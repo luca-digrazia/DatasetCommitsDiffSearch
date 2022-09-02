@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,30 +40,128 @@
  */
 package com.oracle.truffle.api.library;
 
+import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.GeneratedBy;
-import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.library.LibraryExport.DelegateExport;
+import com.oracle.truffle.api.nodes.EncapsulatingNodeReference;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.utilities.FinalBitSet;
+
+import sun.misc.Unsafe;
 
 /**
- * Represents a library factory that allows to create library instances to perform the Truffle
- * library dispatch. Dispatch factory for a library class can be resolved using
- * {@link #resolve(Class)}.
+ * Library factories allow to create instances of libraries used to call library messages. A library
+ * factory for a library class can be looked up using the static method {@link #resolve(Class)}.
  * <p>
- * This class also serves as base class for generated library classes. It is only sub classable to
- * allow generated code to implement it. Do not implement this class manually.
+ * Library instances are either <i>automatically dispatched</i> or <i>manually dispatched</i>.
+ * Automatically dispatched libraries always return <code>true</code> for
+ * {@link Library#accepts(Object)} therefore they can be used with changing receiver values.
+ * <p>
+ * Manually dispatched libraries are created once for a receiver and are only valid as long as
+ * {@link Library#accepts(Object) accepts} returns <code>true</code>. Once accepts was checked for
+ * an individual value, it is guaranteed that the accepts continues to return true. It is therefore
+ * not necessary to call accepts again for multiple message invocations. To create automatically
+ * dispatched versions of libraries use either {@link #createDispatched(int)} or
+ * {@link #getUncached()}. For calling manually dispatched libraries it is recommended to use
+ * {@link CachedLibrary} instead using the factory manually.
+ * <p>
+ * Library instances are either <i>cached</i> or <i>uncached</i>. Cached instances are library
+ * instances designed to be used in ASTs. Cached instances are typically {@link Node#isAdoptable()
+ * adoptable} and store additional profiling information for the cached export. This allows to
+ * generate call-site specific profiling information for libray calls. Before a cached instance can
+ * be used it must be {@link Node#insert(Node) adopted} by a parent node. Cached instances of
+ * libraries have a {@link Node#getCost() cost} of {@link NodeCost#MONOMORPHIC} for each manually
+ * cached library.
+ * <p>
+ * Uncached versions are designed to be used from slow-path runtime methods or whenever call-site
+ * specific profiling is not desired. All uncached versions of a library are annotated with
+ * {@linkplain TruffleBoundary @TruffleBoundary}. Uncached instances always return
+ * <code>false</code> for {@link Node#isAdoptable()}. Uncached instances of libraries have a
+ * {@link Node#getCost() cost} of {@link NodeCost#MEGAMORPHIC}.
+ * <p>
+ * This class is intended to be sub-classed by generated code only. Do not sub-class
+ * {@link LibraryFactory} manually.
  *
- * @since 1.0
+ * @see Library
+ * @see LibraryExport
+ * @see CachedLibrary
+ * @see Message
+ * @since 19.0
  */
 public abstract class LibraryFactory<T extends Library> {
 
-    private static final ConcurrentHashMap<Class<? extends Library>, LibraryFactory<?>> LIBRARIES = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, LibraryFactory<?>> LIBRARIES;
+    private static final DefaultExportProvider[] EMPTY_DEFAULT_EXPORT_ARRAY = new DefaultExportProvider[0];
+
+    static {
+        LIBRARIES = new ConcurrentHashMap<>();
+    }
+
+    /**
+     * Reinitializes the state for native image generation.
+     *
+     * NOTE: this method is called reflectively by downstream projects.
+     */
+    @SuppressWarnings("unused")
+    private static void reinitializeNativeImageState() {
+        for (Map.Entry<Class<?>, LibraryFactory<?>> entry : LIBRARIES.entrySet()) {
+            LibraryFactory<?> libraryFactory = entry.getValue();
+            /* Trigger re-initialization of default exports. */
+            libraryFactory.initDefaultExports();
+        }
+    }
+
+    /**
+     * Resets the state for native image generation.
+     *
+     * NOTE: this method is called reflectively by downstream projects.
+     *
+     * @param imageClassLoader class loader passed by the image builder.
+     */
+    @SuppressWarnings("unused")
+    private static void resetNativeImageState(ClassLoader imageClassLoader) {
+        assert TruffleOptions.AOT : "Only supported during image generation";
+        for (Map.Entry<Class<?>, LibraryFactory<?>> entry : LIBRARIES.entrySet()) {
+            LibraryFactory<?> libraryFactory = entry.getValue();
+            removeClassesLoadedDuringImageBuild(libraryFactory.exportCache, imageClassLoader);
+            removeClassesLoadedDuringImageBuild(libraryFactory.uncachedCache, imageClassLoader);
+            removeClassesLoadedDuringImageBuild(libraryFactory.cachedCache, imageClassLoader);
+            /* Reset the default exports. */
+            LibraryFactory.externalDefaultProviders = null;
+            libraryFactory.afterBuiltinDefaultExports = null;
+            libraryFactory.beforeBuiltinDefaultExports = null;
+        }
+        removeClassesLoadedDuringImageBuild(LIBRARIES, imageClassLoader);
+        removeClassesLoadedDuringImageBuild(ResolvedDispatch.CACHE, imageClassLoader);
+        removeClassesLoadedDuringImageBuild(ResolvedDispatch.REGISTRY, imageClassLoader);
+    }
+
+    private static void removeClassesLoadedDuringImageBuild(Map<Class<?>, ?> map, ClassLoader imageClassLoader) {
+        Class<?>[] classes = map.keySet().toArray(new Class<?>[0]);
+        for (Class<?> clazz : classes) {
+            if (clazz.getClassLoader() == imageClassLoader) {
+                map.remove(clazz);
+            }
+        }
+    }
 
     private final Class<T> libraryClass;
     private final List<Message> messages;
@@ -72,12 +170,20 @@ public abstract class LibraryFactory<T extends Library> {
     private final ConcurrentHashMap<Class<?>, T> cachedCache = new ConcurrentHashMap<>();
     private final ProxyExports proxyExports = new ProxyExports();
     final Map<String, Message> nameToMessages;
-    private final T uncachedDispatch;
+    @CompilationFinal private volatile T uncachedDispatch;
 
     final DynamicDispatchLibrary dispatchLibrary;
 
+    DefaultExportProvider[] beforeBuiltinDefaultExports;
+    DefaultExportProvider[] afterBuiltinDefaultExports;
+
+    /**
+     * Constructor for generated subclasses. Do not sub-class {@link LibraryFactory} manually.
+     *
+     * @since 19.0
+     */
     @SuppressWarnings("unchecked")
-    protected LibraryFactory(Class<T> libraryClass, List<Message> messages, T uncachedDispatch) {
+    protected LibraryFactory(Class<T> libraryClass, List<Message> messages) {
         assert this.getClass().getName().endsWith(LibraryExport.GENERATED_CLASS_SUFFIX);
         assert this.getClass().getAnnotation(GeneratedBy.class) != null;
         assert this.getClass().getAnnotation(GeneratedBy.class).value() == libraryClass;
@@ -90,12 +196,220 @@ public abstract class LibraryFactory<T extends Library> {
             messagesMap.put(message.getSimpleName(), message);
         }
         this.nameToMessages = messagesMap;
-        this.uncachedDispatch = uncachedDispatch;
         if (libraryClass == DynamicDispatchLibrary.class) {
             this.dispatchLibrary = null;
         } else {
-            this.dispatchLibrary = LibraryFactory.resolve(DynamicDispatchLibrary.class).getUncached();
+            GenerateLibrary annotation = libraryClass.getAnnotation(GenerateLibrary.class);
+            boolean dynamicDispatchEnabled = annotation == null || libraryClass.getAnnotation(GenerateLibrary.class).dynamicDispatchEnabled();
+            if (dynamicDispatchEnabled) {
+                this.dispatchLibrary = LibraryFactory.resolve(DynamicDispatchLibrary.class).getUncached();
+            } else {
+                this.dispatchLibrary = null;
+            }
         }
+
+        initDefaultExports();
+    }
+
+    /** Lazyily init the default exports data structures. */
+    private void initDefaultExports() {
+        List<DefaultExportProvider> providers = getExternalDefaultProviders().get(libraryClass.getName());
+        List<DefaultExportProvider> beforeBuiltin = null;
+        List<DefaultExportProvider> afterBuiltin = null;
+        if (providers != null && !providers.isEmpty()) {
+            for (DefaultExportProvider provider : providers) {
+                List<DefaultExportProvider> providerList = new ArrayList<>();
+                if (provider.getPriority() > 0) {
+                    if (beforeBuiltin == null) {
+                        beforeBuiltin = new ArrayList<>();
+                    }
+                    providerList = beforeBuiltin;
+                } else {
+                    if (afterBuiltin == null) {
+                        afterBuiltin = new ArrayList<>();
+                    }
+                    providerList = afterBuiltin;
+                }
+                providerList.add(provider);
+            }
+        }
+
+        if (beforeBuiltin != null) {
+            beforeBuiltinDefaultExports = beforeBuiltin.toArray(new DefaultExportProvider[beforeBuiltin.size()]);
+        } else {
+            beforeBuiltinDefaultExports = EMPTY_DEFAULT_EXPORT_ARRAY;
+        }
+
+        if (afterBuiltin != null) {
+            afterBuiltinDefaultExports = afterBuiltin.toArray(new DefaultExportProvider[afterBuiltin.size()]);
+        } else {
+            afterBuiltinDefaultExports = EMPTY_DEFAULT_EXPORT_ARRAY;
+        }
+    }
+
+    /**
+     * Creates a new cached and automatically dispatched library given a limit. The limit specifies
+     * the number of cached instances that will be automatically dispatched until the dispatched
+     * library rewrites itself to an uncached version of the library. If the limit is zero then the
+     * library will use an uncached version from the start. Negative values will throw an
+     * {@link IllegalArgumentException}. It is discouraged to use {@link Integer#MAX_VALUE} as
+     * parameter to this method. Reasonable values for the limit range from zero to ten.
+     * <p>
+     * If possible it is recommended to not use this method manually but to use
+     * {@link CachedLibrary} instead.
+     * <p>
+     * Whenever the limit is reached for a node and the uncached version is in use, the current
+     * enclosing node will be available to the uncached library export of the library using
+     * {@link EncapsulatingNodeReference}.
+     *
+     * @see EncapsulatingNodeReference
+     * @see CachedLibrary
+     * @since 19.0
+     */
+    @TruffleBoundary
+    public final T createDispatched(int limit) {
+        if (limit <= 0) {
+            return getUncached();
+        } else {
+            ensureLibraryInitialized();
+            return createDispatchImpl(limit);
+        }
+    }
+
+    /**
+     * Creates a new manually dispatched cached library for a given receiver. The receiver must not
+     * be <code>null</code>. The returned library must be adopted before used. For calling manually
+     * dispatched libraries it is recommended to use {@link CachedLibrary} instead using the factory
+     * manually.
+     *
+     * @see CachedLibrary
+     * @since 19.0
+     */
+    @TruffleBoundary
+    public final T create(Object receiver) {
+        Class<?> dispatchClass = dispatch(receiver);
+        T cached = cachedCache.get(dispatchClass);
+        if (cached != null) {
+            assert validateExport(receiver, dispatchClass, cached);
+            return cached;
+        }
+        ensureLibraryInitialized();
+        LibraryExport<T> export = lookupExport(receiver, dispatchClass);
+        cached = export.createCached(receiver);
+        assert (cached = createAssertionsImpl(export, cached)) != null;
+        if (!cached.isAdoptable()) {
+            assert cached.accepts(receiver) : String.format("Invalid accepts implementation detected in '%s'", dispatchClass.getName());
+            T otherCached = cachedCache.putIfAbsent(dispatchClass, cached);
+            if (otherCached != null) {
+                return otherCached;
+            }
+        }
+        return cached;
+    }
+
+    /**
+     * Returns an uncached automatically dispatched version of the library. This is version of a
+     * library is used for slow-path calls.
+     *
+     * @since 19.0
+     */
+    public final T getUncached() {
+        T dispatch = this.uncachedDispatch;
+        if (dispatch == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            ensureLibraryInitialized();
+            dispatch = createUncachedDispatch();
+            T otherDispatch = this.uncachedDispatch;
+            if (otherDispatch != null) {
+                dispatch = otherDispatch;
+            } else {
+                this.uncachedDispatch = dispatch;
+            }
+        }
+        return dispatch;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void ensureLibraryInitialized() {
+        CompilerAsserts.neverPartOfCompilation();
+        /*
+         * This is needed to enforce initialization order. This way the library class is always
+         * initialized before any of the export subclasses. So this method must be invoked before
+         * any instantiation of a library export.
+         */
+        UNSAFE.ensureClassInitialized(libraryClass);
+    }
+
+    /**
+     * Returns an uncached manually dispatched library for a given receiver. The receiver must not
+     * be <code>null</code>.
+     *
+     * @see CachedLibrary
+     * @since 19.0
+     */
+    @TruffleBoundary
+    public final T getUncached(Object receiver) {
+        Class<?> dispatchClass = dispatch(receiver);
+        T uncached = uncachedCache.get(dispatchClass);
+        if (uncached != null) {
+            assert validateExport(receiver, dispatchClass, uncached);
+            return uncached;
+        }
+        return getUncachedSlowPath(receiver, dispatchClass);
+    }
+
+    /**
+     * Handles {@link #getUncached(Object)} cache miss.
+     */
+    private T getUncachedSlowPath(Object receiver, Class<?> dispatchClass) {
+        ensureLibraryInitialized();
+        LibraryExport<T> export = lookupExport(receiver, dispatchClass);
+        T uncached = export.createUncached(receiver);
+        assert validateExport(receiver, dispatchClass, uncached);
+        assert uncached.accepts(receiver);
+        assert (uncached = createAssertionsImpl(export, uncached)) != null;
+        T otherUncached = uncachedCache.putIfAbsent(dispatchClass, uncached);
+        if (otherUncached != null) {
+            return otherUncached;
+        }
+        return uncached;
+    }
+
+    private static volatile Map<String, List<DefaultExportProvider>> externalDefaultProviders;
+
+    private static Map<String, List<DefaultExportProvider>> getExternalDefaultProviders() {
+        Map<String, List<DefaultExportProvider>> providers = externalDefaultProviders;
+        if (providers == null) {
+            synchronized (LibraryFactory.class) {
+                providers = externalDefaultProviders;
+                if (providers == null) {
+                    providers = loadExternalDefaultProviders();
+                }
+            }
+        }
+        return providers;
+    }
+
+    private static Map<String, List<DefaultExportProvider>> loadExternalDefaultProviders() {
+        Map<String, List<DefaultExportProvider>> providers;
+        providers = new LinkedHashMap<>();
+        for (DefaultExportProvider provider : LibraryAccessor.engineAccessor().loadServices(DefaultExportProvider.class)) {
+            String libraryClassName = provider.getLibraryClassName();
+            List<DefaultExportProvider> providerList = providers.get(libraryClassName);
+            if (providerList == null) {
+                providerList = new ArrayList<>();
+                providers.put(libraryClassName, providerList);
+            }
+            providerList.add(provider);
+        }
+        for (List<DefaultExportProvider> providerList : providers.values()) {
+            Collections.sort(providerList, new Comparator<DefaultExportProvider>() {
+                public int compare(DefaultExportProvider o1, DefaultExportProvider o2) {
+                    return Integer.compare(o2.getPriority(), o1.getPriority());
+                }
+            });
+        }
+        return providers;
     }
 
     final Class<T> getLibraryClass() {
@@ -106,75 +420,21 @@ public abstract class LibraryFactory<T extends Library> {
         return messages;
     }
 
-    /**
-     * Returns an uncached and internally dispatched variant of this library. The value of this
-     * method can safely be cached in static constants.
-     *
-     * @since 1.0
-     */
-    public final T getUncached() {
-        return uncachedDispatch;
-    }
-
-    /**
-     * Create a new cached dispatch of the library.
-     *
-     * @since 1.0
-     */
-    public final T createCachedLimit(int limit) {
-        if (limit <= 0) {
-            return getUncached();
+    private T createAssertionsImpl(LibraryExport<T> export, T cached) {
+        if (needsAssertions(export)) {
+            return createAssertions(cached);
         } else {
-            return createCachedDispatchImpl(limit);
-        }
-    }
-
-    /**
-     * Creates a new cached library given a receiver. The returned library implementation only works
-     * with the provided receiver or for other receivers that are {@link Library#accepts(Object)
-     * accepted} by the returned library. This method is rarely used directly. Use the
-     * {@link CachedLibrary} annotation in specializations instead.
-     * <p>
-     *
-     * @see CachedLibrary
-     * @since 1.0
-     */
-    public final T createCached(Object receiver) {
-        Class<?> dispatchClass = dispatch(receiver);
-        T cached = cachedCache.get(dispatchClass);
-        if (cached != null) {
-            assert validateExport(receiver, dispatchClass, cached);
             return cached;
         }
-        LibraryExport<T> exports = lookupExport(receiver, dispatchClass);
-        cached = exports.createCached(receiver);
-        assert (cached = createAssertions(cached)) != null;
-        if (!NodeUtil.isAdoptable(cached)) {
-            assert cached.accepts(receiver) : String.format("Invalid accepts implementation detected in '%s'", dispatchClass.getName());
-            cachedCache.putIfAbsent(dispatchClass, cached);
-        }
-        return cached;
     }
 
-    /**
-     * Returns an cached and manually dispatched version of this library.
-     *
-     * @see Library#getUncached(Class, Object) for further details.
-     * @since 1.0
-     */
-    public final T getUncached(Object receiver) {
-        Class<?> dispatchClass = dispatch(receiver);
-        T uncached = uncachedCache.get(dispatchClass);
-        if (uncached != null) {
-            assert validateExport(receiver, dispatchClass, uncached);
-            return uncached;
+    private boolean needsAssertions(LibraryExport<T> export) {
+        Class<?> registerClass = export.registerClass;
+        if (export.isDefaultExport() && registerClass != null && registerClass.getName().equals("com.oracle.truffle.api.interop.DefaultTruffleObjectExports")) {
+            return false;
+        } else {
+            return true;
         }
-        uncached = lookupExport(receiver, dispatchClass).createUncached(receiver);
-        assert validateExport(receiver, dispatchClass, uncached);
-        assert uncached.accepts(receiver);
-        assert (uncached = createAssertions(uncached)) != null;
-        uncachedCache.putIfAbsent(dispatchClass, uncached);
-        return uncached;
     }
 
     private boolean validateExport(Object receiver, Class<?> dispatchClass, T library) {
@@ -201,45 +461,129 @@ public abstract class LibraryFactory<T extends Library> {
     }
 
     /**
-     * Creates a cached dispatched version of this library. An implementation for this method is
-     * generated, do not implement manually.
+     * Creates a cached automatically dispatched version of this library. An implementation for this
+     * method is generated, do not implement or call manually.
      *
-     * @since 1.0
+     * @since 19.0
      */
-    protected abstract T createCachedDispatchImpl(int limit);
+    protected abstract T createDispatchImpl(int limit);
+
+    /***
+     * Creates a uncached automatically dispatched version of this library. An implementation for
+     * this method is generated, do not implement or call manually.
+     *
+     * @since 19.0
+     */
+    protected abstract T createUncachedDispatch();
 
     /**
-     * Creates a proxy version of this library. An implementation for this method is generated, do
+     * Creates a proxy version of this library. A proxy version is responsible for dispatching to
+     * reflective implementations of messages. An implementation for this method is generated, do
      * not implement manually.
      *
-     * @since 1.0
+     * @since 19.0
      */
     protected abstract T createProxy(ReflectionLibrary lib);
 
     /**
-     * Creates an assertion version of this library. An implementation for this method is generated.
+     * Creates a delegate version of a library. May be used for cached or uncached versions of a
+     * library. Intended to be used by generated code only, do not use manually.
      *
-     * @since 1.0
+     * @since 20.0
+     */
+    protected T createDelegate(T original) {
+        return original;
+    }
+
+    /**
+     * Creates an assertion version of this library. An implementation for this method is generated,
+     * do not implement manually.
+     *
+     * @since 19.0
      */
     protected T createAssertions(T delegate) {
         return delegate;
     }
 
     /**
-     * Returns the implementation type that should be used for a given receiver. An implementation
-     * for this method is generated, do not implement manually.
+     * Returns default exported used for a given receiver. An implementation for this method is
+     * generated, do not implement manually.
      *
-     * @since 1.0
+     * @since 19.0
      */
     protected abstract Class<?> getDefaultClass(Object receiver);
+
+    private Class<?> getDefaultClassImpl(Object receiver) {
+        for (DefaultExportProvider defaultExport : beforeBuiltinDefaultExports) {
+            if (defaultExport.getReceiverClass().isInstance(receiver)) {
+                return defaultExport.getDefaultExport();
+            }
+        }
+
+        Class<?> defaultClass = getDefaultClass(receiver);
+        if (defaultClass != getLibraryClass()) {
+            return defaultClass;
+        }
+
+        for (DefaultExportProvider defaultExport : afterBuiltinDefaultExports) {
+            if (defaultExport.getReceiverClass().isInstance(receiver)) {
+                return defaultExport.getDefaultExport();
+            }
+        }
+
+        return defaultClass;
+    }
 
     /**
      * Performs a generic dispatch for this library. An implementation for this method is generated,
      * do not implement manually.
      *
-     * @since 1.0
+     * @since 19.0
      */
     protected abstract Object genericDispatch(Library library, Object receiver, Message message, Object[] arguments, int parameterOffset) throws Exception;
+
+    /**
+     * Creates a final bitset of the given messages. Uses an internal index for the messages. An
+     * implementation for this method is generated, do not implement manually.
+     *
+     * @since 20.0
+     */
+    protected FinalBitSet createMessageBitSet(@SuppressWarnings({"unused", "hiding"}) Message... enabledMessages) {
+        throw shouldNotReachHere("should be generated");
+    }
+
+    /**
+     * Returns <code>true</code> if a message is delegated, otherwise <code>false</code>. Intended
+     * to be used by generated code only, do not use manually.
+     *
+     * @since 20.0
+     */
+    protected static boolean isDelegated(Library lib, int index) {
+        boolean result = ((DelegateExport) lib).getDelegateExportMessages().get(index);
+        CompilerAsserts.partialEvaluationConstant(result);
+        return !result;
+    }
+
+    /**
+     * Reads the delegate for a receiver. Intended to be used by generated code only, do not use
+     * manually.
+     *
+     * @since 20.0
+     */
+    protected static Object readDelegate(Library lib, Object receiver) {
+        return ((DelegateExport) lib).readDelegateExport(receiver);
+    }
+
+    /**
+     * Returns the delegated library to use when messages are delegated. Intended to be used by
+     * generated code only, do not use manually.
+     *
+     * @since 20.0
+     */
+    @SuppressWarnings("unchecked")
+    protected static <T extends Library> T getDelegateLibrary(T lib, Object delegate) {
+        return (T) ((DelegateExport) lib).getDelegateExportLibrary(delegate);
+    }
 
     final LibraryExport<T> lookupExport(Object receiver, Class<?> dispatchedClass) {
         LibraryExport<T> lib = this.exportCache.get(dispatchedClass);
@@ -254,7 +598,7 @@ public abstract class LibraryFactory<T extends Library> {
             if (libraryClass != DynamicDispatchLibrary.class && resolvedLibrary.getLibrary(ReflectionLibrary.class) != null) {
                 lib = proxyExports;
             } else {
-                Class<?> defaultClass = getDefaultClass(receiver);
+                Class<?> defaultClass = getDefaultClassImpl(receiver);
                 lib = ResolvedDispatch.lookup(defaultClass).getLibrary(libraryClass);
             }
         } else {
@@ -269,7 +613,7 @@ public abstract class LibraryFactory<T extends Library> {
 
     private void validateExport(Object receiver, Class<?> dispatchedClass, LibraryExport<T> exports) throws AssertionError {
         if (!exports.getReceiverClass().isInstance(receiver)) {
-            throw new AssertionError(
+            throw shouldNotReachHere(
                             String.format("Receiver class %s was dynamically dispatched to incompatible exports %s. Expected receiver class %s.",
                                             receiver.getClass().getName(), dispatchedClass.getName(), exports.getReceiverClass().getName()));
         }
@@ -277,14 +621,13 @@ public abstract class LibraryFactory<T extends Library> {
 
     /**
      * Looks up the resolved library instance for a library class. If a library class was not yet
-     * loaded it will be loaded automatically. If the passed library class is not a valid libray
-     * then a {@link IllegalArgumentException} is thrown. Resolving a library class into constant is
-     * useful if performance is a critical requirement, otherwise it is recommended to use the
-     * static methods in {@link Library} instead.
+     * loaded it will be initialized automatically. If the passed library class is not a valid
+     * library then a {@link IllegalArgumentException} is thrown.
      *
      * @see Library
-     * @since 1.0
+     * @since 19.0
      */
+    @TruffleBoundary
     public static <T extends Library> LibraryFactory<T> resolve(Class<T> library) {
         Objects.requireNonNull(library);
         return resolveImpl(library, true);
@@ -294,10 +637,8 @@ public abstract class LibraryFactory<T extends Library> {
     private static <T extends Library> LibraryFactory<T> resolveImpl(Class<T> library, boolean fail) {
         LibraryFactory<?> lib = LIBRARIES.get(library);
         if (lib == null) {
-            if (!TruffleOptions.AOT) {
-                loadGeneratedClass(library);
-                lib = LIBRARIES.get(library);
-            }
+            loadGeneratedClass(library);
+            lib = LIBRARIES.get(library);
             if (lib == null) {
                 if (fail) {
                     throw new IllegalArgumentException(
@@ -311,35 +652,35 @@ public abstract class LibraryFactory<T extends Library> {
         return (LibraryFactory<T>) lib;
     }
 
+    private static final sun.misc.Unsafe UNSAFE;
+
+    static {
+        Unsafe unsafe;
+        try {
+            unsafe = Unsafe.getUnsafe();
+        } catch (SecurityException e) {
+            try {
+                Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafeInstance.setAccessible(true);
+                unsafe = (Unsafe) theUnsafeInstance.get(Unsafe.class);
+            } catch (Exception e2) {
+                throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e2);
+            }
+        }
+        UNSAFE = unsafe;
+    }
+
     static LibraryFactory<?> loadGeneratedClass(Class<?> libraryClass) {
         if (Library.class.isAssignableFrom(libraryClass)) {
             String generatedClassName = libraryClass.getPackage().getName() + "." + libraryClass.getSimpleName() + "Gen";
-            Class<?> loadedClass;
             try {
-                loadedClass = Class.forName(generatedClassName);
+                Class.forName(generatedClassName, true, libraryClass.getClassLoader());
             } catch (ClassNotFoundException e) {
                 return null;
             }
-            LibraryFactory<?> lib = LIBRARIES.get(libraryClass);
-            if (lib == null) {
-                // maybe still initializing?
-                boolean isLibrary = LibraryFactory.class.isAssignableFrom(loadedClass);
-                if (isLibrary) {
-                    throw new AssertionError("Recursive initialization detected. Library cannot use itself in a static initializer.");
-                }
-            }
-            return lib;
+            return LIBRARIES.get(libraryClass);
         }
         return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    static LibraryFactory<?> resolveLibraryByName(String name, boolean fail) {
-        try {
-            return resolveImpl((Class<? extends Library>) Class.forName(name), fail);
-        } catch (ClassNotFoundException e) {
-            return null;
-        }
     }
 
     static Message resolveMessage(Class<? extends Library> library, String message, boolean fail) {
@@ -360,32 +701,25 @@ public abstract class LibraryFactory<T extends Library> {
         return foundMessage;
     }
 
-    static Message resolveMessage(String library, String message, boolean fail) {
-        Objects.requireNonNull(message);
-        LibraryFactory<?> lib = resolveLibraryByName(library, fail);
-        if (lib == null) {
-            if (fail) {
-                throw new IllegalArgumentException(String.format("Unknown library '%s' specified.", library));
-            }
-            return null;
-        } else {
-            return resolveLibraryMessage(lib, message, fail);
-        }
-    }
-
+    /**
+     * @since 19.0
+     */
     protected static <T extends Library> void register(Class<T> libraryClass, LibraryFactory<T> library) {
         LibraryFactory<?> lib = LIBRARIES.putIfAbsent(libraryClass, library);
         if (lib != null) {
-            throw new AssertionError("Reflection cannot be installed for a library twice.");
+            throw shouldNotReachHere("Reflection cannot be installed for a library twice.");
         }
     }
 
+    /***
+     * {@inheritDoc}
+     *
+     * @since 19.0
+     */
     @Override
     public String toString() {
         return "LibraryFactory [library=" + libraryClass.getName() + "]";
     }
-
-    private static final LibraryFactory<ReflectionLibrary> REFLECTION_LIBRARY = LibraryFactory.resolve(ReflectionLibrary.class);
 
     final class ProxyExports extends LibraryExport<T> {
         protected ProxyExports() {
@@ -394,13 +728,129 @@ public abstract class LibraryFactory<T extends Library> {
 
         @Override
         public T createUncached(Object receiver) {
-            return createProxy(REFLECTION_LIBRARY.getUncached(receiver));
+            return createProxy(ReflectionLibrary.getFactory().getUncached(receiver));
         }
 
         @Override
-        public T createCached(Object receiver) {
-            return createProxy(REFLECTION_LIBRARY.createCached(receiver));
+        protected T createCached(Object receiver) {
+            return createProxy(ReflectionLibrary.getFactory().create(receiver));
         }
+    }
+
+    /**
+     * Helper class representing a single resolved receiver class that exports multiple libraries.
+     */
+    static final class ResolvedDispatch {
+
+        private static final ConcurrentHashMap<Class<?>, ResolvedDispatch> CACHE = new ConcurrentHashMap<>();
+        private static final ConcurrentHashMap<Class<?>, LibraryExport<?>[]> REGISTRY = new ConcurrentHashMap<>();
+
+        // the root of every receiver class chain.
+        private static final ResolvedDispatch OBJECT_RECEIVER = new ResolvedDispatch(null, Object.class);
+        private final ResolvedDispatch parent;
+        private final Class<?> dispatchClass;
+        private final Map<Class<?>, LibraryExport<?>> libraries;
+
+        @SuppressWarnings({"hiding", "unchecked"})
+        private ResolvedDispatch(ResolvedDispatch parent, Class<?> dispatchClass, LibraryExport<?>... libs) {
+            this.parent = parent;
+            this.dispatchClass = dispatchClass;
+            Map<Class<?>, LibraryExport<?>> libraries = new LinkedHashMap<>();
+            for (LibraryExport<?> lib : libs) {
+                libraries.put(lib.getLibrary(), lib);
+            }
+            this.libraries = libraries;
+        }
+
+        @SuppressWarnings("unchecked")
+        <T extends Library> LibraryExport<T> getLibrary(Class<T> libraryClass) {
+            LibraryExport<?> lib = libraries.get(libraryClass);
+            if (lib == null && parent != null) {
+                lib = parent.getLibrary(libraryClass);
+            }
+            return (LibraryExport<T>) lib;
+        }
+
+        /** NOTE: this method is called reflectively by downstream projects. */
+        @TruffleBoundary
+        static ResolvedDispatch lookup(Class<?> receiverClass) {
+            ResolvedDispatch type = CACHE.get(receiverClass);
+            if (type == null) {
+                type = resolveClass(receiverClass);
+            }
+            return type;
+        }
+
+        static <T extends Library> void register(Class<?> receiverClass, LibraryExport<?>... libs) {
+            for (LibraryExport<?> lib : libs) {
+                lib.registerClass = receiverClass;
+            }
+            LibraryExport<?>[] prevLibs = REGISTRY.put(receiverClass, libs);
+            if (prevLibs != null) {
+                throw new IllegalStateException("Receiver " + receiverClass + " is already registered.");
+            }
+            // eagerly resolve known receivers in AOT mode
+            if (TruffleOptions.AOT) {
+                lookup(receiverClass);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "ResolvedDispatch[" + dispatchClass.getName() + "]";
+        }
+
+        Set<Class<?>> getLibraries() {
+            return libraries.keySet();
+        }
+
+        private static boolean hasExports(Class<?> c) {
+            return c.getAnnotationsByType(ExportLibrary.class).length > 0;
+        }
+
+        private static ResolvedDispatch resolveClass(Class<?> dispatchClass) {
+            if (dispatchClass == null) {
+                return OBJECT_RECEIVER;
+            }
+            ResolvedDispatch parent = resolveClass(dispatchClass.getSuperclass());
+            ResolvedDispatch resolved;
+            LibraryExport<?>[] libs = REGISTRY.get(dispatchClass);
+            if (libs == null && hasExports(dispatchClass)) {
+                /*
+                 * We can omit loading classes in AOT mode as they are resolved eagerly using the
+                 * TruffleFeature. We can also omit if the type was already resolved.
+                 */
+                loadGeneratedClass(dispatchClass);
+                libs = REGISTRY.get(dispatchClass);
+                if (libs == null) {
+                    throw shouldNotReachHere(String.format("Libraries for class '%s' could not be resolved. Not registered?", dispatchClass.getName()));
+                }
+            }
+
+            if (libs != null) {
+                resolved = new ResolvedDispatch(parent, dispatchClass, libs);
+            } else {
+                resolved = parent;
+            }
+
+            ResolvedDispatch concurrent = CACHE.putIfAbsent(dispatchClass, resolved);
+            if (concurrent != null) {
+                return concurrent;
+            } else {
+                return resolved;
+            }
+        }
+
+        static void loadGeneratedClass(Class<?> currentReceiverClass) {
+            String generatedClassName = currentReceiverClass.getPackage().getName() + "." + currentReceiverClass.getSimpleName() + "Gen";
+            try {
+                Class.forName(generatedClassName, true, currentReceiverClass.getClassLoader());
+            } catch (ClassNotFoundException e) {
+                throw shouldNotReachHere(String.format("Generated class '%s' for class '%s' not found. " +
+                                "Did the Truffle annotation processor run?", generatedClassName, currentReceiverClass.getName()), e);
+            }
+        }
+
     }
 
 }

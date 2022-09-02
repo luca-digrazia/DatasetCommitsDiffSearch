@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -53,13 +53,27 @@ public class GraalUnsafeAccess {
         }
     }
 
+    /**
+     * Gets the {@link Unsafe} singleton.
+     *
+     * @throws SecurityException if a security manager is present and it denies
+     *             {@link RuntimePermission}("accessUnsafe")
+     */
     public static Unsafe getUnsafe() {
-        /*
-         * Ideally we should check here that the caller class has the same class loader as this
-         * class or is in the same module of this class. Unfortunately, Reflection.getCallerClass()
-         * requires the caller to be annotated by CallerSensitive and this annotation is ignored for
-         * classes not loaded by the boot loader.
-         */
+        SecurityManager sm = System.getSecurityManager();
+        if (sm != null) {
+            sm.checkPermission(new RuntimePermission("accessUnsafe"));
+        }
         return UNSAFE;
+    }
+
+    @SuppressWarnings("deprecation") // deprecated since JDK 15
+    public static boolean shouldBeInitialized(Class<?> c) {
+        return UNSAFE.shouldBeInitialized(c);
+    }
+
+    @SuppressWarnings("deprecation") // deprecated since JDK 15
+    public static void ensureClassInitialized(Class<?> c) {
+        UNSAFE.ensureClassInitialized(c);
     }
 }
