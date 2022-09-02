@@ -25,6 +25,7 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import static org.graalvm.compiler.truffle.common.TruffleOutputGroup.GROUP_ID;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilerIdleDelay;
 
 import java.io.CharArrayWriter;
 import java.io.PrintWriter;
@@ -111,7 +112,6 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.LayoutFactory;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.profiles.ConditionProfile;
-import java.util.Collection;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.stack.InspectedFrame;
@@ -125,7 +125,6 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.meta.UnresolvedJavaType;
 import jdk.vm.ci.services.Services;
 
 /**
@@ -165,7 +164,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     private final EngineCacheSupport engineCacheSupport;
     private final UnmodifiableEconomicMap<String, Class<?>> lookupTypes;
     private final OptionDescriptors engineOptions;
-    private final Collection<? extends InstrumentedMethodPattern> instrumentedMethodPatterns;
 
     public GraalTruffleRuntime(Iterable<Class<?>> extraLookupTypes) {
         this.lookupTypes = initLookupTypes(extraLookupTypes);
@@ -175,7 +173,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         this.engineCacheSupport = support == null ? new EngineCacheSupport.Disabled() : support;
         options.add(PolyglotCompilerOptions.getDescriptors());
         this.engineOptions = OptionDescriptors.createUnion(options.toArray(new OptionDescriptors[options.size()]));
-        this.instrumentedMethodPatterns = createInstrumentedMethodPatterns();
     }
 
     @Override
@@ -983,8 +980,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             }
         } else if (getAnnotation(TruffleCallBoundary.class, original) != null) {
             return InlineKind.DO_NOT_INLINE_WITH_EXCEPTION;
-        } else if (isInstrumented(original)) {
-            return InlineKind.DO_NOT_INLINE_WITH_EXCEPTION;
         }
         return InlineKind.INLINE;
     }
@@ -1002,36 +997,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     @Override
     public void log(String loggerId, CompilableTruffleAST compilable, String message) {
         ((OptimizedCallTarget) compilable).engine.getLogger(loggerId).log(Level.INFO, message);
-    }
-
-    private static Collection<? extends InstrumentedMethodPattern> createInstrumentedMethodPatterns() {
-        if (JAVA_SPECIFICATION_VERSION < 11) {
-            return Collections.emptySet();
-        } else {
-            return InstrumentedMethodPattern.newBuilder("Ljdk/jfr/Event;")  //
-                            .addMethod("begin", "()V")      //
-                            .addMethod("end", "()V")        //
-                            .addMethod("commit", "()V")     //
-                            .addMethod("isEnabled", "()Z")  //
-                            .addMethod("shouldCommit", "()Z")   //
-                            .addMethod("set", "(ILjava/lang/Object;)V") //
-                            .build();
-        }
-    }
-
-    private boolean isInstrumented(ResolvedJavaMethod original) {
-        // Fast check, the JFR instrumented methods are marked as synthetic.
-        // If support for some other instrumentation which does not use synthetic flag is added
-        // this check needs to be moved into InstrumentedMethodPattern.
-        if (original.isStatic() || !original.isSynthetic()) {
-            return false;
-        }
-        for (InstrumentedMethodPattern pattern : instrumentedMethodPatterns) {
-            if (pattern.isInstrumented(original)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     // https://bugs.openjdk.java.net/browse/JDK-8209535
@@ -1082,12 +1047,21 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     /**
-     * Gets the time in milliseconds an idle Truffle compiler thread will wait for new tasks before
-     * terminating. A value of {@code <= 0} means that Truffle compiler threads block indefinitely
-     * waiting for a task and thus never terminate.
+     * Gets the time in milliseconds an idle compiler thread will wait for new tasks before
+     * terminating. A value of {@code <= 0} means that compiler threads block indefinitely waiting
+     * for a task and thus never terminate.
      */
-    protected long getCompilerIdleDelay(@SuppressWarnings("unused") OptimizedCallTarget callTarget) {
-        return 0;
+    protected long getCompilerIdleDelay(OptimizedCallTarget callTarget) {
+        OptionValues options = callTarget.engine.getEngineOptions();
+        /*
+         * Compiler idle time is set to 0 to avoid that the compiler thread is shut down. We are
+         * collecting statistics if any of the flags are used.
+         */
+        if (!options.get(PolyglotCompilerOptions.MethodExpansionStatistics).isEmpty() || !options.get(PolyglotCompilerOptions.NodeExpansionStatistics).isEmpty() ||
+                        options.get(PolyglotCompilerOptions.InstrumentBranches) || options.get(PolyglotCompilerOptions.InstrumentBoundaries)) {
+            return 0L;
+        }
+        return callTarget.getOptionValue(CompilerIdleDelay);
     }
 
     final OptionDescriptors getEngineOptionDescriptors() {
@@ -1128,76 +1102,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                         valueClass == Float.class ||
                         valueClass == Double.class ||
                         valueClass == String.class;
-    }
-
-    private static final class InstrumentedMethodPattern {
-
-        private final String name;
-        private final String signature;
-        private final LazyType declaringClass;
-
-        private InstrumentedMethodPattern(String name, String signature, LazyType declaringClass) {
-            this.name = name;
-            this.signature = signature;
-            this.declaringClass = declaringClass;
-        }
-
-        boolean isInstrumented(ResolvedJavaMethod method) {
-            if (!name.equals(method.getName())) {
-                return false;
-            }
-            if (!signature.equals(method.getSignature().toMethodDescriptor())) {
-                return false;
-            }
-            ResolvedJavaType methodOwner = method.getDeclaringClass();
-            ResolvedJavaType patternOwner = declaringClass.getResolvedClass(methodOwner);
-            return patternOwner != null && patternOwner.isAssignableFrom(methodOwner);
-        }
-
-        static Builder newBuilder(String className) {
-            return new Builder(className);
-        }
-
-        static final class Builder {
-
-            private final LazyType declaringClass;
-            private final Collection<InstrumentedMethodPattern> patterns;
-
-            private Builder(String binaryName) {
-                this.declaringClass = new LazyType(UnresolvedJavaType.create(binaryName));
-                this.patterns = new ArrayList<>();
-            }
-
-            Builder addMethod(String name, String signature) {
-                this.patterns.add(new InstrumentedMethodPattern(name, signature, declaringClass));
-                return this;
-            }
-
-            Collection<? extends InstrumentedMethodPattern> build() {
-                return patterns;
-            }
-        }
-
-        private static final class LazyType {
-
-            private final UnresolvedJavaType declaringClass;
-            private volatile ResolvedJavaType resolvedDeclaringClass;
-
-            LazyType(UnresolvedJavaType declaringClass) {
-                this.declaringClass = declaringClass;
-            }
-
-            ResolvedJavaType getResolvedClass(ResolvedJavaType accessingClass) {
-                if (resolvedDeclaringClass == null) {
-                    try {
-                        resolvedDeclaringClass = declaringClass.resolve(accessingClass);
-                    } catch (LinkageError e) {
-                        // May happen when declaringClass is not accessible from accessingClass
-                    }
-                }
-                return resolvedDeclaringClass;
-            }
-        }
     }
 
 }
