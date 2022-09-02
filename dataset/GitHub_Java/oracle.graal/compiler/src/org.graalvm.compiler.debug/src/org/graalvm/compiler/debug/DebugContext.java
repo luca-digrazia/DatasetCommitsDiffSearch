@@ -68,7 +68,6 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.graphio.GraphOutput;
 
-import jdk.vm.ci.common.NativeImageReinitialize;
 import jdk.vm.ci.meta.JavaMethod;
 
 /**
@@ -86,6 +85,8 @@ public final class DebugContext implements AutoCloseable {
     public static final Description NO_DESCRIPTION = new Description(null, "NO_DESCRIPTION");
     public static final GlobalMetrics NO_GLOBAL_METRIC_VALUES = null;
     public static final Iterable<DebugHandlersFactory> NO_CONFIG_CUSTOMIZERS = Collections.emptyList();
+
+    public static final PrintStream DEFAULT_LOG_STREAM = TTY.out;
 
     /**
      * Contains the immutable parts of a debug context. This separation allows the immutable parts
@@ -112,10 +113,6 @@ public final class DebugContext implements AutoCloseable {
      * Stores the {@link MetricKey} values.
      */
     private long[] metricValues;
-
-    public static PrintStream getDefaultLogStream() {
-        return TTY.out;
-    }
 
     /**
      * Determines if dynamic scopes are enabled.
@@ -318,7 +315,7 @@ public final class DebugContext implements AutoCloseable {
     /**
      * Singleton used to represent a disabled debug context.
      */
-    private static final DebugContext DISABLED = new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, getDefaultLogStream(), new Immutable(), NO_CONFIG_CUSTOMIZERS);
+    private static final DebugContext DISABLED = new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, new Immutable(), NO_CONFIG_CUSTOMIZERS);
 
     /**
      * Create a DebugContext with debugging disabled.
@@ -327,7 +324,7 @@ public final class DebugContext implements AutoCloseable {
         if (options == null || options.getMap().isEmpty()) {
             return DISABLED;
         }
-        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, getDefaultLogStream(), Immutable.create(options), NO_CONFIG_CUSTOMIZERS);
+        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, Immutable.create(options), NO_CONFIG_CUSTOMIZERS);
     }
 
     /**
@@ -402,7 +399,7 @@ public final class DebugContext implements AutoCloseable {
      * Creates a {@link DebugContext} based on a given set of option values and {@code factory}.
      */
     public static DebugContext create(OptionValues options, DebugHandlersFactory factory) {
-        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, getDefaultLogStream(), Immutable.create(options), Collections.singletonList(factory));
+        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, Immutable.create(options), Collections.singletonList(factory));
     }
 
     /**
@@ -410,7 +407,7 @@ public final class DebugContext implements AutoCloseable {
      * The {@link DebugHandlersFactory#LOADER} can be used for the latter.
      */
     public static DebugContext create(OptionValues options, Iterable<DebugHandlersFactory> factories) {
-        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, getDefaultLogStream(), Immutable.create(options), factories);
+        return new DebugContext(NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, Immutable.create(options), factories);
     }
 
     public static DebugContext create(OptionValues options, PrintStream logStream, DebugHandlersFactory factory) {
@@ -422,7 +419,7 @@ public final class DebugContext implements AutoCloseable {
      * The {@link DebugHandlersFactory#LOADER} can be used for the latter.
      */
     public static DebugContext create(OptionValues options, Description description, Iterable<DebugHandlersFactory> factories) {
-        return new DebugContext(description, NO_GLOBAL_METRIC_VALUES, getDefaultLogStream(), Immutable.create(options), factories);
+        return new DebugContext(description, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, Immutable.create(options), factories);
     }
 
     /**
@@ -656,11 +653,7 @@ public final class DebugContext implements AutoCloseable {
         }
     }
 
-    /**
-     * Arbitrary threads cannot be in the image so null out {@code DebugContext.invariants} which
-     * holds onto a thread and is only used for assertions.
-     */
-    @NativeImageReinitialize private final Invariants invariants = Assertions.assertionsEnabled() ? new Invariants() : null;
+    private final Invariants invariants = Assertions.assertionsEnabled() ? new Invariants() : null;
 
     static StackTraceElement[] getStackTrace(Thread thread) {
         return thread.getStackTrace();

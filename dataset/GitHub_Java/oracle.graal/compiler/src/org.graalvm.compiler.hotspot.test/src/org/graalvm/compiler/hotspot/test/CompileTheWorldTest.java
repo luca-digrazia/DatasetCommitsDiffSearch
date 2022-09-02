@@ -50,7 +50,7 @@ public class CompileTheWorldTest extends GraalCompilerTest {
         HotSpotJVMCIRuntime runtime = HotSpotJVMCIRuntime.runtime();
         System.setProperty("CompileTheWorld.LimitModules", "java.base");
         OptionValues initialOptions = getInitialOptions();
-        OptionValues harnessOptions = CompileTheWorld.loadHarnessOptions();
+        OptionValues harnessOptions = new OptionValues(OptionValues.newOptionMap());
         int startAt = 1;
         int stopAt = 5;
         int maxClasses = Integer.MAX_VALUE;
