@@ -378,7 +378,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
 
     @Override
     public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, Plugins plugins, ParsingReason reason) {
-        StaticObjectSupport.registerInvocationPlugins(plugins, reason);
+        StaticObjectSupport.registerInvocationPlugins(providers, snippetReflection, plugins, reason);
 
         /*
          * We need to constant-fold Profile.isProfilingEnabled already during static analysis, so
@@ -1021,13 +1021,9 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         private static final Method VALIDATE_CLASSES = ReflectionUtil.lookupMethod(StaticShape.Builder.class, "validateClasses", Class.class, Class.class);
 
         private static final Map<Class<?>, ClassLoader> CLASS_LOADERS = new ConcurrentHashMap<>();
-        private static BeforeAnalysisAccess beforeAnalysisAccess;
+        private static BeforeAnalysisAccess access;
 
-        static void beforeAnalysis(BeforeAnalysisAccess access) {
-            StaticObjectSupport.beforeAnalysisAccess = access;
-        }
-
-        static void registerInvocationPlugins(Plugins plugins, ParsingReason reason) {
+        static void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, Plugins plugins, ParsingReason reason) {
             if (reason == ParsingReason.PointsToAnalysis) {
                 InvocationPlugins.Registration r = new InvocationPlugins.Registration(plugins.getInvocationPlugins(), StaticShape.Builder.class);
                 r.register3("build", InvocationPlugin.Receiver.class, Class.class, Class.class, new InvocationPlugin() {
@@ -1041,11 +1037,15 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
                     public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2) {
                         Class<?> superClass = getArgumentClass(b, targetMethod, 1, arg1);
                         Class<?> factoryInterface = getArgumentClass(b, targetMethod, 2, arg2);
-                        generate(superClass, factoryInterface, beforeAnalysisAccess);
+                        generate(superClass, factoryInterface, access);
                         return false;
                     }
                 });
             }
+        }
+
+        static void beforeAnalysis(BeforeAnalysisAccess access) {
+            StaticObjectSupport.access = access;
         }
 
         static void beforeCompilation(BeforeCompilationAccess config) {

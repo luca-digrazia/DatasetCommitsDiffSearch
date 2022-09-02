@@ -52,9 +52,10 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 
 class StaticObjectModelTest {
-    @Registration(id = TestLanguage.TEST_LANGUAGE_ID, name = TestLanguage.TEST_LANGUAGE_ID)
+    @Registration(id = TestLanguage.TEST_LANGUAGE_ID, name = TestLanguage.TEST_LANGUAGE_NAME)
     public static class TestLanguage extends TruffleLanguage<TestContext> {
-        static final String TEST_LANGUAGE_ID = "StaticObjectModelTest_TestLanguage";
+        static final String TEST_LANGUAGE_NAME = "Test Language for the Static Object Model";
+        static final String TEST_LANGUAGE_ID = "som-test";
 
         @Override
         protected TestContext createContext(Env env) {

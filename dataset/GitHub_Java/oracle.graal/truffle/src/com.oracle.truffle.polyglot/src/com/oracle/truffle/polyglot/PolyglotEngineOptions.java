@@ -128,7 +128,8 @@ final class PolyglotEngineOptions {
                                 case "field-based":
                                     return StaticObjectStorageStrategies.FIELD_BASED;
                                 default:
-                                    throw new IllegalArgumentException("Unexpected value for engine option 'SomStorageStrategy': " + s);
+                                    throw new IllegalArgumentException(
+                                                    "Unexpected value for engine option 'SomStorageStrategy': '" + s + "'. Accepted values are: ['default', 'array-based', 'field-based'].");
                             }
                         }
                     }));

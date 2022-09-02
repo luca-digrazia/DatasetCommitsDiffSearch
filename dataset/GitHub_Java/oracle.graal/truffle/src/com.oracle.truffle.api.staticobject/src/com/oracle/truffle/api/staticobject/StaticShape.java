@@ -203,9 +203,6 @@ public abstract class StaticShape<T> {
      * @since 21.3.0
      */
     public static final class Builder {
-        private static final int MAX_NUMBER_OF_PROPERTIES = 65535;
-        private static final int MAX_PROPERTY_ID_LENGTH = 65529; // 65535 - 6 chars to disambiguate
-                                                                 // escaped IDs
         private static final char[] FORBIDDEN_CHARS = new char[]{'.', ';', '[', '/'};
         private final HashMap<String, StaticProperty> staticProperties = new LinkedHashMap<>();
         private final TruffleLanguage<?> language;
@@ -216,26 +213,27 @@ public abstract class StaticShape<T> {
 
         /**
          * Adds a {@link StaticProperty} to the static shape to be constructed. The
-         * {@linkplain StaticProperty#getId() property id} cannot be an empty String, or a String
-         * longer than 65529 characters. It is not allowed to add two {@linkplain StaticProperty
-         * properties} with the same {@linkplain StaticProperty#getId() id} to the same Builder, or
-         * to add the same {@linkplain StaticProperty property} to more than one Builder. Static
-         * shapes that {@linkplain StaticShape.Builder#build(StaticShape) extend a parent shape} can
-         * have {@linkplain StaticProperty properties} with the same
-         * {@linkplain StaticProperty#getId() id} of those in the parent shape.
+         * {@linkplain StaticProperty#getId() property id} cannot be an empty String, or contain
+         * characters that are illegal for field names ('.', ';', '[', '/'). It is not allowed to
+         * add two {@linkplain StaticProperty properties} with the same
+         * {@linkplain StaticProperty#getId() id} to the same Builder, or to add the same
+         * {@linkplain StaticProperty property} to more than one Builder. Static shapes that
+         * {@linkplain StaticShape.Builder#build(StaticShape) extend a parent shape} can have
+         * {@linkplain StaticProperty properties} with the same {@linkplain StaticProperty#getId()
+         * id} of those in the parent shape.
          *
          * @see DefaultStaticProperty
          * @param property the {@link StaticProperty} to be added
          * @return the Builder instance
-         * @throws IllegalArgumentException if more than 65535 properties are added, or if the
-         *             {@linkplain StaticProperty#getId() property id} is an empty string, it is
-         *             longer than 65529 characters, or it is equal to the id of another static
-         *             property already registered to this builder
+         * @throws IllegalArgumentException if the {@linkplain StaticProperty#getId() property id}
+         *             is an empty string, contains a forbidden character, or is the same of another
+         *             static property already registered to this builder
          * @since 21.3.0
          */
         public Builder property(StaticProperty property) {
             CompilerAsserts.neverPartOfCompilation();
-            staticProperties.put(validateAndGetId(property), property);
+            validatePropertyId(property.getId());
+            staticProperties.put(property.getId(), property);
             return this;
         }
 
@@ -322,7 +320,7 @@ public abstract class StaticShape<T> {
         private <T> StaticShape<T> build(ShapeGenerator<T> sg, StaticShape<T> parentShape) {
             CompilerAsserts.neverPartOfCompilation();
             boolean safetyChecks = !SomAccessor.ENGINE.areStaticObjectSafetyChecksRelaxed(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language));
-            StaticShape<T> shape = sg.generateShape(parentShape, staticProperties, safetyChecks);
+            StaticShape<T> shape = sg.generateShape(parentShape, staticProperties.values(), safetyChecks);
             for (StaticProperty staticProperty : staticProperties.values()) {
                 staticProperty.initShape(shape);
             }
@@ -341,35 +339,19 @@ public abstract class StaticShape<T> {
             return (GeneratorClassLoader) cl;
         }
 
-        private String validateAndGetId(StaticProperty property) {
-            String id = property.getId();
+        private void validatePropertyId(String id) {
             Objects.requireNonNull(id);
-            if (staticProperties.size() == MAX_NUMBER_OF_PROPERTIES) {
-                throw new IllegalArgumentException("This builder already contains the maximum number of properties: " + MAX_NUMBER_OF_PROPERTIES);
-            }
             if (id.length() == 0) {
                 throw new IllegalArgumentException("The property id cannot be an empty string");
             }
-            if (id.length() > MAX_PROPERTY_ID_LENGTH) {
-                throw new IllegalArgumentException("The property id cannot be longer than " + MAX_PROPERTY_ID_LENGTH + " characters");
-            }
-            String escapedId = id;
             for (char forbidden : FORBIDDEN_CHARS) {
-                escapedId = escapedId.replace(forbidden, '_');
-            }
-            if (!id.equals(escapedId)) {
-                for (int i = 0; i < MAX_NUMBER_OF_PROPERTIES; i++) {
-                    String newID = escapedId + "_" + i;
-                    if (!staticProperties.containsKey(newID)) {
-                        return newID;
-                    }
+                if (id.indexOf(forbidden) != -1) {
+                    throw new IllegalArgumentException("Property id '" + id + "' contains a forbidden char: '" + forbidden + "'");
                 }
-                throw new RuntimeException("Should not reach here");
             }
             if (staticProperties.containsKey(id)) {
                 throw new IllegalArgumentException("This builder already contains a property with id '" + id + "'");
             }
-            return id;
         }
 
         private static void validateClasses(Class<?> storageSuperClass, Class<?> storageFactoryInterface) {
