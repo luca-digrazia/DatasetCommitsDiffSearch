@@ -43,7 +43,6 @@ package com.oracle.truffle.regex.tregex.parser.ast;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 import org.graalvm.collections.EconomicMap;
@@ -57,6 +56,7 @@ import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.UnsupportedRegexException;
 import com.oracle.truffle.regex.charset.CodePointSet;
+import com.oracle.truffle.regex.charset.Constants;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
 import com.oracle.truffle.regex.tregex.automaton.StateIndex;
 import com.oracle.truffle.regex.tregex.automaton.StateSet;
@@ -71,7 +71,7 @@ import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonArray;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
-import com.oracle.truffle.regex.util.TBitSet;
+import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
 
@@ -81,12 +81,12 @@ public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible
     private final RegexLanguage language;
     private final RegexSource source;
     private final RegexFlags flags;
+    private final RegexOptions options;
     private final Counter.ThresholdCounter nodeCount = new Counter.ThresholdCounter(TRegexOptions.TRegexParserTreeMaxSize, "parse tree explosion");
     private final Counter.ThresholdCounter groupCount = new Counter.ThresholdCounter(TRegexOptions.TRegexMaxNumberOfCaptureGroups, "too many capture groups");
     private final Counter quantifierCount = new Counter();
     private final Counter zeroWidthQuantifierCount = new Counter();
     private final RegexProperties properties = new RegexProperties();
-    private Map<String, Integer> namedCaputureGroups;
     private RegexASTNode[] nodes;
     /**
      * AST as parsed from the expression.
@@ -104,13 +104,17 @@ public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible
     private StateSet<RegexAST, RegexASTNode> hardPrefixNodes;
     private final EconomicMap<GroupBoundaries, GroupBoundaries> groupBoundariesDeduplicationMap = EconomicMap.create();
 
+    private int negativeLookaheads = 0;
+    private int negativeLookbehinds = 0;
+
     private final EconomicMap<RegexASTNode, List<SourceSection>> sourceSections;
 
-    public RegexAST(RegexLanguage language, RegexSource source, RegexFlags flags) {
+    public RegexAST(RegexLanguage language, RegexSource source, RegexFlags flags, RegexOptions options) {
         this.language = language;
         this.source = source;
         this.flags = flags;
-        this.sourceSections = source.getOptions().isDumpAutomata() ? EconomicMap.create(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE) : null;
+        this.options = options;
+        this.sourceSections = options.isDumpAutomata() ? EconomicMap.create(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE) : null;
     }
 
     public RegexLanguage getLanguage() {
@@ -126,19 +130,11 @@ public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible
     }
 
     public RegexOptions getOptions() {
-        return source.getOptions();
+        return options;
     }
 
     public Encoding getEncoding() {
         return source.getEncoding();
-    }
-
-    public void setNamedCaputureGroups(Map<String, Integer> namedCaputureGroups) {
-        this.namedCaputureGroups = namedCaputureGroups;
-    }
-
-    public Map<String, Integer> getNamedCaputureGroups() {
-        return namedCaputureGroups;
     }
 
     public Group getRoot() {
@@ -203,7 +199,7 @@ public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible
     public boolean isLiteralString() {
         Group r = getRoot();
         RegexProperties p = getProperties();
-        return !((r.hasBackReferences() || p.hasAlternations() || p.hasLookAroundAssertions() || r.hasLoops()) || ((r.startsWithCaret() || r.endsWithDollar()) && getFlags().isMultiline())) &&
+        return !((p.hasBackReferences() || p.hasAlternations() || p.hasLookAroundAssertions() || r.hasLoops()) || ((r.startsWithCaret() || r.endsWithDollar()) && getFlags().isMultiline())) &&
                         (!p.hasCharClasses() || p.charClassesCanBeMatchedWithMask());
     }
 
@@ -327,27 +323,73 @@ public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible
 
     public BackReference register(BackReference backReference) {
         nodeCount.inc();
+        properties.setBackReferences();
         return backReference;
     }
 
     public CharacterClass register(CharacterClass characterClass) {
         nodeCount.inc();
+        updatePropsCC(characterClass);
         return characterClass;
+    }
+
+    public void updatePropsCC(CharacterClass characterClass) {
+        if (!characterClass.getCharSet().matchesSingleChar()) {
+            if (!characterClass.getCharSet().matches2CharsWith1BitDifference()) {
+                properties.unsetCharClassesCanBeMatchedWithMask();
+            }
+            if (!getEncoding().isFixedCodePointWidth(characterClass.getCharSet())) {
+                properties.setFixedCodePointWidth(false);
+            }
+            properties.setCharClasses();
+        }
+        if (Constants.SURROGATES.intersects(characterClass.getCharSet())) {
+            properties.setLoneSurrogates();
+        }
     }
 
     public Group register(Group group) {
         nodeCount.inc();
+        if (group.isCapturing() && group.getGroupNumber() != 0) {
+            properties.setCaptureGroups();
+        }
         return group;
     }
 
     public LookAheadAssertion register(LookAheadAssertion lookAheadAssertion) {
         nodeCount.inc();
+        properties.setLookAheadAssertions();
+        if (lookAheadAssertion.isNegated()) {
+            negativeLookaheads++;
+            properties.setNegativeLookAheadAssertions();
+        }
         return lookAheadAssertion;
     }
 
     public LookBehindAssertion register(LookBehindAssertion lookBehindAssertion) {
         nodeCount.inc();
+        properties.setLookBehindAssertions();
+        if (lookBehindAssertion.isNegated()) {
+            negativeLookbehinds++;
+            properties.setNegativeLookBehindAssertions();
+        }
         return lookBehindAssertion;
+    }
+
+    public void invertNegativeLookAround(LookAroundAssertion assertion) {
+        assert assertion.isNegated();
+        assertion.setNegated(false);
+        if (assertion.isLookAheadAssertion()) {
+            assert negativeLookaheads > 0;
+            if (--negativeLookaheads == 0) {
+                properties.setNegativeLookAheadAssertions(false);
+            }
+        } else {
+            assert negativeLookbehinds > 0;
+            if (--negativeLookbehinds == 0) {
+                properties.setNegativeLookBehindAssertions(false);
+            }
+        }
     }
 
     public PositionAssertion register(PositionAssertion positionAssertion) {
@@ -482,7 +524,7 @@ public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible
         }
     }
 
-    public GroupBoundaries createGroupBoundaries(TBitSet updateIndices, TBitSet clearIndices) {
+    public GroupBoundaries createGroupBoundaries(CompilationFinalBitSet updateIndices, CompilationFinalBitSet clearIndices) {
         GroupBoundaries staticInstance = GroupBoundaries.getStaticInstance(language, updateIndices, clearIndices);
         if (staticInstance != null) {
             return staticInstance;
@@ -528,9 +570,10 @@ public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible
      * Groups generated by the parser, e.g. {@code (?:a|)} generated for {@code a?}, don't have
      * source sections.</li>
      * <li>{@link CharacterClass}: normally these nodes correspond to a single
-     * {@link Token.CharacterClass Token.CharacterClass}, but the parser may optimize redundant
-     * nodes away and add their source sections to existing nodes. Example: {@code a|b} will be
-     * optimized to {@code [ab]}, which will be mapped to both original characters.</li>
+     * {@link com.oracle.truffle.regex.tregex.parser.Token.CharacterClass Token.CharacterClass}, but
+     * the parser may optimize redundant nodes away and add their source sections to existing nodes.
+     * Example: {@code a|b} will be optimized to {@code [ab]}, which will be mapped to both original
+     * characters.</li>
      * <li>{@link Sequence}, {@link MatchFound}, {@link RegexASTSubtreeRootNode}: no mapping.</li>
      * <li>{@link PositionAssertion}, {@link BackReference}: mapped to their respective
      * {@link Token}s.</li>
@@ -538,22 +581,22 @@ public final class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible
      * counterparts.</li>
      * <li>Nodes inserted as substitutions for e.g. {@code \b} will simply point to the source
      * section they are substituting.</li>
-     * <li>Source sections of {@link Token.Quantifier quantifiers} are mapped to their respective
-     * {@link Term}.</li>
+     * <li>Source sections of {@link com.oracle.truffle.regex.tregex.parser.Token.Quantifier
+     * quantifiers} are mapped to their respective {@link Term}.</li>
      * </ul>
      */
     public List<SourceSection> getSourceSections(RegexASTNode node) {
-        return getOptions().isDumpAutomata() ? sourceSections.get(node) : null;
+        return options.isDumpAutomata() ? sourceSections.get(node) : null;
     }
 
     public void addSourceSection(RegexASTNode node, Token token) {
-        if (getOptions().isDumpAutomata() && token != null && token.getSourceSection() != null) {
+        if (options.isDumpAutomata() && token != null && token.getSourceSection() != null) {
             getOrCreateSourceSections(node).add(token.getSourceSection());
         }
     }
 
     public void addSourceSections(RegexASTNode node, Collection<SourceSection> src) {
-        if (getOptions().isDumpAutomata() && src != null) {
+        if (options.isDumpAutomata() && src != null) {
             getOrCreateSourceSections(node).addAll(src);
         }
     }
