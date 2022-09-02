@@ -62,12 +62,11 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
-import org.graalvm.compiler.nodes.calc.FloatNormalizeCompareNode;
 import org.graalvm.compiler.nodes.calc.IntegerBelowNode;
 import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
 import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
-import org.graalvm.compiler.nodes.calc.IntegerNormalizeCompareNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
+import org.graalvm.compiler.nodes.calc.NormalizeCompareNode;
 import org.graalvm.compiler.nodes.calc.ObjectEqualsNode;
 import org.graalvm.compiler.nodes.extended.UnboxNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
@@ -351,7 +350,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         }
     }
 
-    private static boolean isUnboxedFrom(MetaAccessProvider meta, NodeView view, ValueNode x, ValueNode src) {
+    private boolean isUnboxedFrom(MetaAccessProvider meta, NodeView view, ValueNode x, ValueNode src) {
         if (x == src) {
             return true;
         } else if (x instanceof UnboxNode) {
@@ -548,7 +547,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                 return false;
             }
 
-            if (trueSuccessor().hasAnchored() || falseSuccessor().hasAnchored()) {
+            if (trueSuccessor().anchored().isNotEmpty() || falseSuccessor().anchored().isNotEmpty()) {
                 return false;
             }
 
@@ -1123,9 +1122,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                         return null;
                     }
                     boolean unsigned = cond1.isUnsigned() || cond2.isUnsigned();
-                    boolean floatingPoint = x.stamp(NodeView.from(tool)) instanceof FloatStamp;
-                    assert !floatingPoint || y.stamp(NodeView.from(tool)) instanceof FloatStamp;
-                    assert !(floatingPoint && unsigned);
 
                     long expected1 = expectedConstantForNormalize(cond1);
                     long expected2 = expectedConstantForNormalize(cond2);
@@ -1142,22 +1138,26 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
                         // cannot be expressed by NormalizeCompareNode
                         return null;
                     }
-                    if (floatingPoint) {
-                        boolean unorderedLess = false;
-                        if (((FloatStamp) x.stamp).canBeNaN() || ((FloatStamp) y.stamp).canBeNaN()) {
-                            // we may encounter NaNs, check the unordered value
-                            // (following the original condition's "unorderedIsTrue" path)
-                            long unorderedValue = condition1.unorderedIsTrue() ? c1 : condition2.unorderedIsTrue() ? c2 : c3;
-                            if (unorderedValue == 0) {
-                                // returning "0" for unordered is not possible
-                                return null;
-                            }
-                            unorderedLess = unorderedValue == -1;
-                        }
-                        return graph().unique(new FloatNormalizeCompareNode(x, y, stackKind, unorderedLess));
-                    } else {
-                        return graph().unique(new IntegerNormalizeCompareNode(x, y, stackKind, unsigned));
+                    if (unsigned) {
+                        // for unsigned comparisons, we need to add MIN_VALUE (see
+                        // Long.compareUnsigned)
+                        ValueNode minValue = graph().unique(ConstantNode.forIntegerStamp(x.stamp,
+                                        x.stamp.getStackKind().getMinValue()));
+                        x = graph().unique(new AddNode(x, minValue));
+                        y = graph().unique(new AddNode(y, minValue));
                     }
+                    boolean unorderedLess = false;
+                    if (x.stamp instanceof FloatStamp && (((FloatStamp) x.stamp).canBeNaN() || ((FloatStamp) y.stamp).canBeNaN())) {
+                        // we may encounter NaNs, check the unordered value
+                        // (following the original condition's "unorderedIsTrue" path)
+                        long unorderedValue = condition1.unorderedIsTrue() ? c1 : condition2.unorderedIsTrue() ? c2 : c3;
+                        if (unorderedValue == 0) {
+                            // returning "0" for unordered is not possible
+                            return null;
+                        }
+                        unorderedLess = unorderedValue == -1;
+                    }
+                    return graph().unique(new NormalizeCompareNode(x, y, stackKind, unorderedLess));
                 }
             }
         }
@@ -1213,10 +1213,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
 
         PhiNode generalPhi = merge.phis().first();
         if (!(generalPhi instanceof ValuePhiNode)) {
-            return false;
-        }
-
-        if (trueSuccessor().isUsedAsGuardInput() || falseSuccessor().isUsedAsGuardInput()) {
             return false;
         }
 
@@ -1649,10 +1645,6 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
             return false;
         }
 
-        if (trueSuccessor().isUsedAsGuardInput() || falseSuccessor().isUsedAsGuardInput()) {
-            return false;
-        }
-
         // Ensure phi is used by at most the comparison and the merge's frame state (if any)
         ValuePhiNode phi = (ValuePhiNode) singleUsage;
         NodeIterable<Node> phiUsages = phi.usages();
@@ -1780,7 +1772,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
         return true;
     }
 
-    private static void propagateZeroProbability(FixedNode startNode) {
+    private void propagateZeroProbability(FixedNode startNode) {
         Node prev = null;
         for (FixedNode node : GraphUtil.predecessorIterable(startNode)) {
             if (node instanceof IfNode) {
