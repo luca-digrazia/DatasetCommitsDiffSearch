@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,14 +29,16 @@
  */
 package com.oracle.truffle.llvm.runtime.datalayout;
 
+import java.nio.ByteOrder;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.IdentityHashMap;
 
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayoutParser.DataTypeSpecification;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
 
 /**
@@ -49,35 +51,61 @@ import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
  */
 public final class DataLayout {
 
-    private final List<DataTypeSpecification> dataLayout;
+    private final ArrayList<DataTypeSpecification> dataLayout;
+    private final ByteOrder byteOrder;
 
-    public DataLayout() {
+    private final IdentityHashMap<Type, Long> sizeCache = new IdentityHashMap<>();
+    private final IdentityHashMap<Type, Integer> alignmentCache = new IdentityHashMap<>();
+
+    public DataLayout(ByteOrder byteOrder) {
         this.dataLayout = new ArrayList<>();
+        this.byteOrder = byteOrder;
     }
 
     public DataLayout(String layout) {
-        this.dataLayout = DataLayoutParser.parseDataLayout(layout);
+        this.dataLayout = new ArrayList<>();
+        this.byteOrder = DataLayoutParser.parseDataLayout(layout, dataLayout);
     }
 
-    public int getSize(Type type) {
-        int size = type.getBitSize();
-        int align = getBitAlignment(type);
-        if (size % align != 0) {
-            size += align - (size % align);
+    public ByteOrder getByteOrder() {
+        return byteOrder;
+    }
+
+    public long getSize(Type type) throws TypeOverflowException {
+        Long cachedSize = sizeCache.get(type);
+        if (cachedSize != null) {
+            return cachedSize;
         }
-        return Math.max(1, size / Byte.SIZE);
+        long size = type.getBitSize();
+        int align = getBitAlignment(type);
+        long rem = Long.remainderUnsigned(size, align);
+        if (rem != 0) {
+            size = Type.addUnsignedExact(size, Type.subUnsignedExact(align, rem));
+        }
+        size = Math.max(1, Long.divideUnsigned(size, Byte.SIZE));
+        sizeCache.put(type, size);
+        return size;
     }
 
     public int getBitAlignment(Type baseType) {
+        Integer cachedAlignment = alignmentCache.get(baseType);
+        if (cachedAlignment != null) {
+            return cachedAlignment;
+        }
         DataTypeSpecification spec = getDataTypeSpecification(baseType);
         if (spec == null) {
-            throw new IllegalStateException("No data specification found for " + baseType);
+            throw new IllegalStateException("No data specification found for " + baseType + ". Data layout is " + dataLayout);
         }
-        return spec.getAbiAlignment();
+        int alignment = spec.getAbiAlignment();
+        alignmentCache.put(baseType, alignment);
+        return alignment;
     }
 
     public DataLayout merge(DataLayout other) {
-        DataLayout result = new DataLayout();
+        if (other.byteOrder != byteOrder) {
+            throw new IllegalStateException("Multiple bitcode files with incompatible byte order are used: " + this.toString() + " vs. " + other.toString());
+        }
+        DataLayout result = new DataLayout(byteOrder);
         for (DataTypeSpecification otherEntry : other.dataLayout) {
             DataTypeSpecification thisEntry;
             if (otherEntry.getType() == DataLayoutType.POINTER || otherEntry.getType() == DataLayoutType.INTEGER_WIDTHS) {
@@ -103,7 +131,10 @@ public final class DataLayout {
 
     private DataTypeSpecification getDataTypeSpecification(Type baseType) {
         if (baseType instanceof PointerType || baseType instanceof FunctionType) {
-            return getDataTypeSpecification(DataLayoutType.POINTER);
+            DataTypeSpecification ptrDTSpec = getDataTypeSpecification(DataLayoutType.POINTER, 64);
+            // The preceding call does not work for ARM arch that uses 128 bit pointers. In that
+            // case we take the first pointer spec available.
+            return ptrDTSpec == null ? getDataTypeSpecification(DataLayoutType.POINTER) : ptrDTSpec;
         } else if (baseType instanceof PrimitiveType) {
             PrimitiveType primitiveType = (PrimitiveType) baseType;
             switch (primitiveType.getPrimitiveKind()) {
@@ -127,7 +158,7 @@ public final class DataLayout {
                     return getDataTypeSpecification(DataLayoutType.FLOAT, 80);
             }
         } else if (baseType instanceof VariableBitWidthType) {
-            int bits = baseType.getBitSize();
+            int bits = ((VariableBitWidthType) baseType).getBitSizeInt();
 
             DataTypeSpecification largest = null;
             DataTypeSpecification smallestLarger = null;
