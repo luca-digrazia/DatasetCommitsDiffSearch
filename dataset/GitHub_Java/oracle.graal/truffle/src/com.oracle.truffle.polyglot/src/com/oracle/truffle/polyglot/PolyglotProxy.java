@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -138,7 +138,7 @@ final class PolyglotProxy implements TruffleObject {
             PolyglotLanguageContext languageContext = context.get().internalContext;
             Value[] convertedArguments = languageContext.toHostValues(arguments, 0);
             Object result = guestToHostCall(library, language.getHostToGuestCache().instantiate, languageContext, proxy, convertedArguments);
-            return languageContext.toGuestValue(library, result);
+            return languageContext.toGuestValue(result);
         }
         throw UnsupportedMessageException.create();
     }
@@ -158,7 +158,7 @@ final class PolyglotProxy implements TruffleObject {
             PolyglotLanguageContext languageContext = context.get().internalContext;
             Value[] convertedArguments = languageContext.toHostValues(arguments, 0);
             Object result = guestToHostCall(library, language.getHostToGuestCache().execute, languageContext, proxy, convertedArguments);
-            return languageContext.toGuestValue(library, result);
+            return languageContext.toGuestValue(result);
         }
         throw UnsupportedMessageException.create();
     }
@@ -194,7 +194,7 @@ final class PolyglotProxy implements TruffleObject {
         if (proxy instanceof ProxyArray) {
             PolyglotLanguageContext languageContext = context.get().internalContext;
             Object result = guestToHostCall(library, language.getHostToGuestCache().arrayGet, languageContext, proxy, index);
-            return languageContext.toGuestValue(library, result);
+            return languageContext.toGuestValue(result);
         } else {
             throw UnsupportedMessageException.create();
         }
@@ -291,7 +291,7 @@ final class PolyglotProxy implements TruffleObject {
             if (result == null) {
                 result = EMPTY;
             }
-            Object guestValue = languageContext.toGuestValue(library, result);
+            Object guestValue = languageContext.toGuestValue(result);
             if (!InteropLibrary.getFactory().getUncached().hasArrayElements(guestValue)) {
                 throw illegalProxy(languageContext, "getMemberKeys() returned invalid value %s but must return an array of member key Strings.",
                                 languageContext.asValue(guestValue).toString());
@@ -320,7 +320,7 @@ final class PolyglotProxy implements TruffleObject {
             }
             PolyglotLanguageContext languageContext = context.get().internalContext;
             Object result = guestToHostCall(library, language.getHostToGuestCache().getMember, languageContext, proxy, member);
-            return languageContext.toGuestValue(library, result);
+            return languageContext.toGuestValue(result);
         } else {
             throw UnsupportedMessageException.create();
         }
@@ -359,7 +359,7 @@ final class PolyglotProxy implements TruffleObject {
                 throw UnsupportedMessageException.create();
             }
             PolyglotLanguageContext languageContext = context.get().internalContext;
-            memberObject = languageContext.toGuestValue(library, memberObject);
+            memberObject = languageContext.toGuestValue(memberObject);
             if (executables.isExecutable(memberObject)) {
                 return executables.execute(memberObject, arguments);
             } else {

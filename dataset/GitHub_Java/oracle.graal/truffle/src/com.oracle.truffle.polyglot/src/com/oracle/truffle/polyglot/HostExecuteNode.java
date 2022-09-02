@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -323,7 +323,7 @@ abstract class HostExecuteNode extends Node {
             if (arg == null) {
                 argType = NullCheckNode.INSTANCE;
             } else if (multiple && ToHostNode.isPrimitiveTarget(targetType)) {
-                argType = createPrimitiveTargetCheck(applicable, selected, arg, targetType, i, priority, varArgs);
+                argType = createPrimitiveTargetCheck(applicable, selected, arg, targetType, i, varArgs);
             } else if (arg instanceof HostObject) {
                 argType = new JavaObjectType(((HostObject) arg).getObjectClass());
             } else {
@@ -344,7 +344,7 @@ abstract class HostExecuteNode extends Node {
         assert checkArgTypes(args, cachedArgTypes, InteropLibrary.getFactory().getUncached(), languageContext, false) : Arrays.toString(cachedArgTypes);
     }
 
-    private static TypeCheckNode createPrimitiveTargetCheck(List<SingleMethod> applicable, SingleMethod selected, Object arg, Class<?> targetType, int parameterIndex, int priority, boolean varArgs) {
+    private static TypeCheckNode createPrimitiveTargetCheck(List<SingleMethod> applicable, SingleMethod selected, Object arg, Class<?> targetType, int parameterIndex, boolean varArgs) {
         Class<?> currentTargetType = targetType;
 
         Collection<Class<?>> otherPossibleTypes = new ArrayList<>();
@@ -373,7 +373,7 @@ abstract class HostExecuteNode extends Node {
                 otherPossibleTypes.add(paramType);
             }
         }
-        return new PrimitiveType(currentTargetType, otherPossibleTypes.toArray(EMPTY_CLASS_ARRAY), priority);
+        return new PrimitiveType(currentTargetType, otherPossibleTypes.toArray(EMPTY_CLASS_ARRAY));
     }
 
     @ExplodeLoop
@@ -396,9 +396,10 @@ abstract class HostExecuteNode extends Node {
             int parameterCount = overload.getParameterCount();
             if (args.length == parameterCount) {
                 Class<?> varArgParamType = overload.getParameterTypes()[parameterCount - 1];
-                return !ToHostNode.canConvert(args[parameterCount - 1], varArgParamType, overload.getGenericParameterTypes()[parameterCount - 1],
-                                null, languageContext, ToHostNode.LOOSE,
-                                InteropLibrary.getFactory().getUncached(), TargetMappingNode.getUncached());
+                return !isSubtypeOf(args[parameterCount - 1], varArgParamType) &&
+                                !ToHostNode.canConvert(args[parameterCount - 1], varArgParamType, overload.getGenericParameterTypes()[parameterCount - 1],
+                                                null, languageContext, ToHostNode.LOOSE,
+                                                InteropLibrary.getFactory().getUncached(), TargetMappingNode.getUncached());
             } else {
                 assert args.length != parameterCount;
                 return true;
@@ -522,9 +523,10 @@ abstract class HostExecuteNode extends Node {
                     Type[] genericParameterTypes = candidate.getGenericParameterTypes();
                     boolean applicable = true;
                     for (int i = 0; i < paramCount; i++) {
-                        if (!ToHostNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], null,
-                                        languageContext, priority, InteropLibrary.getFactory().getUncached(args[i]),
-                                        TargetMappingNode.getUncached())) {
+                        if (!isSubtypeOf(args[i], parameterTypes[i]) &&
+                                        !ToHostNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], null,
+                                                        languageContext, priority, InteropLibrary.getFactory().getUncached(args[i]),
+                                                        TargetMappingNode.getUncached())) {
                             applicable = false;
                             break;
                         }
@@ -542,9 +544,10 @@ abstract class HostExecuteNode extends Node {
                     Type[] genericParameterTypes = candidate.getGenericParameterTypes();
                     boolean applicable = true;
                     for (int i = 0; i < parameterCount - 1; i++) {
-                        if (!ToHostNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], null,
-                                        languageContext, priority, InteropLibrary.getFactory().getUncached(args[i]),
-                                        TargetMappingNode.getUncached())) {
+                        if (!isSubtypeOf(args[i], parameterTypes[i]) &&
+                                        !ToHostNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], null,
+                                                        languageContext, priority, InteropLibrary.getFactory().getUncached(args[i]),
+                                                        TargetMappingNode.getUncached())) {
                             applicable = false;
                             break;
                         }
@@ -559,9 +562,10 @@ abstract class HostExecuteNode extends Node {
                             varArgsGenericComponentType = varArgsComponentType;
                         }
                         for (int i = parameterCount - 1; i < args.length; i++) {
-                            if (!ToHostNode.canConvert(args[i], varArgsComponentType, varArgsGenericComponentType, null,
-                                            languageContext, priority,
-                                            InteropLibrary.getFactory().getUncached(args[i]), TargetMappingNode.getUncached())) {
+                            if (!isSubtypeOf(args[i], varArgsComponentType) &&
+                                            !ToHostNode.canConvert(args[i], varArgsComponentType, varArgsGenericComponentType, null,
+                                                            languageContext, priority,
+                                                            InteropLibrary.getFactory().getUncached(args[i]), TargetMappingNode.getUncached())) {
                                 applicable = false;
                                 break;
                             }
@@ -958,12 +962,10 @@ abstract class HostExecuteNode extends Node {
     static final class PrimitiveType extends TypeCheckNode {
         final Class<?> targetType;
         @CompilationFinal(dimensions = 1) final Class<?>[] otherTypes;
-        final int priority;
 
-        PrimitiveType(Class<?> targetType, Class<?>[] otherTypes, int priority) {
+        PrimitiveType(Class<?> targetType, Class<?>[] otherTypes) {
             this.targetType = targetType;
             this.otherTypes = otherTypes;
-            this.priority = priority;
         }
 
         @Override
@@ -1002,11 +1004,11 @@ abstract class HostExecuteNode extends Node {
         @Override
         public boolean execute(Object value, InteropLibrary interop, PolyglotLanguageContext languageContext) {
             for (Class<?> otherType : otherTypes) {
-                if (ToHostNode.canConvertToPrimitive(value, otherType, interop, priority)) {
+                if (ToHostNode.canConvertToPrimitive(value, otherType, interop)) {
                     return false;
                 }
             }
-            return ToHostNode.canConvertToPrimitive(value, targetType, interop, priority);
+            return ToHostNode.canConvertToPrimitive(value, targetType, interop);
         }
     }
 

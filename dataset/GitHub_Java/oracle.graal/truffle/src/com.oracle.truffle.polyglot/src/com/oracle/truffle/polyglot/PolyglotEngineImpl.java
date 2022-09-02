@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,8 +46,6 @@ import static com.oracle.truffle.polyglot.EngineAccessor.LANGUAGE;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.time.ZoneId;
@@ -96,9 +94,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLogger;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.dsl.SpecializationStatistics;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.DispatchOutputStream;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
@@ -189,10 +184,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     private volatile int asynchronousStackDepth = 0;
     @CompilationFinal private HostToGuestCodeCache hostToGuestCodeCache;
 
-    final SpecializationStatistics specializationStatistics;
-    final Supplier<TruffleLogger> engineLoggerSupplier;
-    private volatile TruffleLogger engineLogger;
-
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options,
                     boolean allowExperimentalOptions, boolean useSystemProperties, ClassLoader contextClassLoader, boolean boundEngine,
                     MessageTransport messageInterceptor, Handler logHandler) {
@@ -237,7 +228,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
         this.engineOptions = createEngineOptionDescriptors();
         this.engineOptionValues = new OptionValuesImpl(this, engineOptions, true);
-        this.engineLoggerSupplier = PolyglotLoggers.createEngineLoggerProvider(this);
 
         Map<String, Language> publicLanguages = new LinkedHashMap<>();
         for (String key : this.idToLanguage.keySet()) {
@@ -270,12 +260,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
         for (PolyglotLanguage language : languagesOptions.keySet()) {
             language.getOptionValues().putAll(languagesOptions.get(language), useAllowExperimentalOptions);
-        }
-
-        if (engineOptionValues.get(PolyglotEngineOptions.SpecializationStatistics)) {
-            this.specializationStatistics = SpecializationStatistics.create();
-        } else {
-            this.specializationStatistics = null;
         }
 
         ENGINES.put(this, null);
@@ -326,7 +310,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
         this.engineOptions = createEngineOptionDescriptors();
         this.engineOptionValues = new OptionValuesImpl(this, engineOptions, true);
-        this.engineLoggerSupplier = PolyglotLoggers.createEngineLoggerProvider(this);
 
         Map<String, Language> publicLanguages = new LinkedHashMap<>();
         for (String key : this.idToLanguage.keySet()) {
@@ -358,12 +341,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             }
         }
 
-        if (this.engineOptionValues.get(PolyglotEngineOptions.SpecializationStatistics)) {
-            this.specializationStatistics = SpecializationStatistics.create();
-        } else {
-            this.specializationStatistics = null;
-        }
-
         ENGINES.put(this, null);
         Collection<PolyglotInstrument> instrumentsToCreate = new ArrayList<>();
         for (String instrumentId : idToInstrument.keySet()) {
@@ -376,19 +353,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
         ensureInstrumentsCreated(instrumentsToCreate);
         registerShutDownHook();
-    }
-
-    TruffleLogger getEngineLogger() {
-        TruffleLogger result = this.engineLogger;
-        if (result == null) {
-            synchronized (this) {
-                result = this.engineLogger;
-                if (result == null) {
-                    this.engineLogger = result = this.engineLoggerSupplier.get();
-                }
-            }
-        }
-        return result;
     }
 
     HostToGuestCodeCache getHostToGuestCodeCache() {
@@ -1059,21 +1023,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             if (this.runtimeData != null) {
                 EngineAccessor.RUNTIME.onEngineClosed(this.runtimeData);
             }
-
-            if (specializationStatistics != null) {
-                StringWriter logMessage = new StringWriter();
-                try (PrintWriter writer = new PrintWriter(logMessage)) {
-                    if (!specializationStatistics.hasData()) {
-                        writer.printf("No specialization statistics data was collected. Either no node with @%s annotations was executed or " +
-                                        "the interpreter was not compiled with -J-Dtruffle.dsl.GenerateSpecializationStatistics=true e.g as parameter to the javac tool.",
-                                        Specialization.class.getSimpleName());
-                    } else {
-                        specializationStatistics.printHistogram(writer);
-                    }
-                }
-                getEngineLogger().log(Level.INFO, String.format("Specialization histogram: %n%s", logMessage.toString()));
-            }
-
             if (closeContexts) {
                 Object loggers = getEngineLoggers();
                 if (loggers != null) {
@@ -1086,9 +1035,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 closed = true;
                 for (PolyglotLanguage language : idToLanguage.values()) {
                     language.close();
-                }
-                if (runtimeData != null) {
-                    EngineAccessor.RUNTIME.flushCompileQueue(runtimeData);
                 }
             } else if (logHandler != null) {
                 // called from shutdown hook, at least flush the logging handler
