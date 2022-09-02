@@ -74,7 +74,6 @@ import org.graalvm.compiler.nodes.java.DynamicNewInstanceNode;
 import org.graalvm.compiler.nodes.java.InstanceOfDynamicNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
-import org.graalvm.compiler.nodes.java.ValidateNewInstanceClassNode;
 import org.graalvm.compiler.nodes.spi.ArrayLengthProvider;
 import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.nodes.type.NarrowOopStamp;
@@ -578,8 +577,7 @@ public class SubstrateGraphBuilderPlugins {
                  */
                 ValueNode clazzNonNull = b.nullCheckedValue(clazz, DeoptimizationAction.None);
                 b.add(new EnsureClassInitializedNode(clazzNonNull));
-                ValueNode clazzLegal = b.add(new ValidateNewInstanceClassNode(clazzNonNull));
-                b.addPush(JavaKind.Object, new DynamicNewInstanceNode(clazzLegal, true));
+                b.addPush(JavaKind.Object, new DynamicNewInstanceNode(clazzNonNull, true));
                 return true;
             }
         });
@@ -924,7 +922,7 @@ public class SubstrateGraphBuilderPlugins {
                     } else {
                         throw VMError.shouldNotReachHere("Unexpected class object: " + clazzOrHub);
                     }
-                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(!desiredAssertionStatus));
+                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(desiredAssertionStatus));
                     return true;
                 }
                 return false;
