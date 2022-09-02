@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,14 +41,12 @@
 package com.oracle.truffle.api.library.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 
 import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Test;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
@@ -59,7 +57,6 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.test.ExportMethodTest.ExportsTestLibrary4;
-import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @SuppressWarnings({"unused", "hiding"})
@@ -393,32 +390,6 @@ public class ExportNodeTest extends AbstractLibraryTest {
             static String f0(ExportFallback receiver, String arg) {
                 return "f0";
             }
-        }
-
-    }
-
-    @Test
-    public void testWeakReference() {
-        WeakReferenceNodeTest weak = new WeakReferenceNodeTest();
-        MultiNodeExportLibrary cachedLib = createCached(MultiNodeExportLibrary.class, weak);
-        assertEquals("s0", cachedLib.m0(weak, "arg"));
-    }
-
-    @ExportLibrary(MultiNodeExportLibrary.class)
-    public static final class WeakReferenceNodeTest {
-
-        @ExportMessage
-        static class M0 {
-
-            @Specialization(guards = "object == cachedObject", limit = "1")
-            @TruffleBoundary
-            static String s0(@SuppressWarnings("unused") WeakReferenceNodeTest object,
-                            String arg,
-                            @Cached(value = "object", weak = true) WeakReferenceNodeTest cachedObject) {
-                assertNotNull(cachedObject);
-                return "s0";
-            }
-
         }
 
     }
