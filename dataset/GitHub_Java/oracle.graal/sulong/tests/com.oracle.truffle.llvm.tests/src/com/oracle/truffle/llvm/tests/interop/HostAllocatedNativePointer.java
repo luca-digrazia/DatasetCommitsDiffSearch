@@ -42,7 +42,6 @@ import sun.misc.Unsafe;
 
 @RunWith(TruffleRunner.class)
 public class HostAllocatedNativePointer extends InteropTestBase {
-    @SuppressWarnings("try")
     @Test
     public void testHostAllocatedNativePointer() {
         final Unsafe unsafeMem;
