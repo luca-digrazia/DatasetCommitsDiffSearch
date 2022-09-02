@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -129,26 +129,12 @@ public class OptionsParser {
                     msg.format("%n    %s=<value>", match.getName());
                 }
             }
-            IllegalArgumentException iae = new IllegalArgumentException(msg.toString());
-            if (isFromLibGraal(iae)) {
-                msg.format("%nIf %s is a libgraal option, it must be specified with '-Dlibgraal.%s' as opposed to '-Dgraal.%s'.", name, name, name);
-                iae = new IllegalArgumentException(msg.toString());
-            }
-            throw iae;
+            throw new IllegalArgumentException(msg.toString());
         }
 
         Object value = parseOptionValue(desc, uncheckedValue);
 
         desc.getOptionKey().update(values, value);
-    }
-
-    private static boolean isFromLibGraal(Throwable t) {
-        for (StackTraceElement frame : t.getStackTrace()) {
-            if ("org.graalvm.libgraal.LibGraal".equals(frame.getClassName())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** Parses a given option value with a known descriptor. */
