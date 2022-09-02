@@ -89,10 +89,10 @@ import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeoptimizationGroupingPhase;
 import org.graalvm.compiler.phases.common.ExpandLogicPhase;
+import org.graalvm.compiler.phases.common.FixReadsPhase;
 import org.graalvm.compiler.phases.common.FrameStateAssignmentPhase;
 import org.graalvm.compiler.phases.common.LoopSafepointInsertionPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
-import org.graalvm.compiler.phases.common.UseTrappingNullChecksPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.LowTierContext;
@@ -171,6 +171,7 @@ import com.oracle.svm.core.graal.code.SubstratePlatformConfigurationProvider;
 import com.oracle.svm.core.graal.jdk.ArraycopySnippets;
 import com.oracle.svm.core.graal.lir.VerifyCFunctionReferenceMapsLIRPhase;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
+import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.meta.SubstrateLoweringProvider;
 import com.oracle.svm.core.graal.meta.SubstrateReplacements;
@@ -202,6 +203,7 @@ import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.snippets.SnippetRuntime;
+import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescriptor;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
@@ -857,7 +859,7 @@ public class NativeImageGenerator {
                 AnalysisMetaAccess aMetaAccess = new SVMAnalysisMetaAccess(aUniverse, originalMetaAccess);
                 AnalysisConstantReflectionProvider aConstantReflection = new AnalysisConstantReflectionProvider(aUniverse, originalProviders.getConstantReflection(), classInitializationSupport);
                 WordTypes aWordTypes = new SubstrateWordTypes(aMetaAccess, FrameAccess.getWordKind());
-                HostedSnippetReflectionProvider aSnippetReflection = new HostedSnippetReflectionProvider(aWordTypes);
+                HostedSnippetReflectionProvider aSnippetReflection = new HostedSnippetReflectionProvider((SVMHost) aUniverse.hostVM(), aWordTypes);
 
                 boolean withoutCompilerInvoker = CAnnotationProcessorCache.Options.ExitAfterQueryCodeGeneration.getValue() ||
                                 (NativeImageOptions.ExitAfterRelocatableImageWrite.getValue() && CAnnotationProcessorCache.Options.UseCAPCache.getValue());
@@ -1158,7 +1160,7 @@ public class NativeImageGenerator {
 
         featureHandler.forEachGraalFeature(feature -> feature.registerGraphBuilderPlugins(providers, plugins, analysis, hosted));
 
-        HostedSnippetReflectionProvider hostedSnippetReflection = new HostedSnippetReflectionProvider(new SubstrateWordTypes(aMetaAccess, FrameAccess.getWordKind()));
+        HostedSnippetReflectionProvider hostedSnippetReflection = new HostedSnippetReflectionProvider((SVMHost) aUniverse.hostVM(), new SubstrateWordTypes(aMetaAccess, FrameAccess.getWordKind()));
         HotSpotGraalCompiler compiler = (HotSpotGraalCompiler) HotSpotJVMCIRuntime.runtime().getCompiler();
 
         NodeIntrinsificationProvider nodeIntrinsificationProvider;
@@ -1233,7 +1235,9 @@ public class NativeImageGenerator {
         Providers runtimeCallProviders = runtimeConfig != null ? runtimeConfig.getBackendForNormalMethod().getProviders() : providers;
         SubstrateForeignCallsProvider foreignCallsProvider = (SubstrateForeignCallsProvider) providers.getForeignCalls();
         if (initForeignCalls) {
-            SnippetRuntime.registerForeignCalls(runtimeCallProviders, foreignCallsProvider);
+            for (SubstrateForeignCallDescriptor descriptor : SnippetRuntime.getRuntimeCalls()) {
+                foreignCallsProvider.getForeignCalls().put(descriptor.getSignature(), new SubstrateForeignCallLinkage(runtimeCallProviders, descriptor));
+            }
         }
         featureHandler.forEachGraalFeature(feature -> feature.registerForeignCalls(runtimeConfig, runtimeCallProviders, snippetReflection, foreignCallsProvider, hosted));
         try (DebugContext.Scope s = debug.scope("RegisterLowerings", new DebugDumpScope("RegisterLowerings"))) {
@@ -1340,7 +1344,7 @@ public class NativeImageGenerator {
         if (firstTier) {
             lowTier.findPhase(ExpandLogicPhase.class, true).add(addressLoweringPhase);
         } else {
-            lowTier.findPhase(UseTrappingNullChecksPhase.class).add(addressLoweringPhase);
+            lowTier.findPhase(FixReadsPhase.class).add(addressLoweringPhase);
         }
 
         if (SubstrateOptions.MultiThreaded.getValue()) {

@@ -1038,8 +1038,8 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         ResolvedJavaType wrappedEnclosingType;
         try {
             wrappedEnclosingType = wrapped.getEnclosingType();
-        } catch (LinkageError e) {
-            /* Ignore LinkageError thrown by enclosing type resolution. */
+        } catch (NoClassDefFoundError e) {
+            /* Ignore NoClassDefFoundError thrown by enclosing type resolution. */
             return null;
         }
         return universe.lookup(wrappedEnclosingType);
