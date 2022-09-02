@@ -953,7 +953,8 @@ final class JDWP {
 
                 JDWPConstantPool constantPool = klass.getJDWPConstantPool();
 
-                int count = constantPool.getCount();
+                int count = constantPool.getCount() + 1;
+
                 reply.writeInt(count);
 
                 byte[] poolBytes = constantPool.getBytes();

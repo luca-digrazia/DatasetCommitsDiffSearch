@@ -125,7 +125,7 @@ public final class DebuggerController implements ContextsListener {
         return suspendedInfos.get(thread);
     }
 
-    public boolean isSuspend() {
+    public boolean shouldWaitForAttach() {
         return options.suspend;
     }
 
@@ -506,11 +506,7 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public void endSession() {
-        try {
-            debuggerSession.close();
-        } catch (IllegalStateException ex) {
-            // already closed, ignore
-        }
+        debuggerSession.close();
     }
 
     public JDWPOptions getOptions() {
