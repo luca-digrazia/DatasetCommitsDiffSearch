@@ -190,12 +190,8 @@ public final class Target_java_lang_Class {
             if (innerClassIndex != 0) {
                 if (pool.classAt(innerClassIndex).getName(pool) == klass.getName()) {
                     if (pool.resolvedKlassAt(k, innerClassIndex) == k) {
-                        if (entry.innerNameIndex != 0) {
-                            Symbol<Name> innerName = pool.symbolAt(entry.innerNameIndex);
-                            return meta.toGuestString(innerName);
-                        } else {
-                            break;
-                        }
+                        Symbol<Name> innerName = pool.symbolAt(entry.innerNameIndex);
+                        return meta.toGuestString(innerName);
                     }
                 }
             }
