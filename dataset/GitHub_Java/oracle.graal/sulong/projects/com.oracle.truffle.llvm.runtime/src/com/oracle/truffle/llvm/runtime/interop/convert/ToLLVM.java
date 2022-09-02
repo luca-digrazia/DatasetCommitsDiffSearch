@@ -111,8 +111,8 @@ public abstract class ToLLVM extends LLVMNode {
 
         @Specialization(limit = "3", guards = {"!isPointer(value)", "type == null || nativeTypes.hasNativeType(value)"})
         LLVMPointer doUntyped(Object value, LLVMInteropType.Structured type,
-                        @CachedLibrary("value") NativeTypeLibrary nativeTypes) {
-            assert type == null || nativeTypes.hasNativeType(value);
+                        @SuppressWarnings("unused") @CachedLibrary("value") NativeTypeLibrary nativeTypes) {
+            assert type == null;
             return LLVMManagedPointer.create(value);
         }
     }

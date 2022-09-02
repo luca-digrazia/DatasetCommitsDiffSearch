@@ -144,11 +144,6 @@ public abstract class ToPointer extends ForeignToLLVM {
         return LLVMManagedPointer.create(object);
     }
 
-    @Specialization
-    protected LLVMInteropType fromInteropType(LLVMInteropType object, @SuppressWarnings("unused") LLVMInteropType.Structured typeFromMethodSignature) {
-        return object;
-    }
-
     @TruffleBoundary
     static Object slowPathPrimitiveConvert(Object value, LLVMInteropType.Structured typeFromMethodSignature) throws UnsupportedTypeException {
         if (value instanceof Number) {
@@ -169,8 +164,6 @@ public abstract class ToPointer extends ForeignToLLVM {
             } else {
                 return LLVMManagedPointer.create(LLVMTypedForeignObject.create(value, typeFromMethodSignature));
             }
-        } else if (value instanceof LLVMInteropType) {
-            return value;
         } else {
             throw UnsupportedTypeException.create(new Object[]{value});
         }
