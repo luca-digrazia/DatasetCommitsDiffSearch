@@ -405,18 +405,6 @@ abstract class PlatformBuilder extends EspressoProperties.Builder {
     Path defaultEspressoHome() {
         return HomeFinder.getInstance().getLanguageHomes().get(EspressoLanguage.ID);
     }
-
-    protected static Path findGraalVMJavaHome(Path espressoHome) {
-        // ESPRESSO_HOME = GRAALVM_JAVA_HOME/languages/java
-        Path languages = espressoHome.getParent();
-        if (languages != null) {
-            Path graalJavaHome = languages.getParent();
-            if (graalJavaHome != null) {
-                return graalJavaHome;
-            }
-        }
-        throw EspressoError.shouldNotReachHere("Cannot find GraalVM home from Espresso home. Espresso is not running from within GraalVM.");
-    }
 }
 
 enum OS {
@@ -488,9 +476,10 @@ final class LinuxBuilder extends PlatformBuilder {
     @Override
     List<Path> defaultJvmLibraryPath() {
         List<Path> paths = new ArrayList<>();
-        Path graalJavaHome = findGraalVMJavaHome(espressoHome());
-        paths.add(graalJavaHome.resolve("lib").resolve(CPU_ARCH).resolve("truffle"));
-        paths.add(graalJavaHome.resolve("lib").resolve("truffle"));
+        // espressoHome = ESPRESSO_JAVA_HOME/languages/lib
+        Path espressoJavaHome = espressoHome().getParent().getParent();
+        paths.add(espressoJavaHome.resolve("lib").resolve(CPU_ARCH).resolve("truffle"));
+        paths.add(espressoJavaHome.resolve("lib").resolve("truffle"));
         return paths;
     }
 
@@ -537,8 +526,9 @@ final class DarwinBuilder extends PlatformBuilder {
 
     @Override
     List<Path> defaultJvmLibraryPath() {
-        Path graalJavaHome = findGraalVMJavaHome(espressoHome());
-        return Collections.singletonList(graalJavaHome.resolve("lib").resolve("truffle"));
+        // espressoHome = ESPRESSO_JAVA_HOME/languages/lib
+        Path espressoJavaHome = espressoHome().getParent().getParent();
+        return Collections.singletonList(espressoJavaHome.resolve("lib").resolve("truffle"));
     }
 
     @Override
@@ -604,8 +594,9 @@ final class WindowsBuilder extends PlatformBuilder {
 
     @Override
     List<Path> defaultJvmLibraryPath() {
-        Path graalJavaHome = findGraalVMJavaHome(espressoHome());
-        return Collections.singletonList(graalJavaHome.resolve("bin").resolve("truffle"));
+        // espressoHome = ESPRESSO_JAVA_HOME/languages/lib
+        Path espressoJavaHome = espressoHome().getParent().getParent();
+        return Collections.singletonList(espressoJavaHome.resolve("bin").resolve("truffle"));
     }
 
     @Override
