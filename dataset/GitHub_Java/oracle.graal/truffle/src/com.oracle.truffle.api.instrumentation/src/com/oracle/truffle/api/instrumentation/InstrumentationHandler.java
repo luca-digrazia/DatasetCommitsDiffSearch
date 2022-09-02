@@ -763,28 +763,25 @@ final class InstrumentationHandler {
         }
         assert parentInstrumentable != null;
 
-        // fast path no bindings attached
-        if (hasLoadingOrExecutionBinding) {
-            Lock lock = sourceLoadedBindingsLock.readLock();
-            Lock lock2 = sourceExecutedBindingsLock.readLock();
-            lock.lock();
+        Lock lock = sourceLoadedBindingsLock.readLock();
+        Lock lock2 = sourceExecutedBindingsLock.readLock();
+        lock.lock();
+        try {
+            lock2.lock();
             try {
-                lock2.lock();
-                try {
-                    if (!sourceSectionBindings.isEmpty() || !executionBindings.isEmpty() || !sourceLoadedBindings.isEmpty() || !sourceExecutedBindings.isEmpty()) {
-                        VisitorBuilder visitorBuilder = new VisitorBuilder();
-                        visitorBuilder.addNotifyLoadedOperationForAllBindings(VisitOperation.Scope.ALL);
-                        visitorBuilder.addInsertWrapperOperationForAllBindings(VisitOperation.Scope.ALL);
-                        visitorBuilder.addFindSourcesOperation(VisitOperation.Scope.ALL);
-                        visitorBuilder.addFindSourcesExecutedOperation(VisitOperation.Scope.ALL);
-                        visitRoot(rootNode, parentInstrumentable, visitorBuilder.buildVisitor(), true, false);
-                    }
-                } finally {
-                    lock2.unlock();
+                if (!sourceSectionBindings.isEmpty() || !executionBindings.isEmpty() || !sourceLoadedBindings.isEmpty() || !sourceExecutedBindings.isEmpty()) {
+                    VisitorBuilder visitorBuilder = new VisitorBuilder();
+                    visitorBuilder.addNotifyLoadedOperationForAllBindings(VisitOperation.Scope.ALL);
+                    visitorBuilder.addInsertWrapperOperationForAllBindings(VisitOperation.Scope.ALL);
+                    visitorBuilder.addFindSourcesOperation(VisitOperation.Scope.ALL);
+                    visitorBuilder.addFindSourcesExecutedOperation(VisitOperation.Scope.ALL);
+                    visitRoot(rootNode, parentInstrumentable, visitorBuilder.buildVisitor(), true, false);
                 }
             } finally {
-                lock.unlock();
+                lock2.unlock();
             }
+        } finally {
+            lock.unlock();
         }
     }
 
