@@ -47,16 +47,12 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.Reader;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -68,6 +64,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import org.graalvm.collections.EconomicSet;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -116,10 +113,6 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract ProcessHandler.ProcessCommand newProcessCommand(List<String> cmd, String cwd, Map<String, String> environment, boolean redirectErrorStream,
                         ProcessHandler.Redirect inputRedirect, ProcessHandler.Redirect outputRedirect, ProcessHandler.Redirect errorRedirect);
-
-        public abstract ProcessHandler.Redirect createRedirectToStream(OutputStream stream);
-
-        public abstract OutputStream getOutputStream(ProcessHandler.Redirect redirect);
     }
 
     public abstract static class APIAccess {
@@ -435,7 +428,7 @@ public abstract class AbstractPolyglotImpl {
                         boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter,
                         Map<String, String> options,
                         Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream, boolean allowCreateProcess, ProcessHandler processHandler,
-                        EnvironmentAccess environmentAccess, Map<String, String> environment, ZoneId zone);
+                        EnvironmentAccess environmentAccess, Map<String, String> environment);
 
         public abstract String getImplementationName();
 
@@ -687,32 +680,6 @@ public abstract class AbstractPolyglotImpl {
         public abstract <T> T as(Object receiver, TypeLiteral<T> targetType);
 
         public abstract SourceSection getSourceLocation(Object receiver);
-
-        public boolean isDate(Object receiver) {
-            return false;
-        }
-
-        public abstract LocalDate asDate(Object receiver);
-
-        public boolean isTime(Object receiver) {
-            return false;
-        }
-
-        public abstract LocalTime asTime(Object receiver);
-
-        public abstract Instant asInstant(Object receiver);
-
-        public boolean isTimeZone(Object receiver) {
-            return false;
-        }
-
-        public abstract ZoneId asTimeZone(Object receiver);
-
-        public boolean isDuration(Object receiver) {
-            return false;
-        }
-
-        public abstract Duration asDuration(Object receiver);
     }
 
     public abstract Class<?> loadLanguageClass(String className);

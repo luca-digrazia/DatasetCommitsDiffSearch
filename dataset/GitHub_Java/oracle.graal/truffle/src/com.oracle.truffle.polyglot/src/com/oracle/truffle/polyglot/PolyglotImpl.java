@@ -106,7 +106,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.polyglot.HostLanguage.HostContext;
-import java.io.IOException;
 
 /*
  * This class is exported to the GraalVM SDK. Keep that in mind when changing its class or package name.
@@ -557,12 +556,8 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         @Override
         public <S> S lookup(LanguageInfo info, Class<S> serviceClass) {
             PolyglotLanguage language = (PolyglotLanguage) NODES.getEngineObject(info);
-            if (!language.cache.supportsService(serviceClass)) {
-                return null;
-            }
-            PolyglotLanguageContext languageContext = PolyglotContextImpl.requireContext().getContext(language);
-            languageContext.ensureCreated(language);
-            return languageContext.lookupService(serviceClass);
+            PolyglotLanguageContext languageContext = PolyglotContextImpl.requireContext().getContextInitialized(language, language);
+            return LANGUAGE.lookup(LANGUAGE.getLanguage(languageContext.env), serviceClass);
         }
 
         @SuppressWarnings("unchecked")
@@ -1001,6 +996,13 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
+        public TruffleLanguage.Env getLanguageEnv(Object languageVMObject, LanguageInfo language) {
+            PolyglotLanguage lang = (PolyglotLanguage) NODES.getEngineObject(language);
+            PolyglotLanguageContext context = ((PolyglotLanguageContext) languageVMObject);
+            return context.context.getContext(lang).env;
+        }
+
+        @Override
         public Object legacyTckEnter(Object vm) {
             throw new AssertionError("Should not reach here.");
         }
@@ -1217,36 +1219,19 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public Process createSubProcess(Object polyglotLanguageContext, List<String> cmd, String cwd, Map<String, String> environment, boolean redirectErrorStream,
-                        ProcessHandler.Redirect inputRedirect, ProcessHandler.Redirect outputRedirect, ProcessHandler.Redirect errorRedirect) throws IOException {
-            PolyglotLanguageContext languageContext = (PolyglotLanguageContext) polyglotLanguageContext;
-            OutputStream stdOut = languageContext.getImpl().getIO().getOutputStream(outputRedirect);
-            OutputStream stdErr = languageContext.getImpl().getIO().getOutputStream(errorRedirect);
-            ProcessHandler.Redirect useOutputRedirect = stdOut == null ? outputRedirect : ProcessHandler.Redirect.PIPE;
-            ProcessHandler.Redirect useErrorRedirect = stdErr == null ? errorRedirect : ProcessHandler.Redirect.PIPE;
-            ProcessHandler.ProcessCommand command = languageContext.getImpl().getIO().newProcessCommand(cmd, cwd, environment, redirectErrorStream, inputRedirect, useOutputRedirect, useErrorRedirect);
-            Process process = languageContext.context.config.processHandler.start(command);
-            return ProcessHandlers.decorate(
-                            languageContext,
-                            cmd,
-                            process,
-                            stdOut,
-                            stdErr);
+        public ProcessHandler.ProcessCommand newProcessCommand(Object vmObject, List<String> cmd, String cwd, Map<String, String> environment, boolean redirectErrorStream,
+                        ProcessHandler.Redirect inputRedirect, ProcessHandler.Redirect outputRedirect, ProcessHandler.Redirect errorRedirect) {
+            return ((VMObject) vmObject).getImpl().getIO().newProcessCommand(cmd, cwd, environment, redirectErrorStream, inputRedirect, outputRedirect, errorRedirect);
         }
 
         @Override
-        public boolean hasDefaultProcessHandler(Object polyglotLanguageContext) {
-            return ProcessHandlers.isDefault(((PolyglotLanguageContext) polyglotLanguageContext).context.config.processHandler);
+        public ProcessHandler getProcessHandler(Object polylgotLanguageContext) {
+            return ((PolyglotLanguageContext) polylgotLanguageContext).context.config.processHandler;
         }
 
         @Override
-        public ProcessHandler.Redirect createRedirectToOutputStream(Object vmObject, OutputStream stream) {
-            return ((VMObject) vmObject).getImpl().getIO().createRedirectToStream(stream);
-        }
-
-        @Override
-        public boolean isIOAllowed() {
-            return PolyglotEngineImpl.ALLOW_IO;
+        public boolean isDefaultProcessHandler(ProcessHandler handler) {
+            return ProcessHandlers.isDefault(handler);
         }
     }
 }

@@ -51,73 +51,48 @@ public class ProcessEnvironmentTest extends AbstractPolyglotTest {
 
     @Test
     public void testEnvironmentAccessNone() {
-        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.NONE).environment("k1", "v1").environment("k2", "v2").build());
-        Assert.assertNull(languageEnv.getEnvironmentVariable("k1"));
-        Assert.assertNull(languageEnv.getEnvironmentVariable("k2"));
-        Map<String, String> env = languageEnv.getEnvironmentVariables();
-        Assert.assertNotNull(env);
+        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.NONE).build());
+        Map<String, String> env = languageEnv.getEnvironment();
         Assert.assertTrue(env.isEmpty());
         try {
-            languageEnv.setEnvironmentVariable("k3", "v3");
-            Assert.fail("Expected SecurityException.");
-        } catch (SecurityException se) {
-            // expected
-        }
-        try {
-            env.clear();
+            env.put("k1", "v1");
             Assert.fail("Environment map must be unmodifiable.");
         } catch (UnsupportedOperationException e) {
             // expected
         }
-    }
-
-    @Test
-    public void testEnvironmentAccessRead() {
-        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.READ).environment("k1", "v1").environment("k2", "v2").build());
-        Assert.assertEquals("v1", languageEnv.getEnvironmentVariable("k1"));
-        Assert.assertEquals("v2", languageEnv.getEnvironmentVariable("k2"));
-        Map<String, String> env = languageEnv.getEnvironmentVariables();
+        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.NONE).environment("k1", "v1").environment("k2", "v2").build());
+        env = languageEnv.getEnvironment();
         Map<String, String> expected = new HashMap<>();
         expected.put("k1", "v1");
         expected.put("k2", "v2");
         Assert.assertEquals(expected, env);
-        try {
-            languageEnv.setEnvironmentVariable("k3", "v3");
-            Assert.fail("Expected SecurityException.");
-        } catch (SecurityException se) {
-            // expected
-        }
-        try {
-            env.clear();
-            Assert.fail("Environment map must be unmodifiable.");
-        } catch (UnsupportedOperationException e) {
-            // expected
-        }
+        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.NONE).environment(expected).build());
+        env = languageEnv.getEnvironment();
+        Assert.assertEquals(expected, env);
     }
 
     @Test
-    public void testEnvironmentAccessReadWrite() {
-        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.ALL).environment("k1", "v1").environment("k2", "v2").build());
-        Assert.assertEquals("v1", languageEnv.getEnvironmentVariable("k1"));
-        Assert.assertEquals("v2", languageEnv.getEnvironmentVariable("k2"));
-        Map<String, String> env = languageEnv.getEnvironmentVariables();
-        Map<String, String> expected = new HashMap<>();
-        expected.put("k1", "v1");
-        expected.put("k2", "v2");
-        Assert.assertEquals(expected, env);
-        languageEnv.setEnvironmentVariable("k3", "v3");
-        Assert.assertEquals("v3", languageEnv.getEnvironmentVariable("k3"));
-        env = languageEnv.getEnvironmentVariables();
-        expected = new HashMap<>();
-        expected.put("k1", "v1");
-        expected.put("k2", "v2");
-        expected.put("k3", "v3");
+    public void testEnvironmentInherit() {
+        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.INHERIT).build());
+        Map<String, String> env = languageEnv.getEnvironment();
+        Map<String, String> expected = System.getenv();
         Assert.assertEquals(expected, env);
         try {
-            env.clear();
+            env.put("k1", "v1");
             Assert.fail("Environment map must be unmodifiable.");
         } catch (UnsupportedOperationException e) {
             // expected
         }
+        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.INHERIT).environment("k1", "v1").environment("k2", "v2").build());
+        env = languageEnv.getEnvironment();
+        Map<String, String> contextEnv = new HashMap<>();
+        contextEnv.put("k1", "v1");
+        contextEnv.put("k2", "v2");
+        expected = new HashMap<>(System.getenv());
+        expected.putAll(contextEnv);
+        Assert.assertEquals(expected, env);
+        setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.INHERIT).environment(contextEnv).build());
+        env = languageEnv.getEnvironment();
+        Assert.assertEquals(expected, env);
     }
 }
