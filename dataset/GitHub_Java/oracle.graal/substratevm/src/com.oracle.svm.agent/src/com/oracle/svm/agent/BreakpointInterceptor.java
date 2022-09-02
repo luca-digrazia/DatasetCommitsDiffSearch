@@ -473,17 +473,15 @@ final class BreakpointInterceptor {
     }
 
     private static boolean newInstance(JNIEnvironment jni, JNIObjectHandle callerClass, Breakpoint bp) {
-        JNIMethodId result = nullPointer();
+        JNIObjectHandle self = getObjectArgument(0);
+        JNIMethodId result;
         String name = "<init>";
         String signature = "()V";
-        JNIObjectHandle self = getObjectArgument(0);
-        if (self.notEqual(nullHandle())) {
-            try (CCharPointerHolder ctorName = toCString(name); CCharPointerHolder ctorSignature = toCString(signature)) {
-                result = jniFunctions().getGetMethodID().invoke(jni, self, ctorName.get(), ctorSignature.get());
-            }
-            if (clearException(jni)) {
-                result = nullPointer();
-            }
+        try (CCharPointerHolder ctorName = toCString(name); CCharPointerHolder ctorSignature = toCString(signature)) {
+            result = jniFunctions().getGetMethodID().invoke(jni, self, ctorName.get(), ctorSignature.get());
+        }
+        if (clearException(jni)) {
+            result = nullHandle();
         }
         boolean allowed = result.equal(nullHandle()) || accessVerifier == null || accessVerifier.verifyNewInstance(jni, self, name, signature, result, callerClass);
         traceBreakpoint(jni, self, nullHandle(), callerClass, bp.specification.methodName, allowed && result.notEqual(nullHandle()));
