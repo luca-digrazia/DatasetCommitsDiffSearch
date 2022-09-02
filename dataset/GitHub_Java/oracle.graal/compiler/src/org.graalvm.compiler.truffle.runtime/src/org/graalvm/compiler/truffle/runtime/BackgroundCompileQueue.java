@@ -35,6 +35,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 
@@ -48,17 +49,31 @@ import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
  *
  * Note that all the compilation requests are second tier when the multi-tier option is turned off.
  */
-public class BackgroundCompileQueue {
+public abstract class BackgroundCompileQueue {
 
     private final AtomicLong idCounter;
-    private volatile ThreadPoolExecutor compilationExecutorService;
+    private volatile ExecutorService compilationExecutorService;
     private boolean shutdown = false;
     protected final GraalTruffleRuntime runtime;
-    private long delayMillis;
 
-    public BackgroundCompileQueue(GraalTruffleRuntime runtime) {
+
+    private Runnable onIdleDelayed;
+
+    private long delayNanos;
+    private volatile boolean idlingEventEnabled;
+
+    public BackgroundCompileQueue(GraalTruffleRuntime runtime, Runnable onIdleDelayed) {
         this.runtime = runtime;
+        this.onIdleDelayed = onIdleDelayed;
         this.idCounter = new AtomicLong();
+    }
+
+    public boolean isIdlingEventEnabled() {
+        return idlingEventEnabled;
+    }
+
+    public void setIdlingEventEnabled(boolean idlingEventEnabled) {
+        this.idlingEventEnabled = idlingEventEnabled;
     }
 
     private ExecutorService getExecutorService(OptimizedCallTarget callTarget) {
@@ -74,8 +89,13 @@ public class BackgroundCompileQueue {
             }
 
             // NOTE: The value from the first Engine compiling wins for now
+            int capacity = callTarget.getOptionValue(PolyglotCompilerOptions.EncodedGraphCacheCapacity);
+            if (capacity == 0) {
+                // Shared cache across compilations is disabled.
+                setIdlingEventEnabled(false);
+            }
             int delaySeconds = callTarget.getOptionValue(PolyglotCompilerOptions.EncodedGraphCachePurgeDelay);
-            this.delayMillis = TimeUnit.SECONDS.toMillis(delaySeconds);
+            this.delayNanos = TimeUnit.SECONDS.toNanos(delaySeconds);
 
             // NOTE: the value from the first Engine compiling wins for now
             int threads = callTarget.getOptionValue(PolyglotCompilerOptions.CompilerThreads);
@@ -90,25 +110,20 @@ public class BackgroundCompileQueue {
 
             ThreadFactory factory = newThreadFactory("TruffleCompilerThread", callTarget);
 
-            long compilerIdleDelay = runtime.getCompilerIdleDelay();
-            long keepAliveTime = compilerIdleDelay >= 0 ? compilerIdleDelay : delayMillis;
+            long compilerIdleDelay = runtime.getCompilerIdleDelay(callTarget);
+            long keepAliveTime = compilerIdleDelay >= 0 ? compilerIdleDelay : 0;
 
             ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(threads, threads,
                             keepAliveTime, TimeUnit.MILLISECONDS,
-                            new IdlingPriorityBlockingQueue<>(), factory) {
+                            new PriorityBlockingQueue<>(), factory) {
                 @Override
                 protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
                     return new RequestFutureTask<>((RequestImpl<T>) callable);
                 }
             };
-
-            if (compilerIdleDelay >= 0) {
-                // There are two mechanisms to signal idleness: if core threads can timeout, then
-                // the notification is triggered by TruffleCompilerThreadFactory,
-                // otherwise, via IdlingBlockingQueue.take.
+            if (compilerIdleDelay > 0) {
                 threadPoolExecutor.allowCoreThreadTimeOut(true);
             }
-
             return compilationExecutorService = threadPoolExecutor;
         }
     }
@@ -234,7 +249,7 @@ public class BackgroundCompileQueue {
         }
     }
 
-    private final class TruffleCompilerThreadFactory implements ThreadFactory {
+    private static final class TruffleCompilerThreadFactory implements ThreadFactory {
         private final String namePrefix;
         private final GraalTruffleRuntime runtime;
 
@@ -252,11 +267,6 @@ public class BackgroundCompileQueue {
                     setContextClassLoader(getClass().getClassLoader());
                     try (AutoCloseable scope = runtime.openCompilerThreadScope()) {
                         super.run();
-                        if (compilationExecutorService.allowsCoreThreadTimeOut()) {
-                            // If core threads are always kept alive (no timeout), the
-                            // IdlingPriorityBlockingQueue.take mechanism is used instead.
-                            compilerThreadIdled();
-                        }
                     } catch (Exception e) {
                         throw new InternalError(e);
                     }
@@ -269,38 +279,62 @@ public class BackgroundCompileQueue {
         }
     }
 
+    @SuppressWarnings("rawtypes") private static final AtomicLongFieldUpdater<IdlingPriorityBlockingQueue> LATEST_EVENT_NANOS_UPDATER = AtomicLongFieldUpdater.newUpdater(
+                    IdlingPriorityBlockingQueue.class, "latestEventNanos");
+
     /**
-     * {@link PriorityBlockingQueue} with idling notification.
+     * {@link PriorityBlockingQueue} with (delayed) idling notification.
      *
      * <p>
      * The idling notification is triggered when a compiler thread remains idle more than
-     * {@code delayMillis}.
+     * {@code delayMillis}. Exactly one notification will be triggered, periodically, every
+     * {@code delayMillis} if there are idle threads.
      *
      * There are no guarantees on which thread will run the {@code onIdleDelayed} hook. Note that,
      * starved threads can also trigger the notification, even if the compile queue is not idle
      * during the delay period, the idling criteria thread-based, not queue-based.
      */
-    @SuppressWarnings("serial")
     private final class IdlingPriorityBlockingQueue<E> extends PriorityBlockingQueue<E> {
+
+        private static final long serialVersionUID = 5437415215836241566L;
+
+        @SuppressWarnings("unused") volatile long latestEventNanos = System.nanoTime();
+
         @Override
         public E take() throws InterruptedException {
-            while (compilationExecutorService.allowsCoreThreadTimeOut()) {
-                E elem = poll(delayMillis, TimeUnit.MILLISECONDS);
+
+            assert delayNanos > 0;
+            assert compilationExecutorService instanceof ThreadPoolExecutor &&
+                            !((ThreadPoolExecutor) compilationExecutorService).allowsCoreThreadTimeOut() : "idling notification does not support dynamically sized thread pools";
+
+            while (isIdlingEventEnabled()) {
+                E elem = poll(delayNanos, TimeUnit.NANOSECONDS);
                 if (elem == null) {
-                    compilerThreadIdled();
+                    // Compiler thread has been idle for >= delayMillis.
+                    long latestNanos = LATEST_EVENT_NANOS_UPDATER.get(this);
+                    long nowNanos = System.nanoTime();
+                    if (nowNanos - latestNanos >= delayNanos) {
+                        if (LATEST_EVENT_NANOS_UPDATER.compareAndSet(this, latestNanos, nowNanos)) {
+                            compileQueueIdled();
+                        }
+                    }
                 } else {
                     return elem;
                 }
             }
+
             // Fallback to blocking version.
             return super.take();
+        }
+
+        @Override
+        public E poll(long timeout, TimeUnit unit) throws InterruptedException {
+            throw new UnsupportedOperationException("Should not reach here, timed poll not supported");
         }
     }
 
     /**
-     * Called when a compiler thread becomes idle for more than {@code delayMillis}.
+     * Called when the compile queue becomes idle for more than {@code delayMillis}.
      */
-    public void compilerThreadIdled() {
-        // nop
-    }
+    public abstract void compileQueueIdled();
 }
