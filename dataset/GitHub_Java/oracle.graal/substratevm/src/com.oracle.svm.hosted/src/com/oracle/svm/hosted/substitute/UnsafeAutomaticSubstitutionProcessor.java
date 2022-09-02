@@ -287,9 +287,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
 
                 switch (cvField.getRecomputeValueKind()) {
                     case FieldOffset:
-                        Field targetField = cvField.getTargetField();
-                        access.getMetaAccess().lookupJavaType(targetField.getDeclaringClass()).registerAsReachable();
-                        if (access.registerAsUnsafeAccessed(access.getMetaAccess().lookupJavaField(targetField))) {
+                        if (access.registerAsUnsafeAccessed(access.getMetaAccess().lookupJavaField(cvField.getTargetField()))) {
                             access.requireAnalysisIteration();
                         }
                         break;
@@ -320,7 +318,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         if (hostVM.getClassInitializationSupport().shouldInitializeAtRuntime(hostType)) {
             /*
              * The class initializer of this type is executed at run time. The methods in Unsafe are
-             * substituted to return the correct value at image runtime, or fail if the field was
+             * substituted to return the correct value at image run time, or fail if the field was
              * not registered for unsafe access.
              *
              * Calls to Unsafe.objectFieldOffset() with a constant field parameter are automatically
@@ -343,10 +341,13 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         ResolvedJavaMethod clinit = hostType.getClassInitializer();
 
         if (clinit != null && clinit.hasBytecodes()) {
-            /*
-             * Since this analysis is run after the AnalysisType is created at this point the class
-             * should already be linked and clinit should be available.
-             */
+            /* The following directive links the class and makes clinit available. */
+            try {
+                hostType.getDeclaredConstructors();
+            } catch (NoClassDefFoundError | VerifyError t) {
+                /* This code should be non-intrusive so we just ignore. */
+                return;
+            }
             DebugContext debug = new Builder(options).build();
             try (DebugContext.Scope s = debug.scope("Field offset computation", clinit)) {
                 StructuredGraph clinitGraph = getStaticInitializerGraph(clinit, options, debug);
