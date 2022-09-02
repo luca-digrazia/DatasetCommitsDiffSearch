@@ -46,7 +46,7 @@ import static org.graalvm.wasm.benchmark.WasmBenchmarkSuiteBase.Defaults.WARMUP_
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Map;
+import java.util.List;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
@@ -78,7 +78,6 @@ public abstract class WasmBenchmarkSuiteBase {
         private WasmCase benchmarkCase;
 
         private Value benchmarkSetupOnce;
-        private Value benchmarkSetupEach;
         private Value benchmarkRun;
         private Value resetContext;
         private Value customInitializer;
@@ -104,17 +103,16 @@ public abstract class WasmBenchmarkSuiteBase {
             Context.Builder contextBuilder = Context.newBuilder("wasm");
             contextBuilder.option("wasm.Builtins", "testutil,env:emscripten,memory");
 
-            Map<String, byte[]> binaries = benchmarkCase.createBinaries();
+            List<byte[]> binaries = benchmarkCase.createBinaries();
             Context context = contextBuilder.build();
 
-            for (Map.Entry<String, byte[]> entry : binaries.entrySet()) {
-                Source source = Source.newBuilder("wasm", ByteSequence.create(entry.getValue()), entry.getKey()).build();
+            for (byte[] binary : binaries) {
+                Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "test").build();
                 context.eval(source);
             }
 
             Value wasmBindings = context.getBindings("wasm");
             benchmarkSetupOnce = wasmBindings.getMember("_benchmarkSetupOnce");
-            benchmarkSetupEach = wasmBindings.getMember("_benchmarkSetupEach");
             benchmarkRun = wasmBindings.getMember("_benchmarkRun");
             Assert.assertNotNull(String.format("No benchmarkRun method in %s.", wantedBenchmarkName), benchmarkRun);
             resetContext = wasmBindings.getMember(TestutilModule.Names.RESET_CONTEXT);
@@ -154,7 +152,6 @@ public abstract class WasmBenchmarkSuiteBase {
 
         @Setup(Level.Invocation)
         public void setupInvocation() {
-            benchmarkSetupEach.execute();
         }
 
         public Value benchmarkRun() {

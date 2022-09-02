@@ -47,8 +47,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.Properties;
 import java.util.function.BiConsumer;
 
@@ -90,7 +89,7 @@ public abstract class WasmCase {
         return options;
     }
 
-    public abstract Map<String, byte[]> createBinaries() throws IOException, InterruptedException;
+    public abstract List<byte[]> createBinaries() throws IOException, InterruptedException;
 
     public static WasmStringCase create(String name, WasmCaseData data, String program) {
         return new WasmStringCase(name, data, program, null, new Properties());
@@ -120,8 +119,8 @@ public abstract class WasmCase {
         return new WasmCaseData((Value result, String output) -> Assert.assertDoubleEquals("Failure: result:", expectedValue, result.as(Double.class), delta));
     }
 
-    public static WasmCaseData expectedThrows(String expectedErrorMessage, WasmCaseData.ErrorPhase phase) {
-        return new WasmCaseData(expectedErrorMessage.trim(), phase);
+    public static WasmCaseData expectedThrows(String expectedErrorMessage) {
+        return new WasmCaseData(expectedErrorMessage);
     }
 
     public static Collection<WasmCase> collectFileCases(String type, String resource) throws IOException {
@@ -137,34 +136,31 @@ public abstract class WasmCase {
 
         // Iterate through the available test of the bundle.
         while (indexReader.ready()) {
-            String caseSpec = indexReader.readLine().trim();
+            String caseName = indexReader.readLine().trim();
 
-            if (caseSpec.equals("") || caseSpec.startsWith("#")) {
+            if (caseName.equals("") || caseName.startsWith("#")) {
                 // Skip empty lines or lines starting with a hash (treat as a comment).
                 continue;
             } else {
-                collectedCases.add(collectFileCase(type, resource, caseSpec));
+                collectedCases.add(collectFileCase(type, resource, caseName));
             }
         }
 
         return collectedCases;
     }
 
-    public static WasmCase collectFileCase(String type, String resource, String caseSpec) throws IOException {
-        Map<String, Object> mainContents = new LinkedHashMap<>();
-        String caseName;
-        if (caseSpec.contains("/")) {
+    public static WasmCase collectFileCase(String type, String resource, String caseName) throws IOException {
+        ArrayList<Object> mainContents = new ArrayList<>();
+        if (caseName.contains("/")) {
             // Collect multi-module test case.
-            final String[] dirFiles = caseSpec.split("/");
+            final String[] dirFiles = caseName.substring(1).split("/");
             final String dir = dirFiles[0];
             final String[] moduleFiles = dirFiles[1].split(";");
             for (String file : moduleFiles) {
-                mainContents.put(file, WasmResource.getResourceAsTest(String.format("/%s/%s/%s/%s", type, resource, dir, file), true));
+                mainContents.add(WasmResource.getResourceAsTest(String.format("/%s/%s/%s/%s", type, resource, dir, file), true));
             }
-            caseName = dir;
         } else {
-            mainContents.put(caseSpec, WasmResource.getResourceAsTest(String.format("/%s/%s/%s", type, resource, caseSpec), true));
-            caseName = caseSpec;
+            mainContents.add(WasmResource.getResourceAsTest(String.format("/%s/%s/%s", type, resource, caseName), true));
         }
         String resultContent = WasmResource.getResourceAsString(String.format("/%s/%s/%s.result", type, resource, caseName), true);
         String initContent = WasmResource.getResourceAsString(String.format("/%s/%s/%s.init", type, resource, caseName), false);
@@ -193,21 +189,15 @@ public abstract class WasmCase {
             case "double":
                 caseData = WasmCase.expected(Double.parseDouble(resultValue.trim()));
                 break;
-            case "parserFailure":
-                caseData = WasmCase.expectedThrows(resultValue, WasmCaseData.ErrorPhase.Parsing);
-                break;
-            case "linkerFailure":
-                caseData = WasmCase.expectedThrows(resultValue, WasmCaseData.ErrorPhase.Linking);
-                break;
             case "exception":
-                caseData = WasmCase.expectedThrows(resultValue, WasmCaseData.ErrorPhase.Running);
+                caseData = WasmCase.expectedThrows(resultValue);
                 break;
             default:
                 Assert.fail(String.format("Unknown type in result specification: %s", resultType));
         }
 
         if (mainContents.size() == 1) {
-            Object content = mainContents.values().iterator().next();
+            Object content = mainContents.get(0);
             if (content instanceof String) {
                 return WasmCase.create(caseName, caseData, (String) content, initializer, options);
             } else if (content instanceof byte[]) {

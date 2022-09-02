@@ -63,7 +63,6 @@ import org.graalvm.polyglot.io.ByteSequence;
 import org.graalvm.wasm.predefined.testutil.TestutilModule;
 import org.graalvm.wasm.test.options.WasmTestOptions;
 import org.graalvm.wasm.utils.cases.WasmCase;
-import org.graalvm.wasm.utils.cases.WasmCaseData;
 import org.junit.Assert;
 
 import com.oracle.truffle.api.Truffle;
@@ -126,37 +125,32 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return prid != null;
     }
 
-    private static void runInContext(WasmCase testCase, Context context, List<Source> sources, int iterations, String phaseIcon, String phaseLabel) {
+    private static Value runInContext(WasmCase testCase, Context context, List<Source> sources, int iterations, String phaseIcon, String phaseLabel) {
         boolean requiresZeroMemory = Boolean.parseBoolean(testCase.options().getProperty("zero-memory", "false"));
 
         final PrintStream oldOut = System.out;
+        resetStatus(oldOut, PHASE_PARSE_ICON, "parsing");
+        for (Source source : sources) {
+            context.eval(source);
+        }
+
+        // The sequence of WebAssembly functions to execute.
+        // Run custom initialization.
+        // Execute the main function (exported as "_main").
+        // Then, optionally save memory and globals, and compare them.
+        // Execute a special function, which resets memory and globals to their default values.
+        Value mainFunction = context.getBindings("wasm").getMember("_main");
+        Value resetContext = context.getBindings("wasm").getMember(TestutilModule.Names.RESET_CONTEXT);
+        Value customInitialize = context.getBindings("wasm").getMember(TestutilModule.Names.RUN_CUSTOM_INITIALIZATION);
+        Value saveContext = context.getBindings("wasm").getMember(TestutilModule.Names.SAVE_CONTEXT);
+        Value compareContexts = context.getBindings("wasm").getMember(TestutilModule.Names.COMPARE_CONTEXTS);
+
+        Value result = null;
+        resetStatus(oldOut, phaseIcon, phaseLabel);
+        ByteArrayOutputStream capturedStdout;
+        Object firstIterationContextState = null;
+
         try {
-            resetStatus(oldOut, PHASE_PARSE_ICON, "parsing");
-
-            try {
-                for (Source source : sources) {
-                    context.eval(source);
-                }
-            } catch (PolyglotException e) {
-                validateThrown(testCase.data(), WasmCaseData.ErrorPhase.Parsing, e);
-                return;
-            }
-
-            // The sequence of WebAssembly functions to execute.
-            // Run custom initialization.
-            // Execute the main function (exported as "_main").
-            // Then, optionally save memory and globals, and compare them.
-            // Execute a special function, which resets memory and globals to their default values.
-            Value mainFunction = context.getBindings("wasm").getMember("_main");
-            Value resetContext = context.getBindings("wasm").getMember(TestutilModule.Names.RESET_CONTEXT);
-            Value customInitialize = context.getBindings("wasm").getMember(TestutilModule.Names.RUN_CUSTOM_INITIALIZATION);
-            Value saveContext = context.getBindings("wasm").getMember(TestutilModule.Names.SAVE_CONTEXT);
-            Value compareContexts = context.getBindings("wasm").getMember(TestutilModule.Names.COMPARE_CONTEXTS);
-
-            resetStatus(oldOut, phaseIcon, phaseLabel);
-            ByteArrayOutputStream capturedStdout;
-            Object firstIterationContextState = null;
-
             for (int i = 0; i != iterations; ++i) {
                 try {
                     capturedStdout = new ByteArrayOutputStream();
@@ -168,7 +162,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                     }
 
                     // Execute benchmark.
-                    final Value result = mainFunction.execute();
+                    result = mainFunction.execute();
 
                     // Save context state, and check that it's consistent with the previous one.
                     if (iterationNeedsStateCheck(i)) {
@@ -188,17 +182,20 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 } catch (PolyglotException e) {
                     // We cannot label the tests with polyglot errors, because they might
                     // semantically be return values of the test.
-                    validateThrown(testCase.data(), WasmCaseData.ErrorPhase.Running, e);
+                    validateThrown(testCase.data().expectedErrorMessage(), e);
                 } catch (Throwable t) {
                     final RuntimeException e = new RuntimeException("Error during test phase '" + phaseLabel + "'", t);
                     e.setStackTrace(new StackTraceElement[0]);
                     throw e;
+                } finally {
+                    System.setOut(oldOut);
                 }
             }
         } finally {
-            System.setOut(oldOut);
             context.close(true);
         }
+
+        return result;
     }
 
     private static boolean iterationNeedsStateCheck(int i) {
@@ -234,7 +231,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
     private WasmTestStatus runTestCase(WasmCase testCase) {
         try {
-            Map<String, byte[]> binaries = testCase.createBinaries();
+            List<byte[]> binaries = testCase.createBinaries();
             Context.Builder contextBuilder = Context.newBuilder("wasm");
 
             if (WasmTestOptions.LOG_LEVEL != null && !WasmTestOptions.LOG_LEVEL.equals("")) {
@@ -251,8 +248,8 @@ public abstract class WasmSuiteBase extends WasmTestBase {
             Context context;
 
             ArrayList<Source> sources = new ArrayList<>();
-            for (Map.Entry<String, byte[]> entry : binaries.entrySet()) {
-                Source.Builder sourceBuilder = Source.newBuilder("wasm", ByteSequence.create(entry.getValue()), entry.getKey());
+            for (byte[] binary : binaries) {
+                Source.Builder sourceBuilder = Source.newBuilder("wasm", ByteSequence.create(binary), "test");
                 Source source = sourceBuilder.build();
                 sources.add(source);
             }
@@ -299,11 +296,14 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         }
     }
 
-    private static void validateThrown(WasmCaseData data, WasmCaseData.ErrorPhase phase, PolyglotException e) throws PolyglotException {
-        if (data.expectedErrorMessage() == null)
+    private static void validateThrown(String expectedErrorMessage, PolyglotException e) throws PolyglotException {
+        if (expectedErrorMessage != null) {
+            if (!expectedErrorMessage.equals(e.getMessage())) {
+                throw e;
+            }
+        } else {
             throw e;
-        Assert.assertEquals("Unexpected error message.", data.expectedErrorMessage(), e.getMessage());
-        Assert.assertEquals("Unexpected error phase (should not have been thrown during the running phase).", data.expectedErrorTime(), phase);
+        }
     }
 
     @Override
