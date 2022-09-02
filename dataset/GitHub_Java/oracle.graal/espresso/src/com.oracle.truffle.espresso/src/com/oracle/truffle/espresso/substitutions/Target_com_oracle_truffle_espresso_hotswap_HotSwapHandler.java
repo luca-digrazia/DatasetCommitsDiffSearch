@@ -26,19 +26,18 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 @EspressoSubstitutions
-public final class Target_com_oracle_truffle_espresso_hotswap_HotSwapHandler {
+final class Target_com_oracle_truffle_espresso_hotswap_HotSwapHandler {
 
     @Substitution
-    public static boolean registerHandler(@Host(Object.class) StaticObject handler, @InjectMeta Meta meta) {
+    static boolean registerHandler(@JavaType(Object.class) StaticObject handler, @InjectMeta Meta meta) {
         assert handler != null;
-
         if (meta.getContext().JDWPOptions == null) {
             // only allow HotSwap handler registration when running in debug mode
             return false;
         }
 
         try {
-            meta.getContext().getJdwpContext().registerExternalHotSwapHandler(handler);
+            meta.getContext().registerExternalHotSwapHandler(handler);
         } catch (IllegalArgumentException ex) {
             return false;
         }
