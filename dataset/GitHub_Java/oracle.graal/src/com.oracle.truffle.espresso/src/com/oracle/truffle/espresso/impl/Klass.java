@@ -86,7 +86,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     private volatile ArrayKlass arrayClass;
 
     @CompilationFinal //
-    private volatile StaticObject mirrorCache;
+    private StaticObject mirrorCache;
 
     public final ObjectKlass[] getSuperInterfaces() {
         return superInterfaces;
@@ -114,17 +114,13 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     }
 
     public StaticObject mirror() {
-        if (mirrorCache == null) {
-            mirrorCreate();
-        }
-        return mirrorCache;
-    }
-
-    private synchronized void mirrorCreate() {
+        // TODO(peterssen): Make thread-safe.
         if (mirrorCache == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.mirrorCache = new StaticObject(getMeta().Class, this);
+            mirrorCache = new StaticObject(getMeta().Class);
+            mirrorCache.setHiddenField(getMeta().HIDDEN_MIRROR_KLASS, this);
         }
+        return mirrorCache;
     }
 
     @Override

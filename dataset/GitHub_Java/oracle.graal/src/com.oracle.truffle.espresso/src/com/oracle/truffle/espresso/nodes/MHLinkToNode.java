@@ -30,7 +30,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -39,7 +38,6 @@ public abstract class MHLinkToNode extends EspressoBaseNode {
     final MethodHandleIntrinsics.PolySigIntrinsics id;
     @Child IndirectCallNode callNode;
     private final int hidden_vmtarget;
-    private final boolean hasReceiver;
 
     MHLinkToNode(Method method, MethodHandleIntrinsics.PolySigIntrinsics id) {
         super(method);
@@ -47,18 +45,15 @@ public abstract class MHLinkToNode extends EspressoBaseNode {
         this.argCount = Signatures.parameterCount(getMethod().getParsedSignature(), false);
         this.callNode = IndirectCallNode.create();
         this.hidden_vmtarget = getMeta().HIDDEN_VMTARGET.getFieldIndex();
-        this.hasReceiver = id != MethodHandleIntrinsics.PolySigIntrinsics.LinkToStatic;
     }
 
     @Override
     public Object invokeNaked(VirtualFrame frame) {
         assert (getMethod().isStatic());
-        Method target = getTarget(frame.getArguments());
-        Object[] args = unbasic(frame.getArguments(), target.getParsedSignature(), 0, argCount - 1, hasReceiver);
-        return rebasic(linkTo(target, args), target.getReturnKind());
+        return linkTo(frame.getArguments());
     }
 
-    protected abstract Object linkTo(Method target, Object[] args);
+    protected abstract Object linkTo(Object[] args);
 
     @ExplodeLoop
     static Object[] unbasic(Object[] args, Symbol<Type>[] targetSig, int from, int length, boolean inclReceiver) {
@@ -75,18 +70,17 @@ public abstract class MHLinkToNode extends EspressoBaseNode {
     }
 
     // Tranform sub-words to int
-    private static Object rebasic(Object obj, JavaKind rKind) {
-        switch (rKind) {
-            case Boolean:
-                return ((boolean) obj) ? 1 : 0;
-            case Byte:
-                return (int) ((byte) obj);
-            case Char:
-                return (int) ((char) obj);
-            case Short:
-                return (int) ((short) obj);
-            default:
-                return obj;
+    static Object rebasic(Object result, Symbol<Type> rtype) {
+        if (rtype == Type._boolean) {
+            return ((boolean) result) ? 1 : 0;
+        } else if (rtype == Type._short) { // Unbox to cast.
+            return (int) ((short) result);
+        } else if (rtype == Type._byte) {
+            return (int) ((byte) result);
+        } else if (rtype == Type._char) {
+            return (int) ((char) result);
+        } else {
+            return result;
         }
     }
 
@@ -105,7 +99,7 @@ public abstract class MHLinkToNode extends EspressoBaseNode {
         }
     }
 
-    private final Method getTarget(Object[] args) {
+    final Method getTarget(Object[] args) {
         assert args.length >= 1;
         StaticObject memberName = (StaticObject) args[args.length - 1];
         assert (memberName.getKlass().getType() == Symbol.Type.MemberName);

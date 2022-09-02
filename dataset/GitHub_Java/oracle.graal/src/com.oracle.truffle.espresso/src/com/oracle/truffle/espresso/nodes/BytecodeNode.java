@@ -293,7 +293,7 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
  */
 public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
-    public static final boolean DEBUG_GENERAL = true;
+    public static final boolean DEBUG_GENERAL = false;
 
     public static final DebugCounter bcCount = DebugCounter.create("Bytecodes executed");
 
@@ -1078,7 +1078,8 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                         case ATHROW:
                             CompilerDirectives.transferToInterpreter();
                             if (DEBUG_GENERAL) {
-                                reportThrow(curBCI, getMethod(), nullCheck(peekObject(frame, top - 1)));
+                                reportThrow(curBCI, getMethod());
+                                reportError(new EspressoException(nullCheck(peekObject(frame, top - 1))));
                             }
                             throw new EspressoException(nullCheck(peekObject(frame, top - 1)));
 
@@ -1212,14 +1213,8 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
     }
 
     @TruffleBoundary
-    static private void reportThrow(int curBCI, Method method, StaticObject e) {
-        if (method.getName().toString().contains("refill") ||
-            method.getName().toString().contains("loadClass") ||
-            method.getName().toString().contains("findClass") ) {
-            return;
-        }
+    static private void reportThrow(int curBCI, Method method) {
         System.err.println("Throwing at " + curBCI + " in " + method);
-        reportError(new EspressoException(e));
     }
 
     @TruffleBoundary
@@ -1416,13 +1411,10 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
     private char addQuickNode(QuickNode node) {
         CompilerAsserts.neverPartOfCompilation();
         Objects.requireNonNull(node);
-        // TODO(garcia) Prevent creation of multiple nodes for same instruction (concurrency)
-        synchronized (this) {
-            nodes = Arrays.copyOf(nodes, nodes.length + 1);
-            int nodeIndex = nodes.length - 1; // latest empty slot
-            nodes[nodeIndex] = insert(node);
-            return (char) nodeIndex;
-        }
+        nodes = Arrays.copyOf(nodes, nodes.length + 1);
+        int nodeIndex = nodes.length - 1; // latest empty slot
+        nodes[nodeIndex] = insert(node);
+        return (char) nodeIndex;
     }
 
     private void patchBci(int bci, byte opcode, char nodeIndex) {

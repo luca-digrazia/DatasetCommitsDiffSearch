@@ -22,6 +22,10 @@
  */
 package com.oracle.truffle.espresso;
 
+import com.oracle.truffle.espresso.runtime.StaticObject;
+import org.graalvm.options.OptionDescriptors;
+import org.graalvm.options.OptionValues;
+
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -44,10 +48,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.MainLauncherRootNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
-import org.graalvm.options.OptionDescriptors;
-import org.graalvm.options.OptionValues;
 
 @ProvidedTags(StandardTags.RootTag.class)
 @Registration(id = EspressoLanguage.ID, name = EspressoLanguage.NAME, version = EspressoLanguage.VERSION, mimeType = EspressoLanguage.MIME_TYPE, contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)

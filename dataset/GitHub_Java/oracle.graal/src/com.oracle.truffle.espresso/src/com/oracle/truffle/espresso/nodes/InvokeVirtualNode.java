@@ -30,7 +30,6 @@ import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public abstract class InvokeVirtualNode extends QuickNode {
@@ -65,14 +64,12 @@ public abstract class InvokeVirtualNode extends QuickNode {
     }
 
     static Method methodLookup(StaticObject receiver, int vtableIndex) {
+        Klass clazz = receiver.getKlass();
+        Method m = clazz.vtableLookup(vtableIndex);
         // Suprisingly, invokeVirtuals can try to invoke interface methods, even non-default
         // ones.
         // Good thing is, miranda methods are taken care of at vtable creation !
-        Klass receiverKlass = receiver.getKlass();
-        if (receiverKlass.isArray()) {
-            return receiverKlass.getSuperKlass().vtableLookup(vtableIndex);
-        }
-        return ((ObjectKlass)receiverKlass).vtableLookup(vtableIndex);
+        return m;
     }
 
     @Override

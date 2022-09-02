@@ -27,10 +27,12 @@ import java.util.Arrays;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.JniEnv;
@@ -44,6 +46,10 @@ public final class NativeRootNode extends EspressoBaseNode {
 
     private final TruffleObject boundNative;
     private final boolean isJni;
+
+    @Child Node execute = Message.EXECUTE.createNode();
+
+    @Child Node isNullNode = Message.IS_NULL.createNode();
 
     public final static DebugCounter nativeCalls = DebugCounter.create("Native calls");
 
@@ -65,11 +71,6 @@ public final class NativeRootNode extends EspressoBaseNode {
             if (args[argIndex] instanceof Boolean) {
                 if (Signatures.parameterKind(getMethod().getParsedSignature(), i) == JavaKind.Boolean) {
                     args[argIndex] = (boolean) args[argIndex] ? (byte) 1 : (byte) 0;
-                }
-            }
-            if (args[argIndex] instanceof Character) {
-                if (Signatures.parameterKind(getMethod().getParsedSignature(), i) == JavaKind.Char) {
-                    args[argIndex] = (short) (char) args[argIndex];
                 }
             }
             ++argIndex;
@@ -116,7 +117,7 @@ public final class NativeRootNode extends EspressoBaseNode {
     }
 
     private final Object callNative(Object[] argsWithEnv) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
-        return InteropLibrary.getFactory().getUncached().execute(boundNative, argsWithEnv);
+        return ForeignAccess.sendExecute(execute, boundNative, argsWithEnv);
     }
 
     @TruffleBoundary
@@ -141,12 +142,12 @@ public final class NativeRootNode extends EspressoBaseNode {
             case Byte:
                 return result;
             case Char:
-                return (char) (short) result;
+                return result;
             case Short:
                 return result;
             case Object:
                 if (result instanceof TruffleObject) {
-                    if (InteropLibrary.getFactory().getUncached().isNull(result)) {
+                    if (ForeignAccess.sendIsNull(isNullNode, (TruffleObject) result)) {
                         return StaticObject.NULL;
                     }
                 }
