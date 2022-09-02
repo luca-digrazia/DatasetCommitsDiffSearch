@@ -428,6 +428,12 @@ public class StandardOp {
     }
 
     /**
+     * Marker interface for an operation that kills some set register and stack locations.
+     */
+    public interface ZapRegistersOp {
+    }
+
+    /**
      * A LIR operation that does nothing. If the operation records its position, it can be
      * subsequently {@linkplain #replace(LIR, LIRInstruction) replaced}.
      */

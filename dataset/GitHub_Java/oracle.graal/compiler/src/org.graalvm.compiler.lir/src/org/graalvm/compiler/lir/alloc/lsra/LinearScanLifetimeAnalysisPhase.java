@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,8 +28,8 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.asStackSlot;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
-import static org.graalvm.compiler.core.common.GraalOptions.DetailedAsserts;
 import static org.graalvm.compiler.lir.LIRValueUtil.asVariable;
+import static org.graalvm.compiler.lir.LIRValueUtil.isCast;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
 import static org.graalvm.compiler.lir.debug.LIRGenerationDebugContext.getSourceForOperandFromDebugContext;
 
@@ -36,14 +38,18 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.EnumSet;
 
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.alloc.ComputeBlockOrder;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.core.common.util.BitMap2D;
+import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
+import org.graalvm.compiler.lir.InstructionStateProcedure;
 import org.graalvm.compiler.lir.InstructionValueConsumer;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LIRInstruction.OperandFlag;
@@ -56,8 +62,7 @@ import org.graalvm.compiler.lir.alloc.lsra.Interval.SpillState;
 import org.graalvm.compiler.lir.alloc.lsra.LinearScan.BlockData;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.phases.AllocationPhase.AllocationContext;
-import org.graalvm.util.EconomicSet;
-import org.graalvm.util.Equivalence;
+import org.graalvm.compiler.lir.util.IndexedValueMap;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterArray;
@@ -65,7 +70,6 @@ import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
 import jdk.vm.ci.meta.ValueKind;
 
@@ -88,7 +92,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
         debug.dump(DebugContext.VERBOSE_LEVEL, lirGenRes.getLIR(), "Before register allocation");
         computeLocalLiveSets();
         computeGlobalLiveSets();
-        buildIntervals(DetailedAsserts.getValue(allocator.getOptions()));
+        buildIntervals(Assertions.detailedAssertionsEnabled(allocator.getOptions()));
     }
 
     /**
@@ -156,100 +160,116 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
     @SuppressWarnings("try")
     void computeLocalLiveSets() {
         int liveSize = allocator.liveSetSize();
-
-        intervalInLoop = new BitMap2D(allocator.operandSize(), allocator.numLoops());
-
-        // iterate all blocks
-        for (final AbstractBlockBase<?> block : allocator.sortedBlocks()) {
-            try (Indent indent = debug.logAndIndent("compute local live sets for block %s", block)) {
-
-                final BitSet liveGen = new BitSet(liveSize);
-                final BitSet liveKill = new BitSet(liveSize);
-
-                ArrayList<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
-                int numInst = instructions.size();
-
-                ValueConsumer useConsumer = (operand, mode, flags) -> {
-                    if (isVariable(operand)) {
-                        int operandNum = allocator.operandNumber(operand);
-                        if (!liveKill.get(operandNum)) {
-                            liveGen.set(operandNum);
-                            if (debug.isLogEnabled()) {
-                                debug.log("liveGen for operand %d(%s)", operandNum, operand);
-                            }
-                        }
-                        if (block.getLoop() != null) {
-                            intervalInLoop.setBit(operandNum, block.getLoop().getIndex());
-                        }
-                    }
-
-                    if (allocator.detailedAsserts) {
-                        verifyInput(block, liveKill, operand);
-                    }
-                };
-                ValueConsumer stateConsumer = (operand, mode, flags) -> {
-                    if (LinearScan.isVariableOrRegister(operand)) {
-                        int operandNum = allocator.operandNumber(operand);
-                        if (!liveKill.get(operandNum)) {
-                            liveGen.set(operandNum);
-                            if (debug.isLogEnabled()) {
-                                debug.log("liveGen in state for operand %d(%s)", operandNum, operand);
-                            }
-                        }
-                    }
-                };
-                ValueConsumer defConsumer = (operand, mode, flags) -> {
-                    if (isVariable(operand)) {
-                        int varNum = allocator.operandNumber(operand);
-                        liveKill.set(varNum);
-                        if (debug.isLogEnabled()) {
-                            debug.log("liveKill for operand %d(%s)", varNum, operand);
-                        }
-                        if (block.getLoop() != null) {
-                            intervalInLoop.setBit(varNum, block.getLoop().getIndex());
-                        }
-                    }
-
-                    if (allocator.detailedAsserts) {
-                        /*
-                         * Fixed intervals are never live at block boundaries, so they need not be
-                         * processed in live sets. Process them only in debug mode so that this can
-                         * be checked
-                         */
-                        verifyTemp(liveKill, operand);
-                    }
-                };
-
-                // iterate all instructions of the block
-                for (int j = 0; j < numInst; j++) {
-                    final LIRInstruction op = instructions.get(j);
-
-                    try (Indent indent2 = debug.logAndIndent("handle op %d: %s", op.id(), op)) {
-                        op.visitEachInput(useConsumer);
-                        op.visitEachAlive(useConsumer);
-                        /*
-                         * Add uses of live locals from interpreter's point of view for proper debug
-                         * information generation.
-                         */
-                        op.visitEachState(stateConsumer);
-                        op.visitEachTemp(defConsumer);
-                        op.visitEachOutput(defConsumer);
-                    }
-                } // end of instruction iteration
-
-                BlockData blockSets = allocator.getBlockData(block);
-                blockSets.liveGen = liveGen;
-                blockSets.liveKill = liveKill;
-                blockSets.liveIn = new BitSet(liveSize);
-                blockSets.liveOut = new BitSet(liveSize);
-
-                if (debug.isLogEnabled()) {
-                    debug.log("liveGen  B%d %s", block.getId(), blockSets.liveGen);
-                    debug.log("liveKill B%d %s", block.getId(), blockSets.liveKill);
-                }
-
+        int variables = allocator.operandSize();
+        int loops = allocator.numLoops();
+        long nBits = (long) variables * loops;
+        try {
+            if (nBits > Integer.MAX_VALUE) {
+                throw new OutOfMemoryError();
             }
-        } // end of block iteration
+            intervalInLoop = new BitMap2D(variables, loops);
+        } catch (OutOfMemoryError e) {
+            throw new PermanentBailoutException(e, "Cannot handle %d variables in %d loops", variables, loops);
+        }
+
+        try {
+            final BitSet liveGenScratch = new BitSet(liveSize);
+            final BitSet liveKillScratch = new BitSet(liveSize);
+            // iterate all blocks
+            for (final AbstractBlockBase<?> block : allocator.sortedBlocks()) {
+                try (Indent indent = debug.logAndIndent("compute local live sets for block %s", block)) {
+
+                    liveGenScratch.clear();
+                    liveKillScratch.clear();
+
+                    ArrayList<LIRInstruction> instructions = allocator.getLIR().getLIRforBlock(block);
+                    int numInst = instructions.size();
+
+                    ValueConsumer useConsumer = (operand, mode, flags) -> {
+                        if (isVariable(operand)) {
+                            int operandNum = getOperandNumber(operand);
+                            if (!liveKillScratch.get(operandNum)) {
+                                liveGenScratch.set(operandNum);
+                                if (debug.isLogEnabled()) {
+                                    debug.log("liveGen for operand %d(%s)", operandNum, operand);
+                                }
+                            }
+                            if (block.getLoop() != null) {
+                                intervalInLoop.setBit(operandNum, block.getLoop().getIndex());
+                            }
+                        }
+
+                        if (allocator.detailedAsserts) {
+                            verifyInput(block, liveKillScratch, operand);
+                        }
+                    };
+                    ValueConsumer stateConsumer = (operand, mode, flags) -> {
+                        if (LinearScan.isVariableOrRegister(operand) && allocator.isProcessed(operand)) {
+                            int operandNum = getOperandNumber(operand);
+                            if (!liveKillScratch.get(operandNum)) {
+                                liveGenScratch.set(operandNum);
+                                if (debug.isLogEnabled()) {
+                                    debug.log("liveGen in state for operand %d(%s)", operandNum, operand);
+                                }
+                            }
+                        }
+                    };
+                    ValueConsumer defConsumer = (operand, mode, flags) -> {
+                        if (isVariable(operand)) {
+                            int varNum = getOperandNumber(operand);
+                            liveKillScratch.set(varNum);
+                            if (debug.isLogEnabled()) {
+                                debug.log("liveKill for operand %d(%s)", varNum, operand);
+                            }
+                            if (block.getLoop() != null) {
+                                intervalInLoop.setBit(varNum, block.getLoop().getIndex());
+                            }
+                        }
+
+                        if (allocator.detailedAsserts) {
+                            /*
+                             * Fixed intervals are never live at block boundaries, so they need not
+                             * be processed in live sets. Process them only in debug mode so that
+                             * this can be checked
+                             */
+                            verifyTemp(liveKillScratch, operand);
+                        }
+                    };
+
+                    // iterate all instructions of the block
+                    for (int j = 0; j < numInst; j++) {
+                        final LIRInstruction op = instructions.get(j);
+
+                        try (Indent indent2 = debug.logAndIndent("handle op %d: %s", op.id(), op)) {
+                            op.visitEachInput(useConsumer);
+                            op.visitEachAlive(useConsumer);
+                            /*
+                             * Add uses of live locals from interpreter's point of view for proper
+                             * debug information generation.
+                             */
+                            op.visitEachState(stateConsumer);
+                            op.visitEachTemp(defConsumer);
+                            op.visitEachOutput(defConsumer);
+                        }
+                    } // end of instruction iteration
+
+                    BlockData blockSets = allocator.getBlockData(block);
+                    blockSets.liveGen = trimClone(liveGenScratch);
+                    blockSets.liveKill = trimClone(liveKillScratch);
+                    // sticky size, will get non-sticky in computeGlobalLiveSets
+                    blockSets.liveIn = new BitSet(0);
+                    blockSets.liveOut = new BitSet(0);
+
+                    if (debug.isLogEnabled()) {
+                        debug.log("liveGen  B%d %s", block.getId(), blockSets.liveGen);
+                        debug.log("liveKill B%d %s", block.getId(), blockSets.liveKill);
+                    }
+
+                }
+            } // end of block iteration
+        } catch (OutOfMemoryError oom) {
+            throw new PermanentBailoutException(oom, "Out-of-memory during live set allocation of size %d", liveSize);
+        }
     }
 
     private void verifyTemp(BitSet liveKill, Value operand) {
@@ -259,7 +279,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
          */
         if (isRegister(operand)) {
             if (allocator.isProcessed(operand)) {
-                liveKill.set(allocator.operandNumber(operand));
+                liveKill.set(getOperandNumber(operand));
             }
         }
     }
@@ -272,9 +292,13 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
          */
         if (isRegister(operand) && block != allocator.getLIR().getControlFlowGraph().getStartBlock()) {
             if (allocator.isProcessed(operand)) {
-                assert liveKill.get(allocator.operandNumber(operand)) : "using fixed register " + asRegister(operand) + " that is not defined in this block " + block;
+                assert liveKill.get(getOperandNumber(operand)) : "using fixed register " + asRegister(operand) + " that is not defined in this block " + block;
             }
         }
+    }
+
+    protected int getOperandNumber(Value operand) {
+        return allocator.operandNumber(operand);
     }
 
     /**
@@ -288,7 +312,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
             boolean changeOccurred;
             boolean changeOccurredInBlock;
             int iterationCount = 0;
-            BitSet liveOut = new BitSet(allocator.liveSetSize()); // scratch set for calculations
+            BitSet scratch = new BitSet(allocator.liveSetSize()); // scratch set for calculations
 
             /*
              * Perform a backward dataflow analysis to compute liveOut and liveIn for each block.
@@ -311,22 +335,16 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
                          */
                         int n = block.getSuccessorCount();
                         if (n > 0) {
-                            liveOut.clear();
+                            scratch.clear();
                             // block has successors
                             if (n > 0) {
                                 for (AbstractBlockBase<?> successor : block.getSuccessors()) {
-                                    liveOut.or(allocator.getBlockData(successor).liveIn);
+                                    scratch.or(allocator.getBlockData(successor).liveIn);
                                 }
                             }
 
-                            if (!blockSets.liveOut.equals(liveOut)) {
-                                /*
-                                 * A change occurred. Swap the old and new live out sets to avoid
-                                 * copying.
-                                 */
-                                BitSet temp = blockSets.liveOut;
-                                blockSets.liveOut = liveOut;
-                                liveOut = temp;
+                            if (!blockSets.liveOut.equals(scratch)) {
+                                blockSets.liveOut = trimClone(scratch);
 
                                 changeOccurred = true;
                                 changeOccurredInBlock = true;
@@ -340,12 +358,19 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
                              *
                              * Note: liveIn has to be computed only in first iteration or if liveOut
                              * has changed!
+                             *
+                             * Note: liveIn set can only grow, never shrink. No need to clear it.
                              */
                             BitSet liveIn = blockSets.liveIn;
-                            liveIn.clear();
+                            /*
+                             * BitSet#or will call BitSet#ensureSize (since the bit set is of length
+                             * 0 initially) and set sticky to false
+                             */
                             liveIn.or(blockSets.liveOut);
                             liveIn.andNot(blockSets.liveKill);
                             liveIn.or(blockSets.liveGen);
+
+                            liveIn.clone(); // trimToSize()
 
                             if (debug.isLogEnabled()) {
                                 debug.log("block %d: livein = %s,  liveout = %s", block.getId(), liveIn, blockSets.liveOut);
@@ -364,20 +389,48 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
                 }
             } while (changeOccurred);
 
-            if (DetailedAsserts.getValue(allocator.getOptions())) {
+            if (Assertions.detailedAssertionsEnabled(allocator.getOptions())) {
                 verifyLiveness();
             }
 
             // check that the liveIn set of the first block is empty
             AbstractBlockBase<?> startBlock = allocator.getLIR().getControlFlowGraph().getStartBlock();
             if (allocator.getBlockData(startBlock).liveIn.cardinality() != 0) {
-                if (DetailedAsserts.getValue(allocator.getOptions())) {
+                if (Assertions.detailedAssertionsEnabled(allocator.getOptions())) {
                     reportFailure(numBlocks);
                 }
+                BitSet bs = allocator.getBlockData(startBlock).liveIn;
+                StringBuilder sb = new StringBuilder();
+                for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i + 1)) {
+                    int variableNumber = allocator.getVariableNumber(i);
+                    if (variableNumber >= 0) {
+                        sb.append("v").append(variableNumber);
+                    } else {
+                        sb.append(allocator.getRegisters().get(i));
+                    }
+                    sb.append(System.lineSeparator());
+                    if (i == Integer.MAX_VALUE) {
+                        break;
+                    }
+                }
                 // bailout if this occurs in product mode.
-                throw new GraalError("liveIn set of first block must be empty: " + allocator.getBlockData(startBlock).liveIn);
+                throw new GraalError("liveIn set of first block must be empty: " + allocator.getBlockData(startBlock).liveIn + " Live operands:" + sb.toString());
             }
         }
+    }
+
+    /**
+     * Creates a trimmed copy a bit set.
+     *
+     * {@link BitSet#clone()} cannot be used since it will not {@linkplain BitSet#trimToSize trim}
+     * the array if the bit set is {@linkplain BitSet#sizeIsSticky sticky}.
+     */
+    @SuppressWarnings("javadoc")
+    private static BitSet trimClone(BitSet set) {
+        BitSet trimmedSet = new BitSet(0); // zero-length words array, sticky
+        trimmedSet.or(set); // words size ensured to be words-in-use of set,
+                            // also makes it non-sticky
+        return trimmedSet;
     }
 
     @SuppressWarnings("try")
@@ -485,7 +538,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
         }
 
         Interval interval = allocator.getOrCreateInterval(operand);
-        if (!kind.equals(LIRKind.Illegal)) {
+        if (!kind.equals(LIRKind.Illegal) && !isCast(operand)) {
             interval.setKind(kind);
         }
 
@@ -505,7 +558,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
         }
 
         Interval interval = allocator.getOrCreateInterval(operand);
-        if (!kind.equals(LIRKind.Illegal)) {
+        if (!kind.equals(LIRKind.Illegal) && !isCast(operand)) {
             interval.setKind(kind);
         }
 
@@ -570,7 +623,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
             ValueMoveOp move = ValueMoveOp.asValueMoveOp(op);
             if (optimizeMethodArgument(move.getInput())) {
                 StackSlot slot = asStackSlot(move.getInput());
-                if (DetailedAsserts.getValue(allocator.getOptions())) {
+                if (Assertions.detailedAssertionsEnabled(allocator.getOptions())) {
                     assert op.id() > 0 : "invalid id";
                     assert allocator.blockForId(op.id()).getPredecessorCount() == 0 : "move from stack must be in first block";
                     assert isVariable(move.getResult()) : "result of move must be a variable";
@@ -721,12 +774,34 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
                 }
             };
 
-            InstructionValueConsumer stateProc = (op, operand, mode, flags) -> {
+            InstructionValueConsumer nonBasePointersStateProc = (op, operand, mode, flags) -> {
                 if (LinearScan.isVariableOrRegister(operand)) {
                     int opId = op.id();
                     int blockFrom = allocator.getFirstLirInstructionId((allocator.blockForId(opId)));
                     addUse((AllocatableValue) operand, blockFrom, opId + 1, RegisterPriority.None, operand.getValueKind(), detailedAsserts);
                 }
+            };
+            InstructionValueConsumer basePointerStateProc = (op, operand, mode, flags) -> {
+                if (LinearScan.isVariableOrRegister(operand)) {
+                    int opId = op.id();
+                    int blockFrom = allocator.getFirstLirInstructionId((allocator.blockForId(opId)));
+                    /*
+                     * Setting priority of base pointers to ShouldHaveRegister to avoid
+                     * rematerialization (see #getMaterializedValue).
+                     */
+                    addUse((AllocatableValue) operand, blockFrom, opId + 1, RegisterPriority.ShouldHaveRegister, operand.getValueKind(), detailedAsserts);
+                }
+            };
+
+            InstructionStateProcedure stateProc = (op, state) -> {
+                IndexedValueMap liveBasePointers = state.getLiveBasePointers();
+                // temporarily unset the base pointers to that the procedure will not visit them
+                state.setLiveBasePointers(null);
+                state.visitEachState(op, nonBasePointersStateProc);
+                // visit the base pointers explicitly
+                liveBasePointers.visitEach(op, OperandMode.ALIVE, null, basePointerStateProc);
+                // reset the base pointers
+                state.setLiveBasePointers(liveBasePointers);
             };
 
             // create a list with all caller-save registers (cpu, fpu, xmm)
@@ -800,7 +875,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
                              * the live range is extended to a call site, the value would be in a
                              * register at the call otherwise).
                              */
-                            op.visitEachState(stateProc);
+                            op.forEachState(stateProc);
 
                             // special steps for some instructions (especially moves)
                             handleMethodArguments(op);
@@ -830,8 +905,7 @@ public class LinearScanLifetimeAnalysisPhase extends LinearScanAllocationPhase {
      * @param operand The destination operand of the instruction
      * @param interval The interval for this defined value.
      * @return Returns the value which is moved to the instruction and which can be reused at all
-     *         reload-locations in case the interval of this instruction is spilled. Currently this
-     *         can only be a {@link JavaConstant}.
+     *         reload-locations in case the interval of this instruction is spilled.
      */
     protected Constant getMaterializedValue(LIRInstruction op, Value operand, Interval interval) {
         if (LoadConstantOp.isLoadConstantOp(op)) {
