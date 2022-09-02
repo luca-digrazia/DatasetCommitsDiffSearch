@@ -81,7 +81,6 @@ import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLi
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.Log;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.OnCodeInstallation;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.OnCompilationFailed;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.OnCompilationRetry;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.OnFailure;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.OnGraalTierFinished;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.OnSuccess;
@@ -380,8 +379,8 @@ final class TruffleFromLibGraalEntryPoints {
     }
 
     @TruffleFromLibGraal(OnCompilationFailed)
-    static void onCompilationFailed(Object compilable, Supplier<String> serializedException, boolean bailout, boolean permanentBailout, boolean graphTooBig) {
-        ((CompilableTruffleAST) compilable).onCompilationFailed(serializedException, bailout, permanentBailout, graphTooBig);
+    static void onCompilationFailed(Object compilable, Supplier<String> serializedException, boolean bailout, boolean permanentBailout) {
+        ((CompilableTruffleAST) compilable).onCompilationFailed(serializedException, bailout, permanentBailout);
     }
 
     @TruffleFromLibGraal(OnSuccess)
@@ -395,11 +394,6 @@ final class TruffleFromLibGraalEntryPoints {
     @TruffleFromLibGraal(OnFailure)
     static void onFailure(Object listener, Object compilable, String reason, boolean bailout, boolean permanentBailout) {
         ((TruffleCompilerListener) listener).onFailure((CompilableTruffleAST) compilable, reason, bailout, permanentBailout);
-    }
-
-    @TruffleFromLibGraal(OnCompilationRetry)
-    static void onCompilationRetry(Object listener, Object compilable) {
-        ((TruffleCompilerListener) listener).onCompilationRetry((CompilableTruffleAST) compilable);
     }
 
     @TruffleFromLibGraal(OnGraalTierFinished)

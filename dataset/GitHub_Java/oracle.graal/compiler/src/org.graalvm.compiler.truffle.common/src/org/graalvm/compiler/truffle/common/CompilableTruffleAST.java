@@ -53,9 +53,6 @@ public interface CompilableTruffleAST {
      * @param serializedException serializedException a serialized representation of the exception
      *            representing the reason for compilation failure. See
      *            {@link #serializeException(Throwable)}.
-     * @param suppressed specifies whether the failure was suppressed and should be silent. Use the
-     *            {@link TruffleCompilerRuntime#isSuppressedFailure(CompilableTruffleAST, Supplier)}
-     *            to determine if the failure should be suppressed.
      * @param bailout specifies whether the failure was a bailout or an error in the compiler. A
      *            bailout means the compiler aborted the compilation based on some of property of
      *            the AST (e.g., too big). A non-bailout means an unexpected error in the compiler
@@ -63,14 +60,19 @@ public interface CompilableTruffleAST {
      * @param permanentBailout specifies if a bailout is due to a condition that probably won't
      *            change if this AST is compiled again. This value is meaningless if
      *            {@code bailout == false}.
-     * @param graphTooBig graph was too big
      */
-    void onCompilationFailed(Supplier<String> serializedException, boolean suppressed, boolean bailout, boolean permanentBailout, boolean graphTooBig);
+    void onCompilationFailed(Supplier<String> serializedException, boolean bailout, boolean permanentBailout);
 
     /**
      * Gets a descriptive name for this call target.
      */
     String getName();
+
+    /**
+     * Invalidates any machine code attached to this call target.
+     */
+    default void invalidateCode() {
+    }
 
     /**
      * Returns the estimate of the Truffle node count in this AST.
@@ -114,12 +116,6 @@ public interface CompilableTruffleAST {
      *         rewritten.
      */
     JavaConstant getNodeRewritingAssumptionConstant();
-
-    /**
-     * @return A {@link JavaConstant} representing the assumption that the compiled code of the AST
-     *         was not invalidated.
-     */
-    JavaConstant getValidRootAssumptionConstant();
 
     /**
      * Returns {@code e} serialized as a string. The format of the returned string is:
