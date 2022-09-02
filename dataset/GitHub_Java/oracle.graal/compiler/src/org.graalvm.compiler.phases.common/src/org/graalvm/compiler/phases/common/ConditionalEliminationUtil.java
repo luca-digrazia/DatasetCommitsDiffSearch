@@ -42,7 +42,6 @@ import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ShortCircuitOrNode;
 import org.graalvm.compiler.nodes.UnaryOpLogicNode;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.calc.AndNode;
 import org.graalvm.compiler.nodes.calc.BinaryArithmeticNode;
 import org.graalvm.compiler.nodes.calc.BinaryNode;
@@ -200,7 +199,7 @@ public class ConditionalEliminationUtil {
      * node via canonicalization).
      */
     public static Stamp getOtherSafeStamp(ValueNode x) {
-        if (x.isConstant() || x.graph().isAfterStage(StageFlag.FIXED_READS)) {
+        if (x.isConstant() || x.graph().isAfterFixedReadPhase()) {
             return x.stamp(NodeView.DEFAULT);
         }
         return x.stamp(NodeView.DEFAULT).unrestricted();
