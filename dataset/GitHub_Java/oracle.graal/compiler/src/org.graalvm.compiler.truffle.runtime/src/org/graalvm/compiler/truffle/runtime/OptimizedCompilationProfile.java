@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.graalvm.options.OptionValues;
+
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -45,11 +47,14 @@ public final class OptimizedCompilationProfile {
     /**
      * Number of times an installed code for this tree was seen invalidated.
      */
+    private int invalidationCount;
     private int callCount;
     private int callAndLoopCount;
 
     private final int lastTierCompilationCallAndLoopThreshold;
+    private final boolean multiTierEnabled;
     private final long timestamp;
+    private final OptionValues options;
 
     /**
      * The values below must only be written under lock, or in the constructor, because they are
@@ -73,23 +78,25 @@ public final class OptimizedCompilationProfile {
     @CompilationFinal private OptimizedAssumption profiledArgumentTypesAssumption;
     @CompilationFinal private Class<?> profiledReturnType;
     @CompilationFinal private OptimizedAssumption profiledReturnTypeAssumption;
-    @CompilationFinal private Class<? extends Throwable> exceptionType;
+    @CompilationFinal private Class<?> exceptionType;
 
     private volatile boolean compilationFailed;
     @CompilationFinal private boolean callProfiled;
 
-    OptimizedCompilationProfile(EngineData engine) {
-        boolean compileImmediately = engine.compileImmediately;
-        int callThreshold = engine.minInvokeThreshold;
-        int callAndLoopThreshold = engine.compilationThreshold;
+    public OptimizedCompilationProfile(OptionValues options) {
+        this.options = options;
+        boolean compileImmediately = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.CompileImmediately);
+        int callThreshold = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.MinInvokeThreshold);
+        int callAndLoopThreshold = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.CompilationThreshold);
         assert callThreshold >= 0;
         assert callAndLoopThreshold >= 0;
+        this.multiTierEnabled = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.MultiTier);
         this.compilationCallThreshold = compileImmediately ? 0 : Math.min(callThreshold, callAndLoopThreshold);
         this.compilationCallAndLoopThreshold = compileImmediately ? 0 : callAndLoopThreshold;
         this.lastTierCompilationCallAndLoopThreshold = this.compilationCallAndLoopThreshold;
-        if (engine.multiTier) {
-            int firstTierCallThreshold = engine.firstTierMinInvokeThreshold;
-            int firstTierCallAndLoopThreshold = engine.firstTierCompilationThreshold;
+        if (multiTierEnabled) {
+            int firstTierCallThreshold = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.FirstTierMinInvokeThreshold);
+            int firstTierCallAndLoopThreshold = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.FirstTierCompilationThreshold);
             this.compilationCallThreshold = compileImmediately ? 0 : Math.min(firstTierCallThreshold, firstTierCallAndLoopThreshold);
             this.compilationCallAndLoopThreshold = firstTierCallAndLoopThreshold;
         }
@@ -162,11 +169,11 @@ public final class OptimizedCompilationProfile {
     }
 
     @ExplodeLoop
-    void profileDirectCall(OptimizedCallTarget target, Object[] args) {
+    void profileDirectCall(Object[] args) {
         Assumption typesAssumption = profiledArgumentTypesAssumption;
         if (typesAssumption == null) {
             if (CompilerDirectives.inInterpreter()) {
-                initializeProfiledArgumentTypes(target, args);
+                initializeProfiledArgumentTypes(args);
             }
         } else {
             Class<?>[] types = profiledArgumentTypes;
@@ -204,12 +211,12 @@ public final class OptimizedCompilationProfile {
         // nothing to profile for inlined calls by default
     }
 
-    void profileReturnValue(OptimizedCallTarget target, Object result) {
+    void profileReturnValue(Object result) {
         Assumption returnTypeAssumption = profiledReturnTypeAssumption;
         if (CompilerDirectives.inInterpreter() && returnTypeAssumption == null) {
             // we only profile return values in the interpreter as we don't want to deoptimize
             // for immediate compiles.
-            if (target.engine.returnTypeSpeculation) {
+            if (PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.ReturnTypeSpeculation)) {
                 profiledReturnType = classOf(result);
                 profiledReturnTypeAssumption = createValidAssumption(RETURN_TYPE_ASSUMPTION_NAME);
             }
@@ -223,25 +230,24 @@ public final class OptimizedCompilationProfile {
     }
 
     @SuppressWarnings("unchecked")
-    <T extends Throwable> T profileExceptionType(T value) {
-        Class<? extends Throwable> clazz = exceptionType;
-        if (clazz != Throwable.class) {
-            if (clazz != null && value.getClass() == clazz) {
-                if (CompilerDirectives.inInterpreter()) {
-                    return value;
-                } else {
-                    return (T) CompilerDirectives.castExact(value, clazz);
-                }
+    <E extends Throwable> E profileExceptionType(E ex) {
+        Class<?> cachedClass = exceptionType;
+        // if cachedClass is null and we are not in the interpreter we don't want to deoptimize
+        // This usually happens only if the call target was compiled using compile without ever
+        // calling it.
+        if (cachedClass != Object.class) {
+            if (cachedClass != null && cachedClass == ex.getClass()) {
+                return (E) cachedClass.cast(ex);
+            }
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            if (cachedClass == null) {
+                exceptionType = ex.getClass();
             } else {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                if (clazz == null) {
-                    exceptionType = value.getClass();
-                } else {
-                    exceptionType = Throwable.class;
-                }
+                // object class is not reachable for exceptions
+                exceptionType = Object.class;
             }
         }
-        return value;
+        return ex;
     }
 
     Object[] injectArgumentProfile(Object[] originalArguments) {
@@ -288,14 +294,15 @@ public final class OptimizedCompilationProfile {
         compilationFailed = true;
     }
 
-    void reportInvalidated(OptimizedCallTarget target) {
-        int reprofile = target.engine.invalidationReprofileCount;
+    void reportInvalidated() {
+        invalidationCount++;
+        int reprofile = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.InvalidationReprofileCount);
         ensureProfiling(reprofile, reprofile);
     }
 
-    void reportNodeReplaced(OptimizedCallTarget target) {
+    void reportNodeReplaced() {
         // delay compilation until tree is deemed stable enough
-        int replaceBackoff = target.engine.replaceReprofileCount;
+        int replaceBackoff = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.ReplaceReprofileCount);
         ensureProfiling(1, replaceBackoff);
     }
 
@@ -322,14 +329,14 @@ public final class OptimizedCompilationProfile {
         if (callThreshold == 0 || (intCallCount >= callThreshold //
                         && intAndLoopCallCount >= compilationCallAndLoopThreshold //
                         && !compilationFailed && !callTarget.isCompiling())) {
-            return callTarget.compile(!callTarget.engine.multiTier);
+            return callTarget.compile(!multiTierEnabled);
         }
         return false;
     }
 
-    private void initializeProfiledArgumentTypes(OptimizedCallTarget target, Object[] args) {
+    private void initializeProfiledArgumentTypes(Object[] args) {
         CompilerAsserts.neverPartOfCompilation();
-        if (args.length <= MAX_PROFILED_ARGUMENTS && target.engine.argumentTypeSpeculation) {
+        if (args.length <= MAX_PROFILED_ARGUMENTS && PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.ArgumentTypeSpeculation)) {
             Class<?>[] result = new Class<?>[args.length];
             for (int i = 0; i < args.length; i++) {
                 result[i] = classOf(args[i]);
@@ -401,9 +408,15 @@ public final class OptimizedCompilationProfile {
         Map<String, Object> properties = new LinkedHashMap<>();
         String callsThreshold = String.format("%7d/%5d", getCallCount(), getCompilationCallThreshold());
         String loopsThreshold = String.format("%7d/%5d", getCallAndLoopCount(), getCompilationCallAndLoopThreshold());
+        String invalidations = String.format("%5d", invalidationCount);
         properties.put("Calls/Thres", callsThreshold);
         properties.put("CallsAndLoop/Thres", loopsThreshold);
+        properties.put("Inval#", invalidations);
         return properties;
+    }
+
+    public int getInvalidationCount() {
+        return invalidationCount;
     }
 
     public int getCallAndLoopCount() {
@@ -424,6 +437,10 @@ public final class OptimizedCompilationProfile {
 
     public long getTimestamp() {
         return timestamp;
+    }
+
+    public static OptimizedCompilationProfile create(OptionValues options) {
+        return new OptimizedCompilationProfile(options);
     }
 
     private static OptimizedAssumption createValidAssumption(String name) {

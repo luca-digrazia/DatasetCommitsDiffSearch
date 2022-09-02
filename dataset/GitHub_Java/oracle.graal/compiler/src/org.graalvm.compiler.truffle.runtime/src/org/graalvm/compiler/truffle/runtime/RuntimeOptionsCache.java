@@ -24,57 +24,77 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-class RuntimeOptionsCache {
+import org.graalvm.options.OptionValues;
 
-    private static boolean experimentalSplitting;
-    private static boolean experimentalSplittingAllowForcedSplits;
-    private static boolean experimentalSplittingDumpDecisions;
-    private static boolean experimentalSplittingTraceEvents;
-    private static boolean splitting;
-    private static boolean traceSplittingSummary;
-    private static int splittingMaxCalleeSize;
-    private static int splittingMaxPropagationDepth;
+/**
+ * A cache that enables the Runtime options to be read without the lookup. This is intended to only
+ * be used on performance critical paths.
+ */
+public class RuntimeOptionsCache {
 
-    static void reinitialize() {
-        experimentalSplitting = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplitting);
-        experimentalSplittingAllowForcedSplits = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingAllowForcedSplits);
-        experimentalSplittingDumpDecisions = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingDumpDecisions);
-        experimentalSplittingTraceEvents = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingTraceEvents);
-        splitting = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplitting);
-        splittingMaxCalleeSize = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplittingMaxCalleeSize);
-        splittingMaxPropagationDepth = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleExperimentalSplittingMaxPropagationDepth);
-        traceSplittingSummary = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleTraceSplittingSummary);
+    private final boolean legacySplitting;
+    private final boolean splitting;
+    private final boolean splittingAllowForcedSplits;
+    private final boolean splittingDumpDecisions;
+    private final boolean splittingTraceEvents;
+    private final boolean traceSplittingSummary;
+    private final int splittingMaxCalleeSize;
+    private final int splittingMaxPropagationDepth;
+    private final double splittingGrowthLimit;
+    private final int splittingMaxNumberOfSplitNodes;
+
+    public RuntimeOptionsCache(OptionValues options) {
+        // Splitting
+        splitting = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.Splitting) &&
+                        PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.Mode) != PolyglotCompilerOptions.EngineModeEnum.LATENCY;
+        legacySplitting = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.LegacySplitting);
+        splittingAllowForcedSplits = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.SplittingAllowForcedSplits);
+        splittingDumpDecisions = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.SplittingDumpDecisions);
+        splittingMaxCalleeSize = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.SplittingMaxCalleeSize);
+        splittingMaxPropagationDepth = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.SplittingMaxPropagationDepth);
+        splittingTraceEvents = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.SplittingTraceEvents);
+        traceSplittingSummary = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.TraceSplittingSummary);
+        splittingGrowthLimit = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.SplittingGrowthLimit);
+        splittingMaxNumberOfSplitNodes = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.SplittingMaxNumberOfSplitNodes);
     }
 
-    static boolean isExperimentalSplittingDumpDecisions() {
-        return experimentalSplittingDumpDecisions;
+    boolean isSplittingDumpDecisions() {
+        return splittingDumpDecisions;
     }
 
-    static boolean isExperimentalSplitting() {
-        return experimentalSplitting;
+    boolean isLegacySplitting() {
+        return legacySplitting;
     }
 
-    static boolean isExperimentalSplittingAllowForcedSplits() {
-        return experimentalSplittingAllowForcedSplits;
+    boolean isSplittingAllowForcedSplits() {
+        return splittingAllowForcedSplits;
     }
 
-    static boolean isSplitting() {
+    boolean isSplitting() {
         return splitting;
     }
 
-    static boolean isExperimentalSplittingTraceEvents() {
-        return experimentalSplittingTraceEvents;
+    boolean isSplittingTraceEvents() {
+        return splittingTraceEvents;
     }
 
-    static boolean isTraceSplittingSummary() {
+    boolean isTraceSplittingSummary() {
         return traceSplittingSummary;
     }
 
-    static int getSplittingMaxCalleeSize() {
+    int getSplittingMaxCalleeSize() {
         return splittingMaxCalleeSize;
     }
 
-    static int getSplittingMaxPropagationDepth() {
+    int getSplittingMaxPropagationDepth() {
         return splittingMaxPropagationDepth;
+    }
+
+    double getSplittingGrowthLimit() {
+        return splittingGrowthLimit;
+    }
+
+    int getSplittingMaxNumberOfSplitNodes() {
+        return splittingMaxNumberOfSplitNodes;
     }
 }

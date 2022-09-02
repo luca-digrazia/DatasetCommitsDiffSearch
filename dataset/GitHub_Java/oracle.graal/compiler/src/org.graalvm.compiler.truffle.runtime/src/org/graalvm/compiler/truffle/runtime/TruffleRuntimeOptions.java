@@ -177,7 +177,7 @@ public final class TruffleRuntimeOptions {
 
         if (!target.getOptionValues().hasBeenSet(PolyglotCompilerOptions.CompilationExceptionsAreFatal)) {
             boolean assertOn = false;
-            assert (assertOn = true) == true;
+            assert assertOn = true;
             if (assertOn) {
                 return true;
             }
