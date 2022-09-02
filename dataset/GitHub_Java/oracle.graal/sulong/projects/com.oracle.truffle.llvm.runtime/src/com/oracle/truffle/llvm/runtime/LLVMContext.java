@@ -47,11 +47,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.utilities.AssumedValue;
 import com.oracle.truffle.llvm.api.Toolchain;
 import com.oracle.truffle.llvm.runtime.LLVMArgumentBuffer.LLVMArgumentArray;
 import com.oracle.truffle.llvm.runtime.LLVMContextFactory.InitializeContextNodeGen;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage.Loader;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
@@ -129,7 +129,6 @@ public final class LLVMContext {
     private final ArrayList<LLVMLocalScope> localScopes;
 
     private final DynamicLinkChain dynamicLinkChain;
-    private final DynamicLinkChain dynamicLinkChainForScopes;
     private final List<RootCallTarget> destructorFunctions;
     private final LLVMFunctionPointerRegistry functionPointerRegistry;
     private final LLVMInteropType.InteropTypeRegistry interopTypeRegistry;
@@ -203,7 +202,6 @@ public final class LLVMContext {
         this.globalScope = new LLVMScope();
         this.localScopes = new ArrayList<>();
         this.dynamicLinkChain = new DynamicLinkChain();
-        this.dynamicLinkChainForScopes = new DynamicLinkChain();
 
         this.mainArguments = getMainArguments(env);
 
@@ -295,13 +293,8 @@ public final class LLVMContext {
             // add internal library location also to the external library lookup path
             addLibraryPath(internalLibraryPath.toString());
         }
-        try {
-            CallTarget libpolyglotMock = env.parseInternal(Source.newBuilder("llvm",
-                            env.getInternalTruffleFile(internalLibraryPath.resolve(language.getCapability(PlatformCapability.class).getPolyglotMockLibrary()).toUri())).build());
-            libpolyglotMock.call();
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
+        Loader loader = getLanguage().getCapability(Loader.class);
+        loader.loadDefaults(this, internalLibraryPath);
     }
 
     private List<ContextExtension> getContextExtensions() {
@@ -871,16 +864,6 @@ public final class LLVMContext {
     @TruffleBoundary
     public void registerScope(LLVMScope scope) {
         dynamicLinkChain.addScope(scope);
-    }
-
-    @TruffleBoundary
-    public boolean isScopeLoadedForScopes(LLVMScope scope) {
-        return dynamicLinkChainForScopes.containsScope(scope);
-    }
-
-    @TruffleBoundary
-    public void registerScopeForScopes(LLVMScope scope) {
-        dynamicLinkChainForScopes.addScope(scope);
     }
 
     public synchronized void registerThread(LLVMThread thread) {
