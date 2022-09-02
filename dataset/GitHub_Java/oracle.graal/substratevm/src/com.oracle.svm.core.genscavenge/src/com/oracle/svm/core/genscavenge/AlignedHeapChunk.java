@@ -86,16 +86,18 @@ public final class AlignedHeapChunk {
     public interface AlignedHeader extends HeapChunk.Header<AlignedHeader> {
     }
 
-    public static void initialize(AlignedHeader chunk, UnsignedWord chunkSize) {
-        HeapChunk.initialize(chunk, AlignedHeapChunk.getObjectsStart(chunk), chunkSize);
+    public static void initialize(AlignedHeader chunk) {
+        HeapChunk.initialize(chunk, AlignedHeapChunk.getObjectsStart(chunk));
+        RememberedSet.get().initializeChunk(chunk);
     }
 
     public static void reset(AlignedHeader chunk) {
-        HeapChunk.initialize(chunk, AlignedHeapChunk.getObjectsStart(chunk), HeapChunk.getEndOffset(chunk));
+        HeapChunk.initialize(chunk, AlignedHeapChunk.getObjectsStart(chunk));
+        RememberedSet.get().resetChunk(chunk);
     }
 
     public static Pointer getObjectsStart(AlignedHeader that) {
-    	return HeapChunk.asPointer(that).add(getObjectsStartOffset());
+        return HeapChunk.asPointer(that).add(getObjectsStartOffset());
     }
 
     /** Allocate uninitialized memory within this AlignedHeapChunk. */

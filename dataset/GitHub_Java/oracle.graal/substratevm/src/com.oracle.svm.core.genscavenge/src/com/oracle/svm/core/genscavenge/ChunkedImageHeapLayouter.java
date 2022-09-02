@@ -131,11 +131,14 @@ public class ChunkedImageHeapLayouter extends AbstractImageHeapLayouter<ChunkedI
             if (current instanceof AlignedChunk) {
                 AlignedChunk aligned = (AlignedChunk) current;
                 writer.initializeAlignedChunk(chunkPosition, current.getTopOffset(), current.getEndOffset(), offsetToPrevious, offsetToNext);
-                writer.enableRememberedSetForAlignedChunk(chunkPosition, aligned.getObjects());
+                for (ImageHeapObject obj : aligned.getObjects()) {
+                    long offsetInChunk = obj.getOffset() - chunkPosition;
+                    long endOffsetInChunk = offsetInChunk + obj.getSize();
+                    writer.insertIntoAlignedChunkFirstObjectTable(chunkPosition, offsetInChunk, endOffsetInChunk);
+                }
             } else {
                 assert current instanceof UnalignedChunk;
                 writer.initializeUnalignedChunk(chunkPosition, current.getTopOffset(), current.getEndOffset(), offsetToPrevious, offsetToNext);
-                writer.enableRememberedSetForUnalignedChunk(chunkPosition);
             }
         }
     }

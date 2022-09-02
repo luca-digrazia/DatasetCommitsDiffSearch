@@ -169,13 +169,8 @@ public final class HeapChunk {
         void setOffsetToNextChunk(SignedWord newNext);
     }
 
-    /**
-     * Reset the mutable state of a chunk.
-     *
-     * @param chunkSize
-     */
-    public static void initialize(Header<?> chunk, Pointer objectsStart, UnsignedWord chunkSize) {
-        HeapChunk.setEndOffset(chunk, chunkSize);
+    /** Reset the mutable state of a chunk. */
+    public static void initialize(Header<?> chunk, Pointer objectsStart) {
         HeapChunk.setTopPointer(chunk, objectsStart);
         HeapChunk.setSpace(chunk, null);
         HeapChunk.setNext(chunk, WordFactory.nullPointer());

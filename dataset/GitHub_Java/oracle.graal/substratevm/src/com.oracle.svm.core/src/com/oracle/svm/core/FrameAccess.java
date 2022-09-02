@@ -31,25 +31,50 @@ import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.Pointer;
 
+import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.config.ConfigurationValues;
 
+import jdk.vm.ci.aarch64.AArch64;
+import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.JavaKind;
 
 public abstract class FrameAccess {
 
+    @Fold
     public static FrameAccess singleton() {
         return ImageSingletons.lookup(FrameAccess.class);
     }
 
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public abstract CodePointer readReturnAddress(Pointer sourceSp);
 
     public abstract void writeReturnAddress(Pointer sourceSp, CodePointer newReturnAddress);
 
     @Fold
     public static int returnAddressSize() {
-        return ConfigurationValues.getTarget().arch.getReturnAddressSize();
+        Architecture arch = ConfigurationValues.getTarget().arch;
+        if (arch instanceof AArch64) {
+            /* Currently AArch64.getReturnAddressSize() is incorrectly 0. */
+            return wordSize();
+        } else {
+            return arch.getReturnAddressSize();
+        }
     }
 
+    /**
+     * Gets the amount by which the stack pointer is adjusted by a call instruction.
+     */
+    @Fold
+    public abstract int stackPointerAdjustmentOnCall();
+
+    /**
+     * Returns the size in bytes of the saved base pointer in the stack frame. The saved base
+     * pointer must be located immediately after the return address (if this is not the case in a
+     * new architecture, bigger modifications to code like the Deoptimizer is required).
+     */
+    public abstract int savedBasePointerSize();
+
+    @Fold
     public static int wordSize() {
         return ConfigurationValues.getTarget().arch.getWordSize();
     }

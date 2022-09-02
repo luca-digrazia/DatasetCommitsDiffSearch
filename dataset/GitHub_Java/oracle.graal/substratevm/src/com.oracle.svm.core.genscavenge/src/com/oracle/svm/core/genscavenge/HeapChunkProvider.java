@@ -39,6 +39,7 @@ import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.genscavenge.AlignedHeapChunk.AlignedHeader;
 import com.oracle.svm.core.genscavenge.HeapChunk.Header;
 import com.oracle.svm.core.genscavenge.UnalignedHeapChunk.UnalignedHeader;
+import com.oracle.svm.core.genscavenge.remset.RememberedSet;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicUnsigned;
 import com.oracle.svm.core.log.Log;
@@ -112,7 +113,8 @@ final class HeapChunkProvider {
             }
             log().string("  new chunk: ").hex(result).newline();
 
-            AlignedHeapChunk.initialize(result, chunkSize);
+            initializeChunk(result, chunkSize);
+            AlignedHeapChunk.initialize(result);
         }
         assert HeapChunk.getTopOffset(result).equal(AlignedHeapChunk.getObjectsStartOffset());
         assert HeapChunk.getEndOffset(result).equal(chunkSize);
@@ -232,7 +234,8 @@ final class HeapChunkProvider {
             throw UNALIGNED_OUT_OF_MEMORY_ERROR;
         }
 
-        UnalignedHeapChunk.initialize(result, chunkSize);
+        initializeChunk(result, chunkSize);
+        UnalignedHeapChunk.initializeChunk(result);
         assert objectSize.belowOrEqual(HeapChunk.availableObjectMemory(result)) : "UnalignedHeapChunk insufficient for requested object";
 
         if (HeapPolicy.getZapProducedHeapChunks()) {
@@ -251,6 +254,11 @@ final class HeapChunkProvider {
      */
     static void consumeUnalignedChunks(UnalignedHeader firstChunk) {
         freeUnalignedChunkList(firstChunk);
+    }
+
+    /** Initialize the immutable state of a chunk. */
+    private static void initializeChunk(Header<?> that, UnsignedWord chunkSize) {
+        HeapChunk.setEndOffset(that, chunkSize);
     }
 
     private static void zap(Header<?> chunk, WordBase value) {
