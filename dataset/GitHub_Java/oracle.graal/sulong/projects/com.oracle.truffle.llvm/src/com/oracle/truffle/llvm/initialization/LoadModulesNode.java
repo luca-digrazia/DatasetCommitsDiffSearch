@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -133,7 +134,7 @@ public final class LoadModulesNode extends LLVMRootNode {
         }
     }
 
-    private LoadModulesNode(String name, LLVMParserResult parserResult, boolean isInternalSulongLibrary,
+    private LoadModulesNode(String name, LLVMParserResult parserResult, LLVMContext context,
                     FrameDescriptor rootFrame, boolean lazyParsing, List<Object> dependenciesSource, Source source, LLVMLanguage language) throws Type.TypeOverflowException {
         super(language, rootFrame, parserResult.getRuntime().getNodeFactory().createStackAccess(rootFrame));
         this.mainFunctionCallTarget = null;
@@ -150,7 +151,7 @@ public final class LoadModulesNode extends LLVMRootNode {
         this.initContext = null;
         String moduleName = parserResult.getRuntime().getLibraryName();
         this.initSymbols = new InitializeSymbolsNode(parserResult, parserResult.getRuntime().getNodeFactory(), lazyParsing,
-                isInternalSulongLibrary, moduleName);
+                        isInternalSulongLibrary(context, parserResult.getRuntime().getFile()), moduleName);
         this.initScopes = new InitializeScopeNode(parserResult);
         this.initExternals = new InitializeExternalNode(parserResult);
         this.initGlobals = new InitializeGlobalNode(rootFrame, parserResult, moduleName);
@@ -170,9 +171,9 @@ public final class LoadModulesNode extends LLVMRootNode {
     }
 
     public static LoadModulesNode create(String name, LLVMParserResult parserResult,
-                    boolean lazyParsing, boolean isInternalSulongLibrary, List<Object> dependencySources, Source source, LLVMLanguage language) {
+                    boolean lazyParsing, LLVMContext context, List<Object> dependencySources, Source source, LLVMLanguage language) {
         try {
-            return new LoadModulesNode(name, parserResult, isInternalSulongLibrary, new FrameDescriptor(), lazyParsing, dependencySources, source, language);
+            return new LoadModulesNode(name, parserResult, context, new FrameDescriptor(), lazyParsing, dependencySources, source, language);
         } catch (Type.TypeOverflowException e) {
             throw new LLVMUnsupportedException(null, LLVMUnsupportedException.UnsupportedReason.UNSUPPORTED_VALUE_RANGE, e);
         }
@@ -188,9 +189,9 @@ public final class LoadModulesNode extends LLVMRootNode {
         LLVMContext context = ctxRef.get();
 
         synchronized (context) {
-            // Parse the dependencies of this library.
             if (!hasInitialised) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
+                // Parse the dependencies of this library.
                 for (int i = 0; i < dependenciesSource.size(); i++) {
                     if (dependenciesSource.get(i) instanceof Source) {
                         CallTarget callTarget = context.getEnv().parseInternal((Source) dependenciesSource.get(i));
@@ -478,6 +479,12 @@ public final class LoadModulesNode extends LLVMRootNode {
         return new LLVMScope();
     }
 
+    // A library is a sulong internal library if it contains the path of the internal llvm
+    // library directory
+    private static boolean isInternalSulongLibrary(LLVMContext context, TruffleFile file) {
+        return context.isInternalLibraryFile(file);
+    }
+
     /**
      * Retrieves the function for the main method.
      */
@@ -514,9 +521,9 @@ public final class LoadModulesNode extends LLVMRootNode {
         LLVMSymbol disposeContext;
         LLVMScope fileScope = language.getInternalFileScopes("libsulong");
 
-        LLVMSymbol symbol = fileScope.get(START_METHOD_NAME);
-        if (symbol != null) {
-            startFunction = context.createFunctionDescriptor(symbol.asFunction(), new LLVMFunctionCode(symbol.asFunction()));
+        LLVMSymbol function = fileScope.get(START_METHOD_NAME);
+        if (function != null) {
+            startFunction = context.createFunctionDescriptor(function.asFunction());
         } else {
             throw new IllegalStateException("Context cannot be initialized: start function, " + START_METHOD_NAME + ", was not found in sulong libraries");
         }

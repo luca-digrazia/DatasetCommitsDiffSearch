@@ -416,7 +416,7 @@ final class ParserDriver {
                 // only create a source if the library has not already been parsed.
                 TruffleFile file = createTruffleFile(lib, null, binaryParserResult.getLocator(), "<dependency library>");
                 CallTarget calls = language.getCachedLibrary(file.getPath());
-                if (calls != null && !dependencies.contains(calls)) {
+                if (calls != null) {
                     dependencies.add(calls);
                 } else {
                     Object sourceOrCallTarget = createDependencySource(lib, lib, true, file);
