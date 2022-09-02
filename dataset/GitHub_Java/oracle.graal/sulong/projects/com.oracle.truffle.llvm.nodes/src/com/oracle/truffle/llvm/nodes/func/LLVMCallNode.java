@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,74 +29,61 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
-import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.nodes.func.LLVMCallNodeFactory.ArgumentNodeGen;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
 public final class LLVMCallNode extends LLVMExpressionNode {
 
     public static final int USER_ARGUMENT_OFFSET = 1;
 
-    @Child private LLVMExpressionNode functionNode;
     @Children private final LLVMExpressionNode[] argumentNodes;
-    @Children private final ArgumentNode[] prepareArgumentNodes;
-    @Child private LLVMLookupDispatchNode dispatchNode;
+    @Children private final LLVMPrepareArgumentNode[] prepareArgumentNodes;
+    @Child private LLVMLookupDispatchTargetNode dispatchTargetNode;
+    @Child private LLVMDispatchNode dispatchNode;
 
-    private final LLVMSourceLocation source;
+    // this node is also used to execute inline assembly, which is not instrumentable and should
+    // therefore not be considered a function call for the debugger
+    private final boolean isSourceCall;
 
-    public LLVMCallNode(FunctionType functionType, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, LLVMSourceLocation source) {
-        this.functionNode = functionNode;
+    public LLVMCallNode(FunctionType functionType, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, boolean isSourceCall) {
         this.argumentNodes = argumentNodes;
-        this.dispatchNode = LLVMLookupDispatchNodeGen.create(functionType);
-        this.prepareArgumentNodes = new ArgumentNode[argumentNodes.length];
-        for (int i = 0; i < argumentNodes.length; i++) {
-            this.prepareArgumentNodes[i] = ArgumentNodeGen.create();
-        }
-        this.source = source;
+        this.prepareArgumentNodes = createPrepareArgumentNodes(argumentNodes);
+        this.dispatchTargetNode = LLVMLookupDispatchTargetNodeGen.create(functionNode);
+        this.dispatchNode = LLVMDispatchNodeGen.create(functionType);
+        this.isSourceCall = isSourceCall;
     }
 
     @ExplodeLoop
     @Override
     public Object executeGeneric(VirtualFrame frame) {
-        Object function = functionNode.executeGeneric(frame);
+        Object function = dispatchTargetNode.executeGeneric(frame);
+
         Object[] argValues = new Object[argumentNodes.length];
         for (int i = 0; i < argumentNodes.length; i++) {
             argValues[i] = prepareArgumentNodes[i].executeWithTarget(argumentNodes[i].executeGeneric(frame));
         }
+
         return dispatchNode.executeDispatch(function, argValues);
     }
 
-    protected abstract static class ArgumentNode extends LLVMNode {
-
-        protected abstract Object executeWithTarget(Object value);
-
-        @Specialization
-        protected LLVMPointer doPointer(LLVMPointer address) {
-            return address.copy();
+    private static LLVMPrepareArgumentNode[] createPrepareArgumentNodes(LLVMExpressionNode[] argumentNodes) {
+        LLVMPrepareArgumentNode[] nodes = new LLVMPrepareArgumentNode[argumentNodes.length];
+        for (int i = 0; i < nodes.length; i++) {
+            nodes[i] = LLVMPrepareArgumentNodeGen.create();
         }
-
-        @Fallback
-        protected Object doOther(Object value) {
-            return value;
-        }
-    }
-
-    @Override
-    public LLVMSourceLocation getSourceLocation() {
-        return source;
+        return nodes;
     }
 
     @Override
     public boolean hasTag(Class<? extends Tag> tag) {
-        return tag == StandardTags.StatementTag.class || tag == StandardTags.CallTag.class || super.hasTag(tag);
+        if (tag == StandardTags.CallTag.class) {
+            return isSourceCall && getSourceLocation() != null;
+        } else {
+            return super.hasTag(tag);
+        }
     }
 }
