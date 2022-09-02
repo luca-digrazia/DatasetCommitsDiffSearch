@@ -63,12 +63,6 @@ public final class JUnitFeature implements Feature {
     }
 
     @Override
-    public void afterRegistration(AfterRegistrationAccess access) {
-        SVMJUnitRunner svmRunner = new SVMJUnitRunner(access);
-        ImageSingletons.add(SVMJUnitRunner.class, svmRunner);
-    }
-
-    @Override
     public void duringSetup(DuringSetupAccess access) {
         RuntimeClassInitialization.initializeAtBuildTime(SVMJUnitRunner.class);
         RuntimeClassInitialization.initializeAtBuildTime(org.junit.runner.Description.class);
@@ -88,5 +82,7 @@ public final class JUnitFeature implements Feature {
         RuntimeClassInitialization.initializeAtBuildTime(org.junit.runners.model.FrameworkField.class);
         RuntimeClassInitialization.initializeAtBuildTime(org.junit.Assert.class);
         RuntimeClassInitialization.initializeAtBuildTime(com.oracle.mxtool.junit.MxJUnitRequest.class);
+        SVMJUnitRunner svmRunner = new SVMJUnitRunner(access);
+        ImageSingletons.add(SVMJUnitRunner.class, svmRunner);
     }
 }
