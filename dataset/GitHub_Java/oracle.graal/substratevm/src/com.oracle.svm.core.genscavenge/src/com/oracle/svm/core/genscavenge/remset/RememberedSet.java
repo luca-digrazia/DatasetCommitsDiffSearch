@@ -1,27 +1,3 @@
-/*
- * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.svm.core.genscavenge.remset;
 
 import java.util.List;
@@ -43,112 +19,53 @@ import com.oracle.svm.core.util.HostedByteBufferPointer;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 
-/**
- * A remembered set keeps track where the image heap or old generation has references to the young
- * generation. When collecting the young generation, the remembered set is used to avoid having to
- * scan through the whole image heap and old generation.
- */
 public interface RememberedSet {
     @Fold
-    static RememberedSet get() {
+    public static RememberedSet get() {
         return ImageSingletons.lookup(RememberedSet.class);
     }
 
-    /** Creates the barrier set that the compiler should use for emitting read/write barriers. */
-    BarrierSet createBarrierSet(MetaAccessProvider metaAccess);
+    public BarrierSet createBarrierSet(MetaAccessProvider metaAccess);
 
-    /** Returns the header size of aligned chunks. */
-    UnsignedWord getHeaderSizeOfAlignedChunk();
+    public UnsignedWord getHeaderSizeOfAlignedChunk();
 
-    /** Returns the header size of unaligned chunks. */
-    UnsignedWord getHeaderSizeOfUnalignedChunk();
+    public UnsignedWord getHeaderSizeOfUnalignedChunk();
 
-    /**
-     * Enables remembered set tracking for an aligned chunk and its objects. Must be called when
-     * adding a new chunk to the image heap or old generation.
-     */
     @Platforms(Platform.HOSTED_ONLY.class)
-    void enableRememberedSetForAlignedChunk(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects);
+    public void enableRememberedSetForAlignedChunk(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects);
 
-    /**
-     * Enables remembered set tracking for an unaligned chunk and its objects. Must be called when
-     * adding a new chunk to the image heap or old generation.
-     */
     @Platforms(Platform.HOSTED_ONLY.class)
-    void enableRememberedSetForUnalignedChunk(HostedByteBufferPointer chunk);
+    public void enableRememberedSetForUnalignedChunk(HostedByteBufferPointer chunk);
 
-    /**
-     * Enables remembered set tracking for an aligned chunk and its objects. Must be called when
-     * adding a new chunk to the image heap or old generation.
-     */
-    void enableRememberedSetForChunk(AlignedHeader chunk);
+    public void enableRememberedSetForChunk(AlignedHeader chunk);
 
-    /**
-     * Enables remembered set tracking for an unaligned chunk and its objects. Must be called when
-     * adding a new chunk to the image heap or old generation.
-     */
-    void enableRememberedSetForChunk(UnalignedHeader chunk);
+    public void enableRememberedSetForChunk(UnalignedHeader chunk);
 
-    /**
-     * Enables remembered set tracking for a single object in an aligned chunk. Must be called when
-     * an object is added to the image heap or old generation.
-     */
-    void enableRememberedSetForObject(AlignedHeader chunk, Object obj);
+    public void enableRememberedSetForObject(AlignedHeader chunk, Object obj);
 
-    /** Clears the remembered set of an aligned chunk. */
-    void clearRememberedSet(AlignedHeader chunk);
+    public void clearRememberedSet(AlignedHeader chunk);
 
-    /** Clears the remembered set of an unaligned chunk. */
-    void clearRememberedSet(UnalignedHeader chunk);
+    public void clearRememberedSet(UnalignedHeader chunk);
 
-    /** Checks if remembered set tracking is enabled for an object. */
     @AlwaysInline("GC performance")
-    boolean hasRememberedSet(UnsignedWord header);
+    public boolean isRememberedSetEnabled(UnsignedWord header);
 
-    /**
-     * Marks an object as dirty. May only be called for objects for which remembered set tracking is
-     * enabled. This tells the GC that the object may contain a reference to the young generation.
-     */
     @AlwaysInline("GC performance")
-    void dirtyCardForAlignedObject(Object object, boolean verifyOnly);
+    public void dirtyCardForAlignedObject(Object object, boolean verifyOnly);
 
-    /**
-     * Marks an object as dirty. May only be called for objects for which remembered set tracking is
-     * enabled. This tells the GC that the object may contain a reference to the young generation.
-     */
     @AlwaysInline("GC performance")
-    void dirtyCardForUnalignedObject(Object object, boolean verifyOnly);
+    public void dirtyCardForUnalignedObject(Object object, boolean verifyOnly);
 
-    /**
-     * Marks the {@code holderObject} as dirty if {@code object} is in the young generation. May
-     * only be called for {@code holderObject}s for which remembered set tracking is enabled. This
-     * tells the GC that the {@code holderObject} may contain a reference to the young generation.
-     */
     @AlwaysInline("GC performance")
-    void dirtyCardIfNecessary(Object holderObject, Object object);
+    public void dirtyCardIfNecessary(Object holderObject, Object object);
 
-    /**
-     * Walks all dirty objects in an aligned chunk.
-     */
-    void walkDirtyObjects(AlignedHeader chunk, GreyToBlackObjectVisitor visitor);
+    public void walkDirtyObjects(AlignedHeader chunk, GreyToBlackObjectVisitor visitor);
 
-    /**
-     * Walks all dirty objects in an unaligned chunk.
-     */
-    void walkDirtyObjects(UnalignedHeader chunk, GreyToBlackObjectVisitor visitor);
+    public void walkDirtyObjects(UnalignedHeader chunk, GreyToBlackObjectVisitor visitor);
 
-    /**
-     * Walks all dirty objects in a {@link Space}.
-     */
-    void walkDirtyObjects(Space space, GreyToBlackObjectVisitor visitor);
+    public void walkDirtyObjects(Space space, GreyToBlackObjectVisitor visitor);
 
-    /**
-     * Verify the remembered set for an aligned chunk.
-     */
-    boolean verify(AlignedHeader firstAlignedHeapChunk);
+    public boolean verify(AlignedHeader firstAlignedHeapChunk);
 
-    /**
-     * Verify the remembered set for an unaligned chunk.
-     */
-    boolean verify(UnalignedHeader firstUnalignedHeapChunk);
+    public boolean verify(UnalignedHeader firstUnalignedHeapChunk);
 }

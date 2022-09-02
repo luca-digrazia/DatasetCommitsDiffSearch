@@ -40,7 +40,6 @@ import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
-import com.oracle.svm.core.thread.VMOperation;
 
 /** Support for pinning objects to a memory address with {@link PinnedObject}. */
 final class PinnedObjectImpl implements PinnedObject {
@@ -69,7 +68,7 @@ final class PinnedObjectImpl implements PinnedObject {
     static class PinnedObjectFeature implements Feature {
         @Override
         public boolean isInConfiguration(IsInConfigurationAccess access) {
-            return SubstrateOptions.UseSerialGC.getValue();
+            return SubstrateOptions.UseCardRememberedSetHeap.getValue();
         }
 
         @Override
@@ -79,8 +78,6 @@ final class PinnedObjectImpl implements PinnedObject {
     }
 
     static void pushPinnedObject(PinnedObjectImpl newHead) {
-        // To avoid ABA problems, the application may only push data. All other operations may only
-        // be executed by the GC.
         HeapImpl heap = HeapImpl.getHeapImpl();
         UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = heap.getPinHead();
         PinnedObjectImpl sampleHead;
@@ -91,13 +88,11 @@ final class PinnedObjectImpl implements PinnedObject {
     }
 
     static PinnedObjectImpl getPinnedObjects() {
-        assert VMOperation.isGCInProgress();
         UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = HeapImpl.getHeapImpl().getPinHead();
         return pinHead.get();
     }
 
     static void setPinnedObjects(PinnedObjectImpl list) {
-        assert VMOperation.isGCInProgress();
         UninterruptibleUtils.AtomicReference<PinnedObjectImpl> pinHead = HeapImpl.getHeapImpl().getPinHead();
         pinHead.set(list);
     }

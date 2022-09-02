@@ -68,8 +68,9 @@ import com.oracle.svm.core.util.PointerUtils;
  * +===============+-------+--------+----------------------+
  * </pre>
  *
- * The size of both the CardTable and the FirstObjectTable depends on the used {@link RememberedSet}
- * implementation and may even be zero.
+ * The CardTable and the FirstObjectTable are both optional and start at computed addresses. The two
+ * tables each need the same fraction of the size of the space for Objects. I conservatively compute
+ * them as a fraction of the size of the entire chunk.
  */
 public final class AlignedHeapChunk {
     private AlignedHeapChunk() { // all static

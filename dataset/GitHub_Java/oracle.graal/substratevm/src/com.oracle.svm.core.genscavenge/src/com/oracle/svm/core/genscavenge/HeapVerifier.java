@@ -35,7 +35,6 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MemoryWalker;
 import com.oracle.svm.core.SubstrateGCOptions;
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.genscavenge.AlignedHeapChunk.AlignedHeader;
 import com.oracle.svm.core.genscavenge.UnalignedHeapChunk.UnalignedHeader;
@@ -63,7 +62,7 @@ public final class HeapVerifier {
         success &= verifyImageHeapObjects();
         success &= verifyYoungGeneration(occasion);
         success &= verifyOldGeneration();
-        success &= verifyRememberedSets();
+        success &= verifyRememberedSets(occasion);
         return success;
     }
 
@@ -137,13 +136,13 @@ public final class HeapVerifier {
         return success;
     }
 
-    private static boolean verifyRememberedSets() {
+    private static boolean verifyRememberedSets(Occasion occasion) {
         /*
          * After we are done with all other verifications, it is guaranteed that the heap is in a
          * reasonable state. Now, we can verify the remembered sets without having to worry about
          * heap consistency basic.
          */
-        if (!SubstrateOptions.useRememberedSet() || !SubstrateGCOptions.VerifyRememberedSet.getValue()) {
+        if (!HeapOptions.useRememberedSet() || !SubstrateGCOptions.VerifyRememberedSet.getValue()) {
             return true;
         }
 
@@ -153,6 +152,8 @@ public final class HeapVerifier {
          * as the GC itself dirties the card table. For the old generation, it is also not possible
          * at the moment because the reference handling may result in dirty cards.
          */
+
+        YoungGeneration youngGen = HeapImpl.getHeapImpl().getYoungGeneration();
 
         boolean success = true;
         RememberedSet rememberedSet = RememberedSet.get();
@@ -309,7 +310,7 @@ public final class HeapVerifier {
                 // we can't verify that this bit is set.
 
             } else if (space.isOldSpace()) {
-                if (SubstrateOptions.useRememberedSet() && !RememberedSet.get().hasRememberedSet(header)) {
+                if (!RememberedSet.get().isRememberedSetEnabled(header)) {
                     Log.log().string("Object ").hex(ptr).string(" is in old generation chunk ").hex(chunk).string(" but does not have a remembered set.").newline();
                     return false;
                 }
