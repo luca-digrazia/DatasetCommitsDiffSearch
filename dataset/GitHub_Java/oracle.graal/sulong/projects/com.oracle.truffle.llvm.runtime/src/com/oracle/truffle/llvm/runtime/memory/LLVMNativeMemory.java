@@ -112,74 +112,48 @@ public final class LLVMNativeMemory extends LLVMMemory {
         return true;
     }
 
-    @TruffleBoundary
-    private static void memsetBoundary(long address, long size, byte value) {
-        unsafe.setMemory(address, size, value);
-    }
-
     @Override
     @Deprecated
     @SuppressWarnings("deprecation")
     public void memset(LLVMNativePointer address, long size, byte value) {
         assert size == 0 || checkPointer(address.asNative());
         try {
-            memsetBoundary(address.asNative(), size, value);
+            unsafe.setMemory(address.asNative(), size, value);
         } catch (Throwable e) {
             // this avoids unnecessary exception edges in the compiled code
             CompilerDirectives.transferToInterpreter();
             throw e;
         }
-    }
-
-    @TruffleBoundary
-    private static void copyMemoryBoundary(long sourceAddress, long targetAddress, long length) {
-        unsafe.copyMemory(sourceAddress, targetAddress, length);
     }
 
     @Override
     @Deprecated
     @SuppressWarnings("deprecation")
-    @TruffleBoundary
     public void copyMemory(long sourceAddress, long targetAddress, long length) {
         assert length == 0 || checkPointer(sourceAddress) && checkPointer(targetAddress);
-        copyMemoryBoundary(sourceAddress, targetAddress, length);
-    }
-
-    @TruffleBoundary
-    private static void freeBoundary(long address) {
-        unsafe.freeMemory(address);
+        unsafe.copyMemory(sourceAddress, targetAddress, length);
     }
 
     @Override
     public void free(long address) {
         try {
-            freeBoundary(address);
+            unsafe.freeMemory(address);
         } catch (Throwable e) {
             // this avoids unnecessary exception edges in the compiled code
             CompilerDirectives.transferToInterpreter();
             throw e;
         }
-    }
-
-    @TruffleBoundary
-    private static long allocateMemoryBoundary(long size) {
-        return unsafe.allocateMemory(size);
     }
 
     @Override
     public LLVMNativePointer allocateMemory(long size) {
         try {
-            return LLVMNativePointer.create(allocateMemoryBoundary(size));
+            return LLVMNativePointer.create(unsafe.allocateMemory(size));
         } catch (Throwable e) {
             // this avoids unnecessary exception edges in the compiled code
             CompilerDirectives.transferToInterpreter();
             throw e;
         }
-    }
-
-    @TruffleBoundary
-    private static long reallocateMemoryBoundary(long addr, long size) {
-        return unsafe.reallocateMemory(addr, size);
     }
 
     @Override
@@ -188,7 +162,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
     public LLVMNativePointer reallocateMemory(LLVMNativePointer addr, long size) {
         // a null pointer is a valid argument
         try {
-            return LLVMNativePointer.create(reallocateMemoryBoundary(addr.asNative(), size));
+            return LLVMNativePointer.create(unsafe.reallocateMemory(addr.asNative(), size));
         } catch (Throwable e) {
             // this avoids unnecessary exception edges in the compiled code
             CompilerDirectives.transferToInterpreter();
