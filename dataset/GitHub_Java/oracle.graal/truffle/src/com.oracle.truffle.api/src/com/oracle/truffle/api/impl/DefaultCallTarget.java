@@ -42,7 +42,6 @@ package com.oracle.truffle.api.impl;
 
 import static com.oracle.truffle.api.impl.DefaultTruffleRuntime.getRuntime;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.impl.DefaultTruffleRuntime.DefaultFrameInstance;
@@ -87,7 +86,6 @@ public final class DefaultCallTarget implements RootCallTarget {
             DefaultRuntimeAccessor.LANGUAGE.onThrowable(callNode, this, t, frame);
             throw t;
         } finally {
-            CompilerDirectives.safepoint();
             getRuntime().popFrame(callerFrame);
         }
     }
@@ -107,7 +105,7 @@ public final class DefaultCallTarget implements RootCallTarget {
     private void initialize() {
         synchronized (this) {
             if (!this.initialized) {
-                DefaultRuntimeAccessor.INSTRUMENT.onFirstExecution(getRootNode(), true);
+                DefaultRuntimeAccessor.INSTRUMENT.onFirstExecution(getRootNode());
                 this.initialized = true;
             }
         }
