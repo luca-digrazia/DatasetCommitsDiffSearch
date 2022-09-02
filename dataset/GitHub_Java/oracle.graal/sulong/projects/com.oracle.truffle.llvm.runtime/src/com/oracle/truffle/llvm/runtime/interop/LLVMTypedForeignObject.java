@@ -65,7 +65,7 @@ import com.oracle.truffle.llvm.spi.ReferenceLibrary;
 @ExportLibrary(LLVMManagedWriteLibrary.class)
 @ExportLibrary(ReferenceLibrary.class)
 @ExportLibrary(NativeTypeLibrary.class)
-public final class LLVMTypedForeignObject extends LLVMInternalTruffleObject implements LLVMObjectAccess {
+public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInternalTruffleObject {
 
     final Object foreign;
     private final LLVMInteropType.Structured type;

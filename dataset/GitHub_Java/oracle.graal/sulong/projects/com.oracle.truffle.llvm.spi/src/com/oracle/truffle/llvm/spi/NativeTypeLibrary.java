@@ -29,9 +29,9 @@
  */
 package com.oracle.truffle.llvm.spi;
 
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
+import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.LibraryFactory;
 
@@ -40,7 +40,7 @@ import com.oracle.truffle.api.library.LibraryFactory;
  * this interface, raw memory access to this object will simulate the layout of the given type.
  */
 @GenerateLibrary
-@GenerateAOT
+@DefaultExport(LegacyLibrary.class)
 public abstract class NativeTypeLibrary extends Library {
 
     @Abstract
