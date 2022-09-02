@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.logging.Level;
 
@@ -155,11 +154,6 @@ public interface ClassConstant extends PoolConstant {
         public void validate(ConstantPool pool) {
             pool.utf8At(classNameIndex).validateClassName();
         }
-
-        @Override
-        public void dump(ByteBuffer buf) {
-            buf.putChar(classNameIndex);
-        }
     }
 
     final class Resolved implements ClassConstant, Resolvable.ResolvedConstant {
@@ -227,11 +221,6 @@ public interface ClassConstant extends PoolConstant {
                 throw ConstantPool.classFormatError("Invalid class name entry: " + name);
             }
         }
-
-        @Override
-        public void dump(ByteBuffer buf) {
-            buf.putChar((char) 0);
-        }
     }
 
     /**
@@ -256,11 +245,6 @@ public interface ClassConstant extends PoolConstant {
         @Override
         public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
             return new Resolved(resolved);
-        }
-
-        @Override
-        public void dump(ByteBuffer buf) {
-            buf.putChar((char) 0);
         }
     }
 }
