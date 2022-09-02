@@ -27,7 +27,6 @@ import java.util.Arrays;
 
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
-import com.oracle.truffle.espresso.impl.LinkedKlass;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -44,7 +43,7 @@ public class Target_com_oracle_truffle_espresso_InternalUtils {
         Klass k = clazz.getMirrorKlass();
         int maxLen;
         if (k instanceof ObjectKlass) {
-            maxLen = ((ObjectKlass) k).getLinkedKlass().getPrimitiveFieldTotalByteCount();
+            maxLen = ((ObjectKlass) k).getPrimitiveFieldTotalByteCount();
         } else {
             return StaticObject.createArray(k.getMeta().java_lang_String.getArrayClass(), StaticObject.EMPTY_ARRAY);
         }
@@ -56,7 +55,7 @@ public class Target_com_oracle_truffle_espresso_InternalUtils {
             while (true) {
                 Field f = k.lookupFieldTable(i);
                 if (!f.isStatic() && f.getKind().isPrimitive()) {
-                    for (int j = f.getIndex(); j < f.getIndex() + f.getKind().getByteCount(); j++) {
+                    for (int j = f.getFieldIndex(); j < f.getFieldIndex() + f.getKind().getByteCount(); j++) {
                         result[j] = meta.toGuestString(f.getName());
                     }
                 }
@@ -72,7 +71,7 @@ public class Target_com_oracle_truffle_espresso_InternalUtils {
     public static int getPrimitiveFieldByteCount(@Host(Class.class) StaticObject clazz) {
         Klass k = clazz.getMirrorKlass();
         if (k instanceof ObjectKlass) {
-            return ((ObjectKlass) k).getLinkedKlass().getPrimitiveFieldTotalByteCount();
+            return ((ObjectKlass) k).getPrimitiveFieldTotalByteCount();
         } else {
             return 0;
         }
@@ -96,11 +95,11 @@ public class Target_com_oracle_truffle_espresso_InternalUtils {
             total += Unsafe.ARRAY_OBJECT_BASE_OFFSET + JavaKind.Int.getByteCount();
             return total;
         } else {
-            LinkedKlass lk = ((ObjectKlass) k).getLinkedKlass();
+            ObjectKlass klass = (ObjectKlass) k;
             // Bytes used by the primitive fields
-            total += lk.getPrimitiveFieldTotalByteCount();
+            total += klass.getPrimitiveFieldTotalByteCount();
             // Bytes used by the Object fields
-            total += lk.getObjectFieldsCount() * JavaKind.Int.getByteCount();
+            total += klass.getObjectFieldsCount() * JavaKind.Int.getByteCount();
             // Header of the primitive field array + storing its reference
             total += Unsafe.ARRAY_BYTE_BASE_OFFSET + JavaKind.Int.getByteCount();
             // Header of the Object field array + storing its reference

@@ -27,8 +27,9 @@ import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
-import com.oracle.truffle.espresso.impl.Member;
+import com.oracle.truffle.espresso.impl.Method;
 
 /**
  * Interface denoting a field or method entry in a constant pool.
@@ -115,28 +116,28 @@ public interface MemberRefConstant extends PoolConstant {
      * <li>R is private and is declared in D.
      * </ul>
      */
-    static boolean checkAccess(Klass accessingKlass, Klass resolvedKlass, Member member) {
-        if (member.isPublic()) {
+    static boolean checkAccess(Klass accessingKlass, Klass resolvedKlass, Field f) {
+        if (f.isPublic()) {
             return true;
         }
-        Klass memberKlass = member.getDeclaringKlass();
-        if (member.isProtected()) {
-            if (!member.isStatic()) {
+        Klass fieldKlass = f.getDeclaringKlass();
+        if (f.isProtected()) {
+            if (!f.isStatic()) {
                 if (resolvedKlass.isAssignableFrom(accessingKlass) || accessingKlass.isAssignableFrom(resolvedKlass)) {
                     return true;
                 }
             } else {
-                if (memberKlass.isAssignableFrom(accessingKlass)) {
+                if (fieldKlass.isAssignableFrom(accessingKlass)) {
                     return true;
                 }
             }
         }
-        if (member.isProtected() || member.isPackagePrivate()) {
-            if (accessingKlass.sameRuntimePackage(memberKlass)) {
+        if (f.isProtected() || f.isPackagePrivate()) {
+            if (accessingKlass.sameRuntimePackage(fieldKlass)) {
                 return true;
             }
         }
-        if (member.isPrivate() && nestMateTest(accessingKlass, memberKlass)) {
+        if (f.isPrivate() && fieldKlass == accessingKlass) {
             return true;
         }
         // MagicAccessorImpl marks internal reflection classes that have access to eveything.
@@ -145,13 +146,54 @@ public interface MemberRefConstant extends PoolConstant {
         }
 
         if (accessingKlass.getHostClass() != null) {
-            return checkAccess(accessingKlass.getHostClass(), resolvedKlass, member);
+            return checkAccess(accessingKlass.getHostClass(), resolvedKlass, f);
         }
         return false;
     }
 
-    static boolean nestMateTest(Klass k1, Klass k2) {
-        return k1 == k2 || k1.nest() == k2.nest();
+    // Same as above.
+    static boolean checkAccess(Klass accessingKlass, Klass resolvedKlass, Method m) {
+        Klass methodKlass = m.getDeclaringKlass();
+
+        if (m.isPublic()) {
+            return true;
+        }
+
+        if (Name.clone.equals(m.getName()) && methodKlass.isJavaLangObject()) {
+            if (resolvedKlass.isArray()) {
+                return true;
+            }
+        }
+
+        if (m.isProtected()) {
+            if (!m.isStatic()) {
+                if (resolvedKlass.isAssignableFrom(accessingKlass) || accessingKlass.isAssignableFrom(resolvedKlass)) {
+                    return true;
+                }
+            } else {
+                if (methodKlass.isAssignableFrom(accessingKlass)) {
+                    return true;
+                }
+            }
+        }
+        if (m.isProtected() || m.isPackagePrivate()) {
+            if (accessingKlass.sameRuntimePackage(methodKlass)) {
+                return true;
+            }
+        }
+        if (m.isPrivate() && methodKlass == accessingKlass) {
+            return true;
+        }
+        // MagicAccessorImpl marks internal reflection classes that have access to everything.
+        if (accessingKlass.getMeta().sun_reflect_MagicAccessorImpl.isAssignableFrom(accessingKlass)) {
+            return true;
+        }
+
+        if (accessingKlass.getHostClass() != null) {
+            return checkAccess(accessingKlass.getHostClass(), resolvedKlass, m);
+        }
+
+        return false;
     }
 
 }

@@ -124,16 +124,15 @@ public interface ClassConstant extends PoolConstant {
                 if (!Klass.checkAccess(klass.getElementalType(), accessingKlass)) {
                     Meta meta = context.getMeta();
                     System.err.println(EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
-                    throw meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(klassName));
+                    throw meta.throwExWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(klassName));
                 }
 
                 return new Resolved(klass);
 
             } catch (EspressoException e) {
                 CompilerDirectives.transferToInterpreter();
-                Meta meta = pool.getContext().getMeta();
-                if (meta.java_lang_ClassNotFoundException.isAssignableFrom(e.getExceptionObject().getKlass())) {
-                    throw meta.throwExceptionWithMessage(meta.java_lang_NoClassDefFoundError, meta.toGuestString(klassName));
+                if (pool.getContext().getMeta().java_lang_ClassNotFoundException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+                    throw pool.getContext().getMeta().throwExWithMessage(NoClassDefFoundError.class, klassName.toString());
                 }
                 throw e;
             } catch (VirtualMachineError e) {
@@ -193,7 +192,7 @@ public interface ClassConstant extends PoolConstant {
                 if (!Klass.checkAccess(klass.getElementalType(), accessingKlass)) {
                     Meta meta = context.getMeta();
                     System.err.println(EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
-                    throw meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(klassName));
+                    throw meta.throwExWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(klassName));
                 }
 
                 return new Resolved(klass);

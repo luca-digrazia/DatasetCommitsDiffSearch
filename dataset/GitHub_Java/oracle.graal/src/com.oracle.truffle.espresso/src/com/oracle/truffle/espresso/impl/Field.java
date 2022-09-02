@@ -193,7 +193,6 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public static Field getReflectiveFieldRoot(StaticObject seed) {
-        // TODO(tg): inject meta
         Meta meta = seed.getKlass().getMeta();
         StaticObject curField = seed;
         Field target = null;

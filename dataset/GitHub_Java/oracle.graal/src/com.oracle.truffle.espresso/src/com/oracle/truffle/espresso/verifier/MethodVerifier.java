@@ -1924,11 +1924,11 @@ public final class MethodVerifier implements ContextAccess {
     }
 
     private static boolean isClassInit(Symbol<Name> calledMethodName) {
-        return Name._clinit_.equals(calledMethodName);
+        return calledMethodName == Name.CLINIT;
     }
 
     private static boolean isInstanceInit(Symbol<Name> calledMethodName) {
-        return Name._init_.equals(calledMethodName);
+        return calledMethodName == Name.INIT;
     }
 
     private Operand popSignatureGetReturnOP(OperandStack stack, MethodRefConstant mrc) {
@@ -2051,7 +2051,7 @@ public final class MethodVerifier implements ContextAccess {
         if (isInstanceInit(calledMethodName)) {
             UninitReferenceOperand toInit = (UninitReferenceOperand) stack.popUninitRef(methodHolderOp);
             if (toInit.isUninitThis()) {
-                if (!Name._init_.equals(methodName)) {
+                if (methodName != Name.INIT) {
                     throw new VerifyError("Encountered UninitializedThis outside of Constructor: " + toInit);
                 }
                 calledConstructor = true;
@@ -2338,7 +2338,7 @@ public final class MethodVerifier implements ContextAccess {
                     return;
                 }
                 if (!thisKlass.getRuntimePackage().equals(Types.getRuntimePackage(methodHolderType))) {
-                    if (stackOp.isArrayType() && Type.java_lang_Object.equals(methodHolderType) && Name.clone.equals(method.getName())) {
+                    if (stackOp.isArrayType() && methodHolderType == Type.java_lang_Object && method.getName() == Name.clone) {
                         // Special case: Arrays pretend to implement Object.clone().
                         return;
                     }

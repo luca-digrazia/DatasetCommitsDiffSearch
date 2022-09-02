@@ -205,7 +205,7 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
             // initialization method (&sect;2.9). The return type of such a method must be void.
             pool.nameAndTypeAt(nameAndTypeIndex).validateMethod(pool, false);
             Symbol<Name> name = pool.nameAndTypeAt(nameAndTypeIndex).getName(pool);
-            if (Name._init_.equals(name)) {
+            if (name.equals(Name.INIT)) {
                 Symbol<? extends Descriptor> descriptor = pool.nameAndTypeAt(nameAndTypeIndex).getDescriptor(pool);
                 int len = descriptor.length();
                 // descriptor.endsWith(")V");

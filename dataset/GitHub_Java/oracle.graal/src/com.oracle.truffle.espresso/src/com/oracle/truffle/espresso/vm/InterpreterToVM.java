@@ -36,7 +36,6 @@ import com.oracle.truffle.api.frame.FrameInstanceVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -488,7 +487,7 @@ public final class InterpreterToVM implements ContextAccess {
             if (!skipFillInStackTrace) {
                 return false;
             }
-            if (!((Name.fillInStackTrace.equals(m.getName())) || (Name.fillInStackTrace0.equals(m.getName())))) {
+            if (!((m.getName() == Symbol.Name.fillInStackTrace) || (m.getName() == Symbol.Name.fillInStackTrace0))) {
                 skipFillInStackTrace = false;
             }
             return skipFillInStackTrace;
@@ -498,7 +497,7 @@ public final class InterpreterToVM implements ContextAccess {
             if (!skipThrowableInit) {
                 return false;
             }
-            if (!(Name._init_.equals(m.getName())) || !m.getMeta().java_lang_Throwable.isAssignableFrom(m.getDeclaringKlass())) {
+            if (!(m.getName() == Symbol.Name.INIT) || !m.getMeta().java_lang_Throwable.isAssignableFrom(m.getDeclaringKlass())) {
                 skipThrowableInit = false;
             }
             return skipThrowableInit;
