@@ -40,7 +40,6 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64Error;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMBuiltin;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.pthread.LLVMThreadException;
 import com.oracle.truffle.llvm.runtime.pthread.PThreadExitException;
@@ -98,14 +97,12 @@ public final class LLVMPThreadThreadIntrinsics {
 
             try {
                 Thread thread = context.getpThreadContext().getThread(threadId);
-                if (thread != null) {
-                    thread.join();
+                if (thread == null) {
+                    return 0;
                 }
 
+                thread.join();
                 Object retVal = context.getpThreadContext().getThreadReturnValue(threadId);
-                if (retVal == null) {
-                    retVal = LLVMNativePointer.createNull();
-                }
                 if (!threadReturn.isNull()) {
                     storeNode.executeWithTarget(threadReturn, retVal);
                 }
