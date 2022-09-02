@@ -91,7 +91,7 @@ public abstract class ByteArrayLoadNode extends QuickNode {
     }
 
     @Override
-    public final boolean producedForeignObject(OperandStack stack) {
+    public boolean producedForeignObject(OperandStack stack) {
         return false;
     }
 }

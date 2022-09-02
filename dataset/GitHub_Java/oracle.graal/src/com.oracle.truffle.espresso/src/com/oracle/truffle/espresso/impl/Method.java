@@ -558,9 +558,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         Klass[] paramsKlasses = paramCount > 0 ? new Klass[paramCount] : Klass.EMPTY_ARRAY;
         for (int i = 0; i < paramCount; ++i) {
             Symbol<Type> paramType = Signatures.parameterType(signature, i);
-            paramsKlasses[i] = getMeta().resolveSymbolOrFail(paramType,
-                            getDeclaringKlass().getDefiningClassLoader(),
-                            getDeclaringKlass().protectionDomain());
+            paramsKlasses[i] = getMeta().resolveSymbolOrFail(paramType, getDeclaringKlass().getDefiningClassLoader());
         }
         return paramsKlasses;
     }
@@ -568,9 +566,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     public Klass resolveReturnKlass() {
         // TODO(peterssen): Use resolved signature.
         Symbol<Type> returnType = Signatures.returnType(getParsedSignature());
-        return getMeta().resolveSymbolOrFail(returnType,
-                        getDeclaringKlass().getDefiningClassLoader(),
-                        getDeclaringKlass().protectionDomain());
+        return getMeta().resolveSymbolOrFail(returnType, getDeclaringKlass().getDefiningClassLoader());
     }
 
     public int getParameterCount() {
@@ -856,8 +852,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         FrameDescriptor frameDescriptor = initFrameDescriptor(result.getMaxLocals() + result.getMaxStackSize());
 
         // BCI slot is always the latest.
+        FrameSlot stackSlot = frameDescriptor.addFrameSlot("stack", FrameSlotKind.Object);
         FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
-        EspressoRootNode root = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result.getMethodVersion(), frameDescriptor, bciSlot));
+        EspressoRootNode root = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result.getMethodVersion(), frameDescriptor, stackSlot, bciSlot));
         result.getMethodVersion().callTarget = Truffle.getRuntime().createCallTarget(root);
 
         return result;
@@ -1159,11 +1156,12 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                                                 "Calling abstract method: " + getMethod().getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                             }
 
-                            FrameDescriptor frameDescriptor = initFrameDescriptor(getMaxLocals() + getMaxStackSize());
+                            FrameDescriptor frameDescriptor = initFrameDescriptor(getMaxLocals());
 
                             // BCI slot is always the latest.
+                            FrameSlot stackSlot = frameDescriptor.addFrameSlot("stack", FrameSlotKind.Object);
                             FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
-                            EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(this, frameDescriptor, bciSlot));
+                            EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(this, frameDescriptor, stackSlot, bciSlot));
                             callTarget = Truffle.getRuntime().createCallTarget(rootNode);
                         }
                     }
