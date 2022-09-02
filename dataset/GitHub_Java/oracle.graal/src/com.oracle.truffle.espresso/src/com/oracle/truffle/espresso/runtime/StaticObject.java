@@ -86,6 +86,7 @@ public final class StaticObject implements TruffleObject {
 
     public static final StaticObject[] EMPTY_ARRAY = new StaticObject[0];
 
+    public static final StaticObject VOID = new StaticObject();
     public static final StaticObject NULL = new StaticObject();
 
     private volatile EspressoLock lock;
@@ -605,6 +606,9 @@ public final class StaticObject implements TruffleObject {
     @TruffleBoundary
     @Override
     public String toString() {
+        if (this == VOID) {
+            return "void";
+        }
         if (this == NULL) {
             return "null";
         }
@@ -622,6 +626,9 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary
     public String toVerboseString() {
+        if (this == VOID) {
+            return "void";
+        }
         if (this == NULL) {
             return "null";
         }

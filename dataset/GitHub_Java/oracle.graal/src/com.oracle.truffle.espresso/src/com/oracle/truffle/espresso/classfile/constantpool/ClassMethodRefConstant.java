@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.classfile.constantpool;
 
 import java.util.Objects;
-import java.util.logging.Level;
 
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
@@ -186,7 +185,7 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
             }
 
             if (!MemberRefConstant.checkAccess(accessingKlass, holderKlass, method)) {
-                context.getLogger().log(Level.WARNING, EspressoOptions.INCEPTION_NAME + " Method access check of: " + method.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() +
+                System.err.println(EspressoOptions.INCEPTION_NAME + " Method access check of: " + method.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() +
                                 " throws IllegalAccessError");
                 throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(getName(pool)));
             }

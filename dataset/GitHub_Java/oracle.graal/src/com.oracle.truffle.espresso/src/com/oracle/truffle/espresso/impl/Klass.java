@@ -162,7 +162,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     private synchronized void mirrorCreate() {
         if (mirrorCache == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.mirrorCache = StaticObject.createClass(this);
+            this.mirrorCache = new StaticObject(getMeta().java_lang_Class, this);
         }
     }
 
@@ -860,11 +860,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     public JDWPConstantPool getJDWPConstantPool() {
         ConstantPool pool = getConstantPool();
         return new JDWPConstantPool(pool.length(), pool.getRawBytes());
-    }
-
-    @Override
-    public String getSourceDebugExtension() {
-        return null;
     }
 
     // endregion jdwp-specific

@@ -108,11 +108,6 @@ public abstract class ClassRegistry implements ContextAccess {
     }
 
     private final EspressoContext context;
-    private final int loaderID;
-
-    public final int getLoaderID() {
-        return loaderID;
-    }
 
     /**
      * The map from symbol to classes for the classes defined by the class loader associated with
@@ -129,7 +124,6 @@ public abstract class ClassRegistry implements ContextAccess {
 
     protected ClassRegistry(EspressoContext context) {
         this.context = context;
-        this.loaderID = context.getNewLoaderId();
     }
 
     /**

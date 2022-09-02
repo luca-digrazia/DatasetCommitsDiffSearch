@@ -43,7 +43,6 @@ import com.oracle.truffle.espresso.classfile.attributes.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.InnerClassesAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SignatureAttribute;
-import com.oracle.truffle.espresso.classfile.attributes.SourceDebugExtensionAttribute;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -219,7 +218,7 @@ public final class ObjectKlass extends Klass {
     private synchronized void obtainStatics() {
         if (statics == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            statics = StaticObject.createStatics(this);
+            statics = new StaticObject(this, true);
         }
     }
 
@@ -909,11 +908,5 @@ public final class ObjectKlass extends Klass {
     @Override
     public int getMinorVersion() {
         return linkedKlass.getMinorVersion();
-    }
-
-    @Override
-    public String getSourceDebugExtension() {
-        SourceDebugExtensionAttribute attribute = (SourceDebugExtensionAttribute) getAttribute(SourceDebugExtensionAttribute.NAME);
-        return attribute != null ? attribute.getDebugExtension() : null;
     }
 }

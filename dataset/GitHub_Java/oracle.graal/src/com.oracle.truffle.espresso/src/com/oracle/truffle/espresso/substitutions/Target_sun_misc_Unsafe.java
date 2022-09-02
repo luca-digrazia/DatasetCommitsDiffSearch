@@ -74,8 +74,6 @@ public final class Target_sun_misc_Unsafe {
                     @Host(byte[].class) StaticObject data,
                     @Host(Object[].class) StaticObject constantPoolPatches) {
 
-        // TODO(tg): inject meta
-
         EspressoContext context = self.getKlass().getContext();
         Meta meta = context.getMeta();
 
@@ -215,7 +213,6 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static long objectFieldOffset(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(java.lang.reflect.Field.class) StaticObject field) {
-        // TODO(tg): inject meta
         Field target = Field.getReflectiveFieldRoot(field);
         return SAFETY_FIELD_OFFSET + target.getSlot();
     }
@@ -240,7 +237,6 @@ public final class Target_sun_misc_Unsafe {
         // TODO(peterssen): Protection domain is ignored.
         byte[] buf = guestBuf.unwrap();
         byte[] bytes = Arrays.copyOfRange(buf, offset, len);
-        // TODO(tg): inject meta
         Klass klass = self.getKlass().getMeta().getRegistries().defineKlass(self.getKlass().getTypes().fromClassGetName(Meta.toHostString(name)), bytes, loader);
         klass.mirror().setHiddenField(klass.getMeta().HIDDEN_PROTECTION_DOMAIN, pd);
         return klass.mirror();
@@ -702,7 +698,6 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static boolean shouldBeInitialized(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Class.class) StaticObject clazz) {
         if (StaticObject.isNull(clazz)) {
-            // TODO(tg): inject meta
             throw self.getKlass().getMeta().throwNullPointerException();
         }
         Klass klass = clazz.getMirrorKlass();
@@ -1019,7 +1014,6 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void monitorEnter(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject object) {
         if (StaticObject.isNull(object)) {
-            // TODO(tg): inject meta
             throw self.getKlass().getMeta().throwNullPointerException();
         }
         object.getLock().lock();
@@ -1029,7 +1023,6 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static void monitorExit(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject object) {
         if (StaticObject.isNull(object)) {
-            // TODO(tg): inject meta
             throw self.getKlass().getMeta().throwNullPointerException();
         }
         object.getLock().unlock();
@@ -1054,7 +1047,6 @@ public final class Target_sun_misc_Unsafe {
             return;
         }
 
-        // TODO(tg): inject meta
         EspressoContext context = self.getKlass().getContext();
         StaticObject thread = context.getCurrentThread();
 
@@ -1091,7 +1083,6 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void unpark(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject thread) {
-        // TODO(tg): inject meta
         Thread hostThread = (Thread) thread.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
         UNSAFE.unpark(hostThread);
     }
@@ -1196,7 +1187,6 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static boolean tryMonitorEnter(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject object) {
         if (StaticObject.isNull(object)) {
-            // TODO(tg): inject meta
             throw self.getKlass().getMeta().throwNullPointerException();
         }
         return object.getLock().tryLock();
