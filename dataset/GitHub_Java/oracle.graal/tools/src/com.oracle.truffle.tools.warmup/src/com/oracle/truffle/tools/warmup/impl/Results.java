@@ -37,12 +37,12 @@ class Results {
     final long peakStartT;
     final long warmupTime;
 
-    Results(List<Long> samples, double epsilon) {
+    Results(List<Long> samples) {
         this.samples = samples;
         bestT = bestTime(samples);
         bestI = bestIteration(samples, bestT);
-        this.epsilon = epsilon != 0.0 ? epsilon : epsilon(samples, bestT, bestI);
-        peakStartI = peakStartI(samples, bestT, this.epsilon);
+        epsilon = epsilon(samples, bestT, bestI);
+        peakStartI = peakStartI(samples, bestT, epsilon);
         peakStartT = peakStartT(samples, peakStartI);
         warmupTime = warmupTime(samples, peakStartI, bestT);
         warmupCost = (double) warmupTime / bestT;
