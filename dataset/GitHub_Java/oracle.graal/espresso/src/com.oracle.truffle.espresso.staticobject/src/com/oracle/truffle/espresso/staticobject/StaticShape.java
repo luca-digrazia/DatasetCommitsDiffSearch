@@ -105,20 +105,23 @@ public abstract class StaticShape<T> {
             return this;
         }
 
-        public StaticShape<DefaultStaticObjectFactory> build() {
-            return build(Object.class, DefaultStaticObjectFactory.class);
+        public StaticShape<DefaultStaticObject.Factory> build() {
+            // The classloader that loaded the default superClass must be able to load the default
+            // factory.
+            // Therefore, we can't use java.lang.Object as default superClass.
+            return build(DefaultStaticObject.class, DefaultStaticObject.Factory.class);
         }
 
         public <T> StaticShape<T> build(StaticShape<T> parentShape) {
             Objects.requireNonNull(parentShape);
-            GeneratorClassLoader gcl = getOrCreateClassLoader(parentShape.getFactoryInterface());
+            GeneratorClassLoader gcl = getOrCreateClassLoader(parentShape.getStorageClass());
             ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, parentShape);
             return build(sg, parentShape);
         }
 
         public <T> StaticShape<T> build(Class<?> superClass, Class<T> factoryInterface) {
             validateClasses(factoryInterface, superClass);
-            GeneratorClassLoader gcl = getOrCreateClassLoader(factoryInterface);
+            GeneratorClassLoader gcl = getOrCreateClassLoader(superClass);
             ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, superClass, factoryInterface);
             return build(sg, null);
         }
@@ -164,14 +167,10 @@ public abstract class StaticShape<T> {
             if (!storageFactoryInterface.isInterface()) {
                 throw new RuntimeException(storageFactoryInterface.getName() + " must be an interface.");
             }
-            // since methods in the factory interface must have the storage super class as return
-            // type, calling `storageFactoryInterface.getMethods()` also verifies that the class
-            // loader of the factory interface can load the storage super class
             for (Method m : storageFactoryInterface.getMethods()) {
-                // this also verifies that the class loader of the factory interface is the same or
-                // a child of the class loader of the storage super class
                 if (!m.getReturnType().isAssignableFrom(storageSuperClass)) {
-                    throw new RuntimeException("The return type of '" + m + "' is not assignable from '" + storageSuperClass.getName() + "'");
+                    throw new RuntimeException("The return type of '" + m.getReturnType().getName() + " " + storageFactoryInterface.getName() + "." + m + "' is not assignable from '" +
+                                    storageSuperClass.getName() + "'");
                 }
                 try {
                     storageSuperClass.getDeclaredConstructor(m.getParameterTypes());
