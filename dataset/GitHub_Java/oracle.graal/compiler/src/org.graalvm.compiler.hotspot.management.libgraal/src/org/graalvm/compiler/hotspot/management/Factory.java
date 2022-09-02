@@ -124,24 +124,13 @@ public final class Factory extends Thread {
      */
     synchronized void unregister(long isolate) {
         // Remove pending registration requests
-        if (pendingIsolates.remove(isolate)) {
-            // The libgraal compiler notifies the Factory about a new runtime by calling the
-            // #signalRegistrationRequest(long) method.
-            // The #signalRegistrationRequest(long) method only puts the isolate into the
-            // #pendingIsolatesand set and notifies the working thread.
-            // The working thread processes the pending isolates asynchronously in the #run() and
-            // removes them from the #pendingIsolates set.
-            // When the #pendingIsolates contains the isolate the isolate was not yet processed and
-            // there are no registered MBeans to remove from MBeanServer.
-            return;
-        }
+        pendingIsolates.remove(isolate);
         MBeanServer mBeanServer = findMBeanServer();
         if (mBeanServer == null) {
             // Nothing registered yet.
             return;
         }
-        // The mbeansForActiveIsolate can be null when Factory#process() failed with an exception.
-        ObjectName[] objectNames = mbeansForActiveIsolate == null ? null : mbeansForActiveIsolate.remove(isolate);
+        ObjectName[] objectNames = mbeansForActiveIsolate.remove(isolate);
         if (objectNames != null) {
             for (ObjectName objectName : objectNames) {
                 try {

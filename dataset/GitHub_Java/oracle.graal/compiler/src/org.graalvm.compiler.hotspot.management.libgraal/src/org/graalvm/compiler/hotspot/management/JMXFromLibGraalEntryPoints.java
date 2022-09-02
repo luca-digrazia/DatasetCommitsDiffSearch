@@ -24,12 +24,16 @@
  */
 package org.graalvm.compiler.hotspot.management;
 
-import org.graalvm.compiler.hotspot.management.LibGraalMBean.Factory;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXFromLibGraal.Id.GetFactory;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXFromLibGraal.Id.SignalRegistrationRequest;
+import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXFromLibGraal.Id.Unregister;
+
+import org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXFromLibGraal;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 /**
- * Entry points in HotSpot for calls from SVM.
+ * Entry points in HotSpot for calls from libgraal.
  */
 @Platforms(Platform.HOSTED_ONLY.class)
 public final class JMXFromLibGraalEntryPoints {
@@ -38,24 +42,27 @@ public final class JMXFromLibGraalEntryPoints {
     }
 
     /**
-     * @see LibGraalMBean#getFactory()
+     * @see Factory#getInstance()
      */
-    static Factory getFactory() {
-        Factory factory = LibGraalMBean.getFactory();
+    @JMXFromLibGraal(GetFactory)
+    static Object getFactory() {
+        Factory factory = Factory.getInstance();
         return factory;
     }
 
     /**
      * @see Factory#signalRegistrationRequest(long)
      */
-    static void signalRegistrationRequest(Factory factory, long isolate) {
-        factory.signalRegistrationRequest(isolate);
+    @JMXFromLibGraal(SignalRegistrationRequest)
+    static void signalRegistrationRequest(Object factory, long isolate) {
+        ((Factory) factory).signalRegistrationRequest(isolate);
     }
 
     /**
-     * @see Factory#unregister(long, java.lang.String[])
+     * @see Factory#unregister(long)
      */
-    static void unregister(Factory factory, long isolate, String[] objectIds) {
-        factory.unregister(isolate, objectIds);
+    @JMXFromLibGraal(Unregister)
+    static void unregister(Object factory, long isolate) {
+        ((Factory) factory).unregister(isolate);
     }
 }
