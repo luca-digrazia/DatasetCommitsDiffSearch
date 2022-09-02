@@ -125,7 +125,6 @@ import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.util.OptionsEncoder;
 import org.graalvm.word.WordFactory;
 
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 
@@ -192,8 +191,7 @@ final class TruffleToLibGraalEntryPoints {
             HSTruffleCompilerRuntime hsTruffleRuntime = LibGraalObjectHandles.resolve(truffleRuntimeHandle, HSTruffleCompilerRuntime.class);
             assert TruffleCompilerRuntime.getRuntime() == hsTruffleRuntime;
             OptionValues graalOptions = hsTruffleRuntime.getGraalOptions(OptionValues.class);
-            String compConfig = Options.TruffleCompilerConfiguration.getValue(graalOptions);
-            CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(compConfig, graalOptions, HotSpotJVMCIRuntime.runtime());
+            CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(Options.TruffleCompilerConfiguration.getValue(graalOptions), graalOptions);
             String name = compilerConfigurationFactory.getName();
             scope.setObjectResult(createHSString(env, name));
         } catch (Throwable t) {
@@ -272,12 +270,8 @@ final class TruffleToLibGraalEntryPoints {
         try (JNILibGraalScope<TruffleToLibGraal.Id> scope = new JNILibGraalScope<>(CloseCompilation, env)) {
             TruffleCompilation compilation = LibGraalObjectHandles.resolve(compilationHandle, TruffleCompilation.class);
             HSCompilableTruffleAST compilable = (HSCompilableTruffleAST) compilation.getCompilable();
-            try {
-                compilation.close();
-            } finally {
-                compilable.release(env);
-                HSObject.cleanHandles(env);
-            }
+            compilable.release(env);
+            HSObject.cleanHandles(env);
         } catch (Throwable t) {
             JNIExceptionWrapper.throwInHotSpot(env, t);
         }

@@ -64,7 +64,7 @@ final class IsolatedTruffleCompilerEventForwarder implements TruffleCompilerList
     }
 
     @Override
-    public void onSuccess(CompilableTruffleAST compilable, TruffleMetaAccessProvider inliningPlan, GraphInfo graph, CompilationResultInfo info, int tier) {
+    public void onSuccess(CompilableTruffleAST compilable, TruffleMetaAccessProvider inliningPlan, GraphInfo graph, CompilationResultInfo info) {
         IsolatedCompilationResultData data = StackValue.get(IsolatedCompilationResultData.class);
         data.setOriginalObjectHandle(IsolatedCompileContext.get().hand(info));
         data.setTargetCodeSize(info.getTargetCodeSize());
@@ -73,19 +73,19 @@ final class IsolatedTruffleCompilerEventForwarder implements TruffleCompilerList
         data.setInfopointsCount(info.getInfopointsCount());
         data.setMarksCount(info.getMarksCount());
         data.setDataPatchesCount(info.getDataPatchesCount());
-        onSuccess0(IsolatedCompileContext.get().getClient(), contextHandle, IsolatedCompileContext.get().hand(graph), graph.getNodeCount(), data, tier);
+        onSuccess0(IsolatedCompileContext.get().getClient(), contextHandle, IsolatedCompileContext.get().hand(graph), graph.getNodeCount(), data);
     }
 
     @Override
-    public void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout, int tier) {
+    public void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout) {
         try (CCharPointerHolder reasonCstr = CTypeConversion.toCString(reason)) {
-            onFailure0(IsolatedCompileContext.get().getClient(), contextHandle, reasonCstr.get(), bailout, permanentBailout, tier);
+            onFailure0(IsolatedCompileContext.get().getClient(), contextHandle, reasonCstr.get(), bailout, permanentBailout);
         }
     }
 
     @Override
-    public void onCompilationRetry(CompilableTruffleAST compilable, int tier) {
-        onCompilationRetry0(IsolatedCompileContext.get().getClient(), contextHandle, tier);
+    public void onCompilationRetry(CompilableTruffleAST compilable) {
+        onCompilationRetry0(IsolatedCompileContext.get().getClient(), contextHandle);
     }
 
     @CEntryPoint
@@ -107,25 +107,25 @@ final class IsolatedTruffleCompilerEventForwarder implements TruffleCompilerList
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static void onSuccess0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<IsolatedEventContext> contextHandle,
-                    CompilerHandle<GraphInfo> graphInfo, int nodeCount, IsolatedCompilationResultData resultData, int tier) {
+                    CompilerHandle<GraphInfo> graphInfo, int nodeCount, IsolatedCompilationResultData resultData) {
 
         IsolatedEventContext context = IsolatedCompileClient.get().unhand(contextHandle);
-        context.listener.onSuccess(context.compilable, context.inlining, new IsolatedGraphInfo(graphInfo, nodeCount), new IsolatedCompilationResultInfo(resultData), tier);
+        context.listener.onSuccess(context.compilable, context.inlining, new IsolatedGraphInfo(graphInfo, nodeCount), new IsolatedCompilationResultInfo(resultData));
     }
 
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static void onFailure0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<IsolatedEventContext> contextHandle,
-                    CCharPointer reason, boolean bailout, boolean permanentBailout, int tier) {
+                    CCharPointer reason, boolean bailout, boolean permanentBailout) {
         IsolatedEventContext context = IsolatedCompileClient.get().unhand(contextHandle);
-        context.listener.onFailure(context.compilable, CTypeConversion.toJavaString(reason), bailout, permanentBailout, tier);
+        context.listener.onFailure(context.compilable, CTypeConversion.toJavaString(reason), bailout, permanentBailout);
     }
 
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static void onCompilationRetry0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<IsolatedEventContext> contextHandle, int tier) {
+    private static void onCompilationRetry0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<IsolatedEventContext> contextHandle) {
         IsolatedEventContext context = IsolatedCompileClient.get().unhand(contextHandle);
-        context.listener.onCompilationRetry(context.compilable, tier);
+        context.listener.onCompilationRetry(context.compilable);
     }
 }
 
