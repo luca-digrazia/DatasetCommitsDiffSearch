@@ -91,13 +91,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Random;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import org.graalvm.polyglot.io.FileSystem;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage.Env;
+
+import java.util.Random;
 
 /**
  * An abstract representation of a file used by Truffle languages.
@@ -1575,28 +1577,14 @@ public final class TruffleFile {
      * @throws IOException in case of IO error
      * @throws SecurityException if the {@link FileSystem} denied the operation
      * @since 19.0
-     * @deprecated use {@link #detectMimeType()}
      */
     @TruffleBoundary
-    @Deprecated
     public String getMimeType() throws IOException {
-        return detectMimeType(null);
-    }
-
-    /**
-     * Detects the {@link TruffleFile file} MIME type.
-     *
-     * @return the MIME type or {@code null} if the MIME type is not recognized
-     * @throws SecurityException if the {@link FileSystem} denied the operation
-     * @since 22.2
-     */
-    @TruffleBoundary
-    public String detectMimeType() {
-        return detectMimeType(null);
+        return getMimeType(null);
     }
 
     @TruffleBoundary
-    String detectMimeType(Set<String> validMimeTypes) {
+    String getMimeType(Set<String> validMimeTypes) throws IOException {
         try {
             checkFileOperationPreconditions();
             String result = fileSystemContext.fileSystem.getMimeType(normalizedPath);
@@ -1624,7 +1612,7 @@ public final class TruffleFile {
         }
     }
 
-    Charset detectEncoding(String mimeType) {
+    Charset getEncoding(String mimeType) {
         try {
             assert mimeType != null;
             checkFileOperationPreconditions();
@@ -1933,7 +1921,7 @@ public final class TruffleFile {
      * The implementations are registered using
      * {@link TruffleLanguage.Registration#fileTypeDetectors() TruffleLanguage registration}.
      *
-     * @see TruffleFile#detectMimeType()
+     * @see TruffleFile#getMimeType()
      * @see TruffleLanguage.Registration#fileTypeDetectors()
      * @since 19.0
      */
@@ -1965,25 +1953,22 @@ public final class TruffleFile {
     }
 
     static final class FileSystemContext {
-
-        // instance of PolyglotContextConfig or PolyglotSource.EmbedderFileSystemContext
-        final Object engineObject;
-
-        private volatile Map<String, Collection<? extends FileTypeDetector>> fileTypeDetectors;
         final FileSystem fileSystem;
+        private final Supplier<Map<String, Collection<? extends FileTypeDetector>>> fileTypeDetectorsSupplier;
+        private volatile Map<String, Collection<? extends FileTypeDetector>> fileTypeDetectors;
 
-        FileSystemContext(Object engineFileSystemContext, FileSystem fileSystem) {
-            Objects.requireNonNull(engineFileSystemContext);
-            Objects.requireNonNull(fileSystem);
-            this.engineObject = engineFileSystemContext;
+        FileSystemContext(FileSystem fileSystem, Supplier<Map<String, Collection<? extends FileTypeDetector>>> fileTypeDetectorsSupplier) {
+            Objects.requireNonNull(fileSystem, "FileSystem must be non null.");
+            Objects.requireNonNull(fileTypeDetectorsSupplier, "FileTypeDetectorsSupplier must be non null.");
             this.fileSystem = fileSystem;
+            this.fileTypeDetectorsSupplier = fileTypeDetectorsSupplier;
         }
 
         Iterable<? extends FileTypeDetector> getFileTypeDetectors(Set<String> mimeTypes) {
             Map<String, Collection<? extends FileTypeDetector>> result = fileTypeDetectors;
             if (result == null) {
-                result = LanguageAccessor.engineAccess().getEngineFileTypeDetectors(engineObject);
-                assert result != null;
+                result = fileTypeDetectorsSupplier.get();
+                assert result != null : "FileTypeDetectorsSupplier returned null.";
                 fileTypeDetectors = result;
             }
             Set<FileTypeDetector> filtered = new HashSet<>();
