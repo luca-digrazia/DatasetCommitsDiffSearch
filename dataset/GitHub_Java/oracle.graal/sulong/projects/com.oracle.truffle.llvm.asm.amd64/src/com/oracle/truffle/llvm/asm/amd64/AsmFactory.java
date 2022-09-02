@@ -187,7 +187,7 @@ import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64AddressComputationNode
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64AddressComputationNodeFactory.LLVMAMD64AddressOffsetComputationNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64AddressComputationNodeFactory.LLVMAMD64AddressSegmentComputationNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64Flags;
-import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64GetTlsNodeGen;
+import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64GetTlsNode;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64ReadAddressNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64ReadRegisterNodeGen;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMAMD64Target;
@@ -480,7 +480,7 @@ class AsmFactory {
                 // TODO: implement properly
                 break;
             case "mfence":
-            case "lfence":
+            case "lfance":
             case "sfence":
                 statements.add(LLVMFenceNodeGen.create());
                 break;
@@ -1844,7 +1844,7 @@ class AsmFactory {
             assert op.getSegment() == null || "%fs".equals(op.getSegment());
             LLVMExpressionNode segment = null;
             if (op.getSegment() != null) {
-                segment = LLVMAMD64GetTlsNodeGen.create();
+                segment = new LLVMAMD64GetTlsNode();
             }
             if (base != null) {
                 baseAddress = getOperandLoad(new PointerType(type), base);
