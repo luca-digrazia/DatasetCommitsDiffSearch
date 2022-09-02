@@ -53,7 +53,7 @@ public class WasiFdWrite extends WasmPredefinedRootNode {
         Object[] args = frame.getArguments();
         assert args.length == 4;
         for (Object arg : args) {
-            trace("argument: %s", arg);
+            logger.finest(() -> "argument: " + arg);
         }
 
         int stream = (int) args[0];
@@ -78,7 +78,7 @@ public class WasiFdWrite extends WasmPredefinedRootNode {
                 throw new WasmTrap(this, "WasiFdWrite: invalid file stream");
         }
 
-        trace("WasiFdWrite EXECUTE");
+        logger.finest("WasiFdWrite EXECUTE");
 
         int num = 0;
         for (int i = 0; i < iovcnt; i++) {
