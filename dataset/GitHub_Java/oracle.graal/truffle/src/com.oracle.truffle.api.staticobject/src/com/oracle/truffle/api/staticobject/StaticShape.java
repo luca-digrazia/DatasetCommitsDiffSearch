@@ -49,10 +49,8 @@ import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -206,10 +204,11 @@ public abstract class StaticShape<T> {
      */
     public static final class Builder {
         private static final int MAX_NUMBER_OF_PROPERTIES = 65535;
-        private static final int MAX_PROPERTY_ID_BYTE_LENGTH = 65535;
+        private static final int MAX_PROPERTY_ID_LENGTH = 65529; // 65535 - 6 chars to disambiguate
+                                                                 // escaped IDs
+        private static final char[] FORBIDDEN_CHARS = new char[]{'.', ';', '[', '/'};
         private final HashMap<String, StaticProperty> staticProperties = new LinkedHashMap<>();
         private final TruffleLanguage<?> language;
-        boolean hasLongPropertyId = false;
 
         Builder(TruffleLanguage<?> language) {
             this.language = language;
@@ -217,22 +216,21 @@ public abstract class StaticShape<T> {
 
         /**
          * Adds a {@link StaticProperty} to the static shape to be constructed. The
-         * {@linkplain StaticProperty#getId() property id} cannot be null or an empty String. It is
-         * not allowed to add two {@linkplain StaticProperty properties} with the same
-         * {@linkplain StaticProperty#getId() id} to the same Builder, or to add the same
-         * {@linkplain StaticProperty property} to more than one Builder. Static shapes that
-         * {@linkplain StaticShape.Builder#build(StaticShape) extend a parent shape} can have
-         * {@linkplain StaticProperty properties} with the same {@linkplain StaticProperty#getId()
-         * id} of those in the parent shape.
+         * {@linkplain StaticProperty#getId() property id} cannot be an empty String, or a String
+         * longer than 65529 characters. It is not allowed to add two {@linkplain StaticProperty
+         * properties} with the same {@linkplain StaticProperty#getId() id} to the same Builder, or
+         * to add the same {@linkplain StaticProperty property} to more than one Builder. Static
+         * shapes that {@linkplain StaticShape.Builder#build(StaticShape) extend a parent shape} can
+         * have {@linkplain StaticProperty properties} with the same
+         * {@linkplain StaticProperty#getId() id} of those in the parent shape.
          *
          * @see DefaultStaticProperty
          * @param property the {@link StaticProperty} to be added
          * @return the Builder instance
          * @throws IllegalArgumentException if more than 65535 properties are added, or if the
-         *             {@linkplain StaticProperty#getId() property id} is an empty string or it is
-         *             equal to the id of another static property already registered to this builder
-         * @throws NullPointerException if the {@linkplain StaticProperty#getId() property id} is
-         *             null
+         *             {@linkplain StaticProperty#getId() property id} is an empty string, it is
+         *             longer than 65529 characters, or it is equal to the id of another static
+         *             property already registered to this builder
          * @since 21.3.0
          */
         public Builder property(StaticProperty property) {
@@ -323,10 +321,9 @@ public abstract class StaticShape<T> {
 
         private <T> StaticShape<T> build(ShapeGenerator<T> sg, StaticShape<T> parentShape) {
             CompilerAsserts.neverPartOfCompilation();
-            Map<String, StaticProperty> properties = hasLongPropertyId ? defaultPropertyIds(staticProperties) : staticProperties;
             boolean safetyChecks = !SomAccessor.ENGINE.areStaticObjectSafetyChecksRelaxed(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language));
-            StaticShape<T> shape = sg.generateShape(parentShape, properties, safetyChecks);
-            for (StaticProperty staticProperty : properties.values()) {
+            StaticShape<T> shape = sg.generateShape(parentShape, staticProperties, safetyChecks);
+            for (StaticProperty staticProperty : staticProperties.values()) {
                 staticProperty.initShape(shape);
             }
             return shape;
@@ -353,17 +350,24 @@ public abstract class StaticShape<T> {
             if (id.length() == 0) {
                 throw new IllegalArgumentException("The property id cannot be an empty string");
             }
-            // escape chars that are forbidden for field names
-            id = id.replace("_", "__");
-            id = id.replace(".", "_,");
-            id = id.replace(";", "_:");
-            id = id.replace("[", "_]");
-            id = id.replace("/", "_\\");
+            if (id.length() > MAX_PROPERTY_ID_LENGTH) {
+                throw new IllegalArgumentException("The property id cannot be longer than " + MAX_PROPERTY_ID_LENGTH + " characters");
+            }
+            String escapedId = id;
+            for (char forbidden : FORBIDDEN_CHARS) {
+                escapedId = escapedId.replace(forbidden, '_');
+            }
+            if (!id.equals(escapedId)) {
+                for (int i = 0; i < MAX_NUMBER_OF_PROPERTIES; i++) {
+                    String newID = escapedId + "_" + i;
+                    if (!staticProperties.containsKey(newID)) {
+                        return newID;
+                    }
+                }
+                throw new RuntimeException("Should not reach here");
+            }
             if (staticProperties.containsKey(id)) {
                 throw new IllegalArgumentException("This builder already contains a property with id '" + id + "'");
-            }
-            if (id.getBytes(StandardCharsets.UTF_8).length > MAX_PROPERTY_ID_BYTE_LENGTH) {
-                hasLongPropertyId = true;
             }
             return id;
         }
@@ -405,15 +409,6 @@ public abstract class StaticShape<T> {
                     throw new IllegalArgumentException("'" + storageSuperClass.getName() + "' implements Cloneable and declares a final 'clone()' method");
                 }
             }
-        }
-
-        private static Map<String, StaticProperty> defaultPropertyIds(Map<String, StaticProperty> staticProperties) {
-            Map<String, StaticProperty> newStaticProperties = new LinkedHashMap<>();
-            StaticProperty[] properties = staticProperties.values().toArray(new StaticProperty[staticProperties.size()]);
-            for (int i = 0; i < properties.length; i++) {
-                newStaticProperties.put("field" + i, properties[i]);
-            }
-            return newStaticProperties;
         }
 
         private static Method getCloneMethod(Class<?> c) {
