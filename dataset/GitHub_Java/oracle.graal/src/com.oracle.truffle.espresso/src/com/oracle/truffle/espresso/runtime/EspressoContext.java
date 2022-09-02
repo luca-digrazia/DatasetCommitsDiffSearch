@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,16 +33,13 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.graalvm.polyglot.Engine;
 
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
@@ -61,7 +58,6 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
 
@@ -78,7 +74,7 @@ public final class EspressoContext {
     private final MethodHandleIntrinsics methodHandleIntrinsics;
 
     private final ConcurrentHashMap<Thread, StaticObject> host2guest = new ConcurrentHashMap<>();
-    private final Set<StaticObject> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<StaticObject, Boolean>());
+    private final Set<Thread> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<Thread, Boolean>());
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
 
@@ -102,10 +98,6 @@ public final class EspressoContext {
     @CompilationFinal private EspressoException stackOverflow;
     @CompilationFinal private EspressoException outOfMemory;
     @CompilationFinal private ArrayList<Method> frames;
-
-    // Set on calling guest Therad.stop0(), or when closing context.
-    @CompilationFinal private Assumption noThreadStop = Truffle.getRuntime().createAssumption();
-    private boolean isClosing = false;
 
     public EspressoContext(TruffleLanguage.Env env, EspressoLanguage language) {
         this.env = env;
@@ -208,9 +200,6 @@ public final class EspressoContext {
         // Spawn JNI first, then the VM.
         this.vm = VM.create(getJNI()); // Mokapot is loaded
 
-        // Create the discarding assumption
-        this.noThreadStop = Truffle.getRuntime().createAssumption("no thread.stop() called");
-
         initializeKnownClass(Type.Object);
 
         for (Symbol<Type> type : Arrays.asList(
@@ -270,7 +259,7 @@ public final class EspressoContext {
         // Allow guest Thread.currentThread() to work.
         mainThread.setHiddenField(this.meta.HIDDEN_HOST_THREAD, Thread.currentThread());
         host2guest.put(Thread.currentThread(), mainThread);
-        activeThreads.add(mainThread);
+        activeThreads.add(Thread.currentThread());
 
         StaticObject mainThreadGroup = meta.ThreadGroup.allocateInstance();
         meta.ThreadGroup // public ThreadGroup(ThreadGroup parent, String name)
@@ -289,67 +278,22 @@ public final class EspressoContext {
     }
 
     public void interruptActiveThreads() {
-        isClosing = true;
-        invalidateNoThreadStop("Killing the VM");
-        Thread hostInitiatingThread = Thread.currentThread();
-        StaticObject initiatingThread = getHost2Guest(hostInitiatingThread);
-        // Soft interruption
-        killingRound(guestRound1, hostRound1, initiatingThread);
-        // Start killing threads
-        killingRound(guestRound2, hostRound2, initiatingThread);
-        // Threads still alive at that point ignored our warnings: kill them hard.
-        killingRound(guestRound3, hostRound3, initiatingThread);
-        Target_java_lang_Thread.interrupt0(initiatingThread);
-        hostInitiatingThread.interrupt();
-    }
-
-    private static final Consumer<StaticObject> guestRound1 = Target_java_lang_Thread::interrupt0;
-
-    private static final Consumer<Thread> hostRound1 = host -> {
-        try {
-            host.join(100);
-        } catch (InterruptedException e) {
-            System.err.println("Interrupted while closing");
-        }
-    };
-
-    private static final Consumer<StaticObject> guestRound2 = t -> {
-        Target_java_lang_Thread.killThread(t);
-        Target_java_lang_Thread.interrupt0(t);
-    };
-    private static final Consumer<Thread> hostRound2 = host -> {
-        try {
-            host.join(100);
-        } catch (InterruptedException e) {
-            System.err.println("Interrupted while killing");
-        }
-    };
-    private static final Consumer<StaticObject> guestRound3 = t -> {
-        if (Target_java_lang_Thread.checkThreadStatus(t, Target_java_lang_Thread.KillStatus.KILLED) ||
-                        Target_java_lang_Thread.checkThreadStatus(t, Target_java_lang_Thread.KillStatus.KILL)) {
-            Target_java_lang_Thread.setThreadStop(t, Target_java_lang_Thread.KillStatus.DISSIDENT);
-        }
-    };
-    private static final Consumer<Thread> hostRound3 = host -> {
-        try {
-            host.join();
-        } catch (InterruptedException e) {
-            System.err.println("Interrupted while killing");
-        }
-    };
-
-    private void killingRound(Consumer<StaticObject> guestAction, Consumer<Thread> hostAction, StaticObject initiatingThread) {
-        for (StaticObject t : activeThreads) {
+        Thread initiatingThread = Thread.currentThread();
+        for (Thread t : activeThreads) {
             if (t != initiatingThread) {
-                guestAction.accept(t);
+                try {
+                    if (t.isDaemon()) {
+                        t.interrupt();
+                        t.join();
+                    } else {
+                        t.join();
+                    }
+                } catch (InterruptedException e) {
+                    System.err.println("Interrupted while stopping thread in closing context.");
+                }
             }
         }
-        for (StaticObject t : activeThreads) {
-            if (t != initiatingThread) {
-                Thread host = Target_java_lang_Thread.getHostFromGuestThread(t);
-                hostAction.accept(host);
-            }
-        }
+        initiatingThread.interrupt();
     }
 
     private void initVmProperties() {
@@ -442,24 +386,12 @@ public final class EspressoContext {
         return host2guest.get(hostThread);
     }
 
-    public void registerThread(StaticObject thread) {
+    public void registerThread(Thread thread) {
         activeThreads.add(thread);
     }
 
-    public void unregisterThread(StaticObject thread) {
+    public void unregisterThread(Thread thread) {
         activeThreads.remove(thread);
-    }
-
-    public boolean noThreadStop() {
-        return noThreadStop.isValid();
-    }
-
-    public void invalidateNoThreadStop(String message) {
-        noThreadStop.invalidate(message);
-    }
-
-    public boolean isClosing() {
-        return isClosing;
     }
 
     // region Options

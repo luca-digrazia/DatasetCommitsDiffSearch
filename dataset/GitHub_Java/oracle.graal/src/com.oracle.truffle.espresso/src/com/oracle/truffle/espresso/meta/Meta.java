@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -229,7 +229,6 @@ public final class Meta implements ContextAccess {
         HIDDEN_HOST_THREAD = Thread.lookupHiddenField(Name.HIDDEN_HOST_THREAD);
         HIDDEN_IS_ALIVE = Thread.lookupHiddenField(Name.HIDDEN_IS_ALIVE);
         HIDDEN_INTERRUPTED = Thread.lookupHiddenField(Name.HIDDEN_INTERRUPTED);
-        HIDDEN_DEATH = Thread.lookupHiddenField(Name.HIDDEN_DEATH);
         ThreadGroup = knownKlass(Type.ThreadGroup);
         ThreadGroup_remove = ThreadGroup.lookupDeclaredMethod(Name.remove, Signature.ThreadGroup_remove);
         Thread_dispatchUncaughtException = Thread.lookupDeclaredMethod(Name.dispatchUncaughtException, Signature._void_Throwable);
@@ -246,6 +245,7 @@ public final class Meta implements ContextAccess {
         Thread_checkAccess = Thread.lookupDeclaredMethod(Name.checkAccess, Signature._void);
         Thread_stop = Thread.lookupDeclaredMethod(Name.stop, Signature._void);
         ThreadGroup_maxPriority = ThreadGroup.lookupDeclaredField(Name.maxPriority, Type._int);
+        Thread_state = Thread.lookupDeclaredField(Name.threadStatus, Type._int);
 
         sun_misc_VM = knownKlass(Type.sun_misc_VM);
         VM_toThreadState = sun_misc_VM.lookupDeclaredMethod(Name.toThreadState, Signature.toThreadState);
@@ -484,6 +484,7 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass ThreadGroup;
     public final Method ThreadGroup_remove;
     public final Method Thread_dispatchUncaughtException;
+    public final Field HIDDEN_HOST_THREAD;
     public final Field ThreadGroup_maxPriority;
     public final ObjectKlass Thread;
     public final Field Thread_threadStatus;
@@ -491,16 +492,15 @@ public final class Meta implements ContextAccess {
     public final Method Thread_run;
     public final Method Thread_checkAccess;
     public final Method Thread_stop;
-    public final Field HIDDEN_HOST_THREAD;
     public final Field HIDDEN_IS_ALIVE;
     public final Field HIDDEN_INTERRUPTED;
-    public final Field HIDDEN_DEATH;
     public final Field Thread_group;
     public final Field Thread_name;
     public final Field Thread_priority;
     public final Field Thread_blockerLock;
     public final Field Thread_daemon;
     public final Field Thread_inheritedAccessControlContext;
+    public final Field Thread_state;
 
     public final ObjectKlass sun_misc_VM;
     public final Method VM_toThreadState;
@@ -756,7 +756,7 @@ public final class Meta implements ContextAccess {
      * the given class loader to perform the load, even for internal primitive types. This is the
      * method to use when loading symbols that are not directly taken from a constant pool, for
      * example, when loading a class whose name is given by a guest string..
-     *
+     * 
      * @param type The symbolic type.
      * @param classLoader The class loader
      * @return The asked Klass.
@@ -776,7 +776,7 @@ public final class Meta implements ContextAccess {
      * corresponding Klass.
      * <li>If the symbol represents an array, recursively resolve its elemental type, and returns
      * the array Klass need.
-     *
+     * 
      * @param type The symbolic type
      * @param classLoader The class loader of the constant pool holder.
      * @return The asked Klass.
