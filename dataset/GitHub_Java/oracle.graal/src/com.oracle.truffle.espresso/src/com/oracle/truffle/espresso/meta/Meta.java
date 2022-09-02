@@ -314,7 +314,6 @@ public final class Meta implements ContextAccess {
         MethodHandleNatives = knownKlass(Type.MethodHandleNatives);
         MethodHandleNatives_linkMethod = MethodHandleNatives.lookupDeclaredMethod(Name.linkMethod, Signature.linkMethod_signature);
         MethodHandleNatives_linkCallSite = MethodHandleNatives.lookupDeclaredMethod(Name.linkCallSite, Signature.linkCallSite_signature);
-        MethodHandleNatives_fixMethodType = MethodHandleNatives.lookupDeclaredMethod(Name.fixMethodType, Signature.fixMethodType_signature);
         MethodHandleNatives_linkMethodHandleConstant = MethodHandleNatives.lookupDeclaredMethod(Name.linkMethodHandleConstant, Signature.linkMethodHandleConstant_signature);
         MethodHandleNatives_findMethodHandleType = MethodHandleNatives.lookupDeclaredMethod(Name.findMethodHandleType, Signature.MethodType_cons);
 
@@ -347,8 +346,6 @@ public final class Meta implements ContextAccess {
         AssertionStatusDirectives_packageEnabled = AssertionStatusDirectives.lookupField(Name.packageEnabled, Type._boolean_array);
         AssertionStatusDirectives_deflt = AssertionStatusDirectives.lookupField(Name.deflt, Type._boolean);
     }
-
-    // Checkstyle: stop field name check
 
     public final ObjectKlass Object;
     public final ArrayKlass Object_array;
@@ -600,7 +597,6 @@ public final class Meta implements ContextAccess {
     public final Method MethodHandleNatives_linkMethodHandleConstant;
     public final Method MethodHandleNatives_findMethodHandleType;
     public final Method MethodHandleNatives_linkCallSite;
-    public final Method MethodHandleNatives_fixMethodType;
 
     // References
 
@@ -627,10 +623,7 @@ public final class Meta implements ContextAccess {
     @CompilationFinal(dimensions = 1) //
     public final ObjectKlass[] ARRAY_SUPERINTERFACES;
 
-    @CompilationFinal(dimensions = 1) //
-    public final ObjectKlass[] BOXED_PRIMITIVE_KLASSES;
-
-    // Checkstyle: resume field name check
+    @CompilationFinal(dimensions = 1) public final ObjectKlass[] BOXED_PRIMITIVE_KLASSES;
 
     private static boolean isKnownClass(java.lang.Class<?> clazz) {
         // Cheap check: (host) known classes are loaded by the BCL.
@@ -815,9 +808,9 @@ public final class Meta implements ContextAccess {
     }
 
     /**
-     * Performs class loading according to {&sect;5.3. Creation and Loading}. This method directly
-     * asks the given class loader to perform the load, even for internal primitive types. This is
-     * the method to use when loading symbols that are not directly taken from a constant pool, for
+     * Performs class loading according to {§5.3. Creation and Loading}. This method directly asks
+     * the given class loader to perform the load, even for internal primitive types. This is the
+     * method to use when loading symbols that are not directly taken from a constant pool, for
      * example, when loading a class whose name is given by a guest string..
      *
      * @param type The symbolic type.
