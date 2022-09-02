@@ -632,9 +632,7 @@ public class ContextAPITest {
         try {
             r.run();
         } catch (Exception e) {
-            if (!exceptionType.isInstance(e)) {
-                throw new AssertionError(e);
-            }
+            assertTrue(e.getClass().getName(), exceptionType.isInstance(e));
         }
     }
 
