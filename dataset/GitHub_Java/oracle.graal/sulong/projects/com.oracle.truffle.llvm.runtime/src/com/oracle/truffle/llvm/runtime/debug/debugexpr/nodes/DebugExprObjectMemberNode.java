@@ -29,8 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import org.graalvm.collections.Pair;
-
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
@@ -44,55 +42,53 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 @NodeInfo(shortName = ".")
 public class DebugExprObjectMemberNode extends LLVMExpressionNode {
 
-    @Child private LLVMExpressionNode baseNode;
     private final String fieldName;
+    private DebugExprType type;
+    private Object member;
+    private Object baseMember;
 
-    public DebugExprObjectMemberNode(LLVMExpressionNode baseNode, String fieldName) {
+    public DebugExprObjectMemberNode(String fieldName, Object baseMember) {
         this.fieldName = fieldName;
-        this.baseNode = baseNode;
+        this.baseMember = baseMember;
+        this.type = null;
+        findMemberAndType();
     }
 
-    public DebugExprType getType(Object baseMember) {
-        return findMemberAndType(baseMember).getRight();
+    public DebugExprType getType() {
+        return type;
     }
 
-    public Object getMember(Object baseMember) {
-        return findMemberAndType(baseMember).getLeft();
+    public Object getMember() {
+        return member;
     }
 
-    public String getFieldName() {
-        return fieldName;
-    }
-
-    private Pair<Object, DebugExprType> findMemberAndType(Object baseMember) {
+    private void findMemberAndType() {
         InteropLibrary library = InteropLibrary.getFactory().getUncached();
 
         if (library.isMemberExisting(baseMember, fieldName)) {
             try {
-                Object member = library.readMember(baseMember, fieldName);
+
+                member = library.readMember(baseMember, fieldName);
                 LLVMDebuggerValue ldv = (LLVMDebuggerValue) member;
                 Object metaObj = ldv.getMetaObject();
-                DebugExprType type = DebugExprType.getTypeFromSymbolTableMetaObject(metaObj);
-                return Pair.create(member, type);
+                type = DebugExprType.getTypeFromSymbolTableMetaObject(metaObj);
+                return;
             } catch (UnsupportedMessageException e1) {
-                throw DebugExprException.symbolNotFound(this, fieldName, baseMember);
+                // TODO Auto-generated catch block
+                e1.printStackTrace();
             } catch (UnknownIdentifierException e1) {
-                throw DebugExprException.symbolNotFound(this, e1.getUnknownIdentifier(), baseMember);
-            } catch (ClassCastException e1) {
-                throw DebugExprException.symbolNotFound(this, fieldName, baseMember);
+                throw DebugExprException.symbolNotFound(this, e1.getUnknownIdentifier(), member);
             }
+        } else {
+            type = DebugExprType.getVoidType();
+            member = null;
         }
-
-        throw DebugExprException.symbolNotFound(this, fieldName, baseMember);
     }
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
-        Object baseMember = baseNode.executeGeneric(frame);
-        Pair<Object, DebugExprType> pair = findMemberAndType(baseMember);
-        Object member = pair.getLeft();
         if (member != null)
-            return pair.getRight().parse(member);
+            return type.parseString(member.toString());
         throw DebugExprException.symbolNotFound(this, fieldName, baseMember);
     }
 }
