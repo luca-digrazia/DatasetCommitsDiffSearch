@@ -131,7 +131,7 @@ public abstract class LLVMSourceLocation {
         return name;
     }
 
-    public String describeFile() {
+    private String describeFile() {
         CompilerAsserts.neverPartOfCompilation();
         if (lazySourceSection != null) {
             return asFileName(lazySourceSection.getPath());
@@ -142,7 +142,7 @@ public abstract class LLVMSourceLocation {
         }
     }
 
-    public int getLine() {
+    private int getLine() {
         CompilerAsserts.neverPartOfCompilation();
         if (lazySourceSection != null) {
             return lazySourceSection.getLine();
