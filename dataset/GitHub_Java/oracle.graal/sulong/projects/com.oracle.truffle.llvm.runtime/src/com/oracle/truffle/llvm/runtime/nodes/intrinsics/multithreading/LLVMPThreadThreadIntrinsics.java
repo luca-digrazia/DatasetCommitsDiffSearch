@@ -111,13 +111,18 @@ public final class LLVMPThreadThreadIntrinsics {
     public abstract static class LLVMPThreadSelf extends LLVMBuiltin {
 
         @Specialization
-        protected long doIntrinsic() {
-            return getThreadId();
+        protected long doIntrinsic(@CachedContext(LLVMLanguage.class) LLVMContext context) {
+            return getThreadId(context);
         }
 
         @TruffleBoundary
-        private static long getThreadId() {
-            return Thread.currentThread().getId();
+        private static long getThreadId(LLVMContext context) {
+            final Thread thread = Thread.currentThread();
+            final LLVMPThreadContext threadContext = context.getpThreadContext();
+            if (threadContext.getThread(thread.getId()) == null) {
+                context.getpThreadContext().insertThread(thread);
+            }
+            return thread.getId();
         }
     }
 
