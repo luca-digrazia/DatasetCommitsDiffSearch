@@ -246,7 +246,6 @@ public final class UnalignedHeapChunk {
         return WordFactory.zero();
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static UnsignedWord getCommittedObjectMemory(UnalignedHeader that) {
         return HeapChunk.getEndOffset(that).subtract(getObjectStartOffset());
     }

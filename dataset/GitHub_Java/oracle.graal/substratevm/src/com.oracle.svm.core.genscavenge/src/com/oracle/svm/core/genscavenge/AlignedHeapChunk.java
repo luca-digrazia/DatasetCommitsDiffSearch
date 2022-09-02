@@ -131,10 +131,10 @@ public final class AlignedHeapChunk {
 
     static AlignedHeader getEnclosingChunk(Object obj) {
         Pointer ptr = Word.objectToUntrackedPointer(obj);
-        return getEnclosingChunkFromObjectPointer(ptr);
+        return getEnclosingChunkFromPointer(ptr);
     }
 
-    static AlignedHeader getEnclosingChunkFromObjectPointer(Pointer ptr) {
+    static AlignedHeader getEnclosingChunkFromPointer(Pointer ptr) {
         return (AlignedHeader) PointerUtils.roundDown(ptr, HeapPolicy.getAlignedHeapChunkAlignment());
     }
 
@@ -186,7 +186,7 @@ public final class AlignedHeapChunk {
      */
     public static void dirtyCardForObject(Object object, boolean verifyOnly) {
         Pointer objectPointer = Word.objectToUntrackedPointer(object);
-        AlignedHeader chunk = getEnclosingChunkFromObjectPointer(objectPointer);
+        AlignedHeader chunk = getEnclosingChunkFromPointer(objectPointer);
         Pointer cardTableStart = getCardTableStart(chunk);
         UnsignedWord index = getObjectIndex(chunk, objectPointer);
         if (verifyOnly) {

@@ -33,7 +33,6 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.MemoryWalker;
 import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.genscavenge.GCImpl.ChunkReleaser;
 import com.oracle.svm.core.heap.ObjectVisitor;
 import com.oracle.svm.core.log.Log;
 
@@ -144,29 +143,28 @@ final class YoungGeneration extends Generation {
         return original;
     }
 
-    private void releaseSurvivorSpaces(ChunkReleaser chunkReleaser, boolean isFromSpace) {
+    private void releaseSurvivorSpaces(boolean isFromSpace) {
         for (int i = 0; i < maxSurvivorSpaces; i++) {
             if (isFromSpace) {
-                getSurvivorFromSpaceAt(i).releaseChunks(chunkReleaser);
+                getSurvivorFromSpaceAt(i).releaseChunks();
             } else {
-                getSurvivorToSpaceAt(i).releaseChunks(chunkReleaser);
+                getSurvivorToSpaceAt(i).releaseChunks();
             }
         }
     }
 
-    void releaseSpaces(ChunkReleaser chunkReleaser) {
-        getEden().releaseChunks(chunkReleaser);
+    void releaseSpaces() {
+        getEden().releaseChunks();
 
-        releaseSurvivorSpaces(chunkReleaser, true);
+        releaseSurvivorSpaces(true);
         if (HeapImpl.getHeapImpl().getGCImpl().isCompleteCollection()) {
-            releaseSurvivorSpaces(chunkReleaser, false);
+            releaseSurvivorSpaces(false);
         }
     }
 
     void swapSpaces() {
         for (int i = 0; i < maxSurvivorSpaces; i++) {
             assert getSurvivorFromSpaceAt(i).isEmpty() : "Survivor fromSpace should be empty.";
-            assert getSurvivorFromSpaceAt(i).getChunkBytes().equal(0);
             getSurvivorFromSpaceAt(i).absorb(getSurvivorToSpaceAt(i));
         }
     }
@@ -266,34 +264,30 @@ final class YoungGeneration extends Generation {
         return true;
     }
 
-    /**
-     * This value is only updated during a GC. Be careful when calling this method during a GC as it
-     * might wrongly include chunks that will be freed at the end of the GC.
-     */
-    UnsignedWord getChunkBytes() {
-        return getEden().getChunkBytes().add(getSurvivorChunkBytes());
-    }
-
-    private UnsignedWord getSurvivorChunkBytes() {
-        UnsignedWord chunkBytes = WordFactory.zero();
+    UnsignedWord getSurvivorChunkUsedBytes() {
+        UnsignedWord usedBytes = WordFactory.zero();
         for (int i = 0; i < maxSurvivorSpaces; i++) {
-            chunkBytes = chunkBytes.add(this.survivorFromSpaces[i].getChunkBytes());
-            chunkBytes = chunkBytes.add(this.survivorToSpaces[i].getChunkBytes());
+            usedBytes = usedBytes.add(this.survivorFromSpaces[i].getChunkBytes());
+            usedBytes = usedBytes.add(this.survivorToSpaces[i].getChunkBytes());
         }
-        return chunkBytes;
+        return usedBytes;
     }
 
-    UnsignedWord computeObjectBytes() {
-        return getEden().computeObjectBytes().add(computeSurvivorObjectBytes());
+    UnsignedWord getChunkUsedBytes() {
+        return getEden().getChunkBytes().add(getSurvivorChunkUsedBytes());
     }
 
-    private UnsignedWord computeSurvivorObjectBytes() {
+    UnsignedWord getSurvivorObjectBytes() {
         UnsignedWord usedObjectBytes = WordFactory.zero();
         for (int i = 0; i < maxSurvivorSpaces; i++) {
-            usedObjectBytes = usedObjectBytes.add(survivorFromSpaces[i].computeObjectBytes());
-            usedObjectBytes = usedObjectBytes.add(survivorToSpaces[i].computeObjectBytes());
+            usedObjectBytes = usedObjectBytes.add(survivorFromSpaces[i].getObjectBytes());
+            usedObjectBytes = usedObjectBytes.add(survivorToSpaces[i].getObjectBytes());
         }
         return usedObjectBytes;
+    }
+
+    UnsignedWord getObjectBytes() {
+        return getEden().getObjectBytes().add(getSurvivorObjectBytes());
     }
 
     @SuppressWarnings("static-method")

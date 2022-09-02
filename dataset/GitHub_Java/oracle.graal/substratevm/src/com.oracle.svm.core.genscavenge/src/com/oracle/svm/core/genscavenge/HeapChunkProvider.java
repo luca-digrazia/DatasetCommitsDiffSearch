@@ -81,11 +81,6 @@ final class HeapChunkProvider {
     HeapChunkProvider() {
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public UnsignedWord getBytesInUnusedChunks() {
-        return bytesInUnusedAlignedChunks.get();
-    }
-
     @AlwaysInline("Remove all logging when noopLog is returned by this method")
     private static Log log() {
         return Log.noopLog();
@@ -122,7 +117,7 @@ final class HeapChunkProvider {
             zap(result, HeapPolicy.getProducedHeapChunkZapWord());
         }
 
-        HeapPolicy.increaseEdenUsedBytes(chunkSize);
+        HeapPolicy.youngUsedBytes.addAndGet(chunkSize);
 
         log().string("  result chunk: ").hex(result).string("  ]").newline();
         return result;
@@ -142,10 +137,22 @@ final class HeapChunkProvider {
         log().string("  ]").newline();
     }
 
-    private static boolean keepAlignedChunk() {
+    private boolean keepAlignedChunk() {
+        Log trace = Log.noopLog().string("[HeapChunkProvider.keepAlignedChunk:");
         UnsignedWord minimumHeapSize = HeapPolicy.getMinimumHeapSize();
-        UnsignedWord committedBytes = HeapImpl.getHeapImpl().getCommittedBytes();
-        return committedBytes.belowThan(minimumHeapSize);
+        UnsignedWord heapChunkBytes = HeapImpl.getHeapImpl().getUsedChunkBytes();
+        UnsignedWord unusedChunkBytes = bytesInUnusedAlignedChunks.get();
+        UnsignedWord bytesInUse = heapChunkBytes.add(unusedChunkBytes);
+
+        boolean result = bytesInUse.belowThan(minimumHeapSize);
+        trace
+                        .string("  minimumHeapSize: ").unsigned(minimumHeapSize)
+                        .string("  heapChunkBytes: ").unsigned(heapChunkBytes)
+                        .string("  unusedBytes: ").unsigned(unusedChunkBytes)
+                        .string("  bytesInUse: ").unsigned(bytesInUse)
+                        .string("  returns: ").bool(result)
+                        .string(" ]").newline();
+        return result;
     }
 
     private static void cleanAlignedChunk(AlignedHeader alignedChunk) {
@@ -237,7 +244,7 @@ final class HeapChunkProvider {
             zap(result, HeapPolicy.getProducedHeapChunkZapWord());
         }
 
-        HeapPolicy.increaseEdenUsedBytes(chunkSize);
+        HeapPolicy.youngUsedBytes.addAndGet(chunkSize);
 
         log().string("  returns ").hex(result).string("  ]").newline();
         return result;
