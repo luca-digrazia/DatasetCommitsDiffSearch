@@ -29,15 +29,8 @@ import org.graalvm.component.installer.MetadataException;
 import org.graalvm.component.installer.InstallerStopException;
 import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
-import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -47,7 +40,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.ResourceBundle;
@@ -55,11 +47,9 @@ import java.util.Set;
 import java.util.function.Function;
 import org.graalvm.component.installer.Archive;
 import org.graalvm.component.installer.BundleConstants;
-import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.model.ComponentInfo;
-import org.graalvm.component.installer.model.DistributionType;
 
 /**
  * Loads information from the component's bundle.
@@ -113,33 +103,16 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
      */
     private boolean noVerifySymlinks;
 
-    private final String componentTag;
-
-    private final Properties props = new Properties();
-
     static final ResourceBundle BUNDLE = ResourceBundle.getBundle("org.graalvm.component.installer.persist.Bundle");
 
-    public ComponentPackageLoader(String tag, Function<String, String> supplier, Feedback feedback) {
+    public ComponentPackageLoader(Function<String, String> supplier, Feedback feedback) {
         this.feedback = feedback.withBundle(ComponentPackageLoader.class);
         this.valueSupplier = supplier;
-        this.componentTag = tag;
-    }
-
-    public ComponentPackageLoader(Function<String, String> supplier, Feedback feedback) {
-        this(null, supplier, feedback);
     }
 
     @Override
     public Archive getArchive() {
         return null;
-    }
-
-    private String value(String key) {
-        String v = valueSupplier.apply(key);
-        if (v != null && (componentTag == null || componentTag.isEmpty())) {
-            props.put(key, v);
-        }
-        return v;
     }
 
     @Override
@@ -153,7 +126,7 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
     }
 
     private HeaderParser parseHeader2(String header, Function<String, String> fn) throws MetadataException {
-        String s = value(header);
+        String s = valueSupplier.apply(header);
         if (fn != null) {
             s = fn.apply(s);
         }
@@ -161,7 +134,7 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
     }
 
     private HeaderParser parseHeader(String header, String defValue) throws MetadataException {
-        String s = value(header);
+        String s = valueSupplier.apply(header);
         if (s == null) {
             if (defValue == null) {
                 return new HeaderParser(header, s, feedback);
@@ -208,23 +181,6 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
         return errors;
     }
 
-    /**
-     * Computes some component hash/tag. Computes a digest from each read/present value in the
-     * manifest.
-     */
-    private void supplyComponentTag() {
-        String ct = info.getTag();
-        if (ct != null && !ct.isEmpty()) {
-            return;
-        }
-        try (StringWriter wr = new StringWriter()) {
-            props.store(wr, ""); // NOI18N
-            info.setTag(SystemUtils.digestString(wr.toString().replaceAll("#.*\r?\n\r?", ""), false)); // NOI18N
-        } catch (IOException ex) {
-            throw new FailedOperationException(ex.getLocalizedMessage(), ex);
-        }
-    }
-
     private void loadWorkingDirectories(ComponentInfo nfo) {
         String val = parseHeader(BundleConstants.BUNDLE_WORKDIRS, null).getContents("");
         Set<String> workDirs = new LinkedHashSet<>();
@@ -237,31 +193,22 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
         nfo.addWorkingDirectories(workDirs);
     }
 
-    private String findComponentTag() {
-        String t = value(BundleConstants.BUNDLE_SERIAL);
-        return t != null && !t.isEmpty() ? t : componentTag;
-    }
-
     protected ComponentInfo createBaseComponentInfo() {
         parse(
                         () -> id = parseHeader(BundleConstants.BUNDLE_ID).parseSymbolicName(),
                         () -> name = parseHeader(BundleConstants.BUNDLE_NAME).getContents(id),
                         () -> version = parseHeader(BundleConstants.BUNDLE_VERSION).version(),
                         () -> {
-                            info = new ComponentInfo(id, name, version, findComponentTag());
+                            info = new ComponentInfo(id, name, version);
                             info.addRequiredValues(parseHeader(BundleConstants.BUNDLE_REQUIRED).parseRequiredCapabilities());
                             info.addProvidedValues(parseHeader(BundleConstants.BUNDLE_PROVIDED, "").parseProvidedCapabilities());
-                            info.setDependencies(parseHeader(BundleConstants.BUNDLE_DEPENDENCY, "").parseDependencies());
-                            info.setStability(parseHeader(BundleConstants.BUNDLE_STABILITY, "").parseStability());
                         });
-        supplyComponentTag();
         return info;
     }
 
     protected ComponentInfo loadExtendedMetadata(ComponentInfo base) {
         parse(
                         () -> base.setPolyglotRebuild(parseHeader(BundleConstants.BUNDLE_POLYGLOT_PART, null).getBoolean(Boolean.FALSE)),
-                        () -> base.setDistributionType(parseDistributionType()),
                         () -> loadWorkingDirectories(base),
                         () -> loadMessages(base),
                         () -> loadLicenseType(base));
@@ -271,16 +218,6 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
     public ComponentInfo createComponentInfo() {
         ComponentInfo nfo = createBaseComponentInfo();
         return loadExtendedMetadata(nfo);
-    }
-
-    private DistributionType parseDistributionType() {
-        String dtString = parseHeader(BundleConstants.BUNDLE_COMPONENT_DISTRIBUTION, null).getContents(DistributionType.OPTIONAL.name());
-        try {
-            return DistributionType.valueOf(dtString.toUpperCase(Locale.ENGLISH));
-        } catch (IllegalArgumentException ex) {
-            throw new MetadataException(BundleConstants.BUNDLE_COMPONENT_DISTRIBUTION,
-                            feedback.l10n("ERROR_InvalidDistributionType", dtString));
-        }
     }
 
     private void loadLicenseType(ComponentInfo nfo) {
@@ -294,65 +231,12 @@ public class ComponentPackageLoader implements Closeable, MetadataLoader {
 
     @Override
     public String getLicensePath() {
-        if (info != null) {
-            return info.getLicensePath();
-        }
         return licensePath;
     }
 
-    /**
-     * License digest or URL.
-     */
-    private String cachedLicenseID;
-
     @Override
     public String getLicenseID() {
-        if (cachedLicenseID != null) {
-            return cachedLicenseID;
-        }
-        String licPath = getLicensePath();
-        if (licPath == null) {
-            return null;
-        } else if (SystemUtils.isRemotePath(licPath)) { // NOI18N
-            return licPath;
-        }
-        Archive.FileEntry foundEntry = null;
-
-        for (Archive.FileEntry fe : getArchive()) {
-            if (getLicensePath().equals(fe.getName())) {
-                foundEntry = fe;
-                break;
-            }
-        }
-        if (foundEntry == null) {
-            throw feedback.failure("ERROR_CannotComputeLicenseID", null, licPath);
-        }
-
-        ByteBuffer bb = ByteBuffer.allocate(Integer.getInteger("org.graalvm.component.installer.fileReadBuffer", 4096));
-        MessageDigest dg;
-        String licId;
-
-        try {
-            dg = MessageDigest.getInstance("SHA-256"); // NOI18N
-        } catch (NoSuchAlgorithmException ex) {
-            throw feedback.failure("ERROR_CannotComputeLicenseID", ex, foundEntry.getName());
-        }
-        try (InputStream is = getArchive().getInputStream(foundEntry);
-                        ReadableByteChannel rch = Channels.newChannel(is)) {
-            while (true) {
-                int read = rch.read(bb);
-                if (read < 0) {
-                    break;
-                }
-                bb.flip();
-                dg.update(bb);
-                bb.clear();
-            }
-            licId = SystemUtils.fingerPrint(dg.digest(), false);
-        } catch (IOException ex) {
-            throw feedback.failure("ERROR_CannotComputeLicenseID", ex, foundEntry.getName());
-        }
-        return cachedLicenseID = licId;
+        return null;
     }
 
     @Override
