@@ -327,13 +327,11 @@ public abstract class EspressoProcessor extends AbstractProcessor {
         return extractSimpleType(method.getReturnType().toString());
     }
 
-    static boolean appendInvocationMetaInformation(StringBuilder str, List<String> guestCalls, boolean hasMetaInjection, boolean first) {
+    static void appendInvocationMetaInformation(StringBuilder str, List<String> guestCalls, boolean hasMetaInjection, boolean first) {
         str.append(getGuestCallsForInvoke(guestCalls, first));
         if (hasMetaInjection) {
             injectMeta(str, first);
-            return false;
         }
-        return first;
     }
 
     // Commits a single substitution.
@@ -378,7 +376,7 @@ public abstract class EspressoProcessor extends AbstractProcessor {
             str.append(DIRECT_CALL_NODE);
         }
         if (hasMetaInjection) {
-            first = checkFirst(str, first);
+            checkFirst(str, first);
             str.append(META_CLASS);
         }
         str.append(")}\n */");
@@ -481,10 +479,9 @@ public abstract class EspressoProcessor extends AbstractProcessor {
         return str.toString();
     }
 
-    static boolean injectMeta(StringBuilder str, boolean first) {
+    static void injectMeta(StringBuilder str, boolean first) {
         checkFirst(str, first);
         str.append(META_VAR);
-        return false;
     }
 
     // @formatter:off
