@@ -27,14 +27,13 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.Attribute;
-import com.oracle.truffle.espresso.staticobject.StaticProperty;
 
 final class LinkedField extends StaticProperty {
     private final ParserField parserField;
     private final int slot;
 
     LinkedField(ParserField parserField, int slot, int offset) {
-        super(parserField.getPropertyKind(), offset);
+        super(parserField.getKind(), offset);
         this.parserField = parserField;
         this.slot = slot;
     }

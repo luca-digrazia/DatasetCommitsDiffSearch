@@ -29,6 +29,8 @@ import com.oracle.truffle.espresso.vm.UnsafeAccess;
 import sun.misc.Unsafe;
 
 public class StaticProperty {
+    private static final boolean STRICT_TYPE_CHECKS = Boolean.getBoolean("truffle.espresso.staticproperty.StrictTypeChecks");
+    private static final byte INTERNAL_OBJECT_KIND = 0;
     private static final Unsafe UNSAFE = UnsafeAccess.get();
     private final byte internalKind;
     private final int offset;
@@ -39,7 +41,15 @@ public class StaticProperty {
     }
 
     private static byte getInternalKind(JavaKind javaKind) {
-        return javaKind.toByte();
+        if (STRICT_TYPE_CHECKS) {
+            return javaKind.toByte();
+        } else {
+            if (javaKind == JavaKind.Object) {
+                return INTERNAL_OBJECT_KIND;
+            } else {
+                return (byte) javaKind.getSlotCount();
+            }
+        }
     }
 
     /**
@@ -52,8 +62,18 @@ public class StaticProperty {
     private void checkKind(JavaKind kind) {
         if (this.internalKind != getInternalKind(kind)) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            String kindName = JavaKind.fromByte(internalKind).name();
-            throw new RuntimeException("Static property of '" + kindName + "' kind cannot be accessed as '" + kind.name() + "'");
+            if (STRICT_TYPE_CHECKS) {
+                String kindName = JavaKind.fromByte(internalKind).name();
+                throw new RuntimeException("Static property of '" + kindName + "' kind cannot be accessed as '" + kindName + "'");
+            } else {
+                String fieldDescription;
+                if (this.internalKind == INTERNAL_OBJECT_KIND) {
+                    fieldDescription = "Static property of 'object' kind";
+                } else {
+                    fieldDescription = internalKind + " stack-size primitive static property";
+                }
+                throw new RuntimeException(fieldDescription + " cannot be accessed as a " + kind.getSlotCount() + " stack-slot primitive");
+            }
         }
     }
 
