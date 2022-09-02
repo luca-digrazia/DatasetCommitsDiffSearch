@@ -137,9 +137,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
         this.config = config;
         this.codeInstallationTaskFactory = new TrufflePostCodeInstallationTaskFactory();
-        for (Backend backend : config.backends()) {
-            backend.addCodeInstallationTask(codeInstallationTaskFactory);
-        }
+        this.config.backend().addCodeInstallationTask(codeInstallationTaskFactory);
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(this.config.runtime());
 
@@ -160,7 +158,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         ResolvedJavaType[] head = metaAccess.lookupJavaTypes(new Class<?>[]{
                         ArithmeticException.class,
                         IllegalArgumentException.class,
-                        IllegalStateException.class,
                         VirtualMachineError.class,
                         IndexOutOfBoundsException.class,
                         ClassCastException.class,
@@ -178,8 +175,11 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         return skippedExceptionTypes;
     }
 
-    public TruffleCompilerConfiguration getConfig() {
-        return config;
+    /**
+     * Gets the compiler backend used for Truffle compilation.
+     */
+    public Backend getBackend() {
+        return config.backend();
     }
 
     /**
@@ -501,15 +501,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         StructuredGraph graph = null;
 
         try (CompilationAlarm alarm = CompilationAlarm.trackCompilationPeriod(debug.getOptions())) {
-            TruffleTierConfiguration tier;
-            if (task == null || task.isLastTier()) {
-                tier = config.lastTier();
-            } else {
-                tier = config.firstTier();
-            }
-
-            PhaseSuite<HighTierContext> graphBuilderSuite = createGraphBuilderSuite(tier);
-
+            PhaseSuite<HighTierContext> graphBuilderSuite = createGraphBuilderSuite();
             ExpansionStatistics statistics = getExpansionHistogram(options);
             SpeculationLog speculationLog = compilable.getCompilationSpeculationLog();
             if (speculationLog != null) {
@@ -608,21 +600,20 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
         CompilationResult result = null;
 
-        final TruffleTierConfiguration tier;
-        if (task != null && task.isFirstTier()) {
-            tier = config.firstTier();
-        } else {
-            tier = config.lastTier();
-        }
-
         try (DebugCloseable a = CompilationTime.start(debug);
-                        DebugContext.Scope s = debug.scope("TruffleGraal.GraalCompiler", graph, tier.providers().getCodeCache());
+                        DebugContext.Scope s = debug.scope("TruffleGraal.GraalCompiler", graph, config.lastTier().providers().getCodeCache());
                         DebugCloseable c = CompilationMemUse.start(debug)) {
+            final TruffleTierConfiguration tier;
+            if (task != null && task.isFirstTier()) {
+                tier = config.firstTier();
+            } else {
+                tier = config.lastTier();
+            }
             Suites selectedSuites = tier.suites();
             LIRSuites selectedLirSuites = tier.lirSuites();
             Providers selectedProviders = tier.providers();
             CompilationResult compilationResult = createCompilationResult(name, graph.compilationId(), compilable);
-            result = GraalCompiler.compileGraph(graph, graph.method(), selectedProviders, tier.backend(), graphBuilderSuite, Optimizations, graph.getProfilingInfo(), selectedSuites,
+            result = GraalCompiler.compileGraph(graph, graph.method(), selectedProviders, config.backend(), graphBuilderSuite, Optimizations, graph.getProfilingInfo(), selectedSuites,
                             selectedLirSuites, compilationResult, CompilationResultBuilderFactory.Default, false);
         } catch (Throwable e) {
             throw debug.handle(e);
@@ -635,7 +626,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         try (DebugCloseable a = CodeInstallationTime.start(debug); DebugCloseable c = CodeInstallationMemUse.start(debug)) {
             InstalledCode installedCode = createInstalledCode(compilable);
             assert graph.getSpeculationLog() == result.getSpeculationLog();
-            tier.backend().createInstalledCode(debug, graph.method(), compilationRequest, result, installedCode, false);
+            config.backend().createInstalledCode(debug, graph.method(), compilationRequest, result, installedCode, false);
         } catch (Throwable e) {
             throw debug.handle(e);
         }
@@ -667,7 +658,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
      */
     protected abstract CompilationResult createCompilationResult(String name, CompilationIdentifier compilationIdentifier, CompilableTruffleAST compilable);
 
-    public abstract PhaseSuite<HighTierContext> createGraphBuilderSuite(TruffleTierConfiguration tier);
+    public abstract PhaseSuite<HighTierContext> createGraphBuilderSuite();
 
     @Override
     public PartialEvaluator getPartialEvaluator() {
