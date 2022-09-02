@@ -29,6 +29,9 @@ public final class ThreadLocalHandles {
         objects = new Object[MIN_VALUE + initialNumberOfHandles];
     }
 
+    private static int toIndex(int handle) {
+        return (int) handle;
+    }
 
     public int getHandleCount() {
         return top - MIN_VALUE;
@@ -49,7 +52,7 @@ public final class ThreadLocalHandles {
     @SuppressWarnings("unchecked")
     public int create(Object obj) {
         if (obj == null) {
-            return nullHandle();
+            return (int) nullHandle();
         }
         ensureCapacity(1);
         int index = top;
@@ -60,12 +63,13 @@ public final class ThreadLocalHandles {
 
     @SuppressWarnings("unchecked")
     public <U> U getObject(int handle) {
-        return (U) objects[handle];
+        return (U) objects[toIndex(handle)];
     }
 
     public boolean delete(int handle) {
-        Object previous = objects[handle];
-        objects[handle] = null;
+        int index = toIndex(handle);
+        Object previous = objects[index];
+        objects[index] = null;
         return previous != null;
     }
 
