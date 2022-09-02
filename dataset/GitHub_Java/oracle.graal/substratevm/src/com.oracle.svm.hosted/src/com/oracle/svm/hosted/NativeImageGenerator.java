@@ -115,6 +115,7 @@ import org.graalvm.nativeimage.c.constant.CEnum;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.struct.RawStructure;
@@ -188,8 +189,8 @@ import com.oracle.svm.core.graal.snippets.DeoptRuntimeSnippets;
 import com.oracle.svm.core.graal.snippets.DeoptTester;
 import com.oracle.svm.core.graal.snippets.ExceptionSnippets;
 import com.oracle.svm.core.graal.snippets.LegacyTypeSnippets;
+import com.oracle.svm.core.graal.snippets.NewTypeSnippets;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
-import com.oracle.svm.core.graal.snippets.TypeSnippets;
 import com.oracle.svm.core.graal.stackvalue.StackValuePhase;
 import com.oracle.svm.core.graal.word.SubstrateWordTypes;
 import com.oracle.svm.core.heap.Heap;
@@ -1249,7 +1250,7 @@ public class NativeImageGenerator {
             if (SubstrateOptions.UseLegacyTypeCheck.getValue()) {
                 LegacyTypeSnippets.registerLowerings(runtimeConfig, options, factories, providers, snippetReflection, lowerings);
             } else {
-                TypeSnippets.registerLowerings(runtimeConfig, options, factories, providers, snippetReflection, lowerings);
+                NewTypeSnippets.registerLowerings(runtimeConfig, options, factories, providers, snippetReflection, lowerings);
             }
             ExceptionSnippets.registerLowerings(options, factories, providers, snippetReflection, lowerings);
 
@@ -1566,7 +1567,9 @@ public class NativeImageGenerator {
                 classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + CContext.class.getSimpleName() + " are always initialized");
             }
         }
-        nativeLibs.processCLibraryAnnotations(loader);
+        for (CLibrary library : loader.findAnnotations(CLibrary.class)) {
+            nativeLibs.addAnnotated(library);
+        }
 
         nativeLibs.finish();
         nativeLibs.reportErrors();
