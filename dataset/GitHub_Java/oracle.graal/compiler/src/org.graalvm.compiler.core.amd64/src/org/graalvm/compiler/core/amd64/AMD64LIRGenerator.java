@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -76,8 +76,6 @@ import org.graalvm.compiler.lir.amd64.AMD64ArrayIndexOfOp;
 import org.graalvm.compiler.lir.amd64.AMD64Binary;
 import org.graalvm.compiler.lir.amd64.AMD64BinaryConsumer;
 import org.graalvm.compiler.lir.amd64.AMD64ByteSwapOp;
-import org.graalvm.compiler.lir.amd64.AMD64CacheWritebackOp;
-import org.graalvm.compiler.lir.amd64.AMD64CacheWritebackPostSyncOp;
 import org.graalvm.compiler.lir.amd64.AMD64Call;
 import org.graalvm.compiler.lir.amd64.AMD64ControlFlow;
 import org.graalvm.compiler.lir.amd64.AMD64ControlFlow.BranchOp;
@@ -585,30 +583,30 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitArrayCompareTo(JavaKind kind1, JavaKind kind2, int array1BaseOffset, int array2BaseOffset, Value array1, Value array2, Value length1, Value length2) {
+    public Variable emitArrayCompareTo(JavaKind kind1, JavaKind kind2, Value array1, Value array2, Value length1, Value length2) {
         LIRKind resultKind = LIRKind.value(AMD64Kind.DWORD);
         RegisterValue raxRes = AMD64.rax.asValue(resultKind);
         RegisterValue cnt1 = AMD64.rcx.asValue(length1.getValueKind());
         RegisterValue cnt2 = AMD64.rdx.asValue(length2.getValueKind());
         emitMove(cnt1, length1);
         emitMove(cnt2, length2);
-        append(new AMD64ArrayCompareToOp(this, getAVX3Threshold(), kind1, kind2, array1BaseOffset, array2BaseOffset, raxRes, array1, array2, cnt1, cnt2));
+        append(new AMD64ArrayCompareToOp(this, getAVX3Threshold(), kind1, kind2, raxRes, array1, array2, cnt1, cnt2));
         Variable result = newVariable(resultKind);
         emitMove(result, raxRes);
         return result;
     }
 
     @Override
-    public Variable emitArrayEquals(JavaKind kind, int array1BaseOffset, int array2BaseOffset, Value array1, Value array2, Value length, boolean directPointers) {
+    public Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length, boolean directPointers) {
         Variable result = newVariable(LIRKind.value(AMD64Kind.DWORD));
-        append(new AMD64ArrayEqualsOp(this, kind, kind, array1BaseOffset, array2BaseOffset, result, array1, array2, length, directPointers, getMaxVectorSize()));
+        append(new AMD64ArrayEqualsOp(this, kind, kind, result, array1, array2, length, directPointers, getMaxVectorSize()));
         return result;
     }
 
     @Override
-    public Variable emitArrayEquals(JavaKind kind1, JavaKind kind2, int array1BaseOffset, int array2BaseOffset, Value array1, Value array2, Value length, boolean directPointers) {
+    public Variable emitArrayEquals(JavaKind kind1, JavaKind kind2, Value array1, Value array2, Value length, boolean directPointers) {
         Variable result = newVariable(LIRKind.value(AMD64Kind.DWORD));
-        append(new AMD64ArrayEqualsOp(this, kind1, kind2, array1BaseOffset, array2BaseOffset, result, array1, array2, length, directPointers, getMaxVectorSize()));
+        append(new AMD64ArrayEqualsOp(this, kind1, kind2, result, array1, array2, length, directPointers, getMaxVectorSize()));
         return result;
     }
 
@@ -628,9 +626,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitArrayIndexOf(int arrayBaseOffset, JavaKind valueKind, boolean findTwoConsecutive, Value arrayPointer, Value arrayLength, Value fromIndex, Value... searchValues) {
+    public Variable emitArrayIndexOf(JavaKind arrayKind, JavaKind valueKind, boolean findTwoConsecutive, Value arrayPointer, Value arrayLength, Value fromIndex, Value... searchValues) {
         Variable result = newVariable(LIRKind.value(AMD64Kind.DWORD));
-        append(new AMD64ArrayIndexOfOp(arrayBaseOffset, valueKind, findTwoConsecutive, getMaxVectorSize(), this, result,
+        append(new AMD64ArrayIndexOfOp(arrayKind, valueKind, findTwoConsecutive, getMaxVectorSize(), this, result,
                         asAllocatable(arrayPointer), asAllocatable(arrayLength), asAllocatable(fromIndex), searchValues));
         return result;
     }
@@ -725,19 +723,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public void emitPause() {
         append(new AMD64PauseOp());
-    }
-
-    @Override
-    public void emitCacheWriteback(Value address) {
-        append(new AMD64CacheWritebackOp(asAddressValue(address)));
-    }
-
-    @Override
-    public void emitCacheWritebackSync(boolean isPreSync) {
-        // only need a barrier post sync is required on AMD64
-        if (!isPreSync) {
-            append(new AMD64CacheWritebackPostSyncOp());
-        }
     }
 
     @Override

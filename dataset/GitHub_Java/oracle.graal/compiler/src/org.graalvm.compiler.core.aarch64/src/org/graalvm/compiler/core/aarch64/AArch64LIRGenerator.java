@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -49,7 +49,6 @@ import org.graalvm.compiler.lir.aarch64.AArch64AddressValue;
 import org.graalvm.compiler.lir.aarch64.AArch64ArithmeticOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ArrayCompareToOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ArrayEqualsOp;
-import org.graalvm.compiler.lir.aarch64.AArch64ArrayIndexOfOp;
 import org.graalvm.compiler.lir.aarch64.AArch64AtomicMove.AtomicReadAndAddLSEOp;
 import org.graalvm.compiler.lir.aarch64.AArch64AtomicMove.AtomicReadAndAddOp;
 import org.graalvm.compiler.lir.aarch64.AArch64AtomicMove.AtomicReadAndWriteOp;
@@ -63,7 +62,7 @@ import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.CondMoveOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.CondSetOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.StrategySwitchOp;
 import org.graalvm.compiler.lir.aarch64.AArch64ControlFlow.TableSwitchOp;
-import org.graalvm.compiler.lir.aarch64.AArch64LIRFlags;
+import org.graalvm.compiler.lir.aarch64.AArch64LIRFlagsVersioned;
 import org.graalvm.compiler.lir.aarch64.AArch64Move;
 import org.graalvm.compiler.lir.aarch64.AArch64Move.MembarOp;
 import org.graalvm.compiler.lir.aarch64.AArch64PauseOp;
@@ -212,7 +211,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     @Override
     public Value emitAtomicReadAndAdd(Value address, ValueKind<?> kind, Value delta) {
         Variable result = newVariable(kind);
-        if (AArch64LIRFlags.useLSE(target().arch)) {
+        if (AArch64LIRFlagsVersioned.useLSE(target().arch)) {
             append(new AtomicReadAndAddLSEOp((AArch64Kind) kind.getPlatformKind(), asAllocatable(result), asAllocatable(address), asAllocatable(delta)));
         } else {
             append(new AtomicReadAndAddOp((AArch64Kind) kind.getPlatformKind(), asAllocatable(result), asAllocatable(address), delta));
@@ -562,7 +561,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitArrayCompareTo(JavaKind kind1, JavaKind kind2, int array1BaseOffset, int array2BaseOffset, Value array1, Value array2, Value length1, Value length2) {
+    public Variable emitArrayCompareTo(JavaKind kind1, JavaKind kind2, Value array1, Value array2, Value length1, Value length2) {
         LIRKind resultKind = LIRKind.value(AArch64Kind.DWORD);
         // DMS TODO: check calling conversion and registers used
         RegisterValue res = AArch64.r0.asValue(resultKind);
@@ -570,24 +569,16 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         RegisterValue cnt2 = AArch64.r2.asValue(length2.getValueKind());
         emitMove(cnt1, length1);
         emitMove(cnt2, length2);
-        append(new AArch64ArrayCompareToOp(this, kind1, kind2, array1BaseOffset, array2BaseOffset, res, array1, array2, cnt1, cnt2));
+        append(new AArch64ArrayCompareToOp(this, kind1, kind2, res, array1, array2, cnt1, cnt2));
         Variable result = newVariable(resultKind);
         emitMove(result, res);
         return result;
     }
 
     @Override
-    public Variable emitArrayEquals(JavaKind kind, int array1BaseOffset, int array2BaseOffset, Value array1, Value array2, Value length, boolean directPointers) {
+    public Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length, boolean directPointers) {
         Variable result = newVariable(LIRKind.value(AArch64Kind.DWORD));
-        append(new AArch64ArrayEqualsOp(this, kind, array1BaseOffset, array2BaseOffset, result, array1, array2, asAllocatable(length), directPointers));
-        return result;
-    }
-
-    @Override
-    public Variable emitArrayIndexOf(int arrayBaseOffset, JavaKind valueKind, boolean findTwoConsecutive, Value arrayPointer, Value arrayLength, Value fromIndex, Value... searchValues) {
-        assert searchValues.length == 1;
-        Variable result = newVariable(LIRKind.value(AArch64Kind.DWORD));
-        append(new AArch64ArrayIndexOfOp(arrayBaseOffset, valueKind, this, result, asAllocatable(arrayPointer), asAllocatable(arrayLength), asAllocatable(fromIndex), asAllocatable(searchValues[0])));
+        append(new AArch64ArrayEqualsOp(this, kind, result, array1, array2, asAllocatable(length), directPointers));
         return result;
     }
 
