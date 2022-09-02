@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -782,14 +782,14 @@ public class FlatNodeGenFactory {
                 Modifier visibility = Modifier.PRIVATE;
 
                 CodeVariableElement cachedField;
-                if (isAssignable(type, types.NodeInterface) && cache.isAdopt()) {
+                if (isAssignable(type, types.NodeInterface)) {
                     cachedField = createNodeField(visibility, type, fieldName, types.Node_Child);
-                } else if (isNodeInterfaceArray(type) && cache.isAdopt()) {
+                } else if (isNodeInterfaceArray(type)) {
                     cachedField = createNodeField(visibility, type, fieldName, types.Node_Children);
                 } else {
                     cachedField = createNodeField(visibility, type, fieldName, null);
                     AnnotationMirror mirror = findAnnotationMirror(parameter.getVariableElement().getAnnotationMirrors(), types.Cached);
-                    int dimensions = mirror == null ? 0 : getAnnotationValue(Integer.class, mirror, "dimensions");
+                    int dimensions = getAnnotationValue(Integer.class, mirror, "dimensions");
                     setFieldCompilationFinal(cachedField, dimensions);
                 }
                 clazz.getEnclosedElements().add(cachedField);
@@ -826,9 +826,9 @@ public class FlatNodeGenFactory {
                 TypeMirror type = parameter.getType();
                 Modifier visibility = useSpecializationClass ? null : Modifier.PRIVATE;
                 CodeVariableElement cachedField;
-                if (isAssignable(type, types.NodeInterface) && cache.isAdopt()) {
+                if (isAssignable(type, types.NodeInterface)) {
                     cachedField = createNodeField(visibility, type, fieldName, types.Node_Child);
-                } else if (isNodeInterfaceArray(type) && cache.isAdopt()) {
+                } else if (isNodeInterfaceArray(type)) {
                     cachedField = createNodeField(visibility, type, fieldName, types.Node_Children);
                 } else {
                     cachedField = createNodeField(visibility, type, fieldName, null);
@@ -1329,7 +1329,8 @@ public class FlatNodeGenFactory {
         }
 
         if (implementedSpecializations.isEmpty()) {
-            builder.tree(GeneratorUtils.createShouldNotReachHere("Delegation failed."));
+            builder.tree(createTransferToInterpreterAndInvalidate());
+            builder.startThrow().startNew(getType(AssertionError.class)).doubleQuote("Delegation failed.").end().end();
         } else {
             SpecializationGroup group = SpecializationGroup.create(implementedSpecializations);
             builder.tree(createFastPath(builder, implementedSpecializations, group, type, frameState));
@@ -1372,8 +1373,11 @@ public class FlatNodeGenFactory {
 
         CodeTreeBuilder builder = method.createBuilder();
         if (isExecutableInUncached) {
-            builder.tree(GeneratorUtils.createShouldNotReachHere("This execute method cannot be used for uncached node versions as it requires child nodes to be present. " +
-                            "Use an execute method that takes all arguments as parameters."));
+            builder.tree(GeneratorUtils.createTransferToInterpreter());
+            builder.startThrow().startNew(context.getType(AssertionError.class));
+            builder.doubleQuote("This execute method cannot be used for uncached node versions as it requires child nodes to be present. " +
+                            "Use an execute method that takes all arguments as parameters.");
+            builder.end().end();
         } else {
             SpecializationGroup group = SpecializationGroup.create(compatibleSpecializations);
             FrameState originalFrameState = frameState.copy();
@@ -2276,7 +2280,9 @@ public class FlatNodeGenFactory {
             CodeTreeBuilder builder = method.createBuilder();
             if (uncached) {
                 method.getAnnotationMirrors().add(new CodeAnnotationMirror(types.CompilerDirectives_TruffleBoundary));
-                builder.tree(GeneratorUtils.createShouldNotReachHere("This getter method cannot be used for uncached node versions as it requires child nodes to be present."));
+                builder.startThrow().startNew(context.getType(AssertionError.class));
+                builder.doubleQuote("This getter method cannot be used for uncached node versions as it requires child nodes to be present.");
+                builder.end().end();
             } else {
                 if (child.getCardinality().isMany()) {
                     builder.startReturn().startNewArray((ArrayType) child.getOriginalType(), null);
@@ -3720,8 +3726,8 @@ public class FlatNodeGenFactory {
         }
 
         SpecializationData[] specializations;
-        if (specialization.getUncachedSpecialization() != null) {
-            specializations = new SpecializationData[]{specialization, specialization.getUncachedSpecialization()};
+        if (specialization.getExcludeCompanion() != null) {
+            specializations = new SpecializationData[]{specialization, specialization.getExcludeCompanion()};
         } else {
             specializations = new SpecializationData[]{specialization};
         }
@@ -4064,23 +4070,16 @@ public class FlatNodeGenFactory {
                 }
                 if (castType == null) {
                     CodeTreeBuilder noCast = new CodeTreeBuilder(null);
-                    if (cache.isAdopt()) {
-                        noCast.startCall(insertTarget, insertName);
-                    }
+                    noCast.startCall(insertTarget, insertName);
                     noCast.tree(value);
-                    if (cache.isAdopt()) {
-                        noCast.end();
-                    }
+                    noCast.end();
                     value = noCast.build();
                 } else {
                     builder.declaration(cache.getDefaultExpression().getResolvedType(), fieldName, value);
-                    if (cache.isAdopt()) {
-                        builder.startIf().string(fieldName).instanceOf(castType).end().startBlock();
-                        builder.startStatement();
-                        builder.startCall(insertTarget, insertName);
-                        builder.startGroup().cast(castType).string(fieldName).end();
-                        builder.end().end();
-                    }
+                    builder.startIf().string(fieldName).instanceOf(castType).end().startBlock();
+                    builder.startStatement().startCall(insertTarget, insertName);
+                    builder.startGroup().cast(castType).string(fieldName).end();
+                    builder.end().end();
                     builder.end();
                     value = CodeTreeBuilder.singleString(fieldName);
                 }
