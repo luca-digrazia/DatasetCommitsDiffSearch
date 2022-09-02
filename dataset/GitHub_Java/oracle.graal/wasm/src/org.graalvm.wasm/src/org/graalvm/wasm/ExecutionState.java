@@ -56,6 +56,7 @@ public class ExecutionState {
     private IntArrayList continuationReturnLength;
     private ArrayList<int[]> branchTables;
     private boolean reachable;
+    private ByteArrayList endReachableAt;
 
     public ExecutionState() {
         this.stackSize = 0;
@@ -67,6 +68,7 @@ public class ExecutionState {
         this.continuationReturnLength = new IntArrayList();
         this.branchTables = new ArrayList<>();
         this.reachable = true;
+        this.endReachableAt = new ByteArrayList();
     }
 
     public boolean isReachable() {
@@ -75,6 +77,22 @@ public class ExecutionState {
 
     public void setReachable(boolean reachable) {
         this.reachable = reachable;
+    }
+
+    public boolean isEndReachableAt(int offset) {
+        return endReachableAt.get(endReachableAt.size() - 1 - offset) != 0;
+    }
+
+    public void setEndReachableAt(int offset, boolean reachable) {
+        endReachableAt.set(endReachableAt.size() - 1 - offset, (byte) (reachable ? 1 : 0));
+    }
+
+    public void pushEndReachability(boolean r) {
+        endReachableAt.add((byte) (r ? 1 : 0));
+    }
+
+    public boolean popEndReachability() {
+        return endReachableAt.popBack() != 0;
     }
 
     public void push() {
