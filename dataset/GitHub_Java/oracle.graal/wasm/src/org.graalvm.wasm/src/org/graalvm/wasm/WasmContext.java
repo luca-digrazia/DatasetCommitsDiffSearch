@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,13 +40,17 @@
  */
 package org.graalvm.wasm;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.source.Source;
 import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.exception.WasmValidationException;
 import org.graalvm.wasm.predefined.BuiltinModule;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 public final class WasmContext {
     private final Env env;
@@ -55,7 +59,7 @@ public final class WasmContext {
     private final GlobalRegistry globals;
     private final TableRegistry tableRegistry;
     private final Linker linker;
-    private final Map<String, WasmInstance> moduleInstances;
+    private Map<String, WasmInstance> moduleInstances;
     private int moduleNameCount;
 
     public static WasmContext getCurrent() {
@@ -69,9 +73,14 @@ public final class WasmContext {
         this.tableRegistry = new TableRegistry();
         this.memoryRegistry = new MemoryRegistry();
         this.moduleInstances = new LinkedHashMap<>();
-        this.linker = new Linker();
+        this.linker = new Linker(language);
         this.moduleNameCount = 0;
         instantiateBuiltinInstances();
+    }
+
+    public CallTarget parse(Source source) {
+        // TODO: Not used -- can we remove this?
+        return env.parsePublic(source);
     }
 
     public Env environment() {
@@ -98,9 +107,14 @@ public final class WasmContext {
         return linker;
     }
 
-    @SuppressWarnings("unused")
-    public Object getScope() {
-        return new WasmScope(moduleInstances);
+    public Iterable<Scope> getTopScopes() {
+        // Go through all WasmModules parsed with this context, and create a Scope for each of them.
+        ArrayList<Scope> scopes = new ArrayList<>();
+        for (Map.Entry<String, WasmInstance> entry : moduleInstances.entrySet()) {
+            Scope scope = Scope.newBuilder(entry.getKey(), entry.getValue()).build();
+            scopes.add(scope);
+        }
+        return scopes;
     }
 
     /**
@@ -152,26 +166,10 @@ public final class WasmContext {
     }
 
     public WasmInstance readInstance(WasmModule module) {
-        if (moduleInstances.containsKey(module.name())) {
-            throw WasmExecutionException.create(null, "Module " + module.name() + " is already instantiated in this context.");
-        }
         final WasmInstance instance = new WasmInstance(module, module.storeConstantsPolicy());
         final BinaryParser reader = new BinaryParser(language, module);
         reader.readInstance(this, instance);
         this.register(instance);
         return instance;
-    }
-
-    public void reinitInstance(WasmInstance instance) {
-        // Note: this is not a complete and correct instantiation as defined in
-        // https://webassembly.github.io/spec/core/exec/modules.html#instantiation
-        // For testing only.
-        final BinaryParser reader = new BinaryParser(language, instance.module());
-        reader.resetGlobalState(this, instance);
-        reader.resetMemoryState(this, instance);
-        final WasmFunction startFunction = instance.symbolTable().startFunction();
-        if (startFunction != null) {
-            instance.target(startFunction.index());
-        }
     }
 }

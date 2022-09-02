@@ -76,7 +76,7 @@ public class Instance extends Dictionary {
         this.importObject = importObject;
         final WasmContext instanceContext = WasmContext.getCurrent();
         this.instance = instantiateModule(instanceContext);
-        instanceContext.linker().tryLink(instance);
+        instanceContext.linker().tryLink();
         this.exportObject = initializeExports(instanceContext);
         addMembers(new Object[]{
                         "module", this.module,
