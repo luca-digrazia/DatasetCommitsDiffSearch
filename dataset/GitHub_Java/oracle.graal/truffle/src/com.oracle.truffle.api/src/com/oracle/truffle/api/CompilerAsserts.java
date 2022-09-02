@@ -57,7 +57,7 @@ public final class CompilerAsserts {
      * for exceptional code paths or rare code paths that should never be included in a compilation
      * unit. See {@link CompilerDirectives#transferToInterpreter()} for the corresponding compiler
      * directive.
-     *
+     * 
      * @since 0.8 or earlier
      */
     public static void neverPartOfCompilation() {
@@ -76,14 +76,10 @@ public final class CompilerAsserts {
     }
 
     /**
-     * Assertion that the corresponding value is reduced to a constant during compilation. This is,
-     * for example, useful to assert that an array has always the same size, although the actual
-     * value is only known at run-time. In most cases, it is preferred to use
-     * {@link CompilerAsserts#partialEvaluationConstant(Object)} and its specialized variants.
+     * Assertion that the corresponding value is reduced to a constant during compilation.
      *
      * @param value the value that must be constant during compilation
      * @since 0.8 or earlier
-     * @see CompilerAsserts#partialEvaluationConstant(Object)
      */
     public static <T> void compilationConstant(Object value) {
         if (!CompilerDirectives.isCompilationConstant(value)) {
@@ -93,68 +89,60 @@ public final class CompilerAsserts {
 
     /**
      * Assertion that the corresponding value is reduced to a constant during the initial partial
-     * evaluation phase. Compared with {@link CompilerAsserts#compilationConstant(Object)}, the
-     * constantness of the value is checked much earlier in the compilation pipeline. It should
-     * therefore be preferred, also because its specialized variants avoid boxing.
+     * evaluation phase.
      *
      * @param value the value that must be constant during compilation
      * @since 0.8 or earlier
-     * @see CompilerAsserts#compilationConstant(Object)
      */
     public static <T> void partialEvaluationConstant(Object value) {
     }
 
     /**
-     * Specialized version of {@link CompilerAsserts#compilationConstant(Object)} for
-     * <code>boolean</code> values.
+     * Assertion that the corresponding primitive boolean value is reduced to a constant during the
+     * initial partial evaluation phase.
      *
      * @param value the value that must be constant during partial evaluation.
-     * @since 19.3
-     * @see CompilerAsserts#partialEvaluationConstant(Object)
+     * @since 19.2
      */
     public static <T> void partialEvaluationConstant(boolean value) {
     }
 
     /**
-     * Specialized version of {@link CompilerAsserts#compilationConstant(Object)} for
-     * <code>int</code> values.
+     * Assertion that the corresponding primitive int value is reduced to a constant during the
+     * initial partial evaluation phase.
      *
      * @param value the value that must be constant during partial evaluation.
-     * @since 19.3
-     * @see CompilerAsserts#partialEvaluationConstant(Object)
+     * @since 19.2
      */
     public static <T> void partialEvaluationConstant(int value) {
     }
 
     /**
-     * Specialized version of {@link CompilerAsserts#compilationConstant(Object)} for
-     * <code>float</code> values.
+     * Assertion that the corresponding primitive float value is reduced to a constant during the
+     * initial partial evaluation phase.
      *
      * @param value the value that must be constant during partial evaluation.
-     * @since 19.3
-     * @see CompilerAsserts#partialEvaluationConstant(Object)
+     * @since 19.2
      */
     public static <T> void partialEvaluationConstant(float value) {
     }
 
     /**
-     * Specialized version of {@link CompilerAsserts#compilationConstant(Object)} for
-     * <code>long</code> values.
+     * Assertion that the corresponding primitive long value is reduced to a constant during the
+     * initial partial evaluation phase.
      *
      * @param value the value that must be constant during partial evaluation.
-     * @since 19.3
-     * @see CompilerAsserts#partialEvaluationConstant(Object)
+     * @since 19.2
      */
     public static <T> void partialEvaluationConstant(long value) {
     }
 
     /**
-     * Specialized version of {@link CompilerAsserts#compilationConstant(Object)} for
-     * <code>double</code> values.
+     * Assertion that the corresponding primitive double value is reduced to a constant during the
+     * initial partial evaluation phase.
      *
      * @param value the value that must be constant during partial evaluation.
-     * @since 19.3
-     * @see CompilerAsserts#partialEvaluationConstant(Object)
+     * @since 19.2
      */
     public static <T> void partialEvaluationConstant(double value) {
     }
