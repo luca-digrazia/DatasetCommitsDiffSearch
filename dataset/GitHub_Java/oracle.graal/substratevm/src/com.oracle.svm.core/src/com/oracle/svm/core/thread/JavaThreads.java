@@ -59,6 +59,7 @@ import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.FeebleReferenceList;
+import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.jdk.ManagementSupport;
 import com.oracle.svm.core.jdk.StackTraceUtils;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
@@ -173,15 +174,10 @@ public abstract class JavaThreads {
         return toTarget(thread).sleepParkEvent;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     protected static boolean wasStartedByCurrentIsolate(IsolateThread thread) {
         Thread javaThread = currentThread.get(thread);
-        return wasStartedByCurrentIsolate(javaThread);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    protected static boolean wasStartedByCurrentIsolate(Thread thread) {
-        return toTarget(thread).wasStartedByCurrentIsolate;
+        return toTarget(javaThread).wasStartedByCurrentIsolate;
     }
 
     /* End of accessor functions. */
@@ -233,9 +229,9 @@ public abstract class JavaThreads {
      */
     @NeverInline("Must not be inlined in a caller that has an exception handler: We only support InvokeNode and not InvokeWithExceptionNode between a CFunctionPrologueNode and CFunctionEpilogueNode")
     private static void joinAllNonDaemonsTransition(int expectedNonDaemonThreads) {
-        CFunctionPrologueNode.cFunctionPrologue(StatusSupport.STATUS_IN_NATIVE);
+        CFunctionPrologueNode.cFunctionPrologue();
         joinAllNonDaemonsInNative(expectedNonDaemonThreads);
-        CFunctionEpilogueNode.cFunctionEpilogue(StatusSupport.STATUS_IN_NATIVE);
+        CFunctionEpilogueNode.cFunctionEpilogue();
     }
 
     @Uninterruptible(reason = "Must not stop while in native.")
@@ -290,6 +286,7 @@ public abstract class JavaThreads {
      */
     public static boolean ensureJavaThread(String name, ThreadGroup group, boolean asDaemon) {
         if (currentThread.get() == null) {
+            Heap.getHeap().attachThread(CurrentIsolate.getCurrentThread());
             assignJavaThread(JavaThreads.fromTarget(new Target_java_lang_Thread(name, group, asDaemon)), true);
             return true;
         }
@@ -355,6 +352,8 @@ public abstract class JavaThreads {
     public static void detachThread(IsolateThread vmThread) {
         VMThreads.THREAD_MUTEX.assertIsOwner("Must hold the VMThreads mutex");
         assert StatusSupport.isStatusIgnoreSafepoints(vmThread) || VMOperation.isInProgress();
+
+        Heap.getHeap().detachThread(vmThread);
 
         // Detach ParkEvents for this thread, if any.
         final Thread thread = currentThread.get(vmThread);
@@ -507,6 +506,7 @@ public abstract class JavaThreads {
     @SuppressFBWarnings(value = "Ru", justification = "We really want to call Thread.run and not Thread.start because we are in the low-level thread start routine")
     protected static void threadStartRoutine(ObjectHandle threadHandle) {
         Thread thread = ObjectHandles.getGlobal().get(threadHandle);
+        Heap.getHeap().attachThread(CurrentIsolate.getCurrentThread());
         assignJavaThread(thread, false);
         ObjectHandles.getGlobal().destroy(threadHandle);
 
