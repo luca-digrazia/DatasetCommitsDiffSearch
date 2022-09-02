@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,14 +31,12 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining.CallTreeNodeVisitor;
 
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeClass;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 
 /**
  * Traces all polymorphic and generic nodes after each successful Truffle compilation.
@@ -56,17 +54,13 @@ public final class TraceASTCompilationListener extends AbstractGraalTruffleRunti
     @Override
     public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graphInfo, CompilationResultInfo compilationResultInfo) {
         if (target.getOptionValue(PolyglotCompilerOptions.TraceCompilationAST)) {
-            StringWriter logMessage = new StringWriter();
-            try (PrintWriter out = new PrintWriter(logMessage)) {
-                printCompactTree(out, target, inliningDecision);
-            }
-            runtime.logEvent(target, 0, "opt AST", target.toString(), target.getDebugProperties(inliningDecision), logMessage.toString());
+            runtime.logEvent(0, "opt AST", target.toString(), target.getDebugProperties(inliningDecision));
+            printCompactTree(target, inliningDecision);
         }
     }
 
-    private static void printCompactTree(PrintWriter out, OptimizedCallTarget target, TruffleInlining inliningDecision) {
+    private void printCompactTree(OptimizedCallTarget target, TruffleInlining inliningDecision) {
         target.accept(new CallTreeNodeVisitor() {
-            private boolean newLine = false;
 
             @Override
             public boolean visit(List<TruffleInlining> decisionStack, Node node) {
@@ -79,16 +73,12 @@ public final class TraceASTCompilationListener extends AbstractGraalTruffleRunti
                     indent.append("  ");
                 }
                 Node parent = node.getParent();
-                if (newLine) {
-                    out.println();
-                } else {
-                    newLine = true;
-                }
+
                 if (parent == null) {
-                    out.printf("%s%s", indent, node.getClass().getSimpleName());
+                    runtime.log(String.format("%s%s", indent, node.getClass().getSimpleName()));
                 } else {
                     String fieldName = getFieldName(parent, node);
-                    out.printf("%s%s = %s", indent, fieldName, node.getClass().getSimpleName());
+                    runtime.log(String.format("%s%s = %s", indent, fieldName, node.getClass().getSimpleName()));
                 }
                 return true;
             }
