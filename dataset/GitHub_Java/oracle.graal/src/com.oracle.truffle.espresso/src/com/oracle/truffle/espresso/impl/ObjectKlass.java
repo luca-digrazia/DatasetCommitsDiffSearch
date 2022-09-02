@@ -28,9 +28,7 @@ import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.classfile.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.InnerClassesAttribute;
@@ -51,6 +49,7 @@ import com.oracle.truffle.espresso.substitutions.Host;
  */
 public final class ObjectKlass extends Klass {
 
+    public static final boolean VERIFY = true;
     public static final ObjectKlass[] EMPTY_ARRAY = new ObjectKlass[0];
 
     private final EnclosingMethodAttribute enclosingMethod;
@@ -195,11 +194,10 @@ public final class ObjectKlass extends Klass {
         return isPrepared() || isInitialized();
     }
 
-    @ExplodeLoop
     private synchronized void actualInit() {
         if (!(isInitializedOrPrepared())) { // Check under lock
             if (initState == ERRONEOUS) {
-                throw getMeta().throwExWithMessage(NoClassDefFoundError.class, "Erroneous class: " + getName());
+                throw new NoClassDefFoundError("Erroneous class: " + getName());
             }
             initState = PREPARED;
             if (getSuperKlass() != null) {
@@ -510,15 +508,14 @@ public final class ObjectKlass extends Klass {
     }
 
     private void verifyKlass() {
-        if (EspressoOptions.ENABLE_VERIFICATION) {
+        if (VERIFY) {
             for (Method m : declaredMethods) {
                 try {
                     MethodVerifier.verify(m);
-                } catch (VerifyError | ClassFormatError | IncompatibleClassChangeError | NoClassDefFoundError e) {
+                } catch (VerifyError e) {
                     System.err.println(getType() + "." + m.getName());
                     new BytecodeStream(m.getCodeAttribute().getCode()).printBytecode(this);
-                    setErroneous();
-                    throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
+                    throw e;
                 }
             }
 

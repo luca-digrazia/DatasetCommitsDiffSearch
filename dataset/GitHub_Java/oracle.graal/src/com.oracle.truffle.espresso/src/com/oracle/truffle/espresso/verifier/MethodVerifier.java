@@ -427,7 +427,6 @@ public final class MethodVerifier implements ContextAccess {
 
     // JSR BCI states
     static private final byte RETURNED_TO = 64;
-    static private final byte EXPLORED = -128;
     // This state is accompanied by the BCI of the RET instruction that caused it.
     // It is of the form (ret_bci << 16) | RETURNED_TO
 
@@ -470,10 +469,6 @@ public final class MethodVerifier implements ContextAccess {
      * Utility for ease of use in Espresso
      *
      * @param m the method to verify
-     * 
-     * @throws VerifyError
-     * @throws NoClassDefFoundError
-     * @throws ClassFormatError
      */
     public static void verify(Method m) {
         CodeAttribute codeAttribute = m.getCodeAttribute();
@@ -884,8 +879,6 @@ public final class MethodVerifier implements ContextAccess {
                 }
                 stack = frame.extractStack(maxStack);
                 locals = frame.extractLocals();
-                // Propagate subroutine modifications
-                locals.subRoutineModifications = locals_.subRoutineModifications;
             }
             /**
              * Return condition: a successful merge into an already verified branch target.
@@ -1238,20 +1231,16 @@ public final class MethodVerifier implements ContextAccess {
                 // @formatter:on
                 case JSR: // fall through
                 case JSR_W: {
-                    if (majorVersion >= 50) {
+                    if (majorVersion >= 51) {
                         throw new VerifyError("JSR/RET bytecode in version >= 51");
                     }
-                    if (stackFrames[BCI] == null) {
-                        stackFrames[BCI] = spawnStackFrame(stack, locals);
-                    }
                     stack.push(new ReturnAddressOperand(BCI));
-                    locals.subRoutineModifications = new SubroutineModificationStack(locals.subRoutineModifications, new boolean[maxLocals], BCI);
                     branch(code.readBranchDest(BCI), stack, locals);
                     BCIstates[BCI] = DONE;
                     return BCI;
                 }
                 case RET: {
-                    if (majorVersion >= 50) {
+                    if (majorVersion >= 51) {
                         throw new VerifyError("JSR/RET bytecode in version >= 51");
                     }
                     ReturnAddressOperand ra = locals.loadReturnAddress(code.readLocalIndex(BCI));
@@ -1262,8 +1251,7 @@ public final class MethodVerifier implements ContextAccess {
                             }
                         }
                         BCIstates[target] = RETURNED_TO | (BCI << 16);
-                        Locals toMerge = getSubroutineReturnLocals(target, locals);
-                        branch(code.nextBCI(target), stack, toMerge);
+                        branch(code.nextBCI(target), stack, locals);
                     }
                     return BCI;
                 }
@@ -1416,7 +1404,7 @@ public final class MethodVerifier implements ContextAccess {
 
                     // Check guest is not invoking <clinit>
                     if (calledMethodName == Name.CLINIT) {
-                        if (curOpcode == INVOKESTATIC || curOpcode == INVOKEVIRTUAL || curOpcode == INVOKESPECIAL) {
+                        if (curOpcode == INVOKESTATIC || curOpcode == INVOKEVIRTUAL) {
                             throw new ClassFormatError("Invocation of class initializer!");
                         }
                         throw new VerifyError("Invocation of class initializer!");
@@ -1689,29 +1677,6 @@ public final class MethodVerifier implements ContextAccess {
             // @formatter:on
             return code.nextBCI(BCI);
         }
-    }
-
-    private Locals getSubroutineReturnLocals(Integer target, Locals locals) {
-        boolean[] subroutineModifs = locals.subRoutineModifications.subRoutineModifications;
-        SubroutineModificationStack nested = locals.subRoutineModifications.next;
-        Locals jsrLocals = stackFrames[target].extractLocals();
-        if (subroutineModifs == null) {
-            throw new VerifyError("RET outside of a subroutine");
-        }
-        Operand[] registers = new Operand[maxLocals];
-        for (int i = 0; i < maxLocals; i++) {
-            if (subroutineModifs[i]) {
-                registers[i] = locals.registers[i];
-                if (nested != null) {
-                    nested.subRoutineModifications[i] = true;
-                }
-            } else {
-                registers[i] = jsrLocals.registers[i];
-            }
-        }
-        Locals res = new Locals(registers);
-        res.subRoutineModifications = nested;
-        return res;
     }
 
     private boolean checkReceiverSpecialAccess(Operand stackOp) {
