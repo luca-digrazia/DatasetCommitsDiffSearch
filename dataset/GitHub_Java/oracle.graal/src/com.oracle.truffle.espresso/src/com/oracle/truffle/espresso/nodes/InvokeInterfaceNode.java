@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -60,8 +60,7 @@ public abstract class InvokeInterfaceNode extends QuickNode {
         return indirectCallNode.call(methodLookup(receiver, itableIndex, declaringKlass).getCallTarget(), arguments);
     }
 
-    InvokeInterfaceNode(Method resolutionSeed, int top, int curBCI) {
-        super(top, curBCI);
+    InvokeInterfaceNode(Method resolutionSeed) {
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
         this.itableIndex = resolutionSeed.getITableIndex();
@@ -79,12 +78,12 @@ public abstract class InvokeInterfaceNode extends QuickNode {
     }
 
     @Override
-    public final int execute(final VirtualFrame frame) {
+    public final int invoke(final VirtualFrame frame, int top) {
         // Method signature does not change across methods.
         // Can safely use the constant signature from `resolutionSeed` instead of the non-constant
         // signature from the lookup.
         // TODO(peterssen): Maybe refrain from exposing the whole root node?.
-        BytecodeNode root = getBytecodesNode();
+        BytecodeNode root = (BytecodeNode) getParent();
         // TODO(peterssen): IsNull Node?.
         final StaticObject receiver = nullCheck(root.peekReceiver(frame, top, resolutionSeed));
         assert receiver != null;

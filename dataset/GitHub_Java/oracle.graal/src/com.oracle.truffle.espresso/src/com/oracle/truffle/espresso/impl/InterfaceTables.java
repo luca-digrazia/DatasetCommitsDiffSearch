@@ -262,11 +262,11 @@ class InterfaceTables {
             }
             if (!virtualMethod.getDeclaringKlass().isInterface()) {
                 // Current method is a class method: no need to resolve maximally-specific.
-                continue;
+                return;
             }
             Method interfMethod = interfMethods[i];
             if (interfMethod == virtualMethod) {
-                continue;
+                return;
             }
             Method result = resolveMaximallySpecific(virtualMethod, interfMethod);
             if (result != virtualMethod) {
