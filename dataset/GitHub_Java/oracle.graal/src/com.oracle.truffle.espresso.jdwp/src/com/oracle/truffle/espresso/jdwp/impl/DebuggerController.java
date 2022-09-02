@@ -474,7 +474,7 @@ public final class DebuggerController implements ContextsListener {
         }
     }
 
-    private static void runJobs(List<Callable<Void>> jobs) {
+    private void runJobs(List<Callable<Void>> jobs) {
         for (Callable<Void> job : jobs) {
             try {
                 job.call();

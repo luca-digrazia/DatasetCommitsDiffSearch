@@ -24,7 +24,6 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
-import java.util.Arrays;
 import java.util.regex.Pattern;
 
 public final class RequestFilter {
@@ -33,7 +32,8 @@ public final class RequestFilter {
     private final byte eventKind;
     private final byte suspendPolicy;
     private Pattern[] classExcludePatterns = new Pattern[0];
-    private KlassRef[] klassRefPatterns = new KlassRef[0];
+    private final KlassRef[] klassRefPatterns;
+    private int nextIndex;
     private int count = 0;
     private Object thread;
     private Pattern[] positivePatterns = new Pattern[0];
@@ -41,10 +41,11 @@ public final class RequestFilter {
     private long thisFilterId = 0;
     private StepInfo stepInfo;
 
-    public RequestFilter(int requestId, byte eventKind, byte suspendPolicy) {
+    public RequestFilter(int requestId, byte eventKind, int modifiers, byte suspendPolicy) {
         this.requestId = requestId;
         this.eventKind = eventKind;
         this.suspendPolicy = suspendPolicy;
+        this.klassRefPatterns = new KlassRef[modifiers];
     }
 
     public int getRequestId() {
@@ -56,9 +57,10 @@ public final class RequestFilter {
     }
 
     public void addExcludePattern(Pattern pattern) {
-        int length = classExcludePatterns.length;
-        classExcludePatterns = Arrays.copyOf(classExcludePatterns, length + 1);
-        classExcludePatterns[length] = pattern;
+        Pattern[] temp = new Pattern[classExcludePatterns.length + 1];
+        System.arraycopy(classExcludePatterns, 0, temp, 0, classExcludePatterns.length);
+        temp[classExcludePatterns.length] = pattern;
+        classExcludePatterns = temp;
     }
 
     public void setStepInfo(StepInfo info) {
@@ -70,9 +72,8 @@ public final class RequestFilter {
     }
 
     public void addRefTypeLimit(KlassRef klassRef) {
-        int length = klassRefPatterns.length;
-        klassRefPatterns = Arrays.copyOf(klassRefPatterns, length + 1);
-        klassRefPatterns[length] = klassRef;
+        klassRefPatterns[nextIndex] = klassRef;
+        nextIndex++;
     }
 
     public boolean isKlassExcluded(KlassRef klass) {
@@ -103,21 +104,14 @@ public final class RequestFilter {
     }
 
     public void addPositivePattern(Pattern pattern) {
-        int length = positivePatterns.length;
-        positivePatterns = Arrays.copyOf(positivePatterns, length + 1);
-        positivePatterns[length] = pattern;
+        Pattern[] temp = new Pattern[positivePatterns.length + 1];
+        System.arraycopy(positivePatterns, 0, temp, 0, positivePatterns.length);
+        temp[positivePatterns.length] = pattern;
+        positivePatterns = temp;
     }
 
     public Pattern[] getIncludePatterns() {
         return positivePatterns;
-    }
-
-    public Pattern[] getExcludePatterns() {
-        return classExcludePatterns;
-    }
-
-    public KlassRef[] getKlassRefPatterns() {
-        return klassRefPatterns;
     }
 
     public void addBreakpointInfo(BreakpointInfo info) {
@@ -128,6 +122,9 @@ public final class RequestFilter {
         return breakpointInfo;
     }
 
+    public Pattern[] getExcludePatterns() {
+        return classExcludePatterns;
+    }
 
     public void addThisFilterId(long thisId) {
         this.thisFilterId = thisId;

@@ -70,14 +70,4 @@ public interface VMListener {
      * @return true only if the field has a access breakpoint, false otherwise
      */
     boolean hasFieldAccessBreakpoint(FieldRef field, Object receiver);
-
-    /**
-     * Hold all events until releaseEvents is called.
-     */
-    void holdEvents();
-
-    /**
-     * Send all held events, and stop holding events.
-     */
-    void releaseEvents();
 }
