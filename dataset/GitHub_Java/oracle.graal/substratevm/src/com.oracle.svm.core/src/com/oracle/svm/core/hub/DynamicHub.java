@@ -55,6 +55,7 @@ import java.util.Set;
 import java.util.StringJoiner;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
+import org.graalvm.compiler.core.common.calc.UnsignedMath;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.word.ObjectAccess;
 import org.graalvm.nativeimage.Platform;
@@ -295,12 +296,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      */
     private Object module;
 
-    /**
-     * JDK 11 and later: the class that serves as the host for the nest. All nestmates have the same
-     * host.
-     */
-    private final Class<?> nestHost;
-
     @Platforms(Platform.HOSTED_ONLY.class)
     public void setModule(Object module) {
         this.module = module;
@@ -339,7 +334,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public DynamicHub(String name, HubType hubType, ReferenceType referenceType, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName,
-                    int modifiers, ClassLoader classLoader, boolean isHidden, Class<?> nestHost) {
+                    int modifiers, ClassLoader classLoader, boolean isHidden) {
         this.name = name;
         this.hubType = hubType.getValue();
         this.referenceType = referenceType.getValue();
@@ -351,7 +346,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         this.modifiers = modifiers;
         this.classLoader = classLoader;
         this.isHidden = isHidden;
-        this.nestHost = nestHost;
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -621,17 +615,28 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private boolean isInstance(@SuppressWarnings("unused") Object obj) {
-        throw VMError.shouldNotReachHere("Intrinsified in StandardGraphBuilderPlugins.");
+        throw VMError.shouldNotReachHere("Substituted in SubstrateGraphBuilderPlugins.");
     }
 
     @Substitute
     private Object cast(@SuppressWarnings("unused") Object obj) {
-        throw VMError.shouldNotReachHere("Intrinsified in StandardGraphBuilderPlugins.");
+        throw VMError.shouldNotReachHere("Substituted in SubstrateGraphBuilderPlugins.");
     }
 
     @Substitute
-    private boolean isAssignableFrom(@SuppressWarnings("unused") Class<?> cls) {
-        throw VMError.shouldNotReachHere("Intrinsified in StandardGraphBuilderPlugins.");
+    @TargetElement(name = "isAssignableFrom")
+    private boolean isAssignableFromClass(Class<?> cls) {
+        return isAssignableFromHub(fromClass(cls));
+    }
+
+    public boolean isAssignableFromHub(DynamicHub hub) {
+        int checkTypeID = hub.getTypeID();
+        for (int i = 0; i < assignableFromMatches.length; i += 2) {
+            if (UnsignedMath.belowThan(checkTypeID - assignableFromMatches[i], assignableFromMatches[i + 1])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Substitute
@@ -1323,33 +1328,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @SuppressWarnings({"unused"})
     List<Method> getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes) {
         throw VMError.unsupportedFeature("JDK11OrLater: DynamicHub.getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes)");
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK11OrLater.class)
-    public Class<?> getNestHost() {
-        return nestHost;
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK11OrLater.class)
-    public boolean isNestmateOf(Class<?> c) {
-        return nestHost == DynamicHub.fromClass(c).nestHost;
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK11OrLater.class)
-    private Class<?>[] getNestMembers() {
-        /*
-         * Supporting all nest members is not as easy as supporting only the nest host. It is not
-         * enough to just preserve the result of Class.getNestMembers() returned during image
-         * generation. This would significantly worsen the static analysis quality, because it would
-         * make all nest members reachable if only a single class of the nest is reachable. A full
-         * solution would need to filter the nest members based on reachability, i.e., only add nest
-         * members when they are reachable by the static analysis. If necessary, this can be
-         * implemented though.
-         */
-        throw VMError.unsupportedFeature("Class.getNestMembers is not supported yet");
     }
 
     /*
