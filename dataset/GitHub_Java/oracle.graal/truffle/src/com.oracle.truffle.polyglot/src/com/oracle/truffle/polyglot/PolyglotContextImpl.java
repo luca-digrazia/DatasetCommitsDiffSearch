@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -79,16 +79,12 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.impl.Accessor.CastUnsafe;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.polyglot.HostLanguage.HostContext;
 import com.oracle.truffle.polyglot.PolyglotEngineImpl.CancelExecution;
 
 final class PolyglotContextImpl extends AbstractContextImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
-
-    private static final InteropLibrary UNCACHED = InteropLibrary.getFactory().getUncached();
 
     /**
      * This class isolates static state to optimize when only a single context is used. This
@@ -184,7 +180,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     final PolyglotContextImpl parent;
     volatile Map<String, Value> polyglotBindings; // for direct legacy access
     volatile Value polyglotHostBindings; // for accesses from the polyglot api
-    private final PolyglotBindings polyglotBindingsObject = new PolyglotBindings(this);
     final PolyglotLanguage creator; // creator for internal contexts
     final Map<String, Object> creatorArguments; // special arguments for internal contexts
     final ContextWeakReference weakReference;
@@ -705,14 +700,9 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         synchronized (this) {
             if (this.polyglotBindings == null) {
                 this.polyglotBindings = new ConcurrentHashMap<>();
-                PolyglotBindings bindings = new PolyglotBindings(getHostContext());
-                this.polyglotHostBindings = getAPIAccess().newValue(bindings, new PolyglotBindingsValue(getHostContext(), bindings));
+                this.polyglotHostBindings = getAPIAccess().newValue(polyglotBindings, new PolyglotBindingsValue(getHostContext()));
             }
         }
-    }
-
-    public Object getPolyglotBindingsObject() {
-        return polyglotBindingsObject;
     }
 
     void checkClosed() {
@@ -859,22 +849,16 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     @TruffleBoundary
     private static void printResult(PolyglotLanguageContext languageContext, Object result) {
-        if (!LANGUAGE.isVisible(languageContext.env, result)) {
-            return;
-        }
-        String stringResult;
-        try {
-            stringResult = UNCACHED.asString(UNCACHED.toDisplayString(languageContext.getLanguageView(result), true));
-        } catch (UnsupportedMessageException e) {
-            throw new AssertionError(e);
-        }
-        try {
-            OutputStream out = languageContext.context.config.out;
-            out.write(stringResult.getBytes(StandardCharsets.UTF_8));
-            out.write(System.getProperty("line.separator").getBytes(StandardCharsets.UTF_8));
-        } catch (IOException ioex) {
-            // out stream has problems.
-            throw new IllegalStateException(ioex);
+        String stringResult = LANGUAGE.toStringIfVisible(languageContext.env, result, true);
+        if (stringResult != null) {
+            try {
+                OutputStream out = languageContext.context.config.out;
+                out.write(stringResult.getBytes(StandardCharsets.UTF_8));
+                out.write(System.getProperty("line.separator").getBytes(StandardCharsets.UTF_8));
+            } catch (IOException ioex) {
+                // out stream has problems.
+                throw new IllegalStateException(ioex);
+            }
         }
     }
 

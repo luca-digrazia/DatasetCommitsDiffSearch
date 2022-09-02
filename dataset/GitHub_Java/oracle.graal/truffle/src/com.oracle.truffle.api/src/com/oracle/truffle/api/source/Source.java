@@ -1913,17 +1913,6 @@ public abstract class Source {
         }
     }
 
-    /**
-     * Resets cached sources after native image generation.
-     *
-     * NOTE: this method is called reflectively by downstream projects
-     * {@code com.oracle.svm.truffle.TruffleFeature}.
-     */
-    @SuppressWarnings("unused")
-    private static void resetNativeImageState() {
-        SOURCES.resetNativeImageState();
-    }
-
     static {
         // force loading source accessor
         SourceAccessor.load();
