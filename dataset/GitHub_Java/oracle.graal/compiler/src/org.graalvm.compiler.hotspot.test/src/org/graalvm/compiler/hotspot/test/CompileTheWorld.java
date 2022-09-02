@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1102,7 +1102,7 @@ public final class CompileTheWorld {
         public static final OptionKey<String> Config = new OptionKey<>(null);
         public static final OptionKey<Boolean> MultiThreaded = new OptionKey<>(false);
         public static final OptionKey<Integer> Threads = new OptionKey<>(0);
-        public static final OptionKey<Boolean> InvalidateInstalledCode = new OptionKey<>(true);
+        public static final OptionKey<Boolean> InvalidateInstalledCode = new OptionKey<>(false);
 
         // @formatter:off
         static final ReflectionOptionDescriptors DESCRIPTORS = new ReflectionOptionDescriptors(Options.class,
