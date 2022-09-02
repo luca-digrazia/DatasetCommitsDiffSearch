@@ -25,7 +25,6 @@
  */
 package org.graalvm.compiler.core.aarch64.test;
 
-import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.aarch64.AArch64ArithmeticOp.ExtendedAddShiftOp;
 import org.junit.Test;
@@ -156,7 +155,7 @@ public class AArch64ArrayAddressTest extends AArch64MatchRuleTest {
     public static int useArrayInLoop(int[] arr) {
         int ret = 0;
         for (int i = 0; i < arr.length; i++) {
-            ret += GraalDirectives.opaque(arr[i]);
+            ret += arr[i];
         }
         return ret;
     }
