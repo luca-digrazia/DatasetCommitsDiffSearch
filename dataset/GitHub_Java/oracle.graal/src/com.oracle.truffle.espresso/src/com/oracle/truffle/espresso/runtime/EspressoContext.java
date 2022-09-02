@@ -33,6 +33,8 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.espresso.meta.EspressoError;
 import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.api.Assumption;
@@ -41,7 +43,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
@@ -59,7 +60,6 @@ import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
 import com.oracle.truffle.espresso.jdwp.api.VMListener;
 import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
 import com.oracle.truffle.espresso.jni.JniEnv;
-import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.EspressoReference;
 import com.oracle.truffle.espresso.substitutions.JavaVersionUtil;
@@ -86,11 +86,7 @@ public final class EspressoContext {
     private StaticObject mainThreadGroup;
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
-    private final AtomicInteger loaderIdProvider = new AtomicInteger();
-    private final int bootClassLoaderID = getNewLoaderId();
-
     public long initVMDoneMs;
-
     private boolean mainThreadCreated;
     private JDWPContextImpl jdwpContext;
     private VMListener eventListener;
@@ -100,16 +96,8 @@ public final class EspressoContext {
         return logger;
     }
 
-    public int getNewKlassId() {
+    public int getNewId() {
         return klassIdProvider.getAndIncrement();
-    }
-
-    public int getNewLoaderId() {
-        return loaderIdProvider.getAndIncrement();
-    }
-
-    public int getBootClassLoaderID() {
-        return bootClassLoaderID;
     }
 
     private boolean initialized = false;
