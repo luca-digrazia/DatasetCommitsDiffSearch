@@ -56,7 +56,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.test.CompileImmediatelyCheck;
 import com.oracle.truffle.api.nodes.BlockNode;
 import com.oracle.truffle.api.nodes.BlockNode.NodeExecutor;
 import com.oracle.truffle.api.nodes.Node;
@@ -295,8 +294,6 @@ public class OptimizedBlockNodeTest {
         assertValid(target, partialBlocks);
     }
 
-    static boolean compileImmediatly;
-
     @Test
     public void testStartsWithCompilation() {
         OptimizedBlockNode<TestElement> block;
@@ -316,6 +313,8 @@ public class OptimizedBlockNodeTest {
         partialBlocks = block.getPartialBlocks();
         assertValid(target, partialBlocks);
         assertEquals(expectedResult, target.call(1));
+        // do not deoptimize. if aot compiled we don't speculate on the argument
+        assertInvalid(target, partialBlocks, 1);
         assertFalse(elementExecuted[0]);
         assertTrue(elementExecuted[1]);
         assertTrue(elementExecuted[2]);
@@ -481,17 +480,7 @@ public class OptimizedBlockNodeTest {
 
     private static OptimizedCallTarget createTest(BlockNode<?> block) {
         TestRootNode root = new TestRootNode(block, "Block[" + block.getElements().length + "]");
-        OptimizedCallTarget target = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
-        root.accept(new NodeVisitor() {
-            @Override
-            public boolean visit(Node node) {
-                if (node instanceof TestElement) {
-                    ((TestElement) node).onAdopt();
-                }
-                return true;
-            }
-        });
-        return target;
+        return (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
     }
 
     private static OptimizedCallTarget generateSLFunction(Context context, String name, int statements) {
@@ -525,6 +514,14 @@ public class OptimizedBlockNodeTest {
         }
     }
 
+    private static void assertInvalid(OptimizedCallTarget target, PartialBlocks<?> partialBlocks, int startIndex) {
+        assertFalse(target.isValid());
+        for (int i = startIndex; i < partialBlocks.getBlockTargets().length; i++) {
+            OptimizedCallTarget blockTarget = partialBlocks.getBlockTargets()[i];
+            assertFalse(String.valueOf(i), blockTarget.isValid());
+        }
+    }
+
     private static void assertUnexpected(Callable<?> callable, Object result) {
         try {
             callable.call();
@@ -550,8 +547,6 @@ public class OptimizedBlockNodeTest {
         OptimizedCallTarget target = createTest(block);
         target.call();
         target.compile(true);
-
-        compileImmediatly = CompileImmediatelyCheck.isCompileImmediately();
     }
 
     @AfterClass
@@ -605,7 +600,7 @@ public class OptimizedBlockNodeTest {
             CompilerAsserts.partialEvaluationConstant(this.getClass());
             CompilerAsserts.partialEvaluationConstant(elementIndex);
             if (elementIndex >= startsWith) {
-                return node.execute(frame);
+                return super.executeGeneric(frame, node, elementIndex, startsWith);
             }
             CompilerDirectives.transferToInterpreter();
             throw new IllegalArgumentException();
@@ -646,16 +641,20 @@ public class OptimizedBlockNodeTest {
             this.childIndex = childIndex;
         }
 
-        void onAdopt() {
-            root = (TestRootNode) getRootNode();
-        }
-
         public void simulateReplace() {
             childNode.replace(new ElementChildNode());
         }
 
         public Object execute(VirtualFrame frame) {
-            root.elementExecuted[childIndex] = true;
+            if (CompilerDirectives.inInterpreter()) {
+                if (root == null) {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    root = (TestRootNode) getRootNode();
+                }
+            }
+            if (root != null) {
+                root.elementExecuted[childIndex] = true;
+            }
             if (childBlock != null) {
                 return childBlock.executeGeneric(frame, BlockNode.NO_ARGUMENT);
             }

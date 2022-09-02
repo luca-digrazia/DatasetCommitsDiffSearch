@@ -85,11 +85,6 @@ import com.oracle.truffle.api.nodes.BlockNode.NodeExecutor;
  */
 public abstract class BlockNode<T extends Node> extends Node {
 
-    /**
-     * Use when no argument is needed for the block node.
-     *
-     * @since 19.3
-     */
     public static final int NO_ARGUMENT = 0;
 
     @Children private final T[] elements;
@@ -235,7 +230,7 @@ public abstract class BlockNode<T extends Node> extends Node {
 
     /**
      * Returns the elements of the block node. Elements of block nodes are provided using
-     * {@link #create(Node[], NodeExecutor)}.
+     * {@link #create(Node[])}.
      *
      * @since 19.3
      */
@@ -272,13 +267,6 @@ public abstract class BlockNode<T extends Node> extends Node {
         return NodeAccessor.ACCESSOR.createBlockNode(elements, executor);
     }
 
-    /**
-     * Represents a contract how block element nodes can be executed. Designed for the block node
-     * only.
-     *
-     * @see BlockNode
-     * @since 19.3
-     */
     public interface NodeExecutor<T extends Node> {
         /**
          * Executes the block node element without expecting any return value.

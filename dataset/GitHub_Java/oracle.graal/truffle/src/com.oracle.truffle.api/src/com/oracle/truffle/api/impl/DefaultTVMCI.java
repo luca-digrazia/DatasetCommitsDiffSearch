@@ -46,7 +46,7 @@ import com.oracle.truffle.api.impl.Accessor.CastUnsafe;
 import com.oracle.truffle.api.nodes.BlockNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.BlockNode.ElementExecutor;
+import com.oracle.truffle.api.nodes.BlockNode.NodeExecutor;
 
 final class DefaultTVMCI extends TVMCI {
 
@@ -84,7 +84,7 @@ final class DefaultTVMCI extends TVMCI {
     }
 
     @Override
-    protected <T extends Node> BlockNode<T> createBlockNode(T[] elements, ElementExecutor<T> executor) {
+    protected <T extends Node> BlockNode<T> createBlockNode(T[] elements, NodeExecutor<T> executor) {
         return new DefaultBlockNode<>(elements, executor);
     }
 
