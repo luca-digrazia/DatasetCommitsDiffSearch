@@ -421,7 +421,7 @@ public class FlatNodeGenFactory {
     public CodeTypeElement create(CodeTypeElement clazz) {
         if (primaryNode) {
             for (NodeChildData child : node.getChildren()) {
-                clazz.addOptional(createAccessChildMethod(child, false));
+                clazz.addOptional(createAccessChildMethod(child));
             }
 
             for (NodeFieldData field : node.getFields()) {
@@ -554,10 +554,6 @@ public class FlatNodeGenFactory {
         if (node.isUncachable() && node.isGenerateUncached()) {
             CodeTypeElement uncached = GeneratorUtils.createClass(node, null, modifiers(PRIVATE, STATIC, FINAL), "Uncached", node.getTemplateType().asType());
             uncached.getEnclosedElements().addAll(createUncachedFields());
-
-            for (NodeChildData child : node.getChildren()) {
-                uncached.addOptional(createAccessChildMethod(child, true));
-            }
 
             for (ExecutableTypeData type : genericExecutableTypes) {
                 uncached.add(createUncachedExecute(type));
@@ -2201,7 +2197,7 @@ public class FlatNodeGenFactory {
 
     }
 
-    private ExecutableElement createAccessChildMethod(NodeChildData child, boolean uncached) {
+    private ExecutableElement createAccessChildMethod(NodeChildData child) {
         if (child.getAccessElement() != null && child.getAccessElement().getModifiers().contains(Modifier.ABSTRACT)) {
             ExecutableElement getter = (ExecutableElement) child.getAccessElement();
             CodeExecutableElement method = CodeExecutableElement.clone(getter);
@@ -2215,23 +2211,16 @@ public class FlatNodeGenFactory {
             }
 
             CodeTreeBuilder builder = method.createBuilder();
-            if (uncached) {
-                method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
-                builder.startThrow().startNew(context.getType(AssertionError.class));
-                builder.doubleQuote("This getter method cannot be used for uncached node versions as it requires child nodes to be present.");
+            if (child.getCardinality().isMany()) {
+                builder.startReturn().startNewArray((ArrayType) child.getOriginalType(), null);
+                for (NodeExecutionData execution : executions) {
+                    builder.string(accessNodeField(execution));
+                }
                 builder.end().end();
             } else {
-                if (child.getCardinality().isMany()) {
-                    builder.startReturn().startNewArray((ArrayType) child.getOriginalType(), null);
-                    for (NodeExecutionData execution : executions) {
-                        builder.string(accessNodeField(execution));
-                    }
-                    builder.end().end();
-                } else {
-                    for (NodeExecutionData execution : executions) {
-                        builder.startReturn().string(accessNodeField(execution)).end();
-                        break;
-                    }
+                for (NodeExecutionData execution : executions) {
+                    builder.startReturn().string(accessNodeField(execution)).end();
+                    break;
                 }
             }
             return method;
