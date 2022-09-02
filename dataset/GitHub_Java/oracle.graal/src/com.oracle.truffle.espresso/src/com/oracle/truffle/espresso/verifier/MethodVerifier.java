@@ -280,8 +280,6 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
-import com.oracle.truffle.espresso.perf.DebugCloseable;
-import com.oracle.truffle.espresso.perf.DebugTimer;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 
@@ -293,8 +291,6 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
  * given for lesser versions, they are ignored. No fallback for classfile v.50
  */
 public final class MethodVerifier implements ContextAccess {
-    public static final DebugTimer VERIFIER_TIMER = DebugTimer.create("verifier");
-
     // Class info
     private final Klass thisKlass;
     private final RuntimeConstantPool pool;
@@ -536,7 +532,7 @@ public final class MethodVerifier implements ContextAccess {
      */
     private MethodVerifier(CodeAttribute codeAttribute, Method m, boolean useStackMaps) {
         // Extract info from codeAttribute
-        this.code = new BytecodeStream(codeAttribute.getOriginalCode());
+        this.code = new BytecodeStream(codeAttribute.getCode());
         this.maxStack = codeAttribute.getMaxStack();
         this.maxLocals = codeAttribute.getMaxLocals();
         this.bciStates = new int[code.endBCI()];
@@ -581,7 +577,6 @@ public final class MethodVerifier implements ContextAccess {
      * @throws NoClassDefFoundError if Class loading of an operand fails at any point
      * @throws ClassFormatError if classfile is malformed
      */
-    @SuppressWarnings("try")
     public static void verify(Method m) {
         CodeAttribute codeAttribute = m.getCodeAttribute();
         assert !((m.isAbstract() || m.isNative()) && codeAttribute != null) : "Abstract method has code: " + m;
@@ -591,9 +586,7 @@ public final class MethodVerifier implements ContextAccess {
             }
             throw new ClassFormatError("Concrete method has no code attribute: " + m);
         }
-        try (DebugCloseable t = VERIFIER_TIMER.scope(m.getContext().getTimers())) {
-            new MethodVerifier(codeAttribute, m).verify();
-        }
+        new MethodVerifier(codeAttribute, m).verify();
     }
 
     private void initVerifier() {
