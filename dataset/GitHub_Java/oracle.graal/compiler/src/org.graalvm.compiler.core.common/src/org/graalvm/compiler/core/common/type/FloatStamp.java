@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -33,12 +35,13 @@ import java.nio.ByteBuffer;
 import java.util.function.DoubleBinaryOperator;
 
 import org.graalvm.compiler.core.common.LIRKind;
+import org.graalvm.compiler.core.common.calc.ReinterpretUtils;
 import org.graalvm.compiler.core.common.spi.LIRKindTool;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.BinaryOp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.FloatConvertOp;
+import org.graalvm.compiler.core.common.type.ArithmeticOpTable.ReinterpretOp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.UnaryOp;
 import org.graalvm.compiler.debug.GraalError;
-
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -148,6 +151,13 @@ public class FloatStamp extends PrimitiveStamp {
     }
 
     /**
+     * Returns true if NaN is included in the value described by this stamp.
+     */
+    public boolean canBeNaN() {
+        return !nonNaN;
+    }
+
+    /**
      * Returns true if this stamp represents the NaN value.
      */
     public boolean isNaN() {
@@ -176,11 +186,15 @@ public class FloatStamp extends PrimitiveStamp {
         StringBuilder str = new StringBuilder();
         str.append('f');
         str.append(getBits());
-        str.append(nonNaN ? "!" : "");
-        if (lowerBound == upperBound) {
-            str.append(" [").append(lowerBound).append(']');
-        } else if (lowerBound != Double.NEGATIVE_INFINITY || upperBound != Double.POSITIVE_INFINITY) {
-            str.append(" [").append(lowerBound).append(" - ").append(upperBound).append(']');
+        if (hasValues()) {
+            str.append(nonNaN ? "!" : "");
+            if (lowerBound == upperBound) {
+                str.append(" [").append(lowerBound).append(']');
+            } else if (lowerBound != Double.NEGATIVE_INFINITY || upperBound != Double.POSITIVE_INFINITY) {
+                str.append(" [").append(lowerBound).append(" - ").append(upperBound).append(']');
+            }
+        } else {
+            str.append("<empty>");
         }
         return str.toString();
     }
@@ -199,6 +213,12 @@ public class FloatStamp extends PrimitiveStamp {
     public Stamp meet(Stamp otherStamp) {
         if (otherStamp == this) {
             return this;
+        }
+        if (isEmpty()) {
+            return this;
+        }
+        if (otherStamp.isEmpty()) {
+            return otherStamp;
         }
         FloatStamp other = (FloatStamp) otherStamp;
         assert getBits() == other.getBits();
@@ -291,12 +311,76 @@ public class FloatStamp extends PrimitiveStamp {
 
     @Override
     public JavaConstant asConstant() {
-        if (nonNaN && Double.compare(lowerBound, upperBound) == 0) {
+        if (isConstant()) {
             switch (getBits()) {
                 case 32:
                     return JavaConstant.forFloat((float) lowerBound);
                 case 64:
                     return JavaConstant.forDouble(lowerBound);
+            }
+        }
+        return null;
+    }
+
+    private boolean isConstant() {
+        /*
+         * There are many forms of NaNs and any operations on them can silently convert them into
+         * the canonical NaN.
+         *
+         * We need to exclude 0 here since it can contain -0.0 && 0.0 .
+         */
+        return (Double.compare(lowerBound, upperBound) == 0 && nonNaN) && lowerBound != 0;
+    }
+
+    private static FloatStamp stampForConstant(Constant constant) {
+        FloatStamp result;
+        PrimitiveConstant value = (PrimitiveConstant) constant;
+        switch (value.getJavaKind()) {
+            case Float:
+                if (Float.isNaN(value.asFloat())) {
+                    result = new FloatStamp(32, Double.NaN, Double.NaN, false);
+                } else {
+                    result = new FloatStamp(32, value.asFloat(), value.asFloat(), true);
+                }
+                break;
+            case Double:
+                if (Double.isNaN(value.asDouble())) {
+                    result = new FloatStamp(64, Double.NaN, Double.NaN, false);
+                } else {
+                    result = new FloatStamp(64, value.asDouble(), value.asDouble(), true);
+                }
+                break;
+            default:
+                throw GraalError.shouldNotReachHere();
+        }
+        if (result.isConstant()) {
+            return result;
+        }
+        return null;
+    }
+
+    private static Stamp maybeFoldConstant(UnaryOp<?> op, FloatStamp stamp) {
+        if (stamp.isConstant()) {
+            JavaConstant constant = stamp.asConstant();
+            Constant folded = op.foldConstant(constant);
+            if (folded != null) {
+                return FloatStamp.stampForConstant(folded);
+            }
+        }
+        return null;
+    }
+
+    private static Stamp maybeFoldConstant(BinaryOp<?> op, FloatStamp stamp1, FloatStamp stamp2) {
+        if (stamp1.isConstant() && stamp2.isConstant()) {
+            JavaConstant constant1 = stamp1.asConstant();
+            JavaConstant constant2 = stamp2.asConstant();
+            Constant folded = op.foldConstant(constant1, constant2);
+            if (folded != null) {
+                FloatStamp stamp = stampForConstant(folded);
+                if (stamp != null && stamp.isConstant()) {
+                    assert stamp.asConstant().equals(folded);
+                    return stamp;
+                }
             }
         }
         return null;
@@ -321,9 +405,17 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp s) {
+                            if (s.isEmpty()) {
+                                return s;
+                            }
                             FloatStamp stamp = (FloatStamp) s;
+                            Stamp folded = maybeFoldConstant(this, stamp);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return new FloatStamp(stamp.getBits(), -stamp.upperBound(), -stamp.lowerBound(), stamp.isNonNaN());
                         }
+
                     },
 
                     new BinaryOp.Add(false, true) {
@@ -344,8 +436,19 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
-                            // TODO
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return stamp1.unrestricted();
                         }
 
@@ -381,8 +484,19 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
-                            // TODO
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return stamp1.unrestricted();
                         }
 
@@ -418,9 +532,20 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp a, Stamp b) {
-                            // TODO
-                            return a.unrestricted();
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
+                            return stamp1.unrestricted();
                         }
 
                         @Override
@@ -450,17 +575,30 @@ public class FloatStamp extends PrimitiveStamp {
                             assert a.getJavaKind() == b.getJavaKind();
                             switch (a.getJavaKind()) {
                                 case Float:
-                                    return JavaConstant.forFloat(a.asFloat() / b.asFloat());
+                                    float floatDivisor = b.asFloat();
+                                    return (floatDivisor == 0) ? null : JavaConstant.forFloat(a.asFloat() / floatDivisor);
                                 case Double:
-                                    return JavaConstant.forDouble(a.asDouble() / b.asDouble());
+                                    double doubleDivisor = b.asDouble();
+                                    return (doubleDivisor == 0) ? null : JavaConstant.forDouble(a.asDouble() / doubleDivisor);
                                 default:
                                     throw GraalError.shouldNotReachHere();
                             }
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
-                            // TODO
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return stamp1.unrestricted();
                         }
 
@@ -496,8 +634,19 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
-                            // TODO
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return stamp1.unrestricted();
                         }
                     },
@@ -521,6 +670,20 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp s) {
+                            if (s.isEmpty()) {
+                                return s;
+                            }
+                            FloatStamp stamp = (FloatStamp) s;
+                            JavaConstant constant = stamp.asConstant();
+                            if (constant != null) {
+                                Constant folded = foldConstant(constant);
+                                if (folded != null) {
+                                    FloatStamp result = stampForConstant(folded);
+                                    if (result != null && result.isConstant()) {
+                                        return result;
+                                    }
+                                }
+                            }
                             return s.unrestricted();
                         }
                     },
@@ -547,7 +710,19 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return stamp1.unrestricted();
                         }
 
@@ -576,7 +751,9 @@ public class FloatStamp extends PrimitiveStamp {
                                 case Float:
                                     int fa = Float.floatToRawIntBits(a.asFloat());
                                     int fb = Float.floatToRawIntBits(b.asFloat());
-                                    return JavaConstant.forFloat(Float.intBitsToFloat(fa | fb));
+                                    float floatOr = Float.intBitsToFloat(fa | fb);
+                                    assert (fa | fb) == Float.floatToRawIntBits((floatOr));
+                                    return JavaConstant.forFloat(floatOr);
                                 case Double:
                                     long da = Double.doubleToRawLongBits(a.asDouble());
                                     long db = Double.doubleToRawLongBits(b.asDouble());
@@ -587,7 +764,19 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return stamp1.unrestricted();
                         }
 
@@ -627,7 +816,19 @@ public class FloatStamp extends PrimitiveStamp {
                         }
 
                         @Override
-                        public Stamp foldStamp(Stamp stamp1, Stamp stamp2) {
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return stamp1.unrestricted();
                         }
 
@@ -664,7 +865,14 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp s) {
+                            if (s.isEmpty()) {
+                                return s;
+                            }
                             FloatStamp stamp = (FloatStamp) s;
+                            Stamp folded = maybeFoldConstant(this, stamp);
+                            if (folded != null) {
+                                return folded;
+                            }
                             if (stamp.isNaN()) {
                                 return stamp;
                             }
@@ -689,11 +897,109 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp s) {
+                            if (s.isEmpty()) {
+                                return s;
+                            }
+                            FloatStamp stamp = (FloatStamp) s;
+                            Stamp folded = maybeFoldConstant(this, stamp);
+                            if (folded != null) {
+                                return folded;
+                            }
                             return s.unrestricted();
                         }
                     },
 
                     null, null, null,
+
+                    new BinaryOp.Max(true, true) {
+
+                        @Override
+                        public Constant foldConstant(Constant const1, Constant const2) {
+                            PrimitiveConstant a = (PrimitiveConstant) const1;
+                            PrimitiveConstant b = (PrimitiveConstant) const2;
+                            assert a.getJavaKind() == b.getJavaKind();
+                            switch (a.getJavaKind()) {
+                                case Float:
+                                    return JavaConstant.forFloat(Math.max(a.asFloat(), b.asFloat()));
+                                case Double:
+                                    return JavaConstant.forDouble(Math.max(a.asDouble(), b.asDouble()));
+                                default:
+                                    throw GraalError.shouldNotReachHere();
+                            }
+                        }
+
+                        @Override
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
+
+                            return new FloatStamp(stamp1.getBits(), Math.max(stamp1.lowerBound, stamp2.lowerBound), Math.max(stamp1.upperBound, stamp2.upperBound), false);
+                        }
+                    },
+
+                    new BinaryOp.Min(true, true) {
+
+                        @Override
+                        public Constant foldConstant(Constant const1, Constant const2) {
+                            PrimitiveConstant a = (PrimitiveConstant) const1;
+                            PrimitiveConstant b = (PrimitiveConstant) const2;
+                            assert a.getJavaKind() == b.getJavaKind();
+                            switch (a.getJavaKind()) {
+                                case Float:
+                                    return JavaConstant.forFloat(Math.min(a.asFloat(), b.asFloat()));
+                                case Double:
+                                    return JavaConstant.forDouble(Math.min(a.asDouble(), b.asDouble()));
+                                default:
+                                    throw GraalError.shouldNotReachHere();
+                            }
+                        }
+
+                        @Override
+                        public Stamp foldStamp(Stamp s1, Stamp s2) {
+                            if (s1.isEmpty()) {
+                                return s1;
+                            }
+                            if (s2.isEmpty()) {
+                                return s2;
+                            }
+                            FloatStamp stamp1 = (FloatStamp) s1;
+                            FloatStamp stamp2 = (FloatStamp) s2;
+                            Stamp folded = maybeFoldConstant(this, stamp1, stamp2);
+                            if (folded != null) {
+                                return folded;
+                            }
+                            return new FloatStamp(stamp1.getBits(), Math.min(stamp1.lowerBound, stamp2.lowerBound), Math.min(stamp1.upperBound, stamp2.upperBound), false);
+                        }
+                    },
+
+                    new ReinterpretOp() {
+
+                        @Override
+                        public Constant foldConstant(Stamp resultStamp, Constant constant) {
+                            return ReinterpretUtils.foldConstant(resultStamp, constant);
+                        }
+
+                        @Override
+                        public Stamp foldStamp(Stamp resultStamp, Stamp input) {
+                            if (input.isEmpty()) {
+                                return resultStamp.empty();
+                            } else if (resultStamp instanceof IntegerStamp && input instanceof FloatStamp) {
+                                return ReinterpretUtils.floatToInt((FloatStamp) input);
+                            } else {
+                                return resultStamp;
+                            }
+                        }
+                    },
 
                     new FloatConvertOp(F2I) {
 
@@ -705,6 +1011,9 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp stamp) {
+                            if (stamp.isEmpty()) {
+                                return StampFactory.empty(JavaKind.Int);
+                            }
                             FloatStamp floatStamp = (FloatStamp) stamp;
                             assert floatStamp.getBits() == 32;
                             boolean mustHaveZero = !floatStamp.isNonNaN();
@@ -731,6 +1040,9 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp stamp) {
+                            if (stamp.isEmpty()) {
+                                return StampFactory.empty(JavaKind.Long);
+                            }
                             FloatStamp floatStamp = (FloatStamp) stamp;
                             assert floatStamp.getBits() == 32;
                             boolean mustHaveZero = !floatStamp.isNonNaN();
@@ -757,6 +1069,9 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp stamp) {
+                            if (stamp.isEmpty()) {
+                                return StampFactory.empty(JavaKind.Int);
+                            }
                             FloatStamp floatStamp = (FloatStamp) stamp;
                             assert floatStamp.getBits() == 64;
                             boolean mustHaveZero = !floatStamp.isNonNaN();
@@ -783,6 +1098,9 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp stamp) {
+                            if (stamp.isEmpty()) {
+                                return StampFactory.empty(JavaKind.Long);
+                            }
                             FloatStamp floatStamp = (FloatStamp) stamp;
                             assert floatStamp.getBits() == 64;
                             boolean mustHaveZero = !floatStamp.isNonNaN();
@@ -809,6 +1127,9 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp stamp) {
+                            if (stamp.isEmpty()) {
+                                return StampFactory.empty(JavaKind.Double);
+                            }
                             FloatStamp floatStamp = (FloatStamp) stamp;
                             assert floatStamp.getBits() == 32;
                             return StampFactory.forFloat(JavaKind.Double, floatStamp.lowerBound(), floatStamp.upperBound(), floatStamp.isNonNaN());
@@ -825,6 +1146,9 @@ public class FloatStamp extends PrimitiveStamp {
 
                         @Override
                         public Stamp foldStamp(Stamp stamp) {
+                            if (stamp.isEmpty()) {
+                                return StampFactory.empty(JavaKind.Float);
+                            }
                             FloatStamp floatStamp = (FloatStamp) stamp;
                             assert floatStamp.getBits() == 64;
                             return StampFactory.forFloat(JavaKind.Float, (float) floatStamp.lowerBound(), (float) floatStamp.upperBound(), floatStamp.isNonNaN());
