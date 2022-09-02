@@ -40,8 +40,22 @@
  */
 package org.graalvm.wasm.test;
 
-import static junit.framework.TestCase.fail;
-import static org.graalvm.wasm.WasmUtil.prepend;
+import com.oracle.truffle.api.Truffle;
+import junit.framework.AssertionFailedError;
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.EnvironmentAccess;
+import org.graalvm.polyglot.PolyglotException;
+import org.graalvm.polyglot.Source;
+import org.graalvm.polyglot.Value;
+import org.graalvm.wasm.GlobalRegistry;
+import org.graalvm.wasm.WasmContext;
+import org.graalvm.wasm.WasmFunctionInstance;
+import org.graalvm.wasm.WasmInstance;
+import org.graalvm.wasm.memory.WasmMemory;
+import org.graalvm.wasm.test.options.WasmTestOptions;
+import org.graalvm.wasm.utils.cases.WasmCase;
+import org.graalvm.wasm.utils.cases.WasmCaseData;
+import org.junit.Assert;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -61,24 +75,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.EnvironmentAccess;
-import org.graalvm.polyglot.PolyglotException;
-import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
-import org.graalvm.wasm.GlobalRegistry;
-import org.graalvm.wasm.WasmContext;
-import org.graalvm.wasm.WasmFunctionInstance;
-import org.graalvm.wasm.WasmInstance;
-import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.test.options.WasmTestOptions;
-import org.graalvm.wasm.utils.cases.WasmCase;
-import org.graalvm.wasm.utils.cases.WasmCaseData;
-import org.junit.Assert;
-
-import com.oracle.truffle.api.Truffle;
-
-import junit.framework.AssertionFailedError;
+import static junit.framework.TestCase.fail;
+import static org.graalvm.wasm.WasmUtil.prepend;
 
 public abstract class WasmFileSuite extends AbstractWasmSuite {
 
@@ -128,7 +126,7 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
         contextBuilder.option("engine.BackgroundCompilation", "true");
         contextBuilder.option("engine.CompileImmediately", "false");
         contextBuilder.option("engine.Inlining", "false");
-        contextBuilder.option("engine.FirstTierCompilationThreshold", "100");
+        contextBuilder.option("engine.CompilationThreshold", "100");
         return contextBuilder.build();
     }
 
@@ -155,7 +153,7 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
         throw new AssertionFailedError("No start function exported.");
     }
 
-    private static void runInContext(WasmCase testCase, Context context, List<Source> sources, int iterations, String phaseIcon, String phaseLabel) throws IOException {
+    private static void runInContext(WasmCase testCase, Context context, List<Source> sources, int iterations, String phaseIcon, String phaseLabel) {
         try {
             // Whereas the test needs memory to be reset between iterations.
             final boolean requiresZeroMemory = Boolean.parseBoolean(testCase.options().getProperty("zero-memory", "false"));
@@ -164,79 +162,71 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
 
             // This is needed so that we can call WasmContext.getCurrent().
             context.enter();
+
             try {
+                sources.forEach(context::eval);
+            } catch (PolyglotException e) {
+                validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
+                return;
+            }
+
+            final WasmContext wasmContext = WasmContext.getCurrent();
+            final Value mainFunction = findMain(wasmContext);
+
+            resetStatus(System.out, phaseIcon, phaseLabel);
+
+            final String argString = testCase.options().getProperty("argument");
+            final Integer arg = argString == null ? null : Integer.parseInt(argString);
+            ContextState firstIterationContextState = null;
+
+            for (int i = 0; i != iterations; ++i) {
                 try {
-                    sources.forEach(context::eval);
+                    TEST_OUT.reset();
+                    final Value result = arg == null ? mainFunction.execute() : mainFunction.execute(arg);
+                    WasmCase.validateResult(testCase.data().resultValidator(), result, TEST_OUT);
                 } catch (PolyglotException e) {
-                    validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
-                    return;
-                }
-
-                final WasmContext wasmContext = WasmContext.getCurrent();
-                final Value mainFunction = findMain(wasmContext);
-
-                resetStatus(System.out, phaseIcon, phaseLabel);
-
-                final String argString = testCase.options().getProperty("argument");
-                final Integer arg = argString == null ? null : Integer.parseInt(argString);
-                ContextState firstIterationContextState = null;
-
-                for (int i = 0; i != iterations; ++i) {
-                    try {
-                        TEST_OUT.reset();
-                        final Value result = arg == null ? mainFunction.execute() : mainFunction.execute(arg);
-                        WasmCase.validateResult(testCase.data().resultValidator(), result, TEST_OUT);
-                    } catch (PolyglotException e) {
-                        // If no exception is expected and the program returns with success exit
-                        // status, then we check stdout.
-                        if (e.isExit() && testCase.data().expectedErrorMessage() == null) {
-                            Assert.assertEquals("Program exited with non-zero return code.", e.getExitStatus(), 0);
-                            WasmCase.validateResult(testCase.data().resultValidator(), null, TEST_OUT);
-                        } else if (testCase.data().expectedErrorTime() == WasmCaseData.ErrorType.Validation) {
-                            validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
-                            return;
+                    // If no exception is expected and the program returns with success exit status,
+                    // then we check stdout.
+                    if (e.isExit() && testCase.data().expectedErrorMessage() == null) {
+                        Assert.assertEquals("Program exited with non-zero return code.", e.getExitStatus(), 0);
+                        WasmCase.validateResult(testCase.data().resultValidator(), null, TEST_OUT);
+                    } else if (testCase.data().expectedErrorTime() == WasmCaseData.ErrorType.Validation) {
+                        validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
+                        return;
+                    } else {
+                        validateThrown(testCase.data(), WasmCaseData.ErrorType.Runtime, e);
+                    }
+                } catch (Throwable t) {
+                    final RuntimeException e = new RuntimeException("Error during test phase '" + phaseLabel + "'", t);
+                    e.setStackTrace(new StackTraceElement[0]);
+                    throw e;
+                } finally {
+                    // Save context state, and check that it's consistent with the previous one.
+                    if (iterationNeedsStateCheck(i)) {
+                        final ContextState contextState = saveContext(wasmContext);
+                        if (firstIterationContextState == null) {
+                            firstIterationContextState = contextState;
                         } else {
-                            validateThrown(testCase.data(), WasmCaseData.ErrorType.Runtime, e);
+                            assertContextEqual(firstIterationContextState, contextState);
                         }
-                    } catch (Throwable t) {
-                        final RuntimeException e = new RuntimeException("Error during test phase '" + phaseLabel + "'", t);
-                        e.setStackTrace(new StackTraceElement[0]);
-                        throw e;
-                    } finally {
-                        // Save context state, and check that it's consistent with the previous one.
-                        if (iterationNeedsStateCheck(i)) {
-                            final ContextState contextState = saveContext(wasmContext);
-                            if (firstIterationContextState == null) {
-                                firstIterationContextState = contextState;
-                            } else {
-                                assertContextEqual(firstIterationContextState, contextState);
-                            }
-                        }
+                    }
 
-                        // Reset context state.
-                        final boolean reinitMemory = requiresZeroMemory || iterationNeedsStateCheck(i + 1);
-                        if (reinitMemory) {
-                            for (int j = 0; j < wasmContext.memories().count(); ++j) {
-                                wasmContext.memories().memory(j).reset();
-                            }
-                            for (int j = 0; j < wasmContext.tables().tableCount(); ++j) {
-                                wasmContext.tables().table(j).reset();
-                            }
+                    // Reset context state.
+                    final boolean reinitMemory = requiresZeroMemory || iterationNeedsStateCheck(i + 1);
+                    if (reinitMemory) {
+                        for (int j = 0; j < wasmContext.memories().count(); ++j) {
+                            wasmContext.memories().memory(j).reset();
                         }
-                        for (final WasmInstance instance : wasmContext.moduleInstances().values()) {
-                            if (!instance.isBuiltin()) {
-                                wasmContext.reinitInstance(instance, reinitMemory);
-                            }
+                        for (int j = 0; j < wasmContext.tables().tableCount(); ++j) {
+                            wasmContext.tables().table(j).reset();
                         }
-
-                        // Reset stdin
-                        if (wasmContext.environment().in() instanceof ByteArrayInputStream) {
-                            wasmContext.environment().in().reset();
+                    }
+                    for (final WasmInstance instance : wasmContext.moduleInstances().values()) {
+                        if (!instance.isBuiltin()) {
+                            wasmContext.reinitInstance(instance, reinitMemory);
                         }
                     }
                 }
-            } finally {
-                context.leave();
             }
         } finally {
             System.setOut(System.out);
@@ -321,10 +311,9 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
                 Files.write(testFile, "Hello Graal! \uD83D\uDE80".getBytes(StandardCharsets.UTF_8));
             }
 
-            final String stdinString = testCase.options().getProperty("stdin");
-            if (stdinString != null) {
-                final ByteArrayInputStream stdin = new ByteArrayInputStream(stdinString.getBytes(StandardCharsets.UTF_8));
-                contextBuilder.in(stdin);
+            final String stdin = testCase.options().getProperty("stdin");
+            if (stdin != null) {
+                contextBuilder.in(new ByteArrayInputStream(stdin.getBytes(StandardCharsets.UTF_8)));
             }
 
             Context context;

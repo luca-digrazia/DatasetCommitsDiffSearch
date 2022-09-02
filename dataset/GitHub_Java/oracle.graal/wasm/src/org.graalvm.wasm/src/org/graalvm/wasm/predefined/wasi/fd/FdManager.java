@@ -82,7 +82,6 @@ public final class FdManager implements Closeable {
             final TruffleFile virtualDir = env.getPublicTruffleFile(virtualDirPath).normalize();
             final TruffleFile hostDir;
             try {
-                // Currently, we follow symbolic links.
                 hostDir = env.getPublicTruffleFile(hostDirPath).getCanonicalFile();
             } catch (IOException | SecurityException e) {
                 throw WasmException.create(Failure.INVALID_WASI_DIRECTORIES_MAPPING);
