@@ -46,29 +46,23 @@ import java.util.Set;
 
 /**
  * Represents a mapping between {@link String} keys and values. Allows to create {@link OptionKey
- * options} to group/accumulate {@code key=value} pairs, with a common prefix, whose keys are not
+ * options} to group/accumulate {@code key=value} pairs, with a common prefix; whose keys are not
  * known beforehand e.g. user defined properties.
  *
  * @param <T> the class of the map values
  *
- * @since 20.0
+ * @since 19.2
  */
-public abstract class OptionMap<T> {
+public final class OptionMap<T> {
 
-    private static OptionMap<Object> EMPTY = new OptionMap<Object>() {
-        @Override
-        public Object get(String key) {
-            return null;
-        }
+    private static final OptionMap<?> EMPTY = new OptionMap<>(Collections.emptyMap());
 
-        @Override
-        public Set<Map.Entry<String, Object>> entrySet() {
-            return Collections.emptySet();
-        }
-    };
+    final Map<String, T> backingMap;
+    final Map<String, T> readonlyMap;
 
-    OptionMap() {
-        // no user-provided instances
+    OptionMap(Map<String, T> map) {
+        this.backingMap = map;
+        this.readonlyMap = Collections.unmodifiableMap(map);
     }
 
     /**
@@ -76,7 +70,7 @@ public abstract class OptionMap<T> {
      * 
      * @param <T> the class of the map values
      * @return an empty option map
-     * @since 20.0
+     * @since 19.2
      */
     @SuppressWarnings("unchecked")
     public static <T> OptionMap<T> empty() {
@@ -91,28 +85,39 @@ public abstract class OptionMap<T> {
      * @return the value to which the specified key is mapped, or {@code null} if this map contains
      *         no mapping for the key
      *
-     * @since 20.0
+     * @since 19.2
      */
-    public abstract T get(String key);
+    public T get(String key) {
+        return readonlyMap.get(key);
+    }
 
     /**
      * Returns an unmodifiable {@link Set} view of the mappings contained in this map.
      *
      * @return a set view of the mappings contained in this map
      *
-     * @since 20.0
+     * @since 19.2
      */
-    public abstract Set<Map.Entry<String, T>> entrySet();
-
-    @Override
-    public int hashCode() {
-        return entrySet().hashCode();
+    public Set<Map.Entry<String, T>> entrySet() {
+        return readonlyMap.entrySet();
     }
 
+    /**
+     * @since 19.2
+     */
+    @Override
+    public int hashCode() {
+        return readonlyMap.hashCode();
+    }
+
+    /**
+     * @since 19.2
+     */
+    @SuppressWarnings("unchecked")
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof OptionMap) {
-            return entrySet().equals(((OptionMap) obj).entrySet());
+            return readonlyMap.equals(((OptionMap<T>) obj).readonlyMap);
         }
         return false;
     }
