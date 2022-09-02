@@ -34,6 +34,11 @@ import com.oracle.truffle.espresso.jdwp.impl.JDWPVirtualMachine;
 public interface JDWPContext {
 
     /**
+     * @return the Truffle language environment.
+     */
+    TruffleLanguage.Env getEnv();
+
+    /**
      * Rerturns the guest language representation of a host thread
      * @param hostThread
      * @return guest language thread
