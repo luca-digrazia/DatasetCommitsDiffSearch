@@ -391,7 +391,6 @@ import org.graalvm.compiler.nodes.extended.LoadArrayComponentHubNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.extended.MembarNode;
 import org.graalvm.compiler.nodes.extended.StateSplitProxyNode;
-import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.ClassInitializationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
@@ -1405,7 +1404,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (profile == null || profile.getNotRecordedProbability() > 0.0) {
             return null;
         } else {
-            return append(new ValueAnchorNode(null));
+            return BeginNode.prevBegin(lastInstr);
         }
     }
 
@@ -4794,9 +4793,6 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    private static final int SWITCH_DEOPT_UNSEEN = -2;
-    private static final int SWITCH_DEOPT_SEEN = -1;
-
     private void genSwitch(BytecodeSwitch bs) {
         int bci = bci();
         ValueNode value = frameState.pop(JavaKind.Int);
@@ -4814,16 +4810,20 @@ public class BytecodeParser implements GraphBuilderContext {
         ArrayList<BciBlock> actualSuccessors = new ArrayList<>();
         int[] keys = new int[nofCases];
         int[] keySuccessors = new int[nofCasesPlusDefault];
-        int deoptSuccessorIndex = SWITCH_DEOPT_UNSEEN;
+        int deoptSuccessorIndex = -1;
         int nextSuccessorIndex = 0;
         boolean constantValue = value.isConstant();
         for (int i = 0; i < nofCasesPlusDefault; i++) {
             if (i < nofCases) {
                 keys[i] = bs.keyAt(i);
             }
+
             if (!constantValue && isNeverExecutedCode(keyProbabilities[i])) {
-                deoptSuccessorIndex = SWITCH_DEOPT_SEEN;
-                keySuccessors[i] = SWITCH_DEOPT_SEEN;
+                if (deoptSuccessorIndex < 0) {
+                    deoptSuccessorIndex = nextSuccessorIndex++;
+                    actualSuccessors.add(null);
+                }
+                keySuccessors[i] = deoptSuccessorIndex;
             } else {
                 int targetBci = i < nofCases ? bs.targetAt(i) : bs.defaultTarget();
                 SuccessorInfo info = bciToBlockSuccessorIndex.get(targetBci);
@@ -4858,31 +4858,20 @@ public class BytecodeParser implements GraphBuilderContext {
          *
          * The following code rewires deoptimization stub to existing resolved branch target if
          * the target is connected by more than 1 cases.
-         *
-         * If this operation rewires every deoptimization seen to an existing branch, care is
-         * taken that we do not spawn a branch that will never be taken.
          */
-        if (deoptSuccessorIndex == SWITCH_DEOPT_SEEN) {
-            int[] connectedCases = new int[nextSuccessorIndex + 1];
+        if (deoptSuccessorIndex >= 0) {
+            int[] connectedCases = new int[nextSuccessorIndex];
             for (int i = 0; i < nofCasesPlusDefault; i++) {
-                connectedCases[keySuccessors[i] + 1]++;
+                connectedCases[keySuccessors[i]]++;
             }
 
             for (int i = 0; i < nofCasesPlusDefault; i++) {
-                if (keySuccessors[i] == SWITCH_DEOPT_SEEN) {
+                if (keySuccessors[i] == deoptSuccessorIndex) {
                     int targetBci = i < nofCases ? bs.targetAt(i) : bs.defaultTarget();
                     SuccessorInfo info = bciToBlockSuccessorIndex.get(targetBci);
                     int rewiredIndex = info.actualIndex;
-                    if (rewiredIndex >= 0 && connectedCases[rewiredIndex + 1] > 1) {
-                        // Rewire
+                    if (rewiredIndex >= 0 && connectedCases[rewiredIndex] > 1) {
                         keySuccessors[i] = info.actualIndex;
-                    } else {
-                        if (deoptSuccessorIndex == SWITCH_DEOPT_SEEN) {
-                            // Spawn deopt successor if needed.
-                            deoptSuccessorIndex = nextSuccessorIndex++;
-                            actualSuccessors.add(null);
-                        }
-                        keySuccessors[i] = deoptSuccessorIndex;
                     }
                 }
             }

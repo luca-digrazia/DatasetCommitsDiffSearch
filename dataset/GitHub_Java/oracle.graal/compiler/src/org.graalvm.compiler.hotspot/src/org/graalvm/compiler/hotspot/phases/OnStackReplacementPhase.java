@@ -223,8 +223,8 @@ public class OnStackReplacementPhase extends Phase {
                 }
             }
 
-            osr.replaceAtUsages(osrStart, InputType.Guard);
-            osr.replaceAtUsages(osrStart, InputType.Anchor);
+            osr.replaceAtUsages(InputType.Guard, osrStart);
+            osr.replaceAtUsages(InputType.Anchor, osrStart);
         }
         debug.dump(DebugContext.DETAILED_LEVEL, graph, "OnStackReplacement after replacing entry proxies");
         GraphUtil.killCFG(start);
@@ -238,7 +238,6 @@ public class OnStackReplacementPhase extends Phase {
                     MonitorIdNode id = osrState.monitorIdAt(i);
                     ValueNode lockedObject = osrState.lockAt(i);
                     OSRMonitorEnterNode osrMonitorEnter = graph.add(new OSRMonitorEnterNode(lockedObject, id));
-                    osrMonitorEnter.setStateAfter(osrStart.stateAfter());
                     for (Node usage : id.usages()) {
                         if (usage instanceof AccessMonitorNode) {
                             AccessMonitorNode access = (AccessMonitorNode) usage;

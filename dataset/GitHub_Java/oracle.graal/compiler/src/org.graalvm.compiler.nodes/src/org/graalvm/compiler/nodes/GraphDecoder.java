@@ -582,6 +582,7 @@ public class GraphDecoder {
         } else if (node instanceof Invoke) {
             InvokeData invokeData = readInvokeData(methodScope, nodeOrderId, (Invoke) node);
             resultScope = handleInvoke(methodScope, loopScope, invokeData);
+
         } else if (node instanceof ReturnNode || node instanceof UnwindNode) {
             methodScope.returnAndUnwindNodes.add((ControlSinkNode) node);
         } else {
@@ -1747,7 +1748,7 @@ class LoopDetector implements Runnable {
                                 "Value flowing out of loop, but we are not prepared to insert a ProxyNode");
 
                 ProxyPlaceholder proxyPlaceholder = (ProxyPlaceholder) value;
-                ValueProxyNode proxy = ProxyNode.forValue(proxyPlaceholder.value, loopExit);
+                ValueProxyNode proxy = ProxyNode.forValue(proxyPlaceholder.value, loopExit, graph);
                 proxyPlaceholder.setValue(proxy);
                 newValues.add(proxy);
             }
