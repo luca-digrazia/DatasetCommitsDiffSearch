@@ -282,6 +282,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -2217,6 +2218,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
         assert field.isStatic() == (opcode == GETSTATIC);
 
+
         StaticObject receiver = field.isStatic()
                         ? field.getDeclaringKlass().tryInitializeAndGetStatics()
                         : nullCheck(peekAndReleaseObject(frame, top - 1));
@@ -2383,10 +2385,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         @Children private final EspressoInstrumentableNode[] statementNodes;
         @Child private MapperBCI hookBCIToNodeIndex;
 
-        private final EspressoContext context;
-
         InstrumentationSupport(Method method) {
-            this.context = method.getContext();
             LineNumberTable table = method.getLineNumberTable();
 
             if (table != LineNumberTable.EMPTY) {
@@ -2417,11 +2416,11 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             enterAt(frame, nextStatementIndex);
         }
 
-        public void notifyEntry(@SuppressWarnings("unused") VirtualFrame frame) {
+        public void notifyEntry(VirtualFrame frame) {
             // TODO(Gregersen) - implement method entry breakpoint hooks
         }
 
-        public void notifyReturn(@SuppressWarnings("unused") VirtualFrame frame, @SuppressWarnings("unused") int statementIndex, @SuppressWarnings("unused") Object toReturn) {
+        public void notifyReturn(VirtualFrame frame, int statementIndex, Object toReturn) {
             // TODO(Gregersen) - implement method return breakpoint hooks
         }
 
@@ -2435,13 +2434,13 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         }
 
         public void notifyFieldModification(VirtualFrame frame, int index, Field field, StaticObject receiver, Object value) {
-            if (context.getJDWPListener().hasFieldModificationBreakpoint(field, receiver, value)) {
+            if (VMEventListeners.getDefault().hasFieldModificationBreakpoint(field, receiver, value)) {
                 enterAt(frame, index);
             }
         }
 
         public void notifyFieldAccess(VirtualFrame frame, int index, Field field, StaticObject receiver) {
-            if (context.getJDWPListener().hasFieldAccessBreakpoint(field, receiver)) {
+            if (VMEventListeners.getDefault().hasFieldAccessBreakpoint(field, receiver)) {
                 enterAt(frame, index);
             }
         }
