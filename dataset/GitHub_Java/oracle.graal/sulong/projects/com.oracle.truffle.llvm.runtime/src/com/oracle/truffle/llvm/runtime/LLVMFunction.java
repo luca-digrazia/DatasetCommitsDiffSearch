@@ -66,11 +66,11 @@ public final class LLVMFunction extends LLVMSymbol {
         this.path = path;
     }
 
-    public LLVMSourceLocation getSourceLocation() {
+    public final LLVMSourceLocation getSourceLocation() {
         return sourceLocation;
     }
 
-    public void setSourceLocation(LLVMSourceLocation sourceLocation) {
+    public final void setSourceLocation(LLVMSourceLocation sourceLocation) {
         this.sourceLocation = sourceLocation;
     }
 
