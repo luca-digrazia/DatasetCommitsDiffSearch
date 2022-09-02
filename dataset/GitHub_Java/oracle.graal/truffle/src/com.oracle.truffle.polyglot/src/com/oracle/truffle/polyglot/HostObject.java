@@ -49,7 +49,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.GenerateUncached;
-import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -142,12 +141,11 @@ final class HostObject implements TruffleObject {
         }
         return false;
     }
-
-    private boolean isList() {
+    boolean isList() {
         return obj instanceof List;
     }
 
-    private boolean isArray() {
+    boolean isArray() {
         return obj != null && obj.getClass().isArray();
     }
 
@@ -156,6 +154,10 @@ final class HostObject implements TruffleObject {
             return true;
         }
         return false;
+    }
+
+    boolean isList() {
+        return obj instanceof List;
     }
 
     @ExportMessage
@@ -181,7 +183,7 @@ final class HostObject implements TruffleObject {
             if (receiver.isNull()) {
                 return false;
             }
-            return HostInteropReflect.isReadable(receiver, receiver.getLookupClass(), name, receiver.isStaticClass(), receiver.isClass());
+            return HostInteropReflect.isReadable(receiver.getLookupClass(), name, receiver.isStaticClass(), receiver.isClass());
         }
 
     }
@@ -191,8 +193,9 @@ final class HostObject implements TruffleObject {
         if (isNull()) {
             throw UnsupportedMessageException.create();
         }
-        String[] fields = HostInteropReflect.findUniquePublicMemberNames(getEngine(), getLookupClass(), isStaticClass(), isClass(), includeInternal);
-        return HostObject.forObject(fields, this.languageContext);
+        Object obj = VMAccessor.NODES.getSourceVM(getRootNode());
+        String[] fields = HostInteropReflect.findUniquePublicMemberNames((PolyglotEngineImpl) obj, receiver.getLookupClass(), receiver.isStaticClass(), receiver.isClass(), includeInternal);
+        return HostObject.forObject(fields, receiver.languageContext);
     }
 
     @ExportMessage
@@ -206,11 +209,11 @@ final class HostObject implements TruffleObject {
         }
         boolean isStatic = isStaticClass();
         Class<?> lookupClass = getLookupClass();
-        HostFieldDesc foundField = lookupField.execute(this, lookupClass, name, isStatic);
+        HostFieldDesc foundField = lookupField.execute(lookupClass, name, isStatic);
         if (foundField != null) {
             return readField.execute(foundField, this);
         }
-        HostMethodDesc foundMethod = lookupMethod.execute(this, lookupClass, name, isStatic);
+        HostMethodDesc foundMethod = lookupMethod.execute(lookupClass, name, isStatic);
         if (foundMethod != null) {
             return new HostFunction(foundMethod, this.obj, this.languageContext);
         }
@@ -248,7 +251,7 @@ final class HostObject implements TruffleObject {
             if (receiver.isNull()) {
                 return false;
             }
-            return HostInteropReflect.isModifiable(receiver, receiver.getLookupClass(), name, receiver.isStaticClass());
+            return HostInteropReflect.isModifiable(receiver.getLookupClass(), name, receiver.isStaticClass());
         }
 
     }
@@ -271,7 +274,7 @@ final class HostObject implements TruffleObject {
             if (receiver.isNull()) {
                 return false;
             }
-            return HostInteropReflect.isInternal(receiver, receiver.getLookupClass(), name, receiver.isStaticClass());
+            return HostInteropReflect.isInternal(receiver.getLookupClass(), name, receiver.isStaticClass());
         }
     }
 
@@ -289,7 +292,7 @@ final class HostObject implements TruffleObject {
         if (isNull()) {
             throw UnsupportedMessageException.create();
         }
-        HostFieldDesc f = lookupField.execute(this, getLookupClass(), member, isStaticClass());
+        HostFieldDesc f = lookupField.execute(getLookupClass(), member, isStaticClass());
         if (f == null) {
             throw UnknownIdentifierException.create(member);
         }
@@ -319,7 +322,7 @@ final class HostObject implements TruffleObject {
             if (receiver.isNull()) {
                 return false;
             }
-            return HostInteropReflect.isInvokable(receiver, receiver.getLookupClass(), name, receiver.isStaticClass());
+            return HostInteropReflect.isInvokable(receiver.getLookupClass(), name, receiver.isStaticClass());
         }
     }
 
@@ -338,13 +341,13 @@ final class HostObject implements TruffleObject {
         Class<?> lookupClass = getLookupClass();
 
         // (1) look for a method; if found, invoke it on obj.
-        HostMethodDesc foundMethod = lookupMethod.execute(this, lookupClass, name, isStatic);
+        HostMethodDesc foundMethod = lookupMethod.execute(lookupClass, name, isStatic);
         if (foundMethod != null) {
             return executeMethod.execute(foundMethod, obj, args, languageContext);
         }
 
         // (2) look for a field; if found, read its value and if that IsExecutable, Execute it.
-        HostFieldDesc foundField = lookupField.execute(this, lookupClass, name, isStatic);
+        HostFieldDesc foundField = lookupField.execute(lookupClass, name, isStatic);
         if (foundField != null) {
             Object fieldValue = readField.execute(foundField, this);
             if (fieldValues.isExecutable(fieldValue)) {
@@ -358,16 +361,14 @@ final class HostObject implements TruffleObject {
     @ExportMessage(name = "isArrayElementModifiable")
     static class IsArrayElementExisting {
 
-        @Specialization(guards = "isArray.execute(receiver)", limit = "1")
-        static boolean doArray(HostObject receiver, long index,
-                        @Shared("isArray") @Cached IsArrayNode isArray) {
+        @Specialization(guards = "receiver.isHostArray()")
+        static boolean doArray(HostObject receiver, long index) {
             long size = Array.getLength(receiver.obj);
             return index >= 0 && index < size;
         }
 
-        @Specialization(guards = "isList.execute(receiver)", limit = "1")
-        static boolean doList(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList) {
+        @Specialization(guards = "receiver.isList()")
+        static boolean doList(HostObject receiver, long index) {
             long size = receiver.getListSize();
             return index >= 0 && index < size;
         }
@@ -386,11 +387,10 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     static class WriteArrayElement {
 
-        @Specialization(guards = {"isArray.execute(receiver)"}, limit = "1")
+        @Specialization(guards = {"receiver.isHostArray()"})
         @SuppressWarnings("unchecked")
         static void doArray(HostObject receiver, long index, Object value,
                         @Shared("toHost") @Cached ToHostNode toHostNode,
-                        @Shared("isArray") @Cached IsArrayNode isArray,
                         @Cached ArraySet arraySet) throws InvalidArrayIndexException, UnsupportedTypeException {
             if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
@@ -410,10 +410,9 @@ final class HostObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = {"isList.execute(receiver)"}, limit = "1")
+        @Specialization(guards = {"receiver.isList()"})
         @SuppressWarnings("unchecked")
         static void doList(HostObject receiver, long index, Object value,
-                        @Shared("isList") @Cached IsListNode isList,
                         @Shared("toHost") @Cached ToHostNode toHostNode) throws InvalidArrayIndexException, UnsupportedTypeException {
             if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
@@ -452,10 +451,8 @@ final class HostObject implements TruffleObject {
 
     @ExportMessage
     static class IsArrayElementRemovable {
-
-        @Specialization(guards = "isList.execute(receiver)", limit = "1")
-        static boolean doList(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList) {
+        @Specialization(guards = "receiver.isList()")
+        static boolean doList(HostObject receiver, long index) {
             return index >= 0 && index < callSize(receiver);
         }
 
@@ -464,19 +461,31 @@ final class HostObject implements TruffleObject {
             return ((List<?>) receiver.obj).size();
         }
 
-        @Specialization(guards = "!isList.execute(receiver)", limit = "1")
-        static boolean doOther(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList) {
+        @Specialization(guards = "!receiver.isList()")
+        static boolean doOther(HostObject receiver, long index) {
             return false;
         }
+        @Specialization(guards = {"checkArray(receiver)"})
+        protected Object doArrayIntIndex(HostObject receiver, int index) {
+            return doArrayAccess(receiver, index);
+        }
 
+        @Specialization(guards = {"checkArray(receiver)", "index.getClass() == clazz"}, replaces = "doArrayIntIndex")
+        protected Object doArrayCached(HostObject receiver, Number index,
+                        @Cached("index.getClass()") Class<? extends Number> clazz) {
+            return doArrayAccess(receiver, clazz.cast(index).intValue());
+        }
+
+        @Specialization(guards = {"checkArray(receiver)"}, replaces = "doArrayCached")
+        protected Object doArrayGeneric(HostObject receiver, Number index) {
+            return doArrayAccess(receiver, index.intValue());
+        }
     }
 
     @ExportMessage
     static class RemoveArrayElement {
-        @Specialization(guards = "isList.execute(receiver)", limit = "1")
-        static void doList(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList) throws InvalidArrayIndexException {
+        @Specialization(guards = "isList(receiver)")
+        static void doList(HostObject receiver, long index) throws InvalidArrayIndexException {
             if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
@@ -493,30 +502,75 @@ final class HostObject implements TruffleObject {
             return ((List<Object>) receiver.obj).remove((int) index);
         }
 
-        @Specialization(guards = "!isList.execute(receiver)", limit = "1")
-        static void doOther(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList) throws UnsupportedMessageException {
+        @Specialization(guards = "!receiver.isList()")
+        static void doOther(HostObject receiver, long index) throws UnsupportedMessageException {
             throw UnsupportedMessageException.create();
+        }
+
+        @Specialization(guards = {"isList(receiver)"}, replaces = "doListIntIndex")
+        protected Object doListGeneric(HostObject receiver, Number index) {
+            return doListIntIndex(receiver, index.intValue());
+        }
+
+        @SuppressWarnings("unused")
+        @TruffleBoundary
+        @Specialization(guards = {"!checkArray(receiver)", "!isList(receiver)"})
+        protected static Object notArray(HostObject receiver, Number index) {
+            throw UnsupportedMessageException.raise(Message.READ);
+        }
+
+        @CompilationFinal Boolean publicAccessEnabled;
+
+        final boolean isPublicAccess(HostObject receiver) {
+            Boolean isPublicAccess = this.publicAccessEnabled;
+            if (isPublicAccess == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                this.publicAccessEnabled = isPublicAccess = HostClassCache.forInstance(receiver).isPublicAccess();
+            }
+            assert isPublicAccess == HostClassCache.forInstance(receiver).isPublicAccess();
+            return isPublicAccess;
+        }
+
+        final boolean isList(HostObject receiver) {
+            return isPublicAccess(receiver) ? receiver.isList() : false;
+        }
+
+        final boolean checkArray(HostObject receiver) {
+            return isPublicAccess(receiver) ? receiver.isArray() : false;
+        }
+
+        private Object doArrayAccess(HostObject object, int index) {
+            Object obj = object.obj;
+            assert object.isArray();
+            Object val = null;
+            try {
+                val = arrayGet.execute(obj, index);
+            } catch (ArrayIndexOutOfBoundsException outOfBounds) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnknownIdentifierException.raise(String.valueOf(index));
+            }
+
+            return toGuest.apply(object.languageContext, val);
         }
     }
 
     @ExportMessage
     boolean hasArrayElements() {
-        return isArray() || obj instanceof List<?>;
+        return isHostArray() || obj instanceof List<?>;
     }
 
     @ExportMessage
     abstract static class ReadArrayElement {
 
-        @Specialization(guards = {"isArray.execute(receiver)"}, limit = "1")
+        @Specialization(guards = {"receiver.isHostArray()"})
         protected static Object doArray(HostObject receiver, long index,
                         @Cached ArrayGet arrayGet,
-                        @Shared("isArray") @Cached IsArrayNode isArray,
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest) throws InvalidArrayIndexException {
             if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             Object obj = receiver.obj;
+            assert receiver.isHostArray();
             Object val = null;
             try {
                 val = arrayGet.execute(obj, (int) index);
@@ -528,9 +582,8 @@ final class HostObject implements TruffleObject {
         }
 
         @TruffleBoundary
-        @Specialization(guards = {"isList.execute(receiver)"}, limit = "1")
+        @Specialization(guards = {"receiver.isList()"})
         protected static Object doList(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList,
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest) throws InvalidArrayIndexException {
             try {
                 if (index > Integer.MAX_VALUE) {
@@ -543,10 +596,8 @@ final class HostObject implements TruffleObject {
         }
 
         @SuppressWarnings("unused")
-        @Specialization(guards = {"!isArray.execute(receiver)", "!isList.execute(receiver)"}, limit = "1")
-        protected static Object doNotArrayOrList(HostObject receiver, long index,
-                        @Shared("isArray") @Cached IsArrayNode isArray,
-                        @Shared("isList") @Cached IsListNode isList) throws UnsupportedMessageException {
+        @Specialization(guards = {"!receiver.hasArrayElements()", "!receiver.isList()"})
+        protected static Object doNotArrayOrList(HostObject receiver, long index) throws UnsupportedMessageException {
             throw UnsupportedMessageException.create();
         }
 
@@ -554,7 +605,7 @@ final class HostObject implements TruffleObject {
 
     @ExportMessage
     long getArraySize() throws UnsupportedMessageException {
-        if (isArray()) {
+        if (isHostArray()) {
             return Array.getLength(obj);
         } else if (isList()) {
             return getListSize();
@@ -565,6 +616,10 @@ final class HostObject implements TruffleObject {
     @TruffleBoundary(allowInlining = true)
     int getListSize() {
         return ((List<?>) obj).size();
+    }
+
+    boolean isHostArray() {
+        return obj != null && obj.getClass().isArray();
     }
 
     @ExportMessage
@@ -589,13 +644,13 @@ final class HostObject implements TruffleObject {
         @Specialization(guards = "receiver.isDefaultClass()")
         static boolean doObjectCached(HostObject receiver,
                         @Shared("lookupConstructor") @Cached LookupConstructorNode lookupConstructor) {
-            return lookupConstructor.execute(receiver, receiver.asClass()) != null;
+            return lookupConstructor.execute(receiver.asClass()) != null;
         }
     }
 
     @ExportMessage
     boolean isExecutable(@Shared("lookupFunctionalMethod") @Cached LookupFunctionalMethodNode lookupMethod) {
-        return !isNull() && !isClass() && lookupMethod.execute(this, getLookupClass()) != null;
+        return !isNull() && !isClass() && lookupMethod.execute(getLookupClass()) != null;
     }
 
     @ExportMessage
@@ -603,7 +658,7 @@ final class HostObject implements TruffleObject {
                     @Shared("hostExecute") @Cached HostExecuteNode doExecute,
                     @Shared("lookupFunctionalMethod") @Cached LookupFunctionalMethodNode lookupMethod) throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
         if (!isNull() && !isClass()) {
-            HostMethodDesc method = lookupMethod.execute(this, getLookupClass());
+            HostMethodDesc method = lookupMethod.execute(getLookupClass());
             if (method != null) {
                 return doExecute.execute(method, obj, args, languageContext);
             }
@@ -643,7 +698,7 @@ final class HostObject implements TruffleObject {
                         @Shared("hostExecute") @Cached HostExecuteNode executeMethod) throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
             assert !receiver.isArrayClass();
             if (receiver.isClass()) {
-                HostMethodDesc constructor = lookupConstructor.execute(receiver, receiver.asClass());
+                HostMethodDesc constructor = lookupConstructor.execute(receiver.asClass());
                 if (constructor != null) {
                     return executeMethod.execute(constructor, null, arguments, receiver.languageContext);
                 }
@@ -707,6 +762,7 @@ final class HostObject implements TruffleObject {
         }
     }
 
+<<<<<<< HEAD
     @ExportMessage
     boolean fitsInDouble(@Shared("numbers") @CachedLibrary(limit = "LIMIT") InteropLibrary numbers) {
         if (isNumber()) {
@@ -715,6 +771,16 @@ final class HostObject implements TruffleObject {
             return false;
         }
     }
+
+     final boolean isPublicAccess(HostObject receiver) {
+            Boolean isPublicAccess = this.publicAccessEnabled;
+            if (isPublicAccess == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                this.publicAccessEnabled = isPublicAccess = HostClassCache.forInstance(receiver).isPublicAccess();
+            }
+            assert isPublicAccess == HostClassCache.forInstance(receiver).isPublicAccess();
+            return isPublicAccess;
+        }
 
     @ExportMessage
     byte asByte(@Shared("numbers") @CachedLibrary(limit = "LIMIT") InteropLibrary numbers) throws UnsupportedMessageException {
@@ -836,18 +902,6 @@ final class HostObject implements TruffleObject {
         }
     }
 
-    PolyglotEngineImpl getEngine() {
-        PolyglotContextImpl context = languageContext != null ? languageContext.context : null;
-        if (context == null) {
-            context = PolyglotContextImpl.requireContext();
-        }
-        return context.engine;
-    }
-
-    HostClassCache getHostClassCache() {
-        return HostClassCache.forInstance(this);
-    }
-
     @Override
     public boolean equals(Object o) {
         if (o instanceof HostObject) {
@@ -924,7 +978,7 @@ final class HostObject implements TruffleObject {
 
         protected abstract Object execute(Object array, int index);
 
-        @Specialization
+<       @Specialization
         static boolean doBoolean(boolean[] array, int index) {
             return array[index];
         }
@@ -932,7 +986,7 @@ final class HostObject implements TruffleObject {
         @Specialization
         static byte doByte(byte[] array, int index) {
             return array[index];
-        }
+=        }
 
         @Specialization
         static short doShort(short[] array, int index) {
@@ -977,21 +1031,22 @@ final class HostObject implements TruffleObject {
         LookupConstructorNode() {
         }
 
-        public abstract HostMethodDesc execute(HostObject receiver, Class<?> clazz);
+        public abstract HostMethodDesc execute(Class<?> clazz);
 
         @SuppressWarnings("unused")
         @Specialization(guards = {"clazz == cachedClazz"}, limit = "LIMIT")
-        HostMethodDesc doCached(HostObject receiver, Class<?> clazz,
+        HostMethodDesc doCached(Class<?> clazz,
                         @Cached("clazz") Class<?> cachedClazz,
-                        @Cached("doUncached(receiver, clazz)") HostMethodDesc cachedMethod) {
-            assert cachedMethod == doUncached(receiver, clazz);
+                        @Cached("doUncached(clazz)") HostMethodDesc cachedMethod) {
+            assert cachedMethod == doUncached(clazz);
             return cachedMethod;
         }
 
         @Specialization(replaces = "doCached")
         @TruffleBoundary
-        HostMethodDesc doUncached(HostObject receiver, Class<?> clazz) {
-            return HostClassDesc.forClass(receiver.getEngine(), clazz).lookupConstructor();
+        HostMethodDesc doUncached(Class<?> clazz) {
+            Object obj = VMAccessor.NODES.getSourceVM(getRootNode());
+            return HostClassDesc.forClass((PolyglotEngineImpl) obj, clazz).lookupConstructor();
         }
     }
 
@@ -1002,23 +1057,24 @@ final class HostObject implements TruffleObject {
         LookupFieldNode() {
         }
 
-        public abstract HostFieldDesc execute(HostObject receiver, Class<?> clazz, String name, boolean onlyStatic);
+        public abstract HostFieldDesc execute(Class<?> clazz, String name, boolean onlyStatic);
 
         @SuppressWarnings("unused")
         @Specialization(guards = {"onlyStatic == cachedStatic", "clazz == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
-        HostFieldDesc doCached(HostObject receiver, Class<?> clazz, String name, boolean onlyStatic,
+        HostFieldDesc doCached(Class<?> clazz, String name, boolean onlyStatic,
                         @Cached("onlyStatic") boolean cachedStatic,
                         @Cached("clazz") Class<?> cachedClazz,
                         @Cached("name") String cachedName,
-                        @Cached("doUncached(receiver, clazz, name, onlyStatic)") HostFieldDesc cachedField) {
-            assert cachedField == doUncached(receiver, clazz, name, onlyStatic);
+                        @Cached("doUncached(clazz, name, onlyStatic)") HostFieldDesc cachedField) {
+            assert cachedField == doUncached(clazz, name, onlyStatic);
             return cachedField;
         }
 
         @Specialization(replaces = "doCached")
         @TruffleBoundary
-        HostFieldDesc doUncached(HostObject receiver, Class<?> clazz, String name, boolean onlyStatic) {
-            return HostInteropReflect.findField(receiver.getEngine(), clazz, name, onlyStatic);
+        HostFieldDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
+            Object obj = VMAccessor.NODES.getSourceVM(getRootNode());
+            return HostInteropReflect.findField((PolyglotEngineImpl) obj, clazz, name, onlyStatic);
         }
     }
 
@@ -1029,21 +1085,22 @@ final class HostObject implements TruffleObject {
         LookupFunctionalMethodNode() {
         }
 
-        public abstract HostMethodDesc execute(HostObject object, Class<?> clazz);
+        public abstract HostMethodDesc execute(Class<?> clazz);
 
         @SuppressWarnings("unused")
         @Specialization(guards = {"clazz == cachedClazz"}, limit = "LIMIT")
-        HostMethodDesc doCached(HostObject object, Class<?> clazz,
+        HostMethodDesc doCached(Class<?> clazz,
                         @Cached("clazz") Class<?> cachedClazz,
-                        @Cached("doUncached(object, clazz)") HostMethodDesc cachedMethod) {
-            assert cachedMethod == doUncached(object, clazz);
+                        @Cached("doUncached(clazz)") HostMethodDesc cachedMethod) {
+            assert cachedMethod == doUncached(clazz);
             return cachedMethod;
         }
 
         @Specialization(replaces = "doCached")
         @TruffleBoundary
-        static HostMethodDesc doUncached(HostObject object, Class<?> clazz) {
-            return HostClassDesc.forClass(object.getEngine(), clazz).getFunctionalMethod();
+        static HostMethodDesc doUncached(Class<?> clazz) {
+            Object obj = VMAccessor.NODES.getSourceVM(getRootNode());
+            return HostClassDesc.forClass((PolyglotEngineImpl) obj, clazz).getFunctionalMethod();
         }
     }
 
@@ -1080,23 +1137,24 @@ final class HostObject implements TruffleObject {
         LookupMethodNode() {
         }
 
-        public abstract HostMethodDesc execute(HostObject receiver, Class<?> clazz, String name, boolean onlyStatic);
+        public abstract HostMethodDesc execute(Class<?> clazz, String name, boolean onlyStatic);
 
         @SuppressWarnings("unused")
         @Specialization(guards = {"onlyStatic == cachedStatic", "clazz == cachedClazz", "cachedName.equals(name)"}, limit = "LIMIT")
-        HostMethodDesc doCached(HostObject receiver, Class<?> clazz, String name, boolean onlyStatic,
+        HostMethodDesc doCached(Class<?> clazz, String name, boolean onlyStatic,
                         @Cached("onlyStatic") boolean cachedStatic,
                         @Cached("clazz") Class<?> cachedClazz,
                         @Cached("name") String cachedName,
-                        @Cached("doUncached(receiver, clazz, name, onlyStatic)") HostMethodDesc cachedMethod) {
-            assert cachedMethod == doUncached(receiver, clazz, name, onlyStatic);
+                        @Cached("doUncached(clazz, name, onlyStatic)") HostMethodDesc cachedMethod) {
+            assert cachedMethod == doUncached(clazz, name, onlyStatic);
             return cachedMethod;
         }
 
         @Specialization(replaces = "doCached")
         @TruffleBoundary
-        HostMethodDesc doUncached(HostObject receiver, Class<?> clazz, String name, boolean onlyStatic) {
-            return HostInteropReflect.findMethod(receiver.getEngine(), clazz, name, onlyStatic);
+         HostMethodDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
+            Object obj = VMAccessor.NODES.getSourceVM(getRootNode());
+            return HostInteropReflect.findMethod((PolyglotEngineImpl) obj, clazz, name, onlyStatic);
         }
     }
 
@@ -1160,31 +1218,26 @@ final class HostObject implements TruffleObject {
         }
     }
 
-    @GenerateUncached
-    abstract static class IsListNode extends Node {
+    abstract static class BaseNode extends Node {
 
-        public abstract boolean execute(HostObject receiver);
+        @CompilationFinal Boolean publicAccessEnabled;
 
-        @Specialization
-        public boolean doDefault(HostObject receiver,
-                        @Cached(value = "receiver.getHostClassCache().isPublicAccess()", allowUncached = true) boolean publicAccess) {
-            assert receiver.getHostClassCache().isPublicAccess() == publicAccess;
-            return publicAccess && receiver.isList();
+        final boolean isPublicAccess(HostObject receiver) {
+            Boolean isPublicAccess = this.publicAccessEnabled;
+            if (isPublicAccess == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                this.publicAccessEnabled = isPublicAccess = HostClassCache.forInstance(receiver).isPublicAccess();
+            }
+            return isPublicAccess;
         }
 
-    }
-
-    @GenerateUncached
-    abstract static class IsArrayNode extends Node {
-
-        public abstract boolean execute(HostObject receiver);
-
-        @Specialization
-        public boolean doDefault(HostObject receiver,
-                        @Cached(value = "receiver.getHostClassCache().isPublicAccess()", allowUncached = true) boolean publicAccess) {
-            assert receiver.getHostClassCache().isPublicAccess() == publicAccess;
-            return publicAccess && receiver.obj != null && receiver.obj.getClass().isArray();
+        final boolean isList(HostObject receiver) {
+            return isPublicAccess(receiver) ? receiver.isList() : false;
         }
 
+        final boolean checkArray(HostObject receiver) {
+            return isPublicAccess(receiver) ? receiver.isArray() : false;
+        }
     }
+
 }
