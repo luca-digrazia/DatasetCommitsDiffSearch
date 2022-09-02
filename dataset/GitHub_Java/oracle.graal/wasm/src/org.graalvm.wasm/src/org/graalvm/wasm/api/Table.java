@@ -43,7 +43,6 @@ package org.graalvm.wasm.api;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -55,7 +54,6 @@ import org.graalvm.wasm.WasmTable;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
-import org.graalvm.wasm.exception.WasmJsApiException;
 import org.graalvm.wasm.exception.WasmTrap;
 
 @ExportLibrary(InteropLibrary.class)
@@ -74,24 +72,8 @@ public class Table extends Dictionary {
         });
     }
 
-    public Table(Object descriptor) {
-        this(new WasmTable(initial(descriptor), maximum(descriptor)));
-    }
-
-    private static int initial(Object descriptor) {
-        try {
-            return (Integer) InteropLibrary.getUncached().readMember(descriptor, "initial");
-        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid memory descriptor " + descriptor);
-        }
-    }
-
-    private static int maximum(Object descriptor) {
-        try {
-            return (Integer) InteropLibrary.getUncached().readMember(descriptor, "maximum");
-        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid memory descriptor " + descriptor);
-        }
+    public Table(TableDescriptor descriptor) {
+        this(new WasmTable(descriptor.initial(), descriptor.maximum()));
     }
 
     @TruffleBoundary
