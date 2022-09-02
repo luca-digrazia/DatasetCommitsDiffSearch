@@ -30,8 +30,6 @@
 package com.oracle.truffle.llvm.nativemode;
 
 import com.oracle.truffle.llvm.nativemode.NativeConfigurationFactory.Key;
-
-import java.util.Collections;
 import java.util.List;
 
 import org.graalvm.options.OptionDescriptor;
@@ -85,7 +83,7 @@ public class NativeConfigurationFactory implements ConfigurationFactory<Key> {
 
     @Override
     public List<OptionDescriptor> getOptionDescriptors() {
-        return Collections.emptyList();
+        return SulongEngineOption.describeOptions();
     }
 
     @Override
