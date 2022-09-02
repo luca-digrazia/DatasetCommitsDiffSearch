@@ -206,6 +206,9 @@ public final class LLVMContext {
         pThreadContext = new LLVMPThreadContext(this);
 
         symbolStorage = new AssumedValue[10][];
+
+        sulongInitContext = null;
+        sulongDisposeContext = null;
     }
 
     boolean patchContext(Env newEnv) {
