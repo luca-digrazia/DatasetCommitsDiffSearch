@@ -842,7 +842,7 @@ public final class GraalFeature implements Feature {
 
         HostedMetaAccess hMetaAccess = config.getMetaAccess();
         HostedUniverse hUniverse = (HostedUniverse) hMetaAccess.getUniverse();
-        objectReplacer.updateSubstrateDataAfterCompilation(hUniverse, config.getProviders().getConstantFieldProvider());
+        objectReplacer.updateSubstrateDataAfterCompilation(hUniverse);
 
         objectReplacer.registerImmutableObjects(config);
         GraalSupport.registerImmutableObjects(config);
