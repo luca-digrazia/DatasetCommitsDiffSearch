@@ -70,9 +70,11 @@ import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
  * initialized, which violates the class initialization specification.</li>
  * <ul>
  *
+ * @deprecated Replaced by {@link org.graalvm.nativeimage.hosted.ClassInitialization}.
  * @since 1.0
  */
 @Platforms(Platform.HOSTED_ONLY.class)
+@Deprecated
 public final class RuntimeClassInitialization {
 
     /**
@@ -89,7 +91,9 @@ public final class RuntimeClassInitialization {
      * @since 1.0
      */
     public static void delayClassInitialization(Class<?>... classes) {
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).delayClassInitialization(classes);
+        for (Class<?> aClass : classes) {
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).delay(aClass, "");
+        }
     }
 
     /**
@@ -108,7 +112,28 @@ public final class RuntimeClassInitialization {
      * @since 1.0
      */
     public static void rerunClassInitialization(Class<?>... classes) {
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunClassInitialization(classes);
+        for (Class<?> aClass : classes) {
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerun(aClass, "");
+        }
+    }
+
+    /**
+     * Registers the provided classes as eagerly initialized during image-build time.
+     * <p>
+     * All static initializers of {@code classes} will be executed during image-build time and
+     * static fields that are assigned values will be available at runtime. {@code static final}
+     * fields will be considered as constant.
+     * <p>
+     * It is up to the user to ensure that this behavior makes sense and does not lead to wrong
+     * application behavior.
+     *
+     *
+     * @since 1.0
+     */
+    public static void eagerClassInitialization(Class<?>... classes) {
+        for (Class<?> aClass : classes) {
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).eager(aClass, "");
+        }
     }
 
     private RuntimeClassInitialization() {

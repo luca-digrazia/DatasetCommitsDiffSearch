@@ -288,8 +288,6 @@ public class NativeImageGenerator {
     private AbstractBootImage image;
     private AtomicBoolean buildStarted = new AtomicBoolean();
 
-    private Platform targetPlatform;
-
     public NativeImageGenerator(ImageClassLoader loader, HostedOptionProvider optionProvider) {
         this.loader = loader;
         this.featureHandler = new FeatureHandler();
@@ -602,7 +600,7 @@ public class NativeImageGenerator {
                 /* release memory taken by graphs for the image writing */
                 hUniverse.getMethods().forEach(HostedMethod::clear);
 
-                codeCache = NativeImageCodeCacheFactory.get().newCodeCache(compileQueue, heap, targetPlatform);
+                codeCache = NativeImageCodeCacheFactory.get().newCodeCache(compileQueue, heap);
                 codeCache.layoutConstants();
                 codeCache.layoutMethods(debug, imageName);
 
@@ -791,9 +789,9 @@ public class NativeImageGenerator {
                     ForkJoinPool analysisExecutor, SnippetReflectionProvider originalSnippetReflection, DebugContext debug) {
         try (Indent ignored = debug.logAndIndent("setup native-image builder")) {
             try (StopTimer ignored1 = new Timer(imageName, "setup").start()) {
-                this.targetPlatform = defaultPlatform(loader.getClassLoader());
-                SubstrateTargetDescription target = createTarget(targetPlatform);
-                ImageSingletons.add(Platform.class, targetPlatform);
+                Platform platform = defaultPlatform(loader.getClassLoader());
+                SubstrateTargetDescription target = createTarget(platform);
+                ImageSingletons.add(Platform.class, platform);
                 ImageSingletons.add(SubstrateTargetDescription.class, target);
 
                 if (javaMainSupport != null) {
@@ -820,7 +818,7 @@ public class NativeImageGenerator {
 
                 AnnotationSubstitutionProcessor annotationSubstitutions = createDeclarativeSubstitutionProcessor(originalMetaAccess, loader, classInitializaitonSupport);
                 CEnumCallWrapperSubstitutionProcessor cEnumProcessor = new CEnumCallWrapperSubstitutionProcessor();
-                aUniverse = createAnalysisUniverse(options, targetPlatform, target, loader, originalMetaAccess, originalSnippetReflection, annotationSubstitutions, cEnumProcessor,
+                aUniverse = createAnalysisUniverse(options, platform, target, loader, originalMetaAccess, originalSnippetReflection, annotationSubstitutions, cEnumProcessor,
                                 classInitializaitonSupport, Collections.singletonList(harnessSubstitutions));
 
                 AnalysisMetaAccess aMetaAccess = new SVMAnalysisMetaAccess(aUniverse, originalMetaAccess);
@@ -1155,7 +1153,7 @@ public class NativeImageGenerator {
                             SubstrateOptions.EmitStringEncodingSubstitutions.getValue() && JAVA_SPECIFICATION_VERSION >= 9);
         } else if (architecture instanceof AArch64) {
             AArch64GraphBuilderPlugins.register(plugins, replacementBytecodeProvider, explicitUnsafeNullChecks, //
-                            /* registerMathPlugins */false,SubstrateOptions.EmitStringEncodingSubstitutions.getValue() && JAVA_SPECIFICATION_VERSION >= 9);
+                            /* registerMathPlugins */false);
         } else {
             throw GraalError.shouldNotReachHere("Unimplemented GraphBuilderPlugin for architecture " + architecture);
         }
@@ -1492,31 +1490,31 @@ public class NativeImageGenerator {
     @SuppressWarnings("try")
     private void processNativeLibraryImports(NativeLibraries nativeLibs, MetaAccessProvider metaAccess, ClassInitializationSupport classInitializationSupport) {
         for (Method method : loader.findAnnotatedMethods(CConstant.class)) {
-            classInitializationSupport.initializeAtBuildTime(method.getDeclaringClass(), "classes with " + CConstant.class.getSimpleName() + " annotations are always initialized");
+            classInitializationSupport.eager(method.getDeclaringClass(), "classes with " + CConstant.class.getSimpleName() + " annotations are always initialized");
             nativeLibs.loadJavaMethod(metaAccess.lookupJavaMethod(method));
         }
         for (Method method : loader.findAnnotatedMethods(CFunction.class)) {
             nativeLibs.loadJavaMethod(metaAccess.lookupJavaMethod(method));
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(CStruct.class)) {
-            classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + CStruct.class.getSimpleName() + " are always initialized");
+            classInitializationSupport.eager(clazz, "classes annotated with " + CStruct.class.getSimpleName() + " are always initialized");
             nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(RawStructure.class)) {
-            classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + RawStructure.class.getSimpleName() + " are always initialized");
+            classInitializationSupport.eager(clazz, "classes annotated with " + RawStructure.class.getSimpleName() + " are always initialized");
             nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(CPointerTo.class)) {
-            classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + CPointerTo.class.getSimpleName() + " are always initialized");
+            classInitializationSupport.eager(clazz, "classes annotated with " + CPointerTo.class.getSimpleName() + " are always initialized");
             nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(CEnum.class)) {
             ResolvedJavaType type = metaAccess.lookupJavaType(clazz);
-            classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + CEnum.class.getSimpleName() + " are always initialized");
+            classInitializationSupport.eager(clazz, "classes annotated with " + CEnum.class.getSimpleName() + " are always initialized");
             nativeLibs.loadJavaType(type);
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(CContext.class)) {
-            classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + CContext.class.getSimpleName() + " are always initialized");
+            classInitializationSupport.eager(clazz, "classes annotated with " + CContext.class.getSimpleName() + " are always initialized");
         }
         for (CLibrary library : loader.findAnnotations(CLibrary.class)) {
             nativeLibs.addLibrary(library.value());
