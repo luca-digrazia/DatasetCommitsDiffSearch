@@ -1,53 +1,94 @@
+/*
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.truffle.espresso.impl;
-
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_invoke_MethodHandleNatives;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
-public class VirtualTable {
-    @CompilerDirectives.CompilationFinal(dimensions = 1) private final Method[] table;
-    private final int length;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.meta.Meta;
 
-    VirtualTable(ObjectKlass superKlass, Method[] declaredMethods) {
+/**
+ * Helper for creating virtual tables in ObjectKlass.
+ */
+public final class VirtualTable {
+
+    private VirtualTable() {
+
+    }
+
+    // Mirandas are already in the Klass, there is not much left to do.
+    public static Method[] create(ObjectKlass superKlass, Method[] declaredMethods, ObjectKlass thisKlass) {
         ArrayList<Method> tmp;
+        ArrayList<Method> overrides = new ArrayList<>();
         if (superKlass != null) {
-            tmp = new ArrayList<>(Arrays.asList(superKlass.getVTable().table));
+            tmp = new ArrayList<>(Arrays.asList(superKlass.getVTable()));
         } else {
             tmp = new ArrayList<>();
         }
-        Method override;
-        int pos;
-        for (Method m: declaredMethods) {
-            if (m.getRefKind() == Target_java_lang_invoke_MethodHandleNatives.REF_invokeVirtual) {
-                if (superKlass != null) {
-                    override = superKlass.lookupMethod(m.getName(), m.getRawSignature());
-                } else {
-                    override = null;
-                }
-                if (override != null) {
-                    pos = override.getVTableIndex();
-                    m.setVTableIndex(pos);
-                    tmp.set(pos, m);
-                } else {
-                    pos = tmp.size();
-                    m.setVTableIndex(pos);
-                    tmp.add(m);
-                }
+        for (Method m : declaredMethods) {
+            if (!m.isPrivate() && !m.isStatic() && !Name._clinit_.equals(m.getName()) && !Name._init_.equals(m.getName())) {
+                // Do not bloat the vtable with methods that cannot be called through
+                // virtual invocation.
+                checkOverride(superKlass, m, tmp, thisKlass, overrides);
             }
         }
-        this.table = tmp.toArray(Method.EMPTY_ARRAY);
-        this.length = table.length;
+        for (Method m : thisKlass.getMirandaMethods()) {
+            m.setVTableIndex(tmp.size());
+            tmp.add(m);
+            // checkOverride(superKlass, m, tmp);
+        }
+        return tmp.toArray(Method.EMPTY_ARRAY);
     }
 
-    final public int length() {
-        return this.length;
+    private static void checkOverride(ObjectKlass superKlass, Method m, ArrayList<Method> tmp, Klass thisKlass, ArrayList<Method> overrides) {
+        if (!overrides.isEmpty()) {
+            overrides.clear();
+        }
+        if (superKlass != null) {
+            superKlass.lookupVirtualMethodOverrides(m, thisKlass, overrides);
+        }
+        Method toSet = m;
+        if (!overrides.isEmpty()) {
+            int count = 1;
+            for (Method override : overrides) {
+                if (override.isFinalFlagSet()) {
+                    Meta meta = m.getDeclaringKlass().getMeta();
+                    throw Meta.throwExceptionWithMessage(meta.java_lang_VerifyError, "Overriding final method: " + override);
+                }
+                override.invalidateLeaf();
+                int pos = override.getVTableIndex();
+                if (count > 1) {
+                    toSet = new Method(m);
+                }
+                toSet.setVTableIndex(pos);
+                tmp.set(pos, toSet);
+                count++;
+            }
+        } else {
+            int pos = tmp.size();
+            toSet.setVTableIndex(pos);
+            tmp.add(toSet);
+        }
     }
-
-    final Method lookupMethod(int index) {
-        return table[index];
-    }
-
-
 }

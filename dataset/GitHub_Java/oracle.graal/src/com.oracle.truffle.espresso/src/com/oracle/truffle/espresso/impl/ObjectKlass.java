@@ -29,12 +29,8 @@ import static com.oracle.truffle.espresso.classfile.Constants.ACC_SUPER;
 import static com.oracle.truffle.espresso.classfile.Constants.JVM_ACC_WRITTEN_FLAGS;
 
 import java.io.PrintStream;
-import java.lang.ref.WeakReference;
-import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -58,11 +54,9 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.Attribute;
@@ -97,6 +91,11 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal(dimensions = 1) //
     private final Field[] staticFieldTable;
 
+    @CompilationFinal(dimensions = 1) //
+    private Method[] declaredMethods;
+
+    @CompilationFinal(dimensions = 1) private Method[] mirandaMethods;
+
     private final InnerClassesAttribute innerClasses;
 
     private final Attribute runtimeVisibleAnnotations;
@@ -111,6 +110,14 @@ public final class ObjectKlass extends Klass {
 
     private String genericSignature;
 
+    // Stores the VTable for classes, holds public non-static methods for interfaces.
+    @CompilationFinal(dimensions = 1) private final Method[] vtable;
+
+    // TODO(garcia) Sort itables (according to an arbitrary key) for dichotomic search?
+    @CompilationFinal(dimensions = 2) private final Method[][] itable;
+    @CompilationFinal(dimensions = 1) private final ObjectKlass[] iKlassTable;
+    @CompilationFinal private final int itableLength;
+
     @CompilationFinal private volatile int initState = LOADED;
 
     @CompilationFinal //
@@ -120,16 +127,11 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal volatile RedefinitionCache redefineCache;
 
-    // used for class redefintion when refreshing vtables etc.
-    private ArrayList<WeakReference<ObjectKlass>> subTypes;
-
     public static final int LOADED = 0;
     public static final int LINKED = 1;
     public static final int PREPARED = 2;
     public static final int INITIALIZED = 3;
     public static final int ERRONEOUS = 99;
-
-    private final StaticObject definingClassLoader;
 
     public Attribute getAttribute(Symbol<Name> name) {
         return getLinkedKlass().getAttribute(name);
@@ -145,7 +147,7 @@ public final class ObjectKlass extends Klass {
         this.hostKlass = hostKlass;
         // TODO(peterssen): Make writable copy.
         RuntimeConstantPool pool = new RuntimeConstantPool(getContext(), linkedKlass.getConstantPool(), classLoader);
-        definingClassLoader = pool.getClassLoader();
+
         Field[] skFieldTable = superKlass != null ? superKlass.getFieldTable() : new Field[0];
         LinkedField[] lkInstanceFields = linkedKlass.getInstanceFields();
         LinkedField[] lkStaticFields = linkedKlass.getStaticFields();
@@ -171,51 +173,36 @@ public final class ObjectKlass extends Klass {
             methods[i] = new Method(this, linkedMethods[i], pool);
         }
 
-        this.enclosingMethod = (EnclosingMethodAttribute) linkedKlass.getAttribute(EnclosingMethodAttribute.NAME);
-        this.innerClasses = (InnerClassesAttribute) linkedKlass.getAttribute(InnerClassesAttribute.NAME);
+        this.declaredMethods = methods;
+        this.redefineCache = new RedefinitionCache(pool, linkedKlass);
+
+        this.enclosingMethod = (EnclosingMethodAttribute) getAttribute(EnclosingMethodAttribute.NAME);
+        this.innerClasses = (InnerClassesAttribute) getAttribute(InnerClassesAttribute.NAME);
 
         // Move attribute name to better location.
-        this.runtimeVisibleAnnotations = linkedKlass.getAttribute(Name.RuntimeVisibleAnnotations);
+        this.runtimeVisibleAnnotations = getAttribute(Name.RuntimeVisibleAnnotations);
         // Package initialization must be done before vtable creation, as there are same package
         // checks.
-        initPackage(classLoader);
-
-        Method[][] itable = null;
-        Method[] vtable;
-        ObjectKlass[] iKlassTable;
-        Method[] mirandaMethods = null;
+        initPackage();
 
         if (this.isInterface()) {
-            InterfaceTables.InterfaceCreationResult icr = InterfaceTables.constructInterfaceItable(this, methods);
-            vtable = icr.methodtable;
-            iKlassTable = icr.klassTable;
+            this.itable = null;
+            InterfaceTables.InterfaceCreationResult icr = InterfaceTables.constructInterfaceItable(this, declaredMethods);
+            this.vtable = icr.methodtable;
+            this.iKlassTable = icr.klassTable;
         } else {
-            InterfaceTables.CreationResult methodCR = InterfaceTables.create(superKlass, superInterfaces, methods);
-            iKlassTable = methodCR.klassTable;
-            mirandaMethods = methodCR.mirandas;
-            vtable = VirtualTable.create(superKlass, methods, this, mirandaMethods, false);
-            itable = InterfaceTables.fixTables(vtable, mirandaMethods, methods, methodCR.tables, iKlassTable);
+            InterfaceTables.CreationResult methodCR = InterfaceTables.create(this, superKlass, superInterfaces);
+            this.iKlassTable = methodCR.klassTable;
+            this.mirandaMethods = methodCR.mirandas;
+            this.vtable = VirtualTable.create(superKlass, declaredMethods, this);
+            this.itable = InterfaceTables.fixTables(this, methodCR.tables, iKlassTable);
         }
-        if (superKlass != null) {
-            superKlass.addSubType(this);
-        }
-        for (ObjectKlass superInterface : superInterfaces) {
-            superInterface.addSubType(this);
-        }
-        this.redefineCache = new RedefinitionCache(pool, linkedKlass, methods, mirandaMethods, vtable, itable, iKlassTable);
+        this.itableLength = iKlassTable.length;
         this.initState = LINKED;
         assert verifyTables();
     }
 
-    private void addSubType(ObjectKlass objectKlass) {
-        if (subTypes == null) {
-            subTypes = new ArrayList<>(1);
-        }
-        subTypes.add(new WeakReference<>(objectKlass));
-    }
-
     private boolean verifyTables() {
-        Method[] vtable = getRedefineCache().vtable;
         if (vtable != null) {
             for (int i = 0; i < vtable.length; i++) {
                 if (isInterface()) {
@@ -229,8 +216,8 @@ public final class ObjectKlass extends Klass {
                 }
             }
         }
-        if (getItable() != null) {
-            for (Method[] table : getItable()) {
+        if (itable != null) {
+            for (Method[] table : itable) {
                 for (int i = 0; i < table.length; i++) {
                     if (table[i].getITableIndex() != i) {
                         return false;
@@ -425,7 +412,7 @@ public final class ObjectKlass extends Klass {
 
     @Override
     public @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
-        return definingClassLoader;
+        return getConstantPool().getClassLoader();
     }
 
     @Override
@@ -460,19 +447,19 @@ public final class ObjectKlass extends Klass {
     }
 
     Method[] getMirandaMethods() {
-        return getRedefineCache().mirandaMethods;
+        return mirandaMethods;
     }
 
     @Override
     public Method[] getDeclaredMethods() {
-        return getRedefineCache().declaredMethods;
+        return declaredMethods;
     }
 
     @Override
     public MethodRef[] getDeclaredMethodRefs() {
-        MethodRef[] result = new MethodRef[getDeclaredMethods().length];
+        MethodRef[] result = new MethodRef[declaredMethods.length];
         for (int i = 0; i < result.length; i++) {
-            result[i] = getDeclaredMethods()[i].getMethodVersion();
+            result[i] = declaredMethods[i].getMethodVersion();
         }
         return result;
     }
@@ -590,53 +577,61 @@ public final class ObjectKlass extends Klass {
     // Exposed to LookupVirtualMethodNode
     public Method[] getVTable() {
         assert !isInterface();
-        return getRedefineCache().vtable;
+        return vtable;
     }
 
     Method[] getInterfaceMethodsTable() {
         assert isInterface();
-        return getRedefineCache().vtable;
+        return vtable;
     }
 
     Method vtableLookupImpl(int vtableIndex) {
         assert (vtableIndex >= 0) : "Undeclared virtual method";
-        return getVTable()[vtableIndex];
+        return vtable[vtableIndex];
     }
 
     public Method itableLookup(Klass interfKlass, int index) {
         assert (index >= 0) : "Undeclared interface method";
         try {
-            return getItable()[fastLookup(interfKlass, getiKlassTable())][index];
+            return itable[fastLookup(interfKlass, iKlassTable)][index];
         } catch (IndexOutOfBoundsException e) {
             throw Meta.throwExceptionWithMessage(getMeta().java_lang_IncompatibleClassChangeError, "Class " + getName() + " does not implement interface " + interfKlass.getName());
         }
     }
 
     Method[][] getItable() {
-        return getRedefineCache().itable;
+        return itable;
     }
 
     ObjectKlass[] getiKlassTable() {
-        return getRedefineCache().iKlassTable;
+        return iKlassTable;
     }
 
-    int lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass) {
-        for (int i = 0; i < getVTable().length; i++) {
-            Method m = getVTable()[i];
-            if (!m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
-                if (m.isProtected() || m.isPublic() || sameRuntimePackage(subClass)) {
-                    return i;
-                }
-            }
-        }
-        return -1;
-    }
-
-    List<Method> lookupVirtualMethodOverrides(Symbol<Name> name, Symbol<Signature> signature, Klass subKlass, List<Method> result) {
-        for (Method m : getVTable()) {
+    List<Method> lookupVirtualMethodOverrides(Method current, Klass subKlass, List<Method> result) {
+        Symbol<Name> name = current.getName();
+        Symbol<Signature> signature = current.getRawSignature();
+        for (Method m : vtable) {
             if (!m.isStatic() && !m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
-                if (m.isProtected() || m.isPublic() || m.getDeclaringKlass().sameRuntimePackage(subKlass)) {
+                if (m.isProtected() || m.isPublic()) {
                     result.add(m);
+                } else {
+                    if (m.getDeclaringKlass().sameRuntimePackage(subKlass)) {
+                        result.add(m);
+                    } else {
+                        ObjectKlass currentKlass = this.getSuperKlass();
+                        int index = m.getVTableIndex();
+                        while (currentKlass != null) {
+                            if (index >= currentKlass.vtable.length) {
+                                break;
+                            }
+                            Method toExamine = currentKlass.vtable[index];
+                            if (current.canOverride(toExamine)) {
+                                result.add(toExamine);
+                                break;
+                            }
+                            currentKlass = currentKlass.getSuperKlass();
+                        }
+                    }
                 }
             }
         }
@@ -670,8 +665,8 @@ public final class ObjectKlass extends Klass {
          * Interfaces are sorted, superinterfaces first; traverse in reverse order to get
          * maximally-specific first.
          */
-        for (int i = getiKlassTable().length - 1; i >= 0; i--) {
-            ObjectKlass superInterf = getiKlassTable()[i];
+        for (int i = iKlassTable.length - 1; i >= 0; i--) {
+            ObjectKlass superInterf = iKlassTable[i];
             for (Method superM : superInterf.getInterfaceMethodsTable()) {
                 /*
                  * Methods in superInterf.getInterfaceMethodsTable() are all non-static non-private
@@ -745,10 +740,10 @@ public final class ObjectKlass extends Klass {
     }
 
     private Method lookupMirandas(Symbol<Name> methodName, Symbol<Signature> signature) {
-        if (getMirandaMethods() == null) {
+        if (mirandaMethods == null) {
             return null;
         }
-        for (Method miranda : getMirandaMethods()) {
+        for (Method miranda : mirandaMethods) {
             if (miranda.getName() == methodName && miranda.getRawSignature() == signature) {
                 return miranda;
             }
@@ -829,7 +824,7 @@ public final class ObjectKlass extends Klass {
 
     void print(PrintStream out) {
         out.println(getType());
-        for (Method m : getDeclaredMethods()) {
+        for (Method m : declaredMethods) {
             out.println(m);
             m.printBytecodes(out);
             out.println();
@@ -936,9 +931,9 @@ public final class ObjectKlass extends Klass {
         return result;
     }
 
-    private void initPackage(@Host(ClassLoader.class) StaticObject classLoader) {
+    private void initPackage() {
         if (!Names.isUnnamedPackage(getRuntimePackage())) {
-            ClassRegistry registry = getRegistries().getClassRegistry(classLoader);
+            ClassRegistry registry = getRegistries().getClassRegistry(getDefiningClassLoader());
             packageEntry = registry.packages().lookup(getRuntimePackage());
             // If the package name is not found in the loader's package
             // entry table, it is an indication that the package has not
@@ -1037,9 +1032,6 @@ public final class ObjectKlass extends Klass {
     }
 
     public RedefinitionCache getRedefineCache() {
-        // block execution during class redefinition
-        ClassRedefinition.check();
-
         RedefinitionCache cache = redefineCache;
         if (!cache.assumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -1050,199 +1042,29 @@ public final class ObjectKlass extends Klass {
         return cache;
     }
 
-    public void redefineClass(ChangePacket packet, List<ObjectKlass> refreshSubClasses, Ids<Object> ids) {
-        ParserKlass parserKlass = packet.parserKlass;
-        DetectedChange change = packet.detectedChange;
+    public void redefineClass(ParserKlass parserKlass) {
         RedefinitionCache oldVersion = redefineCache;
-        StaticObject classLoader = oldVersion.pool.getClassLoader();
-        RuntimeConstantPool pool = new RuntimeConstantPool(getContext(), parserKlass.getConstantPool(), classLoader);
+        StaticObject definingClassLoader = oldVersion.pool.getClassLoader();
+        RuntimeConstantPool pool = new RuntimeConstantPool(getContext(), parserKlass.getConstantPool(), definingClassLoader);
         ObjectKlass[] superInterfaces = getSuperInterfaces();
         LinkedKlass[] interfaces = new LinkedKlass[superInterfaces.length];
         for (int i = 0; i < superInterfaces.length; i++) {
             interfaces[i] = superInterfaces[i].getLinkedKlass();
         }
         LinkedKlass linkedKlass = new LinkedKlass(parserKlass, getSuperKlass().getLinkedKlass(), interfaces);
-
-        Method[][] itable = oldVersion.itable;
-        Method[] vtable = oldVersion.vtable;
-        ObjectKlass[] iKlassTable = oldVersion.iKlassTable;
-        Method[] mirandaMethods = oldVersion.mirandaMethods;
-        Method[] newDeclaredMethods = oldVersion.declaredMethods;
-
-        // changed methods
-        List<ParserMethod> changedMethodBodies = packet.detectedChange.getChangedMethodBodies();
-        for (ParserMethod changedMethod : changedMethodBodies) {
-            // find the old real method
-            Method method = findMethod(changedMethod, oldVersion.declaredMethods);
-            method.redefine(changedMethod, packet.parserKlass, ids);
-            JDWPLogger.log("Redefining method %s.%s", JDWPLogger.LogLevel.REDEFINE, method.getDeclaringKlass().getName(), method.getName());
-        }
-
-        if (change.getAddedAndRemovedMethods().size() > 0) {
-            LinkedList<Method> declaredMethods = new LinkedList<>(Arrays.asList(oldVersion.declaredMethods));
-            List<ParserMethod> removedMethods = change.getRemovedMethods();
-            List<ParserMethod> addedMethods = change.getAddedMethods();
-
-            // removed methods
-            Iterator<Method> it = declaredMethods.iterator();
-            while (it.hasNext()) {
-                Method oldDeclaredMethod = it.next();
-                if (removedMethods.contains(oldDeclaredMethod.getLinkedMethod().getParserMethod())) {
-                    it.remove();
-                    oldDeclaredMethod.removedByRedefinition();
-                    oldDeclaredMethod.getMethodVersion().getAssumption().invalidate();
-                    JDWPLogger.log("Removed method %s.%s", JDWPLogger.LogLevel.REDEFINE, oldDeclaredMethod.getDeclaringKlass().getName(), oldDeclaredMethod.getName());
-                }
-            }
-
-            // added methods
-            for (ParserMethod addedMethod : addedMethods) {
-                LinkedMethod linkedMethod = new LinkedMethod(addedMethod);
-                Method added = new Method(this, linkedMethod, pool);
-                JDWPLogger.log("Added method %s.%s", JDWPLogger.LogLevel.REDEFINE, added.getDeclaringKlass().getName(), added.getName());
-                declaredMethods.addLast(added);
-            }
-
-            newDeclaredMethods = declaredMethods.toArray(new Method[declaredMethods.size()]);
-
-            if (isInterface()) {
-                InterfaceTables.InterfaceCreationResult icr = InterfaceTables.constructInterfaceItable(this, newDeclaredMethods);
-                vtable = icr.methodtable;
-                iKlassTable = icr.klassTable;
-            } else {
-                InterfaceTables.CreationResult methodCR = InterfaceTables.create(getSuperKlass(), superInterfaces, newDeclaredMethods);
-                iKlassTable = methodCR.klassTable;
-                mirandaMethods = methodCR.mirandas;
-                vtable = VirtualTable.create(getSuperKlass(), newDeclaredMethods, this, mirandaMethods, true);
-                itable = InterfaceTables.fixTables(vtable, mirandaMethods, newDeclaredMethods, methodCR.tables, iKlassTable);
-            }
-            // in case of an added/removed virtual method, we must also update the tables
-            // which might have ripple implications on all subclasses
-            boolean isRefresh = false;
-            for (ParserMethod m : change.getAddedAndRemovedMethods()) {
-                if (isVirtual(m)) {
-                    isRefresh = true;
-                }
-                updateOverrideMethods(ids, m.getFlags(), m.getName(), m.getSignature());
-            }
-            if (isRefresh) {
-                refreshSubClasses.addAll(getSubTypes());
-            }
-        }
-
-        redefineCache = new RedefinitionCache(pool, linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
-
-        // flush caches before invalidating to avoid races
-        // a potential thread fetching new reflection data
-        // will be blocked at entry until the redefinition
-        // transaction is ended
-        flushReflectionCaches();
+        redefineCache = new RedefinitionCache(pool, linkedKlass);
         oldVersion.assumption.invalidate();
-    }
-
-    private void flushReflectionCaches() {
-        // increment the redefine count on the class instance to flush reflection caches
-        int value = InterpreterToVM.getFieldInt(mirror(), getMeta().java_lang_Class_classRedefinedCount);
-        InterpreterToVM.setFieldInt(++value, mirror(), getMeta().java_lang_Class_classRedefinedCount);
-    }
-
-    private static Method findMethod(ParserMethod changedMethod, Method[] declaredMethods) {
-        for (Method declaredMethod : declaredMethods) {
-            if (changedMethod.getName().equals(declaredMethod.getName()) && changedMethod.getSignature().equals(declaredMethod.getDescriptor())) {
-                return declaredMethod;
-            }
-        }
-        return null;
-    }
-
-    // if an added/removed method is an override of a super method
-    // we need to invalidate the super class method, to allow
-    // for new method dispatch lookup
-    private void updateOverrideMethods(Ids<Object> ids, int flags, Symbol<Name> name, Symbol<Signature> signature) {
-        if (!Modifier.isStatic(flags) && !Modifier.isPrivate(flags) && !Name._init_.equals(name)) {
-            ObjectKlass superKlass = getSuperKlass();
-
-            while (superKlass != null) {
-                // look for the method
-                int vtableIndex = superKlass.lookupVirtualMethod(name, signature, superKlass);
-                if (vtableIndex != -1) {
-                    superKlass.getVTable()[vtableIndex].onSubclassMethodChanged(ids);
-                }
-                superKlass = superKlass.getSuperKlass();
-            }
-        }
-    }
-
-    public void onSuperKlassUpdate() {
-        RedefinitionCache oldVersion = redefineCache;
-
-        Method[][] itable = oldVersion.itable;
-        Method[] vtable;
-        ObjectKlass[] iKlassTable;
-        Method[] mirandaMethods = oldVersion.mirandaMethods;
-        Method[] newDeclaredMethods = oldVersion.declaredMethods;
-
-        if (this.isInterface()) {
-            InterfaceTables.InterfaceCreationResult icr = InterfaceTables.constructInterfaceItable(this, newDeclaredMethods);
-            vtable = icr.methodtable;
-            iKlassTable = icr.klassTable;
-        } else {
-            InterfaceTables.CreationResult methodCR = InterfaceTables.create(getSuperKlass(), getSuperInterfaces(), newDeclaredMethods);
-            iKlassTable = methodCR.klassTable;
-            mirandaMethods = methodCR.mirandas;
-            vtable = VirtualTable.create(getSuperKlass(), newDeclaredMethods, this, mirandaMethods, true);
-            itable = InterfaceTables.fixTables(vtable, mirandaMethods, newDeclaredMethods, methodCR.tables, iKlassTable);
-        }
-
-        redefineCache = new RedefinitionCache(oldVersion.pool, oldVersion.linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
-
-        // flush caches before invalidating to avoid races
-        // a potential thread fetching new reflection data
-        // will be blocked at entry until the redefinition
-        // transaction is ended
-        flushReflectionCaches();
-        oldVersion.assumption.invalidate();
-    }
-
-    private List<ObjectKlass> getSubTypes() {
-        List<ObjectKlass> result = new ArrayList<>();
-        if (subTypes != null) {
-            for (WeakReference<ObjectKlass> subType : subTypes) {
-                ObjectKlass sub = subType.get();
-                if (sub != null) {
-                    result.add(sub);
-                    result.addAll(sub.getSubTypes());
-                }
-            }
-        }
-        return result;
-    }
-
-    private static boolean isVirtual(ParserMethod m) {
-        return !Modifier.isStatic(m.getFlags()) && !Modifier.isPrivate(m.getFlags()) && !Name._init_.equals(m.getName());
     }
 
     private static final class RedefinitionCache {
         final Assumption assumption;
         final RuntimeConstantPool pool;
         final LinkedKlass linkedKlass;
-        // Stores the VTable for classes, holds public non-static methods for interfaces.
-        private final Method[] vtable;
-        // TODO(garcia) Sort itables (according to an arbitrary key) for dichotomic search?
-        private final Method[][] itable;
-        private final ObjectKlass[] iKlassTable;
-        private final Method[] declaredMethods;
-        private final Method[] mirandaMethods;
 
-        RedefinitionCache(RuntimeConstantPool pool, LinkedKlass linkedKlass, Method[] declaredMethods, Method[] mirandaMethods, Method[] vtable, Method[][] itable, ObjectKlass[] iKlassTable) {
+        RedefinitionCache(RuntimeConstantPool pool, LinkedKlass linkedKlass) {
             this.assumption = Truffle.getRuntime().createAssumption();
             this.pool = pool;
             this.linkedKlass = linkedKlass;
-            this.declaredMethods = declaredMethods;
-            this.mirandaMethods = mirandaMethods;
-            this.itable = itable;
-            this.vtable = vtable;
-            this.iKlassTable = iKlassTable;
         }
     }
 }
