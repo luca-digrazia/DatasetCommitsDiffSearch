@@ -60,6 +60,7 @@ import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode.LLVMPointerDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Array;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.VarargsAreaStackAllocationNode;
@@ -420,8 +421,8 @@ public class LLVMVaListStorage implements TruffleObject {
 
         @Specialization
         Object createWrapper(LLVMPointer pointer,
-                        @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
-                        @Cached(value = "createVAListPointerWrapperFactoryCached(language)", uncached = "createVAListPointerWrapperFactoryUncached(language)") VAListPointerWrapperFactory wrapperFactory) {
+                             @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
+                             @Cached(value = "createVAListPointerWrapperFactoryCached(language)", uncached = "createVAListPointerWrapperFactoryUncached(language)") VAListPointerWrapperFactory wrapperFactory) {
             return wrapperFactory.execute(pointer);
         }
 
@@ -795,7 +796,7 @@ public class LLVMVaListStorage implements TruffleObject {
 
         @Specialization(guards = "!isNativePointer(x)")
         byte managedPointerObjectConversion(LLVMManagedPointer x, int offset,
-                        @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
+                                            @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile1,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile2,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile3) {
@@ -882,8 +883,8 @@ public class LLVMVaListStorage implements TruffleObject {
 
         @Specialization(guards = "!isNativePointer(x)")
         short managedPointerObjectConversion(LLVMManagedPointer x, int offset,
-                        @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
-                        @Cached("createBinaryProfile()") ConditionProfile conditionProfile1,
+                                             @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
+                                             @Cached("createBinaryProfile()") ConditionProfile conditionProfile1,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile2) {
             LLVMNativePointer nativePointer = toNativePointer.execute(x.getObject());
             return nativePointerObjectConversion(nativePointer, offset, conditionProfile1, conditionProfile2);
@@ -966,8 +967,8 @@ public class LLVMVaListStorage implements TruffleObject {
 
         @Specialization(guards = "!isNativePointer(x)")
         int managedPointerObjectConversion(LLVMManagedPointer x, int offset,
-                        @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
-                        @Cached("createBinaryProfile()") ConditionProfile conditionProfile) {
+                                           @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
+                                           @Cached("createBinaryProfile()") ConditionProfile conditionProfile) {
             LLVMNativePointer nativePointer = toNativePointer.execute(x.getObject());
             return nativePointerObjectConversion(nativePointer, offset, conditionProfile);
         }

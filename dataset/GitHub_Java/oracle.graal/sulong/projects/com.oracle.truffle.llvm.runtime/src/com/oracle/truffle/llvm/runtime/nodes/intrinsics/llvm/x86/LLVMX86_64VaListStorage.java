@@ -216,13 +216,6 @@ public final class LLVMX86_64VaListStorage extends LLVMVaListStorage {
         return nativized != null;
     }
 
-    // LLVMAsForeignLibrary
-
-    @ExportMessage
-    public static boolean isForeign(@SuppressWarnings("unused") LLVMX86_64VaListStorage receiver) {
-        return false;
-    }
-
     // NativeTypeLibrary library
 
     @SuppressWarnings("static-method")

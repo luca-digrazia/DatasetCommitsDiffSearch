@@ -161,13 +161,6 @@ public final class LLVMAarch64VaListStorage extends LLVMVaListStorage {
         return usedGpArea;
     }
 
-    // LLVMAsForeignLibrary
-
-    @ExportMessage
-    public static boolean isForeign(@SuppressWarnings("unused") LLVMAarch64VaListStorage receiver) {
-        return false;
-    }
-
     // LLVMCopyTargetLibrary
 
     @ExportMessage
