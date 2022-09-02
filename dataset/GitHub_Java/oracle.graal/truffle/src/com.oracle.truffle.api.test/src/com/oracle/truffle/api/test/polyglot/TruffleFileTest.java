@@ -53,8 +53,6 @@ import com.oracle.truffle.api.test.OSUtils;
 import com.oracle.truffle.api.test.polyglot.TruffleFileTest.DuplicateMimeTypeLanguage1.Language1Detector;
 import com.oracle.truffle.api.test.polyglot.TruffleFileTest.DuplicateMimeTypeLanguage2.Language2Detector;
 import com.oracle.truffle.api.test.polyglot.FileSystemsTest.ForwardingFileSystem;
-
-import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -87,7 +85,6 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.FileTime;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -95,19 +92,12 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.io.FileSystem;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -654,22 +644,18 @@ public class TruffleFileTest extends AbstractPolyglotTest {
             SeekableByteChannel readByteChannel1 = languageEnv.getPublicTruffleFile(read1.toString()).newByteChannel(EnumSet.of(StandardOpenOption.READ));
             assertEquals(1, fs.openFileCount);
             SeekableByteChannel readByteChannel2 = languageEnv.getPublicTruffleFile(read2.toString()).newByteChannel(EnumSet.of(StandardOpenOption.READ));
-            languageEnv.registerOnDispose(readByteChannel2);
             assertEquals(2, fs.openFileCount);
             InputStream inputStream1 = languageEnv.getPublicTruffleFile(read3.toString()).newInputStream();
             assertEquals(3, fs.openFileCount);
             InputStream inputStream2 = languageEnv.getPublicTruffleFile(read4.toString()).newInputStream();
-            languageEnv.registerOnDispose(inputStream2);
             assertEquals(4, fs.openFileCount);
             SeekableByteChannel writeByteChannel1 = languageEnv.getPublicTruffleFile(write1.toString()).newByteChannel(EnumSet.of(StandardOpenOption.WRITE));
             assertEquals(5, fs.openFileCount);
             SeekableByteChannel writeByteChannel2 = languageEnv.getPublicTruffleFile(write2.toString()).newByteChannel(EnumSet.of(StandardOpenOption.WRITE));
-            languageEnv.registerOnDispose(writeByteChannel2);
             assertEquals(6, fs.openFileCount);
             OutputStream outputStream1 = languageEnv.getPublicTruffleFile(write3.toString()).newOutputStream();
             assertEquals(7, fs.openFileCount);
             OutputStream outputStream2 = languageEnv.getPublicTruffleFile(write4.toString()).newOutputStream();
-            languageEnv.registerOnDispose(outputStream2);
             assertEquals(8, fs.openFileCount);
             readByteChannel1.close();
             assertEquals(7, fs.openFileCount);
@@ -699,7 +685,6 @@ public class TruffleFileTest extends AbstractPolyglotTest {
             DirectoryStream<TruffleFile> dirStream1 = languageEnv.getPublicTruffleFile(dir1.toString()).newDirectoryStream();
             assertEquals(1, fs.openDirCount);
             DirectoryStream<TruffleFile> dirStream2 = languageEnv.getPublicTruffleFile(dir2.toString()).newDirectoryStream();
-            languageEnv.registerOnDispose(dirStream2);
             assertEquals(2, fs.openDirCount);
             dirStream1.close();
             assertEquals(1, fs.openDirCount);
@@ -708,46 +693,6 @@ public class TruffleFileTest extends AbstractPolyglotTest {
         } finally {
             delete(p);
         }
-    }
-
-    @Test
-    public void testIOExceptionFromClose() {
-        TestHandler handler = new TestHandler();
-        setupEnv(Context.newBuilder().allowAllAccess(true).logHandler(handler).build());
-        Closeable closeable = new Closeable() {
-            @Override
-            public void close() throws IOException {
-                throw new IOException();
-            }
-        };
-        languageEnv.registerOnDispose(closeable);
-        context.close();
-        Optional<LogRecord> record = handler.findRecordByMessage("Failed to close.*");
-        assertTrue(record.isPresent());
-        assertEquals(Level.WARNING, record.map(LogRecord::getLevel).get());
-        assertEquals("engine", record.map(LogRecord::getLoggerName).get());
-    }
-
-    @Test
-    public void testUncheckedExceptionFromClose() {
-        TestHandler handler = new TestHandler();
-        setupEnv(Context.newBuilder().allowAllAccess(true).logHandler(handler).build());
-        Closeable closeable = new Closeable() {
-            @Override
-            public void close() throws IOException {
-                throw new RuntimeException();
-            }
-        };
-        languageEnv.registerOnDispose(closeable);
-        try {
-            assertFails(() -> context.close(), PolyglotException.class, (pe) -> {
-                assertTrue(pe.isInternalError());
-            });
-        } finally {
-            context = null;
-        }
-        Optional<LogRecord> record = handler.findRecordByMessage("Failed to close.*");
-        assertFalse(record.isPresent());
     }
 
     private static void delete(Path path) throws IOException {
@@ -1131,29 +1076,6 @@ public class TruffleFileTest extends AbstractPolyglotTest {
                     openDirCount--;
                 }
             }
-        }
-    }
-
-    private static final class TestHandler extends Handler {
-
-        private final List<LogRecord> records = new ArrayList<>();
-
-        @Override
-        public void publish(LogRecord record) {
-            records.add(record);
-        }
-
-        @Override
-        public void flush() {
-        }
-
-        @Override
-        public void close() {
-        }
-
-        Optional<LogRecord> findRecordByMessage(String regex) {
-            Pattern pattern = Pattern.compile(regex);
-            return records.stream().filter((r) -> r.getMessage() != null && pattern.matcher(r.getMessage()).matches()).findAny();
         }
     }
 }

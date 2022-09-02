@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -114,7 +114,7 @@ import com.oracle.truffle.polyglot.PolyglotLocals.InstrumentContextLocal;
 import com.oracle.truffle.polyglot.PolyglotLocals.InstrumentContextThreadLocal;
 import com.oracle.truffle.polyglot.PolyglotLocals.LanguageContextLocal;
 import com.oracle.truffle.polyglot.PolyglotLocals.LanguageContextThreadLocal;
-import com.oracle.truffle.polyglot.PolyglotSourceDispatch.EmbedderFileSystemContext;
+import com.oracle.truffle.polyglot.PolyglotSource.EmbedderFileSystemContext;
 
 final class EngineAccessor extends Accessor {
 
@@ -666,7 +666,7 @@ final class EngineAccessor extends Accessor {
         public Object toGuestValue(Object obj, Object context) {
             PolyglotLanguageContext languageContext = (PolyglotLanguageContext) context;
             if (obj instanceof Value) {
-                PolyglotValue valueImpl = (PolyglotValue) languageContext.getImpl().getAPIAccess().getDispatch((Value) obj);
+                PolyglotValue valueImpl = (PolyglotValue) languageContext.getImpl().getAPIAccess().getImpl((Value) obj);
                 languageContext = valueImpl.languageContext;
             }
             return languageContext.toGuestValue(null, obj);
@@ -793,7 +793,8 @@ final class EngineAccessor extends Accessor {
             PolyglotContextImpl impl;
             synchronized (creator.context) {
                 impl = new PolyglotContextImpl(creator, config);
-                impl.api = creator.getImpl().getAPIAccess().newContext(creator.getImpl().contextDispatch, impl, creator.context.engine.api);
+                impl.creatorApi = impl.getAPIAccess().newContext(impl);
+                impl.currentApi = impl.getAPIAccess().newContext(impl);
             }
             synchronized (impl) {
                 impl.initializeContextLocals();
@@ -1195,11 +1196,32 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public void registerOnDispose(Object engineObject, Closeable closeable) {
+        public void onCloseableCreated(Object engineObject, Closeable closeable) {
             if (engineObject instanceof PolyglotLanguageContext) {
-                ((PolyglotLanguageContext) engineObject).context.registerOnDispose(closeable);
+                ((PolyglotLanguageContext) engineObject).context.onCloseableCreated(closeable);
+            } else if (engineObject instanceof EmbedderFileSystemContext) {
+                /*
+                 * EmbedderFileSystemContext is a singleton held by PolyglotSource which is never
+                 * closed.
+                 */
+                return;
             } else {
-                throw CompilerDirectives.shouldNotReachHere("EngineObject must be PolyglotLanguageContext.");
+                throw CompilerDirectives.shouldNotReachHere("EngineObject must be either PolyglotLanguageContext or EmbedderFileSystemContext.");
+            }
+        }
+
+        @Override
+        public void onCloseableClosed(Object engineObject, Closeable closeable) {
+            if (engineObject instanceof PolyglotLanguageContext) {
+                ((PolyglotLanguageContext) engineObject).context.onCloseableClosed(closeable);
+            } else if (engineObject instanceof EmbedderFileSystemContext) {
+                /*
+                 * EmbedderFileSystemContext is a singleton held by PolyglotSource which is never
+                 * closed.
+                 */
+                return;
+            } else {
+                throw CompilerDirectives.shouldNotReachHere("EngineObject must be either PolyglotLanguageContext or EmbedderFileSystemContext.");
             }
         }
 
