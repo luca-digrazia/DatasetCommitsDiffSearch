@@ -37,7 +37,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -439,34 +438,13 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
     }
 
-    public static class StackTrace {
-        public StackElement[] trace;
-        public int size;
-        public int capacity;
-
-        public StackTrace() {
-            this.trace = new StackElement[EspressoContext.DEFAULT_STACK_SIZE];
-            this.capacity = EspressoContext.DEFAULT_STACK_SIZE;
-            this.size = 0;
-        }
-
-        public void add(StackElement e) {
-            if (size < capacity) {
-                trace[size++] = e;
-            } else {
-                trace = Arrays.copyOf(trace, capacity <<= 1);
-                trace[size++] = e;
-            }
-        }
-    }
-
     // endregion JNI Invocation Interface
     @VmImpl
     @JniImpl
     public @Host(Throwable.class) StaticObject JVM_FillInStackTrace(@Host(Throwable.class) StaticObject self, @SuppressWarnings("unused") int dummy) {
         assert EspressoException.isUnwinding(self, getMeta());
         assert self.getHiddenField(getMeta().HIDDEN_FRAMES) == null;
-        self.setHiddenField(getMeta().HIDDEN_FRAMES, new StackTrace());
+        self.setHiddenField(getMeta().HIDDEN_FRAMES, new ArrayList<StackElement>(EspressoContext.DEFAULT_STACK_SIZE));
         return self;
     }
 
@@ -475,12 +453,11 @@ public final class VM extends NativeEnv implements ContextAccess {
     @SuppressWarnings("unchecked")
     public int JVM_GetStackTraceDepth(@Host(Throwable.class) StaticObject self) {
         Meta meta = getMeta();
-        StackTrace frames = (StackTrace) self.getHiddenField(meta.HIDDEN_FRAMES);
-        if (EspressoException.isUnwinding(self, meta)) {
-            InterpreterToVM.fillInStackTrace(self, false, meta);
+        List<StackElement> stackTrace = (List<StackElement>) self.getHiddenField(meta.HIDDEN_FRAMES);
+        if (EspressoException.isUnwinding(self, getMeta())) {
+            InterpreterToVM.fillInStackTrace(self, getMeta());
         }
-        assert !EspressoException.isUnwinding(self, meta);
-        return frames.size;
+        return stackTrace.size();
     }
 
     @VmImpl
@@ -488,19 +465,12 @@ public final class VM extends NativeEnv implements ContextAccess {
     @SuppressWarnings("unchecked")
     public @Host(StackTraceElement.class) StaticObject JVM_GetStackTraceElement(@Host(Throwable.class) StaticObject self, int index) {
         Meta meta = getMeta();
-        if (index < 0) {
-            throw meta.throwEx(IndexOutOfBoundsException.class);
-        }
         StaticObject ste = meta.StackTraceElement.allocateInstance();
-        StackTrace frames = EspressoException.getFrames(self, meta);
-        if (EspressoException.isUnwinding(self, meta)) {
-            InterpreterToVM.fillInStackTrace(self, false, meta);
+        List<StackElement> stackTrace = ((List<StackElement>) self.getHiddenField(meta.HIDDEN_FRAMES));
+        if (EspressoException.isUnwinding(self, getMeta())) {
+            InterpreterToVM.fillInStackTrace(self, getMeta());
         }
-        assert !EspressoException.isUnwinding(self, meta);
-        if (index >= frames.size) {
-            throw meta.throwEx(IndexOutOfBoundsException.class);
-        }
-        StackElement stackElement = frames.trace[index];
+        StackElement stackElement = stackTrace.get(index);
         Method caller = stackElement.getMethod();
         if (caller == null) {
             return StaticObject.NULL;
@@ -511,7 +481,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                         /* this */ ste,
                         /* declaringClass */ meta.toGuestString(MetaUtil.internalNameToJava(caller.getDeclaringKlass().getType().toString(), true, true)),
                         /* methodName */ meta.toGuestString(caller.getName()),
-                        /* fileName */ meta.toGuestString(caller.getSourceFile()),
+                        /* fileName */ StaticObject.NULL,
                         /* lineNumber */ caller.BCItoLineNumber(bci));
 
         return ste;
