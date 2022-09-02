@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -84,8 +84,7 @@ public final class InspectorProfiler extends ProfilerDomain {
         this.connectionWatcher = connectionWatcher;
     }
 
-    @Override
-    public void doEnable() {
+    private void doEnable() {
         slh = context.acquireScriptsHandler();
         sampler = context.getEnv().lookup(context.getEnv().getInstruments().get(CPUSamplerInstrument.ID), CPUSampler.class);
         tracer = context.getEnv().lookup(context.getEnv().getInstruments().get(CPUTracerInstrument.ID), CPUTracer.class);
@@ -96,7 +95,14 @@ public final class InspectorProfiler extends ProfilerDomain {
     }
 
     @Override
-    public void doDisable() {
+    public void enable() {
+        if (slh == null) {
+            doEnable();
+        }
+    }
+
+    @Override
+    public void disable() {
         if (slh != null) {
             context.releaseScriptsHandler();
             slh = null;
