@@ -22,9 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import java.util.Arrays;
-
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
@@ -40,6 +37,7 @@ import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.jni.Word;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.object.DebugCounter;
@@ -71,14 +69,14 @@ public final class NativeRootNode extends EspressoMethodNode {
         } else {
             if (!Types.isPrimitive(espressoType)) {
                 assert arg instanceof StaticObject;
-                return (/* @Word */ long) env.getHandles().createLocal((StaticObject) arg);
+                return (@Word long) env.getHandles().createLocal((StaticObject) arg); // return handle as word
             }
             return arg;
         }
     }
 
     @ExplodeLoop
-    private Object[] preprocessArgs(JniEnv env, Object[] args) {
+    private final Object[] preprocessArgs(JniEnv env, Object[] args) {
         int paramCount = Signatures.parameterCount(getMethod().getParsedSignature(), false);
         Object[] unpacked = new Object[prependParams + paramCount + 1 /* class or receiver */];
         int argIndex = 0;
@@ -99,17 +97,16 @@ public final class NativeRootNode extends EspressoMethodNode {
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
+    public final Object invokeNaked(VirtualFrame frame) {
         final JniEnv env = getContext().getJNI();
 
         int nativeFrame = env.getHandles().pushFrame();
         try {
-            NATIVE_METHOD_CALLS.inc();
+            nativeCalls.inc();
             Object[] unpackedArgs = preprocessArgs(env, frame.getArguments());
             Object result = executeNative.execute(boundNative, unpackedArgs);
             return processResult(env, result);
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
             throw EspressoError.shouldNotReachHere(e);
         } finally {
             env.getHandles().popFramesIncluding(nativeFrame);
@@ -126,6 +123,10 @@ public final class NativeRootNode extends EspressoMethodNode {
         System.err.println("Calling native " + getMethod() + Arrays.toString(argsWithEnv));
     }
 
+    private Object callNative(Object[] argsWithEnv) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
+        return InteropLibrary.getFactory().getUncached().execute(boundNative, argsWithEnv);
+    }
+
     @TruffleBoundary
     private static void maybeThrowAndClearPendingException(JniEnv jniEnv) {
         StaticObject ex = jniEnv.getPendingException();
@@ -135,7 +136,7 @@ public final class NativeRootNode extends EspressoMethodNode {
         }
     }
 
-    protected Object processResult(JniEnv env, Object result) {
+    protected final Object processResult(JniEnv env, Object result) {
         assert env.getNativePointer() != 0;
 
         // JNI exception handling.
@@ -163,3 +164,4 @@ public final class NativeRootNode extends EspressoMethodNode {
         return result;
     }
 }
+
