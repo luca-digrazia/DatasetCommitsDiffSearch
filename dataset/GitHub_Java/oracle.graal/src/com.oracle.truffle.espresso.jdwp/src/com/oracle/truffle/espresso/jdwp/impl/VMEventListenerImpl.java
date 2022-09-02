@@ -503,6 +503,7 @@ public final class VMEventListenerImpl implements VMEventListener {
                 stream.writeLong(callFrame.getMethodId());
                 stream.writeLong(catchLocation);
                 caught = true;
+                break;
             }
         }
         if (!caught) {
@@ -523,7 +524,6 @@ public final class VMEventListenerImpl implements VMEventListener {
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(suspendPolicy);
-        suspend(suspendPolicy, guestThread);
         stream.writeInt(1); // # events in reply
 
         stream.writeByte(RequestedJDWPEvents.SINGLE_STEP);
@@ -535,6 +535,8 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeLong(currentFrame.getClassId());
         stream.writeLong(currentFrame.getMethodId());
         stream.writeLong(currentFrame.getCodeIndex());
+        JDWPLogger.log("Sending step completed event", JDWPLogger.LogLevel.STEPPING);
+
         if (holdEvents) {
             heldEvents.add(stream);
         } else {
@@ -674,7 +676,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         }
     }
 
-    private void suspend(byte suspendPolicy, Object... thread) {
+    private void suspend(byte suspendPolicy, Object thread) {
         switch(suspendPolicy) {
             case SuspendStrategy.NONE:
                 return;
