@@ -56,9 +56,11 @@ public class AnnotationSubstitutionType extends CustomSubstitutionType<Annotatio
     public ResolvedJavaType[] getInterfaces() {
         /* Filter out the ConstantAnnotationMarker interface. */
         ResolvedJavaType[] interfaces = super.getInterfaces();
-        return Arrays.stream(interfaces)
-                        .filter((t) -> !AnnotationSupport.isAnnotationMarkerInterface(t, metaAccess))
-                        .toArray(ResolvedJavaType[]::new);
+        return Arrays.stream(interfaces).filter(this::isNotAnnotationMarkerInterface).toArray(ResolvedJavaType[]::new);
+    }
+
+    private boolean isNotAnnotationMarkerInterface(ResolvedJavaType type) {
+        return !type.equals(metaAccess.lookupJavaType(ConstantAnnotationMarker.class));
     }
 
     @Override

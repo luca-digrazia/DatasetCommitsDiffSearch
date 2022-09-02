@@ -25,6 +25,7 @@
 package com.oracle.svm.hosted.annotation;
 
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,7 +34,6 @@ import java.util.Map;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaType;
@@ -76,7 +76,7 @@ public class AnnotationSubstitutionField extends CustomSubstitutionField {
              * Annotation elements that have a Class type can reference classes that are missing at
              * runtime. We declare the corresponding fields with the Object type to be able to store
              * a TypeNotPresentExceptionProxy which we then use to generate the
-             * TypeNotPresentException at runtime (see below).
+             * TypeNotPresentException at runtime (see bellow).
              */
             return metaAccess.lookupJavaType(Object.class);
         }
@@ -94,7 +94,7 @@ public class AnnotationSubstitutionField extends CustomSubstitutionField {
              */
             try {
                 /*
-                 * The code below assumes that the annotations have already been parsed and the
+                 * The code bellow assumes that the annotations have already been parsed and the
                  * result cached in the AnnotationInvocationHandler.memberValues field. The parsing
                  * is triggered, at the least, during object graph checking in
                  * Inflation.checkType(), or earlier when the type annotations are accessed for the
@@ -111,8 +111,11 @@ public class AnnotationSubstitutionField extends CustomSubstitutionField {
                  * modules.
                  */
                 Class<?> annotationInterface = AnnotationSupport.findAnnotationInterfaceTypeForMarkedAnnotationType(proxy.getClass());
-                annotationFieldValue = ReflectionUtil.lookupMethod(annotationInterface, accessorMethod.getName()).invoke(proxy);
-            } catch (IllegalAccessException | IllegalArgumentException ex) {
+                Method reflectionMethod = annotationInterface.getDeclaredMethod(accessorMethod.getName());
+                reflectionMethod.setAccessible(true);
+
+                annotationFieldValue = reflectionMethod.invoke(proxy);
+            } catch (IllegalAccessException | IllegalArgumentException | NoSuchMethodException ex) {
                 throw VMError.shouldNotReachHere(ex);
             } catch (InvocationTargetException ex) {
                 Throwable cause = ex.getCause();
