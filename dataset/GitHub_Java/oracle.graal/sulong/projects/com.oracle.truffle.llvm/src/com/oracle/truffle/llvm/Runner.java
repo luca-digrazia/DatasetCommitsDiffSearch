@@ -692,7 +692,7 @@ final class Runner {
             for (FunctionSymbol function : parserResult.getExternalFunctions()) {
                 LLVMSymbol globalSymbol = globalScope.get(function.getName());
                 if (globalSymbol == null) {
-                    globalSymbol = context.createFunctionDescriptor(function.getName(), function.getType(), new LLVMFunctionDescriptor.UnresolvedFunction(), null);
+                    globalSymbol = context.createFunctionDescriptor(function.getName(), function.getType());
                     globalScope.register(globalSymbol);
                 } else if (!globalSymbol.isFunction()) {
                     assert globalSymbol.isGlobalVariable();
