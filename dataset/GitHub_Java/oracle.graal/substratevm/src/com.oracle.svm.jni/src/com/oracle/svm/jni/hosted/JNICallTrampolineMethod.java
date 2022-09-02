@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,22 +27,20 @@ package com.oracle.svm.jni.hosted;
 // Checkstyle: allow reflection
 
 import java.lang.reflect.Modifier;
-import java.util.stream.Stream;
+import java.util.ArrayList;
+import java.util.List;
 
-import org.graalvm.compiler.asm.amd64.AMD64Address;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler;
-import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.graal.pointsto.meta.HostedProviders;
-import com.oracle.svm.core.graal.code.amd64.SubstrateAMD64Backend;
-import com.oracle.svm.core.graal.code.amd64.SubstrateCallingConventionType;
-import com.oracle.svm.core.graal.nodes.DeadEndNode;
-import com.oracle.svm.core.graal.nodes.UnreachableNode;
-import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.graal.code.SubstrateBackend;
+import com.oracle.svm.core.graal.code.SubstrateCallingConventionType;
+import com.oracle.svm.core.graal.nodes.LoweredDeadEndNode;
+import com.oracle.svm.core.thread.VMThreads;
 import com.oracle.svm.hosted.annotation.CustomSubstitutionMethod;
 import com.oracle.svm.hosted.code.CompileQueue.CompileFunction;
 import com.oracle.svm.hosted.code.CompileQueue.ParseFunction;
@@ -48,12 +48,12 @@ import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedUniverse;
 import com.oracle.svm.hosted.phases.HostedGraphKit;
+import com.oracle.svm.hosted.thread.VMThreadMTFeature;
 import com.oracle.svm.jni.access.JNIAccessibleMethod;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIMethodId;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 
-import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.meta.JavaType;
@@ -78,10 +78,12 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  */
 public class JNICallTrampolineMethod extends CustomSubstitutionMethod {
     private final ResolvedJavaField callWrapperField;
+    private final boolean nonVirtual;
 
-    public JNICallTrampolineMethod(ResolvedJavaMethod original, ResolvedJavaField callWrapperField) {
+    public JNICallTrampolineMethod(ResolvedJavaMethod original, ResolvedJavaField callWrapperField, boolean nonVirtual) {
         super(original);
         this.callWrapperField = callWrapperField;
+        this.nonVirtual = nonVirtual;
     }
 
     @Override
@@ -92,10 +94,9 @@ public class JNICallTrampolineMethod extends CustomSubstitutionMethod {
     @Override
     public StructuredGraph buildGraph(DebugContext debug, ResolvedJavaMethod method, HostedProviders providers, Purpose purpose) {
         HostedGraphKit kit = new JNIGraphKit(debug, providers, method);
-        kit.append(new UnreachableNode());
-        kit.append(new DeadEndNode());
-        assert kit.getGraph().verify();
-        return kit.getGraph();
+        kit.append(new LoweredDeadEndNode());
+
+        return kit.finalizeGraph();
     }
 
     public ParseFunction createCustomParseFunction() {
@@ -106,28 +107,33 @@ public class JNICallTrampolineMethod extends CustomSubstitutionMethod {
 
     public CompileFunction createCustomCompileFunction() {
         return (debug, method, identifier, reason, config) -> {
-            Backend backend = config.getBackendForNormalMethod();
-            VMError.guarantee(backend.getTarget().arch instanceof AMD64, "currently only implemented on AMD64");
+            SubstrateBackend backend = config.getBackendForNormalMethod();
 
             // Determine register for jmethodID argument
             HostedProviders providers = (HostedProviders) config.getProviders();
-            JavaType[] parameters = Stream.of(JNIEnvironment.class, JNIObjectHandle.class, JNIMethodId.class)
-                            .map(providers.getMetaAccess()::lookupJavaType).toArray(JavaType[]::new);
+            List<JavaType> parameters = new ArrayList<>();
+            parameters.add(providers.getMetaAccess().lookupJavaType(JNIEnvironment.class));
+            parameters.add(providers.getMetaAccess().lookupJavaType(JNIObjectHandle.class));
+            if (nonVirtual) {
+                parameters.add(providers.getMetaAccess().lookupJavaType(JNIObjectHandle.class));
+            }
+            parameters.add(providers.getMetaAccess().lookupJavaType(JNIMethodId.class));
             ResolvedJavaType returnType = providers.getWordTypes().getWordImplType();
             CallingConvention callingConvention = backend.getCodeCache().getRegisterConfig().getCallingConvention(
-                            SubstrateCallingConventionType.NativeCall, returnType, parameters, backend);
-            RegisterValue methodIdArg = (RegisterValue) callingConvention.getArgument(2);
+                            SubstrateCallingConventionType.NativeCall, returnType, parameters.toArray(new JavaType[0]), backend);
+            RegisterValue threadArg = null;
+            int threadIsolateOffset = -1;
+            if (SubstrateOptions.SpawnIsolates.getValue()) {
+                threadArg = (RegisterValue) callingConvention.getArgument(0); // JNIEnv
+                if (SubstrateOptions.MultiThreaded.getValue()) {
+                    threadIsolateOffset = ImageSingletons.lookup(VMThreadMTFeature.class).offsetOf(VMThreads.IsolateTL);
+                }
+                // NOTE: GR-17030: JNI is currently broken in the single-threaded, multi-isolate
+                // case. Fixing this also requires changes to how trampolines are generated.
+            }
+            RegisterValue methodIdArg = (RegisterValue) callingConvention.getArgument(parameters.size() - 1);
 
-            CompilationResult result = new CompilationResult(identifier);
-            AMD64Assembler asm = new AMD64Assembler(backend.getTarget());
-            int offset = getFieldOffset(providers);
-            asm.jmp(new AMD64Address(methodIdArg.getRegister(), offset));
-            result.recordMark(asm.position(), SubstrateAMD64Backend.MARK_PROLOGUE_DECD_RSP);
-            result.recordMark(asm.position(), SubstrateAMD64Backend.MARK_PROLOGUE_END);
-            byte[] instructions = asm.close(true);
-            result.setTargetCode(instructions, instructions.length);
-            result.setTotalFrameSize(backend.getTarget().wordSize); // not really, but 0 not allowed
-            return result;
+            return backend.createJNITrampolineMethod(method, identifier, threadArg, threadIsolateOffset, methodIdArg, getFieldOffset(providers));
         };
     }
 
