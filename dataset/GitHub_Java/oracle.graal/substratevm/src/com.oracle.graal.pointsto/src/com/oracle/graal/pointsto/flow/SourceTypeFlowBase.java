@@ -127,15 +127,14 @@ public abstract class SourceTypeFlowBase extends TypeFlow<BytecodePosition> {
     }
 
     @Override
+    public boolean canSaturate() {
+        return false;
+    }
+
+    @Override
     public boolean addState(BigBang bb, TypeState add) {
         /* Only a clone should be updated */
         assert this.isClone();
         return super.addState(bb, add);
-    }
-
-    @Override
-    public void update(BigBang bb) {
-        assert !getState().isEmpty() : "why update when state is still empty?";
-        super.update(bb);
     }
 }
