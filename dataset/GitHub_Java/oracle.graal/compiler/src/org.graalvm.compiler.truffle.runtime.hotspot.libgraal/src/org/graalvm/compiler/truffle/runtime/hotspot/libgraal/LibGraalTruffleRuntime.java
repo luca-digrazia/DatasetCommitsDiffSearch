@@ -116,19 +116,13 @@ final class LibGraalTruffleRuntime extends AbstractHotSpotTruffleRuntime {
         }
     }
 
-    @SuppressWarnings("unused")
     @Override
-    public int enterLibGraalScope() {
-        final LibGraalScope scope = new LibGraalScope();
-        return scope.getDepth();
+    public void enterLibGraalScope() {
+        new LibGraalScope();
     }
 
     @Override
-    public void exitLibGraalScope(int expectedDepth) {
-        LibGraalScope s = LibGraalScope.current();
-        if (s.getDepth() != expectedDepth) {
-            throw new IllegalStateException("The current nesting depth " + s.getDepth() + " is not equal to the expected depth " + expectedDepth);
-        }
-        s.close();
+    public void exitLibGraalScope() {
+        LibGraalScope.current().close();
     }
 }
