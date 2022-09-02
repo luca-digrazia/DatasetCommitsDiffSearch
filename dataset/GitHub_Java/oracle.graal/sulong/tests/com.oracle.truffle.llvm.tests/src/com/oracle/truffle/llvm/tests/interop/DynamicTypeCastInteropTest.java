@@ -50,7 +50,7 @@ import com.oracle.truffle.llvm.tests.interop.values.ArrayObject;
 
 public class DynamicTypeCastInteropTest extends InteropTestBase {
 
-    private static Object testLibraryInternal;
+    private static TruffleObject testLibraryInternal;
     private static Value testLibrary;
     private static Value test;
 
@@ -62,13 +62,17 @@ public class DynamicTypeCastInteropTest extends InteropTestBase {
     }
 
     @ExportLibrary(InteropLibrary.class)
-    @ExportLibrary(value = NativeTypeLibrary.class, useForAOT = false)
+    @ExportLibrary(NativeTypeLibrary.class)
     static class DynamicStructlikeObject implements TruffleObject {
         final HashMap<String, Object> map = new HashMap<>();
 
         DynamicStructlikeObject(HashMap<String, Object> map2) {
             map.putAll(map2);
             map.put("base", this);
+        }
+
+        public static boolean isInstance(TruffleObject obj) {
+            return obj instanceof DynamicStructlikeObject;
         }
 
         @ExportMessage
