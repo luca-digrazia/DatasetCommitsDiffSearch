@@ -105,7 +105,6 @@ public final class RegexSource implements JsonConvertible {
                         encoding.equals(((RegexSource) obj).encoding);
     }
 
-    @TruffleBoundary
     @Override
     public String toString() {
         return "/" + pattern + "/" + flags;
