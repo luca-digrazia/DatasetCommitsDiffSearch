@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,53 +42,209 @@ package com.oracle.truffle.polyglot;
 
 import java.util.LinkedList;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.SpecializationStatistics;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.utilities.TruffleWeakReference;
+
 final class PolyglotThreadInfo {
 
-    static final PolyglotThreadInfo NULL = new PolyglotThreadInfo(null);
+    static final PolyglotThreadInfo NULL = new PolyglotThreadInfo(null, null);
+    private static final Object NULL_CLASS_LOADER = new Object();
 
-    final Thread thread;
+    private final PolyglotContextImpl context;
+    private final TruffleWeakReference<Thread> thread;
 
-    private int enteredCount;
-    final LinkedList<Object> explicitContextStack = new LinkedList<>();
+    /*
+     * Only modify if Thread.currentThread() == thread.get().
+     */
+    private volatile int enteredCount;
+    final LinkedList<PolyglotContextImpl> explicitContextStack = new LinkedList<>();
     volatile boolean cancelled;
+    private Object originalContextClassLoader = NULL_CLASS_LOADER;
+    private ClassLoaderEntry prevContextClassLoader;
+    private SpecializationStatisticsEntry executionStatisticsEntry;
 
-    PolyglotThreadInfo(Thread thread) {
-        this.thread = thread;
+    private boolean safepointActive; // only accessed from current thread
+    private volatile Object[] contextThreadLocals;
+
+    PolyglotThreadInfo(PolyglotContextImpl context, Thread thread) {
+        this.context = context;
+        this.thread = new TruffleWeakReference<>(thread);
+    }
+
+    Thread getThread() {
+        return thread.get();
+    }
+
+    boolean isSafepointActive() {
+        assert isCurrent();
+        return safepointActive;
+    }
+
+    public void setSafepointActive(boolean safepointActive) {
+        assert isCurrent();
+        this.safepointActive = safepointActive;
+    }
+
+    public Object[] getContextThreadLocals() {
+        assert Thread.holdsLock(context);
+        return contextThreadLocals;
+    }
+
+    public void setContextThreadLocals(Object[] contextThreadLocals) {
+        assert Thread.holdsLock(context);
+        this.contextThreadLocals = contextThreadLocals;
     }
 
     boolean isCurrent() {
-        return thread == Thread.currentThread();
+        return getThread() == Thread.currentThread();
     }
 
-    void enter() {
-        assert Thread.currentThread() == thread;
+    /**
+     * Not to be used directly. Use
+     * {@link PolyglotEngineImpl#enter(PolyglotContextImpl, boolean, Node, boolean)} instead.
+     */
+    @SuppressFBWarnings("VO_VOLATILE_INCREMENT")
+    PolyglotContextImpl enterInternal() {
+        PolyglotContextImpl prev = PolyglotContextImpl.getSingleContextState().getContextThreadLocal().setReturnParent(context);
         enteredCount++;
+        return prev;
+    }
+
+    int getEnteredCount() {
+        assert Thread.currentThread() == thread.get();
+        return enteredCount;
+    }
+
+    /**
+     * Not to be used directly. Use
+     * {@link PolyglotEngineImpl#leave(PolyglotContextImpl, PolyglotContextImpl)} instead.
+     */
+    @SuppressFBWarnings("VO_VOLATILE_INCREMENT")
+    void leaveInternal(PolyglotContextImpl prev) {
+        enteredCount--;
+        PolyglotContextImpl.getSingleContextState().getContextThreadLocal().set(prev);
+    }
+
+    void notifyEnter(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext) {
+        if (!engine.customHostClassLoader.isValid()) {
+            setContextClassLoader();
+        }
+
+        EngineAccessor.INSTRUMENT.notifyEnter(engine.instrumentationHandler, profiledContext.creatorTruffleContext);
+
+        if (engine.specializationStatistics != null) {
+            enterStatistics(engine.specializationStatistics);
+        }
     }
 
     boolean isPolyglotThread(PolyglotContextImpl c) {
-        if (thread instanceof PolyglotThread) {
-            return ((PolyglotThread) thread).isOwner(c);
+        if (getThread() instanceof PolyglotThread) {
+            return ((PolyglotThread) getThread()).isOwner(c);
         }
         return false;
     }
 
-    void leave() {
-        assert Thread.currentThread() == thread;
-        --enteredCount;
+    /*
+     * Volatile decrement is safe if only one thread does it.
+     */
+    @SuppressFBWarnings("VO_VOLATILE_INCREMENT")
+    void notifyLeave(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext) {
+        /*
+         * Notify might be false if the context was closed already on a second thread.
+         */
+        try {
+            EngineAccessor.INSTRUMENT.notifyLeave(engine.instrumentationHandler, profiledContext.creatorTruffleContext);
+        } finally {
+            if (!engine.customHostClassLoader.isValid()) {
+                restoreContextClassLoader();
+            }
+            if (engine.specializationStatistics != null) {
+                leaveStatistics(engine.specializationStatistics);
+            }
+        }
     }
 
-    boolean isLastActive() {
-        assert Thread.currentThread() == thread;
-        return thread != null && enteredCount == 1 && !cancelled;
+    @TruffleBoundary
+    private void enterStatistics(SpecializationStatistics statistics) {
+        SpecializationStatistics prev = statistics.enter();
+        if (prev != null || this.executionStatisticsEntry != null) {
+            executionStatisticsEntry = new SpecializationStatisticsEntry(prev, executionStatisticsEntry);
+        }
+    }
+
+    @TruffleBoundary
+    private void leaveStatistics(SpecializationStatistics statistics) {
+        SpecializationStatisticsEntry entry = this.executionStatisticsEntry;
+        if (entry == null) {
+            statistics.leave(null);
+        } else {
+            statistics.leave(entry.statistics);
+            this.executionStatisticsEntry = entry.next;
+        }
+    }
+
+    boolean isActiveNotCancelled() {
+        return getThread() != null && enteredCount > 0 && !cancelled;
     }
 
     boolean isActive() {
-        return thread != null && enteredCount > 0 && !cancelled;
+        return getThread() != null && enteredCount > 0;
     }
 
     @Override
     public String toString() {
-        return super.toString() + "[thread=" + thread + ", enteredCount=" + enteredCount + ", cancelled=" + cancelled + "]";
+        return super.toString() + "[thread=" + getThread() + ", enteredCount=" + enteredCount + ", cancelled=" + cancelled + "]";
     }
 
+    @TruffleBoundary
+    private void setContextClassLoader() {
+        ClassLoader hostClassLoader = context.config.hostClassLoader;
+        if (hostClassLoader != null) {
+            Thread t = getThread();
+            ClassLoader original = t.getContextClassLoader();
+            assert originalContextClassLoader != NULL_CLASS_LOADER || prevContextClassLoader == null;
+            if (originalContextClassLoader != NULL_CLASS_LOADER) {
+                prevContextClassLoader = new ClassLoaderEntry((ClassLoader) originalContextClassLoader, prevContextClassLoader);
+            }
+            originalContextClassLoader = original;
+            t.setContextClassLoader(hostClassLoader);
+        }
+    }
+
+    @TruffleBoundary
+    private void restoreContextClassLoader() {
+        if (originalContextClassLoader != NULL_CLASS_LOADER) {
+            assert context.config.hostClassLoader != null;
+            Thread t = getThread();
+            t.setContextClassLoader((ClassLoader) originalContextClassLoader);
+            if (prevContextClassLoader != null) {
+                originalContextClassLoader = prevContextClassLoader.classLoader;
+                prevContextClassLoader = prevContextClassLoader.next;
+            } else {
+                originalContextClassLoader = NULL_CLASS_LOADER;
+            }
+        }
+    }
+
+    private static final class ClassLoaderEntry {
+        final ClassLoader classLoader;
+        final ClassLoaderEntry next;
+
+        ClassLoaderEntry(ClassLoader classLoader, ClassLoaderEntry next) {
+            this.classLoader = classLoader;
+            this.next = next;
+        }
+    }
+
+    private static final class SpecializationStatisticsEntry {
+        final SpecializationStatistics statistics;
+        final SpecializationStatisticsEntry next;
+
+        SpecializationStatisticsEntry(SpecializationStatistics statistics, SpecializationStatisticsEntry next) {
+            this.statistics = statistics;
+            this.next = next;
+        }
+    }
 }

@@ -733,42 +733,6 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public Object evalInternalContext(Node location, Object polyglotContext, Source source) {
-            PolyglotContextImpl context = ((PolyglotContextImpl) polyglotContext);
-            if (context.parent == null) {
-                throw PolyglotEngineException.illegalState("Only created inner contexts can be used to evaluate sources. " +
-                                "Use TruffleLanguage.Env.parseInternal(Source) or TruffleInstrument.Env.parse(Source) instead.");
-            }
-            PolyglotEngineImpl engine = resolveEngine(location, context);
-            PolyglotContextImpl prev = engine.enter(context);
-            try {
-                return evalBoundary(source, prev, context);
-            } finally {
-                engine.leave(prev, context);
-            }
-        }
-
-        @TruffleBoundary
-        private static Object evalBoundary(Source source, PolyglotContextImpl parentEnteredContext, PolyglotContextImpl context) {
-            if (parentEnteredContext != null && parentEnteredContext != context.parent && parentEnteredContext.engine == context.engine) {
-                throw PolyglotEngineException.illegalState("Invalid parent context entered. " +
-                                "The parent creator context or no context must be entered to evaluate code in an inner context.");
-            }
-            PolyglotLanguageContext targetContext = context.getContext(context.engine.requireLanguage(source.getLanguage()));
-            PolyglotLanguage accessingLanguage = context.creator;
-            targetContext.checkAccess(accessingLanguage);
-            Object result;
-            try {
-                CallTarget target = targetContext.parseCached(accessingLanguage, source, null);
-                result = target.call(PolyglotImpl.EMPTY_ARGS);
-            } catch (RuntimeException e) {
-                throw OtherContextGuestObject.migrateException(context.parent, e, context);
-            }
-            assert InteropLibrary.isValidValue(result) : "invalid call target return value";
-            return context.parent.migrateValue(result, context);
-        }
-
-        @Override
         public void leaveInternalContext(Node node, Object impl, Object prev) {
             CompilerAsserts.partialEvaluationConstant(node);
             PolyglotContextImpl context = ((PolyglotContextImpl) impl);
@@ -809,7 +773,7 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public TruffleContext createInternalContext(Object sourcePolyglotLanguageContext, Map<String, Object> config, boolean initializeCreatorContext) {
+        public TruffleContext createInternalContext(Object sourcePolyglotLanguageContext, Map<String, Object> config) {
             PolyglotLanguageContext creator = ((PolyglotLanguageContext) sourcePolyglotLanguageContext);
             PolyglotContextImpl impl;
             synchronized (creator.context) {
@@ -821,11 +785,9 @@ final class EngineAccessor extends Accessor {
             }
             synchronized (impl) {
                 impl.initializeContextLocals();
-                impl.engine.initializeMultiContext();
+                impl.engine.initializeMultiContext(creator.context);
                 impl.notifyContextCreated();
-                if (initializeCreatorContext) {
-                    impl.initializeInnerContextLanguage(creator.language.getId());
-                }
+                impl.initializeInnerContextLanguage(creator.language.getId());
             }
             return impl.creatorTruffleContext;
         }
