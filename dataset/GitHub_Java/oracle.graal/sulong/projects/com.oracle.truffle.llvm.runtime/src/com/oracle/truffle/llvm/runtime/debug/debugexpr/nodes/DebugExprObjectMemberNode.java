@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import com.oracle.truffle.api.dsl.Specialization;
 import org.graalvm.collections.Pair;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -43,7 +42,7 @@ import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeInfo(shortName = ".")
-public abstract class DebugExprObjectMemberNode extends LLVMExpressionNode implements MemberAccessible {
+public class DebugExprObjectMemberNode extends LLVMExpressionNode implements MemberAccessible {
 
     @Child private LLVMExpressionNode baseNode;
     private final String fieldName;
@@ -96,8 +95,8 @@ public abstract class DebugExprObjectMemberNode extends LLVMExpressionNode imple
         throw DebugExprException.symbolNotFound(this, fieldName, baseMember);
     }
 
-    @Specialization
-    Object doObjectMember(VirtualFrame frame) {
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
         Object baseMember = baseNode.executeGeneric(frame);
         Pair<Object, DebugExprType> pair = findMemberAndType(baseMember);
         Object member = pair.getLeft();

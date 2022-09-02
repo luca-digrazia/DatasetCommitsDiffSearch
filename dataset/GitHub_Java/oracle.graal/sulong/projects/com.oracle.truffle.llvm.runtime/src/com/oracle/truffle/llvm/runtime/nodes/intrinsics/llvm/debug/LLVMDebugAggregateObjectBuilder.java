@@ -38,7 +38,7 @@ import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 
-public final class LLVMDebugAggregateObjectBuilder extends LLVMDebugObjectBuilder {
+final class LLVMDebugAggregateObjectBuilder extends LLVMDebugObjectBuilder {
 
     @CompilationFinal(dimensions = 1) private final int[] offsets;
     @CompilationFinal(dimensions = 1) private final int[] lengths;
@@ -46,7 +46,7 @@ public final class LLVMDebugAggregateObjectBuilder extends LLVMDebugObjectBuilde
     private final LLVMDebugValue.Builder[] partBuilders;
     private final Object[] partValues;
 
-    public LLVMDebugAggregateObjectBuilder(int[] offsets, int[] lengths) {
+    LLVMDebugAggregateObjectBuilder(int[] offsets, int[] lengths) {
         super();
         this.offsets = offsets;
         this.lengths = lengths;
@@ -54,16 +54,14 @@ public final class LLVMDebugAggregateObjectBuilder extends LLVMDebugObjectBuilde
         this.partValues = new Object[offsets.length];
     }
 
-    public void setPart(int partIndex, LLVMDebugValue.Builder builder, Object value) {
+    void setPart(int partIndex, LLVMDebugValue.Builder builder, Object value) {
         partBuilders[partIndex] = builder;
         partValues[partIndex] = value;
     }
 
-    public void clear(int[] clearIndices) {
-        for (int partIndex : clearIndices) {
-            partValues[partIndex] = null;
-            partBuilders[partIndex] = null;
-        }
+    void clear(int partIndex) {
+        partValues[partIndex] = null;
+        partBuilders[partIndex] = null;
     }
 
     @Override
