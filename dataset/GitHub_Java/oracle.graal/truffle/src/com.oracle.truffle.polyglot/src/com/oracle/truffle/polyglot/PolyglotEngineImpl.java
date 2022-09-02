@@ -74,7 +74,6 @@ import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
-import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
 
@@ -159,7 +158,7 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
     Map<String, Level> logLevels;    // effectively final
     private HostClassCache hostClassCache; // effectively final
     private volatile Object engineLoggers;
-    private volatile Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectorsSupplier;
+    private volatile Supplier<Iterable<? extends TruffleFile.FileTypeDetector>> fileTypeDetectorsSupplier;
 
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options,
                     boolean allowExperimentalOptions, boolean useSystemProperties, ClassLoader contextClassLoader, boolean boundEngine,
@@ -927,16 +926,15 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
         ENGINES.clear();
     }
 
-    void initializeHostAccess(HostAccess policy) {
+    void assignHostAccess(HostAccess policy) {
         assert Thread.holdsLock(this);
-        assert policy != null;
-        HostClassCache cache = HostClassCache.findOrInitialize(getAPIAccess(), policy);
-        if (this.hostClassCache != null && this.hostClassCache != cache) {
-            throw new IllegalStateException("Found different host access configuration for a context with a shared engine. " +
-                            "The host access configuration must be the same for all contexts of an engine. " +
-                            "Provide the same host access configuration using the Context.Builder.allowHostAccess method when constructing the context.");
+        HostAccess nonNullAccess = policy == null ? HostAccess.EXPLICIT : policy;
+        if (hostClassCache != null) {
+            if (!hostClassCache.checkHostAccess(nonNullAccess)) {
+                throw new IllegalStateException("Cannot share engine between contexts with different HostAccess");
+            }
         } else {
-            this.hostClassCache = cache;
+            hostClassCache = HostClassCache.find(getAPIAccess(), nonNullAccess);
         }
     }
 
@@ -1098,16 +1096,16 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
     @SuppressWarnings({"all"})
     public synchronized Context createContext(OutputStream configOut, OutputStream configErr, InputStream configIn, boolean allowHostLookup,
                     HostAccess access,
-                    PolyglotAccess polyglotAccess, boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO,
-                    boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter, Map<String, String> options,
-                    Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream) {
+                    boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading,
+                    boolean allowExperimentalOptions, Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments,
+                    String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream) {
         checkState();
         if (boundEngine && preInitializedContext == null && !contexts.isEmpty()) {
             throw new IllegalArgumentException("Automatically created engines cannot be used to create more than one context. " +
                             "Use Engine.newBuilder().build() to construct a new engine and pass it using Context.newBuilder().engine(engine).build().");
         }
 
-        initializeHostAccess(access);
+        assignHostAccess(access);
 
         Set<String> allowedLanguages;
         if (onlyLanguages.length == 0) {
@@ -1144,7 +1142,7 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
         final InputStream useIn = configIn == null ? this.in : configIn;
 
         PolyglotContextConfig config = new PolyglotContextConfig(this, useOut, useErr, useIn,
-                        allowHostLookup, polyglotAccess, allowNativeAccess, allowCreateThread, allowHostClassLoading,
+                        allowHostLookup, allowNativeAccess, allowCreateThread, allowHostClassLoading,
                         allowExperimentalOptions, classFilter, arguments, allowedLanguages, options, fs, useHandler);
 
         PolyglotContextImpl context = loadPreinitializedContext(config);
@@ -1211,8 +1209,8 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
         return engineLoggers;
     }
 
-    Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> getFileTypeDetectorsSupplier() {
-        Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> res = fileTypeDetectorsSupplier;
+    Supplier<Iterable<? extends TruffleFile.FileTypeDetector>> getFileTypeDetectorsSupplier() {
+        Supplier<Iterable<? extends TruffleFile.FileTypeDetector>> res = fileTypeDetectorsSupplier;
         if (res == null) {
             synchronized (this) {
                 res = fileTypeDetectorsSupplier;

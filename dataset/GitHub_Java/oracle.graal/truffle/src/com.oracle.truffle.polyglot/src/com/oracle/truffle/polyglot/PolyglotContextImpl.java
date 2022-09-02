@@ -1175,7 +1175,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                         engine.err,
                         engine.in,
                         false,
-                        null,
                         false,
                         false,
                         false,

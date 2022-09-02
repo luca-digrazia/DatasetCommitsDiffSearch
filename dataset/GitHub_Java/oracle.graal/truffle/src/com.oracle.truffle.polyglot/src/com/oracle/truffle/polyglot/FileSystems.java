@@ -73,7 +73,6 @@ import java.util.function.Supplier;
 import java.util.function.Function;
 
 import com.oracle.truffle.api.TruffleFile;
-import java.nio.charset.Charset;
 import org.graalvm.polyglot.io.FileSystem;
 
 final class FileSystems {
@@ -115,7 +114,7 @@ final class FileSystems {
         return fileSystem != null && fileSystem.getClass() == DeniedIOFileSystem.class;
     }
 
-    static Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> newFileTypeDetectorsSupplier(Iterable<LanguageCache> languageCaches) {
+    static Supplier<Iterable<? extends TruffleFile.FileTypeDetector>> newFileTypeDetectorsSupplier(Iterable<LanguageCache> languageCaches) {
         return new FileTypeDetectorsSupplier(languageCaches);
     }
 
@@ -287,21 +286,11 @@ final class FileSystems {
             return delegate.getSeparator();
         }
 
-        @Override
-        public Charset getEncoding(Path path) {
-            return delegate.getEncoding(unwrap(path));
-        }
-
-        @Override
-        public String getMimeType(Path path) {
-            return delegate.getMimeType(unwrap(path));
-        }
-
         Path wrap(Path path) {
             return path == null ? null : factory.apply(path);
         }
 
-        static Path unwrap(Path path) {
+        Path unwrap(Path path) {
             return path.getClass() == PreInitializePath.class ? ((PreInitializePath) path).getDelegate() : path;
         }
 
@@ -370,14 +359,13 @@ final class FileSystems {
             private Path getDelegate() {
                 if (delegatePath instanceof Path) {
                     return (Path) delegatePath;
-                } else if (delegatePath instanceof ImageHeapPath) {
-                    ImageHeapPath imageHeapPath = (ImageHeapPath) delegatePath;
-                    String languageId = imageHeapPath.languageId;
-                    String path = imageHeapPath.path;
+                } else if (delegatePath instanceof String[]) {
+                    String[] pair = (String[]) delegatePath;
+                    String languageId = pair[0];
+                    String path = pair[1];
                     Path result;
-                    String newLanguageHome;
-                    if (languageId != null && (newLanguageHome = LanguageCache.languages(null).get(languageId).getLanguageHome()) != null) {
-                        result = delegate.parsePath(newLanguageHome).resolve(path);
+                    if (languageId != null) {
+                        result = delegate.parsePath(LanguageCache.languages(null).get(languageId).getLanguageHome()).resolve(path);
                     } else {
                         result = delegate.parsePath(path);
                     }
@@ -398,7 +386,7 @@ final class FileSystems {
                         break;
                     }
                 }
-                delegatePath = new ImageHeapPath(languageId, internalPath.toString());
+                delegatePath = new String[]{languageId, internalPath.toString()};
             }
 
             @Override
@@ -550,18 +538,6 @@ final class FileSystems {
             @Override
             public String toString() {
                 return getDelegate().toString();
-            }
-        }
-
-        private static final class ImageHeapPath {
-
-            private final String languageId;
-            private final String path;
-
-            ImageHeapPath(String languageId, String path) {
-                assert path != null;
-                this.languageId = languageId;
-                this.path = path;
             }
         }
     }
@@ -949,7 +925,7 @@ final class FileSystems {
         }
     }
 
-    private static final class FileTypeDetectorsSupplier implements Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> {
+    private static final class FileTypeDetectorsSupplier implements Supplier<Iterable<? extends TruffleFile.FileTypeDetector>> {
 
         private final Iterable<LanguageCache> languageCaches;
 
@@ -958,22 +934,10 @@ final class FileSystems {
         }
 
         @Override
-        public Map<String, Collection<? extends TruffleFile.FileTypeDetector>> get() {
-            Map<String, Collection<? extends TruffleFile.FileTypeDetector>> detectors = new HashMap<>();
+        public Iterable<? extends TruffleFile.FileTypeDetector> get() {
+            Collection<TruffleFile.FileTypeDetector> detectors = new ArrayList<>();
             for (LanguageCache cache : languageCaches) {
-                for (String mimeType : cache.getMimeTypes()) {
-                    Collection<? extends TruffleFile.FileTypeDetector> languageDetectors = cache.getFileTypeDetectors();
-                    Collection<? extends TruffleFile.FileTypeDetector> mimeTypeDetectors = detectors.get(mimeType);
-                    if (mimeTypeDetectors != null) {
-                        if (!languageDetectors.isEmpty()) {
-                            Collection<TruffleFile.FileTypeDetector> mergedDetectors = new ArrayList<>(mimeTypeDetectors);
-                            mergedDetectors.addAll(languageDetectors);
-                            detectors.put(mimeType, mergedDetectors);
-                        }
-                    } else {
-                        detectors.put(mimeType, languageDetectors);
-                    }
-                }
+                detectors.addAll(cache.getFileTypeDetectors());
             }
             return detectors;
         }
