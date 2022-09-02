@@ -75,7 +75,6 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      *
      * @see InteropLibrary#isString(Object)
      */
-    @Substitution
     public static boolean isString(@Host(Object.class) StaticObject receiver) {
         return UNCACHED.isString(unwrap(receiver));
     }
