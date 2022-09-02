@@ -36,7 +36,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
@@ -55,20 +54,10 @@ import com.oracle.svm.hosted.c.util.FileUtils;
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.sparc.SPARC;
 
 public abstract class CCompilerInvoker {
 
     public final Path tempDirectory;
-    public final CompilerInfo compilerInfo;
-
-    public CCompilerInvoker(Path tempDirectory) {
-        this.tempDirectory = tempDirectory;
-        this.compilerInfo = getCCompilerInfo();
-        if (compilerInfo == null) {
-            UserError.abort(String.format("Unable to detect supported %s native software development toolchain.", OS.getCurrent().name()));
-        }
-    }
 
     public static CCompilerInvoker create(Path tempDirectory) {
         OS hostOS = OS.getCurrent();
@@ -85,7 +74,6 @@ public abstract class CCompilerInvoker {
     }
 
     private static class WindowsCCompilerInvoker extends CCompilerInvoker {
-
         WindowsCCompilerInvoker(Path tempDirectory) {
             super(tempDirectory);
         }
@@ -124,14 +112,20 @@ public abstract class CCompilerInvoker {
             try {
                 /* For cl.exe the first line holds all necessary information */
                 scanner.findInLine(Pattern.quote("Microsoft (R) C/C++ Optimizing Compiler Version "));
-                scanner.useDelimiter("[. ]");
+                scanner.useDelimiter(Pattern.quote("."));
                 int major = scanner.nextInt();
-                int minor0 = scanner.nextInt();
-                int minor1 = scanner.nextInt();
+                int minor = scanner.nextInt();
                 scanner.reset(); /* back to default delimiters */
-                scanner.findInLine("for ");
-                String targetArch = scanner.next();
-                return new CompilerInfo("microsoft", "C/C++ Optimizing Compiler", "cl", major, minor0, minor1, targetArch);
+                scanner.findInLine(" for ");
+                Class<? extends Architecture> arch;
+                switch (scanner.next()) {
+                    case "x64":
+                        arch = AMD64.class;
+                        break;
+                    default:
+                        arch = null;
+                }
+                return new CompilerInfo("Microsoft", "C/C++ Optimizing Compiler", "cl", major, minor, arch);
             } catch (Exception e) {
                 return null;
             }
@@ -139,6 +133,10 @@ public abstract class CCompilerInvoker {
 
         @Override
         public void verifyCompiler() {
+            CompilerInfo compilerInfo = getCCompilerInfo();
+            if (compilerInfo == null) {
+                UserError.abort("Unable to detect supported Windows native software development toolchain.");
+            }
             if (JavaVersionUtil.JAVA_SPEC >= 11) {
                 if (compilerInfo.versionMajor < 19) {
                     UserError.abort("Java " + JavaVersionUtil.JAVA_SPEC +
@@ -146,20 +144,17 @@ public abstract class CCompilerInvoker {
                 }
             } else {
                 VMError.guarantee(JavaVersionUtil.JAVA_SPEC == 8, "Native-image building is only supported for Java 8 and Java 11 or later");
-                if (compilerInfo.versionMajor != 16 || compilerInfo.versionMinor0 != 0) {
+                if (compilerInfo.versionMajor != 16 || compilerInfo.versionMinor != 0) {
                     UserError.abort("Java 8 native-image building on Windows requires Microsoft Windows SDK 7.1");
                 }
             }
-            if (guessArchitecture(compilerInfo.targetArch) != AMD64.class) {
-                UserError.abort(String.format("Native-image building on Windows currently only supports target architecture: %s (%s unsupported)",
-                                AMD64.class.getSimpleName(), compilerInfo.targetArch));
+            if (compilerInfo.target != AMD64.class) {
+                UserError.abort("Native-image building on Windows currently only supported for target architecture: " + AMD64.class.getSimpleName());
             }
         }
-
     }
 
     private static class LinuxCCompilerInvoker extends CCompilerInvoker {
-
         LinuxCCompilerInvoker(Path tempDirectory) {
             super(tempDirectory);
         }
@@ -172,15 +167,30 @@ public abstract class CCompilerInvoker {
         @Override
         protected CompilerInfo createCompilerInfo(Scanner scanner) {
             try {
-                String[] triplet = guessTargetTriplet(scanner);
+                while (scanner.findInLine("Target: ") == null) {
+                    scanner.nextLine();
+                }
+                scanner.useDelimiter("-");
+                Class<? extends Architecture> arch;
+                switch (scanner.next()) {
+                    case "x86_64":
+                        arch = AMD64.class;
+                        break;
+                    case "aarch64":
+                        arch = AArch64.class;
+                        break;
+                    default:
+                        arch = null;
+                }
+                String vendor = scanner.next();
+                scanner.reset(); /* back to default delimiters */
                 while (scanner.findInLine("gcc version ") == null) {
                     scanner.nextLine();
                 }
-                scanner.useDelimiter("[. ]");
+                scanner.useDelimiter(Pattern.quote("."));
                 int major = scanner.nextInt();
-                int minor0 = scanner.nextInt();
-                int minor1 = scanner.nextInt();
-                return new CompilerInfo(triplet[1], "GNU project C and C++ compiler", "gcc", major, minor0, minor1, triplet[0]);
+                int minor = scanner.nextInt();
+                return new CompilerInfo(vendor, "GNU project C and C++ compiler", "gcc", major, minor, arch);
             } catch (Exception e) {
                 return null;
             }
@@ -188,16 +198,18 @@ public abstract class CCompilerInvoker {
 
         @Override
         public void verifyCompiler() {
+            CompilerInfo compilerInfo = getCCompilerInfo();
+            if (compilerInfo == null) {
+                UserError.abort("Unable to detect supported Linux native software development toolchain.");
+            }
             Class<? extends Architecture> substrateTargetArch = ImageSingletons.lookup(SubstrateTargetDescription.class).arch.getClass();
-            if (guessArchitecture(compilerInfo.targetArch) != substrateTargetArch) {
-                UserError.abort(String.format("Native toolchain (%s) and native-image target architecture (%s) mismatch.", compilerInfo.targetArch, substrateTargetArch));
+            if (compilerInfo.target != substrateTargetArch) {
+                UserError.abort(String.format("Native toolchain (%s) and native-image target architecture (%s) mismatch.", compilerInfo.target, substrateTargetArch));
             }
         }
-
     }
 
     private static class DarwinCCompilerInvoker extends CCompilerInvoker {
-
         DarwinCCompilerInvoker(Path tempDirectory) {
             super(tempDirectory);
         }
@@ -206,37 +218,18 @@ public abstract class CCompilerInvoker {
         protected String getDefaultCompiler() {
             return "cc";
         }
+    }
 
-        @Override
-        protected CompilerInfo createCompilerInfo(Scanner scanner) {
-            try {
-                while (scanner.findInLine("Apple LLVM version ") == null) {
-                    scanner.nextLine();
-                }
-                scanner.useDelimiter("[. ]");
-                int major = scanner.nextInt();
-                int minor0 = scanner.nextInt();
-                int minor1 = scanner.nextInt();
-                scanner.reset(); /* back to default delimiters */
-                String[] triplet = guessTargetTriplet(scanner);
-                return new CompilerInfo(triplet[1], "LLVM", "clang", major, minor0, minor1, triplet[0]);
-            } catch (Exception e) {
-                return null;
-            }
-        }
-
-        @Override
-        public void verifyCompiler() {
-            if (guessArchitecture(compilerInfo.targetArch) != AMD64.class) {
-                UserError.abort(String.format("Native-image building on Darwin currently only supports target architecture: %s (%s unsupported)",
-                                AMD64.class.getSimpleName(), compilerInfo.targetArch));
-            }
-        }
-
+    public CCompilerInvoker(Path tempDirectory) {
+        this.tempDirectory = tempDirectory;
     }
 
     protected InputStream getCompilerErrorStream(Process compilingProcess) {
         return compilingProcess.getErrorStream();
+    }
+
+    public interface CompilerErrorHandler {
+        void handle(ProcessBuilder current, Path source, String line);
     }
 
     public static final class CompilerInfo {
@@ -244,35 +237,22 @@ public abstract class CCompilerInvoker {
         public final String shortName;
         public final String vendor;
         public final int versionMajor;
-        public final int versionMinor0;
-        public final int versionMinor1;
-        public final String targetArch;
+        public final int versionMinor;
+        public final Class<? extends Architecture> target;
 
-        public CompilerInfo(String vendor, String name, String shortName, int versionMajor, int versionMinor0, int versionMinor1, String targetArch) {
+        public CompilerInfo(String vendor, String name, String shortName, int versionMajor, int versionMinor, Class<? extends Architecture> target) {
             this.name = name;
             this.vendor = vendor;
             this.shortName = shortName;
             this.versionMajor = versionMajor;
-            this.versionMinor0 = versionMinor0;
-            this.versionMinor1 = versionMinor1;
-            this.targetArch = targetArch;
-        }
-
-        @Override
-        public String toString() {
-            return String.join("|", Arrays.asList(shortName, vendor, targetArch,
-                            String.format("%d.%d.%d", versionMajor, versionMinor0, versionMinor1)));
-        }
-
-        public void dump(Consumer<String> sink) {
-            sink.accept("Name: " + name + " (" + shortName + ")");
-            sink.accept("Vendor: " + vendor);
-            sink.accept(String.format("Version: %d.%d.%d", versionMajor, versionMinor0, versionMinor1));
-            sink.accept("Target architecture: " + targetArch);
+            this.versionMinor = versionMinor;
+            this.target = target;
         }
     }
 
-    public abstract void verifyCompiler();
+    public void verifyCompiler() {
+        /* Currently verification is only implemented for Windows. */
+    }
 
     public CompilerInfo getCCompilerInfo() {
         List<String> compilerCommand = createCompilerCommand(getVersionInfoOptions(), null);
@@ -304,41 +284,9 @@ public abstract class CCompilerInvoker {
         return Arrays.asList("-v");
     }
 
-    protected abstract CompilerInfo createCompilerInfo(Scanner scanner);
-
-    protected static String[] guessTargetTriplet(Scanner scanner) {
-        while (scanner.findInLine("Target: ") == null) {
-            scanner.nextLine();
-        }
-        scanner.useDelimiter("-");
-        String arch = scanner.next();
-        String vendor = scanner.next();
-        String os = scanner.nextLine();
-        os = os.startsWith("-") ? os.substring(1) : os;
-        scanner.reset(); /* back to default delimiters */
-        return new String[]{arch, vendor, os};
-    }
-
-    protected static Class<? extends Architecture> guessArchitecture(String archStr) {
-        Class<? extends Architecture> arch;
-        switch (archStr) {
-            case "x86_64":
-            case "x64": /* Windows notation */
-                return AMD64.class;
-            case "aarch64":
-                return AArch64.class;
-            case "sparc64":
-                return SPARC.class;
-            case "i686":
-            case "80x86": /* Windows notation */
-                /* Graal does not support 32-bit architectures */
-            default:
-                return null;
-        }
-    }
-
-    public interface CompilerErrorHandler {
-        void handle(ProcessBuilder current, Path source, String line);
+    @SuppressWarnings("unused")
+    protected CompilerInfo createCompilerInfo(Scanner scanner) {
+        return null;
     }
 
     public void compileAndParseError(List<String> options, Path source, Path target, CompilerErrorHandler handler) {
