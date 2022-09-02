@@ -96,26 +96,6 @@ final class JDWP {
             }
         }
 
-        static class ALL_CLASSES {
-            public static final int ID = 3;
-
-            static CommandResult createReply(Packet packet, JDWPContext context) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                KlassRef[] allLoadedClasses = context.getAllLoadedClasses();
-                reply.writeInt(allLoadedClasses.length);
-
-                for (KlassRef klass : allLoadedClasses) {
-                    reply.writeByte(TypeTag.getKind(klass));
-                    reply.writeLong(context.getIds().getIdAsLong(klass));
-                    reply.writeString(klass.getTypeAsString());
-                    reply.writeInt(klass.getStatus());
-                }
-
-                return new CommandResult(reply);
-            }
-        }
-
         static class ALL_THREADS {
             public static final int ID = 4;
 
@@ -312,7 +292,9 @@ final class JDWP {
                     reply.writeByte(TypeTag.getKind(klass));
                     reply.writeLong(context.getIds().getIdAsLong(klass));
                     reply.writeString(klass.getTypeAsString());
-                    reply.writeString(klass.getGenericTypeAsString());
+                    // TODO(Gregersen) - generic signature if any
+                    // tracked by /browse/GR-19818
+                    reply.writeString("");
                     reply.writeInt(klass.getStatus());
                 }
 

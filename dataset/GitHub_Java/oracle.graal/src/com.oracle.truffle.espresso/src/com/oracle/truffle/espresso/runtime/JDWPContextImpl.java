@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.runtime;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.List;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Debugger;
@@ -110,8 +111,76 @@ public final class JDWPContextImpl implements JDWPContext {
 
     @Override
     public KlassRef[] findLoadedClass(String slashName) {
-        Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(slashName);
-        return context.getRegistries().findLoadedClassAny(type);
+        if (slashName.length() == 1) {
+            switch (slashName) {
+                case "I":
+                    return new KlassRef[]{context.getMeta()._int.getArrayClass()};
+                case "Z":
+                    return new KlassRef[]{context.getMeta()._boolean.getArrayClass()};
+                case "S":
+                    return new KlassRef[]{context.getMeta()._short.getArrayClass()};
+                case "C":
+                    return new KlassRef[]{context.getMeta()._char.getArrayClass()};
+                case "B":
+                    return new KlassRef[]{context.getMeta()._byte.getArrayClass()};
+                case "J":
+                    return new KlassRef[]{context.getMeta()._long.getArrayClass()};
+                case "D":
+                    return new KlassRef[]{context.getMeta()._double.getArrayClass()};
+                case "F":
+                    return new KlassRef[]{context.getMeta()._float.getArrayClass()};
+                default:
+                    throw new RuntimeException("invalid primitive component type " + slashName);
+            }
+        } else if (slashName.startsWith("[")) {
+            // array type
+            int dimensions = 0;
+            for (char c : slashName.toCharArray()) {
+                if ('[' == c) {
+                    dimensions++;
+                } else {
+                    break;
+                }
+            }
+            String componentRawName = slashName.substring(dimensions);
+            if (componentRawName.length() == 1) {
+                // primitive
+                switch (componentRawName) {
+                    case "I":
+                        return new KlassRef[]{context.getMeta()._int.getArrayClass(dimensions)};
+                    case "Z":
+                        return new KlassRef[]{context.getMeta()._boolean.getArrayClass(dimensions)};
+                    case "S":
+                        return new KlassRef[]{context.getMeta()._short.getArrayClass(dimensions)};
+                    case "C":
+                        return new KlassRef[]{context.getMeta()._char.getArrayClass(dimensions)};
+                    case "B":
+                        return new KlassRef[]{context.getMeta()._byte.getArrayClass(dimensions)};
+                    case "J":
+                        return new KlassRef[]{context.getMeta()._long.getArrayClass(dimensions)};
+                    case "D":
+                        return new KlassRef[]{context.getMeta()._double.getArrayClass(dimensions)};
+                    case "F":
+                        return new KlassRef[]{context.getMeta()._float.getArrayClass(dimensions)};
+                    default:
+                        throw new RuntimeException("invalid primitive component type " + componentRawName);
+                }
+            } else {
+                // object type
+                String componentType = componentRawName.substring(1, componentRawName.length() - 1);
+                Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(componentType);
+                KlassRef[] klassRefs = context.getRegistries().findLoadedClassAny(type);
+                KlassRef[] result = new KlassRef[klassRefs.length];
+                for (int i = 0; i < klassRefs.length; i++) {
+                    result[i] = klassRefs[i].getArrayClass(dimensions);
+                }
+                return result;
+            }
+        } else {
+            // regular type
+            Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(slashName);
+            return context.getRegistries().findLoadedClassAny(type);
+        }
     }
 
     @Override
@@ -188,7 +257,29 @@ public final class JDWPContextImpl implements JDWPContext {
     public KlassRef getReflectedType(Object classObject) {
         if (classObject instanceof StaticObject) {
             StaticObject staticObject = (StaticObject) classObject;
-            return (KlassRef) staticObject.getHiddenField(context.getMeta().HIDDEN_MIRROR_KLASS);
+            if (staticObject.getKlass().getType() == Symbol.Type.Class) {
+                return (KlassRef) staticObject.getHiddenField(context.getMeta().HIDDEN_MIRROR_KLASS);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public KlassRef[] getNestedTypes(KlassRef klass) {
+        if (klass instanceof ObjectKlass) {
+            ArrayList<KlassRef> result = new ArrayList<>();
+            ObjectKlass objectKlass = (ObjectKlass) klass;
+            List<Symbol<Symbol.Name>> nestedTypeNames = objectKlass.getNestedTypeNames();
+
+            StaticObject classLoader = objectKlass.getDefiningClassLoader();
+            for (Symbol<Symbol.Name> nestedType : nestedTypeNames) {
+                Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(nestedType.toString());
+                KlassRef loadedKlass = context.getRegistries().findLoadedClass(type, classLoader);
+                if (loadedKlass != null && loadedKlass != klass) {
+                    result.add(loadedKlass);
+                }
+            }
+            return result.toArray(new KlassRef[0]);
         }
         return null;
     }
@@ -249,6 +340,17 @@ public final class JDWPContextImpl implements JDWPContext {
     @Override
     public Object[] getTopLevelThreadGroups() {
         return new Object[]{context.getMainThreadGroup()};
+    }
+
+    @Override
+    public Object[] getChildrenThreds(Object threadGroup) {
+        ArrayList<Object> result = new ArrayList<>();
+        for (Object thread : getAllGuestThreads()) {
+            if (getThreadGroup(thread) == threadGroup) {
+                result.add(thread);
+            }
+        }
+        return result.toArray();
     }
 
     @Override
@@ -372,5 +474,15 @@ public final class JDWPContextImpl implements JDWPContext {
     public boolean isInstanceOf(Object object, KlassRef klass) {
         StaticObject staticObject = (StaticObject) object;
         return klass.isAssignable(staticObject.getKlass());
+    }
+
+    @Override
+    public void stopThread(Object guestThread, Object guestThrowable) {
+        Target_java_lang_Thread.stop0((StaticObject) guestThread, guestThrowable);
+    }
+
+    @Override
+    public void interruptThread(Object thread) {
+        Target_java_lang_Thread.interrupt0((StaticObject) thread);
     }
 }
