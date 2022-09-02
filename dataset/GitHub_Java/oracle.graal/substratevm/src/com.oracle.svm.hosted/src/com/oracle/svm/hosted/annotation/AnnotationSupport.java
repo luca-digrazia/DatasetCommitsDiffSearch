@@ -62,7 +62,6 @@ import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.hub.AnnotationTypeSupport;
-import com.oracle.svm.core.jdk.AnnotationSupportConfig;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.hosted.phases.HostedGraphKit;
 import com.oracle.svm.hosted.snippets.SubstrateGraphBuilderPlugins;
@@ -92,8 +91,6 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
 
         javaLangAnnotationAnnotation = metaAccess.lookupJavaType(java.lang.annotation.Annotation.class);
         javaLangReflectProxy = metaAccess.lookupJavaType(java.lang.reflect.Proxy.class);
-
-        AnnotationSupportConfig.initialize();
     }
 
     private boolean isAnnotation(ResolvedJavaType type) {

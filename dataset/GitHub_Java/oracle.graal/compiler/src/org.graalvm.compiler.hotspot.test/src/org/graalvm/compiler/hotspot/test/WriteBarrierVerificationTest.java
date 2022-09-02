@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,19 +26,20 @@ package org.graalvm.compiler.hotspot.test;
 
 import java.util.List;
 
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Scope;
 import org.graalvm.compiler.debug.DebugDumpScope;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
-import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePostWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePreWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.G1PostWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.G1PreWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.SerialArrayRangeWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.SerialWriteBarrier;
+import org.graalvm.compiler.hotspot.gc.g1.G1ArrayRangePostWriteBarrier;
+import org.graalvm.compiler.hotspot.gc.g1.G1ArrayRangePreWriteBarrier;
+import org.graalvm.compiler.hotspot.gc.g1.G1PostWriteBarrier;
+import org.graalvm.compiler.hotspot.gc.g1.G1PreWriteBarrier;
+import org.graalvm.compiler.hotspot.gc.shared.SerialArrayRangeWriteBarrier;
+import org.graalvm.compiler.hotspot.gc.shared.SerialWriteBarrier;
 import org.graalvm.compiler.hotspot.phases.WriteBarrierAdditionPhase;
 import org.graalvm.compiler.hotspot.phases.WriteBarrierVerificationPhase;
-import org.graalvm.compiler.hotspot.replacements.arraycopy.UnsafeArrayCopyNode;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
@@ -53,12 +56,10 @@ import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.GuardLoweringPhase;
 import org.graalvm.compiler.phases.common.LoopSafepointInsertionPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
-import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.graph.ReentrantNodeIterator;
 import org.graalvm.compiler.phases.graph.ReentrantNodeIterator.NodeIteratorClosure;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.MidTierContext;
-import org.graalvm.util.EconomicMap;
 import org.graalvm.word.LocationIdentity;
 import org.junit.Assert;
 import org.junit.Test;
@@ -628,12 +629,6 @@ public class WriteBarrierVerificationTest extends HotSpotGraalCompilerTest {
         System.arraycopy(a, 0, b, 0, a.length);
     }
 
-    @Test
-    public void test61() {
-        GraphPredicate checkForUnsafeArrayCopy = graph -> graph.getNodes().filter(UnsafeArrayCopyNode.class).count() > 0 ? 1 : 0;
-        testPredicate("test13Snippet", checkForUnsafeArrayCopy, new int[]{});
-    }
-
     private interface GraphPredicate {
         int apply(StructuredGraph graph);
     }
@@ -646,10 +641,10 @@ public class WriteBarrierVerificationTest extends HotSpotGraalCompilerTest {
     @SuppressWarnings("try")
     private void testPredicate(final String snippet, final GraphPredicate expectedBarriers, final int... removedBarrierIndices) {
         DebugContext debug = getDebugContext();
-        try (DebugContext.Scope d = debug.scope("WriteBarrierVerificationTest", new DebugDumpScope(snippet))) {
+        try (DebugCloseable d = debug.disableIntercept(); DebugContext.Scope s = debug.scope("WriteBarrierVerificationTest", new DebugDumpScope(snippet))) {
             final StructuredGraph graph = parseEager(snippet, AllowAssumptions.YES, debug);
             HighTierContext highTierContext = getDefaultHighTierContext();
-            new InliningPhase(new CanonicalizerPhase()).apply(graph, highTierContext);
+            createInliningPhase().apply(graph, highTierContext);
 
             MidTierContext midTierContext = new MidTierContext(getProviders(), getTargetProvider(), OptimisticOptimizations.ALL, graph.getProfilingInfo());
 
@@ -724,7 +719,7 @@ public class WriteBarrierVerificationTest extends HotSpotGraalCompilerTest {
                 }
             };
 
-            try (Scope s = debug.disable()) {
+            try (Scope disabled = debug.disable()) {
                 ReentrantNodeIterator.apply(closure, graph.start(), false);
                 new WriteBarrierVerificationPhase(config).apply(graph);
             } catch (AssertionError error) {
