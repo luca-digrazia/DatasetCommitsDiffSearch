@@ -87,7 +87,6 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.runtime.JVMCIBackend;
-import org.graalvm.nativeimage.ImageInfo;
 
 //JaCoCo Exclude
 
@@ -160,13 +159,9 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         compilerConfigurationName = compilerConfigurationFactory.getName();
 
         compiler = new HotSpotGraalCompiler(jvmciRuntime, this, options);
-        if (ImageInfo.inImageRuntimeCode()) {
-            management = null;
-        } else {
-            management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
-            if (management != null) {
-                management.initialize(this);
-            }
+        management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
+        if (management != null) {
+            management.initialize(this);
         }
 
         BackendMap backendMap = compilerConfigurationFactory.createBackendMap();

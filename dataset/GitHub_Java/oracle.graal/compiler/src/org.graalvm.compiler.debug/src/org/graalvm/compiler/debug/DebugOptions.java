@@ -52,15 +52,9 @@ public class DebugOptions {
 
         /**
          * Dump graphs to the network. The network destination is specified by the
-         * {@link DebugOptions#PrintGraphHost} and {@link DebugOptions#PrintGraphPort} options. If a
-         * network connection cannot be opened, dumping falls back to {@link #file} dumping.
+         * {@link DebugOptions#PrintGraphHost} and {@link DebugOptions#PrintGraphPort} options.
          */
         network,
-
-        /**
-         * Same as {@link #network} but without the fallback to file dumping.
-         */
-        networkOnly,
 
         /**
          * Do not dump graphs.
