@@ -76,7 +76,6 @@ import java.util.function.Consumer;
 import org.graalvm.polyglot.Context;
 import org.junit.After;
 import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -109,7 +108,7 @@ import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class TruffleSafepointTest {
 
-    private static final int[] THREAD_CONFIGS = new int[]{4, 16};
+    private static final int[] THREAD_CONFIGS = new int[]{1, 4, 16};
     private static final int[] ITERATION_CONFIGS = new int[]{1, 8, 32};
     private static ExecutorService service;
     private static final AtomicBoolean CANCELLED = new AtomicBoolean();
@@ -685,11 +684,7 @@ public class TruffleSafepointTest {
                         threadLocals.add(setup.env.submitThreadLocal(null, new ThreadLocalAction(false, true) {
                             @Override
                             protected void perform(Access access) {
-                                System.out.println("Perform! ");
-                                if (lock.isHeldByCurrentThread()) {
-                                    new Exception().printStackTrace();
-                                }
-                                Assert.assertFalse(lock.isHeldByCurrentThread());
+                                System.out.println("Perform!");
                                 eventCounter.incrementAndGet();
                             }
                         }));
@@ -706,13 +701,13 @@ public class TruffleSafepointTest {
                         lock.lock();
                         try {
                             System.err.println("set done");
+                            setup.stopped.set(true);
                             done.set(true);
                             System.err.println("signal");
                             condition.signalAll();
                         } finally {
                             lock.unlock();
                         }
-
                     } catch (Throwable t) {
                         t.printStackTrace();
                         throw t;
