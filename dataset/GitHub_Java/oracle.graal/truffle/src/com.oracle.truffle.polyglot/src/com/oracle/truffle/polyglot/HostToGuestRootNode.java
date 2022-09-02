@@ -65,11 +65,7 @@ abstract class HostToGuestRootNode extends RootNode {
     private final BranchProfile error = BranchProfile.create();
 
     HostToGuestRootNode() {
-        this(null);
-    }
-
-    HostToGuestRootNode(PolyglotLanguageContext languageContext) {
-        super(languageContext != null ? languageContext.getLanguageInstance().spi : null);
+        super(null);
         this.engine = (PolyglotEngineImpl) EngineAccessor.NODES.getPolyglotEngine(this);
         assert this.engine != null : "all host to guest root nodes need to be initialized when entered";
     }
