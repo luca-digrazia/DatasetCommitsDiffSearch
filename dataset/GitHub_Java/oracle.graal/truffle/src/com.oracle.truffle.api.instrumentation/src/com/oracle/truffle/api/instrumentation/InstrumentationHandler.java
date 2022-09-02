@@ -1266,12 +1266,6 @@ final class InstrumentationHandler {
         return allocationReporter;
     }
 
-    void finalizeStore() {
-        this.out = null;
-        this.err = null;
-        this.in = null;
-    }
-
     void patch(DispatchOutputStream newOut, DispatchOutputStream newErr, InputStream newIn) {
         this.out = newOut;
         this.err = newErr;
@@ -1767,7 +1761,7 @@ final class InstrumentationHandler {
                             (singleBindingOperations == 1 && multiBindingOriginalTreeOperations == 0));
 
             Set<Class<?>> compoundTags = null; // null means all provided tags by the language
-            outer: for (VisitOperation operation : operations) {
+            for (VisitOperation operation : operations) {
                 /*
                  * Operations that don't depend on their bindings do not influence materializations.
                  */
@@ -1776,7 +1770,7 @@ final class InstrumentationHandler {
                         Set<Class<?>> limitedTags = sourceBinding.getLimitedTags();
                         if (limitedTags == null) {
                             compoundTags = null;
-                            break outer;
+                            break;
                         } else {
                             if (compoundTags == null) {
                                 compoundTags = new HashSet<>();
