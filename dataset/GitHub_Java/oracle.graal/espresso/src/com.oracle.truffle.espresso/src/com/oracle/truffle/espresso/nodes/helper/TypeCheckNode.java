@@ -23,9 +23,6 @@
 
 package com.oracle.truffle.espresso.nodes.helper;
 
-import java.util.Arrays;
-import java.util.List;
-
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.GenerateUncached;
@@ -33,7 +30,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
-import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -66,7 +62,7 @@ public abstract class TypeCheckNode extends Node {
 
     @Specialization(guards = "isJLObject(context, typeToCheck)")
     protected boolean typeCheckJLObject(Klass typeToCheck, Klass k,
-                                        @CachedContext(EspressoLanguage.class) EspressoContext context) {
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
         return !k.isPrimitive();
     }
 
@@ -90,11 +86,11 @@ public abstract class TypeCheckNode extends Node {
 
     @Specialization(replaces = "typeCheckCached", guards = "arrayBiggerDim(k, typeToCheck)")
     protected boolean typeCheckArrayLowerDim(ArrayKlass typeToCheck, ArrayKlass k,
-                                             @CachedContext(EspressoLanguage.class) EspressoContext context) {
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
         Klass elem = typeToCheck.getElementalType();
         return elem == context.getMeta().java_lang_Object ||
-                elem == context.getMeta().java_io_Serializable ||
-                elem == context.getMeta().java_lang_Cloneable;
+                        elem == context.getMeta().java_io_Serializable ||
+                        elem == context.getMeta().java_lang_Cloneable;
     }
 
     /*
@@ -134,7 +130,7 @@ public abstract class TypeCheckNode extends Node {
         return typeToCheck.checkOrdinaryClassSubclassing(k);
     }
 
-    protected static  boolean isJLObject(EspressoContext context, Klass k) {
+    protected static boolean isJLObject(EspressoContext context, Klass k) {
         return k == context.getMeta().java_lang_Object;
     }
 
