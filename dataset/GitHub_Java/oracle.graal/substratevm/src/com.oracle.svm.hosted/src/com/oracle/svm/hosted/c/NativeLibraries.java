@@ -48,7 +48,6 @@ import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.constant.CConstant;
 import org.graalvm.nativeimage.c.constant.CEnum;
 import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.struct.RawStructure;
@@ -97,7 +96,6 @@ public final class NativeLibraries {
     private final ResolvedJavaType enumType;
     private final ResolvedJavaType locationIdentityType;
 
-    private final LinkedHashSet<CLibrary> annotated;
     private final List<String> libraries;
     private final List<String> staticLibraries;
     private final LinkedHashSet<String> libraryPaths;
@@ -130,8 +128,6 @@ public final class NativeLibraries {
         byteArrayType = metaAccess.lookupJavaType(byte[].class);
         enumType = metaAccess.lookupJavaType(Enum.class);
         locationIdentityType = metaAccess.lookupJavaType(LocationIdentity.class);
-
-        annotated = new LinkedHashSet<>();
 
         /*
          * Libraries can be added during the static analysis, which runs multi-threaded. So the
@@ -250,10 +246,6 @@ public final class NativeLibraries {
         } else {
             addError("Type is not annotated with supported C interface annotation", type);
         }
-    }
-
-    public void addAnnotated(CLibrary library) {
-        annotated.add(library);
     }
 
     public void addLibrary(String library, boolean requireStatic) {
@@ -425,16 +417,5 @@ public final class NativeLibraries {
 
     public ConstantReflectionProvider getConstantReflection() {
         return constantReflection;
-    }
-
-    public boolean processAnnotated() {
-        if (annotated.isEmpty()) {
-            return false;
-        }
-        for (CLibrary lib : annotated) {
-            addLibrary(lib.value(), lib.requireStatic());
-        }
-        annotated.clear();
-        return true;
     }
 }
