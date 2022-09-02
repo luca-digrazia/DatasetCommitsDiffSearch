@@ -317,10 +317,6 @@ public final class Support {
         return getMethodDeclaringClass(getCallerMethod(depth));
     }
 
-    static JNIObjectHandle getDirectCallerClass() {
-        return getCallerClass(1);
-    }
-
     public static JNIMethodId getCallerMethod(int depth) {
         JvmtiFrameInfo frameInfo = StackValue.get(JvmtiFrameInfo.class);
         CIntPointer countPtr = StackValue.get(CIntPointer.class);
