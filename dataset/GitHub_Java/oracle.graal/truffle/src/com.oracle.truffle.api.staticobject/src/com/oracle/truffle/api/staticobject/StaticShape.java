@@ -304,7 +304,7 @@ public abstract class StaticShape<T> {
          * @since 21.3.0
          */
         public <T> StaticShape<T> build(Class<?> superClass, Class<T> factoryInterface) {
-            validateClasses(superClass, factoryInterface);
+            validateClasses(factoryInterface, superClass);
             GeneratorClassLoader gcl = getOrCreateClassLoader(factoryInterface);
             ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, superClass, factoryInterface, getStorageStrategy());
             return build(sg, null);
@@ -347,7 +347,7 @@ public abstract class StaticShape<T> {
             }
         }
 
-        private static void validateClasses(Class<?> storageSuperClass, Class<?> storageFactoryInterface) {
+        private static void validateClasses(Class<?> storageFactoryInterface, Class<?> storageSuperClass) {
             CompilerAsserts.neverPartOfCompilation();
             if (!storageFactoryInterface.isInterface()) {
                 throw new IllegalArgumentException(storageFactoryInterface.getName() + " must be an interface.");
