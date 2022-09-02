@@ -719,17 +719,12 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
              * Check ahead of time for open contexts to fail early and avoid closing only some
              * contexts.
              */
-            boolean stillRunning = false;
-            if (!cancelIfExecuting) {
+            if (!cancelIfExecuting && !ignoreCloseFailure) {
                 for (PolyglotContextImpl context : localContexts) {
                     synchronized (context) {
-                        if (context.hasActiveOtherThread(false)) {
-                            if (!ignoreCloseFailure) {
-                                throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
-                                                "Set cancelIfExecuting to true to stop the execution on this thread."));
-                            } else {
-                                stillRunning = true;
-                            }
+                        if (context.hasActiveOtherThread(false) && context.closingThread == null) {
+                            throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
+                                            "Set cancelIfExecuting to true to stop the execution on this thread."));
                         }
                     }
                 }
@@ -737,19 +732,13 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             for (PolyglotContextImpl context : localContexts) {
                 try {
                     boolean closeCompleted = context.closeImpl(cancelIfExecuting, cancelIfExecuting);
-                    if (!closeCompleted && !cancelIfExecuting) {
-                        if (!ignoreCloseFailure) {
-                            throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
-                                            "Set cancelIfExecuting to true to stop the execution on this thread."));
-                        } else {
-                            stillRunning = true;
-                        }
+                    if (!closeCompleted && !cancelIfExecuting && !ignoreCloseFailure) {
+                        throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
+                                        "Set cancelIfExecuting to true to stop the execution on this thread."));
                     }
                 } catch (Throwable e) {
                     if (!ignoreCloseFailure) {
                         throw e;
-                    } else {
-                        stillRunning = true;
                     }
                 }
             }
@@ -757,19 +746,13 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                 getCancelHandler().waitForClosing(localContexts);
             }
 
-            if (!boundEngine && !stillRunning) {
+            if (!boundEngine) {
                 for (PolyglotContextImpl context : localContexts) {
                     PolyglotContextImpl.disposeStaticContext(context);
                 }
             }
 
-            // don't commit changes to contexts if still running
-            if (!stillRunning) {
-                contexts.clear();
-            }
-
-            // instruments should be shut-down even if they are currently still executed
-            // we want to see instrument output if the process is quit while executing.
+            contexts.clear();
             for (PolyglotInstrument instrumentImpl : idToInstrument.values()) {
                 try {
                     instrumentImpl.notifyClosing();
@@ -788,15 +771,11 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                     }
                 }
             }
-            // don't commit to the close if still running as this might cause races in the executing
-            // context.
-            if (!stillRunning) {
-                if (logHandler != null) {
-                    logHandler.close();
-                }
-                ENGINES.remove(this);
-                closed = true;
+            if (logHandler != null) {
+                logHandler.close();
             }
+            ENGINES.remove(this);
+            closed = true;
         }
     }
 
@@ -895,10 +874,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     private static final class PolyglotShutDownHook implements Runnable {
 
         public void run() {
-            PolyglotEngineImpl[] engines;
-            synchronized (ENGINES) {
-                engines = ENGINES.keySet().toArray(new PolyglotEngineImpl[0]);
-            }
+            PolyglotEngineImpl[] engines = ENGINES.keySet().toArray(new PolyglotEngineImpl[0]);
             for (PolyglotEngineImpl engine : engines) {
                 if (DEBUG_MISSING_CLOSE) {
                     PrintStream out = System.out;
@@ -921,6 +897,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
                     engine.ensureClosed(false, true);
                 }
             }
+            ENGINES.keySet().removeAll(Arrays.asList(engines));
         }
     }
 
