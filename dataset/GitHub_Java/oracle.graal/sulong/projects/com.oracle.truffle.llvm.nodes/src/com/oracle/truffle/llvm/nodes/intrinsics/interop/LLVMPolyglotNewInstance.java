@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,28 +29,26 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.interop;
 
-import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMGetStackNode;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
@@ -59,6 +57,7 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 @NodeChild(value = "object", type = LLVMExpressionNode.class)
 public abstract class LLVMPolyglotNewInstance extends LLVMIntrinsic {
@@ -66,24 +65,24 @@ public abstract class LLVMPolyglotNewInstance extends LLVMIntrinsic {
     @Children private final LLVMExpressionNode[] args;
     @Children private final LLVMDataEscapeNode[] prepareValuesForEscape;
 
-    @Child private Node foreignNewInstance;
+    @Child private InteropLibrary foreignNewInstance;
     @Child private LLVMAsForeignNode asForeign = LLVMAsForeignNode.create();
 
-    public LLVMPolyglotNewInstance(LLVMExpressionNode[] args) {
+    public LLVMPolyglotNewInstance(LLVMExpressionNode[] args, Type[] argTypes) {
         this.args = args;
         this.prepareValuesForEscape = new LLVMDataEscapeNode[args.length];
         for (int i = 0; i < prepareValuesForEscape.length; i++) {
-            prepareValuesForEscape[i] = LLVMDataEscapeNode.create();
+            prepareValuesForEscape[i] = LLVMDataEscapeNode.create(argTypes[i]);
         }
-        this.foreignNewInstance = Message.NEW.createNode();
+        this.foreignNewInstance = InteropLibrary.getFactory().createDispatched(5);
     }
 
     @CompilationFinal private LLVMThreadingStack threadingStack = null;
 
-    private LLVMThreadingStack getThreadingStack(LLVMContext context) {
+    private LLVMThreadingStack getThreadingStack(ContextReference<LLVMContext> context) {
         if (threadingStack == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            threadingStack = context.getThreadingStack();
+            threadingStack = context.get().getThreadingStack();
         }
         return threadingStack;
     }
@@ -91,21 +90,21 @@ public abstract class LLVMPolyglotNewInstance extends LLVMIntrinsic {
     @Specialization
     @ExplodeLoop
     protected Object doNew(VirtualFrame frame, LLVMManagedPointer value,
-                    @Cached("getContextReference()") ContextReference<LLVMContext> ctxRef,
+                    @CachedContext(LLVMLanguage.class) ContextReference<LLVMContext> ctxRef,
                     @Cached("create()") LLVMGetStackNode getStack,
                     @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM) {
-        TruffleObject foreign = asForeign.execute(value);
+        Object foreign = asForeign.execute(value);
 
         Object[] evaluatedArgs = new Object[args.length];
         for (int i = 0; i < args.length; i++) {
             evaluatedArgs[i] = prepareValuesForEscape[i].executeWithTarget(args[i].executeGeneric(frame));
         }
 
-        LLVMStack stack = getStack.executeWithTarget(getThreadingStack(ctxRef.get()), Thread.currentThread());
+        LLVMStack stack = getStack.executeWithTarget(getThreadingStack(ctxRef), Thread.currentThread());
         try {
             Object rawValue;
             try (StackPointer save = stack.newFrame()) {
-                rawValue = ForeignAccess.sendNew(foreignNewInstance, foreign, evaluatedArgs);
+                rawValue = foreignNewInstance.instantiate(foreign, evaluatedArgs);
             }
             return toLLVM.executeWithTarget(rawValue);
         } catch (UnsupportedMessageException e) {
@@ -127,7 +126,6 @@ public abstract class LLVMPolyglotNewInstance extends LLVMIntrinsic {
         throw new LLVMPolyglotException(this, "Non-polyglot value passed to polyglot_new_instance.");
     }
 
-    @TruffleBoundary
     protected ForeignToLLVM createForeignToLLVM() {
         return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.POINTER);
     }
