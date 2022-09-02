@@ -352,11 +352,7 @@ public class CheckGraalIntrinsics extends GraalTest {
             if (!(arch instanceof AArch64)) {
                 add(toBeInvestigated,
                                 "java/lang/Math.abs(I)I",
-                                "java/lang/Math.abs(J)J",
-                                "java/lang/Math.max(DD)D",
-                                "java/lang/Math.max(FF)F",
-                                "java/lang/Math.min(DD)D",
-                                "java/lang/Math.min(FF)F");
+                                "java/lang/Math.abs(J)J");
             }
             add(toBeInvestigated,
                             "java/lang/CharacterDataLatin1.isDigit(I)Z",
