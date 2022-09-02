@@ -45,6 +45,13 @@ import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.bytedeco.javacpp.BytePointer;
+import org.bytedeco.javacpp.LLVM;
+import org.bytedeco.javacpp.LLVM.LLVMMemoryBufferRef;
+import org.bytedeco.javacpp.LLVM.LLVMObjectFileRef;
+import org.bytedeco.javacpp.LLVM.LLVMSectionIteratorRef;
+import org.bytedeco.javacpp.LLVM.LLVMSymbolIteratorRef;
+import org.bytedeco.javacpp.Pointer;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.llvm.LLVMUtils;
@@ -76,13 +83,6 @@ import com.oracle.svm.hosted.image.NativeImageHeap;
 import com.oracle.svm.hosted.image.RelocatableBuffer;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.MethodPointer;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.BytePointer;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMMemoryBufferRef;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMObjectFileRef;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMSectionIteratorRef;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMSymbolIteratorRef;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.Pointer;
 
 import jdk.vm.ci.code.site.Call;
 import jdk.vm.ci.code.site.DataPatch;
@@ -463,16 +463,20 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
             List<String> cmd = new ArrayList<>();
             cmd.add("opt");
 
-            if (LLVMOptions.BitcodeOptimizations.getValue()) {
+            /*
+             * The x86 backend of LLVM has a bug which prevents the use of bitcode-level
+             * optimizations. This bug will be fixed in the LLVM 9.0.0 release.
+             */
+            if (!Platform.includedIn(Platform.AMD64.class)) {
                 cmd.add("-disable-inlining");
                 cmd.add("-O2");
-            } else {
-                /*
-                 * Mem2reg has to be run before rewriting statepoints as it promotes allocas, which
-                 * are not supported for statepoints.
-                 */
-                cmd.add("-mem2reg");
             }
+
+            /*
+             * Mem2reg has to be run before rewriting statepoints as it promotes allocas, which are
+             * not supported for statepoints.
+             */
+            cmd.add("-mem2reg");
             cmd.add("-rewrite-statepoints-for-gc");
             cmd.add("-always-inline");
 
@@ -502,7 +506,6 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
             List<String> cmd = new ArrayList<>();
             cmd.add((LLVMOptions.CustomLLC.hasBeenSet()) ? LLVMOptions.CustomLLC.getValue() : "llc");
             cmd.add("-relocation-model=pic");
-            cmd.add("--trap-unreachable");
             cmd.add("-march=" + TargetSpecific.get().getLLVMArchName());
             cmd.addAll(TargetSpecific.get().getLLCAdditionalOptions());
             cmd.add("-O2");
@@ -558,7 +561,7 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
     private void nativeLink(DebugContext debug, String outputPath, List<String> inputPaths) {
         try {
             List<String> cmd = new ArrayList<>();
-            cmd.add((LLVMOptions.CustomLD.hasBeenSet()) ? LLVMOptions.CustomLD.getValue() : "ld");
+            cmd.add("ld");
             cmd.add("-r");
             cmd.add("-o");
             cmd.add(outputPath);
