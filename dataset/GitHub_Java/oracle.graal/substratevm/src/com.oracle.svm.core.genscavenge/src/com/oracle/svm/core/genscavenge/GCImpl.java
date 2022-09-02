@@ -130,7 +130,6 @@ public final class GCImpl implements GC {
         possibleCollectionEpilogue(requestingEpoch);
     }
 
-    @Uninterruptible(reason = "Avoid races with other threads that also try to trigger a GC")
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate in the implementation of garbage collection.")
     void collectWithoutAllocating(GCCause cause) {
         int size = SizeOf.get(CollectionVMOperationData.class);
@@ -139,15 +138,10 @@ public final class GCImpl implements GC {
         data.setNativeVMOperation(collectOperation);
         data.setCauseId(cause.getId());
         data.setRequestingEpoch(getCollectionEpoch());
-        enqueueCollectOperation(data);
+        collectOperation.enqueue(data);
         if (data.getOutOfMemory()) {
             throw oldGenerationSizeExceeded;
         }
-    }
-
-    @Uninterruptible(reason = "Used as a transition between uninterruptible and interruptible code", calleeMustBe = false)
-    private void enqueueCollectOperation(CollectionVMOperationData data) {
-        collectOperation.enqueue(data);
     }
 
     /** The body of the VMOperation to do the collection. */
@@ -961,7 +955,6 @@ public final class GCImpl implements GC {
         }
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public UnsignedWord getCollectionEpoch() {
         return collectionEpoch;
     }

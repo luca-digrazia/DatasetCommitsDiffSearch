@@ -280,7 +280,6 @@ public final class HeapImpl extends Heap {
         return heapPolicy;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     YoungGeneration getYoungGeneration() {
         return youngGeneration;
     }

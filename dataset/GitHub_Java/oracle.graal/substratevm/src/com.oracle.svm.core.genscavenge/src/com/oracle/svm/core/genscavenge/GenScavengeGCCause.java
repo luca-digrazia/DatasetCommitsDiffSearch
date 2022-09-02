@@ -26,9 +26,8 @@ package com.oracle.svm.core.genscavenge;
 
 import com.oracle.svm.core.heap.GCCause;
 
-public final class GenScavengeGCCause extends GCCause {
-    public static final GCCause OnAllocationAlways = new GenScavengeGCCause("AlwaysCollectOnAllocation", 10);
-    public static final GCCause OnAllocationSometimes = new GenScavengeGCCause("SometimesCollectOnAllocation", 11);
+final class GenScavengeGCCause extends GCCause {
+    public static final GCCause OnAllocation = new GenScavengeGCCause("CollectOnAllocation", 10);
 
     private GenScavengeGCCause(String name, int id) {
         super(name, id);

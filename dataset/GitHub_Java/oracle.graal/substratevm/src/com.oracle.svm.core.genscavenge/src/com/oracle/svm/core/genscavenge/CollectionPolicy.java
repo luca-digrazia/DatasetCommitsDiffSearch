@@ -34,7 +34,6 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature.FeatureAccess;
 import org.graalvm.word.UnsignedWord;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionKey;
@@ -53,14 +52,7 @@ public abstract class CollectionPolicy {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     static CollectionPolicy getInitialPolicy(FeatureAccess access) {
-        if (SubstrateOptions.UseEpsilonGC.getValue()) {
-            return new NeverCollect();
-        } else if (!HeapOptions.useRememberedSet()) {
-            return new OnlyCompletely();
-        } else {
-            // Use whatever policy the user specified.
-            return instantiatePolicy(access, CollectionPolicy.class, Options.InitialCollectionPolicy.getValue());
-        }
+        return instantiatePolicy(access, CollectionPolicy.class, Options.InitialCollectionPolicy.getValue());
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
