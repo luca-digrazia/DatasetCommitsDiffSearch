@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -268,11 +268,9 @@ public class CompileQueue {
     protected class TrivialInlineTask implements DebugContextRunnable {
 
         private final HostedMethod method;
-        private final Description description;
 
         TrivialInlineTask(HostedMethod method) {
             this.method = method;
-            this.description = new Description(method, toString());
         }
 
         @Override
@@ -282,7 +280,7 @@ public class CompileQueue {
 
         @Override
         public Description getDescription() {
-            return description;
+            return new Description(method, toString());
         }
     }
 
@@ -290,12 +288,10 @@ public class CompileQueue {
 
         protected final CompileReason reason;
         private final HostedMethod method;
-        private final Description description;
 
         public ParseTask(HostedMethod method, CompileReason reason) {
             this.method = method;
             this.reason = reason;
-            this.description = new Description(method, toString());
         }
 
         @Override
@@ -305,7 +301,7 @@ public class CompileQueue {
 
         @Override
         public Description getDescription() {
-            return description;
+            return new Description(method, toString());
         }
     }
 

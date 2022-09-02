@@ -290,12 +290,7 @@ public class AnalysisUniverse implements Universe {
             assert oldValue == claim;
             claim = null;
 
-            ResolvedJavaType enclosingType = null;
-            try {
-                enclosingType = newValue.getWrapped().getEnclosingType();
-            } catch (NoClassDefFoundError e) {
-                /* Ignore NoClassDefFoundError thrown by enclosing type resolution. */
-            }
+            ResolvedJavaType enclosingType = newValue.getWrapped().getEnclosingType();
             /* If not being currently constructed by this thread. */
             if (enclosingType != null && !types.containsKey(enclosingType)) {
                 /* Make sure that the enclosing type is also in the universe. */
