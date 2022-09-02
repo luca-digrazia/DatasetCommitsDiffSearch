@@ -137,21 +137,6 @@ final class FileSystems {
         DEFAULT_FILE_SYSTEM_PROVIDER.set(null);
     }
 
-    static String getRelativePathInLanguageHome(TruffleFile file) {
-        FileSystem fs = EngineAccessor.LANGUAGE.getFileSystem(file);
-        Path path = EngineAccessor.LANGUAGE.getPath(file);
-        for (LanguageCache cache : LanguageCache.languages().values()) {
-            final String languageHome = cache.getLanguageHome();
-            if (languageHome != null) {
-                Path languageHomePath = fs.parsePath(languageHome);
-                if (path.startsWith(languageHomePath)) {
-                    return languageHomePath.relativize(path).toString();
-                }
-            }
-        }
-        return null;
-    }
-
     private static FileSystem newFileSystem(final FileSystemProvider fileSystemProvider) {
         return new NIOFileSystem(fileSystemProvider);
     }
@@ -678,21 +663,7 @@ final class FileSystems {
 
         @Override
         public DirectoryStream<Path> newDirectoryStream(Path dir, DirectoryStream.Filter<? super Path> filter) throws IOException {
-            Path cwd = userDir;
-            Path resolvedPath;
-            boolean relativize;
-            if (!dir.isAbsolute() && cwd != null) {
-                resolvedPath = cwd.resolve(dir);
-                relativize = true;
-            } else {
-                resolvedPath = dir;
-                relativize = false;
-            }
-            DirectoryStream<Path> result = delegate.newDirectoryStream(resolvedPath, filter);
-            if (relativize) {
-                result = new RelativizeDirectoryStream(cwd, result);
-            }
-            return result;
+            return delegate.newDirectoryStream(resolveRelative(dir), filter);
         }
 
         @Override
@@ -766,48 +737,6 @@ final class FileSystems {
 
         private Path resolveRelative(Path path) {
             return !path.isAbsolute() && userDir != null ? toAbsolutePath(path) : path;
-        }
-
-        private static final class RelativizeDirectoryStream implements DirectoryStream<Path> {
-
-            private final Path folder;
-            private final DirectoryStream<? extends Path> delegateDirectoryStream;
-
-            RelativizeDirectoryStream(Path folder, DirectoryStream<? extends Path> delegateDirectoryStream) {
-                this.folder = folder;
-                this.delegateDirectoryStream = delegateDirectoryStream;
-            }
-
-            @Override
-            public Iterator<Path> iterator() {
-                return new RelativizeIterator(folder, delegateDirectoryStream.iterator());
-            }
-
-            @Override
-            public void close() throws IOException {
-                delegateDirectoryStream.close();
-            }
-
-            private static final class RelativizeIterator implements Iterator<Path> {
-
-                private final Path folder;
-                private final Iterator<? extends Path> delegateIterator;
-
-                RelativizeIterator(Path folder, Iterator<? extends Path> delegateIterator) {
-                    this.folder = folder;
-                    this.delegateIterator = delegateIterator;
-                }
-
-                @Override
-                public boolean hasNext() {
-                    return delegateIterator.hasNext();
-                }
-
-                @Override
-                public Path next() {
-                    return folder.relativize(delegateIterator.next());
-                }
-            }
         }
     }
 
