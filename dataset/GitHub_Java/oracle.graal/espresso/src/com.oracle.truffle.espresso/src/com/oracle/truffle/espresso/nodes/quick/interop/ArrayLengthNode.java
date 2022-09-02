@@ -36,6 +36,7 @@ import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -87,7 +88,8 @@ public abstract class ArrayLengthNode extends QuickNode {
             long bufferLength = interop.getBufferSize(array.rawForeignObject());
             if (bufferLength > Integer.MAX_VALUE) {
                 sizeOverflowProfile.enter();
-                return Integer.MAX_VALUE;
+                Meta meta = context.getMeta();
+                throw meta.throwExceptionWithMessage(meta.java_lang_ClassCastException, "The foreign array length does not fit in int");
             }
             return (int) bufferLength;
         } catch (UnsupportedMessageException e) {
@@ -109,7 +111,8 @@ public abstract class ArrayLengthNode extends QuickNode {
             long arrayLength = interop.getArraySize(array.rawForeignObject());
             if (arrayLength > Integer.MAX_VALUE) {
                 sizeOverflowProfile.enter();
-                return Integer.MAX_VALUE;
+                Meta meta = context.getMeta();
+                throw meta.throwExceptionWithMessage(meta.java_lang_ClassCastException, "The foreign array length does not fit in int");
             }
             return (int) arrayLength;
         } catch (UnsupportedMessageException e) {

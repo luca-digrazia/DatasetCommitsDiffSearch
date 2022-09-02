@@ -30,9 +30,6 @@ import static com.oracle.truffle.espresso.meta.DiffVersionLoadHelper.VERSION_9_O
 import static com.oracle.truffle.espresso.meta.DiffVersionLoadHelper.VersionRange.higher;
 import static com.oracle.truffle.espresso.meta.DiffVersionLoadHelper.VersionRange.lower;
 
-import java.util.Arrays;
-import java.util.HashSet;
-
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -56,6 +53,10 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.JavaType;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 
 /**
  * Introspection API to access the guest world from the host. Provides seamless conversions from
