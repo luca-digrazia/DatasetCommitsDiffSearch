@@ -696,15 +696,18 @@ public abstract class AbstractPolyglotImpl {
 
     public abstract <S, T> Object newTargetTypeMapping(Class<S> sourceType, Class<T> targetType, Predicate<S> acceptsValue, Function<S, T> convertValue);
 
-    public abstract SecurityException throwSecurityException(String message);
-
     public static final class EnvironmentConfig {
         private final EnvironmentAccess environmentAccess;
+        private final boolean inheritEnvironment;
+        private final Map<String, String> environment;
         private volatile Map<String, String> configuredEnvironement;
 
-        public EnvironmentConfig(EnvironmentAccess environmentAcceess) {
+        public EnvironmentConfig(EnvironmentAccess environmentAcceess, boolean inheritEnvironment, Map<String, String> environment) {
             assert environmentAcceess != null;
+            assert environment != null;
             this.environmentAccess = environmentAcceess;
+            this.inheritEnvironment = inheritEnvironment;
+            this.environment = environment;
         }
 
         public EnvironmentAccess getEnvironmentAccess() {
@@ -719,16 +722,24 @@ public abstract class AbstractPolyglotImpl {
                     if (result == null) {
                         if (environmentAccess == EnvironmentAccess.NONE) {
                             result = Collections.emptyMap();
-                        } else if (environmentAccess == EnvironmentAccess.INHERIT) {
-                            result = System.getenv();   // System.getenv returns unmodifiable map.
+                        } else if (environmentAccess == EnvironmentAccess.READ) {
+                            result = Collections.unmodifiableMap(createInitialEnv(new HashMap<>()));
                         } else {
-                            throw new IllegalStateException(String.format("Unsupported EnvironmentAccess: %s", environmentAccess));
+                            result = createInitialEnv(new ConcurrentHashMap<>());
                         }
                         configuredEnvironement = result;
                     }
                 }
             }
             return result;
+        }
+
+        private Map<String, String> createInitialEnv(Map<String, String> map) {
+            if (inheritEnvironment) {
+                map.putAll(System.getenv());
+            }
+            map.putAll(environment);
+            return map;
         }
     }
 }

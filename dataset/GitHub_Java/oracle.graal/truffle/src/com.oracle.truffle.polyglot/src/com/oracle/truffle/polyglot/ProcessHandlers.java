@@ -76,12 +76,13 @@ final class ProcessHandlers {
         }
 
         private static java.lang.ProcessBuilder.Redirect translateRedirect(ProcessHandler.Redirect redirect) {
-            if (redirect == ProcessHandler.Redirect.PIPE) {
-                return java.lang.ProcessBuilder.Redirect.PIPE;
-            } else if (redirect == ProcessHandler.Redirect.INHERIT) {
-                return java.lang.ProcessBuilder.Redirect.INHERIT;
-            } else {
-                throw new IllegalStateException("Unsupported redirect: " + redirect);
+            switch (redirect.type()) {
+                case PIPE:
+                    return java.lang.ProcessBuilder.Redirect.PIPE;
+                case INHERIT:
+                    return java.lang.ProcessBuilder.Redirect.INHERIT;
+                default:
+                    throw new IllegalStateException("Unsupported redirect type: " + redirect.type());
             }
         }
 
