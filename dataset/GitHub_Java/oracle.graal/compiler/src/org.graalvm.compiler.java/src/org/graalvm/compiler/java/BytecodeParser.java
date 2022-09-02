@@ -1993,8 +1993,10 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
     @SuppressWarnings("deprecation")
     private static ResolvedJavaType getHostClass(ResolvedJavaType type) {
-        ResolvedJavaType hostClass = type.getHostClass();
-        return hostClass != null ? hostClass : type;
+        if (type.getHostClass() != null) {
+            return type.getHostClass();
+        }
+        return type;
     }
 
     protected JavaTypeProfile getProfileForInvoke(InvokeKind invokeKind) {
