@@ -102,8 +102,8 @@ public final class ParserKlass {
         this.attributes = new Attributes(attributes);
     }
 
-    Attribute getAttribute(Symbol<Name> attrName) {
-        return attributes.get(attrName);
+    Attribute getAttribute(Symbol<Name> name) {
+        return attributes.get(name);
     }
 
     public Symbol<Name> getName() {

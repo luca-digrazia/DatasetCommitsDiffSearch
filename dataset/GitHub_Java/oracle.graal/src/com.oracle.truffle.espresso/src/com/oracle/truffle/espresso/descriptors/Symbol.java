@@ -118,6 +118,9 @@ public final class Symbol<T> extends ByteSequence {
 
     public static final class Name extends ModifiedUTF8 {
 
+
+
+
         public static void init() {
             /* nop */
         }

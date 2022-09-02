@@ -24,9 +24,9 @@ package com.oracle.truffle.espresso.impl;
 
 import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.ModifiersProvider;
@@ -138,6 +138,7 @@ public final class Field implements ModifiersProvider {
                 tk = typeKlassCache;
                 if (tk == null) {
                     tk = getDeclaringKlass().getRegistries().loadKlass(getType(), getDeclaringKlass().getDefiningClassLoader());
+                    //tk = // holder.getConstantPool().resolvedKlassAt(linkedField.getParserField().getTypeIndex());
                     typeKlassCache = tk;
                 }
             }
@@ -145,7 +146,7 @@ public final class Field implements ModifiersProvider {
         return typeKlassCache;
     }
 
-    Attribute getAttribute(Symbol<Name> name) {
+    public Attribute getAttribute(Symbol<Name> name) {
         return linkedField.getAttribute(name);
     }
 }

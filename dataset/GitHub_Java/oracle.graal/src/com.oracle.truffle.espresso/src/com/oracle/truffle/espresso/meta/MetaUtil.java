@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.meta;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 
@@ -200,7 +199,6 @@ public class MetaUtil {
             case Illegal: // fall-though
             case Void:    // fall-though
             default:
-                CompilerAsserts.neverPartOfCompilation();
                 throw EspressoError.shouldNotReachHere("Invalid field type " + kind);
         }
     }

@@ -28,7 +28,6 @@ import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.JavaVersion;
 import com.oracle.truffle.espresso.runtime.StringTable;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
@@ -75,9 +74,5 @@ public interface ContextAccess {
 
     default Substitutions getSubstitutions() {
         return getContext().getSubstitutions();
-    }
-
-    default JavaVersion getJavaVersion() {
-        return getContext().getJavaVersion();
     }
 }

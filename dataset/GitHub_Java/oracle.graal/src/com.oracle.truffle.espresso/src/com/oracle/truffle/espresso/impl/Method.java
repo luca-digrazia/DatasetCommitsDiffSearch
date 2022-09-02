@@ -182,6 +182,8 @@ public final class Method implements ModifiersProvider, ContextAccess {
         // TODO(peterssen): Make lazy call target thread-safe.
         if (callTarget == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
+
+            // TODO(peterssen): Rethink method substitution logic.
             EspressoRootNode redirectedMethod = getSubstitutions().get(this);
             if (redirectedMethod != null) {
                 callTarget = Truffle.getRuntime().createCallTarget(redirectedMethod);
@@ -225,7 +227,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
                         throw getMeta().throwEx(UnsatisfiedLinkError.class);
                     }
                 } else {
-                    callTarget = Truffle.getRuntime().createCallTarget(new BytecodeNode(this));
+                    callTarget = Truffle.getRuntime().createCallTarget(new BytecodeNode(getContext(), this));
                 }
             }
         }

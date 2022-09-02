@@ -146,7 +146,6 @@ public final class Substitutions implements ContextAccess {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static void registerStaticSubstitutions(Class<?> clazz) {
         int registered = 0;
 
@@ -206,7 +205,7 @@ public final class Substitutions implements ContextAccess {
             ++registered;
             registerStaticSubstitution(classType,
                             StaticSymbols.putName(methodName),
-                            StaticSymbols.putSignature(returnType, parameterTypes.toArray(new Symbol[parameterTypes.size()])),
+                            StaticSymbols.putSignature(returnType, parameterTypes.toArray(Symbol.EMPTY_ARRAY)),
                             factory,
                             true);
         }

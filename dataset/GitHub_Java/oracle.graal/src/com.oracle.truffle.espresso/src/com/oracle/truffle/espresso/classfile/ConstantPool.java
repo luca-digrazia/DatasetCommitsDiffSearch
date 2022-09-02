@@ -48,7 +48,9 @@ import com.oracle.truffle.object.DebugCounter;
 
 public abstract class ConstantPool {
 
+
     static final DebugCounter utf8EntryCount = DebugCounter.create("utf8EntryCount");
+
 
     // public static final ConstantPool EMPTY = new ConstantPoolImpl(new
     // PoolConstant[]{InvalidConstant.VALUE});
