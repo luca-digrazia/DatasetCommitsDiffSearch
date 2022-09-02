@@ -2,8 +2,6 @@ package com.oracle.truffle.espresso.polyglot;
 
 public final class ForeignException extends RuntimeException {
 
-    private static final long serialVersionUID = -765815353576751011L;
-
     private ForeignException() {
         throw new RuntimeException("No instance of ForeignException can be created directly");
     }
@@ -22,7 +20,6 @@ public final class ForeignException extends RuntimeException {
         return null;
     }
 
-    @SuppressWarnings("sync-override")
     @Override
     public Throwable getCause() {
         assert Interop.isException(this);
