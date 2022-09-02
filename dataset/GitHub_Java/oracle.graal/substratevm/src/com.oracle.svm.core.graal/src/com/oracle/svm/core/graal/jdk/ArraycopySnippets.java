@@ -47,7 +47,7 @@ import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
+import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.graal.snippets.SubstrateTemplates;
 import com.oracle.svm.core.hub.DynamicHub;
@@ -58,26 +58,16 @@ import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescripto
 import com.oracle.svm.core.snippets.SubstrateForeignCallTarget;
 
 public final class ArraycopySnippets extends SubstrateTemplates implements Snippets {
+
     private static final SubstrateForeignCallDescriptor ARRAYCOPY = SnippetRuntime.findForeignCall(ArraycopySnippets.class, "doArraycopy", false, LocationIdentity.ANY_LOCATION);
-    private static final SubstrateForeignCallDescriptor[] FOREIGN_CALLS = new SubstrateForeignCallDescriptor[]{ARRAYCOPY};
 
-    public static void registerForeignCalls(Providers providers, Map<SubstrateForeignCallDescriptor, SubstrateForeignCallLinkage> foreignCalls) {
-        for (SubstrateForeignCallDescriptor descriptor : FOREIGN_CALLS) {
-            foreignCalls.put(descriptor, new SubstrateForeignCallLinkage(providers, descriptor));
-        }
-    }
-
-    protected ArraycopySnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
-                    Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
-        super(options, factories, providers, snippetReflection);
-        lowerings.put(SubstrateArraycopyNode.class, new ArraycopyLowering());
-    }
+    protected static final SubstrateForeignCallDescriptor[] FOREIGN_CALLS = new SubstrateForeignCallDescriptor[]{ARRAYCOPY};
 
     /**
      * The actual implementation of {@link System#arraycopy}, called via the foreign call
      * {@link #ARRAYCOPY}.
      */
-    @SubstrateForeignCallTarget(stubCallingConvention = false)
+    @SubstrateForeignCallTarget
     private static void doArraycopy(Object fromArray, int fromIndex, Object toArray, int toIndex, int length) {
         if (fromArray == null || toArray == null) {
             throw new NullPointerException();
@@ -119,50 +109,49 @@ public final class ArraycopySnippets extends SubstrateTemplates implements Snipp
         }
     }
 
-    public static void primitiveCopyForward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int layoutEncoding) {
-        UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, fromIndex);
-        UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, toIndex);
-        UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(layoutEncoding));
+    private static void primitiveCopyForward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int le) {
+        UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(le, fromIndex);
+        UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(le, toIndex);
+        UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(le));
         UnsignedWord size = elementSize.multiply(length);
-
-        primitiveCopyForward(fromArray, fromOffset, toArray, toOffset, size);
-    }
-
-    public static void primitiveCopyForward(Object from, UnsignedWord fromOffset, Object to, UnsignedWord toOffset, UnsignedWord size) {
         UnsignedWord i = WordFactory.zero();
+
         if (size.and(1).notEqual(0)) {
-            ObjectAccess.writeByte(to, toOffset.add(i), ObjectAccess.readByte(from, fromOffset.add(i)));
+            ObjectAccess.writeByte(toArray, toOffset.add(i), ObjectAccess.readByte(fromArray, fromOffset.add(i)));
+            size = size.subtract(1);
             i = i.add(1);
         }
-        if (size.and(2).notEqual(0)) {
-            ObjectAccess.writeShort(to, toOffset.add(i), ObjectAccess.readShort(from, fromOffset.add(i)));
+        if (size.and(3).notEqual(0)) {
+            ObjectAccess.writeShort(toArray, toOffset.add(i), ObjectAccess.readShort(fromArray, fromOffset.add(i)));
+            size = size.subtract(2);
             i = i.add(2);
         }
-        if (size.and(4).notEqual(0)) {
-            ObjectAccess.writeInt(to, toOffset.add(i), ObjectAccess.readInt(from, fromOffset.add(i)));
+        if (size.and(7).notEqual(0)) {
+            ObjectAccess.writeInt(toArray, toOffset.add(i), ObjectAccess.readInt(fromArray, fromOffset.add(i)));
+            size = size.subtract(4);
             i = i.add(4);
         }
         while (i.belowThan(size)) {
-            ObjectAccess.writeLong(to, toOffset.add(i), ObjectAccess.readLong(from, fromOffset.add(i)));
+            ObjectAccess.writeLong(toArray, toOffset.add(i), ObjectAccess.readLong(fromArray, fromOffset.add(i)));
             i = i.add(8);
         }
     }
 
-    private static void primitiveCopyBackward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int layoutEncoding) {
-        UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, fromIndex);
-        UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, toIndex);
-        UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(layoutEncoding));
+    private static void primitiveCopyBackward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int le) {
+        UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(le, fromIndex);
+        UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(le, toIndex);
+        UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(le));
         UnsignedWord size = elementSize.multiply(length);
 
         if (size.and(1).notEqual(0)) {
             size = size.subtract(1);
             ObjectAccess.writeByte(toArray, toOffset.add(size), ObjectAccess.readByte(fromArray, fromOffset.add(size)));
         }
-        if (size.and(2).notEqual(0)) {
+        if (size.and(3).notEqual(0)) {
             size = size.subtract(2);
             ObjectAccess.writeShort(toArray, toOffset.add(size), ObjectAccess.readShort(fromArray, fromOffset.add(size)));
         }
-        if (size.and(4).notEqual(0)) {
+        if (size.and(7).notEqual(0)) {
             size = size.subtract(4);
             ObjectAccess.writeInt(toArray, toOffset.add(size), ObjectAccess.readInt(fromArray, fromOffset.add(size)));
         }
@@ -172,29 +161,53 @@ public final class ArraycopySnippets extends SubstrateTemplates implements Snipp
         }
     }
 
-    public static void objectCopyForward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int layoutEncoding) {
-        UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, fromIndex);
-        UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, toIndex);
-        UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(layoutEncoding));
+    private static void objectCopyForward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int le) {
+        UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(le, fromIndex);
+        UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(le, toIndex);
+        UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(le));
         UnsignedWord size = elementSize.multiply(length);
+        objectCopyForwardUninterruptibly(fromArray, fromOffset, toArray, toOffset, elementSize, size);
+    }
 
+    @Uninterruptible(reason = "Only the first writeObject has a write-barrier.")
+    private static void objectCopyForwardUninterruptibly(Object fromArray, UnsignedWord fromOffset, Object toArray, UnsignedWord toOffset, UnsignedWord elementSize, UnsignedWord size) {
         UnsignedWord copied = WordFactory.zero();
-        while (copied.belowThan(size)) {
-            BarrieredAccess.writeObject(toArray, toOffset.add(copied), BarrieredAccess.readObject(fromArray, fromOffset.add(copied)));
+        // Loop-peel the first iteration so I can use BarrieredAccess
+        // to put a write barrier on the destination.
+        // TODO: I am explicitly not making the first read have a read barrier.
+        if (copied.belowThan(size)) {
+            BarrieredAccess.writeObject(toArray, toOffset.add(copied), ObjectAccess.readObject(fromArray, fromOffset.add(copied)));
             copied = copied.add(elementSize);
+
+            while (copied.belowThan(size)) {
+                ObjectAccess.writeObject(toArray, toOffset.add(copied), ObjectAccess.readObject(fromArray, fromOffset.add(copied)));
+                copied = copied.add(elementSize);
+            }
         }
     }
 
-    private static void objectCopyBackward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int layoutEncoding) {
-        UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, fromIndex);
-        UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, toIndex);
-        UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(layoutEncoding));
+    private static void objectCopyBackward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int le) {
+        UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(le, fromIndex);
+        UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(le, toIndex);
+        UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(le));
         UnsignedWord size = elementSize.multiply(length);
+        objectCopyBackwardsUninterruptibly(fromArray, fromOffset, toArray, toOffset, elementSize, size);
+    }
 
+    @Uninterruptible(reason = "Only the first writeObject has a write-barrier.")
+    private static void objectCopyBackwardsUninterruptibly(Object fromArray, UnsignedWord fromOffset, Object toArray, UnsignedWord toOffset, UnsignedWord elementSize, UnsignedWord size) {
+        // Loop-peel the first iteration so I can use BarrieredAccess
+        // to put a write barrier on the destination.
+        // TODO: I am explicitly not making the first read have a read barrier.
         UnsignedWord remaining = size;
-        while (remaining.aboveThan(0)) {
+        if (remaining.aboveThan(0)) {
             remaining = remaining.subtract(elementSize);
-            BarrieredAccess.writeObject(toArray, toOffset.add(remaining), BarrieredAccess.readObject(fromArray, fromOffset.add(remaining)));
+            BarrieredAccess.writeObject(toArray, toOffset.add(remaining), ObjectAccess.readObject(fromArray, fromOffset.add(remaining)));
+
+            while (remaining.aboveThan(0)) {
+                remaining = remaining.subtract(elementSize);
+                ObjectAccess.writeObject(toArray, toOffset.add(remaining), ObjectAccess.readObject(fromArray, fromOffset.add(remaining)));
+            }
         }
     }
 
@@ -217,6 +230,12 @@ public final class ArraycopySnippets extends SubstrateTemplates implements Snipp
 
     @NodeIntrinsic(value = ForeignCallNode.class)
     private static native void callArraycopy(@ConstantNodeParameter ForeignCallDescriptor descriptor, Object fromArray, int fromIndex, Object toArray, int toIndex, int length);
+
+    protected ArraycopySnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
+                    Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
+        super(options, factories, providers, snippetReflection);
+        lowerings.put(SubstrateArraycopyNode.class, new ArraycopyLowering());
+    }
 
     final class ArraycopyLowering implements NodeLoweringProvider<SubstrateArraycopyNode> {
         private final SnippetInfo arraycopyInfo = snippet(ArraycopySnippets.class, "arraycopySnippet");
