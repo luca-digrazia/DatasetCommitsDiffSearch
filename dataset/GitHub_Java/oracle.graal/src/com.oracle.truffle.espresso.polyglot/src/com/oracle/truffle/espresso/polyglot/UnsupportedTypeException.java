@@ -45,7 +45,7 @@ package com.oracle.truffle.espresso.polyglot;
  * An exception thrown if an interop {@link Object} does not support the type of one ore more
  * arguments.
  *
- * @since 21.0
+ * @since 0.11
  */
 public final class UnsupportedTypeException extends InteropException {
 
@@ -68,7 +68,7 @@ public final class UnsupportedTypeException extends InteropException {
      * {@link Object}.
      *
      * @return the unsupported arguments
-     * @since 21.0
+     * @since 0.11
      */
     public Object[] getSuppliedValues() {
         return suppliedValues;
@@ -78,7 +78,7 @@ public final class UnsupportedTypeException extends InteropException {
      * Creates an {@link UnsupportedTypeException} to indicate that an argument type is not
      * supported.
      *
-     * @since 21.0
+     * @since 19.0
      */
     public static UnsupportedTypeException create(Object[] suppliedValues) {
         return new UnsupportedTypeException((String) null, suppliedValues);
@@ -88,7 +88,7 @@ public final class UnsupportedTypeException extends InteropException {
      * Creates an {@link UnsupportedTypeException} to indicate that an argument type is not
      * supported.
      *
-     * @since 21.0
+     * @since 19.0
      */
     public static UnsupportedTypeException create(Object[] suppliedValues, String hint) {
         return new UnsupportedTypeException(hint, suppliedValues);
@@ -108,8 +108,7 @@ public final class UnsupportedTypeException extends InteropException {
      * source language as well.
      *
      * @param cause the guest language exception that caused the error.
-     * 
-     * @since 21.0
+     * @since 20.2
      */
     public static UnsupportedTypeException create(Object[] suppliedValues, String hint, Throwable cause) {
         return new UnsupportedTypeException(hint, suppliedValues, cause);
