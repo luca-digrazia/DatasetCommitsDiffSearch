@@ -53,6 +53,7 @@ import java.util.HashSet;
 import java.util.function.Supplier;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
 
 /**
@@ -65,7 +66,7 @@ import org.graalvm.polyglot.Value;
 final class HostAdapterClassLoader {
     static final ProtectionDomain GENERATED_PROTECTION_DOMAIN = createGeneratedProtectionDomain();
     static final Collection<String> VISIBLE_INTERNAL_CLASS_NAMES = Collections.unmodifiableCollection(
-                    new HashSet<>(Arrays.asList(Value.class.getName(), HostAdapterServices.class.getName(), HostAdapterServices.Export.class.getName())));
+                    new HashSet<>(Arrays.asList(HostAdapterServices.class.getName(), Value.class.getName(), HostAccess.Export.class.getName())));
 
     private final String className;
     private final byte[] classBytes;
