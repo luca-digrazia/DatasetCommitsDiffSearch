@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,20 +24,13 @@
  */
 package org.graalvm.compiler.word;
 
-import static org.graalvm.compiler.word.UnsafeAccess.UNSAFE;
+import static org.graalvm.compiler.serviceprovider.GraalUnsafeAccess.getUnsafe;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import org.graalvm.api.word.ComparableWord;
-import org.graalvm.api.word.LocationIdentity;
-import org.graalvm.api.word.Pointer;
-import org.graalvm.api.word.Signed;
-import org.graalvm.api.word.Unsigned;
-import org.graalvm.api.word.WordBase;
-import org.graalvm.api.word.WordFactory;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.calc.UnsignedMath;
 import org.graalvm.compiler.debug.GraalError;
@@ -53,10 +48,30 @@ import org.graalvm.compiler.nodes.calc.UnsignedDivNode;
 import org.graalvm.compiler.nodes.calc.UnsignedRemNode;
 import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
 import org.graalvm.compiler.nodes.calc.XorNode;
-import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.address.AddressNode.Address;
+import org.graalvm.word.ComparableWord;
+import org.graalvm.word.LocationIdentity;
+import org.graalvm.word.Pointer;
+import org.graalvm.word.SignedWord;
+import org.graalvm.word.UnsignedWord;
+import org.graalvm.word.WordBase;
+import org.graalvm.word.WordFactory;
+import org.graalvm.word.impl.WordBoxFactory;
 
-public abstract class Word extends WordFactory implements Signed, Unsigned, Pointer {
+import sun.misc.Unsafe;
+
+public abstract class Word implements SignedWord, UnsignedWord, Pointer {
+
+    private static final Unsafe UNSAFE = getUnsafe();
+
+    static {
+        BoxFactoryImpl.initialize();
+    }
+
+    public static void ensureInitialized() {
+        /* Calling this method ensures that the static initializer has been executed. */
+    }
 
     /**
      * Links a method to a canonical operation represented by an {@link Opcode} val.
@@ -79,13 +94,17 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
      */
     public enum Opcode {
         NODE_CLASS,
+        INTEGER_DIVISION_NODE_CLASS,
         COMPARISON,
+        IS_NULL,
+        IS_NON_NULL,
         NOT,
         READ_POINTER,
         READ_OBJECT,
         READ_BARRIERED,
         READ_HEAP,
         WRITE_POINTER,
+        WRITE_POINTER_SIDE_EFFECT_FREE,
         WRITE_OBJECT,
         WRITE_BARRIERED,
         CAS_POINTER,
@@ -98,10 +117,15 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
         TO_RAW_VALUE,
     }
 
-    public static class BoxFactoryImpl implements BoxFactory {
+    static class BoxFactoryImpl extends WordBoxFactory {
+        static void initialize() {
+            assert boxFactory == null : "BoxFactory must be initialized only once.";
+            boxFactory = new BoxFactoryImpl();
+        }
+
         @SuppressWarnings("unchecked")
         @Override
-        public <T extends WordBase> T box(long val) {
+        public <T extends WordBase> T boxImpl(long val) {
             return (T) HostedWord.boxLong(val);
         }
     }
@@ -164,13 +188,13 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(node = AddNode.class)
-    public Word add(Signed val) {
+    public Word add(SignedWord val) {
         return add((Word) val);
     }
 
     @Override
     @Operation(node = AddNode.class)
-    public Word add(Unsigned val) {
+    public Word add(UnsignedWord val) {
         return add((Word) val);
     }
 
@@ -187,13 +211,13 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(node = SubNode.class)
-    public Word subtract(Signed val) {
+    public Word subtract(SignedWord val) {
         return subtract((Word) val);
     }
 
     @Override
     @Operation(node = SubNode.class)
-    public Word subtract(Unsigned val) {
+    public Word subtract(UnsignedWord val) {
         return subtract((Word) val);
     }
 
@@ -210,13 +234,13 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(node = MulNode.class)
-    public Word multiply(Signed val) {
+    public Word multiply(SignedWord val) {
         return multiply((Word) val);
     }
 
     @Override
     @Operation(node = MulNode.class)
-    public Word multiply(Unsigned val) {
+    public Word multiply(UnsignedWord val) {
         return multiply((Word) val);
     }
 
@@ -232,76 +256,76 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
     }
 
     @Override
-    @Operation(node = SignedDivNode.class)
-    public Word signedDivide(Signed val) {
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = SignedDivNode.class)
+    public Word signedDivide(SignedWord val) {
         return signedDivide((Word) val);
     }
 
     @Override
-    @Operation(node = SignedDivNode.class)
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = SignedDivNode.class)
     public Word signedDivide(int val) {
         return signedDivide(intParam(val));
     }
 
-    @Operation(node = SignedDivNode.class)
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = SignedDivNode.class)
     public Word signedDivide(Word val) {
         return box(unbox() / val.unbox());
     }
 
     @Override
-    @Operation(node = UnsignedDivNode.class)
-    public Word unsignedDivide(Unsigned val) {
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = UnsignedDivNode.class)
+    public Word unsignedDivide(UnsignedWord val) {
         return unsignedDivide((Word) val);
     }
 
     @Override
-    @Operation(node = UnsignedDivNode.class)
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = UnsignedDivNode.class)
     public Word unsignedDivide(int val) {
         return signedDivide(intParam(val));
     }
 
-    @Operation(node = UnsignedDivNode.class)
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = UnsignedDivNode.class)
     public Word unsignedDivide(Word val) {
         return box(Long.divideUnsigned(unbox(), val.unbox()));
     }
 
     @Override
-    @Operation(node = SignedRemNode.class)
-    public Word signedRemainder(Signed val) {
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = SignedRemNode.class)
+    public Word signedRemainder(SignedWord val) {
         return signedRemainder((Word) val);
     }
 
     @Override
-    @Operation(node = SignedRemNode.class)
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = SignedRemNode.class)
     public Word signedRemainder(int val) {
         return signedRemainder(intParam(val));
     }
 
-    @Operation(node = SignedRemNode.class)
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = SignedRemNode.class)
     public Word signedRemainder(Word val) {
         return box(unbox() % val.unbox());
     }
 
     @Override
-    @Operation(node = UnsignedRemNode.class)
-    public Word unsignedRemainder(Unsigned val) {
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = UnsignedRemNode.class)
+    public Word unsignedRemainder(UnsignedWord val) {
         return unsignedRemainder((Word) val);
     }
 
     @Override
-    @Operation(node = UnsignedRemNode.class)
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = UnsignedRemNode.class)
     public Word unsignedRemainder(int val) {
         return signedRemainder(intParam(val));
     }
 
-    @Operation(node = UnsignedRemNode.class)
+    @Operation(opcode = Opcode.INTEGER_DIVISION_NODE_CLASS, node = UnsignedRemNode.class)
     public Word unsignedRemainder(Word val) {
         return box(Long.remainderUnsigned(unbox(), val.unbox()));
     }
 
     @Override
     @Operation(node = LeftShiftNode.class, rightOperandIsInt = true)
-    public Word shiftLeft(Unsigned val) {
+    public Word shiftLeft(UnsignedWord val) {
         return shiftLeft((Word) val);
     }
 
@@ -318,7 +342,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(node = RightShiftNode.class, rightOperandIsInt = true)
-    public Word signedShiftRight(Unsigned val) {
+    public Word signedShiftRight(UnsignedWord val) {
         return signedShiftRight((Word) val);
     }
 
@@ -335,7 +359,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(node = UnsignedRightShiftNode.class, rightOperandIsInt = true)
-    public Word unsignedShiftRight(Unsigned val) {
+    public Word unsignedShiftRight(UnsignedWord val) {
         return unsignedShiftRight((Word) val);
     }
 
@@ -352,13 +376,13 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(node = AndNode.class)
-    public Word and(Signed val) {
+    public Word and(SignedWord val) {
         return and((Word) val);
     }
 
     @Override
     @Operation(node = AndNode.class)
-    public Word and(Unsigned val) {
+    public Word and(UnsignedWord val) {
         return and((Word) val);
     }
 
@@ -375,13 +399,13 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(node = OrNode.class)
-    public Word or(Signed val) {
+    public Word or(SignedWord val) {
         return or((Word) val);
     }
 
     @Override
     @Operation(node = OrNode.class)
-    public Word or(Unsigned val) {
+    public Word or(UnsignedWord val) {
         return or((Word) val);
     }
 
@@ -398,13 +422,13 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(node = XorNode.class)
-    public Word xor(Signed val) {
+    public Word xor(SignedWord val) {
         return xor((Word) val);
     }
 
     @Override
     @Operation(node = XorNode.class)
-    public Word xor(Unsigned val) {
+    public Word xor(UnsignedWord val) {
         return xor((Word) val);
     }
 
@@ -426,6 +450,18 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
     }
 
     @Override
+    @Operation(opcode = Opcode.IS_NULL)
+    public boolean isNull() {
+        return equal(WordFactory.zero());
+    }
+
+    @Override
+    @Operation(opcode = Opcode.IS_NON_NULL)
+    public boolean isNonNull() {
+        return notEqual(WordFactory.zero());
+    }
+
+    @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.EQ)
     public boolean equal(ComparableWord val) {
         return equal((Word) val);
@@ -433,13 +469,13 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.EQ)
-    public boolean equal(Signed val) {
+    public boolean equal(SignedWord val) {
         return equal((Word) val);
     }
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.EQ)
-    public boolean equal(Unsigned val) {
+    public boolean equal(UnsignedWord val) {
         return equal((Word) val);
     }
 
@@ -462,13 +498,13 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.NE)
-    public boolean notEqual(Signed val) {
+    public boolean notEqual(SignedWord val) {
         return notEqual((Word) val);
     }
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.NE)
-    public boolean notEqual(Unsigned val) {
+    public boolean notEqual(UnsignedWord val) {
         return notEqual((Word) val);
     }
 
@@ -485,7 +521,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.LT)
-    public boolean lessThan(Signed val) {
+    public boolean lessThan(SignedWord val) {
         return lessThan((Word) val);
     }
 
@@ -502,7 +538,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.LE)
-    public boolean lessOrEqual(Signed val) {
+    public boolean lessOrEqual(SignedWord val) {
         return lessOrEqual((Word) val);
     }
 
@@ -519,7 +555,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.GT)
-    public boolean greaterThan(Signed val) {
+    public boolean greaterThan(SignedWord val) {
         return greaterThan((Word) val);
     }
 
@@ -536,7 +572,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.GE)
-    public boolean greaterOrEqual(Signed val) {
+    public boolean greaterOrEqual(SignedWord val) {
         return greaterOrEqual((Word) val);
     }
 
@@ -553,7 +589,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.BT)
-    public boolean belowThan(Unsigned val) {
+    public boolean belowThan(UnsignedWord val) {
         return belowThan((Word) val);
     }
 
@@ -570,7 +606,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.BE)
-    public boolean belowOrEqual(Unsigned val) {
+    public boolean belowOrEqual(UnsignedWord val) {
         return belowOrEqual((Word) val);
     }
 
@@ -587,7 +623,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.AT)
-    public boolean aboveThan(Unsigned val) {
+    public boolean aboveThan(UnsignedWord val) {
         return aboveThan((Word) val);
     }
 
@@ -604,7 +640,7 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
 
     @Override
     @Operation(opcode = Opcode.COMPARISON, condition = Condition.AE)
-    public boolean aboveOrEqual(Unsigned val) {
+    public boolean aboveOrEqual(UnsignedWord val) {
         return aboveOrEqual((Word) val);
     }
 
@@ -674,55 +710,55 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public byte readByte(int offset, LocationIdentity locationIdentity) {
-        return readByte(signed(offset), locationIdentity);
+        return readByte(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public char readChar(int offset, LocationIdentity locationIdentity) {
-        return readChar(signed(offset), locationIdentity);
+        return readChar(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public short readShort(int offset, LocationIdentity locationIdentity) {
-        return readShort(signed(offset), locationIdentity);
+        return readShort(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public int readInt(int offset, LocationIdentity locationIdentity) {
-        return readInt(signed(offset), locationIdentity);
+        return readInt(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public long readLong(int offset, LocationIdentity locationIdentity) {
-        return readLong(signed(offset), locationIdentity);
+        return readLong(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public float readFloat(int offset, LocationIdentity locationIdentity) {
-        return readFloat(signed(offset), locationIdentity);
+        return readFloat(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public double readDouble(int offset, LocationIdentity locationIdentity) {
-        return readDouble(signed(offset), locationIdentity);
+        return readDouble(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public <T extends WordBase> T readWord(int offset, LocationIdentity locationIdentity) {
-        return readWord(signed(offset), locationIdentity);
+        return readWord(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public Object readObject(int offset, LocationIdentity locationIdentity) {
-        return readObject(signed(offset), locationIdentity);
+        return readObject(WordFactory.signed(offset), locationIdentity);
     }
 
     @Override
@@ -786,61 +822,61 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeByte(int offset, byte val, LocationIdentity locationIdentity) {
-        writeByte(signed(offset), val, locationIdentity);
+        writeByte(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeChar(int offset, char val, LocationIdentity locationIdentity) {
-        writeChar(signed(offset), val, locationIdentity);
+        writeChar(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeShort(int offset, short val, LocationIdentity locationIdentity) {
-        writeShort(signed(offset), val, locationIdentity);
+        writeShort(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeInt(int offset, int val, LocationIdentity locationIdentity) {
-        writeInt(signed(offset), val, locationIdentity);
+        writeInt(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeLong(int offset, long val, LocationIdentity locationIdentity) {
-        writeLong(signed(offset), val, locationIdentity);
+        writeLong(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeFloat(int offset, float val, LocationIdentity locationIdentity) {
-        writeFloat(signed(offset), val, locationIdentity);
+        writeFloat(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeDouble(int offset, double val, LocationIdentity locationIdentity) {
-        writeDouble(signed(offset), val, locationIdentity);
+        writeDouble(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeWord(int offset, WordBase val, LocationIdentity locationIdentity) {
-        writeWord(signed(offset), val, locationIdentity);
+        writeWord(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.INITIALIZE)
     public void initializeLong(int offset, long val, LocationIdentity locationIdentity) {
-        initializeLong(signed(offset), val, locationIdentity);
+        initializeLong(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeObject(int offset, Object val, LocationIdentity locationIdentity) {
-        writeObject(signed(offset), val, locationIdentity);
+        writeObject(WordFactory.signed(offset), val, locationIdentity);
     }
 
     @Override
@@ -898,63 +934,71 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
     @Operation(opcode = Opcode.READ_HEAP)
     public native Object readObject(WordBase offset, BarrierType barrierType);
 
+    @Operation(opcode = Opcode.READ_HEAP)
+    public native Object readObject(WordBase offset, BarrierType barrierType, LocationIdentity locationIdentity);
+
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public byte readByte(int offset) {
-        return readByte(signed(offset));
+        return readByte(WordFactory.signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public char readChar(int offset) {
-        return readChar(signed(offset));
+        return readChar(WordFactory.signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public short readShort(int offset) {
-        return readShort(signed(offset));
+        return readShort(WordFactory.signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public int readInt(int offset) {
-        return readInt(signed(offset));
+        return readInt(WordFactory.signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public long readLong(int offset) {
-        return readLong(signed(offset));
+        return readLong(WordFactory.signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public float readFloat(int offset) {
-        return readFloat(signed(offset));
+        return readFloat(WordFactory.signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public double readDouble(int offset) {
-        return readDouble(signed(offset));
+        return readDouble(WordFactory.signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public <T extends WordBase> T readWord(int offset) {
-        return readWord(signed(offset));
+        return readWord(WordFactory.signed(offset));
     }
 
     @Override
     @Operation(opcode = Opcode.READ_POINTER)
     public Object readObject(int offset) {
-        return readObject(signed(offset));
+        return readObject(WordFactory.signed(offset));
     }
 
     @Operation(opcode = Opcode.READ_HEAP)
     public Object readObject(int offset, BarrierType barrierType) {
-        return readObject(signed(offset), barrierType);
+        return readObject(WordFactory.signed(offset), barrierType);
+    }
+
+    @Operation(opcode = Opcode.READ_HEAP)
+    public Object readObject(int offset, BarrierType barrierType, LocationIdentity locationIdentity) {
+        return readObject(WordFactory.signed(offset), barrierType, locationIdentity);
     }
 
     @Override
@@ -1050,105 +1094,112 @@ public abstract class Word extends WordFactory implements Signed, Unsigned, Poin
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeByte(int offset, byte val) {
-        writeByte(signed(offset), val);
+        writeByte(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeChar(int offset, char val) {
-        writeChar(signed(offset), val);
+        writeChar(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeShort(int offset, short val) {
-        writeShort(signed(offset), val);
+        writeShort(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeInt(int offset, int val) {
-        writeInt(signed(offset), val);
+        writeInt(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeLong(int offset, long val) {
-        writeLong(signed(offset), val);
+        writeLong(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeFloat(int offset, float val) {
-        writeFloat(signed(offset), val);
+        writeFloat(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeDouble(int offset, double val) {
-        writeDouble(signed(offset), val);
+        writeDouble(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeWord(int offset, WordBase val) {
-        writeWord(signed(offset), val);
+        writeWord(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.WRITE_POINTER)
     public void writeObject(int offset, Object val) {
-        writeObject(signed(offset), val);
+        writeObject(WordFactory.signed(offset), val);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public int compareAndSwapInt(int offset, int expectedValue, int newValue, LocationIdentity locationIdentity) {
-        return compareAndSwapInt(signed(offset), expectedValue, newValue, locationIdentity);
+        return compareAndSwapInt(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public long compareAndSwapLong(int offset, long expectedValue, long newValue, LocationIdentity locationIdentity) {
-        return compareAndSwapLong(signed(offset), expectedValue, newValue, locationIdentity);
+        return compareAndSwapLong(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public <T extends WordBase> T compareAndSwapWord(int offset, T expectedValue, T newValue, LocationIdentity locationIdentity) {
-        return compareAndSwapWord(signed(offset), expectedValue, newValue, locationIdentity);
+        return compareAndSwapWord(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public Object compareAndSwapObject(int offset, Object expectedValue, Object newValue, LocationIdentity locationIdentity) {
-        return compareAndSwapObject(signed(offset), expectedValue, newValue, locationIdentity);
+        return compareAndSwapObject(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public boolean logicCompareAndSwapInt(int offset, int expectedValue, int newValue, LocationIdentity locationIdentity) {
-        return logicCompareAndSwapInt(signed(offset), expectedValue, newValue, locationIdentity);
+        return logicCompareAndSwapInt(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public boolean logicCompareAndSwapLong(int offset, long expectedValue, long newValue, LocationIdentity locationIdentity) {
-        return logicCompareAndSwapLong(signed(offset), expectedValue, newValue, locationIdentity);
+        return logicCompareAndSwapLong(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public boolean logicCompareAndSwapWord(int offset, WordBase expectedValue, WordBase newValue, LocationIdentity locationIdentity) {
-        return logicCompareAndSwapWord(signed(offset), expectedValue, newValue, locationIdentity);
+        return logicCompareAndSwapWord(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
     }
 
     @Override
     @Operation(opcode = Opcode.CAS_POINTER)
     public boolean logicCompareAndSwapObject(int offset, Object expectedValue, Object newValue, LocationIdentity locationIdentity) {
-        return logicCompareAndSwapObject(signed(offset), expectedValue, newValue, locationIdentity);
+        return logicCompareAndSwapObject(WordFactory.signed(offset), expectedValue, newValue, locationIdentity);
     }
 
+    /**
+     * This is deprecated because of the easy to mistype name collision between {@link #equals} and
+     * the other equals routines like {@link #equal(Word)}. In general you should never be
+     * statically calling this method for Word types.
+     */
+    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public final boolean equals(Object obj) {
         throw GraalError.shouldNotReachHere("equals must not be called on words");
