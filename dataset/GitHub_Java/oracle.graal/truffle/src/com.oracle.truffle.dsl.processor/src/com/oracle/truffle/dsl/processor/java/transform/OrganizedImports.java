@@ -81,7 +81,6 @@ import com.oracle.truffle.dsl.processor.java.model.GeneratedTypeMirror;
 public final class OrganizedImports {
 
     private final Map<String, String> classImportUsage = new HashMap<>();
-    private final Map<String, Boolean> noImportSymbols = new HashMap<>();
     private final Map<String, Set<String>> autoImportCache = new HashMap<>();
 
     private final CodeTypeElement topLevelClass;
@@ -159,7 +158,8 @@ public final class OrganizedImports {
         } else if (classImportUsage.containsKey(name)) {
             String qualifiedImport = classImportUsage.get(name);
             String qualifiedName = ElementUtils.getEnclosedQualifiedName(type);
-            if (qualifiedImport == null || !qualifiedName.equals(qualifiedImport)) {
+
+            if (!qualifiedName.equals(qualifiedImport)) {
                 name = ElementUtils.getQualifiedName(type);
             }
         }
@@ -220,10 +220,15 @@ public final class OrganizedImports {
         String enclosedElementId = ElementUtils.getUniqueIdentifier(enclosedType.asType());
         Set<String> autoImportedTypes = autoImportCache.get(enclosedElementId);
         if (autoImportedTypes == null) {
+            List<Element> elements = ElementUtils.getElementHierarchy(enclosedType);
             autoImportedTypes = new HashSet<>();
+            for (Element element : elements) {
+                if (element.getKind().isClass() || element.getKind().isInterface()) {
+                    collectSuperTypeImports((TypeElement) element, autoImportedTypes);
+                    collectInnerTypeImports((TypeElement) element, autoImportedTypes);
+                }
+            }
             autoImportCache.put(enclosedElementId, autoImportedTypes);
-
-            collectImplicitImports(autoImportedTypes, enclosedElementId, enclosedType);
         }
 
         String qualifiedName = getQualifiedName(importType);
@@ -232,17 +237,6 @@ public final class OrganizedImports {
         }
 
         return true;
-    }
-
-    private void collectImplicitImports(Set<String> autoImportedTypes, String enclosedElementId, TypeElement enclosedType) {
-        List<Element> elements = ElementUtils.getElementHierarchy(enclosedType);
-        for (Element element : elements) {
-            if (element.getKind().isClass() || element.getKind().isInterface()) {
-                collectSuperTypeImports((TypeElement) element, autoImportedTypes);
-                collectInnerTypeImports((TypeElement) element, autoImportedTypes);
-            }
-        }
-        autoImportCache.put(enclosedElementId, autoImportedTypes);
     }
 
     private static boolean anyEqualEnclosingTypes(Element enclosed, Element importElement) {
@@ -262,13 +256,12 @@ public final class OrganizedImports {
         return anyEqualEnclosingTypes(enclosingElement, importElement) || anyEqualEnclosingTypes(importElement, enclosingElement);
     }
 
-    private Set<CodeImport> generateImports(Map<String, String> symbols) {
+    private static Set<CodeImport> generateImports(Map<String, String> symbols) {
         TreeSet<CodeImport> importObjects = new TreeSet<>();
         for (String symbol : symbols.keySet()) {
-            String importQualifiedName = symbols.get(symbol);
-            Boolean needsImport = this.noImportSymbols.get(symbol);
-            if (importQualifiedName != null && needsImport) {
-                importObjects.add(new CodeImport(importQualifiedName, symbol, false));
+            String packageName = symbols.get(symbol);
+            if (packageName != null) {
+                importObjects.add(new CodeImport(packageName, symbol, false));
             }
         }
         return importObjects;
@@ -324,14 +317,10 @@ public final class OrganizedImports {
 
         @Override
         public Void visitType(CodeTypeElement e, Void p) {
-            Element enclosing = e;
-            if (!e.isTopLevelClass()) {
-                enclosing = e.getEnclosingElement();
-            }
-            visitAnnotations(enclosing, e.getAnnotationMirrors());
+            visitAnnotations(e, e.getAnnotationMirrors());
 
             if (e.getDocTree() != null) {
-                visitTree(e.getDocTree(), null, enclosing);
+                visitTree(e.getDocTree(), null, e);
             }
 
             visitTypeReference(e, e.getSuperclass());
@@ -499,15 +488,11 @@ public final class OrganizedImports {
                         return;
                     case DECLARED:
                         DeclaredType declared = (DeclaredType) type;
-                        String declaredName = ElementUtils.getDeclaredName(declared, false);
-                        String enclosedQualifiedName = ElementUtils.getEnclosedQualifiedName(declared);
-                        registerSymbol(classImportUsage, enclosedQualifiedName, declaredName);
-                        if (!needsImport(enclosedType, type)) {
-                            noImportSymbols.putIfAbsent(declaredName, Boolean.FALSE);
-                        } else {
-                            noImportSymbols.put(declaredName, Boolean.TRUE);
+                        if (needsImport(enclosedType, type)) {
+                            String declaredName = ElementUtils.getDeclaredName(declared, false);
+                            String enclosedQualifiedName = ElementUtils.getEnclosedQualifiedName(declared);
+                            registerSymbol(classImportUsage, enclosedQualifiedName, declaredName);
                         }
-
                         for (TypeMirror argument : ((DeclaredType) type).getTypeArguments()) {
                             visitTypeReference(enclosedType, argument);
                         }
