@@ -53,7 +53,6 @@ public class RuntimeState {
     private static final int INITIAL_GLOBALS_SIZE = 64;
     private static final int INITIAL_TARGETS_SIZE = 32;
 
-    private final WasmContext.Uid contextUid;
     private final WasmModule module;
 
     /**
@@ -106,8 +105,7 @@ public class RuntimeState {
         }
     }
 
-    public RuntimeState(WasmContext context, WasmModule module) {
-        this.contextUid = context.uid();
+    public RuntimeState(WasmModule module) {
         this.module = module;
         this.globalAddresses = new int[INITIAL_GLOBALS_SIZE];
         this.targets = new CallTarget[INITIAL_TARGETS_SIZE];
@@ -140,10 +138,6 @@ public class RuntimeState {
             throw CompilerDirectives.shouldNotReachHere("Can only switch to failed state when linking is in-progress.");
         }
         this.linkState = Linker.LinkState.failed;
-    }
-
-    public WasmContext.Uid contextUid() {
-        return contextUid;
     }
 
     public boolean isNonLinked() {
@@ -188,9 +182,7 @@ public class RuntimeState {
     }
 
     public int globalAddress(int index) {
-        final int result = globalAddresses[index];
-        assert result != SymbolTable.UNINITIALIZED_GLOBAL_ADDRESS : "Uninitialized global at index: " + index;
-        return result;
+        return globalAddresses[index];
     }
 
     void setGlobalAddress(int globalIndex, int address) {
