@@ -43,13 +43,13 @@ import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleDebugContext;
 import org.graalvm.compiler.truffle.common.TruffleDebugJavaMethod;
 import org.graalvm.graphio.GraphOutput;
-import org.graalvm.libgraal.LibGraalObject;
 import org.graalvm.libgraal.LibGraalScope;
 import org.graalvm.util.OptionsEncoder;
 
+import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.services.Services;
 
-final class IgvSupport extends LibGraalObject implements TruffleDebugContext {
+final class IgvSupport extends SVMObject implements TruffleDebugContext {
 
     private static final String SOURCE_PREFIX = "SOURCE=";
     private static volatile Map<Object, Object> versionProperties;
@@ -74,7 +74,7 @@ final class IgvSupport extends LibGraalObject implements TruffleDebugContext {
             return builder.build(parent);
         }
         if (sharedChannel == null) {
-            sharedChannel = new IgvDumpChannel(HotSpotToSVMCalls.getDumpChannel(getIsolateThread(), getHandle()));
+            sharedChannel = new IgvDumpChannel(HotSpotToSVMCalls.getDumpChannel(getIsolateThread(), handle));
         }
         final GraphOutput<G, M> res = builder.embedded(true).build(sharedChannel);
         parentOutput = res;
@@ -83,7 +83,7 @@ final class IgvSupport extends LibGraalObject implements TruffleDebugContext {
 
     @Override
     public boolean isDumpEnabled() {
-        return HotSpotToSVMCalls.isBasicDumpEnabled(getIsolateThread(), getHandle());
+        return HotSpotToSVMCalls.isBasicDumpEnabled(getIsolateThread(), handle);
     }
 
     @Override
@@ -134,16 +134,16 @@ final class IgvSupport extends LibGraalObject implements TruffleDebugContext {
         } else {
             SVMTruffleCompilation compilation = owner.getActiveCompilation();
             assert compilation != null : compilable;
-            compilationHandle = compilation.getHandle();
+            compilationHandle = compilation.handle;
         }
-        long scopeHandle = HotSpotToSVMCalls.openDebugContextScope(getIsolateThread(), getHandle(), name, compilationHandle);
+        long scopeHandle = HotSpotToSVMCalls.openDebugContextScope(getIsolateThread(), handle, name, compilationHandle);
         return scopeHandle == 0 ? null : new Scope(scopeHandle);
     }
 
     @Override
     public void close() {
         try {
-            HotSpotToSVMCalls.closeDebugContext(getIsolateThread(), getHandle());
+            HotSpotToSVMCalls.closeDebugContext(getIsolateThread(), handle);
         } finally {
             scope.close();
         }
@@ -176,11 +176,11 @@ final class IgvSupport extends LibGraalObject implements TruffleDebugContext {
 
     static IgvSupport create(SVMHotSpotTruffleCompiler compiler, Map<String, Object> options, SVMTruffleCompilation compilation) {
         byte[] encodedOptions = OptionsEncoder.encode(options);
-        LibGraalScope scope = new LibGraalScope();
-        return new IgvSupport(scope, compiler, HotSpotToSVMCalls.openDebugContext(getIsolateThread(), compiler.handle(), compilation == null ? 0 : compilation.getHandle(), encodedOptions));
+        LibGraalScope scope = new LibGraalScope(HotSpotJVMCIRuntime.runtime());
+        return new IgvSupport(scope, compiler, HotSpotToSVMCalls.openDebugContext(getIsolateThread(), compiler.handle(), compilation == null ? 0 : compilation.handle, encodedOptions));
     }
 
-    private static final class IgvDumpChannel extends LibGraalObject implements WritableByteChannel {
+    private static final class IgvDumpChannel extends SVMObject implements WritableByteChannel {
 
         IgvDumpChannel(long handle) {
             super(handle);
@@ -201,7 +201,7 @@ final class IgvSupport extends LibGraalObject implements TruffleDebugContext {
             int capacity = src.capacity();
             int pos = src.position();
             int limit = src.limit();
-            int written = HotSpotToSVMCalls.dumpChannelWrite(getIsolateThread(), getHandle(), src, capacity, pos, limit);
+            int written = HotSpotToSVMCalls.dumpChannelWrite(getIsolateThread(), handle, src, capacity, pos, limit);
             if (written > 0) {
                 asBaseBuffer(src).position(pos + written);
             }
@@ -210,16 +210,16 @@ final class IgvSupport extends LibGraalObject implements TruffleDebugContext {
 
         @Override
         public boolean isOpen() {
-            return HotSpotToSVMCalls.isDumpChannelOpen(getIsolateThread(), getHandle());
+            return HotSpotToSVMCalls.isDumpChannelOpen(getIsolateThread(), handle);
         }
 
         @Override
         public void close() throws IOException {
-            HotSpotToSVMCalls.dumpChannelClose(getIsolateThread(), getHandle());
+            HotSpotToSVMCalls.dumpChannelClose(getIsolateThread(), handle);
         }
     }
 
-    private static final class Scope extends LibGraalObject implements Closeable {
+    private static final class Scope extends SVMObject implements Closeable {
 
         Scope(long handle) {
             super(handle);
@@ -227,7 +227,7 @@ final class IgvSupport extends LibGraalObject implements TruffleDebugContext {
 
         @Override
         public void close() {
-            HotSpotToSVMCalls.closeDebugContextScope(getIsolateThread(), getHandle());
+            HotSpotToSVMCalls.closeDebugContextScope(getIsolateThread(), handle);
         }
     }
 }
