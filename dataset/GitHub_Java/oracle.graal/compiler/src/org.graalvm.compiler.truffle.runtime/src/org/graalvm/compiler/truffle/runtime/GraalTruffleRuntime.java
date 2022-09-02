@@ -728,7 +728,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         Priority priority = lastTierCompilation ? Priority.LAST_TIER : Priority.FIRST_TIER;
         return getCompileQueue().submitTask(priority, optimizedCallTarget, new BackgroundCompileQueue.Request() {
             @Override
-            protected void execute(CancellableCompileTask task, WeakReference<OptimizedCallTarget> targetRef) {
+            protected void execute(TruffleCompilationTask task, WeakReference<OptimizedCallTarget> targetRef) {
                 OptimizedCallTarget callTarget = targetRef.get();
                 if (callTarget != null) {
                     try {
@@ -736,7 +736,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                             doCompile(callTarget, task);
                         }
                     } finally {
-                        task.finished();
+                        callTarget.resetCompilationTask();
                     }
                 }
             }
@@ -752,7 +752,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     public void finishCompilation(OptimizedCallTarget optimizedCallTarget, CancellableCompileTask task, boolean mayBeAsynchronous) {
-        getListener().onCompilationQueued(optimizedCallTarget);
 
         if (!mayBeAsynchronous) {
             try {
@@ -793,8 +792,17 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
-    // TODO: Used only in tests. Should be removed and task should be reflectively looked up or use
-    // org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime.finishCompilation
+    public boolean cancelInstalledTask(OptimizedCallTarget optimizedCallTarget, Object source, CharSequence reason) {
+        CancellableCompileTask task = optimizedCallTarget.getCompilationTask();
+        if (task != null) {
+            if (task.cancel()) {
+                getListener().onCompilationDequeued(optimizedCallTarget, source, reason);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException {
         CancellableCompileTask task = optimizedCallTarget.getCompilationTask();
         if (task != null && !task.isCancelled()) {
