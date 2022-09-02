@@ -29,8 +29,11 @@ import static com.oracle.truffle.espresso.classfile.Constants.ACC_SUPER;
 import static com.oracle.truffle.espresso.classfile.Constants.JVM_ACC_WRITTEN_FLAGS;
 
 import java.io.PrintStream;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -45,14 +48,13 @@ import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.attributes.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.InnerClassesAttribute;
-import com.oracle.truffle.espresso.classfile.attributes.NestHostAttribute;
-import com.oracle.truffle.espresso.classfile.attributes.NestMembersAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SignatureAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SourceDebugExtensionAttribute;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -76,22 +78,19 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal //
     private StaticObject statics;
 
-    // instance and hidden fields declared in this class and in its super classes
     @CompilationFinal(dimensions = 1) //
-    private final Field[] fieldTable;
+    private Field[] declaredFields;
 
-    // points to the first element in the FieldTable that refers to a field declared in this class,
-    // or is equal to fieldTable.length if this class does not declare fields
-    private final int localFieldTableIndex;
+    @CompilationFinal(dimensions = 2) private final int[][] leftoverHoles;
+    @CompilationFinal(dimensions = 1) private final Field[] fieldTable;
 
-    // static fields declared in this class (no hidden fields)
-    @CompilationFinal(dimensions = 1) //
-    private final Field[] staticFieldTable;
+    private final int primitiveFieldTotalByteCount;
+    private final int primitiveStaticFieldTotalByteCount;
 
-    @CompilationFinal(dimensions = 1) //
-    private Method[] declaredMethods;
+    private final int objectFields;
+    private final int staticObjectFields;
 
-    @CompilationFinal(dimensions = 1) private Method[] mirandaMethods;
+    @CompilationFinal(dimensions = 1) private final Field[] staticFieldTable;
 
     private final InnerClassesAttribute innerClasses;
 
@@ -99,18 +98,7 @@ public final class ObjectKlass extends Klass {
 
     private final Klass hostKlass;
 
-    @CompilationFinal //
-    private Klass nest;
-
     private String genericSignature;
-
-    // Stores the VTable for classes, holds public non-static methods for interfaces.
-    @CompilationFinal(dimensions = 1) private final Method[] vtable;
-
-    // TODO(garcia) Sort itables (according to an arbitrary key) for dichotomic search?
-    @CompilationFinal(dimensions = 2) private final Method[][] itable;
-    @CompilationFinal(dimensions = 1) private final ObjectKlass[] iKlassTable;
-    @CompilationFinal private final int itableLength;
 
     @CompilationFinal private volatile int initState = LOADED;
 
@@ -121,6 +109,9 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal volatile RedefinitionCache redefineCache;
 
+    // used for class redefintion whenrefreshing vtables etc.
+    private final ArrayList<ObjectKlass> subTypes = new ArrayList<>(8);
+
     public static final int LOADED = 0;
     public static final int LINKED = 1;
     public static final int PREPARED = 2;
@@ -129,6 +120,10 @@ public final class ObjectKlass extends Klass {
 
     public Attribute getAttribute(Symbol<Name> name) {
         return getLinkedKlass().getAttribute(name);
+    }
+
+    public Attribute getAttribute(LinkedKlass linkedKlass, Symbol<Name> name) {
+        return linkedKlass.getAttribute(name);
     }
 
     public ObjectKlass(EspressoContext context, LinkedKlass linkedKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, StaticObject classLoader) {
@@ -142,73 +137,77 @@ public final class ObjectKlass extends Klass {
         // TODO(peterssen): Make writable copy.
         RuntimeConstantPool pool = new RuntimeConstantPool(getContext(), linkedKlass.getConstantPool(), classLoader);
 
-        Field[] skFieldTable = superKlass != null ? superKlass.getFieldTable() : new Field[0];
-        LinkedField[] lkInstanceFields = linkedKlass.getInstanceFields();
-        LinkedField[] lkStaticFields = linkedKlass.getStaticFields();
-
-        fieldTable = new Field[skFieldTable.length + lkInstanceFields.length];
-        staticFieldTable = new Field[lkStaticFields.length];
-
-        assert fieldTable.length == linkedKlass.getFieldTableLength();
-        System.arraycopy(skFieldTable, 0, fieldTable, 0, skFieldTable.length);
-        localFieldTableIndex = skFieldTable.length;
-        for (int i = 0; i < lkInstanceFields.length; i++) {
-            Field instanceField = new Field(this, lkInstanceFields[i], lkInstanceFields[i].isHidden());
-            fieldTable[localFieldTableIndex + i] = instanceField;
-        }
-        for (int i = 0; i < lkStaticFields.length; i++) {
-            Field staticField = new Field(this, lkStaticFields[i], false);
-            staticFieldTable[i] = staticField;
-        }
-
         LinkedMethod[] linkedMethods = linkedKlass.getLinkedMethods();
         Method[] methods = new Method[linkedMethods.length];
-        for (int i = 0; i < methods.length; i++) {
-            methods[i] = new Method(this, linkedMethods[i], pool);
+        for (int i = 0; i < methods.length; ++i) {
+            LinkedMethod linkedMethod = linkedMethods[i];
+            methods[i] = new Method(this, linkedMethod, pool);
         }
 
-        this.declaredMethods = methods;
-        this.redefineCache = new RedefinitionCache(pool, linkedKlass);
-
-        this.enclosingMethod = (EnclosingMethodAttribute) getAttribute(EnclosingMethodAttribute.NAME);
-        this.innerClasses = (InnerClassesAttribute) getAttribute(InnerClassesAttribute.NAME);
+        this.enclosingMethod = (EnclosingMethodAttribute) getAttribute(linkedKlass, EnclosingMethodAttribute.NAME);
+        this.innerClasses = (InnerClassesAttribute) getAttribute(linkedKlass, InnerClassesAttribute.NAME);
 
         // Move attribute name to better location.
-        this.runtimeVisibleAnnotations = getAttribute(Name.RuntimeVisibleAnnotations);
+        this.runtimeVisibleAnnotations = getAttribute(linkedKlass, Name.RuntimeVisibleAnnotations);
 
+        FieldTable.CreationResult fieldCR = FieldTable.create(superKlass, this, linkedKlass);
+
+        this.fieldTable = fieldCR.fieldTable;
+        this.staticFieldTable = fieldCR.staticFieldTable;
+        this.declaredFields = fieldCR.declaredFields;
+
+        this.primitiveFieldTotalByteCount = fieldCR.primitiveFieldTotalByteCount;
+        this.primitiveStaticFieldTotalByteCount = fieldCR.primitiveStaticFieldTotalByteCount;
+        this.objectFields = fieldCR.objectFields;
+        this.staticObjectFields = fieldCR.staticObjectFields;
+
+        this.leftoverHoles = fieldCR.leftoverHoles;
+        Method[][] itable = null;
+        Method[] vtable;
+        ObjectKlass[] iKlassTable;
+        Method[] mirandaMethods = null;
         if (this.isInterface()) {
-            this.itable = null;
-            InterfaceTables.InterfaceCreationResult icr = InterfaceTables.constructInterfaceItable(this, declaredMethods);
-            this.vtable = icr.methodtable;
-            this.iKlassTable = icr.klassTable;
+            InterfaceTables.InterfaceCreationResult icr = InterfaceTables.constructInterfaceItable(this, methods);
+            vtable = icr.methodtable;
+            iKlassTable = icr.klassTable;
         } else {
-            InterfaceTables.CreationResult methodCR = InterfaceTables.create(this, superKlass, superInterfaces);
-            this.iKlassTable = methodCR.klassTable;
-            this.mirandaMethods = methodCR.mirandas;
-            this.vtable = VirtualTable.create(superKlass, declaredMethods, this);
-            this.itable = InterfaceTables.fixTables(this, methodCR.tables, iKlassTable);
+            InterfaceTables.CreationResult methodCR = InterfaceTables.create(this, superKlass, superInterfaces, methods);
+            iKlassTable = methodCR.klassTable;
+            mirandaMethods = methodCR.mirandas;
+            vtable = VirtualTable.create(superKlass, methods, this, mirandaMethods, classLoader);
+            itable = InterfaceTables.fixTables(vtable, mirandaMethods, methods, methodCR.tables, iKlassTable);
         }
-        this.itableLength = iKlassTable.length;
+        if (superKlass != null) {
+            superKlass.addSubType(this);
+        }
+        for (ObjectKlass superInterface : superInterfaces) {
+            superInterface.addSubType(this);
+        }
+        this.redefineCache = new RedefinitionCache(pool, linkedKlass, methods, mirandaMethods, vtable, itable, iKlassTable);
         this.initState = LINKED;
         assert verifyTables();
     }
 
+    private void addSubType(ObjectKlass objectKlass) {
+        subTypes.add(objectKlass);
+    }
+
     private boolean verifyTables() {
-        if (vtable != null) {
-            for (int i = 0; i < vtable.length; i++) {
+        if (getVTable() != null) {
+            for (int i = 0; i < getVTable().length; i++) {
                 if (isInterface()) {
-                    if (vtable[i].getITableIndex() != i) {
+                    if (getVTable()[i].getITableIndex() != i) {
                         return false;
                     }
                 } else {
-                    if (vtable[i].getVTableIndex() != i) {
+                    if (getVTable()[i].getVTableIndex() != i) {
                         return false;
                     }
                 }
             }
         }
-        if (itable != null) {
-            for (Method[] table : itable) {
+        if (getItable() != null) {
+            for (Method[] table : getItable()) {
                 for (int i = 0; i < table.length; i++) {
                     if (table[i].getITableIndex() != i) {
                         return false;
@@ -265,7 +264,6 @@ public final class ObjectKlass extends Klass {
                     //
                     // Next, execute the class or interface initialization method of C.
                     prepare();
-
                     initState = PREPARED;
                     if (getContext().isMainThreadCreated()) {
                         if (getContext().getJDWPListener() != null) {
@@ -310,59 +308,61 @@ public final class ObjectKlass extends Klass {
 
     private void prepare() {
         checkLoadingConstraints();
-        for (Field f : staticFieldTable) {
-            ConstantValueAttribute a = (ConstantValueAttribute) f.getAttribute(Name.ConstantValue);
-            if (a == null) {
-                continue;
-            }
-            switch (f.getKind()) {
-                case Boolean: {
-                    boolean c = getConstantPool().intAt(a.getConstantValueIndex()) != 0;
-                    f.set(getStatics(), c);
-                    break;
+        for (Field f : declaredFields) {
+            if (f.isStatic()) {
+                ConstantValueAttribute a = (ConstantValueAttribute) f.getAttribute(Name.ConstantValue);
+                if (a == null) {
+                    continue;
                 }
-                case Byte: {
-                    byte c = (byte) getConstantPool().intAt(a.getConstantValueIndex());
-                    f.set(getStatics(), c);
-                    break;
+                switch (f.getKind()) {
+                    case Boolean: {
+                        boolean c = getConstantPool().intAt(a.getConstantValueIndex()) != 0;
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    case Byte: {
+                        byte c = (byte) getConstantPool().intAt(a.getConstantValueIndex());
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    case Short: {
+                        short c = (short) getConstantPool().intAt(a.getConstantValueIndex());
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    case Char: {
+                        char c = (char) getConstantPool().intAt(a.getConstantValueIndex());
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    case Int: {
+                        int c = getConstantPool().intAt(a.getConstantValueIndex());
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    case Float: {
+                        float c = getConstantPool().floatAt(a.getConstantValueIndex());
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    case Long: {
+                        long c = getConstantPool().longAt(a.getConstantValueIndex());
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    case Double: {
+                        double c = getConstantPool().doubleAt(a.getConstantValueIndex());
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    case Object: {
+                        StaticObject c = getConstantPool().resolvedStringAt(a.getConstantValueIndex());
+                        f.set(getStatics(), c);
+                        break;
+                    }
+                    default:
+                        throw EspressoError.shouldNotReachHere("invalid constant field kind");
                 }
-                case Short: {
-                    short c = (short) getConstantPool().intAt(a.getConstantValueIndex());
-                    f.set(getStatics(), c);
-                    break;
-                }
-                case Char: {
-                    char c = (char) getConstantPool().intAt(a.getConstantValueIndex());
-                    f.set(getStatics(), c);
-                    break;
-                }
-                case Int: {
-                    int c = getConstantPool().intAt(a.getConstantValueIndex());
-                    f.set(getStatics(), c);
-                    break;
-                }
-                case Float: {
-                    float c = getConstantPool().floatAt(a.getConstantValueIndex());
-                    f.set(getStatics(), c);
-                    break;
-                }
-                case Long: {
-                    long c = getConstantPool().longAt(a.getConstantValueIndex());
-                    f.set(getStatics(), c);
-                    break;
-                }
-                case Double: {
-                    double c = getConstantPool().doubleAt(a.getConstantValueIndex());
-                    f.set(getStatics(), c);
-                    break;
-                }
-                case Object: {
-                    StaticObject c = getConstantPool().resolvedStringAt(a.getConstantValueIndex());
-                    f.set(getStatics(), c);
-                    break;
-                }
-                default:
-                    throw EspressoError.shouldNotReachHere("invalid constant field kind");
             }
         }
     }
@@ -433,35 +433,26 @@ public final class ObjectKlass extends Klass {
     }
 
     Method[] getMirandaMethods() {
-        return mirandaMethods;
+        return getRedefineCache().mirandaMethods;
     }
 
     @Override
     public Method[] getDeclaredMethods() {
-        return declaredMethods;
+        return getRedefineCache().declaredMethods;
     }
 
     @Override
     public MethodRef[] getDeclaredMethodRefs() {
-        MethodRef[] result = new MethodRef[declaredMethods.length];
+        MethodRef[] result = new MethodRef[getDeclaredMethods().length];
         for (int i = 0; i < result.length; i++) {
-            result[i] = declaredMethods[i].getMethodVersion();
+            result[i] = getDeclaredMethods()[i].getMethodVersion();
         }
         return result;
     }
 
     @Override
     public Field[] getDeclaredFields() {
-        // Speculate that there are no hidden fields
-        Field[] declaredFields = Arrays.copyOf(staticFieldTable, staticFieldTable.length + fieldTable.length - localFieldTableIndex);
-        int insertionIndex = staticFieldTable.length;
-        for (int i = localFieldTableIndex; i < fieldTable.length; i++) {
-            Field f = fieldTable[i];
-            if (!f.isHidden()) {
-                declaredFields[insertionIndex++] = f;
-            }
-        }
-        return insertionIndex == declaredFields.length ? declaredFields : Arrays.copyOf(declaredFields, insertionIndex);
+        return declaredFields;
     }
 
     public EnclosingMethodAttribute getEnclosingMethod() {
@@ -480,54 +471,41 @@ public final class ObjectKlass extends Klass {
         return runtimeVisibleAnnotations;
     }
 
+    public int getStaticFieldSlots() {
+        return getLinkedKlass().staticFieldCount;
+    }
+
+    public int getInstanceFieldSlots() {
+        return getLinkedKlass().instanceFieldCount;
+    }
+
+    public int getObjectFieldsCount() {
+        return objectFields;
+    }
+
+    public int getPrimitiveFieldTotalByteCount() {
+        return primitiveFieldTotalByteCount;
+    }
+
+    public int getStaticObjectFieldsCount() {
+        return staticObjectFields;
+    }
+
+    public int getPrimitiveStaticFieldTotalByteCount() {
+        return primitiveStaticFieldTotalByteCount;
+    }
+
     Klass getHostClassImpl() {
         return hostKlass;
     }
 
-    @Override
-    public Klass nest() {
-        if (nest == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            NestHostAttribute nestHost = (NestHostAttribute) getAttribute(NestHostAttribute.NAME);
-            if (nestHost == null) {
-                nest = this;
-            } else {
-                RuntimeConstantPool thisPool = getConstantPool();
-                Klass host = thisPool.resolvedKlassAt(this, nestHost.hostClassIndex);
-
-                if (!host.nestMembersCheck(this)) {
-                    throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
-                }
-                nest = host;
-            }
-        }
-        return nest;
-    }
-
-    @Override
-    public boolean nestMembersCheck(Klass k) {
-        NestMembersAttribute nestMembers = (NestMembersAttribute) getAttribute(NestMembersAttribute.NAME);
-        if (nestMembers == null) {
-            return false;
-        }
-        RuntimeConstantPool pool = getConstantPool();
-        for (int index : nestMembers.getClasses()) {
-            if (k.getName().equals(pool.classAt(index).getName(pool))) {
-                if (k == pool.resolvedKlassAt(this, index)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     Field lookupFieldTableImpl(int slot) {
-        assert slot >= 0 && slot < fieldTable.length && !fieldTable[slot].isHidden();
+        assert (slot >= 0 && slot < getInstanceFieldSlots());
         return fieldTable[slot];
     }
 
     Field lookupStaticFieldTableImpl(int slot) {
-        assert slot >= 0 && slot < getStaticFieldTable().length;
+        assert (slot >= 0 && slot < getStaticFieldSlots());
         return staticFieldTable[slot];
     }
 
@@ -544,43 +522,43 @@ public final class ObjectKlass extends Klass {
 
     Method[] getVTable() {
         assert !isInterface();
-        return vtable;
+        return getRedefineCache().vtable;
     }
 
     Method[] getInterfaceMethodsTable() {
         assert isInterface();
-        return vtable;
+        return getRedefineCache().vtable;
     }
 
     Method vtableLookupImpl(int vtableIndex) {
         assert (vtableIndex >= 0) : "Undeclared virtual method";
-        return vtable[vtableIndex];
+        return getVTable()[vtableIndex];
     }
 
     public Method itableLookup(Klass interfKlass, int index) {
         assert (index >= 0) : "Undeclared interface method";
         try {
-            return itable[fastLookup(interfKlass, iKlassTable)][index];
+            return getItable()[fastLookup(interfKlass, getiKlassTable())][index];
         } catch (IndexOutOfBoundsException e) {
             throw Meta.throwExceptionWithMessage(getMeta().java_lang_IncompatibleClassChangeError, "Class " + getName() + " does not implement interface " + interfKlass.getName());
         }
     }
 
     Method[][] getItable() {
-        return itable;
+        return getRedefineCache().itable;
     }
 
     ObjectKlass[] getiKlassTable() {
-        return iKlassTable;
+        return getRedefineCache().iKlassTable;
     }
 
-    int lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass) {
-        for (int i = 0; i < vtable.length; i++) {
-            Method m = vtable[i];
+    int lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass, StaticObject classLoader) {
+        for (int i = 0; i < getVTable().length; i++) {
+            Method m = getVTable()[i];
             if (!m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
                 if (m.isProtected() || m.isPublic()) {
                     return i;
-                } else if (sameRuntimePackage(subClass)) {
+                } else if (sameRuntimePackage(classLoader, subClass)) {
                     return i;
                 }
             }
@@ -588,12 +566,14 @@ public final class ObjectKlass extends Klass {
         return -1;
     }
 
-    List<Method> lookupVirtualMethodOverrides(Symbol<Name> name, Symbol<Signature> signature, Klass subKlass, List<Method> result) {
-        for (Method m : vtable) {
+    List<Method> lookupVirtualMethodOverrides(Symbol<Name> name, Symbol<Signature> signature, Klass subKlass, List<Method> result, StaticObject classLoader) {
+        for (Method m : getVTable()) {
             if (!m.isStatic() && !m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
-                if (m.isProtected() || m.isPublic()) {
+                if (this == subKlass) {
                     result.add(m);
-                } else if (m.getDeclaringKlass().sameRuntimePackage(subKlass)) {
+                } else if (m.isProtected() || m.isPublic()) {
+                    result.add(m);
+                } else if (m.getDeclaringKlass().sameRuntimePackage(classLoader, subKlass)) {
                     result.add(m);
                 }
             }
@@ -628,8 +608,8 @@ public final class ObjectKlass extends Klass {
          * Interfaces are sorted, superinterfaces first; traverse in reverse order to get
          * maximally-specific first.
          */
-        for (int i = iKlassTable.length - 1; i >= 0; i--) {
-            ObjectKlass superInterf = iKlassTable[i];
+        for (int i = getiKlassTable().length - 1; i >= 0; i--) {
+            ObjectKlass superInterf = getiKlassTable()[i];
             for (Method superM : superInterf.getInterfaceMethodsTable()) {
                 /*
                  * Methods in superInterf.getInterfaceMethodsTable() are all non-static non-private
@@ -696,10 +676,10 @@ public final class ObjectKlass extends Klass {
     }
 
     private Method lookupMirandas(Symbol<Name> methodName, Symbol<Signature> signature) {
-        if (mirandaMethods == null) {
+        if (getMirandaMethods() == null) {
             return null;
         }
-        for (Method miranda : mirandaMethods) {
+        for (Method miranda : getMirandaMethods()) {
             if (miranda.getName() == methodName && miranda.getRawSignature() == signature) {
                 return miranda;
             }
@@ -785,7 +765,7 @@ public final class ObjectKlass extends Klass {
 
     void print(PrintStream out) {
         out.println(getType());
-        for (Method m : declaredMethods) {
+        for (Method m : getDeclaredMethods()) {
             out.println(m);
             m.printBytecodes(out);
             out.println();
@@ -824,6 +804,10 @@ public final class ObjectKlass extends Klass {
 
     private void setErroneous() {
         initState = ERRONEOUS;
+    }
+
+    public int[][] getLeftoverHoles() {
+        return leftoverHoles;
     }
 
     private void checkLoadingConstraints() {
@@ -941,6 +925,9 @@ public final class ObjectKlass extends Klass {
     }
 
     public RedefinitionCache getRedefineCache() {
+        // block execution during class redefinition
+        ClassRedefinition.check();
+
         RedefinitionCache cache = redefineCache;
         if (!cache.assumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -951,7 +938,9 @@ public final class ObjectKlass extends Klass {
         return cache;
     }
 
-    public void redefineClass(ParserKlass parserKlass) {
+    public void redefineClass(ChangePacket packet, List<ObjectKlass> refreshSubClasses, Ids<Object> ids) {
+        ParserKlass parserKlass = packet.parserKlass;
+        DetectedChange change = packet.detectedChange;
         RedefinitionCache oldVersion = redefineCache;
         StaticObject definingClassLoader = oldVersion.pool.getClassLoader();
         RuntimeConstantPool pool = new RuntimeConstantPool(getContext(), parserKlass.getConstantPool(), definingClassLoader);
@@ -961,19 +950,159 @@ public final class ObjectKlass extends Klass {
             interfaces[i] = superInterfaces[i].getLinkedKlass();
         }
         LinkedKlass linkedKlass = new LinkedKlass(parserKlass, getSuperKlass().getLinkedKlass(), interfaces);
-        redefineCache = new RedefinitionCache(pool, linkedKlass);
+
+        Method[][] itable = oldVersion.itable;
+        Method[] vtable = oldVersion.vtable;
+        ObjectKlass[] iKlassTable = oldVersion.iKlassTable;
+        Method[] mirandaMethods = oldVersion.mirandaMethods;
+        Method[] newDeclaredMethods = oldVersion.declaredMethods;
+
+        // changed methods
+        List<ParserMethod> changedMethodBodies = packet.detectedChange.getChangedMethodBodies();
+        for (ParserMethod changedMethod : changedMethodBodies) {
+            // find the old real method
+            Method method = findMethod(changedMethod, oldVersion.declaredMethods);
+            method.redefine(changedMethod, packet.parserKlass, ids);
+        }
+
+        if (change.getAddedAndRemovedMethods().size() > 0) {
+            LinkedList<Method> declaredMethods = new LinkedList<>(Arrays.asList(oldVersion.declaredMethods));
+            List<ParserMethod> removedMethods = change.getRemovedMethods();
+            List<ParserMethod> addedMethods = change.getAddedMethods();
+
+            // removed methods
+            Iterator<Method> it = declaredMethods.iterator();
+            while (it.hasNext()) {
+                Method oldDeclaredMethod = it.next();
+                if (removedMethods.contains(oldDeclaredMethod.getLinkedMethod().getParserMethod())) {
+                    it.remove();
+                    oldDeclaredMethod.getMethodVersion().getAssumption().invalidate();
+                }
+            }
+
+            // added methods
+            for (ParserMethod addedMethod : addedMethods) {
+                LinkedMethod linkedMethod = new LinkedMethod(addedMethod);
+                declaredMethods.addLast(new Method(this, linkedMethod, pool));
+            }
+
+            newDeclaredMethods = declaredMethods.toArray(new Method[declaredMethods.size()]);
+
+            if (isInterface()) {
+                InterfaceTables.InterfaceCreationResult icr = InterfaceTables.constructInterfaceItable(this, newDeclaredMethods);
+                vtable = icr.methodtable;
+                iKlassTable = icr.klassTable;
+            } else {
+                InterfaceTables.CreationResult methodCR = InterfaceTables.create(this, getSuperKlass(), superInterfaces, newDeclaredMethods);
+                iKlassTable = methodCR.klassTable;
+                mirandaMethods = methodCR.mirandas;
+                vtable = VirtualTable.create(getSuperKlass(), newDeclaredMethods, this, mirandaMethods, definingClassLoader);
+                itable = InterfaceTables.fixTables(vtable, mirandaMethods, newDeclaredMethods, methodCR.tables, iKlassTable);
+            }
+            // in case of an added/removed virtual method, we must also update the tables
+            // which might have ripple implications on all subclasses
+            boolean isRefresh = false;
+            for (ParserMethod m : change.getAddedAndRemovedMethods()) {
+                if (isVirtual(m)) {
+                    isRefresh = true;
+                }
+                updateOverrideMethods(ids, m.getFlags(), m.getName(), m.getSignature());
+            }
+            if (isRefresh) {
+                refreshSubClasses.addAll(getSubTypes());
+            }
+        }
+
+        redefineCache = new RedefinitionCache(pool, linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
         oldVersion.assumption.invalidate();
+    }
+
+    private static Method findMethod(ParserMethod changedMethod, Method[] declaredMethods) {
+        for (Method declaredMethod : declaredMethods) {
+            if (changedMethod.getName().equals(declaredMethod.getName()) && changedMethod.getSignature().equals(declaredMethod.getDescriptor())) {
+                return declaredMethod;
+            }
+        }
+        return null;
+    }
+
+    // if an added/removed method is an override of a super method
+    // we need to invalidate the super class method, to allow
+    // for new method dispatch lookup
+    private void updateOverrideMethods(Ids<Object> ids, int flags, Symbol<Name> name, Symbol<Signature> signature) {
+        if (!Modifier.isStatic(flags) && !Modifier.isPrivate(flags) && !Name._init_.equals(name)) {
+            ObjectKlass superKlass = getSuperKlass();
+
+            while (superKlass != null) {
+                // look for the method
+                int vtableIndex = superKlass.lookupVirtualMethod(name, signature, superKlass, superKlass.getDefiningClassLoader());
+                if (vtableIndex != -1) {
+                    superKlass.getVTable()[vtableIndex].onSubclassMethodChanged(ids);
+                }
+                superKlass = superKlass.getSuperKlass();
+            }
+        }
+    }
+
+    public void onSuperKlassUpdate() {
+        RedefinitionCache oldVersion = redefineCache;
+
+        Method[][] itable = oldVersion.itable;
+        Method[] vtable;
+        ObjectKlass[] iKlassTable;
+        Method[] mirandaMethods = oldVersion.mirandaMethods;
+        Method[] newDeclaredMethods = oldVersion.declaredMethods;
+
+        if (this.isInterface()) {
+            InterfaceTables.InterfaceCreationResult icr = InterfaceTables.constructInterfaceItable(this, newDeclaredMethods);
+            vtable = icr.methodtable;
+            iKlassTable = icr.klassTable;
+        } else {
+            InterfaceTables.CreationResult methodCR = InterfaceTables.create(this, getSuperKlass(), getSuperInterfaces(), newDeclaredMethods);
+            iKlassTable = methodCR.klassTable;
+            mirandaMethods = methodCR.mirandas;
+            vtable = VirtualTable.create(getSuperKlass(), newDeclaredMethods, this, mirandaMethods, getDefiningClassLoader());
+            itable = InterfaceTables.fixTables(vtable, mirandaMethods, newDeclaredMethods, methodCR.tables, iKlassTable);
+        }
+
+        redefineCache = new RedefinitionCache(oldVersion.pool, oldVersion.linkedKlass, oldVersion.declaredMethods, mirandaMethods, vtable, itable, iKlassTable);
+        oldVersion.assumption.invalidate();
+    }
+
+    private List<ObjectKlass> getSubTypes() {
+        List<ObjectKlass> result = new ArrayList<>();
+        result.addAll(subTypes);
+        for (ObjectKlass subType : subTypes) {
+            result.addAll(subType.getSubTypes());
+        }
+        return result;
+    }
+
+    private boolean isVirtual(ParserMethod m) {
+        return !Modifier.isStatic(m.getFlags()) && !Modifier.isPrivate(m.getFlags()) && !Name._init_.equals(m.getName());
     }
 
     private static final class RedefinitionCache {
         final Assumption assumption;
         final RuntimeConstantPool pool;
         final LinkedKlass linkedKlass;
+        // Stores the VTable for classes, holds public non-static methods for interfaces.
+        private final Method[] vtable;
+        // TODO(garcia) Sort itables (according to an arbitrary key) for dichotomic search?
+        private final Method[][] itable;
+        private final ObjectKlass[] iKlassTable;
+        private final Method[] declaredMethods;
+        private final Method[] mirandaMethods;
 
-        RedefinitionCache(RuntimeConstantPool pool, LinkedKlass linkedKlass) {
+        RedefinitionCache(RuntimeConstantPool pool, LinkedKlass linkedKlass, Method[] declaredMethods, Method[] mirandaMethods, Method[] vtable, Method[][] itable, ObjectKlass[] iKlassTable) {
             this.assumption = Truffle.getRuntime().createAssumption();
             this.pool = pool;
             this.linkedKlass = linkedKlass;
+            this.declaredMethods = declaredMethods;
+            this.mirandaMethods = mirandaMethods;
+            this.itable = itable;
+            this.vtable = vtable;
+            this.iKlassTable = iKlassTable;
         }
     }
 }

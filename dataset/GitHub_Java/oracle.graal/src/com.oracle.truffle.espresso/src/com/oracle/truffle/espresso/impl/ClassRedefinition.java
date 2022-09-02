@@ -66,8 +66,8 @@ public final class ClassRedefinition {
 
     public static void end() {
         synchronized (redefineLock) {
-            locked = false;
             current = new RedefineAssumption();
+            locked = false;
             redefineThread = null;
             redefineLock.notifyAll();
         }
@@ -160,12 +160,6 @@ public final class ClassRedefinition {
                     } else {
                         return ErrorCodes.DELETE_METHOD_NOT_IMPLEMENTED;
                     }
-                case METHOD_MODIFIERS_CHANGE:
-                    if (isArbitraryChangesSupported()) {
-                        return doRedefineClass(packet, ids, refreshSubClasses);
-                    } else {
-                        return ErrorCodes.METHOD_MODIFIERS_CHANGE_NOT_IMPLEMENTED;
-                    }
                 case SCHEMA_CHANGE:
                     if (isArbitraryChangesSupported()) {
                         return doRedefineClass(packet, ids, refreshSubClasses);
@@ -177,6 +171,12 @@ public final class ClassRedefinition {
                         return doRedefineClass(packet, ids, refreshSubClasses);
                     } else {
                         return ErrorCodes.CLASS_MODIFIERS_CHANGE_NOT_IMPLEMENTED;
+                    }
+                case METHOD_MODIFIERS_CHANGE:
+                    if (isArbitraryChangesSupported()) {
+                        return doRedefineClass(packet, ids, refreshSubClasses);
+                    } else {
+                        return ErrorCodes.METHOD_MODIFIERS_CHANGE_NOT_IMPLEMENTED;
                     }
                 case HIERARCHY_CHANGE:
                     if (isArbitraryChangesSupported()) {
@@ -278,7 +278,7 @@ public final class ClassRedefinition {
                         case NO_CHANGE:
                             if (constantPoolChanged) {
                                 if (isObsolete(oldMethod, newMethod, oldParserKlass.getConstantPool(), newParserKlass.getConstantPool())) {
-                                    result = ClassChange.CONSTANT_POOL_CHANGE;
+                                    result = ClassChange.METHOD_BODY_CHANGE;
                                     collectedChanges.addMethodBodyChange(newMethod);
                                 }
                             }
@@ -287,9 +287,6 @@ public final class ClassRedefinition {
                             result = change;
                             collectedChanges.addMethodBodyChange(newMethod);
                             break;
-                        case METHOD_MODIFIERS_CHANGE:
-                            // not handled yet
-                            return change;
                         default:
                             return change;
                     }
@@ -357,9 +354,6 @@ public final class ClassRedefinition {
     }
 
     private static ClassChange detectMethodChanges(ParserMethod oldMethod, ParserMethod newMethod) {
-        if (oldMethod.getFlags() != newMethod.getFlags()) {
-            return ClassChange.METHOD_MODIFIERS_CHANGE;
-        }
         // check method attributes that would constitute a higher-level
         // class redefinition than a method body change
         if (checkAttribute(oldMethod, newMethod, Symbol.Name.RuntimeVisibleTypeAnnotations)) {
@@ -454,7 +448,7 @@ public final class ClassRedefinition {
     }
 
     private static boolean isSameMethod(ParserMethod oldMethod, ParserMethod newMethod) {
-        return oldMethod.getName().equals(newMethod.getName()) && oldMethod.getSignature().equals(newMethod.getSignature());
+        return oldMethod.getName().equals(newMethod.getName()) && oldMethod.getSignature().equals(newMethod.getSignature()) && oldMethod.getFlags() == newMethod.getFlags();
     }
 
     private static boolean isUnchangedField(ParserField oldField, ParserField newField) {
