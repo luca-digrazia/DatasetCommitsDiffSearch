@@ -574,9 +574,8 @@ public class FlatNodeGenFactory {
             uncached.add(isAdoptable);
 
             clazz.add(uncached);
-            GeneratedTypeMirror uncachedType = new GeneratedTypeMirror("", uncached.getSimpleName().toString());
-            CodeVariableElement uncachedField = clazz.add(new CodeVariableElement(modifiers(PRIVATE, STATIC, FINAL), uncachedType, "UNCACHED"));
-            uncachedField.createInitBuilder().startNew(uncachedType).end();
+            CodeVariableElement uncachedField = clazz.add(new CodeVariableElement(modifiers(PRIVATE, STATIC, FINAL), uncached.asType(), "UNCACHED"));
+            uncachedField.createInitBuilder().startNew(uncached.asType()).end();
         }
 
         return clazz;
@@ -830,17 +829,14 @@ public class FlatNodeGenFactory {
                     baseType = context.getType(Object.class);
                 }
 
-                String typeName = createSpecializationTypeName(specialization);
                 CodeTypeElement cacheType = GeneratorUtils.createClass(node, null, modifiers(PRIVATE, FINAL,
                                 STATIC), createSpecializationTypeName(specialization), baseType);
-
-                TypeMirror referenceType = new GeneratedTypeMirror("", typeName);
 
                 Class<?> annotationType;
                 if (useNode) {
                     annotationType = Child.class;
                     if (specialization.getMaximumNumberOfInstances() > 1) {
-                        cacheType.add(createNodeField(null, referenceType, "next_", Child.class));
+                        cacheType.add(createNodeField(null, cacheType.asType(), "next_", Child.class));
                     }
 
                     CodeExecutableElement getNodeCost = new CodeExecutableElement(modifiers(PUBLIC),
@@ -852,14 +848,14 @@ public class FlatNodeGenFactory {
                 } else {
                     annotationType = CompilationFinal.class;
                     if (specialization.getMaximumNumberOfInstances() > 1) {
-                        cacheType.add(createNodeField(null, referenceType, "next_", annotationType));
+                        cacheType.add(createNodeField(null, cacheType.asType(), "next_", annotationType));
                     }
                 }
 
                 cacheType.add(GeneratorUtils.createConstructorUsingFields(modifiers(), cacheType));
                 cacheType.getEnclosedElements().addAll(fields);
 
-                clazz.add(createNodeField(PRIVATE, referenceType,
+                clazz.add(createNodeField(PRIVATE, cacheType.asType(),
                                 createSpecializationFieldName(specialization), annotationType));
 
                 clazz.add(cacheType);
