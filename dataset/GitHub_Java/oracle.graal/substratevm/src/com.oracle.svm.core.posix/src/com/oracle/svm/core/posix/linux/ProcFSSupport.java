@@ -25,13 +25,12 @@
 package com.oracle.svm.core.posix.linux;
 
 import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CIntPointer;
-import org.graalvm.nativeimage.c.type.CLongPointer;
+import org.graalvm.nativeimage.c.type.WordPointer;
+import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.posix.headers.Errno;
-import com.oracle.svm.core.posix.headers.Unistd;
+import com.oracle.svm.core.posix.PosixUtils;
 
 class ProcFSSupport {
     private static final int ST_ADDR_START = 1;
@@ -45,131 +44,105 @@ class ProcFSSupport {
     private static final int ST_SKIP = 9;
 
     /**
-     * Find a mapping in /proc/self/maps format which corresponds to the specified address. The
-     * buffer is dual-purpose and used to return the file's path name if requested via the needName
-     * parameter. As such the buffer should be large enough to accommodate a path. If not enough
-     * buffer capacity is available, and needName is true, false will be returned and the buffer
-     * null prefixed to prevent accidental use.
+     * Find a mapping in /proc/self/maps format which encloses the specified address range. The
+     * buffer is dual-purpose and used to return the file's path name if requested via the
+     * {@code needName} parameter. As such the buffer should be large enough to accommodate a path.
+     * If not enough buffer capacity is available, and needName is true, false will be returned. If
+     * a mapping is not found, or an error has occurred, false will be returned.
      *
-     * If a mapping is not found, or an error has occured, false will be returned.
-     *
-     * @param fd an FD pointing to /proc/self/maps
-     * @param buffer a buffer for reading operations, and optionally returning the path name of the
-     *            mapping.
+     * @param fd a file descriptor pointing to /proc/self/maps
+     * @param buffer a buffer for reading operations, and optionally for returning the path name of
+     *            the mapping
      * @param bufferLen the length of the buffer
-     * @param address the address to search for that is within a mapping entry's address range
+     * @param beginAddress the start address of the address range to find within a mapping
+     * @param endAddress the end address of the address range to find within a mapping
      * @param startAddrPtr the start address range for a found mapping
-     * @param offsetPtr the file offset for the backing file of the found mapping
-     * @param devPtr the device id of the matching mapping's backing file
-     * @param inodePtr the inode of the matching mapping's backing file
-     * @param needName whether the matching path name is desired and should be returned in buffer
-     * @return true if a mapping is found and no errors, false otherwise.
+     * @param fileOffsetPtr the file offset of the found mapping in its backing file
+     * @param needName whether the matching path name is required and should be returned in buffer
+     * @return true if a mapping is found and no errors occurred, false otherwise.
      */
     @Uninterruptible(reason = "Called during isolate initialization.")
     @SuppressWarnings("fallthrough")
-    static boolean findMapping(int fd, CCharPointer buffer, int bufferLen, long address, CLongPointer startAddrPtr,
-                    CLongPointer offsetPtr, CIntPointer devPtr, CLongPointer inodePtr, boolean needName) {
-        int rem = 0;
-        int pos = 0;
+    static boolean findMapping(int fd, CCharPointer buffer, int bufferLen, UnsignedWord beginAddress, UnsignedWord endAddress,
+                    WordPointer startAddrPtr, WordPointer fileOffsetPtr, boolean needName) {
+        int readOffset = 0;
+        int endOffset = 0;
+        int position = 0;
         int state = ST_ADDR_START;
         int b;
-        int dev = 0;
-        long inode = 0;
-        long offs = 0;
-        long start = 0;
-        long end = 0;
-        int fns = 0;
+
+        UnsignedWord start = WordFactory.zero();
+        UnsignedWord end = WordFactory.zero();
+        UnsignedWord fileOffset = WordFactory.zero();
         OUT: for (;;) {
-            while (pos == rem) {
-                // fill buffer
-                int res;
-                do {
-                    res = (int) Unistd.NoTransitions.read(fd, buffer.addressOf(fns), WordFactory.unsigned(bufferLen - fns)).rawValue();
-                } while (res == -1 && Errno.errno() == Errno.EINTR());
-                if (res == -1 || res == 0) {
-                    // read failure or EOF == not matched
-                    return false;
+            while (position == endOffset) { // fill buffer
+                int readBytes = PosixUtils.readBytes(fd, buffer, bufferLen, readOffset);
+                if (readBytes <= 0) {
+                    return false; // read failure or 0 == EOF -> not matched
                 }
-                pos = fns;
-                rem = res + fns;
+                position = readOffset;
+                endOffset = readOffset + readBytes;
             }
-            b = buffer.read(pos++) & 0xff;
+            b = buffer.read(position++) & 0xff;
             switch (state) {
                 case ST_ADDR_START: {
                     if (b == '-') {
-                        state = address > start ? ST_ADDR_END : ST_SKIP;
+                        state = beginAddress.aboveOrEqual(start) ? ST_ADDR_END : ST_SKIP;
                     } else if ('0' <= b && b <= '9') {
-                        start = (start << 4) + (b - '0');
+                        start = start.shiftLeft(4).add(b - '0');
                     } else if ('a' <= b && b <= 'f') {
-                        start = (start << 4) + (b - 'a' + 10);
+                        start = start.shiftLeft(4).add(b - 'a' + 10);
                     } else {
-                        // garbage == not matched
-                        return false;
+                        return false; // garbage == not matched
                     }
                     break;
                 }
                 case ST_ADDR_END: {
                     if (b == ' ') {
-                        state = address < end ? ST_PERMS : ST_SKIP;
+                        state = endAddress.belowOrEqual(end) ? ST_PERMS : ST_SKIP;
                     } else if ('0' <= b && b <= '9') {
-                        end = (end << 4) + (b - '0');
+                        end = end.shiftLeft(4).add(b - '0');
                     } else if ('a' <= b && b <= 'f') {
-                        end = (end << 4) + (b - 'a' + 10);
+                        end = end.shiftLeft(4).add(b - 'a' + 10);
                     } else {
-                        // garbage == not matched
-                        return false;
+                        return false; // garbage == not matched
                     }
                     break;
                 }
                 case ST_PERMS: {
                     if (b == ' ') {
-                        offs = 0;
+                        fileOffset = WordFactory.zero();
                         state = ST_OFFSET;
                     }
-                    // ignore anything else
-                    break;
+                    break; // ignore anything else
                 }
                 case ST_OFFSET: {
                     if (b == ' ') {
-                        dev = 0;
                         state = ST_DEV;
                     } else if ('0' <= b && b <= '9') {
-                        offs = (offs << 4) + (b - '0');
+                        fileOffset = fileOffset.shiftLeft(4).add(b - '0');
                     } else if ('a' <= b && b <= 'f') {
-                        offs = (offs << 4) + (b - 'a' + 10);
+                        fileOffset = fileOffset.shiftLeft(4).add(b - 'a' + 10);
                     } else {
-                        // garbage == not matched
-                        return false;
+                        return false; // garbage == not matched
                     }
                     break;
                 }
                 case ST_DEV: {
                     if (b == ' ') {
-                        inode = 0;
                         state = ST_INODE;
-                    } else if (b == ':') {
-                        // ignore
-                    } else if ('0' <= b && b <= '9') {
-                        dev = (dev << 4) + (b - '0');
-                    } else if ('a' <= b && b <= 'f') {
-                        dev = (dev << 4) + (b - 'a' + 10);
-                    }
+                    } // ignore anything else
                     break;
                 }
                 case ST_INODE: {
                     if (b == ' ') {
-                        fns = 0;
+                        readOffset = 0;
                         if (!needName) {
                             buffer.write(0, (byte) 0);
                             break OUT;
                         }
                         state = ST_SPACE;
-                    } else if ('0' <= b && b <= '9') {
-                        inode = (inode << 3) + (inode << 1) + (b - '0');
-                    } else {
-                        // garbage == not matched
-                        return false;
-                    }
+                    } // ignore anything else
                     break;
                 }
                 case ST_SPACE: {
@@ -181,23 +154,22 @@ class ProcFSSupport {
                 // fallthru
                 case ST_FILENAME: {
                     if (b == '\n') {
-                        buffer.write(fns, (byte) 0);
+                        buffer.write(readOffset, (byte) 0);
                         break OUT;
                     } else {
-                        if (fns < pos - 1) {
-                            buffer.write(fns, (byte) (b & 0xFF));
+                        if (readOffset < position - 1) {
+                            buffer.write(readOffset, (byte) (b & 0xFF));
                         }
-                        if (++fns >= bufferLen) {
-                            // advance out of capacity, garbage
-                            return false;
+                        if (++readOffset >= bufferLen) {
+                            return false; // advance out of capacity, garbage
                         }
                     }
                     break;
                 }
                 case ST_SKIP: {
                     if (b == '\n') {
-                        start = 0;
-                        end = 0;
+                        start = WordFactory.zero();
+                        end = WordFactory.zero();
                         state = ST_ADDR_START;
                     }
                     break;
@@ -207,14 +179,8 @@ class ProcFSSupport {
         if (startAddrPtr.isNonNull()) {
             startAddrPtr.write(start);
         }
-        if (offsetPtr.isNonNull()) {
-            offsetPtr.write(offs);
-        }
-        if (devPtr.isNonNull()) {
-            devPtr.write(dev);
-        }
-        if (inodePtr.isNonNull()) {
-            inodePtr.write(inode);
+        if (fileOffsetPtr.isNonNull()) {
+            fileOffsetPtr.write(fileOffset);
         }
         return true;
     }
