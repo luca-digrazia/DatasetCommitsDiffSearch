@@ -24,29 +24,22 @@
  */
 package com.oracle.svm.core.posix;
 
-import static com.oracle.svm.core.posix.headers.Resource.RLIMIT_NOFILE;
-import static com.oracle.svm.core.posix.headers.Resource.getrlimit;
-
-import java.lang.management.OperatingSystemMXBean;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.impl.InternalPlatform;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.headers.Errno;
-import com.oracle.svm.core.jdk.SubstrateOperatingSystemMXBean;
-import com.oracle.svm.core.posix.headers.Resource.rlimit;
-import com.oracle.svm.core.posix.headers.Stat;
-import com.oracle.svm.core.posix.headers.Stat.stat;
+import com.oracle.svm.core.jdk.management.ManagementFeature;
+import com.oracle.svm.core.jdk.management.ManagementSupport;
+import com.oracle.svm.core.jdk.management.SubstrateOperatingSystemMXBean;
+import com.oracle.svm.core.posix.headers.Resource;
 import com.oracle.svm.core.posix.headers.Times;
 import com.oracle.svm.core.posix.headers.Unistd;
 import com.sun.management.UnixOperatingSystemMXBean;
 
-@Platforms({InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
 class PosixSubstrateOperatingSystemMXBean extends SubstrateOperatingSystemMXBean implements UnixOperatingSystemMXBean {
 
     /**
@@ -72,8 +65,8 @@ class PosixSubstrateOperatingSystemMXBean extends SubstrateOperatingSystemMXBean
 
     @Override
     public long getMaxFileDescriptorCount() {
-        rlimit rlp = StackValue.get(rlimit.class);
-        if (getrlimit(RLIMIT_NOFILE(), rlp) < 0) {
+        Resource.rlimit rlp = StackValue.get(Resource.rlimit.class);
+        if (Resource.getrlimit(Resource.RLIMIT_NOFILE(), rlp) < 0) {
             throwUnchecked(PosixUtils.newIOExceptionWithLastError("getrlimit failed"));
         }
         return rlp.rlim_cur().rawValue();
@@ -81,11 +74,10 @@ class PosixSubstrateOperatingSystemMXBean extends SubstrateOperatingSystemMXBean
 
     @Override
     public long getOpenFileDescriptorCount() {
-        int maxFileDescriptor = Unistd.getdtablesize();
+        int maxFileDescriptor = (int) Unistd.sysconf(Unistd._SC_OPEN_MAX());
         long count = 0;
         for (int i = 0; i <= maxFileDescriptor; i++) {
-            stat stat = StackValue.get(stat.class);
-            if (Stat.fstat(i, stat) == 0 || Errno.errno() != Errno.EBADF()) {
+            if (PosixStat.isOpen(i)) {
                 count++;
             }
         }
@@ -98,11 +90,15 @@ class PosixSubstrateOperatingSystemMXBean extends SubstrateOperatingSystemMXBean
     }
 }
 
-@Platforms({InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
 @AutomaticFeature
 class PosixSubstrateOperatingSystemMXBeanFeature implements Feature {
     @Override
+    public List<Class<? extends Feature>> getRequiredFeatures() {
+        return Arrays.asList(ManagementFeature.class);
+    }
+
+    @Override
     public void afterRegistration(Feature.AfterRegistrationAccess access) {
-        ImageSingletons.add(OperatingSystemMXBean.class, new PosixSubstrateOperatingSystemMXBean());
+        ManagementSupport.getSingleton().addPlatformManagedObjectSingleton(UnixOperatingSystemMXBean.class, new PosixSubstrateOperatingSystemMXBean());
     }
 }
