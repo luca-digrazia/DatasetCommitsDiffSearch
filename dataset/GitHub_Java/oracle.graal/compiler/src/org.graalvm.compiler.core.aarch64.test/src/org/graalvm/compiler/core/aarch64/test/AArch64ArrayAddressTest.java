@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2019, Arm Limited. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Arm Limited. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,8 +25,11 @@
  */
 package org.graalvm.compiler.core.aarch64.test;
 
+import org.graalvm.compiler.api.directives.GraalDirectives;
+import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.lir.LIRInstruction;
-import org.graalvm.compiler.lir.aarch64.AArch64ArithmeticOp.ExtendedAddShiftOp;
+import org.graalvm.compiler.lir.aarch64.AArch64ArithmeticOp.ExtendedAddSubShiftOp;
+import org.graalvm.compiler.options.OptionValues;
 import org.junit.Test;
 
 import java.util.ArrayDeque;
@@ -35,7 +38,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 public class AArch64ArrayAddressTest extends AArch64MatchRuleTest {
-    private static final Predicate<LIRInstruction> predicate = op -> (op instanceof ExtendedAddShiftOp);
+    private static final Predicate<LIRInstruction> predicate = op -> (op instanceof ExtendedAddSubShiftOp);
 
     public static byte loadByte(byte[] arr, int n) {
         return arr[n];
@@ -155,7 +158,7 @@ public class AArch64ArrayAddressTest extends AArch64MatchRuleTest {
     public static int useArrayInLoop(int[] arr) {
         int ret = 0;
         for (int i = 0; i < arr.length; i++) {
-            ret += arr[i];
+            ret += GraalDirectives.opaque(arr[i]);
         }
         return ret;
     }
@@ -163,8 +166,9 @@ public class AArch64ArrayAddressTest extends AArch64MatchRuleTest {
     @Test
     public void testUseArrayInLoop() {
         int[] arr = {1, 2, 3, 4, 5, 6, 7, 8};
-        test("useArrayInLoop", arr);
-        checkLIRforAll("useArrayInLoop", predicate, 1);
+        OptionValues withoutPartialUnrolling = new OptionValues(getInitialOptions(), GraalOptions.PartialUnroll, false);
+        test(withoutPartialUnrolling, "useArrayInLoop", arr);
+        checkLIRforAll(withoutPartialUnrolling, "useArrayInLoop", predicate, 1);
     }
 
     public static int useArrayDeque(ArrayDeque<Integer> ad) {
