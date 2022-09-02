@@ -45,7 +45,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-import com.oracle.truffle.llvm.parser.binary.BinaryParser;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -663,9 +662,8 @@ final class Runner {
 
     private LLVMParserResult parse(List<LLVMParserResult> parserResults, ArrayDeque<ExternalLibrary> dependencyQueue, Source source,
                     ExternalLibrary library, ByteSequence bytes) {
-        ModelModule module = BinaryParser.parse(bytes);
+        ModelModule module = LLVMScanner.parse(bytes, source, context);
         if (module != null) {
-            LLVMScanner.parseBitcodeBlock(module.getBitcode(), module, source, context);
             library.setIsNative(false);
             context.addLibraryPaths(module.getLibraryPaths());
             List<String> libraries = module.getLibraries();
