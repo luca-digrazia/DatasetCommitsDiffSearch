@@ -211,7 +211,7 @@ public class EngineBenchmark extends TruffleBenchmark {
         final Context context = Context.create(TEST_LANGUAGE);
         final Value value = context.eval(source);
         final Integer intValue = 42;
-        final Value hostValue = context.asValue(new Object());
+        final Value hostValue = context.getPolyglotBindings().getMember("context");
 
         @TearDown
         public void tearDown() {
@@ -276,7 +276,7 @@ public class EngineBenchmark extends TruffleBenchmark {
         {
             context.initialize(TEST_LANGUAGE);
         }
-        final Value hostValue = context.asValue(new Object());
+        final Value hostValue = context.getPolyglotBindings().getMember("context");
         final BenchmarkContext internalContext = hostValue.asHostObject();
         final Integer intValue = 42;
         final CallTarget callTarget = Truffle.getRuntime().createCallTarget(new RootNode(null) {
@@ -374,6 +374,7 @@ public class EngineBenchmark extends TruffleBenchmark {
 
         @Override
         protected void initializeContext(BenchmarkContext context) throws Exception {
+            InteropLibrary.getFactory().getUncached().writeMember(context.env.getPolyglotBindings(), "context", context.env.asGuestValue(context));
         }
 
         @Override
@@ -406,7 +407,7 @@ public class EngineBenchmark extends TruffleBenchmark {
 
     }
 
-    static final class BenchmarkContext {
+    static class BenchmarkContext {
 
         final Env env;
         final BenchmarkObject object = new BenchmarkObject();
@@ -414,7 +415,6 @@ public class EngineBenchmark extends TruffleBenchmark {
         BenchmarkContext(Env env) {
             this.env = env;
         }
-
     }
 
     @ExportLibrary(InteropLibrary.class)
