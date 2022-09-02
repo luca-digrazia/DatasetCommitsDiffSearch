@@ -1374,24 +1374,24 @@ abstract class PolyglotValue extends AbstractValueImpl {
         throw PolyglotEngineException.illegalArgument(message);
     }
 
-    static String formatExpectedArguments(int expectedMinArity, int expectedMaxArity, int actualArity) {
-        String actual;
-        if (actualArity < 0) {
-            actual = "unknown";
+    static String formatExpectedArguments(int expectedMin, int expectedMax, int actual) {
+        String actualLabel;
+        if (actual < 0) {
+            actualLabel = "unknown";
         } else {
-            actual = String.valueOf(actualArity);
+            actualLabel = String.valueOf(actual);
         }
-        String expected;
-        if (expectedMinArity == expectedMaxArity) {
-            expected = String.valueOf(expectedMinArity);
+        if (expectedMin == expectedMax) {
+            return String.format("Expected %d argument(s) but got %d.", expectedMin, actual);
         } else {
-            if (expectedMaxArity < 0) {
-                expected = expectedMinArity + "+";
+            String maxLabel;
+            if (expectedMax < 0) {
+                maxLabel = "infinity";
             } else {
-                expected = expectedMinArity + "-" + expectedMaxArity;
+                maxLabel = String.valueOf(expectedMax);
             }
+            return String.format("Expected argument range [%d - %s] but got %s.", expectedMin, maxLabel, actualLabel);
         }
-        return String.format("Expected %s argument(s) but got %s.", expected, actual);
     }
 
     private static String[] formatArgs(PolyglotLanguageContext context, Object[] arguments) {
