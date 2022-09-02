@@ -51,7 +51,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -126,11 +125,8 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
                 public DSLExpression visitVariable(Variable binary) {
                     if (binary.getReceiver() == null) {
                         Variable newVar = new Variable(null, "receiver");
-                        // we don't use the binary.getResolvedType() receiver type in order to group
-                        // also between base and subclasses.
-                        TypeMirror newReceiverType = ProcessorContext.getInstance().getType(Object.class);
-                        newVar.setResolvedTargetType(newReceiverType);
-                        newVar.setResolvedVariable(new CodeVariableElement(newReceiverType, "receiver"));
+                        newVar.setResolvedTargetType(binary.getResolvedType());
+                        newVar.setResolvedVariable(new CodeVariableElement(binary.getResolvedType(), "receiver"));
                         return newVar;
                     }
                     return binary;
