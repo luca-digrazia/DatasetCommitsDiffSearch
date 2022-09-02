@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,30 +41,44 @@
 package com.oracle.truffle.api.library.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
 import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateUncached;
+import com.oracle.truffle.api.dsl.Introspectable;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.AssumptionNodeGen;
+import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.BoundaryFallthroughNodeGen;
+import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.CachedLibraryWithVarArgsExecuteNodeGen;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.ConstantLimitNodeGen;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.ConstantNodeGen;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.DoubleNodeGen;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.ExcludeNodeGen;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.FromCached1NodeGen;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.FromCached2NodeGen;
+import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.ReplaceCachedLibraryTestNodeGen;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.SimpleDispatchedNodeGen;
 import com.oracle.truffle.api.library.test.CachedLibraryTestFactory.SimpleNodeGen;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 public class CachedLibraryTest extends AbstractLibraryTest {
@@ -72,6 +86,10 @@ public class CachedLibraryTest extends AbstractLibraryTest {
     @GenerateLibrary
     @SuppressWarnings("unused")
     public abstract static class SomethingLibrary extends Library {
+
+        public boolean guard(Object receiver) {
+            return true;
+        }
 
         public String call(Object receiver) {
             return "default";
@@ -99,23 +117,18 @@ public class CachedLibraryTest extends AbstractLibraryTest {
         }
 
         @ExportMessage
-        static final String call(Something s) {
-            if (s.name != null) {
-                return s.name + "_uncached";
-            } else {
-                return "uncached";
-            }
-
-        }
-
-        @ExportMessage
-        static class CallNode extends Node {
-            @Specialization
-            static final String call(Something s) {
+        static final String call(Something s, @Cached(value = "0", uncached = "1") int cached) {
+            if (cached == 0) {
                 if (s.name != null) {
                     return s.name + "_cached";
                 } else {
                     return "cached";
+                }
+            } else {
+                if (s.name != null) {
+                    return s.name + "_uncached";
+                } else {
+                    return "uncached";
                 }
             }
         }
@@ -123,6 +136,7 @@ public class CachedLibraryTest extends AbstractLibraryTest {
     }
 
     @GenerateUncached
+    @Introspectable
     public abstract static class SimpleNode extends Node {
 
         abstract String execute(Object receiver);
@@ -243,12 +257,6 @@ public class CachedLibraryTest extends AbstractLibraryTest {
         AssumptionNode.a = Truffle.getRuntime().createAssumption();
         assertEquals("cached_s0", node.execute(s3));
 
-        Assumption uncached = AssumptionNode.a = Truffle.getRuntime().createAssumption();
-        assertEquals("uncached_s0", node.execute(s1));
-
-        assertEquals("uncached_s0", node.execute(s2));
-        assertEquals("uncached_s0", node.execute(s3));
-        uncached.invalidate();
         assertEquals("cached_s1", node.execute(s1));
         assertEquals("cached_s1", node.execute(s2));
         assertEquals("uncached_s1", node.execute(s3));
@@ -490,6 +498,211 @@ public class CachedLibraryTest extends AbstractLibraryTest {
 
     }
 
+    @Test
+    public void testBoundaryFallthrough() {
+        BoundaryFallthroughNode node = adopt(BoundaryFallthroughNodeGen.create());
+        node.execute(1);
+        node.execute(2);
+        node.execute(3);
+        node.execute(3);
+        node.execute(5);
+        try {
+            node.execute(6);
+            fail();
+        } catch (UnsupportedSpecializationException e) {
+        }
+        assertEquals(5, node.invocationCount);
+    }
+
+    @SuppressWarnings("unused")
+    public abstract static class ReplaceCachedLibraryTest extends Node {
+
+        static final String TEST_STRING = "test";
+
+        static int limit = 2;
+
+        abstract String execute(Object a0);
+
+        @Specialization(limit = "2")
+        public static String s0(Object a0,
+                        @CachedLibrary("a0") SomethingLibrary lib1) {
+            return "s0_" + lib1.call(a0);
+        }
+
+        @Specialization(replaces = "s0")
+        public static String s1(Object a0) {
+            return "s1";
+        }
+
+    }
+
+    @Test
+    public void testReplace() {
+        Something s1 = new Something("1");
+        Something s2 = new Something("2");
+        Something s3 = new Something("3");
+        ReplaceCachedLibraryTest node = adopt(ReplaceCachedLibraryTestNodeGen.create());
+        assertEquals("s0_1_cached", node.execute(s1));
+        assertEquals("s0_2_cached", node.execute(s2));
+        assertEquals("s1", node.execute(s3));
+        node.execute(2);
+        node.execute(3);
+        node.execute(3);
+        node.execute(5);
+    }
+
+    @Test
+    public void testCachedLibraryWithVarArgsExecute() {
+        CachedLibraryWithVarArgsExecute node = adoptNode(CachedLibraryWithVarArgsExecuteNodeGen.create(new ArgumentNode[]{
+                        new ArgumentNode(), new ArgumentNode(), new ArgumentNode()
+        })).get();
+
+        // test execute with nodes
+        assertEquals(3, node.execute());
+        assertEquals(2, node.execute(0));
+        assertEquals(1, node.execute(0, 0));
+        assertEquals(0, node.execute(0, 0, 0));
+
+        // test execute with varargs
+        assertEquals(3, node.executeVarArgs(new Object[]{1, 1, 1}));
+        assertEquals(2, node.executeVarArgs(0, new Object[]{1, 1}));
+        assertEquals(1, node.executeVarArgs(0, 0, new Object[]{1}));
+        assertEquals(0, node.executeVarArgs(0, 0, 0, new Object[]{}));
+
+        // test with varargs and frame
+        VirtualFrame frame = Truffle.getRuntime().createVirtualFrame(new Object[0], node.getRootNode().getFrameDescriptor());
+
+        assertEquals(3, node.executeWithFrame(frame, new Object[]{1, 1, 1}));
+        assertEquals(2, node.executeWithFrame(frame, 0, new Object[]{1, 1}));
+        assertEquals(1, node.executeWithFrame(frame, 0, 0, new Object[]{1}));
+        assertEquals(0, node.executeWithFrame(frame, 0, 0, 0, new Object[]{}));
+
+    }
+
+    public static class ArgumentNode extends Node {
+
+        public Object execute() {
+            return 1;
+        }
+
+    }
+
+    /*
+     * Test for GR-27335.
+     */
+    @NodeChild(value = "arguments", type = ArgumentNode[].class)
+    abstract static class CachedLibraryWithVarArgsExecute extends Node {
+
+        abstract Object executeWithFrame(VirtualFrame frame, Object... arguments);
+
+        abstract Object executeWithFrame(VirtualFrame frame, Object arg0, Object... arguments);
+
+        abstract Object executeWithFrame(VirtualFrame frame, Object arg0, Object arg1, Object... arguments);
+
+        abstract Object executeWithFrame(VirtualFrame frame, Object arg0, Object arg1, Object arg2, Object... arguments);
+
+        abstract Object executeWithFrame(VirtualFrame frame);
+
+        abstract Object executeVarArgs(Object... arguments);
+
+        abstract Object executeVarArgs(Object arg0, Object... arguments);
+
+        abstract Object executeVarArgs(Object arg0, Object arg1, Object... arguments);
+
+        abstract Object executeVarArgs(Object arg0, Object arg1, Object arg2, Object... arguments);
+
+        abstract Object execute();
+
+        abstract Object execute(Object arg0);
+
+        abstract Object execute(Object arg0, Object arg1);
+
+        abstract Object execute(Object arg0, Object arg1, Object arg2);
+
+        static int LIMIT = 0;
+
+        /*
+         * We don't use a constant limit to avoid optimizations in the DSL.
+         */
+        @Specialization(limit = "LIMIT")
+        @SuppressWarnings("unused")
+        protected static final int doExecute(Object arg0, Object arg1, Object arg2,
+                        @CachedLibrary("arg0") final InteropLibrary interop0,
+                        @CachedLibrary("arg1") final InteropLibrary interop1,
+                        @CachedLibrary("arg2") final InteropLibrary interop2) {
+            try {
+                return interop0.asInt(arg0) + interop1.asInt(arg1) + interop2.asInt(arg2);
+            } catch (UnsupportedMessageException e) {
+                throw CompilerDirectives.shouldNotReachHere(e);
+            }
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public abstract static class BoundaryFallthroughNode extends Node {
+
+        abstract Object execute(Object arg);
+
+        private int invocationCount = 0;
+
+        @Specialization(guards = "arg == cachedArg", limit = "2")
+        Object doNative(Object arg,
+                        @Cached("arg") Object cachedArg,
+                        @CachedLibrary("arg") InteropLibrary interop) {
+            invocationCount++;
+            return null;
+        }
+
+        protected static final Object initArg(Object arg, Object ctx) {
+            return arg;
+        }
+
+    }
+
+    public abstract static class TestBoundaryAndVirtualFrame1 extends Node {
+
+        public abstract Object execute(VirtualFrame frame, Object arg);
+
+        @SuppressWarnings("unused")
+        @Specialization(limit = "3")
+        String doDefault(VirtualFrame frame, Object arg, @CachedLibrary("arg") SomethingLibrary interop) {
+            return null;
+        }
+    }
+
+    public abstract static class TestBoundaryAndVirtualFrame2 extends Node {
+
+        public abstract Object execute(VirtualFrame frame, Object arg);
+
+        @SuppressWarnings("unused")
+        @Specialization(limit = "3")
+        String doDefault(Object arg, @CachedLibrary("arg") SomethingLibrary interop) {
+            return null;
+        }
+    }
+
+    public abstract static class TestBoundaryAndFrame extends Node {
+
+        public abstract Object execute(Frame frame, Object arg);
+
+        @SuppressWarnings("unused")
+        @Specialization(limit = "3")
+        String doDefault(Frame frame, Object arg, @CachedLibrary("arg") SomethingLibrary interop) {
+            return null;
+        }
+    }
+
+    public abstract static class TestBoundaryAndMaterializedFrame extends Node {
+
+        public abstract Object execute(MaterializedFrame frame, Object arg);
+
+        @SuppressWarnings("unused")
+        @Specialization(limit = "3")
+        String doDefault(MaterializedFrame frame, Object arg, @CachedLibrary("arg") SomethingLibrary interop) {
+            return null;
+        }
+    }
+
     @GenerateLibrary
     @SuppressWarnings("unused")
     public abstract static class InExportsLibrary extends Library {
@@ -516,7 +729,7 @@ public class CachedLibraryTest extends AbstractLibraryTest {
     @ExportLibrary(InExportsLibrary.class)
     final class InExportsDifferentLibraryObject {
 
-        @ExportMessage(limit = "4")
+        @ExportMessage
         String m0(@CachedLibrary("this") SomethingLibrary otherLibrary) {
             return otherLibrary.call(this);
         }
@@ -562,8 +775,11 @@ public class CachedLibraryTest extends AbstractLibraryTest {
 
         @Specialization
         public static String s1(Object receiver,
-                        @ExpectError("A limit must be specified for a dispatched @CachedLibrary. A @CachedLibrary annotation without value attribute needs to specifiy a limit for the number of " +
-                                        "entries in the cache per library. Either specify the limit or specify a value attribute to resolve this.") @CachedLibrary SomethingLibrary lib2) {
+                        @ExpectError("A specialized value expression or limit must be specified for @CachedLibrary. " +
+                                        "Use @CachedLibrary(\"value\") for a specialized " +
+                                        "or @CachedLibrary(limit=\"\") for a dispatched library. " +
+                                        "See the javadoc of @CachedLibrary for further details.") //
+                        @CachedLibrary SomethingLibrary lib2) {
             return lib2.call(receiver);
         }
     }
@@ -592,6 +808,18 @@ public class CachedLibraryTest extends AbstractLibraryTest {
         }
     }
 
+    public abstract static class CachedLibraryErrorNode6 extends Node {
+
+        abstract String execute(Object receiver);
+
+        @Specialization
+        public static String s1(Object receiver,
+                        @ExpectError("The limit and specialized value expression cannot be specified at the same time. They are mutually exclusive.") //
+                        @CachedLibrary(value = "receiver", limit = "2") SomethingLibrary lib2) {
+            return lib2.call(receiver);
+        }
+    }
+
     static class ExplicitReceiver {
 
     }
@@ -615,6 +843,105 @@ public class CachedLibraryTest extends AbstractLibraryTest {
         public static String s0(Object receiver,
                         @CachedLibrary("receiver") ExplicitReceiverLibrary lib1) {
             return lib1.call(receiver);
+        }
+    }
+
+    /*
+     * Test that two abstract execute methods generate non-duplicate methods for @CachedLibrary.
+     */
+    @SuppressWarnings("unused")
+    abstract static class TestDuplicateBoundaryMethod extends Node {
+
+        abstract Object execute(Object value);
+
+        abstract Object executeWith(Object value);
+
+        @Specialization(limit = "5")
+        Object doSomething(Object value, @CachedLibrary("value") SomethingLibrary interop) {
+            return null;
+        }
+    }
+
+    /*
+     * Test that testNode is not sharable (does not produce a warning)
+     */
+    public abstract static class SharedLibraryTestNode extends Node {
+
+        abstract String execute(Object receiver);
+
+        @Specialization(limit = "2")
+        public static String s0(Object receiver,
+                        @CachedLibrary("receiver") SomethingLibrary lib1,
+                        @SuppressWarnings("unused") @Cached SimpleNode testNode) {
+            return lib1.call(receiver);
+        }
+    }
+
+    /*
+     * Test that dispatched libraries in guards don't require an outer limit.
+     */
+    public abstract static class DispatchedLibrariesSingleInstance extends Node {
+
+        abstract String execute(Object receiver);
+
+        @ExpectError("The limit expression has no effect. Multiple specialization instantiations are impossible for this specialization.")
+        @Specialization(guards = "lib1.guard(receiver)", limit = "3")
+        public static String s0(Object receiver,
+                        @CachedLibrary(limit = "2") SomethingLibrary lib1) {
+            return lib1.call(receiver);
+        }
+    }
+
+    /*
+     * Test that a library with a message called execute works. This can easily trigger the code
+     * generator as it often looks for methods with the execute prefix.
+     */
+    @GenerateLibrary
+    @SuppressWarnings("unused")
+    public abstract static class LibraryWithExecute extends Library {
+
+        public String execute(Object receiver) {
+            return "default";
+        }
+
+    }
+
+    @ExportLibrary(LibraryWithExecute.class)
+    public abstract static class LibraryThatUsesExecuteMethod {
+
+        @ExportMessage
+        public String execute(@CachedLibrary("this") SomethingLibrary somethings) {
+            return somethings.call(this);
+        }
+    }
+
+    @ExportLibrary(LibraryWithExecute.class)
+    public abstract static class LibraryThatUsesExecuteNode {
+
+        @ExportMessage
+        static class Execute {
+
+            @Specialization
+            static String doDefault(LibraryThatUsesExecuteNode receiver, @CachedLibrary("receiver") SomethingLibrary somethings) {
+                return somethings.call(receiver);
+            }
+        }
+
+    }
+
+    /*
+     * This test was crashing in GR-24920 as the uncached library lookup was accidently using lib1
+     * to match lib2 for the generated uncached specializations.
+     */
+    abstract static class DispatchedAndExpressionLibraryNode extends Node {
+
+        public abstract int execute(Object arg) throws UnsupportedMessageException;
+
+        @Specialization(limit = "2")
+        static int doBoxed(Object arg,
+                        @CachedLibrary(limit = "2") InteropLibrary lib1,
+                        @SuppressWarnings("unused") @CachedLibrary("arg") InteropLibrary lib2) throws UnsupportedMessageException {
+            return lib1.asInt(arg);
         }
     }
 
