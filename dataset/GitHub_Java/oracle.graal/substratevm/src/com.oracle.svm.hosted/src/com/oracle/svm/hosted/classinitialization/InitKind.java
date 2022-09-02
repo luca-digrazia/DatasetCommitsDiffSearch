@@ -61,23 +61,20 @@ public enum InitKind {
     }
 
     Consumer<String> stringConsumer(ClassInitializationSupport support, String origin) {
+        String prefix = "from ";
+        String reason = origin == null ? prefix + "the command line" : prefix + origin;
         if (this == RUN_TIME) {
-            return name -> support.initializeAtRunTime(name, reason(origin, name));
+            return name -> support.initializeAtRunTime(name, reason);
         } else if (this == RERUN) {
-            return name -> support.rerunInitialization(name, reason(origin, name));
+            return name -> support.rerunInitialization(name, reason);
         } else {
             return name -> {
                 if (name.equals("")) {
                     System.err.println("--initialize-at-build-time without arguments has been deprecated and will be removed in GraalVM 22.0.");
                 }
-                support.initializeAtBuildTime(name, reason(origin, name));
+                support.initializeAtBuildTime(name, reason);
             };
         }
-    }
-
-    private static String reason(String origin, String name) {
-        String prefix = "from ";
-        return (origin == null ? prefix + "the command line" : prefix + origin) + " with '" + name + "'";
     }
 
     static Pair<String, InitKind> strip(String input) {
