@@ -78,10 +78,8 @@ import static org.graalvm.compiler.hotspot.replacements.HotspotSnippetsOptions.P
 import static org.graalvm.compiler.nodes.PiArrayNode.piArrayCastToSnippetReplaceeStamp;
 import static org.graalvm.compiler.nodes.PiNode.piCastToSnippetReplaceeStamp;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
-import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.VERY_FAST_PATH_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.FREQUENT_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.SLOW_PATH_PROBABILITY;
-import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.DEOPT_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probability;
 import static org.graalvm.compiler.replacements.ReplacementsUtil.REPLACEMENTS_ASSERTIONS_ENABLED;
 import static org.graalvm.compiler.replacements.ReplacementsUtil.runtimeAssert;
@@ -119,7 +117,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.debug.DynamicCounterNode;
 import org.graalvm.compiler.nodes.debug.VerifyHeapNode;
-import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.MembarNode;
 import org.graalvm.compiler.nodes.java.DynamicNewArrayNode;
@@ -298,12 +295,12 @@ public class NewObjectSnippets implements Snippets {
                     @ConstantParameter boolean emitMemoryBarrier,
                     @ConstantParameter Register threadRegister,
                     @ConstantParameter Counters counters) {
-        if (probability(DEOPT_PROBABILITY, type == null)) {
+        if (probability(SLOW_PATH_PROBABILITY, type == null)) {
             DeoptimizeNode.deopt(None, RuntimeConstraint);
         }
         Class<?> nonNullType = PiNode.piCastNonNullClass(type, SnippetAnchorNode.anchor());
 
-        if (probability(DEOPT_PROBABILITY, DynamicNewInstanceNode.throwsInstantiationException(type, classClass))) {
+        if (probability(SLOW_PATH_PROBABILITY, DynamicNewInstanceNode.throwsInstantiationException(type, classClass))) {
             DeoptimizeNode.deopt(None, RuntimeConstraint);
         }
 
@@ -320,7 +317,7 @@ public class NewObjectSnippets implements Snippets {
         if (probability(FAST_PATH_PROBABILITY, !hub.isNull())) {
             KlassPointer nonNullHub = ClassGetHubNode.piCastNonNull(hub, SnippetAnchorNode.anchor());
 
-            if (probability(VERY_FAST_PATH_PROBABILITY, isInstanceKlassFullyInitialized(nonNullHub))) {
+            if (probability(FAST_PATH_PROBABILITY, isInstanceKlassFullyInitialized(nonNullHub))) {
                 int layoutHelper = readLayoutHelper(nonNullHub);
                 /*
                  * src/share/vm/oops/klass.hpp: For instances, layout helper is a positive number,
@@ -492,7 +489,7 @@ public class NewObjectSnippets implements Snippets {
      * Deoptimizes if {@code obj == null} otherwise returns {@code obj}.
      */
     private static Object nonNullOrDeopt(Object obj) {
-        if (BranchProbabilityNode.probability(BranchProbabilityNode.DEOPT_PROBABILITY, obj == null)) {
+        if (obj == null) {
             DeoptimizeNode.deopt(None, RuntimeConstraint);
         }
         return obj;
@@ -542,12 +539,12 @@ public class NewObjectSnippets implements Snippets {
         }
 
         KlassPointer klass = loadKlassFromObject(elementType, arrayKlassOffset(INJECTED_VMCONFIG), CLASS_ARRAY_KLASS_LOCATION);
-        if (probability(DEOPT_PROBABILITY, klass.isNull())) {
+        if (klass.isNull()) {
             DeoptimizeNode.deopt(None, RuntimeConstraint);
         }
         KlassPointer nonNullKlass = ClassGetHubNode.piCastNonNull(klass, SnippetAnchorNode.anchor());
 
-        if (probability(DEOPT_PROBABILITY, length < 0)) {
+        if (length < 0) {
             DeoptimizeNode.deopt(None, RuntimeConstraint);
         }
         int layoutHelper;
