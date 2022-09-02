@@ -193,6 +193,10 @@ public class HotSpotReplacementsUtil {
         return config.useG1GC;
     }
 
+    public static boolean verifyOops() {
+        return GraalHotSpotVMConfigNode.verifyOops();
+    }
+
     /**
      * @see GraalHotSpotVMConfig#doingUnsafeAccessOffset
      */
@@ -721,7 +725,7 @@ public class HotSpotReplacementsUtil {
     }
 
     public static Object verifyOop(Object object) {
-        if (GraalHotSpotVMConfigNode.verifyOops()) {
+        if (verifyOops()) {
             verifyOopStub(VERIFY_OOP, object);
         }
         return object;

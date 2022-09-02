@@ -29,6 +29,7 @@ import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFI
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.clearPendingException;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.getPendingException;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.loadHubIntrinsic;
+import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.verifyOops;
 import static org.graalvm.compiler.hotspot.stubs.StubUtil.fatal;
 
 import org.graalvm.compiler.api.replacements.Fold;
@@ -87,8 +88,8 @@ public class ForeignCallSnippets implements Snippets {
      */
     @Snippet
     public static Object verifyObject(Object object) {
-        if (GraalHotSpotVMConfigNode.verifyOops()) {
-            Word verifyOopCounter = WordFactory.unsigned(GraalHotSpotVMConfigNode.verifyOopCounterAddress());
+        if (verifyOops()) {
+            Word verifyOopCounter = WordFactory.unsigned(verifyOopCounterAddress());
             verifyOopCounter.writeInt(0, verifyOopCounter.readInt(0) + 1);
 
             Pointer oop = Word.objectToTrackedPointer(object);
@@ -106,6 +107,10 @@ public class ForeignCallSnippets implements Snippets {
             }
         }
         return object;
+    }
+
+    static long verifyOopCounterAddress() {
+        return GraalHotSpotVMConfigNode.verifyOopCounterAddress();
     }
 
     @Fold
