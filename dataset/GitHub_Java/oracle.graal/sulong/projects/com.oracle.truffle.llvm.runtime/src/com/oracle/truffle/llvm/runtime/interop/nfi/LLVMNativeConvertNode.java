@@ -29,9 +29,9 @@
  */
 package com.oracle.truffle.llvm.runtime.interop.nfi;
 
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.interop.nfi.LLVMNativeConvertNodeFactory.I1FromNativeToLLVMNodeGen;
@@ -79,7 +79,7 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
     protected static class VoidToNative extends LLVMNativeConvertNode {
 
         @Override
-        public Object executeConvert(Object arg) {
+        public TruffleObject executeConvert(Object arg) {
             assert LLVMPointer.isInstance(arg) && LLVMPointer.cast(arg).isNull();
             return LLVMNativePointer.createNull();
         }
@@ -103,15 +103,13 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
         }
 
         @Specialization(guards = "interop.isPointer(address)", limit = "3", rewriteOn = UnsupportedMessageException.class)
-        @GenerateAOT.Exclude
-        protected LLVMNativePointer doPointer(Object address,
+        protected LLVMNativePointer doPointer(TruffleObject address,
                         @CachedLibrary("address") InteropLibrary interop) throws UnsupportedMessageException {
             return LLVMNativePointer.create(interop.asPointer(address));
         }
 
         @Specialization(guards = "!interop.isPointer(address)", limit = "3")
-        @GenerateAOT.Exclude
-        protected LLVMManagedPointer doFunction(Object address,
+        protected LLVMManagedPointer doFunction(TruffleObject address,
                         @CachedLibrary("address") @SuppressWarnings("unused") InteropLibrary interop) {
             /*
              * If the NFI returns an object that's not a pointer, it's probably a callback function.
@@ -122,8 +120,7 @@ public abstract class LLVMNativeConvertNode extends LLVMNode {
         }
 
         @Specialization(limit = "3", replaces = {"doPointer", "doFunction"})
-        @GenerateAOT.Exclude
-        protected LLVMPointer doGeneric(Object address,
+        protected LLVMPointer doGeneric(TruffleObject address,
                         @CachedLibrary("address") InteropLibrary interop) {
             if (interop.isPointer(address)) {
                 try {

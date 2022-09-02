@@ -77,10 +77,10 @@ public abstract class LLVMStart extends LLVMIntrinsic {
     public abstract static class LLVMLangStart extends LLVMStart {
 
         /**
-         * @param stackPointer @NodeChild
-         * @param main @NodeChild
-         * @param argc @NodeChild
-         * @param argv @NodeChild
+         * @param stackPointer
+         * @param main
+         * @param argc
+         * @param argv
          * @see LLVMLangStart
          */
         @Specialization
@@ -107,11 +107,12 @@ public abstract class LLVMStart extends LLVMIntrinsic {
         }
 
         /**
-         * @param stackPointer @NodeChild
-         * @param mainPointer @NodeChild
-         * @param vtable @NodeChild
-         * @param argc @NodeChild
-         * @param argv @NodeChild
+         * @param stackPointer
+         * @param mainPointer
+         * @param vtable
+         * @param argc
+         * @param argv
+         * @param ctx
          * @see LLVMLangStartInternal
          */
         @Specialization

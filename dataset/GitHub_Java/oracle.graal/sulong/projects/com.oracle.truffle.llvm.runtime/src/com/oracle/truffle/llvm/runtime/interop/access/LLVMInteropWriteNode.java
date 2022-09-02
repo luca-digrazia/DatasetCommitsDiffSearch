@@ -167,20 +167,20 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
 
         @Specialization(guards = "writeType.getSizeInBytes() == 2")
         long doI16(Object value, @SuppressWarnings("unused") ForeignToLLVMType writeType,
-                        @Cached LLVMDataEscapeNode.LLVMI16DataEscapeNode dataEscape) {
-            return dataEscape.executeWithTargetI16(value);
+                        @Cached(parameters = "I16") LLVMDataEscapeNode dataEscape) {
+            return (Short) dataEscape.executeWithTarget(value);
         }
 
         @Specialization(guards = "writeType.getSizeInBytes() == 4")
         long doI32(Object value, @SuppressWarnings("unused") ForeignToLLVMType writeType,
-                        @Cached LLVMDataEscapeNode.LLVMI32DataEscapeNode dataEscape) {
-            return dataEscape.executeWithTargetI32(value);
+                        @Cached(parameters = "I32") LLVMDataEscapeNode dataEscape) {
+            return (Integer) dataEscape.executeWithTarget(value);
         }
 
         @Specialization(guards = "writeType.getSizeInBytes() == 8")
         long doI64(Object value, @SuppressWarnings("unused") ForeignToLLVMType writeType,
-                        @Cached LLVMDataEscapeNode.LLVMI64DataEscapeNode dataEscape) {
-            return dataEscape.executeWithTargetI64(value);
+                        @Cached(parameters = "I64") LLVMDataEscapeNode dataEscape) {
+            return (Long) dataEscape.executeWithTarget(value);
         }
 
         @Fallback
@@ -211,10 +211,15 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
             }
         }
 
+        /**
+         * @param value
+         * @param outgoingType
+         * @param type
+         * @see #execute(Object, LLVMInteropType.Value, ForeignToLLVMType)
+         */
         @Specialization(limit = "3", guards = {"typeMismatch(outgoingType, cachedType)", "cachedType == type"})
-        @SuppressWarnings("unused")
         Object doUnknownType(Object value, LLVMInteropType.Value outgoingType, ForeignToLLVMType type,
-                        @Cached("type") ForeignToLLVMType cachedType,
+                        @Cached("type") @SuppressWarnings("unused") ForeignToLLVMType cachedType,
                         @Cached(parameters = "type") LLVMDataEscapeNode dataEscape) {
             return dataEscape.executeWithTarget(value);
         }

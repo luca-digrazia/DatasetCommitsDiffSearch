@@ -507,7 +507,7 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
         /**
          * @param left
          * @param right
-         * @see #execute(LLVMManagedPointer, long)
+         * @see #execute
          */
         @Specialization(guards = "right == 0")
         long doZero(LLVMManagedPointer left, long right) {

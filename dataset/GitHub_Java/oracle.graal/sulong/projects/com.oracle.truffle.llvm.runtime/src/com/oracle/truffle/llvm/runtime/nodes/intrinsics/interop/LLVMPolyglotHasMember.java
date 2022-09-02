@@ -56,8 +56,8 @@ public abstract class LLVMPolyglotHasMember extends LLVMIntrinsic {
     }
 
     /**
-     * @param object @NodeChild
-     * @param name @NodeChild
+     * @param object
+     * @param name
      * @see LLVMPolyglotHasMember
      */
     @Fallback

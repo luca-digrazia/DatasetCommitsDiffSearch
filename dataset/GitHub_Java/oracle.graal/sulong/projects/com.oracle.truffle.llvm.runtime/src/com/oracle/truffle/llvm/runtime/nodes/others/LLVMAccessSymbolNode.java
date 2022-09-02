@@ -44,43 +44,51 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
 
-    protected final LLVMSymbol symbol;
+    protected final LLVMSymbol descriptor;
 
-    public LLVMAccessSymbolNode(LLVMSymbol symbol) {
-        LLVMSymbol tmp = symbol;
-        while (tmp.isAlias()) {
-            tmp = ((LLVMAlias) tmp).getTarget();
-        }
-        this.symbol = tmp;
+    public LLVMAccessSymbolNode(LLVMSymbol descriptor) {
+        this.descriptor = descriptor;
     }
 
     @Override
     public String toString() {
-        return getShortString("symbol");
+        return getShortString("descriptor");
     }
 
-    public LLVMSymbol getSymbol() {
-        return symbol;
+    public LLVMSymbol getDescriptor() {
+        return descriptor;
     }
 
     public abstract LLVMPointer execute();
 
+    @Specialization(guards = {"descriptor.isAlias()"})
+    LLVMPointer doAliasAccess(@CachedContext(LLVMLanguage.class) LLVMContext context) {
+        CompilerAsserts.partialEvaluationConstant(descriptor);
+        LLVMSymbol target = ((LLVMAlias) descriptor).getTarget();
+        while (target.isAlias()) {
+            target = ((LLVMAlias) target).getTarget();
+        }
+        AssumedValue<LLVMPointer>[] symbols = context.findSymbolTable(target.getBitcodeID(false));
+        int index = target.getSymbolIndex(false);
+        return symbols[index].get();
+    }
+
     @Specialization
-    LLVMPointer doAccess(
+    LLVMPointer doFallback(
                     @CachedContext(LLVMLanguage.class) LLVMContext context) {
-        CompilerAsserts.partialEvaluationConstant(symbol);
-        if (symbol.hasValidIndexAndID()) {
-            int bitcodeID = symbol.getBitcodeID(false);
+        CompilerAsserts.partialEvaluationConstant(descriptor);
+        if (descriptor.hasValidIndexAndID()) {
+            int bitcodeID = descriptor.getBitcodeID(false);
             if (context.symbolTableExists(bitcodeID)) {
                 AssumedValue<LLVMPointer>[] symbols = context.findSymbolTable(bitcodeID);
-                int index = symbol.getSymbolIndex(false);
-                AssumedValue<LLVMPointer> assumedValue = symbols[index];
-                if (assumedValue != null) {
-                    return assumedValue.get();
+                int index = descriptor.getSymbolIndex(false);
+                AssumedValue<LLVMPointer> symbol = symbols[index];
+                if (symbol != null) {
+                    return symbol.get();
                 }
             }
         }
         CompilerDirectives.transferToInterpreter();
-        throw new LLVMLinkerException(this, String.format("External %s %s cannot be found.", symbol.getKind(), symbol.getName()));
+        throw new LLVMLinkerException(this, String.format("External %s %s cannot be found.", descriptor.getKind(), descriptor.getName()));
     }
 }

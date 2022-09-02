@@ -90,9 +90,9 @@ public final class LLVMPolyglotWrite {
         }
 
         /**
-         * @param value @NodeChild
-         * @param id @NodeChild
-         * @param v @NodeChild
+         * @param value
+         * @param id
+         * @param v
          * @see LLVMPolyglotPutMember
          */
         @Fallback
@@ -138,9 +138,9 @@ public final class LLVMPolyglotWrite {
         }
 
         /**
-         * @param value @NodeChild
-         * @param id @NodeChild
-         * @param v @NodeChild
+         * @param value
+         * @param id
+         * @param v
          * @see LLVMPolyglotSetArrayElement
          */
         @Fallback

@@ -42,6 +42,7 @@ import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
@@ -591,17 +592,17 @@ public final class LLVM80BitFloat implements LLVMArithmetic {
             this.name = name;
         }
 
-        protected Object createFunction() {
+        protected TruffleObject createFunction() {
             LLVMContext context = lookupContextReference(LLVMLanguage.class).get();
             NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
-            return nfiContextExtension == null ? null : nfiContextExtension.getNativeFunction("__sulong_fp80_" + name, "(UINT64,UINT64,UINT64):VOID");
+            return nfiContextExtension == null ? null : nfiContextExtension.getNativeFunction(context, "__sulong_fp80_" + name, "(UINT64,UINT64,UINT64):VOID");
         }
 
         public abstract LLVM80BitFloat execute(LLVM80BitFloat x, LLVM80BitFloat y);
 
         @Specialization(guards = "function != null")
         protected LLVM80BitFloat doCall(LLVM80BitFloat x, LLVM80BitFloat y,
-                        @Cached("createFunction()") Object function,
+                        @Cached("createFunction()") TruffleObject function,
                         @CachedLibrary("function") InteropLibrary nativeExecute,
                         @CachedLanguage LLVMLanguage language) {
             LLVMMemory memory = language.getLLVMMemory();

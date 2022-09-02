@@ -39,14 +39,12 @@ import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
-import com.oracle.truffle.llvm.runtime.memory.LLVMHandleMemoryBase;
+import com.oracle.truffle.llvm.runtime.memory.LLVMNativeMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
@@ -57,8 +55,7 @@ public abstract class LLVMLookupDispatchTargetNode extends LLVMExpressionNode {
 
     @CompilationFinal private LanguageReference<LLVMLanguage> languageRef;
 
-    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"isSameObject(pointer.getObject(), cachedDescriptor)", "cachedDescriptor != null",
-                    "pointer.getOffset() == 0"}, assumptions = "singleContextAssumption()")
+    @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"isSameObject(pointer.getObject(), cachedDescriptor)", "cachedDescriptor != null", "pointer.getOffset() == 0"})
     protected static LLVMFunctionDescriptor doDirectCached(@SuppressWarnings("unused") LLVMManagedPointer pointer,
                     @Cached("asFunctionDescriptor(pointer.getObject())") LLVMFunctionDescriptor cachedDescriptor) {
         return cachedDescriptor;
@@ -122,16 +119,6 @@ public abstract class LLVMLookupDispatchTargetNode extends LLVMExpressionNode {
         if (CompilerDirectives.inCompiledCode() && languageRef.get().getNoDerefHandleAssumption().isValid()) {
             return false;
         }
-        return LLVMHandleMemoryBase.isDerefHandleMemory(addr);
-    }
-
-    public static LLVMExpressionNode createOptimized(LLVMExpressionNode function) {
-        if (function instanceof LLVMAccessSymbolNode) {
-            LLVMAccessSymbolNode node = (LLVMAccessSymbolNode) function;
-            if (node.getSymbol() instanceof LLVMFunction) {
-                return LLVMLookupDispatchTargetSymbolNodeGen.create((LLVMFunction) node.getSymbol());
-            }
-        }
-        return LLVMLookupDispatchTargetNodeGen.create(function);
+        return LLVMNativeMemory.isDerefHandleMemory(addr);
     }
 }

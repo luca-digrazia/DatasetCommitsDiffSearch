@@ -61,7 +61,7 @@ public abstract class LLVMPolyglotGetArraySize extends LLVMIntrinsic {
     }
 
     /**
-     * @param value @NodeChild
+     * @param value
      * @see LLVMPolyglotGetArraySize
      */
     @Fallback
