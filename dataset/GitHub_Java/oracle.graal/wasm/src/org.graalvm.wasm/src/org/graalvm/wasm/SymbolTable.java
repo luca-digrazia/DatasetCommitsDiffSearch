@@ -46,12 +46,10 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import org.graalvm.wasm.constants.GlobalModifier;
 import org.graalvm.wasm.exception.WasmException;
-import org.graalvm.wasm.exception.WasmLinkerException;
 import org.graalvm.wasm.memory.UnsafeWasmMemory;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.memory.WasmMemoryException;
@@ -287,12 +285,6 @@ public class SymbolTable {
         }
     }
 
-    private void checkUniqueExport(String name) {
-        if (exportedFunctions.containsKey(name) || exportedGlobals.containsKey(name) || Objects.equals(exportedMemory, name) || Objects.equals(exportedTable, name)) {
-            throw new WasmLinkerException("All export names must be different, but '" + name + "' is exported twice.");
-        }
-    }
-
     private static int[] reallocate(int[] array, int currentSize, int newLength) {
         int[] newArray = new int[newLength];
         System.arraycopy(array, 0, newArray, 0, currentSize);
@@ -494,9 +486,8 @@ public class SymbolTable {
         return new FunctionType(functionTypeArgumentTypes(index).toArray(), functionTypeReturnType(index));
     }
 
-    public void exportFunction(WasmContext context, int functionIndex, String exportName) {
+    void exportFunction(WasmContext context, int functionIndex, String exportName) {
         checkNotLinked();
-        checkUniqueExport(exportName);
         exportedFunctions.put(exportName, functions[functionIndex]);
         exportedFunctionsByIndex.put(functionIndex, exportName);
         context.linker().resolveFunctionExport(module, functionIndex, exportName);
@@ -506,7 +497,7 @@ public class SymbolTable {
         return exportedFunctions;
     }
 
-    public WasmFunction importFunction(WasmContext context, String moduleName, String functionName, int typeIndex) {
+    WasmFunction importFunction(WasmContext context, String moduleName, String functionName, int typeIndex) {
         checkNotLinked();
         final ImportDescriptor importDescriptor = new ImportDescriptor(moduleName, functionName);
         WasmFunction function = allocateFunction(typeIndex, importDescriptor);
@@ -624,7 +615,6 @@ public class SymbolTable {
 
     void exportGlobal(WasmContext context, String name, int index) {
         checkNotLinked();
-        checkUniqueExport(name);
         if (globalExported(index)) {
             throw new WasmMemoryException("Global " + index + " already exported with the name: " + nameOfExportedGlobal(index));
         }
@@ -668,7 +658,6 @@ public class SymbolTable {
 
     public void exportTable(WasmContext context, String name) {
         checkNotLinked();
-        checkUniqueExport(name);
         if (exportedTable != null) {
             throw new WasmException("A table has been already exported from this module.");
         }
@@ -734,7 +723,6 @@ public class SymbolTable {
 
     public void exportMemory(WasmContext context, String name) {
         checkNotLinked();
-        checkUniqueExport(name);
         if (exportedMemory != null) {
             throw new WasmException("A memory has been already exported from this module.");
         }
