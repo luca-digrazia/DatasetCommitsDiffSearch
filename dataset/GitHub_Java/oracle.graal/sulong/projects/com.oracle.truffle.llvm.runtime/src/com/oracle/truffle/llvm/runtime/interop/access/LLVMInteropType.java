@@ -341,10 +341,6 @@ public abstract class LLVMInteropType implements TruffleObject {
             return method;
         }
 
-        public Clazz getSuperclass() {
-            return superclass;
-        }
-
     }
 
     public static final class StructMember {
