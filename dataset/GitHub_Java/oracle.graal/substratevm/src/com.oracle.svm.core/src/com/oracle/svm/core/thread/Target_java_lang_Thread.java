@@ -32,6 +32,7 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.Inject;
+import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
@@ -41,9 +42,11 @@ import com.oracle.svm.core.jdk.JDK11OrEarlier;
 import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.jdk.JDK14OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
+import com.oracle.svm.core.jdk.StackTraceUtils;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicReference;
 import com.oracle.svm.core.monitor.MonitorSupport;
 import com.oracle.svm.core.option.XOptions;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.StackOverflowCheck;
 import com.oracle.svm.core.util.TimeUtils;
 import com.oracle.svm.core.util.VMError;
@@ -364,8 +367,14 @@ final class Target_java_lang_Thread {
     }
 
     @Substitute
+    @NeverInline("Starting a stack walk in the caller frame")
     private StackTraceElement[] getStackTrace() {
-        return JavaThreads.getStackTrace(JavaThreads.fromTarget(this));
+        if (JavaThreads.fromTarget(this) == Thread.currentThread()) {
+            /* We can walk our own stack without a VMOperation. */
+            return StackTraceUtils.getStackTrace(false, KnownIntrinsics.readCallerStackPointer());
+        } else {
+            return JavaThreads.getStackTrace(JavaThreads.fromTarget(this));
+        }
     }
 
     @Substitute
@@ -376,10 +385,11 @@ final class Target_java_lang_Thread {
     @Substitute
     @TargetElement(onlyWith = JDK14OrLater.class)
     private static void clearInterruptEvent() {
-        /*
-         * In the JDK, this is a no-op except on Windows. The JDK resets the interrupt event used by
-         * Process.waitFor ResetEvent((HANDLE) JVM_GetThreadInterruptEvent()); Our implementation in
-         * WindowsJavaThreads.java takes care of this ResetEvent.
-         */
+        // In the JDK, this is a noop except on Windows
+        // The JDK resets the interrupt event used by Process.waitFor
+        // ResetEvent((HANDLE) JVM_GetThreadInterruptEvent());
+        // Our implementation in WindowsJavaThreads.java takes care
+        // of this ResetEvent.
+        VMError.unimplemented();
     }
 }
