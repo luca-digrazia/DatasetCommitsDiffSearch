@@ -39,6 +39,19 @@ public interface PoolConstant {
 
     String toString(ConstantPool pool);
 
+    /**
+     * Throws guest ClassFormatError if the constant is ill-formed (/ex: a StringConstant does not
+     * refer to an UTF8Constant).
+     *
+     * Resolved entries are not validated.
+     *
+     * @param pool The constant pool in which this constant appears.
+     */
+    @SuppressWarnings("unused")
+    default void validate(ConstantPool pool) {
+        /* nop */
+    }
+
     static byte u1(int i) {
         assert (byte) i == i;
         return (byte) i;
