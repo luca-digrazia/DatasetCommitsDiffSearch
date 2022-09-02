@@ -143,18 +143,6 @@ public abstract class ByteSequence {
         return true;
     }
 
-    public final boolean contentStartsWith(ByteSequence other) {
-        if (length() < other.length()) {
-            return false;
-        }
-        for (int i = 0; i < other.length(); ++i) {
-            if (byteAt(i) != other.byteAt(i)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     @Override
     public String toString() {
         try {
@@ -165,7 +153,7 @@ public abstract class ByteSequence {
     }
 
     public int lastIndexOf(byte b) {
-        for (int i = length() - 1; i >= 0; i--) {
+        for (int i = length() - 1; i >= offset(); i--) {
             if (byteAt(i) == b) {
                 return i;
             }
