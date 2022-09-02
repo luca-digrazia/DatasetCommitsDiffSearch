@@ -214,7 +214,7 @@ abstract class ToHostNode extends Node {
         }
 
         if (targetType == Value.class && languageContext != null) {
-            return value instanceof Value ? value : languageContext.asValue(value);
+            convertedValue = value instanceof Value ? value : languageContext.asValue(value);
         } else if (interop.isNull(value)) {
             if (targetType.isPrimitive()) {
                 throw HostInteropErrors.nullCoercion(languageContext, value, targetType);
@@ -222,12 +222,7 @@ abstract class ToHostNode extends Node {
             return null;
         } else if (value instanceof TruffleObject) {
             convertedValue = asJavaObject((TruffleObject) value, targetType, genericType, allowsImplementation, languageContext);
-            if (convertedValue != null) {
-                return convertedValue;
-            }
-            // no default conversion available but we can still try target type mappings.
-        }
-        if (targetType.isInstance(value)) {
+        } else if (targetType.isAssignableFrom(value.getClass())) {
             convertedValue = value;
         } else {
             if (useCustomTargetTypes) {
@@ -573,7 +568,7 @@ abstract class ToHostNode extends Node {
                 throw HostInteropErrors.cannotConvert(languageContext, value, targetType, "Value must have members.");
             }
         } else {
-            return null;
+            throw HostInteropErrors.cannotConvert(languageContext, value, targetType, "Unsupported target type.");
         }
         assert targetType.isInstance(obj);
         return targetType.cast(obj);
