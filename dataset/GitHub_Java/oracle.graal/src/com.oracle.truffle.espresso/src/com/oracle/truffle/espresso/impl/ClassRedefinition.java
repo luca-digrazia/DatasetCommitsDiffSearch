@@ -304,10 +304,8 @@ public final class ClassRedefinition {
     private static boolean isObsolete(ParserMethod oldMethod, ParserMethod newMethod, ConstantPool oldPool, ConstantPool newPool) {
         CodeAttribute oldCodeAttribute = (CodeAttribute) oldMethod.getAttribute(Symbol.Name.Code);
         CodeAttribute newCodeAttribute = (CodeAttribute) newMethod.getAttribute(Symbol.Name.Code);
-        if (oldCodeAttribute == null) {
-            return newCodeAttribute != null;
-        } else if (newCodeAttribute == null) {
-            return oldCodeAttribute != null;
+        if (oldCodeAttribute == null && newCodeAttribute == null) {
+            return false;
         }
         BytecodeStream oldCode = new BytecodeStream(oldCodeAttribute.getOriginalCode());
         BytecodeStream newCode = new BytecodeStream(newCodeAttribute.getOriginalCode());
@@ -358,10 +356,8 @@ public final class ClassRedefinition {
         CodeAttribute oldCodeAttribute = (CodeAttribute) oldMethod.getAttribute(Symbol.Name.Code);
         CodeAttribute newCodeAttribute = (CodeAttribute) newMethod.getAttribute(Symbol.Name.Code);
 
-        if (oldCodeAttribute == null) {
-            return newCodeAttribute != null ? ClassChange.METHOD_BODY_CHANGE : ClassChange.NO_CHANGE;
-        } else if (newCodeAttribute == null) {
-            return oldCodeAttribute != null ? ClassChange.METHOD_BODY_CHANGE : ClassChange.NO_CHANGE;
+        if (oldCodeAttribute == null && newCodeAttribute == null) {
+            return ClassChange.NO_CHANGE;
         }
 
         if (!Arrays.equals(oldCodeAttribute.getOriginalCode(), newCodeAttribute.getOriginalCode())) {
