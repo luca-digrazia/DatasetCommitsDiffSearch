@@ -40,7 +40,6 @@
  */
 package org.graalvm.wasm.benchmark;
 
-import joptsimple.internal.Strings;
 import org.graalvm.polyglot.Context;
 import org.graalvm.wasm.utils.WasmResource;
 import org.graalvm.wasm.utils.cases.WasmCase;
@@ -63,7 +62,7 @@ import static org.graalvm.wasm.utils.cases.WasmCase.collectFileCase;
  * </p>
  *
  * <pre>
- * $ java org.graalvm.wasm.benchmark.MemoryProfiler bench/wasm/memory/go-hello
+ * $ java org.graalvm.wasm.benchmark.MemoryProfiler --warmup-iterations 10 --result-iterations 6 go-hello
  * </pre>
  *
  * <p>
@@ -71,8 +70,8 @@ import static org.graalvm.wasm.utils.cases.WasmCase.collectFileCase;
  * </p>
  *
  * <pre>
- * go-hello: warmup_iteration[0]: 50.863 MB
- * go-hello: warmup_iteration[1]: 12.708 MB
+ * go-hello: warmup iteration[0]: 50.863 MB
+ * go-hello: warmup iteration[1]: 12.708 MB
  * ...
  * go-hello: iteration[0]: 16.902 MB
  * go-hello: iteration[1]: 17.161 MB
@@ -94,8 +93,6 @@ public class MemoryFootprintBenchmarkRunner {
     // generalize this to include more paths, if that turns out necessary.
     private static String BENCHCASES_TYPE = "bench";
     private static String BENCHCASES_RESOURCE = "wasm/memory";
-    private static int WARMUP_ITERATIONS = 10;
-    private static int ITERATIONS = 10;
 
     public static void main(String[] args) throws IOException, InterruptedException {
         if (args[0].equals("--list")) {
@@ -103,16 +100,22 @@ public class MemoryFootprintBenchmarkRunner {
             return;
         }
 
-        for (final String caseSpec : args) {
+        if (args.length < 5 || !args[0].equals("--warmup-iterations") || !args[2].equals("--result-iterations")) {
+            System.err.println("Usage: --warmup-iterations <n> --result-iterations <n> <case_spec>...");
+        }
+
+        final int warmup_iterations = Integer.parseInt(args[1]);
+        final int result_iterations = Integer.parseInt(args[3]);
+
+        for (final String caseSpec : Arrays.copyOfRange(args, 4, args.length)) {
             final WasmCase benchmarkCase = collectFileCase(BENCHCASES_TYPE, BENCHCASES_RESOURCE, caseSpec);
             assert benchmarkCase != null : String.format("Test case %s/%s not found.", BENCHCASES_RESOURCE, caseSpec);
 
             final Context.Builder contextBuilder = Context.newBuilder("wasm");
-            contextBuilder.option("wasm.Builtins", "testutil,env:emscripten,memory");
 
             final List<Double> results = new ArrayList<>();
 
-            for (int i = 0; i < WARMUP_ITERATIONS + ITERATIONS; ++i) {
+            for (int i = 0; i < warmup_iterations + result_iterations; ++i) {
                 final Context context = contextBuilder.build();
 
                 final double heapSizeBefore = getHeapSize();
@@ -122,11 +125,11 @@ public class MemoryFootprintBenchmarkRunner {
 
                 final double heapSizeAfter = getHeapSize();
                 final double result = heapSizeAfter - heapSizeBefore;
-                if (i < WARMUP_ITERATIONS) {
-                    System.out.format("%s: warmup_iteration[%d]: %.3f MB%n", caseSpec, i, result);
+                if (i < warmup_iterations) {
+                    System.out.format("%s: warmup iteration[%d]: %.3f MB%n", caseSpec, i, result);
                 } else {
                     results.add(result);
-                    System.out.format("%s: iteration[%d]: %.3f MB%n", caseSpec, i - WARMUP_ITERATIONS, result);
+                    System.out.format("%s: iteration[%d]: %.3f MB%n", caseSpec, i, result);
                 }
 
                 context.close();
@@ -135,18 +138,26 @@ public class MemoryFootprintBenchmarkRunner {
             Collections.sort(results);
 
             System.out.format("%s: median: %.3f MB%n", caseSpec, median(results));
-            System.out.format("%s: min: %.3f MB%n", caseSpec, results.get(results.size() - 1));
-            System.out.format("%s: max: %.3f MB%n", caseSpec, results.get(0));
+            System.out.format("%s: min: %.3f MB%n", caseSpec, results.get(0));
+            System.out.format("%s: max: %.3f MB%n", caseSpec, results.get(results.size() - 1));
             System.out.format("%s: average: %.3f MB%n", caseSpec, average(results));
         }
     }
 
-    private static double getHeapSize() throws InterruptedException {
-        Thread.sleep(100);
+    static double getHeapSize() {
+        sleep();
         System.gc();
-        Thread.sleep(500);
+        sleep();
         final Runtime runtime = Runtime.getRuntime();
         return (runtime.totalMemory() - runtime.freeMemory()) / 1000000.0;
+    }
+
+    static void sleep() {
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static double median(List<Double> xs) {
