@@ -33,11 +33,9 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
@@ -339,7 +337,7 @@ public class LLVMVaListStorage implements TruffleObject {
 
     @ExportMessage
     public Object invokeMember(String member, Object[] arguments,
-                    @Cached.Shared("escapeNode") @Cached LLVMPointerDataEscapeNode pointerEscapeNode) throws ArityException, UnknownIdentifierException, UnsupportedTypeException {
+                    @Cached LLVMPointerDataEscapeNode pointerEscapeNode) throws ArityException, UnknownIdentifierException, UnsupportedTypeException {
         if (GET_MEMBER.equals(member)) {
             if (arguments.length == 2) {
                 if (!(arguments[0] instanceof Integer)) {
@@ -392,9 +390,8 @@ public class LLVMVaListStorage implements TruffleObject {
     }
 
     @ExportMessage
-    public Object readArrayElement(long index, @Cached.Shared("escapeNode") @Cached LLVMPointerDataEscapeNode pointerEscapeNode) {
-        Object arg = realArguments[(int) index + numberOfExplicitArguments];
-        return pointerEscapeNode.executeWithTarget(arg);
+    public Object readArrayElement(long index) {
+        return realArguments[(int) index + numberOfExplicitArguments];
     }
 
     @ExportMessage
@@ -423,8 +420,8 @@ public class LLVMVaListStorage implements TruffleObject {
 
         @Specialization
         Object createWrapper(LLVMPointer pointer,
-                             @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
-                             @Cached(value = "createVAListPointerWrapperFactoryCached(language)", uncached = "createVAListPointerWrapperFactoryUncached(language)") VAListPointerWrapperFactory wrapperFactory) {
+                        @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
+                        @Cached(value = "createVAListPointerWrapperFactory(language, true)", uncached = "createVAListPointerWrapperFactory(language, false)") VAListPointerWrapperFactory wrapperFactory) {
             return wrapperFactory.execute(pointer);
         }
 
@@ -433,12 +430,8 @@ public class LLVMVaListStorage implements TruffleObject {
             return o;
         }
 
-        public static VAListPointerWrapperFactory createVAListPointerWrapperFactoryCached(@CachedLanguage LLVMLanguage language) {
-            return language.getCapability(PlatformCapability.class).createNativeVAListWrapper(true);
-        }
-
-        public static VAListPointerWrapperFactory createVAListPointerWrapperFactoryUncached(@CachedLanguage LLVMLanguage language) {
-            return language.getCapability(PlatformCapability.class).createNativeVAListWrapper(false);
+        public static VAListPointerWrapperFactory createVAListPointerWrapperFactory(LLVMLanguage language, boolean cached) {
+            return language.getCapability(PlatformCapability.class).createNativeVAListWrapper(cached);
         }
 
     }
@@ -477,7 +470,7 @@ public class LLVMVaListStorage implements TruffleObject {
      * <code>offsetToIndex</code> method, which is called from the common implementation of
      * {@link LLVMManagedReadLibrary}.
      */
-    @ExportLibrary(value = LLVMManagedReadLibrary.class, useForAOT = false)
+    @ExportLibrary(LLVMManagedReadLibrary.class)
     public abstract static class ArgsArea implements TruffleObject {
         public final Object[] args;
 

@@ -60,7 +60,6 @@ import com.oracle.truffle.espresso.ffi.TruffleByteBuffer;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.perf.DebugCounter;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Collect;
 import com.oracle.truffle.espresso.vm.UnsafeAccess;
 import com.oracle.truffle.nfi.api.SignatureLibrary;
 
@@ -70,7 +69,7 @@ import sun.misc.Unsafe;
  * Espresso native interface implementation based on TruffleNFI, this class is fully functional on
  * its own (nfi-native backend) and also serves as base for other NFI backends.
  */
-public class NFINativeAccess implements NativeAccess {
+class NFINativeAccess implements NativeAccess {
 
     private static final Unsafe UNSAFE = UnsafeAccess.get();
 
@@ -447,7 +446,6 @@ public class NFINativeAccess implements NativeAccess {
         UNSAFE.freeMemory(address);
     }
 
-    @Collect(NativeAccess.class)
     public static final class Provider implements NativeAccess.Provider {
         @Override
         public String id() {
