@@ -40,7 +40,6 @@ import java.util.Scanner;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.ImageSingletons;
 
@@ -345,16 +344,12 @@ public abstract class CCompilerInvoker {
         void handle(ProcessBuilder current, Path source, String line);
     }
 
-    @SuppressWarnings("try")
-    public void compileAndParseError(List<String> options, Path source, Path target, CompilerErrorHandler handler, DebugContext debug) {
+    public void compileAndParseError(List<String> options, Path source, Path target, CompilerErrorHandler handler) {
         ProcessBuilder pb = new ProcessBuilder()
                         .command(createCompilerCommand(options, target.normalize(), source.normalize()))
                         .directory(tempDirectory.toFile());
         Process compilingProcess = null;
         try {
-            try (DebugContext.Scope s = debug.scope("InvokeCC")) {
-                debugLogCompilerCommand(debug, pb.command());
-            }
             compilingProcess = pb.start();
 
             List<String> lines;
@@ -386,21 +381,6 @@ public abstract class CCompilerInvoker {
                 compilingProcess.destroy();
             }
         }
-    }
-
-    public static StringBuilder debugLogCompilerCommand(DebugContext debug, List<String> cmd) {
-        StringBuilder sb = new StringBuilder();
-        for (String s : cmd) {
-            if (s.indexOf(' ') != -1) {
-                // Quote command line arguments that contain a space
-                sb.append('\'').append(s).append('\'');
-            } else {
-                sb.append(s);
-            }
-            sb.append(' ');
-        }
-        debug.log("Using CompilerCommand: %s", sb);
-        return sb;
     }
 
     protected boolean detectError(String line) {
