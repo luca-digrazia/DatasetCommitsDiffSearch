@@ -34,13 +34,14 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 
 import org.graalvm.compiler.core.common.NumUtil;
-import org.graalvm.compiler.core.llvm.LLVMUtils;
-import org.graalvm.compiler.core.llvm.LLVMUtils.TargetSpecific;
 
 import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.util.VMError;
+import org.graalvm.compiler.core.llvm.LLVMUtils;
 
 public class LLVMStackMapInfo {
+    private static final int AMD64_RSP_IDX = 7;
+    private static final int AMD64_RBP_IDX = 6;
     private StackMap stackMap;
 
     static class StackMap {
@@ -296,13 +297,13 @@ public class LLVMStackMapInfo {
         assert location.size == 8;
 
         int offset;
-        if (location.regNum == TargetSpecific.get().getStackPointerDwarfRegNum()) {
+        if (location.regNum == AMD64_RSP_IDX) {
             offset = location.offset;
-        } else if (location.regNum == TargetSpecific.get().getFramePointerDwarfRegNum()) {
+        } else if (location.regNum == AMD64_RBP_IDX) {
             /*
              * Convert frame-relative offset (negative) to a stack-relative offset (positive).
              */
-            offset = location.offset + NumUtil.safeToInt(getFunctionStackSize(patchpointID)) + TargetSpecific.get().getFramePointerOffset();
+            offset = location.offset + NumUtil.safeToInt(getFunctionStackSize(patchpointID)) - FrameAccess.wordSize();
         } else {
             throw shouldNotReachHere("found other register " + patchpointID + " " + location.regNum);
         }
