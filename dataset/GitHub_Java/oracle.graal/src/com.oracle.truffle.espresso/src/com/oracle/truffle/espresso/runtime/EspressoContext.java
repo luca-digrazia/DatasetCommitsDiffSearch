@@ -127,7 +127,6 @@ public final class EspressoContext {
                                                                               // specified
         this.InlineFieldAccessors = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineFieldAccessors);
         this.InlineMethodHandle = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineMethodHandle);
-        this.SplitMethodHandles = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.SplitMethodHandles);
         this.Verify = env.getOptions().get(EspressoOptions.Verify);
     }
 
@@ -606,7 +605,6 @@ public final class EspressoContext {
 
     public final boolean InlineFieldAccessors;
     public final boolean InlineMethodHandle;
-    public final boolean SplitMethodHandles;
 
     public final EspressoOptions.VerifyMode Verify;
     public final JDWPOptions JDWPOptions;
