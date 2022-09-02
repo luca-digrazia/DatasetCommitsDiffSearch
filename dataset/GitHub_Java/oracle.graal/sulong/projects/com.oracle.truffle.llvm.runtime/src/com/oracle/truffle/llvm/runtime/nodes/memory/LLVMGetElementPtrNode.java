@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime.nodes.memory;
 
 import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.interop.LLVMNegatedForeignObject;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -40,14 +41,13 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 
 @NodeChild(type = LLVMExpressionNode.class)
 @NodeChild(type = LLVMExpressionNode.class)
+@NodeField(type = long.class, name = "typeWidth")
+@NodeField(type = Type.class, name = "targetType")
 public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
-    final long typeWidth;
-    final Type targetType;
 
-    public LLVMGetElementPtrNode(long typeWidth, Type targetType) {
-        this.typeWidth = typeWidth;
-        this.targetType = targetType;
-    }
+    public abstract long getTypeWidth();
+
+    public abstract Type getTargetType();
 
     protected static boolean isNegated(Object obj, Object negatedObj) {
         if (negatedObj instanceof LLVMNegatedForeignObject) {
@@ -69,16 +69,16 @@ public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
 
     @Specialization
     protected LLVMPointer doInt(LLVMPointer addr, int val) {
-        return addr.increment(typeWidth * val);
+        return addr.increment(getTypeWidth() * val);
     }
 
     @Specialization
     protected LLVMPointer doLong(LLVMPointer addr, long val) {
-        return addr.increment(typeWidth * val);
+        return addr.increment(getTypeWidth() * val);
     }
 
     @Specialization
     protected LLVMPointer doNativePointer(LLVMPointer addr, LLVMNativePointer val) {
-        return addr.increment(typeWidth * val.asNative());
+        return addr.increment(getTypeWidth() * val.asNative());
     }
 }
