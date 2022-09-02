@@ -340,8 +340,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
     @Specialization(guards = "haveNativeCtxExt()")
     @GenerateAOT.Exclude
     protected static Object doNativeFunction(LLVMNativePointer pointer, Object[] arguments,
-                    @SuppressWarnings("unused") @CachedContext(LLVMLanguage.class) ContextReference<LLVMContext> ctxRef,
-                    @Cached("createCachedNativeDispatch(ctxRef)") LLVMNativeDispatchNode dispatchNode) {
+                    @Cached("createCachedNativeDispatch()") LLVMNativeDispatchNode dispatchNode) {
         try {
             return dispatchNode.executeDispatch(pointer, arguments);
         } catch (IllegalStateException e) {
@@ -356,8 +355,8 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         throw new LLVMNativePointerException(this, "Invalid native function pointer", null);
     }
 
-    protected LLVMNativeDispatchNode createCachedNativeDispatch(ContextReference<LLVMContext> ctxRef) {
-        return LLVMNativeDispatchNodeGen.create(type, getSignatureSource(ctxRef));
+    protected LLVMNativeDispatchNode createCachedNativeDispatch() {
+        return LLVMNativeDispatchNodeGen.create(type, getSignatureSource(lookupContextReference(LLVMLanguage.class)));
     }
 
     abstract static class LLVMLookupDispatchForeignNode extends LLVMNode {

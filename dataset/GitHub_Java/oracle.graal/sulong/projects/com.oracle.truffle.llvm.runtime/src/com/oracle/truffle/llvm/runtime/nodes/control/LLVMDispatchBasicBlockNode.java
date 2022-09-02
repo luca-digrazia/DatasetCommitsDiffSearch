@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,45 +31,56 @@ package com.oracle.truffle.llvm.runtime.nodes.control;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.ExplodeLoop.LoopExplosionKind;
 import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.llvm.runtime.except.LLVMUserException;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.nodes.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.runtime.nodes.base.LLVMFrameNullerUtil;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMInvokeNode;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMResumeNode;
 import com.oracle.truffle.llvm.runtime.nodes.others.LLVMUnreachableNode;
-import com.oracle.truffle.llvm.runtime.except.LLVMUserException;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.llvm.runtime.types.symbols.LocalVariableDebugInfo;
 
-public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
+public abstract class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
 
     private final FrameSlot exceptionValueSlot;
-    @Children private final LLVMBasicBlockNode[] bodyNodes;
-    @CompilationFinal(dimensions = 2) private final FrameSlot[][] beforeBlockNuller;
-    @CompilationFinal(dimensions = 2) private final FrameSlot[][] afterBlockNuller;
+    private final LocalVariableDebugInfo debugInfo;
 
-    public LLVMDispatchBasicBlockNode(FrameSlot exceptionValueSlot, LLVMBasicBlockNode[] bodyNodes, FrameSlot[][] beforeBlockNuller,
-                    FrameSlot[][] afterBlockNuller) {
+    @Children private final LLVMBasicBlockNode[] bodyNodes;
+
+    private final FrameSlot loopSuccessorSlot;
+
+    public LLVMDispatchBasicBlockNode(FrameSlot exceptionValueSlot, LLVMBasicBlockNode[] bodyNodes, FrameSlot loopSuccessorSlot, LocalVariableDebugInfo debugInfo) {
         this.exceptionValueSlot = exceptionValueSlot;
         this.bodyNodes = bodyNodes;
-        this.beforeBlockNuller = beforeBlockNuller;
-        this.afterBlockNuller = afterBlockNuller;
+        this.loopSuccessorSlot = loopSuccessorSlot;
+        this.debugInfo = debugInfo;
     }
 
-    @Override
+    public LocalVariableDebugInfo getDebugInfo() {
+        return debugInfo;
+    }
+
+    /**
+     * The code in this function is mirrored in {@link LLVMLoopDispatchNode}, any changes need to be
+     * done in both places.
+     */
+    @Specialization
     @ExplodeLoop(kind = LoopExplosionKind.MERGE_EXPLODE)
-    public Object executeGeneric(VirtualFrame frame) {
+    public Object doDispatch(VirtualFrame frame) {
         Object returnValue = null;
 
-        CompilerAsserts.compilationConstant(bodyNodes.length);
+        CompilerAsserts.partialEvaluationConstant(bodyNodes.length);
         int basicBlockIndex = 0;
         int backEdgeCounter = 0;
         outer: while (basicBlockIndex != LLVMBasicBlockNode.RETURN_FROM_FUNCTION) {
@@ -92,28 +103,28 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
                 LLVMConditionalBranchNode conditionalBranchNode = (LLVMConditionalBranchNode) controlFlowNode;
                 boolean condition = conditionalBranchNode.executeCondition(frame);
                 if (CompilerDirectives.injectBranchProbability(bb.getBranchProbability(LLVMConditionalBranchNode.TRUE_SUCCESSOR), condition)) {
+                    bb.enterSuccessor(LLVMConditionalBranchNode.TRUE_SUCCESSOR);
                     if (CompilerDirectives.inInterpreter()) {
-                        bb.increaseBranchProbability(LLVMConditionalBranchNode.TRUE_SUCCESSOR);
                         if (conditionalBranchNode.getTrueSuccessor() <= basicBlockIndex) {
                             backEdgeCounter++;
                         }
                     }
-                    nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                    nullDeadSlots(frame, bb.nullableAfter);
                     executePhis(frame, conditionalBranchNode, LLVMConditionalBranchNode.TRUE_SUCCESSOR);
                     basicBlockIndex = conditionalBranchNode.getTrueSuccessor();
-                    nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                    nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
                     continue outer;
                 } else {
+                    bb.enterSuccessor(LLVMConditionalBranchNode.FALSE_SUCCESSOR);
                     if (CompilerDirectives.inInterpreter()) {
-                        bb.increaseBranchProbability(LLVMConditionalBranchNode.FALSE_SUCCESSOR);
                         if (conditionalBranchNode.getFalseSuccessor() <= basicBlockIndex) {
                             backEdgeCounter++;
                         }
                     }
-                    nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                    nullDeadSlots(frame, bb.nullableAfter);
                     executePhis(frame, conditionalBranchNode, LLVMConditionalBranchNode.FALSE_SUCCESSOR);
                     basicBlockIndex = conditionalBranchNode.getFalseSuccessor();
-                    nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                    nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
                     continue outer;
                 }
             } else if (controlFlowNode instanceof LLVMSwitchNode) {
@@ -121,32 +132,58 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
                 Object condition = switchNode.executeCondition(frame);
                 int[] successors = switchNode.getSuccessors();
                 for (int i = 0; i < successors.length - 1; i++) {
-                    if (CompilerDirectives.injectBranchProbability(bb.getBranchProbability(i), switchNode.executeIsCase(frame, i, condition))) {
+                    if (CompilerDirectives.injectBranchProbability(bb.getBranchProbability(i), switchNode.checkCase(frame, i, condition))) {
+                        bb.enterSuccessor(i);
                         if (CompilerDirectives.inInterpreter()) {
-                            bb.increaseBranchProbability(i);
                             if (successors[i] <= basicBlockIndex) {
                                 backEdgeCounter++;
                             }
                         }
-                        nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                        nullDeadSlots(frame, bb.nullableAfter);
                         executePhis(frame, switchNode, i);
                         basicBlockIndex = successors[i];
-                        nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                        nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
                         continue outer;
                     }
                 }
 
                 int i = successors.length - 1;
+                bb.enterSuccessor(i);
                 if (CompilerDirectives.inInterpreter()) {
-                    bb.increaseBranchProbability(i);
                     if (successors[i] <= basicBlockIndex) {
                         backEdgeCounter++;
                     }
                 }
-                nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                nullDeadSlots(frame, bb.nullableAfter);
                 executePhis(frame, switchNode, i);
                 basicBlockIndex = successors[i];
-                nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
+                continue outer;
+            } else if (controlFlowNode instanceof LLVMLoopNode) {
+                LLVMLoopNode loop = (LLVMLoopNode) controlFlowNode;
+                loop.executeLoop(frame);
+                int successorBasicBlockIndex = FrameUtil.getIntSafe(frame, loopSuccessorSlot);
+                frame.setInt(loopSuccessorSlot, 0); // null frame
+                int[] successors = loop.getSuccessors();
+                for (int i = 0; i < successors.length - 1; i++) {
+                    if (successorBasicBlockIndex == successors[i]) {
+                        if (CompilerDirectives.inInterpreter()) {
+                            if (successors[i] <= basicBlockIndex) {
+                                backEdgeCounter++;
+                            }
+                        }
+                        basicBlockIndex = successors[i];
+                        continue outer;
+                    }
+                }
+                int i = successors.length - 1;
+                assert successors[i] == successorBasicBlockIndex : "Could not find loop successor!";
+                if (CompilerDirectives.inInterpreter()) {
+                    if (successors[i] <= basicBlockIndex) {
+                        backEdgeCounter++;
+                    }
+                }
+                basicBlockIndex = successors[i];
                 continue outer;
             } else if (controlFlowNode instanceof LLVMIndirectBranchNode) {
                 // TODO (chaeubl): we need a different approach here - this is awfully
@@ -156,32 +193,32 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
                 int successorBasicBlockIndex = indirectBranchNode.executeCondition(frame);
                 for (int i = 0; i < successors.length - 1; i++) {
                     if (CompilerDirectives.injectBranchProbability(bb.getBranchProbability(i), successors[i] == successorBasicBlockIndex)) {
+                        bb.enterSuccessor(i);
                         if (CompilerDirectives.inInterpreter()) {
-                            bb.increaseBranchProbability(i);
                             if (successors[i] <= basicBlockIndex) {
                                 backEdgeCounter++;
                             }
                         }
-                        nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                        nullDeadSlots(frame, bb.nullableAfter);
                         executePhis(frame, indirectBranchNode, i);
                         basicBlockIndex = successors[i];
-                        nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                        nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
                         continue outer;
                     }
                 }
 
                 int i = successors.length - 1;
                 assert successorBasicBlockIndex == successors[i];
+                bb.enterSuccessor(i);
                 if (CompilerDirectives.inInterpreter()) {
-                    bb.increaseBranchProbability(i);
                     if (successors[i] <= basicBlockIndex) {
                         backEdgeCounter++;
                     }
                 }
-                nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                nullDeadSlots(frame, bb.nullableAfter);
                 executePhis(frame, indirectBranchNode, i);
                 basicBlockIndex = successors[i];
-                nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
                 continue outer;
             } else if (controlFlowNode instanceof LLVMBrUnconditionalNode) {
                 LLVMBrUnconditionalNode unconditionalNode = (LLVMBrUnconditionalNode) controlFlowNode;
@@ -191,70 +228,72 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
                     }
                 }
                 unconditionalNode.execute(frame); // required for instrumentation
-                nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                nullDeadSlots(frame, bb.nullableAfter);
                 executePhis(frame, unconditionalNode, 0);
                 basicBlockIndex = unconditionalNode.getSuccessor();
-                nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
                 continue outer;
             } else if (controlFlowNode instanceof LLVMInvokeNode) {
                 LLVMInvokeNode invokeNode = (LLVMInvokeNode) controlFlowNode;
                 try {
                     invokeNode.execute(frame);
+                    bb.enterSuccessor(LLVMInvokeNode.NORMAL_SUCCESSOR);
                     if (CompilerDirectives.inInterpreter()) {
                         if (invokeNode.getNormalSuccessor() <= basicBlockIndex) {
                             backEdgeCounter++;
                         }
                     }
-                    nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                    nullDeadSlots(frame, bb.nullableAfter);
                     executePhis(frame, invokeNode, LLVMInvokeNode.NORMAL_SUCCESSOR);
                     basicBlockIndex = invokeNode.getNormalSuccessor();
-                    nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                    nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
                     continue outer;
                 } catch (LLVMUserException e) {
-                    frame.setObject(exceptionValueSlot, e);
+                    bb.enterSuccessor(LLVMInvokeNode.UNWIND_SUCCESSOR);
                     if (CompilerDirectives.inInterpreter()) {
                         if (invokeNode.getUnwindSuccessor() <= basicBlockIndex) {
                             backEdgeCounter++;
                         }
                     }
-                    nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                    frame.setObject(exceptionValueSlot, e);
+                    nullDeadSlots(frame, bb.nullableAfter);
                     executePhis(frame, invokeNode, LLVMInvokeNode.UNWIND_SUCCESSOR);
                     basicBlockIndex = invokeNode.getUnwindSuccessor();
-                    nullDeadSlots(frame, basicBlockIndex, beforeBlockNuller);
+                    nullDeadSlots(frame, bodyNodes[basicBlockIndex].nullableBefore);
                     continue outer;
                 }
             } else if (controlFlowNode instanceof LLVMRetNode) {
                 LLVMRetNode retNode = (LLVMRetNode) controlFlowNode;
                 returnValue = retNode.execute(frame);
                 assert noPhisNecessary(retNode);
-                nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
+                nullDeadSlots(frame, bb.nullableAfter);
                 basicBlockIndex = retNode.getSuccessor();
                 continue outer;
             } else if (controlFlowNode instanceof LLVMResumeNode) {
                 LLVMResumeNode resumeNode = (LLVMResumeNode) controlFlowNode;
                 assert noPhisNecessary(resumeNode);
-                nullDeadSlots(frame, basicBlockIndex, afterBlockNuller);
                 resumeNode.execute(frame);
-                CompilerAsserts.neverPartOfCompilation();
+                CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new IllegalStateException("must not reach here");
             } else if (controlFlowNode instanceof LLVMUnreachableNode) {
                 LLVMUnreachableNode unreachableNode = (LLVMUnreachableNode) controlFlowNode;
                 assert noPhisNecessary(unreachableNode);
                 unreachableNode.execute(frame);
-                CompilerAsserts.neverPartOfCompilation();
+                CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new IllegalStateException("must not reach here");
             } else {
-                CompilerAsserts.neverPartOfCompilation();
+                CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new UnsupportedOperationException("unexpected controlFlowNode type: " + controlFlowNode);
             }
         }
         assert backEdgeCounter >= 0;
         LoopNode.reportLoopCount(this, backEdgeCounter);
+        assert returnValue != null;
         return returnValue;
     }
 
     @ExplodeLoop
-    private static void executePhis(VirtualFrame frame, LLVMControlFlowNode controlFlowNode, int successorIndex) {
+    public static void executePhis(VirtualFrame frame, LLVMControlFlowNode controlFlowNode, int successorIndex) {
         LLVMStatementNode phi = controlFlowNode.getPhiNode(successorIndex);
         if (phi != null) {
             phi.execute(frame);
@@ -262,12 +301,11 @@ public final class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
     }
 
     @ExplodeLoop
-    private static void nullDeadSlots(VirtualFrame frame, int bci, FrameSlot[][] blockNullers) {
-        FrameSlot[] frameSlotsToNull = blockNullers[bci];
+    public static void nullDeadSlots(VirtualFrame frame, FrameSlot[] frameSlotsToNull) {
         if (frameSlotsToNull != null) {
             assert frameSlotsToNull.length > 0;
             for (int i = 0; i < frameSlotsToNull.length; i++) {
-                LLVMFrameNullerUtil.nullFrameSlot(frame, frameSlotsToNull[i], false);
+                LLVMFrameNullerUtil.nullFrameSlot(frame, frameSlotsToNull[i]);
             }
         }
     }

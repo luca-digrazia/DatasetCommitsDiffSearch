@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,28 +29,33 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
-import java.io.PrintStream;
-
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Assumption;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
-import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.instrumentation.Tag;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode.WrapperNode;
+import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.NodeFactory;
+import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.runtime.memory.LLVMHandleMemoryBase;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+
+import java.io.PrintStream;
+import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 @TypeSystemReference(LLVMTypes.class)
+@GenerateAOT
 public abstract class LLVMNode extends Node {
     public static final int DOUBLE_SIZE_IN_BYTES = 8;
     public static final int FLOAT_SIZE_IN_BYTES = 4;
@@ -74,75 +79,21 @@ public abstract class LLVMNode extends Node {
 
     public static final int ADDRESS_SIZE_IN_BYTES = 8;
 
-    public final ContextReference<LLVMContext> getContextReference() {
-        return getRootNode().getLanguage(LLVMLanguage.class).getContextReference();
-    }
-
-    public final LLVMLanguage getLLVMLanguage() {
-        return getRootNode().getLanguage(LLVMLanguage.class);
-    }
-
-    public final NodeFactory getNodeFactory() {
-        RootNode rootNode = getRootNode();
-        if (rootNode != null && rootNode.getLanguage(LLVMLanguage.class) != null) {
-            return rootNode.getLanguage(LLVMLanguage.class).getContextReference().get().getNodeFactory();
-        } else {
-            return LLVMLanguage.getLanguage().getContextReference().get().getNodeFactory();
-        }
-    }
-
-    public final LLVMMemory getLLVMMemory() {
-        RootNode rootNode = getRootNode();
-        if (rootNode != null && rootNode.getLanguage(LLVMLanguage.class) != null) {
-            return rootNode.getLanguage(LLVMLanguage.class).getCapability(LLVMMemory.class);
-        } else {
-            return LLVMLanguage.getLanguage().getCapability(LLVMMemory.class);
-        }
-    }
-
-    public final UnsafeArrayAccess getUnsafeArrayAccess() {
-        RootNode rootNode = getRootNode();
-        if (rootNode != null && rootNode.getLanguage(LLVMLanguage.class) != null) {
-            return rootNode.getLanguage(LLVMLanguage.class).getCapability(UnsafeArrayAccess.class);
-        } else {
-            return LLVMLanguage.getLanguage().getCapability(UnsafeArrayAccess.class);
-        }
-    }
-
     protected static PrintStream nativeCallStatisticsStream(ContextReference<LLVMContext> context) {
-        return SulongEngineOption.getStream(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
+        CompilerAsserts.neverPartOfCompilation();
+        return context.get().nativeCallStatsStream();
     }
 
     protected static boolean nativeCallStatisticsEnabled(ContextReference<LLVMContext> context) {
-        return SulongEngineOption.isTrue(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
+        CompilerAsserts.neverPartOfCompilation();
+        return nativeCallStatisticsStream(context) != null;
     }
 
-    public boolean hasTag(Class<? extends Tag> tag) {
-        // only nodes that have a SourceSection attached are considered to be tagged by any
-        // anything, for sulong only those nodes that actually represent source language statements
-        // should have one
-        return tag == StandardTags.StatementTag.class;
-    }
-
-    public LLVMSourceLocation getSourceLocation() {
-        return null;
-    }
-
-    @Override
-    public SourceSection getSourceSection() {
-        final LLVMSourceLocation location = getSourceLocation();
-        if (location != null) {
-            return location.getSourceSection();
-        }
-
-        return null;
-    }
-
-    protected static boolean isFunctionDescriptor(TruffleObject object) {
+    protected static boolean isFunctionDescriptor(Object object) {
         return object instanceof LLVMFunctionDescriptor;
     }
 
-    protected static LLVMFunctionDescriptor asFunctionDescriptor(TruffleObject object) {
+    protected static LLVMFunctionDescriptor asFunctionDescriptor(Object object) {
         return object instanceof LLVMFunctionDescriptor ? (LLVMFunctionDescriptor) object : null;
     }
 
@@ -151,18 +102,176 @@ public abstract class LLVMNode extends Node {
         return a == b;
     }
 
-    @TruffleBoundary
-    protected static Node createIsNull() {
-        return Message.IS_NULL.createNode();
+    public final DataLayout getDataLayout() {
+        return findDataLayout(this);
     }
 
-    @TruffleBoundary
-    protected static Node createIsBoxed() {
-        return Message.IS_BOXED.createNode();
+    public static DataLayout findDataLayout(Node node) {
+        Node datalayoutNode = node;
+        while (!(datalayoutNode instanceof LLVMHasDatalayoutNode)) {
+            if (datalayoutNode.getParent() != null) {
+                assert !(datalayoutNode instanceof RootNode) : "root node must not have a parent";
+                datalayoutNode = datalayoutNode.getParent();
+            } else {
+                return LLVMLanguage.getLanguage().getDefaultDataLayout();
+            }
+        }
+        return ((LLVMHasDatalayoutNode) datalayoutNode).getDatalayout();
     }
 
-    @TruffleBoundary
-    protected static Node createUnbox() {
-        return Message.UNBOX.createNode();
+    private static final WeakHashMap<Node, Long> nodeIdentifiers = new WeakHashMap<>();
+    private static final AtomicLong identifiers = new AtomicLong();
+
+    private static synchronized long getNodeId(Node node) {
+        return nodeIdentifiers.computeIfAbsent(node, (n) -> identifiers.incrementAndGet());
+    }
+
+    /**
+     * See {@link #getShortString(Node, String...)}.
+     */
+    protected final String getShortString(String... fields) {
+        return getShortString(this, fields);
+    }
+
+    /**
+     * Creates a short (single line) textual description of the given node.
+     *
+     * A unique name is built from the class name and a global map of node identifiers.
+     *
+     * A source location will be appended if available.
+     *
+     * The given fields will be extracted (in the given order) using {@link String#valueOf(Object)}
+     * (with a special case for arrays).
+     */
+    public static String getShortString(Node node, String... fields) {
+        CompilerAsserts.neverPartOfCompilation();
+        StringBuilder str = new StringBuilder();
+        if (node instanceof LLVMInstrumentableNode) {
+            LLVMInstrumentableNode instruction = (LLVMInstrumentableNode) node;
+            if (instruction.hasTag(StatementTag.class)) {
+                LLVMSourceLocation location = instruction.getSourceLocation();
+                str.append(location.getName()).append(":").append(location.getLine()).append(" ");
+            }
+
+        }
+        str.append(node.getClass().getSimpleName()).append("#").append(getNodeId(node));
+
+        for (String field : fields) {
+            Class<?> c = node.getClass();
+            while (c != Object.class) {
+                try {
+                    Field declaredField = c.getDeclaredField(field);
+                    declaredField.setAccessible(true);
+                    Object value = declaredField.get(node);
+                    str.append(" ").append(field).append("=").append(formatFieldValue(value));
+                    break;
+                } catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {
+                    // skip
+                }
+                c = c.getSuperclass();
+            }
+        }
+
+        return str.toString();
+    }
+
+    @Override
+    public String toString() {
+        return getShortString();
+    }
+
+    private static Object formatFieldValue(Object value) {
+        if (value != null) {
+            if (value.getClass().isArray()) {
+                return Arrays.asList((Object[]) value).toString();
+            }
+        }
+        return String.valueOf(value);
+    }
+
+    public static boolean isAutoDerefHandle(LLVMLanguage language, LLVMNativePointer addr) {
+        return isAutoDerefHandle(language, addr.asNative());
+    }
+
+    public static boolean isAutoDerefHandle(LLVMLanguage language, long addr) {
+        // checking the bit is cheaper than getting the assumption in interpreted mode
+        if (CompilerDirectives.inCompiledCode() && language.getNoDerefHandleAssumption().isValid()) {
+            return false;
+        }
+        return LLVMHandleMemoryBase.isDerefHandleMemory(addr);
+    }
+
+    /**
+     * Get the closest parent of {@code node} with the given type, or {@code null} is no node in the
+     * parent chain has the given type. This method will also look into wrapped parents, returning
+     * the delegate node if it has the given type.
+     */
+    public static <T extends Node> T getParent(Node node, Class<T> clazz) {
+        Node current = node;
+        while (current != null) {
+            if (clazz.isInstance(current)) {
+                return clazz.cast(current);
+            }
+            if (current instanceof WrapperNode) {
+                Node delegate = ((WrapperNode) current).getDelegateNode();
+                if (clazz.isInstance(delegate)) {
+                    return clazz.cast(delegate);
+                }
+            }
+            current = current.getParent();
+        }
+        return null;
+    }
+
+    public static Assumption singleContextAssumption() {
+        return LLVMLanguage.getLanguage().singleContextAssumption;
+    }
+
+    /**
+     * Allows for a custom AOT preparation of an abstract DSL node class that cannot be fully
+     * prepared in its generated companion class.
+     *
+     * <pre>
+     *     public abstract class AllocatingNode extends Node {
+     *
+     *         &#64;CompilationFinal Allocator allocator = null;
+     *
+     *         &#64;Child private AOTInitHelper aotInitHelper = new AOTInitHelper(new GenerateAOT.Provider() {
+     *              &#64;Override
+     *              public void prepareForAOT(TruffleLanguage<?> language, RootNode root) {
+     *                  // As no context is available, pick the generic allocator
+     *                  defaultValue = GenericAllocator.INSTANCE;
+     *              }
+     *         });
+     *
+     *         public abstract LLVMManagedPointer execute(int size);
+     *
+     *         private Allocator getAllocator(LLVMContext context) {
+     *             if (allocator == null) {
+     *                 CompilerDirectives.transferToInterpreterAndInvalidate();
+     *                 allocator = context.getAllocator(); // get a context specific allocator
+     *             }
+     *             return allocator;
+     *         }
+     *
+     *         &#64;Specialization
+     *         LLVMManagedPointer allocate(int size, @CachedContext(LLVMLanguage.class) LLVMContext context) {
+     *              return getAllocator(context).allocate(size);
+     *         }
+     *
+     * </pre>
+     */
+    public static final class AOTInitHelper extends Node implements GenerateAOT.Provider {
+
+        private final GenerateAOT.Provider delegate;
+
+        public AOTInitHelper(GenerateAOT.Provider delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void prepareForAOT(TruffleLanguage<?> language, RootNode root) {
+            delegate.prepareForAOT(language, root);
+        }
     }
 }
