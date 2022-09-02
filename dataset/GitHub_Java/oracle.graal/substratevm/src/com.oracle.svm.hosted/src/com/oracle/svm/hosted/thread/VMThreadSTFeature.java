@@ -26,7 +26,6 @@ package com.oracle.svm.hosted.thread;
 
 import java.util.List;
 
-import com.oracle.svm.core.ParsingReason;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -35,7 +34,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
-import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
@@ -91,7 +90,7 @@ public class VMThreadSTFeature implements GraalFeature {
      * ignored.
      */
     @Override
-    public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, InvocationPlugins invocationPlugins, ParsingReason reason) {
+    public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, InvocationPlugins invocationPlugins, boolean analysis, boolean hosted) {
         for (Class<? extends FastThreadLocal> threadLocalClass : VMThreadLocalInfo.THREAD_LOCAL_CLASSES) {
             Registration r = new Registration(invocationPlugins, threadLocalClass);
             Class<?> valueClass = VMThreadLocalInfo.getValueClass(threadLocalClass);
@@ -182,18 +181,14 @@ public class VMThreadSTFeature implements GraalFeature {
     private boolean handleSet(GraphBuilderContext b, Receiver receiver, ValueNode valueNode) {
         VMThreadLocalInfo info = threadLocalCollector.findInfo(b, receiver.get());
         VMThreadLocalSTHolderNode holder = b.add(new VMThreadLocalSTHolderNode(info));
-        StoreVMThreadLocalNode store = new StoreVMThreadLocalNode(info, holder, valueNode, BarrierType.ARRAY);
-        b.add(store);
-        assert store.stateAfter() != null : store + " has no state after with graph builder context " + b;
+        b.add(new StoreVMThreadLocalNode(info, holder, valueNode, BarrierType.ARRAY));
         return true;
     }
 
     private boolean handleCompareAndSet(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode expect, ValueNode update) {
         VMThreadLocalInfo threadLocalInfo = threadLocalCollector.findInfo(b, receiver.get());
         VMThreadLocalSTHolderNode holder = b.add(new VMThreadLocalSTHolderNode(threadLocalInfo));
-        CompareAndSetVMThreadLocalNode cas = new CompareAndSetVMThreadLocalNode(threadLocalInfo, holder, expect, update);
-        b.addPush(targetMethod.getSignature().getReturnKind(), cas);
-        assert cas.stateAfter() != null : cas + " has no state after with graph builder context " + b;
+        b.addPush(targetMethod.getSignature().getReturnKind(), new CompareAndSetVMThreadLocalNode(threadLocalInfo, holder, expect, update));
         return true;
     }
 
