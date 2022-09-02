@@ -70,27 +70,13 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         return kind;
     }
 
-    private static boolean removeUnusedSymbols() {
-        if (SubstrateOptions.RemoveUnusedSymbols.hasBeenSet()) {
-            return SubstrateOptions.RemoveUnusedSymbols.getValue();
-        }
-        return Platform.includedIn(Platform.PLATFORM_JNI.class);
-    }
-
     class BinutilsCCLinkerInvocation extends CCLinkerInvocation {
 
         BinutilsCCLinkerInvocation() {
             additionalPreOptions.add("-z");
             additionalPreOptions.add("noexecstack");
-
-            if (removeUnusedSymbols()) {
-                /* Perform garbage collection of unused input sections. */
-                additionalPreOptions.add("-Wl,--gc-sections");
-            }
-
-            if (SubstrateOptions.DeleteLocalSymbols.getValue()) {
-                additionalPreOptions.add("-Wl,-x");
-            }
+            /* Perform garbage collection of unused input sections. */
+            additionalPreOptions.add("-Wl,--gc-sections");
         }
 
         @Override
@@ -118,17 +104,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
     }
 
     class DarwinCCLinkerInvocation extends CCLinkerInvocation {
-
-        DarwinCCLinkerInvocation() {
-            if (removeUnusedSymbols()) {
-                /* Remove functions and data unreachable by entry points. */
-                additionalPreOptions.add("-Wl,-dead_strip");
-            }
-
-            if (SubstrateOptions.DeleteLocalSymbols.getValue()) {
-                additionalPreOptions.add("-Wl,-x");
-            }
-        }
 
         @Override
         protected void addOneSymbolAliasOption(List<String> cmd, Entry<ResolvedJavaMethod, String> ent) {
@@ -189,14 +164,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
 
             // Add debugging info
             cmd.add("/Zi");
-
-            if (removeUnusedSymbols()) {
-                additionalPreOptions.add("/OPT:REF");
-            }
-
-            if (SubstrateOptions.DeleteLocalSymbols.getValue()) {
-                cmd.add("/PDBSTRIPPED");
-            }
 
             cmd.add("/Fe" + outputFile.toString());
 
