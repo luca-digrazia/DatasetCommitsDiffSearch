@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -412,6 +412,8 @@ abstract class ToHostNode extends Node {
                 return asJavaObject(value, Iterable.class, null, false, languageContext);
             } else if (interop.isIterator(value)) {
                 return asJavaObject(value, Iterator.class, null, false, languageContext);
+            } else if (interop.isHashEntry(value)) {
+                return asJavaObject(value, Map.Entry.class, null, false, languageContext);
             } else if (interop.isExecutable(value) || interop.isInstantiable(value)) {
                 return asJavaObject(value, Function.class, null, false, languageContext);
             }
@@ -476,19 +478,18 @@ abstract class ToHostNode extends Node {
                 throw HostInteropErrors.cannotConvert(languageContext, value, targetType, "Value must have members, array elements or hash entries.");
             }
         } else if (targetType == Map.Entry.class) {
-            if (interop.hasArrayElements(value)) {
-                TypeAndClass<?> keyType = getGenericParameterType(genericType, 0);
-                TypeAndClass<?> valueType = getGenericParameterType(genericType, 1);
+            TypeAndClass<?> keyType = getGenericParameterType(genericType, 0);
+            TypeAndClass<?> valueType = getGenericParameterType(genericType, 1);
+            if (interop.isHashEntry(value)) {
                 boolean implementsFunction = shouldImplementFunction(value, interop);
                 obj = PolyglotMapEntry.create(languageContext, value, implementsFunction, keyType.clazz, keyType.type, valueType.clazz, valueType.type);
             } else {
-                throw HostInteropErrors.cannotConvert(languageContext, value, targetType, "Value must have array elements.");
+                throw HostInteropErrors.cannotConvert(languageContext, value, targetType, "Value must be hash entry.");
             }
         } else if (targetType == Function.class) {
-            TypeAndClass<?> paramType = getGenericParameterType(genericType, 0);
             TypeAndClass<?> returnType = getGenericParameterType(genericType, 1);
             if (interop.isExecutable(value) || interop.isInstantiable(value)) {
-                obj = PolyglotFunction.create(languageContext, value, returnType.clazz, returnType.type, paramType.clazz, paramType.type);
+                obj = PolyglotFunction.create(languageContext, value, returnType.clazz, returnType.type);
             } else if (interop.hasMembers(value)) {
                 obj = HostInteropReflect.newProxyInstance(targetType, value, languageContext);
             } else {
