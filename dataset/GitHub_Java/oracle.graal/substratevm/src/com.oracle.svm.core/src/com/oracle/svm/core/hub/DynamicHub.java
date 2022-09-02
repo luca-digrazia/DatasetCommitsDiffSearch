@@ -1276,9 +1276,11 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         throw VMError.unsupportedFeature("JDK11OrLater: DynamicHub.reflectionData()");
     }
 
-    @KeepOriginal
+    @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class)
-    private native boolean isTopLevelClass();
+    private boolean isTopLevelClass() {
+        return !isLocalOrAnonymousClass() && getDeclaringClassJDK11OrLater() == null;
+    }
 
     @KeepOriginal
     @TargetElement(onlyWith = JDK11OrLater.class)
