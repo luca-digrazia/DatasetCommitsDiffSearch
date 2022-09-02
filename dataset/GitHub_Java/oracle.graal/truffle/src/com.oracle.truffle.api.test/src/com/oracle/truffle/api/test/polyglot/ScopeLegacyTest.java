@@ -41,6 +41,7 @@
 package com.oracle.truffle.api.test.polyglot;
 
 import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
@@ -53,6 +54,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest;
 import static com.oracle.truffle.api.test.polyglot.ScopedViewLegacyTest.createRoot;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import org.graalvm.polyglot.Context;
 import static org.junit.Assert.assertEquals;
@@ -135,6 +137,56 @@ public class ScopeLegacyTest extends AbstractParametrizedLibraryTest {
         scope = interop.getScopeParent(scope);
         checkScope(scope, "V3", "3a", 30, "3b", 31);
         assertFalse(interop.hasScopeParent(scope));
+    }
+
+    @Test
+    public void testArgsAndVarsAtRoot() throws Exception {
+        setupScopes(com.oracle.truffle.api.Scope.newBuilder("V1", createVariables("1v", 1)).build());
+        Node location = new ScopedViewLegacyTest.TestInstrumentableNode(StandardTags.RootTag.class);
+        ScopedViewLegacyTest.TestRootNode root = createRoot(language);
+        root.setChild(location);
+        NodeLibrary nodeLibrary = createLibrary(NodeLibrary.class, location);
+        // No arguments
+        assertFalse(nodeLibrary.hasScope(location, null));
+
+        setupScopes(com.oracle.truffle.api.Scope.newBuilder("V1", createVariables("1v", 1)).arguments(createVariables("1a", 10, "1b", 11)).build());
+        location = new ScopedViewLegacyTest.TestInstrumentableNode(StandardTags.RootTag.class);
+        root = createRoot(language);
+        root.setChild(location);
+        Object scope = nodeLibrary.getScope(location, null, true);
+        // Just arguments
+        checkScope(scope, "V1", "1a", 10, "1b", 11);
+
+        // Variables when with a non-root node
+        setupScopes(com.oracle.truffle.api.Scope.newBuilder("V1", createVariables("1v", 1)).arguments(createVariables("1a", 10, "1b", 11)).node(new Node() {
+        }).build());
+        location = new ScopedViewLegacyTest.TestInstrumentableNode(StandardTags.RootTag.class);
+        root = createRoot(language);
+        root.setChild(location);
+        scope = nodeLibrary.getScope(location, null, true);
+        checkScope(scope, "V1", "1v", 1);
+    }
+
+    @Test
+    public void testEmptyScopes() {
+        Context cntx = Context.create();
+        setupEnv(cntx, new ProxyLanguage() {
+            @Override
+            protected Iterable<com.oracle.truffle.api.Scope> findTopScopes(ProxyLanguage.LanguageContext c) {
+                return Collections.emptyList();
+            }
+
+            @Override
+            protected Iterable<com.oracle.truffle.api.Scope> findLocalScopes(ProxyLanguage.LanguageContext c, Node node, Frame frame) {
+                return Collections.emptyList();
+            }
+        });
+        cntx.getBindings(ProxyLanguage.ID).getMemberKeys().size();
+        Node location = new ScopedViewLegacyTest.TestInstrumentableNode(StandardTags.StatementTag.class);
+        ScopedViewLegacyTest.TestRootNode root = createRoot(language);
+        root.setChild(location);
+        NodeLibrary nodeLibrary = createLibrary(NodeLibrary.class, location);
+        assertFalse(nodeLibrary.hasScope(location, null));
     }
 
     private void setupScopes(com.oracle.truffle.api.Scope... scopes) {
