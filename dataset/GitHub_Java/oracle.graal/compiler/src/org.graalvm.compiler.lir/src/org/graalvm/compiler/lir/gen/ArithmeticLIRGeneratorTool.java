@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,13 +24,14 @@
  */
 package org.graalvm.compiler.lir.gen;
 
-import jdk.vm.ci.meta.Value;
-import jdk.vm.ci.meta.ValueKind;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.calc.FloatConvert;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.Variable;
+
+import jdk.vm.ci.meta.Value;
+import jdk.vm.ci.meta.ValueKind;
 
 /**
  * This interface can be used to generate LIR for arithmetic and simple memory access operations.
@@ -90,6 +91,8 @@ public interface ArithmeticLIRGeneratorTool {
     Value emitMathAbs(Value input);
 
     Value emitMathSqrt(Value input);
+
+    Value emitMathSignum(Value input);
 
     Value emitBitCount(Value operand);
 

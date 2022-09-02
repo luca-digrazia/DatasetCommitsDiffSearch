@@ -48,7 +48,6 @@ import org.graalvm.compiler.lir.aarch64.AArch64ArithmeticLIRGeneratorTool;
 import org.graalvm.compiler.lir.aarch64.AArch64ArithmeticOp;
 import org.graalvm.compiler.lir.aarch64.AArch64BitManipulationOp;
 import org.graalvm.compiler.lir.aarch64.AArch64Convert;
-import org.graalvm.compiler.lir.aarch64.AArch64MathCopySignOp;
 import org.graalvm.compiler.lir.aarch64.AArch64MathSignumOp;
 import org.graalvm.compiler.lir.aarch64.AArch64Move;
 import org.graalvm.compiler.lir.aarch64.AArch64Move.LoadOp;
@@ -128,7 +127,7 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
             case DWORD:
             case QWORD:
                 getLIRGen().append(new AArch64Unary.MemoryOp(isSigned, targetSize,
-                                memoryKind.getSizeInBytes() * Byte.SIZE, result, address, state));
+                                memoryKind.getSizeInBytes() * 8, result, address, state));
                 break;
             default:
                 throw GraalError.shouldNotReachHere();
@@ -384,13 +383,8 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
         }
     }
 
-    protected Variable emitBinary(LIRKind resultKind, AArch64ArithmeticOp op, boolean commutative, Value a, Value b) {
+    protected Variable emitBinary(ValueKind<?> resultKind, AArch64ArithmeticOp op, boolean commutative, Value a, Value b) {
         Variable result = getLIRGen().newVariable(resultKind);
-        emitBinary(result, op, commutative, a, b);
-        return result;
-    }
-
-    protected void emitBinary(AllocatableValue result, AArch64ArithmeticOp op, boolean commutative, Value a, Value b) {
         if (isValidBinaryConstant(op, b)) {
             emitBinaryConst(result, op, asAllocatable(a), asJavaConstant(b));
         } else if (commutative && isValidBinaryConstant(op, a)) {
@@ -398,9 +392,10 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
         } else {
             emitBinaryVar(result, op, asAllocatable(a), asAllocatable(b));
         }
+        return result;
     }
 
-    private void emitBinaryVar(AllocatableValue result, AArch64ArithmeticOp op, AllocatableValue a, AllocatableValue b) {
+    private void emitBinaryVar(Variable result, AArch64ArithmeticOp op, AllocatableValue a, AllocatableValue b) {
         AllocatableValue x = moveSp(a);
         AllocatableValue y = moveSp(b);
         switch (op) {
@@ -414,7 +409,7 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
         }
     }
 
-    public void emitBinaryConst(AllocatableValue result, AArch64ArithmeticOp op, AllocatableValue a, JavaConstant b) {
+    public void emitBinaryConst(Variable result, AArch64ArithmeticOp op, AllocatableValue a, JavaConstant b) {
         AllocatableValue x = moveSp(a);
         getLIRGen().append(new AArch64ArithmeticOp.BinaryConstOp(op, result, x, b));
     }
@@ -505,16 +500,7 @@ public class AArch64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implem
         assert input.getPlatformKind() == AArch64Kind.DOUBLE ||
                         input.getPlatformKind() == AArch64Kind.SINGLE;
         Variable result = getLIRGen().newVariable(input.getValueKind());
-        getLIRGen().append(new AArch64MathSignumOp(getLIRGen(), result, asAllocatable(input)));
-        return result;
-    }
-
-    @Override
-    public Value emitMathCopySign(Value magnitude, Value sign) {
-        assert magnitude.getPlatformKind() == AArch64Kind.DOUBLE ||
-                        magnitude.getPlatformKind() == AArch64Kind.SINGLE;
-        Variable result = getLIRGen().newVariable(magnitude.getValueKind());
-        getLIRGen().append(new AArch64MathCopySignOp(result, asAllocatable(magnitude), asAllocatable(sign)));
+        getLIRGen().append(new AArch64MathSignumOp(result, asAllocatable(input)));
         return result;
     }
 

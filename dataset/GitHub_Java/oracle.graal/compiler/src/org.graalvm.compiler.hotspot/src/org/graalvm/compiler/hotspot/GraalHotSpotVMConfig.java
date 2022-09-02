@@ -156,6 +156,8 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final boolean useVectorizedMismatchIntrinsic = getFlag("UseVectorizedMismatchIntrinsic", Boolean.class, false, isJDK11Plus);
     public final boolean useFMAIntrinsics = getFlag("UseFMA", Boolean.class, false, JDK >= 9);
     public final int useAVX3Threshold = getFlag("AVX3Threshold", Integer.class, 4096, osArch.equals("amd64") && (JDK >= 14 || (JDK == 11 && JDK_UPDATE >= 6)));
+    public final boolean useCopySignIntrinsic = getFlag("UseCopySignIntrinsic", Boolean.class, false, JDK >= 16 || (JDK == 11 && JDK_UPDATE >= 12));
+    public final boolean useSignumIntrinsic = getFlag("UseSignumIntrinsic", Boolean.class, false, JDK >= 16 || (JDK == 11 && JDK_UPDATE >= 12));
 
     public final boolean preserveFramePointer = getFlag("PreserveFramePointer", Boolean.class);
 
@@ -675,6 +677,32 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     private final int threadLocalAllocBufferStartOffset = getFieldOffset("ThreadLocalAllocBuffer::_start", Integer.class, "HeapWord*");
     private final int threadLocalAllocBufferEndOffset = getFieldOffset("ThreadLocalAllocBuffer::_end", Integer.class, "HeapWord*");
     private final int threadLocalAllocBufferTopOffset = getFieldOffset("ThreadLocalAllocBuffer::_top", Integer.class, "HeapWord*");
+    private final int threadLocalAllocBufferPfTopOffset = getFieldOffset("ThreadLocalAllocBuffer::_pf_top", Integer.class, "HeapWord*");
+    private final int threadLocalAllocBufferSlowAllocationsOffset = getFieldOffset("ThreadLocalAllocBuffer::_slow_allocations", Integer.class, "unsigned");
+    private final int threadLocalAllocBufferFastRefillWasteOffset = getFieldOffset("ThreadLocalAllocBuffer::_fast_refill_waste", Integer.class, "unsigned");
+    private final int threadLocalAllocBufferNumberOfRefillsOffset = getFieldOffset("ThreadLocalAllocBuffer::_number_of_refills", Integer.class, "unsigned");
+    private final int threadLocalAllocBufferRefillWasteLimitOffset = getFieldOffset("ThreadLocalAllocBuffer::_refill_waste_limit", Integer.class, "size_t");
+    private final int threadLocalAllocBufferDesiredSizeOffset = getFieldOffset("ThreadLocalAllocBuffer::_desired_size", Integer.class, "size_t");
+
+    public int tlabSlowAllocationsOffset() {
+        return threadTlabOffset + threadLocalAllocBufferSlowAllocationsOffset;
+    }
+
+    public int tlabFastRefillWasteOffset() {
+        return threadTlabOffset + threadLocalAllocBufferFastRefillWasteOffset;
+    }
+
+    public int tlabNumberOfRefillsOffset() {
+        return threadTlabOffset + threadLocalAllocBufferNumberOfRefillsOffset;
+    }
+
+    public int tlabRefillWasteLimitOffset() {
+        return threadTlabOffset + threadLocalAllocBufferRefillWasteLimitOffset;
+    }
+
+    public int threadTlabSizeOffset() {
+        return threadTlabOffset + threadLocalAllocBufferDesiredSizeOffset;
+    }
 
     public int threadTlabStartOffset() {
         return threadTlabOffset + threadLocalAllocBufferStartOffset;
@@ -686,6 +714,10 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     public int threadTlabTopOffset() {
         return threadTlabOffset + threadLocalAllocBufferTopOffset;
+    }
+
+    public int threadTlabPfTopOffset() {
+        return threadTlabOffset + threadLocalAllocBufferPfTopOffset;
     }
 
     public final int tlabAlignmentReserve = getFieldValue("CompilerToVM::Data::ThreadLocalAllocBuffer_alignment_reserve", Integer.class, "size_t");
