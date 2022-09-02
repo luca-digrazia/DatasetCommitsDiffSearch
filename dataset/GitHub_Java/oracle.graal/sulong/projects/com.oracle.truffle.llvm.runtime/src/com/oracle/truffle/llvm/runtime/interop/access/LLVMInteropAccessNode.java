@@ -96,6 +96,7 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
                         return doClazz(classType.getSuperclass(), foreign, offset, makeAccessLocation2);
                     }
                 }
+                return doClazz(classType.getSuperclass(), foreign, offset, makeAccessLocation);
             }
             // no other working solution found
             throw e;
