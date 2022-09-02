@@ -590,7 +590,6 @@ public final class HostAccess {
             this.allowPublic = access.allowPublic;
             this.allowListAccess = access.allowListAccess;
             this.allowArrayAccess = access.allowArrayAccess;
-            this.allowBufferAccess = access.allowBufferAccess;
             this.allowIterableAccess = access.allowIterableAccess;
             this.allowIteratorAccess = access.allowIteratorAccess;
             this.allowMapAccess = access.allowMapAccess;
@@ -821,8 +820,7 @@ public final class HostAccess {
 
         /**
          * Allows the guest application to access {@link Map map} as {@link Value#hasHashEntries()
-         * hash} values. By default no map access is allowed. Allowing map access implies also
-         * allowing of {@link #allowIteratorAccess(boolean) iterators}.
+         * hash} values. By default no map access is allowed.
          *
          * @see Value#hasHashEntries()
          * @since 21.1

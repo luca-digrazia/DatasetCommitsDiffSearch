@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -55,7 +55,6 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -374,41 +373,6 @@ public class HostAccessTest {
     }
 
     @Test
-    public void testBufferAccessEnabled() {
-        setupEnv(HostAccess.newBuilder().allowBufferAccess(true));
-        assertBufferAccessEnabled(context);
-    }
-
-    @Test
-    public void testBufferAccessEnabledHostAccessCloned() {
-        HostAccess hostAccess = HostAccess.newBuilder().allowBufferAccess(true).build();
-        setupEnv(HostAccess.newBuilder(hostAccess));
-        assertBufferAccessEnabled(context);
-    }
-
-    private static void assertBufferAccessEnabled(Context context) {
-        ByteBuffer buffer = ByteBuffer.allocate(2);
-        buffer.put((byte) 42);
-        Value value = context.asValue(buffer);
-        assertTrue(value.hasBufferElements());
-        assertTrue(value.isBufferWritable());
-        assertEquals(2, value.getBufferSize());
-        assertEquals(42, value.readBufferByte(0));
-        value.writeBufferByte(1, (byte) 24);
-        assertEquals(24, value.readBufferByte(1));
-        ValueAssert.assertValue(value, false, Trait.BUFFER_ELEMENTS, Trait.MEMBERS, Trait.HOST_OBJECT);
-    }
-
-    @Test
-    public void testBufferAccessDisabled() {
-        setupEnv(HostAccess.newBuilder().allowBufferAccess(false));
-        ByteBuffer buffer = ByteBuffer.allocate(2);
-        Value value = context.asValue(buffer);
-        assertSame(buffer, value.asHostObject());
-        ValueAssert.assertValue(value, false, Trait.MEMBERS, Trait.HOST_OBJECT);
-    }
-
-    @Test
     public void testListAccessEnabled() {
         setupEnv(HostAccess.newBuilder().allowListAccess(true));
         List<Integer> array = new ArrayList<>(Arrays.asList(1, 2, 3));
@@ -510,9 +474,9 @@ public class HostAccessTest {
         assertTrue(entriesIteratorIterator.isIterator());
         assertTrue(entriesIteratorIterator.hasIteratorNextElement());
         Value entry = entriesIteratorIterator.getIteratorNextElement();
-        assertTrue(entry.hasArrayElements());
-        assertEquals(1, entry.getArrayElement(0).asInt());
-        assertEquals(Integer.toBinaryString(1), entry.getArrayElement(1).asString());
+        assertTrue(entry.isHashEntry());
+        assertEquals(1, entry.getHashEntryKey().asInt());
+        assertEquals(Integer.toBinaryString(1), entry.getHashEntryValue().asString());
         assertEquals(0, value.getMemberKeys().size());
         ValueAssert.assertValue(value, false, Trait.HASH, Trait.MEMBERS, Trait.HOST_OBJECT);
         assertArrayAccessDisabled(context);
