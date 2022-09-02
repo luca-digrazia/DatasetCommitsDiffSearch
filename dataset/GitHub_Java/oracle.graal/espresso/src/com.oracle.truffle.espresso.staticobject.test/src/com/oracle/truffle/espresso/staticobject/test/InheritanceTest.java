@@ -43,7 +43,7 @@ public class InheritanceTest extends StaticObjectTest {
 
     @Test
     public void baseClassInheritance() throws NoSuchFieldException {
-        StaticShape.Builder builder = StaticShape.newBuilder(this);
+        StaticShape.Builder builder = StaticShape.newBuilder();
         StaticProperty property = new DefaultStaticProperty("field1", StaticPropertyKind.Int, false);
         builder.property(property);
         StaticShape<CustomStaticObjectFactory> shape = builder.build(CustomStaticObject.class, CustomStaticObjectFactory.class);
@@ -58,7 +58,7 @@ public class InheritanceTest extends StaticObjectTest {
         // Get the value of the field declared in the generated class
         Assert.assertEquals(24, property.getInt(object));
 
-        Assume.assumeFalse(ARRAY_BASED_STORAGE);
+        Assume.assumeFalse(ARRAY_BASED);
         // `CustomStaticObject.field1` is shadowed
         Assert.assertEquals(int.class, object.getClass().getField("field1").getType());
         // `CustomStaticObject.field2` is visible
@@ -67,7 +67,7 @@ public class InheritanceTest extends StaticObjectTest {
 
     @Test
     public void baseShapeInheritance() throws NoSuchFieldException, IllegalAccessException {
-        StaticShape.Builder b1 = StaticShape.newBuilder(this);
+        StaticShape.Builder b1 = StaticShape.newBuilder();
         StaticProperty s1p1 = new DefaultStaticProperty("field1", StaticPropertyKind.Int, false);
         StaticProperty s1p2 = new DefaultStaticProperty("field2", StaticPropertyKind.Int, false);
         b1.property(s1p1);
@@ -75,7 +75,7 @@ public class InheritanceTest extends StaticObjectTest {
         // StaticShape s1 declares 2 properties: s1p1 and s1p2
         StaticShape<DefaultStaticObject.Factory> s1 = b1.build();
 
-        StaticShape.Builder b2 = StaticShape.newBuilder(this);
+        StaticShape.Builder b2 = StaticShape.newBuilder();
         StaticProperty s2p1 = new DefaultStaticProperty("field1", StaticPropertyKind.Int, false);
         b2.property(s2p1);
         // StaticShape s2:
@@ -95,7 +95,7 @@ public class InheritanceTest extends StaticObjectTest {
         Assert.assertEquals(1, s1p1.getInt(object));
         Assert.assertEquals(3, s2p1.getInt(object));
 
-        Assume.assumeFalse(ARRAY_BASED_STORAGE);
+        Assume.assumeFalse(ARRAY_BASED);
         Assert.assertEquals(3, object.getClass().getField("field1").getInt(object));
     }
 }
