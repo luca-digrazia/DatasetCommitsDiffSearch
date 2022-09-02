@@ -297,7 +297,7 @@ public final class LLVMContext {
         loader.loadDefaults(this, internalLibraryPath);
     }
 
-    private List<ContextExtension> getLanguageContextExtension() {
+    public List<ContextExtension> getLanguageContextExtension() {
         verifyContextExtensionsInitialized();
         return contextExtensions;
     }

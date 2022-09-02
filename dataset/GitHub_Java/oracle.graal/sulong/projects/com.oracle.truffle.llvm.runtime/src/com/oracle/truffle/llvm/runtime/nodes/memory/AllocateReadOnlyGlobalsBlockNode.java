@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.runtime.nodes.memory;
 
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
@@ -48,14 +49,14 @@ public final class AllocateReadOnlyGlobalsBlockNode extends LLVMNode implements 
     @Child InteropLibrary interop;
     @Child LLVMToNativeNode toNative;
 
-    private final Object allocateGlobalsBlock;
+    private final TruffleObject allocateGlobalsBlock;
 
     public AllocateReadOnlyGlobalsBlockNode(LLVMContext context, StructureType type, DataLayout dataLayout) throws TypeOverflowException {
         this.size = type.getSize(dataLayout);
         this.toNative = LLVMToNativeNode.createToNativeWithTarget();
 
         NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
-        this.allocateGlobalsBlock = nfiContextExtension.getNativeFunction("__sulong_allocate_globals_block", "(UINT64):POINTER");
+        this.allocateGlobalsBlock = nfiContextExtension.getNativeFunction(context, "__sulong_allocate_globals_block", "(UINT64):POINTER");
         this.interop = InteropLibrary.getFactory().create(allocateGlobalsBlock);
     }
 

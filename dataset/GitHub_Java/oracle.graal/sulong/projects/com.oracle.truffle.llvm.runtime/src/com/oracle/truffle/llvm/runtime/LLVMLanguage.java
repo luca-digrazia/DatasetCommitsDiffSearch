@@ -61,6 +61,7 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import org.graalvm.options.OptionDescriptors;
 
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -108,6 +109,8 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     private final Assumption noDerefHandleAssumption = Truffle.getRuntime().createAssumption("no deref handle");
 
     public abstract static class Loader implements LLVMCapability {
+        public abstract void loadDefaults(LLVMContext context, Path internalLibraryPath);
+
         public abstract CallTarget load(LLVMContext context, Source source, AtomicInteger id);
     }
 

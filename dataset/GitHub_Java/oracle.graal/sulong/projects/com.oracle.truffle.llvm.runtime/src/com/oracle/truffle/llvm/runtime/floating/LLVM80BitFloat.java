@@ -482,27 +482,25 @@ public final class LLVM80BitFloat implements LLVMArithmetic {
     }
 
     public byte[] getBytesBigEndian() {
-        byte[] array = new byte[BYTE_WIDTH];
-        ByteBuffer bb = ByteBuffer.wrap(array);
+        ByteBuffer bb = ByteBuffer.allocate(BYTE_WIDTH);
         bb.order(ByteOrder.BIG_ENDIAN);
         short signWithExponent = getExponent();
         short signBit = sign ? (short) bit(Short.SIZE - 1) : 0;
         signWithExponent |= signBit;
         bb.putShort(signWithExponent);
         bb.putLong(getFraction());
-        return array;
+        return bb.array();
     }
 
     public byte[] getBytes() {
-        byte[] array = new byte[BYTE_WIDTH];
-        ByteBuffer bb = ByteBuffer.wrap(array);
+        ByteBuffer bb = ByteBuffer.allocate(BYTE_WIDTH);
         bb.order(ByteOrder.LITTLE_ENDIAN);
         short signWithExponent = getExponent();
         short signBit = sign ? (short) bit(Short.SIZE - 1) : 0;
         signWithExponent |= signBit;
         bb.putLong(getFraction());
         bb.putShort(signWithExponent);
-        return array;
+        return bb.array();
     }
 
     public static LLVM80BitFloat fromBytesBigEndian(byte[] bytes) {
