@@ -801,9 +801,6 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      * </ul>
      */
     private void escape() {
-        if (atEnd()) {
-            throw syntaxErrorAtRel(PyErrorMessages.BAD_ESCAPE_END_OF_PATTERN, 1);
-        }
         if (assertionEscape()) {
             lastTerm = TermCategory.Assertion;
             return;
