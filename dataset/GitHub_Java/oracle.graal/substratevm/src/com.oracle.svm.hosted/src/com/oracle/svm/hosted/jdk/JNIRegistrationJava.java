@@ -37,7 +37,6 @@ import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.impl.InternalPlatform;
 
-import com.oracle.svm.core.ParsingReason;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.jdk.JNIRegistrationUtil;
@@ -60,7 +59,7 @@ class JNIRegistrationJava extends JNIRegistrationUtil implements GraalFeature {
     });
 
     @Override
-    public void registerGraphBuilderPlugins(Providers providers, Plugins plugins, ParsingReason reason) {
+    public void registerGraphBuilderPlugins(Providers providers, Plugins plugins, boolean analysis, boolean hosted) {
         JNIRegistrationSupport.singleton().registerNativeLibrary(providers, plugins, System.class, "loadLibrary");
     }
 
