@@ -291,6 +291,8 @@ public class CheckGraalIntrinsics extends GraalTest {
                             // Emits a slow and a fast path and some dispatching logic
                             "jdk/internal/misc/Unsafe.allocateUninitializedArray0(Ljava/lang/Class;I)Ljava/lang/Object;",
 
+                            // Control flow, deopts, and a cast
+                            "jdk/internal/util/Preconditions.checkIndex(IILjava/util/function/BiFunction;)I",
                             // HotSpot MacroAssembler-based intrinsic
                             "sun/nio/cs/ISO_8859_1$Encoder.implEncodeISOArray([CI[BII)I");
 
@@ -428,10 +430,6 @@ public class CheckGraalIntrinsics extends GraalTest {
 
         if (isJDK16OrHigher()) {
             add(toBeInvestigated,
-                            "java/lang/Math.copySign(DD)D",
-                            "java/lang/Math.copySign(FF)F",
-                            "java/lang/Math.signum(D)D",
-                            "java/lang/Math.signum(F)F",
                             "sun/security/provider/MD5.implCompress0([BI)V");
         }
 
