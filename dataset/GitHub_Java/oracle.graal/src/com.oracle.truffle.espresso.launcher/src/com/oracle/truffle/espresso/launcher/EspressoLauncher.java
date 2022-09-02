@@ -220,6 +220,10 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
         // @formatter:on
     }
 
+    private static void print(String string) {
+        System.out.println(string);
+    }
+
     /**
      * Gets the values of the attribute {@code name} from the manifest in {@code jarFile}.
      *
@@ -310,7 +314,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
 
     @Override
     protected void printHelp(OptionCategory maxCategory) {
-        getOutput().println(usage());
+        print(usage());
     }
 
     @Override
