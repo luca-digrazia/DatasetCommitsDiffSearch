@@ -51,7 +51,6 @@ import java.util.function.Predicate;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 
-import org.graalvm.polyglot.HostAccess.Export;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
@@ -205,19 +204,14 @@ import org.graalvm.polyglot.proxy.Proxy;
  * objects are referred to as <i>host objects</i>. Every Java value that is passed to a Graal
  * language is interpreted according to the specification described in {@link #asValue(Object)}.
  * Also see {@link Value#as(Class)} for further details.
- * <p>
- * By default only public classes, methods, fields that are annotated with
- * {@linkplain Export @Export} are accessible to the guest language. This policy can be customized
- * using {@link Builder#allowHostAccess(HostAccess)} when constructing the context.
  *
  * <p>
  * <b>Example</b> using a Java object from JavaScript:
  *
  * <pre>
  * public class JavaRecord {
- *     &#64;HostAccess.Export public int x;
+ *     public int x;
  *
- *     &#64;HostAccess.Export
  *     public String name() {
  *         return "foo";
  *     }
@@ -687,19 +681,13 @@ public final class Context implements AutoCloseable {
 
     private static final Context EMPTY = new Context(null);
 
-    static final Predicate<String> UNSET_HOST_LOOKUP = new Predicate<String>() {
-        public boolean test(String t) {
-            return false;
-        }
-    };
-
     static final Predicate<String> NO_HOST_CLASSES = new Predicate<String>() {
         public boolean test(String t) {
             return false;
         }
     };
 
-    static final Predicate<String> ALL_HOST_CLASSES = new Predicate<String>() {
+    private static final Predicate<String> ALL_HOST_CLASSES = new Predicate<String>() {
         public boolean test(String t) {
             return true;
         }
@@ -723,7 +711,7 @@ public final class Context implements AutoCloseable {
         private InputStream in;
         private Map<String, String> options;
         private Map<String, String[]> arguments;
-        private Predicate<String> hostClassFilter = UNSET_HOST_LOOKUP;
+        private Predicate<String> hostClassFilter;
         private Boolean allowNativeAccess;
         private Boolean allowCreateThread;
         private boolean allowAllAccess;
@@ -731,7 +719,7 @@ public final class Context implements AutoCloseable {
         private Boolean allowHostClassLoading;
         private Boolean allowExperimentalOptions;
         private Boolean allowHostAccess;
-        private HostAccess hostAccess;
+        private HostAccessPolicy hostAccess;
         private FileSystem customFileSystem;
         private MessageTransport messageTransport;
         private Object customLogHandler;
@@ -802,8 +790,7 @@ public final class Context implements AutoCloseable {
          * <code>true</code>, then host access is enabled if not allowed explicitly.
          *
          * @since 1.0
-         * @deprecated use {@link #allowHostAccess(HostAccess)} or
-         *             {@link #allowHostClassLookup(Predicate)} instead.
+         * @deprecated use {@link #allowHostAccess(HostAccess)} instead.
          */
         @Deprecated
         public Builder allowHostAccess(boolean enabled) {
@@ -812,21 +799,14 @@ public final class Context implements AutoCloseable {
         }
 
         /**
-         * Configures which public constructors, methods or fields of public classes are accessible
-         * by guest applications. By default if {@link #allowAllAccess(boolean)} is
-         * <code>false</code> the {@link HostAccess#EXPLICIT EXPLICIT} policy will be used,
-         * otherwise {@link HostAccess#ALL}.
+         * Configures host access. Use {@link HostAccessPolicy#EXPLICIT} or
+         * {@link HostAccessPolicy#PUBLIC}.
          *
-         * @see HostAccess#EXPLICIT EXPLICIT - to allow explicitely annotated constructors, methods
-         *      or fields.
-         * @see HostAccess#ALL ALL - to allow unrestricted access (use only for trusted guest
-         *      applications)
-         * @see HostAccess#NONE NONE - to not allow any access
-         * @see HostAccess#newBuilder() newBuilder() - to create a custom configuration.
-         *
-         * @since 1.0
+         * @param config configuration of host access
+         * @return {@code this} builder
+         * @since 1.0 RC14
          */
-        public Builder allowHostAccess(HostAccess config) {
+        public Builder allowHostAccess(HostAccessPolicy config) {
             this.hostAccess = config;
             return this;
         }
@@ -871,8 +851,8 @@ public final class Context implements AutoCloseable {
          * Grants full access to the following privileges by default:
          * <ul>
          * <li>The {@link #allowCreateThread(boolean) creation} and use of new threads.
-         * <li>The access to public {@link #allowHostAccess(org.graalvm.polyglot.HostAccess) host
-         * classes}.
+         * <li>The access to public {@link #allowHostAccess(org.graalvm.polyglot.HostAccessPolicy)
+         * host classes}.
          * <li>The loading of new {@link #allowHostClassLoading(boolean) host classes} by adding
          * entries to the class path.
          * <li>Exporting new members into the polyglot {@link Context#getPolyglotBindings()
@@ -894,86 +874,13 @@ public final class Context implements AutoCloseable {
          * classes via jar or class files. If {@link #allowAllAccess(boolean) all access} is set to
          * <code>true</code>, then the host class loading is enabled if it is not disallowed
          * explicitly. For host class loading to be useful, {@link #allowIO(boolean) IO} operations
-         * {@link #allowHostClassLookup(Predicate) host class lookup}, and the
-         * {@link #allowHostAccess(org.graalvm.polyglot.HostAccess) host access policy} needs to be
-         * configured as well.
+         * and {@link #allowHostAccess(org.graalvm.polyglot.HostAccessPolicy) host access} need to
+         * be allowed as well.
          *
-         * @see #allowHostAccess(HostAccess)
-         * @see #allowHostClassLookup(Predicate)
          * @since 1.0
          */
         public Builder allowHostClassLoading(boolean enabled) {
             this.allowHostClassLoading = enabled;
-            return this;
-        }
-
-        /**
-         * Sets a filter that specifies the Java host classes that can be looked up by the guest
-         * application. If set to <code>null</code> then no class lookup is allowed and relevant
-         * language builtins are not available (e.g. <code>Java.type</code> in JavaScript). If the
-         * <code>classFilter</code> parameter is set to a filter predicate, then language builtins
-         * are available and classes can be looked up if the filter predicate returns
-         * <code>true</code> for the fully qualified class name. If the filter returns
-         * <code>false</code>, then the class cannot be looked up and as a result throws a guest
-         * language error when accessed. By default and if {@link #allowAllAccess(boolean) all
-         * access} is <code>false</code>, host class lookup is disabled. By default and if
-         * {@link #allowAllAccess(boolean) all access} is <code>true</code>, then all classes may be
-         * looked up by the guest application.
-         * <p>
-         * In order to access class members looked up by the guest application a
-         * {@link #allowHostAccess(org.graalvm.polyglot.HostAccess) host access policy} needs to be
-         * set or {@link #allowAllAccess(boolean) all access} needs to be set to <code>true</code>.
-         * <p>
-         * <h3>Example usage with JavaScript:</h3>
-         *
-         * <pre>
-         * public class MyClass {
-         *     &#64;HostAccessPolicy.Export
-         *     public int accessibleMethod() {
-         *         return 42;
-         *     }
-         *
-         *     public static void main(String[] args) {
-         *         try (Context context = Context.newBuilder() //
-         *                         .allowHostClassLookup(c -> c.equals("myPackage.MyClass")) //
-         *                         .build()) {
-         *             int result = context.eval("js", "" +
-         *                             "var MyClass = Java.type('myPackage.MyClass');" +
-         *                             "new MyClass().accessibleMethod()").asInt();
-         *             assert result == 42;
-         *         }
-         *     }
-         * }
-         * </pre>
-         *
-         * <h4>In this example:</h4>
-         * <ul>
-         * <li>We create a new context with the {@link Builder#allowHostClassLookup(Predicate)
-         * permission} to lookup the class <code>myPackage.MyClass</code> in the guest language
-         * application.
-         * <li>We evaluate a JavaScript code snippet that accesses the Java class
-         * <code>myPackage.MyClass</code> using the <code>Java.type</code> builtin provided by the
-         * JavaScript language implementation. Other classes can only be looked up if the provided
-         * class filter provides <code>true</code> for their name.
-         * <li>We create a new instance the Java class <code>MyClass</code> by using the JavaScript
-         * <code>new</code> keyword.
-         * <li>We call the method <code>accessibleMethod</code> which returns <code>42</code>. The
-         * method is accessible to the guest language because because the enclosing class and the
-         * declared method have the public modifier set, as well as are annotated by the
-         * {@linkplain HostAccess.Export @Export} annotation. Which Java members of classes are
-         * accessible can be configured using the {@link #allowHostAccess(HostAccess) host access
-         * policy}.
-         * </ul>
-         *
-         * @param classFilter a predicate that returns <code>true</code> or <code>false</code> for a
-         *            java qualified class name.
-         * @see #allowHostClassLoading(boolean) allowHostClassLoading - to allow loading of classes.
-         * @see #allowHostAccess(HostAccess) allowHostAccess - to configure the access policy of
-         *      host values for guest languages.
-         * @since 1.0
-         */
-        public Builder allowHostClassLookup(Predicate<String> classFilter) {
-            this.hostClassFilter = classFilter;
             return this;
         }
 
@@ -994,15 +901,13 @@ public final class Context implements AutoCloseable {
          * Sets a class filter that allows to limit the classes that are allowed to be loaded by
          * guest languages. If the filter returns <code>true</code>, then the class is accessible,
          * otherwise it is not accessible and throws a guest language error when accessed. In order
-         * to have an effect, {@link #allowHostAccess(org.graalvm.polyglot.HostAccess)} or
+         * to have an effect, {@link #allowHostAccess(org.graalvm.polyglot.HostAccessPolicy)} or
          * {@link #allowAllAccess(boolean)} needs to be set to <code>true</code>.
          *
          * @param classFilter a predicate that returns <code>true</code> or <code>false</code> for a
          *            java qualified class name.
          * @since 1.0
-         * @deprecated use {@link #allowHostClassLookup(Predicate)} instead.
          */
-        @Deprecated
         public Builder hostClassFilter(Predicate<String> classFilter) {
             Objects.requireNonNull(classFilter);
             this.hostClassFilter = classFilter;
@@ -1205,34 +1110,33 @@ public final class Context implements AutoCloseable {
                 throw new IllegalArgumentException("The method allowHostAccess with boolean and with HostAccess are mutually exclusive.");
             }
 
-            Predicate<String> localHostLookupFilter = this.hostClassFilter;
-            HostAccess hostAccess = this.hostAccess;
+            Predicate<String> localHostClassFilter = this.hostClassFilter;
+            HostAccessPolicy hostAccess = this.hostAccess;
 
-            if (this.allowHostAccess != null && this.allowHostAccess) {
-                if (localHostLookupFilter == UNSET_HOST_LOOKUP) {
-                    // legacy behavior support
-                    localHostLookupFilter = ALL_HOST_CLASSES;
+            if (this.allowHostAccess != null) {
+                if (this.allowHostAccess) {
+                    if (localHostClassFilter == null) {
+                        // legacy behavior support
+                        localHostClassFilter = ALL_HOST_CLASSES;
+                    }
                 }
                 // legacy behavior support
-                hostAccess = HostAccess.ALL;
+                hostAccess = HostAccessPolicy.PUBLIC;
             }
             if (hostAccess == null) {
-                // Default to be changed.
-                // hostAccess = this.allowAllAccess ? HostAccess.ALL : HostAccess.EXPLICIT;
-                hostAccess = HostAccess.ALL;
+                // hostAccess = this.allowAllAccess ? HostAccess.PUBLIC : HostAccess.EXPLICIT;
+                hostAccess = HostAccessPolicy.PUBLIC;
             }
 
-            if (localHostLookupFilter == UNSET_HOST_LOOKUP) {
+            if (localHostClassFilter == null) {
                 if (allowAllAccess) {
-                    localHostLookupFilter = ALL_HOST_CLASSES;
+                    localHostClassFilter = ALL_HOST_CLASSES;
                 } else {
-                    localHostLookupFilter = null;
+                    localHostClassFilter = NO_HOST_CLASSES;
                 }
             }
-            boolean hostClassLookupEnabled = localHostLookupFilter != null;
-            if (localHostLookupFilter == null) {
-                localHostLookupFilter = NO_HOST_CLASSES;
-            }
+            // TODO change and implement usage of hostAccess instead of hostAccessEnabled.
+            boolean hostAccessEnabled = orAllAccess(allowHostAccess) || this.hostAccess != null;
 
             if (!io && customFileSystem != null) {
                 throw new IllegalStateException("Cannot install custom FileSystem when IO is disabled.");
@@ -1260,16 +1164,16 @@ public final class Context implements AutoCloseable {
                 engineBuilder.allowExperimentalOptions(experimentalOptions);
                 engineBuilder.setBoundEngine(true);
                 engine = engineBuilder.build();
-                return engine.impl.createContext(null, null, null, hostClassLookupEnabled, hostAccess, nativeAccess, createThread, io,
-                                hostClassLoading, experimentalOptions, localHostLookupFilter,
+                return engine.impl.createContext(null, null, null, hostAccessEnabled, nativeAccess, createThread, io,
+                                hostClassLoading, experimentalOptions, localHostClassFilter,
                                 Collections.emptyMap(), arguments == null ? Collections.emptyMap() : arguments, onlyLanguages,
                                 customFileSystem, customLogHandler);
             } else {
                 if (messageTransport != null) {
                     throw new IllegalStateException("Cannot use MessageTransport in a context that shares an Engine.");
                 }
-                return engine.impl.createContext(out, err, in, hostClassLookupEnabled, hostAccess, nativeAccess, createThread, io,
-                                hostClassLoading, experimentalOptions, localHostLookupFilter,
+                return engine.impl.createContext(out, err, in, hostAccessEnabled, hostAccess, nativeAccess, createThread, io,
+                                hostClassLoading, experimentalOptions, localHostClassFilter,
                                 options == null ? Collections.emptyMap() : options, arguments == null ? Collections.emptyMap() : arguments, onlyLanguages,
                                 customFileSystem, customLogHandler);
             }
@@ -1278,5 +1182,14 @@ public final class Context implements AutoCloseable {
         private boolean orAllAccess(Boolean optionalBoolean) {
             return optionalBoolean != null ? optionalBoolean : allowAllAccess;
         }
+        /** Associates new safety configuration with the builder.
+         *
+         * @param conf the config
+         * @return
+         */
+        public Builder safety(SafetyConf conf) {
+            return this;
+        }
+
     }
 }

@@ -86,7 +86,7 @@ public class ExposeToGuestTest {
 
     @Test
     public void exportingAllPublicIsEasy() {
-        Context context = Context.newBuilder().allowHostAccess(HostAccess.ALL).build();
+        Context context = Context.newBuilder().allowHostAccess(HostAccess.PUBLIC).build();
         Value readValue = context.eval("sl", "" + "function readValue(x) {\n" + "  return x.value;\n" + "}\n" + "function main() {\n" + "  return readValue;\n" + "}\n");
         Assert.assertEquals(42, readValue.execute(new PublicValue()).asInt());
         Assert.assertEquals(42, readValue.execute(new ExportedValue()).asInt());
@@ -123,7 +123,6 @@ public class ExposeToGuestTest {
 
     public static class Foo<T extends Number> {
         @HostAccess.Export
-        @SuppressWarnings("unused")
         public Object foo(T x) {
             return "basic foo";
         }
@@ -131,14 +130,12 @@ public class ExposeToGuestTest {
 
     static class Bar extends Foo<Number> {
         @Override
-        @SuppressWarnings("unused")
         public Object foo(Number x) {
             return "enhanced bar";
         }
     }
 
     static class PackagePrivateBar {
-        @SuppressWarnings("unused")
         public Object foo(Number x) {
             fail("Never called");
             return "hidden bar";
@@ -146,14 +143,12 @@ public class ExposeToGuestTest {
     }
 
     static class PrivateFoo<T extends Number> extends Foo<T> {
-        @SuppressWarnings("all")
         private Object foo(Integer y) {
             fail("Never called");
             return "hidden foo";
         }
     }
 
-    @SuppressWarnings("all")
     public static class PrivateChangedFoo<T extends Integer> extends PrivateFoo<T> {
         @HostAccess.Export
         @Override
@@ -197,8 +192,8 @@ public class ExposeToGuestTest {
         doAccessAllowedInPublicHostAccess(false);
     }
 
-    private static void doAccessAllowedInPublicHostAccess(boolean asList) throws Exception {
-        Context context = Context.newBuilder().allowHostAccess(HostAccess.ALL).build();
+    private void doAccessAllowedInPublicHostAccess(boolean asList) throws Exception {
+        Context context = Context.newBuilder().allowHostAccess(HostAccess.PUBLIC).build();
         Value readValue = context.eval("sl", "" + "function callFoo(x) {\n" + "  return x.foo(1)[0];\n" + "}\n" + "function main() {\n" + "  return callFoo;\n" + "}\n");
         boolean[] gotIn = {false};
         FooInterface<Number> foo = returnAsArrayOrList(gotIn, asList);
@@ -217,7 +212,7 @@ public class ExposeToGuestTest {
         doAccessForbiddenInExplicit(false);
     }
 
-    private static void doAccessForbiddenInExplicit(boolean asList) throws Exception {
+    private void doAccessForbiddenInExplicit(boolean asList) throws Exception {
         Context context = Context.newBuilder().allowHostAccess(HostAccess.EXPLICIT).build();
         Value readValue = context.eval("sl", "" + "function callFoo(x) {\n" + "  return x.foo(1)[0];\n" + "}\n" + "function main() {\n" + "  return callFoo;\n" + "}\n");
         boolean[] gotIn = {false};
@@ -243,7 +238,7 @@ public class ExposeToGuestTest {
         doAccessForbiddenInManual(false);
     }
 
-    private static void doAccessForbiddenInManual(boolean asList) throws Exception {
+    private void doAccessForbiddenInManual(boolean asList) throws Exception {
         HostAccess config = HostAccess.newBuilder().allowAccess(FooInterface.class.getMethod("foo", Number.class)).build();
         Context context = Context.newBuilder().allowHostAccess(config).build();
         Value readValue = context.eval("sl", "" + "function callFoo(x) {\n" + "  return x.foo(1)[0];\n" + "}\n" + "function main() {\n" + "  return callFoo;\n" + "}\n");
@@ -260,7 +255,7 @@ public class ExposeToGuestTest {
         fail("The read shouldn't succeed: " + arrayRead);
     }
 
-    private static FooInterface<Number> returnAsArrayOrList(boolean[] gotIn, boolean asList) {
+    private FooInterface<Number> returnAsArrayOrList(boolean[] gotIn, boolean asList) {
         FooInterface<Number> foo = (n) -> {
             gotIn[0] = true;
             if (asList) {
