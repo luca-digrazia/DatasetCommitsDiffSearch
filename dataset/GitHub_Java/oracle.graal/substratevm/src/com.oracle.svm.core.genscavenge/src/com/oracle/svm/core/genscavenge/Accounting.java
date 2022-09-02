@@ -107,7 +107,7 @@ class Accounting {
         trace.string("]").newline();
     }
 
-    void afterCollection(boolean completeCollection, Timer collectionTimer) {
+    void afterCollection(boolean completeCollection, GCImpl.Timer collectionTimer) {
         if (completeCollection) {
             afterCompleteCollection(collectionTimer);
         } else {
@@ -115,7 +115,7 @@ class Accounting {
         }
     }
 
-    private void afterIncrementalCollection(Timer collectionTimer) {
+    private void afterIncrementalCollection(GCImpl.Timer collectionTimer) {
         final Log trace = Log.noopLog().string("[GCImpl.Accounting.afterIncrementalCollection:");
         /*
          * Aggregating collection information is needed because any given collection policy may not
@@ -135,7 +135,7 @@ class Accounting {
         trace.string("]").newline();
     }
 
-    private void afterCompleteCollection(Timer collectionTimer) {
+    private void afterCompleteCollection(GCImpl.Timer collectionTimer) {
         final Log trace = Log.noopLog().string("[GCImpl.Accounting.afterCompleteCollection:");
         completeCollectionCount += 1;
         afterCollectionCommon();

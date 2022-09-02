@@ -114,7 +114,6 @@ public class GCImpl implements GC {
     private final ThreadLocalMTWalker threadLocalsWalker = createThreadLocalsWalker();
     private final RuntimeCodeCacheWalker runtimeCodeCacheWalker = new RuntimeCodeCacheWalker(greyToBlackObjRefVisitor);
     private final RuntimeCodeCacheCleaner runtimeCodeCacheCleaner = new RuntimeCodeCacheCleaner();
-    private final Timers timers = new Timers();
 
     private CollectionPolicy policy;
     private boolean completeCollection = false;
@@ -164,10 +163,10 @@ public class GCImpl implements GC {
         assert VMOperation.isGCInProgress() : "Collection should be a VMOperation.";
         assert getCollectionEpoch().equal(requestingEpoch);
 
-        timers.mutator.close();
+        mutatorTimer.close();
         startCollectionOrExit();
 
-        timers.resetAllExceptMutator();
+        resetTimers();
         incrementCollectionEpoch();
 
         /* Flush chunks from thread-local lists to global lists. */
@@ -179,7 +178,7 @@ public class GCImpl implements GC {
         printGCAfter(cause.getName());
 
         finishCollection();
-        timers.mutator.open();
+        mutatorTimer.open();
 
         trace.string("]").newline();
         return outOfMemory;
@@ -195,7 +194,7 @@ public class GCImpl implements GC {
         trace.string("  Begin collection: ");
         try (NoAllocationVerifier nav = noAllocationVerifier.open()) {
             trace.string("  Verify before: ");
-            try (Timer vbt = timers.verifyBefore.open()) {
+            try (Timer vbt = verifyBeforeTimer.open()) {
                 HeapImpl.getHeapImpl().verifyBeforeGC(cause, getCollectionEpoch());
             }
             outOfMemory = doCollectImpl(getPolicy());
@@ -210,7 +209,7 @@ public class GCImpl implements GC {
             }
         }
         trace.string("  Verify after: ");
-        try (Timer vat = timers.verifyAfter.open()) {
+        try (Timer vat = verifyAfterTimer.open()) {
             HeapImpl.getHeapImpl().verifyAfterGC(cause, getCollectionEpoch());
         }
 
@@ -226,7 +225,7 @@ public class GCImpl implements GC {
 
         getAccounting().beforeCollection();
 
-        try (Timer ct = timers.collection.open()) {
+        try (Timer ct = collectionTimer.open()) {
             if (appliedPolicy.collectIncrementally()) {
                 scavenge(true);
             }
@@ -237,7 +236,7 @@ public class GCImpl implements GC {
         }
         CommittedMemoryProvider.get().afterGarbageCollection(completeCollection);
 
-        getAccounting().afterCollection(completeCollection, timers.collection);
+        getAccounting().afterCollection(completeCollection, collectionTimer);
         UnsignedWord maxBytes = HeapPolicy.getMaximumHeapSize();
         UnsignedWord usedBytes = getChunkUsedBytesAfterCollection();
         boolean outOfMemory = usedBytes.aboveThan(maxBytes);
@@ -288,7 +287,7 @@ public class GCImpl implements GC {
                 final UnsignedWord sizeAfter = heap.getUsedChunkBytes();
                 printGCLog.string("[");
                 if (HeapOptions.PrintGCTimeStamps.getValue()) {
-                    final long finishNanos = timers.collection.getFinish();
+                    final long finishNanos = collectionTimer.getFinish();
                     printGCLog.unsigned(TimeUtils.roundNanosToMillis(Timer.getTimeSinceFirstAllocation(finishNanos))).string(" msec: ");
                 }
                 printGCLog.string(completeCollection ? "Full GC" : "Incremental GC");
@@ -296,12 +295,12 @@ public class GCImpl implements GC {
                 printGCLog.unsigned(sizeBefore.unsignedDivide(1024));
                 printGCLog.string("K->");
                 printGCLog.unsigned(sizeAfter.unsignedDivide(1024)).string("K, ");
-                printGCLog.rational(timers.collection.getCollectedNanos(), TimeUtils.nanosPerSecond, 7).string(" secs");
+                printGCLog.rational(collectionTimer.getCollectedNanos(), TimeUtils.nanosPerSecond, 7).string(" secs");
                 printGCLog.string("]").newline();
             }
             if (SubstrateOptions.VerboseGC.getValue()) {
                 verboseGCLog.string(" [");
-                final long finishNanos = timers.collection.getFinish();
+                final long finishNanos = collectionTimer.getFinish();
                 if (HeapOptions.PrintGCTimeStamps.getValue()) {
                     verboseGCLog.unsigned(TimeUtils.roundNanosToMillis(Timer.getTimeSinceFirstAllocation(finishNanos))).string(" msec: ");
                 } else {
@@ -316,9 +315,9 @@ public class GCImpl implements GC {
                 }
                 if (!HeapOptions.PrintGCTimes.getValue()) {
                     verboseGCLog.newline();
-                    verboseGCLog.string("  collection time: ").unsigned(timers.collection.getCollectedNanos()).string(" nanoSeconds");
+                    verboseGCLog.string("  collection time: ").unsigned(collectionTimer.getCollectedNanos()).string(" nanoSeconds");
                 } else {
-                    timers.logAfterCollection(verboseGCLog);
+                    logGCTimers(verboseGCLog);
                 }
                 verboseGCLog.string("]");
                 verboseGCLog.string("]").newline();
@@ -434,7 +433,7 @@ public class GCImpl implements GC {
     private void scavenge(boolean fromDirtyRoots) {
         try (GreyToBlackObjRefVisitor.Counters gtborv = greyToBlackObjRefVisitor.openCounters()) {
             final Log trace = Log.noopLog().string("[GCImpl.scavenge:").string("  fromDirtyRoots: ").bool(fromDirtyRoots).newline();
-            try (Timer rst = timers.rootScan.open()) {
+            try (Timer rst = rootScanTimer.open()) {
                 trace.string("  Cheney scan: ");
                 if (fromDirtyRoots) {
                     cheneyScanFromDirtyRoots();
@@ -443,12 +442,12 @@ public class GCImpl implements GC {
                 }
             }
             trace.string("  Discovered references: ");
-            try (Timer drt = timers.referenceObjects.open()) {
+            try (Timer drt = referenceObjectsTimer.open()) {
                 Reference<?> newlyPendingList = ReferenceObjectProcessing.processRememberedReferences();
                 HeapImpl.getHeapImpl().addToReferencePendingList(newlyPendingList);
             }
             trace.string("  Release spaces: ");
-            try (Timer rst = timers.releaseSpaces.open()) {
+            try (Timer rst = releaseSpacesTimer.open()) {
                 releaseSpaces();
             }
             trace.string("  Swap spaces: ");
@@ -464,14 +463,14 @@ public class GCImpl implements GC {
      */
     @SuppressWarnings("try")
     private void walkRuntimeCodeCache() {
-        try (Timer wrm = timers.walkRuntimeCodeCache.open()) {
+        try (Timer wrm = walkRuntimeCodeCacheTimer.open()) {
             RuntimeCodeInfoMemory.singleton().walkRuntimeMethods(runtimeCodeCacheWalker);
         }
     }
 
     @SuppressWarnings("try")
     private void cleanRuntimeCodeCache() {
-        try (Timer wrm = timers.cleanRuntimeCodeCache.open()) {
+        try (Timer wrm = cleanRuntimeCodeCacheTimer.open()) {
             RuntimeCodeInfoMemory.singleton().walkRuntimeMethods(runtimeCodeCacheCleaner);
         }
     }
@@ -480,7 +479,7 @@ public class GCImpl implements GC {
     private void cheneyScanFromRoots() {
         final Log trace = Log.noopLog().string("[GCImpl.cheneyScanFromRoots:").newline();
 
-        try (Timer csfrt = timers.cheneyScanFromRoots.open()) {
+        try (Timer csfrt = cheneyScanFromRootsTimer.open()) {
             /* Take a snapshot of the heap so that I can visit all the promoted Objects. */
             /*
              * Debugging tip: I could move the taking of the snapshot and the scanning of grey
@@ -534,7 +533,7 @@ public class GCImpl implements GC {
     private void cheneyScanFromDirtyRoots() {
         final Log trace = Log.noopLog().string("[GCImpl.cheneyScanFromDirtyRoots:").newline();
 
-        try (Timer csfdrt = timers.cheneyScanFromDirtyRoots.open()) {
+        try (Timer csfdrt = cheneyScanFromDirtyRootsTimer.open()) {
             /*
              * Move all the chunks in fromSpace to toSpace. That does not make those chunks grey, so
              * I have to use the dirty cards marks to blacken them, but that's what card marks are
@@ -604,7 +603,7 @@ public class GCImpl implements GC {
     @SuppressWarnings("try")
     private void promoteIndividualPinnedObjects() {
         final Log trace = Log.noopLog().string("[GCImpl.promoteIndividualPinnedObjects:").newline();
-        try (Timer ppot = timers.promotePinnedObjects.open()) {
+        try (Timer ppot = promotePinnedObjectsTimer.open()) {
             PinnedObjectImpl rest = PinnedObjectImpl.claimPinnedObjectList();
             while (rest != null) {
                 final PinnedObjectImpl first = rest;
@@ -630,7 +629,7 @@ public class GCImpl implements GC {
     @SuppressWarnings("try")
     private void blackenStackRoots() {
         final Log trace = Log.noopLog().string("[GCImpl.blackenStackRoots:").newline();
-        try (Timer bsr = timers.blackenStackRoots.open()) {
+        try (Timer bsr = blackenStackRootsTimer.open()) {
             Pointer sp = readCallerStackPointer();
             trace.string("[blackenStackRoots:").string("  sp: ").hex(sp);
             CodePointer ip = readReturnAddress();
@@ -728,7 +727,7 @@ public class GCImpl implements GC {
     private void walkThreadLocals() {
         final Log trace = Log.noopLog().string("[walkRegisteredObjectReferences").string(":").newline();
         if (threadLocalsWalker != null) {
-            try (Timer wrm = timers.walkThreadLocals.open()) {
+            try (Timer wrm = walkThreadLocalsTimer.open()) {
                 trace.string("[ThreadLocalsWalker:").newline();
                 threadLocalsWalker.walk(greyToBlackObjRefVisitor);
                 trace.string("]").newline();
@@ -750,7 +749,7 @@ public class GCImpl implements GC {
         @SuppressWarnings("try")
         public <T> boolean visitNativeImageHeapRegion(T region, MemoryWalker.NativeImageHeapRegionAccess<T> access) {
             if (access.containsReferences(region) && access.isWritable(region)) {
-                try (Timer timer = timers.blackenImageHeapRoots.open()) {
+                try (Timer timer = blackenImageHeapRootsTimer.open()) {
                     ImageHeapInfo imageHeapInfo = HeapImpl.getImageHeapInfo();
                     Pointer cur = Word.objectToUntrackedPointer(imageHeapInfo.firstWritableReferenceObject);
                     final Pointer last = Word.objectToUntrackedPointer(imageHeapInfo.lastWritableReferenceObject);
@@ -780,7 +779,7 @@ public class GCImpl implements GC {
     @SuppressWarnings("try")
     private void blackenDirtyCardRoots() {
         final Log trace = Log.noopLog().string("[GCImpl.blackenDirtyCardRoots:").newline();
-        try (Timer bdcrt = timers.blackenDirtyCardRoots.open()) {
+        try (Timer bdcrt = blackenDirtyCardRootsTimer.open()) {
             /*
              * Walk To-Space looking for dirty cards, and within those for old-to-young pointers.
              * Promote any referenced young objects.
@@ -809,7 +808,7 @@ public class GCImpl implements GC {
         final Log trace = Log.noopLog().string("[GCImpl.scanGreyObjects").newline();
         final HeapImpl heap = HeapImpl.getHeapImpl();
         final OldGeneration oldGen = heap.getOldGeneration();
-        try (Timer sgot = timers.scanGreyObjects.open()) {
+        try (Timer sgot = scanGreyObjectsTimer.open()) {
             if (isIncremental) {
                 scanGreyObjectsLoop();
             } else {
@@ -926,7 +925,7 @@ public class GCImpl implements GC {
             ReferenceHandler.maybeProcessCurrentlyPending();
         }
         if (SubstrateOptions.VerboseGC.getValue() && HeapOptions.PrintGCTimes.getValue()) {
-            Timers.logOneTimer(Log.log(), "[GC epilogue reference processing: ", refsTimer);
+            logOneTimer(Log.log(), "[GC epilogue reference processing: ", refsTimer);
             Log.log().string("]");
         }
     }
@@ -962,6 +961,159 @@ public class GCImpl implements GC {
 
     GreyToBlackObjectVisitor getGreyToBlackObjectVisitor() {
         return greyToBlackObjectVisitor;
+    }
+
+    /*
+     * Timers.
+     */
+    private final Timer blackenImageHeapRootsTimer = new Timer("blackenImageHeapRootsTimer");
+    private final Timer blackenDirtyCardRootsTimer = new Timer("blackenDirtyCardRoots");
+    private final Timer blackenStackRootsTimer = new Timer("blackenStackRoots");
+    private final Timer cheneyScanFromRootsTimer = new Timer("cheneyScanFromRoots");
+    private final Timer cheneyScanFromDirtyRootsTimer = new Timer("cheneyScanFromDirtyRoots");
+    private final Timer collectionTimer = new Timer("collection");
+    private final Timer referenceObjectsTimer = new Timer("referenceObjects");
+    private final Timer promotePinnedObjectsTimer = new Timer("promotePinnedObjects");
+    private final Timer rootScanTimer = new Timer("rootScan");
+    private final Timer scanGreyObjectsTimer = new Timer("scanGreyObject");
+    private final Timer releaseSpacesTimer = new Timer("releaseSpaces");
+    private final Timer verifyAfterTimer = new Timer("verifyAfter");
+    private final Timer verifyBeforeTimer = new Timer("verifyBefore");
+    private final Timer walkThreadLocalsTimer = new Timer("walkThreadLocals");
+    private final Timer walkRuntimeCodeCacheTimer = new Timer("walkRuntimeCodeCacheTimer");
+    private final Timer cleanRuntimeCodeCacheTimer = new Timer("cleanRuntimeCodeCacheTimer");
+    private final Timer watchersBeforeTimer = new Timer("watchersBefore");
+    private final Timer watchersAfterTimer = new Timer("watchersAfter");
+    private final Timer mutatorTimer = new Timer("Mutator");
+
+    private void resetTimers() {
+        final Log trace = Log.noopLog();
+        trace.string("[GCImpl.resetTimers:");
+        watchersBeforeTimer.reset();
+        verifyBeforeTimer.reset();
+        collectionTimer.reset();
+        rootScanTimer.reset();
+        cheneyScanFromRootsTimer.reset();
+        cheneyScanFromDirtyRootsTimer.reset();
+        promotePinnedObjectsTimer.reset();
+        blackenStackRootsTimer.reset();
+        walkThreadLocalsTimer.reset();
+        walkRuntimeCodeCacheTimer.reset();
+        cleanRuntimeCodeCacheTimer.reset();
+        blackenImageHeapRootsTimer.reset();
+        blackenDirtyCardRootsTimer.reset();
+        scanGreyObjectsTimer.reset();
+        referenceObjectsTimer.reset();
+        releaseSpacesTimer.reset();
+        verifyAfterTimer.reset();
+        watchersAfterTimer.reset();
+        /* The mutator timer is *not* reset here. */
+        trace.string("]").newline();
+    }
+
+    private void logGCTimers(final Log log) {
+        if (log.isEnabled()) {
+            log.newline();
+            log.string("  [GC nanoseconds:");
+            logOneTimer(log, "    ", watchersBeforeTimer);
+            logOneTimer(log, "    ", verifyBeforeTimer);
+            logOneTimer(log, "    ", collectionTimer);
+            logOneTimer(log, "      ", rootScanTimer);
+            logOneTimer(log, "        ", cheneyScanFromRootsTimer);
+            logOneTimer(log, "        ", cheneyScanFromDirtyRootsTimer);
+            logOneTimer(log, "          ", promotePinnedObjectsTimer);
+            logOneTimer(log, "          ", blackenStackRootsTimer);
+            logOneTimer(log, "          ", walkThreadLocalsTimer);
+            logOneTimer(log, "          ", walkRuntimeCodeCacheTimer);
+            logOneTimer(log, "          ", cleanRuntimeCodeCacheTimer);
+            logOneTimer(log, "          ", blackenImageHeapRootsTimer);
+            logOneTimer(log, "          ", blackenDirtyCardRootsTimer);
+            logOneTimer(log, "          ", scanGreyObjectsTimer);
+            logOneTimer(log, "      ", referenceObjectsTimer);
+            logOneTimer(log, "      ", releaseSpacesTimer);
+            logOneTimer(log, "    ", verifyAfterTimer);
+            logOneTimer(log, "    ", watchersAfterTimer);
+            logGCLoad(log, "    ", "GCLoad", collectionTimer, mutatorTimer);
+            log.string("]");
+        }
+    }
+
+    private static void logOneTimer(final Log log, final String prefix, final Timer timer) {
+        if (timer.getCollectedNanos() > 0) {
+            log.newline().string(prefix).string(timer.getName()).string(": ").signed(timer.getCollectedNanos());
+        }
+    }
+
+    /**
+     * Log the "GC load" for this collection as the collection time divided by the sum of the
+     * previous mutator interval plus the collection time. This method uses wall-time, and so does
+     * not take in to account that the collector is single-threaded, while the mutator might be
+     * multi-threaded.
+     */
+    private static void logGCLoad(Log log, String prefix, String label, Timer cTimer, Timer mTimer) {
+        final long collectionNanos = cTimer.getLastIntervalNanos();
+        final long mutatorNanos = mTimer.getLastIntervalNanos();
+        final long intervalNanos = mutatorNanos + collectionNanos;
+        final long intervalGCPercent = (((100 * collectionNanos) + (intervalNanos / 2)) / intervalNanos);
+        log.newline().string(prefix).string(label).string(": ").signed(intervalGCPercent).string("%");
+    }
+
+    static class Timer implements AutoCloseable {
+        private final String name;
+        private long openNanos;
+        private long closeNanos;
+        private long collectedNanos;
+
+        public Timer(final String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public Timer open() {
+            openNanos = System.nanoTime();
+            closeNanos = 0L;
+            return this;
+        }
+
+        @Override
+        public void close() {
+            /* If a timer was not opened, pretend it was opened at the start of the VM. */
+            if (openNanos == 0L) {
+                openNanos = HeapChunkProvider.getFirstAllocationTime();
+            }
+            closeNanos = System.nanoTime();
+            collectedNanos += closeNanos - openNanos;
+        }
+
+        public void reset() {
+            openNanos = 0L;
+            closeNanos = 0L;
+            collectedNanos = 0L;
+        }
+
+        public long getFinish() {
+            assert closeNanos > 0L : "Should have closed timer";
+            return closeNanos;
+        }
+
+        /** Get all the nanoseconds collected between open/close pairs since the last reset. */
+        long getCollectedNanos() {
+            return collectedNanos;
+        }
+
+        /** Get the nanoseconds collected by the most recent open/close pair. */
+        long getLastIntervalNanos() {
+            assert openNanos > 0L : "Should have opened timer";
+            assert closeNanos > 0L : "Should have closed timer";
+            return closeNanos - openNanos;
+        }
+
+        static long getTimeSinceFirstAllocation(final long nanos) {
+            return nanos - HeapChunkProvider.getFirstAllocationTime();
+        }
     }
 
     RememberedSetConstructor getRememberedSetConstructor() {
@@ -1114,7 +1266,7 @@ public class GCImpl implements GC {
         log.string(prefix).string("CompleteGCNanos: ").signed(completeNanos).newline();
 
         final long gcNanos = incrementalNanos + completeNanos;
-        final long mutatorNanos = timers.mutator.getCollectedNanos();
+        final long mutatorNanos = mutatorTimer.getCollectedNanos();
         final long totalNanos = gcNanos + mutatorNanos;
         final long roundedGCLoad = (0 < totalNanos ? TimeUtils.roundedDivide(100 * gcNanos, totalNanos) : 0);
         log.string(prefix).string("GCNanos: ").signed(gcNanos).newline();

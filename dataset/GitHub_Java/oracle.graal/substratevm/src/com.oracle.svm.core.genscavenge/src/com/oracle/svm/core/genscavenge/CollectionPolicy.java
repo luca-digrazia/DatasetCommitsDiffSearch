@@ -36,7 +36,8 @@ import com.oracle.svm.core.option.RuntimeOptionKey;
 import com.oracle.svm.core.util.TimeUtils;
 
 /** A collection policy decides when to collect incrementally or completely. */
-abstract class CollectionPolicy {
+public abstract class CollectionPolicy {
+
     public static class Options {
         @Option(help = "The initial garbage collection policy, as a fully-qualified class name (might require quotes or escaping).")//
         public static final HostedOptionKey<String> InitialCollectionPolicy = new HostedOptionKey<>(ByTime.class.getName());
