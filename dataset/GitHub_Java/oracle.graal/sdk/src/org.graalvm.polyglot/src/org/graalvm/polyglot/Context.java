@@ -1117,10 +1117,10 @@ public final class Context implements AutoCloseable {
                     }
                 }
                 // legacy behavior support
-                hostAccess = HostAccess.PUBLIC;
+                hostAccess = HostAccess.ALL;
             }
             if (hostAccess == null) {
-                hostAccess = this.allowAllAccess ? HostAccess.PUBLIC : HostAccess.EXPLICIT;
+                hostAccess = this.allowAllAccess ? HostAccess.ALL : HostAccess.EXPLICIT;
             }
 
             if (localHostClassFilter == null) {
