@@ -68,7 +68,7 @@ public abstract class LLVMDLOpen extends LLVMIntrinsic {
     }
 
     @ExportLibrary(LLVMAsForeignLibrary.class)
-    protected static final class LLVMDLHandler {
+    protected final class LLVMDLHandler {
         final Object library;
 
         private LLVMDLHandler(Object library) {
@@ -97,9 +97,13 @@ public abstract class LLVMDLOpen extends LLVMIntrinsic {
                     @Cached() LLVMReadStringNode readStr,
                     @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
         // Default settings for RTLD flags.
+        RTLDFlags rtld_flag_NowOrLazy = RTLDFlags.RTLD_NOW;
         RTLDFlags rtld_flag_GlobalOrLocal = RTLDFlags.RTLD_LOCAL;
         // Check for flag settings for each platform.
         PlatformCapability<?> sysContextExt = LLVMLanguage.getLanguage().getCapability(PlatformCapability.class);
+        if (sysContextExt.isLazyDLOpenFlagSet(flag)) {
+            rtld_flag_NowOrLazy = RTLDFlags.RTLD_LAZY;
+        }
         if (sysContextExt.isGlobalDLOpenFlagSet(flag)) {
             rtld_flag_GlobalOrLocal = RTLDFlags.RTLD_GLOBAL;
         }
@@ -109,7 +113,10 @@ public abstract class LLVMDLOpen extends LLVMIntrinsic {
             TruffleFile truffleFile = ctx.getEnv().getInternalTruffleFile(path.toUri());
             Source source = Source.newBuilder("llvm", truffleFile).build();
             CallTarget callTarget = ctx.getEnv().parsePublic(source, String.valueOf(flag));
-            Object sulongLibrary = callTarget.call(rtld_flag_GlobalOrLocal);
+            Object sulongLibrary = callTarget.call(rtld_flag_GlobalOrLocal, rtld_flag_NowOrLazy);
+
+            // pack the return library. dllibraryhandle
+
             return LLVMManagedPointer.create(new LLVMDLHandler(sulongLibrary));
         } catch (IOException e) {
             throw new IllegalStateException(e);

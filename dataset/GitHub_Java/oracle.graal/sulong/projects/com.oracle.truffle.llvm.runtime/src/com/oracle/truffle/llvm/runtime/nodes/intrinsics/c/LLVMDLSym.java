@@ -29,16 +29,13 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.c;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen.LLVMDLHandler;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMReadStringNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
@@ -50,24 +47,22 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMDLSym extends LLVMIntrinsic {
 
-    @Specialization(guards = "isLLVMLibrary(libraryHandle)", limit = "2")
-    protected Object doOp(LLVMManagedPointer libraryHandle,
-                    LLVMPointer symbol,
+    @Specialization(guards = "isLLVMLibrary(pointer)", limit = "1")
+    protected Object doOp(LLVMManagedPointer pointer,
+                    LLVMPointer flag,
                     @Cached() LLVMReadStringNode readStr,
-                    @CachedLibrary("getLibrary(libraryHandle)") InteropLibrary interop,
-                    @Cached WrappedFunctionNode wrapper) {
+                    @CachedLibrary("getLibrary(pointer)") InteropLibrary interop) {
         try {
-            String symbolName = readStr.executeWithTarget(symbol);
-            Object function = interop.readMember(getLibrary(libraryHandle), symbolName);
-            return wrapper.execute(function);
+            String flagName = readStr.executeWithTarget(flag);
+            return LLVMManagedPointer.create(interop.readMember(getLibrary(pointer), flagName));
         } catch (InteropException e) {
             return LLVMNativePointer.createNull();
         }
     }
 
-    @Specialization(guards = "!(isLLVMLibrary(libraryHandle))")
-    protected Object doOp(@SuppressWarnings("unused") LLVMManagedPointer libraryHandle,
-                    @SuppressWarnings("unused") LLVMPointer symbol,
+    @Specialization(guards = "!(isLLVMLibrary(pointer))")
+    protected Object doOp(@SuppressWarnings("unused") LLVMManagedPointer pointer,
+                    @SuppressWarnings("unused") LLVMPointer flag,
                     @SuppressWarnings("unused") @Cached() LLVMReadStringNode readStr) {
         return LLVMNativePointer.createNull();
     }
@@ -78,31 +73,6 @@ public abstract class LLVMDLSym extends LLVMIntrinsic {
 
     protected boolean isLLVMLibrary(LLVMManagedPointer library) {
         return library.getObject() instanceof LLVMDLHandler;
-    }
-
-    abstract static class WrappedFunctionNode extends LLVMNode {
-
-        abstract LLVMPointer execute(Object function);
-
-        @Specialization
-        protected LLVMManagedPointer doFunctionDescriptor(LLVMFunctionDescriptor function){
-            return LLVMManagedPointer.create(function);
-        }
-
-        @Specialization(guards = {"!isFunctionDescriptor(symbol)", "interopLibrary.isPointer(symbol)"}, limit = "1")
-        protected LLVMNativePointer doNFISymbol(Object symbol,
-                                                @CachedLibrary("symbol") InteropLibrary interopLibrary){
-            try {
-                return LLVMNativePointer.create(interopLibrary.asPointer(symbol));
-            } catch (InteropException e) {
-                throw CompilerDirectives.shouldNotReachHere(e);
-            }
-        }
-
-        protected static boolean isFunctionDescriptor(Object function){
-            return function instanceof LLVMFunctionDescriptor;
-        }
-
     }
 
 }
