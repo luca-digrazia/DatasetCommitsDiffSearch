@@ -349,8 +349,7 @@ final class ParserDriver {
         NodeFactory nodeFactory = context.getLanguage().getActiveConfiguration().createNodeFactory(language, targetDataLayout);
         LLVMScope fileScope = new LLVMScope();
         int bitcodeID = nextFreeBitcodeID.getAndIncrement();
-        LLVMParserRuntime runtime = new LLVMParserRuntime(fileScope, nodeFactory, bitcodeID, file, source.getName(), getSourceFilesWithChecksums(context.getEnv(), module),
-                        binaryParserResult.getLocator());
+        LLVMParserRuntime runtime = new LLVMParserRuntime(fileScope, nodeFactory, bitcodeID, file, source.getName(), getSourceFilesWithChecksums(context.getEnv(), module));
         LLVMParser parser = new LLVMParser(source, runtime);
         LLVMParserResult result = parser.parse(module, targetDataLayout);
         createDebugInfo(module, new LLVMSymbolReadResolver(runtime, new FrameDescriptor(), GetStackSpaceFactory.createAllocaFactory(), targetDataLayout, false));
@@ -462,7 +461,7 @@ final class ParserDriver {
             // don't add the library itself as one of it's own dependency.
             if (!libraryName.equals(lib)) {
                 // only create a source if the library has not already been parsed.
-                TruffleFile file = createTruffleFile(lib, null, binaryParserResult.getLocator(), libraryName);
+                TruffleFile file = createTruffleFile(lib, null, binaryParserResult.getLocator(), "<dependency library>");
                 CallTarget calls = language.getCachedLibrary(file.getPath());
                 if (calls != null && !dependencies.contains(calls)) {
                     dependencies.add(calls);

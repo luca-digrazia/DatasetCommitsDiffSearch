@@ -40,7 +40,6 @@ public abstract class LLVMDLClose extends LLVMIntrinsic {
 
     @Specialization
     protected int doOp(@SuppressWarnings("unused") LLVMPointer library) {
-        // Opened library can only be closed once the context contain the library has been closed.
         return 0;
     }
 
