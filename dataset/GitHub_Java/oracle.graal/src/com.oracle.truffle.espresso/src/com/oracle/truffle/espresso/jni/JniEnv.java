@@ -180,7 +180,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                                     : (e instanceof StackOverflowError)
                                                     ? getContext().getStackOverflow()
                                                     : getContext().getOutOfMemory();
-                    setPendingException(wrappedError.getExceptionObject());
+                    getThreadLocalPendingException().set(wrappedError.getExceptionObject());
                     return defaultValue(factory.returnType());
                 }
             }
@@ -430,12 +430,10 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         return handles;
     }
 
-    @TruffleBoundary
     private ByteBuffer allocateDirect(int capacity, JavaKind kind) {
         return allocateDirect(Math.multiplyExact(capacity, kind.getByteCount()));
     }
 
-    @TruffleBoundary
     private ByteBuffer allocateDirect(int capacity) {
         ByteBuffer bb = ByteBuffer.allocateDirect(capacity).order(ByteOrder.nativeOrder());
         long address = byteBufferAddress(bb);
@@ -1585,7 +1583,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      * @return JNI_TRUE when there is a pending exception; otherwise, returns JNI_FALSE.
      */
     @JniImpl
-    @TruffleBoundary
     public boolean ExceptionCheck() {
         StaticObject ex = threadLocalPendingException.get();
         assert !StaticObject.isEspressoNull(ex);
@@ -1665,14 +1662,14 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      */
     @JniImpl
     public void ExceptionDescribe() {
-        StaticObject ex = getPendingException();
+        StaticObject ex = getThreadLocalPendingException().get();
         if (ex != null) {
             assert InterpreterToVM.instanceOf(ex, getMeta().java_lang_Throwable);
             // Dynamic lookup.
             Method printStackTrace = ex.getKlass().lookupMethod(Name.printStackTrace, Signature._void);
             printStackTrace.invokeDirect(ex);
             // Restore exception cleared by invokeDirect.
-            setPendingException(ex);
+            getThreadLocalPendingException().set(ex);
         }
     }
 
@@ -1704,7 +1701,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             InterpreterToVM.monitorExit(object);
         } catch (EspressoException e) {
             assert InterpreterToVM.instanceOf(e.getExceptionObject(), getMeta().java_lang_IllegalMonitorStateException);
-            setPendingException(e.getExceptionObject());
+            getThreadLocalPendingException().set(e.getExceptionObject());
             return JNI_ERR;
         }
         return JNI_OK;
@@ -2041,7 +2038,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
         Meta meta = getMeta();
         if (name == null || signature == null) {
-            setPendingException(Meta.initException(meta.java_lang_NoSuchMethodError));
+            getThreadLocalPendingException().set(Meta.initException(meta.java_lang_NoSuchMethodError));
             return JNI_ERR;
         }
 
@@ -2050,7 +2047,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             m.unregisterNative();
             getSubstitutions().removeRuntimeSubstitution(m);
         } else {
-            setPendingException(Meta.initException(meta.java_lang_NoSuchMethodError));
+            getThreadLocalPendingException().set(Meta.initException(meta.java_lang_NoSuchMethodError));
             return JNI_ERR;
         }
 

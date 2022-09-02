@@ -24,7 +24,6 @@ package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
-import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode.WrapperNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -52,6 +51,25 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
 
     public final Method getMethod() {
         return getMethodNode().getMethod();
+    }
+
+    public final EspressoRootNode split() {
+        return create(getFrameDescriptor(), getMethodNode().split());
+    }
+
+    @Override
+    public boolean isCloningAllowed() {
+        return getMethodNode().shouldSplit();
+    }
+
+    @Override
+    protected boolean isCloneUninitializedSupported() {
+        return getMethodNode().shouldSplit();
+    }
+
+    @Override
+    protected EspressoRootNode cloneUninitialized() {
+        return create(getFrameDescriptor(), getMethodNode().split());
     }
 
     @Override
@@ -88,14 +106,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         return getMethodNode() instanceof BytecodeNode;
     }
 
-    public final BytecodeNode getBytecodeNode() {
-        if (isBytecodeNode()) {
-            return (BytecodeNode) getMethodNode();
-        } else {
-            return null;
-        }
-    }
-
     private EspressoMethodNode getMethodNode() {
         Node child = methodNode;
         if (child instanceof WrapperNode) {
@@ -117,10 +127,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         return ((BytecodeNode) getMethodNode()).readBCI(frameInstance);
     }
 
-    public int readBCI(MaterializedFrame frame) {
-        return ((BytecodeNode) getMethodNode()).readBCI(frame);
-    }
-
     static final class Synchronized extends EspressoRootNode {
 
         Synchronized(FrameDescriptor frameDescriptor, EspressoMethodNode methodNode) {
@@ -138,27 +144,12 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
             // monitor accesses until Espresso has its own monitor handling.
             //
             // synchronized (monitor) {
-            if (isBytecodeNode()) {
-                BytecodeNode bytecodeNode = getBytecodeNode();
-                bytecodeNode.methodMonitorEnter(frame, monitor);
-            } else {
-                // TODO(Gregersen) - register monitors on frames for non-bytecode methods
-                InterpreterToVM.monitorEnter(monitor);
-            }
+            InterpreterToVM.monitorEnter(monitor);
             Object result;
             try {
                 result = methodNode.execute(frame);
             } finally {
-                if (isBytecodeNode()) {
-                    // force early return has already released the monitor on the frame, so don't
-                    // do an unbalanced monitor exit here
-                    if (getContext().getJDWPListener().getAndRemoveEarlyReturnValue() == null) {
-                        getBytecodeNode().monitorExit(frame, monitor);
-                    }
-                } else {
-                    // TODO(Gregersen) - exit monitors on frames for non-bytecode methods
-                    InterpreterToVM.monitorExit(monitor);
-                }
+                InterpreterToVM.monitorExit(monitor);
             }
             return result;
         }
