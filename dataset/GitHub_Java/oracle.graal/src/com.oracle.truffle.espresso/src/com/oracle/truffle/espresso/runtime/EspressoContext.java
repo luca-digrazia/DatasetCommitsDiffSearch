@@ -33,10 +33,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_ref_Reference;
 import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.api.Assumption;
@@ -69,8 +67,6 @@ import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
-
-import static com.oracle.truffle.espresso.EspressoLanguage.EspressoLogger;
 
 public final class EspressoContext {
 
@@ -130,8 +126,6 @@ public final class EspressoContext {
         this.JDWPOptions = env.getOptions().get(EspressoOptions.JDWPOptions); // null if not
                                                                               // specified
         this.InlineFieldAccessors = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineFieldAccessors);
-        this.InlineMethodHandle = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineMethodHandle);
-        this.SplitMethodHandles = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.SplitMethodHandles);
         this.Verify = env.getOptions().get(EspressoOptions.Verify);
         this.SpecCompliancyMode = env.getOptions().get(EspressoOptions.SpecCompliancy);
     }
@@ -208,8 +202,6 @@ public final class EspressoContext {
     public void initializeContext() {
         assert !this.initialized;
         eventListener = new EmptyListener();
-        // Inject PublicFinalReference in the host VM.
-        Target_java_lang_ref_Reference.init();
         spawnVM();
         this.initialized = true;
         this.jdwpContext = new JDWPContextImpl(this);
@@ -350,7 +342,7 @@ public final class EspressoContext {
         this.stackOverflow = new EspressoException(stackOverflowErrorInstance);
         this.outOfMemory = new EspressoException(outOfMemoryErrorInstance);
 
-        EspressoLogger.log(Level.FINE, "VM booted in {0} ms", System.currentTimeMillis() - ticks);
+        System.err.println("spawnVM: " + (System.currentTimeMillis() - ticks) + " ms");
     }
 
     private void casNextIfNullAndMaybeClear(@SuppressWarnings("rawtypes") EspressoReference wrapper) {
@@ -612,8 +604,6 @@ public final class EspressoContext {
     // Checkstyle: stop field name check
 
     public final boolean InlineFieldAccessors;
-    public final boolean InlineMethodHandle;
-    public final boolean SplitMethodHandles;
 
     public final EspressoOptions.VerifyMode Verify;
     public final JDWPOptions JDWPOptions;
@@ -633,23 +623,6 @@ public final class EspressoContext {
 
     public StaticObject getMainThread() {
         return threadManager.getMainThread();
-    }
-
-    public boolean isValidThread(Object thread) {
-        StaticObject[] activeThreads = threadManager.activeThreads();
-
-        for (StaticObject activeThread : activeThreads) {
-            if (activeThread == thread) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @SuppressWarnings("static-method")
-    public boolean isValidThreadGroup(@SuppressWarnings("unused") Object threadGroup) {
-        // TODO(Gregersen) - validate if this is a valid threadgroup
-        return true;
     }
 
     public StaticObject getMainThreadGroup() {
