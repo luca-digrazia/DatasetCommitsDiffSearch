@@ -192,11 +192,7 @@ public abstract class ToEspressoNode extends Node {
     Object doForeignClass(Object value, ObjectKlass klass,
                     @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @CachedContext(EspressoLanguage.class) EspressoContext context) throws UnsupportedTypeException {
-        try {
-            checkHasAllFieldsOrThrow(value, klass, interop, context.getMeta());
-        } catch (ClassCastException e) {
-            throw UnsupportedTypeException.create(new Object[]{value}, "Could not cast foreign object to " + klass.getNameAsString() + ": " + e.getMessage());
-        }
+        checkHasAllFieldsOrThrow(value, klass, interop, context.getMeta());
         return StaticObject.createForeign(klass, value, interop);
     }
 
@@ -217,10 +213,10 @@ public abstract class ToEspressoNode extends Node {
         return StaticObject.createForeign(klass, value, interop);
     }
 
-    public static void checkHasAllFieldsOrThrow(Object value, ObjectKlass klass, InteropLibrary interopLibrary, Meta meta) {
+    private static void checkHasAllFieldsOrThrow(Object value, ObjectKlass klass, InteropLibrary interopLibrary, Meta meta) throws UnsupportedTypeException {
         for (Field f : klass.getDeclaredFields()) {
             if (!f.isStatic() && !interopLibrary.isMemberExisting(value, f.getNameAsString())) {
-                throw new ClassCastException("Missing field: " + f.getNameAsString());
+                throw UnsupportedTypeException.create(new Object[]{value}, klass.getTypeAsString());
             }
         }
         if (klass.getSuperClass() != null) {
@@ -229,7 +225,7 @@ public abstract class ToEspressoNode extends Node {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Throwable> void rethrow(Throwable e) throws T {
+    private static <T extends RuntimeException> boolean rethrow(Throwable e) throws T {
         throw (T) e;
     }
 }
