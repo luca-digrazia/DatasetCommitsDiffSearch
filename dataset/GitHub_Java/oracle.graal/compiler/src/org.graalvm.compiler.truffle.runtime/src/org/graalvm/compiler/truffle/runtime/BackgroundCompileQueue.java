@@ -292,9 +292,7 @@ public class BackgroundCompileQueue {
      */
     private final class IdlingPriorityBlockingQueue<E> extends PriorityBlockingQueue<E> {
 
-        private static final long serialVersionUID = 5437415215836241566L;
-
-        @SuppressWarnings("unused") volatile long latestEventMillis;
+        volatile long latestEventMillis;
 
         @Override
         public E take() throws InterruptedException {
