@@ -554,8 +554,7 @@ public final class NFIContextExtension extends NativeContextExtension {
         return signatureSourceCache.getSignatureSourceSkipStackArg(type);
     }
 
-    @Override
-    public Object createSignature(Source signatureSource) {
+    private Object createSignature(Source signatureSource) {
         synchronized (signatureCache) {
             Object ret = signatureCache.get(signatureSource);
             if (ret == null) {
