@@ -206,8 +206,7 @@ public final class SchedulePhase extends Phase {
                 sortNodesLatestWithinBlock(cfg, earliestBlockToNodesMap, latestBlockToNodesMap, currentNodeMap, watchListMap, visited);
 
                 assert verifySchedule(cfg, latestBlockToNodesMap, currentNodeMap);
-                assert (!Assertions.detailedAssertionsEnabled(graph.getOptions())) ||
-                                ScheduleVerification.check(cfg.getStartBlock(), latestBlockToNodesMap, currentNodeMap);
+                assert (!Assertions.detailedAssertionsEnabled(graph.getOptions())) || MemoryScheduleVerification.check(cfg.getStartBlock(), latestBlockToNodesMap);
 
                 this.blockToNodesMap = latestBlockToNodesMap;
 
@@ -359,7 +358,7 @@ public final class SchedulePhase extends Phase {
             }
 
             if (lastBlock.getBeginNode() instanceof KillingBeginNode) {
-                LocationIdentity locationIdentity = ((KillingBeginNode) lastBlock.getBeginNode()).getKilledLocationIdentity();
+                LocationIdentity locationIdentity = ((KillingBeginNode) lastBlock.getBeginNode()).getLocationIdentity();
                 if ((locationIdentity.isAny() || locationIdentity.equals(location)) && lastBlock != earliestBlock) {
                     // The begin of this block kills the location, so we *have* to schedule the node
                     // in the dominating block.
@@ -375,13 +374,13 @@ public final class SchedulePhase extends Phase {
                 for (Node n : subList) {
                     // Check if this node kills a node in the watch list.
                     if (n instanceof MemoryCheckpoint.Single) {
-                        LocationIdentity identity = ((MemoryCheckpoint.Single) n).getKilledLocationIdentity();
+                        LocationIdentity identity = ((MemoryCheckpoint.Single) n).getLocationIdentity();
                         killed.add(identity);
                         if (killed.isAny()) {
                             return;
                         }
                     } else if (n instanceof MemoryCheckpoint.Multi) {
-                        for (LocationIdentity identity : ((MemoryCheckpoint.Multi) n).getKilledLocationIdentities()) {
+                        for (LocationIdentity identity : ((MemoryCheckpoint.Multi) n).getLocationIdentities()) {
                             killed.add(identity);
                             if (killed.isAny()) {
                                 return;
@@ -472,10 +471,10 @@ public final class SchedulePhase extends Phase {
             if (watchList != null && !watchList.isEmpty()) {
                 // Check if this node kills a node in the watch list.
                 if (n instanceof MemoryCheckpoint.Single) {
-                    LocationIdentity identity = ((MemoryCheckpoint.Single) n).getKilledLocationIdentity();
+                    LocationIdentity identity = ((MemoryCheckpoint.Single) n).getLocationIdentity();
                     checkWatchList(watchList, identity, b, result, nodeMap, unprocessed);
                 } else if (n instanceof MemoryCheckpoint.Multi) {
-                    for (LocationIdentity identity : ((MemoryCheckpoint.Multi) n).getKilledLocationIdentities()) {
+                    for (LocationIdentity identity : ((MemoryCheckpoint.Multi) n).getLocationIdentities()) {
                         checkWatchList(watchList, identity, b, result, nodeMap, unprocessed);
                     }
                 }
@@ -897,7 +896,7 @@ public final class SchedulePhase extends Phase {
                 }
             }
 
-            assert (!Assertions.detailedAssertionsEnabled(cfg.graph.getOptions())) || ScheduleVerification.check(cfg.getStartBlock(), blockToNodes, nodeToBlock);
+            assert (!Assertions.detailedAssertionsEnabled(cfg.graph.getOptions())) || MemoryScheduleVerification.check(cfg.getStartBlock(), blockToNodes);
         }
 
         private static void processNodes(NodeBitMap visited, NodeMap<MicroBlock> entries, NodeStack stack, MicroBlock startBlock, Iterable<? extends Node> nodes) {
@@ -1184,10 +1183,10 @@ public final class SchedulePhase extends Phase {
             Formatter buf = new Formatter();
             buf.format("%s", n);
             if (n instanceof MemoryCheckpoint.Single) {
-                buf.format(" // kills %s", ((MemoryCheckpoint.Single) n).getKilledLocationIdentity());
+                buf.format(" // kills %s", ((MemoryCheckpoint.Single) n).getLocationIdentity());
             } else if (n instanceof MemoryCheckpoint.Multi) {
                 buf.format(" // kills ");
-                for (LocationIdentity locid : ((MemoryCheckpoint.Multi) n).getKilledLocationIdentities()) {
+                for (LocationIdentity locid : ((MemoryCheckpoint.Multi) n).getLocationIdentities()) {
                     buf.format("%s, ", locid);
                 }
             } else if (n instanceof FloatingReadNode) {
