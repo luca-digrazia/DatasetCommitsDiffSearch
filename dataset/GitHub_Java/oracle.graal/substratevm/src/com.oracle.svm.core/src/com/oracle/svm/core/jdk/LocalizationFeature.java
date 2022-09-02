@@ -237,8 +237,7 @@ public abstract class LocalizationFeature implements Feature {
         /* Note that JDK 11 support overrides this method to register more bundles. */
 
         final String[] alwaysRegisteredResourceBundles = new String[]{
-                        "sun.util.logging.resources.logging",
-                        "sun.util.resources.TimeZoneNames"
+                        "sun.util.logging.resources.logging"
         };
         for (String bundleName : alwaysRegisteredResourceBundles) {
             addBundleToCache(bundleName);
