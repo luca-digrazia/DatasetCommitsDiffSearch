@@ -145,7 +145,6 @@ import com.oracle.truffle.espresso.vm.structs.JavaVMAttachArgs;
 import com.oracle.truffle.espresso.vm.structs.JdkVersionInfo;
 import com.oracle.truffle.espresso.vm.structs.Structs;
 import com.oracle.truffle.espresso.vm.structs.StructsAccess;
-
 import sun.misc.Unsafe;
 
 /**
@@ -1055,17 +1054,18 @@ public final class VM extends NativeEnv implements ContextAccess {
         return type;
     }
 
-    @VmImpl(isJni = true)
+    @VmImpl
+    @JniImpl
     @TruffleBoundary
-    public @JavaType(Class.class) StaticObject JVM_LookupDefineClass(
-                    @JavaType(Class.class) StaticObject lookup,
+    public @Host(Class.class) StaticObject JVM_LookupDefineClass(
+                    @Host(Class.class) StaticObject lookup,
                     @Pointer TruffleObject namePtr,
                     @Pointer TruffleObject bufPtr,
                     int len,
-                    @JavaType(ProtectionDomain.class) StaticObject pd,
+                    @Host(ProtectionDomain.class) StaticObject pd,
                     boolean initialize,
                     int flags,
-                    @JavaType(Object.class) StaticObject classData) {
+                    @Host(Object.class) StaticObject classData) {
         if (StaticObject.isNull(lookup)) {
             throw getMeta().throwExceptionWithMessage(getMeta().java_lang_InternalError, "Lookup class is null");
         }
