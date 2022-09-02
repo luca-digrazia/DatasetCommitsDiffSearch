@@ -59,7 +59,6 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.Containers;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
@@ -249,12 +248,11 @@ final class Target_java_lang_Runtime {
     public void runFinalization() {
     }
 
-    @NeverInline("Workaround for GR-26489")
     @Substitute
     @Platforms(InternalPlatform.PLATFORM_JNI.class)
     private int availableProcessors() {
         if (SubstrateOptions.MultiThreaded.getValue()) {
-            return Containers.activeProcessorCount();
+            return Jvm.JVM_ActiveProcessorCount();
         } else {
             return 1;
         }
