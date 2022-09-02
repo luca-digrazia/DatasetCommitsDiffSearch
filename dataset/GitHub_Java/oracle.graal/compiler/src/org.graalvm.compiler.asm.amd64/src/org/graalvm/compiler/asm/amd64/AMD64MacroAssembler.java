@@ -46,6 +46,7 @@ import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.amd64.AMD64Kind;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
 
@@ -349,31 +350,31 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         movzbq(dst, dst);
     }
 
-    public final void flog(Register dest, Register value, boolean base10, AMD64Address tmp) {
+    public final void flog(Register dest, Register value, boolean base10) {
         if (base10) {
             fldlg2();
         } else {
             fldln2();
         }
-        trigPrologue(value, tmp);
+        AMD64Address tmp = trigPrologue(value);
         fyl2x();
         trigEpilogue(dest, tmp);
     }
 
-    public final void fsin(Register dest, Register value, AMD64Address tmp) {
-        trigPrologue(value, tmp);
+    public final void fsin(Register dest, Register value) {
+        AMD64Address tmp = trigPrologue(value);
         fsin();
         trigEpilogue(dest, tmp);
     }
 
-    public final void fcos(Register dest, Register value, AMD64Address tmp) {
-        trigPrologue(value, tmp);
+    public final void fcos(Register dest, Register value) {
+        AMD64Address tmp = trigPrologue(value);
         fcos();
         trigEpilogue(dest, tmp);
     }
 
-    public final void ftan(Register dest, Register value, AMD64Address tmp) {
-        trigPrologue(value, tmp);
+    public final void ftan(Register dest, Register value) {
+        AMD64Address tmp = trigPrologue(value);
         fptan();
         fstp(0); // ftan pushes 1.0 in addition to the actual result, pop
         trigEpilogue(dest, tmp);
@@ -384,16 +385,20 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         fincstp();
     }
 
-    private void trigPrologue(Register value, AMD64Address tmp) {
+    private AMD64Address trigPrologue(Register value) {
         assert value.getRegisterCategory().equals(AMD64.XMM);
+        AMD64Address tmp = new AMD64Address(AMD64.rsp);
+        subq(AMD64.rsp, AMD64Kind.DOUBLE.getSizeInBytes());
         movdbl(tmp, value);
         fldd(tmp);
+        return tmp;
     }
 
     private void trigEpilogue(Register dest, AMD64Address tmp) {
         assert dest.getRegisterCategory().equals(AMD64.XMM);
         fstpd(tmp);
         movdbl(dest, tmp);
+        addq(AMD64.rsp, AMD64Kind.DOUBLE.getSizeInBytes());
     }
 
     /**

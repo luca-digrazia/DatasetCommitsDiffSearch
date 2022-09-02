@@ -3959,10 +3959,6 @@ public class AMD64Assembler extends AMD64BaseAssembler {
     }
 
     @Override
-    public AMD64Address makeAddress(int transferSize, Register base, int displacement) {
-        return makeAddress(base, displacement);
-    }
-
     public AMD64Address makeAddress(Register base, int displacement) {
         return new AMD64Address(base, displacement);
     }
@@ -4023,12 +4019,6 @@ public class AMD64Assembler extends AMD64BaseAssembler {
     public void rdtsc() {
         emitByte(0x0F);
         emitByte(0x31);
-    }
-
-    public void rdtscp() {
-        emitByte(0x0F);
-        emitByte(0x01);
-        emitByte(0xF9);
     }
 
     /**

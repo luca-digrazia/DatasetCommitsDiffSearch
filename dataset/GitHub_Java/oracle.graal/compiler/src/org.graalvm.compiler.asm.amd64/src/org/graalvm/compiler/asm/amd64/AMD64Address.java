@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,9 +24,11 @@
  */
 package org.graalvm.compiler.asm.amd64;
 
-import jdk.vm.ci.code.Register;
-
 import org.graalvm.compiler.asm.AbstractAddress;
+import org.graalvm.compiler.debug.GraalError;
+
+import jdk.vm.ci.code.CodeUtil;
+import jdk.vm.ci.code.Register;
 
 /**
  * Represents an address in target machine memory, specified via some combination of a base
@@ -39,6 +41,7 @@ public final class AMD64Address extends AbstractAddress {
     private final Register index;
     private final Scale scale;
     private final int displacement;
+    private final Object displacementAnnotation;
 
     /**
      * The start of the instruction, i.e., the value that is used as the key for looking up
@@ -76,7 +79,7 @@ public final class AMD64Address extends AbstractAddress {
      * @param scale the scaling factor
      */
     public AMD64Address(Register base, Register index, Scale scale) {
-        this(base, index, scale, 0, -1);
+        this(base, index, scale, 0, null, -1);
     }
 
     /**
@@ -89,14 +92,19 @@ public final class AMD64Address extends AbstractAddress {
      * @param displacement the displacement
      */
     public AMD64Address(Register base, Register index, Scale scale, int displacement) {
-        this(base, index, scale, displacement, -1);
+        this(base, index, scale, displacement, null, -1);
     }
 
-    AMD64Address(Register base, Register index, Scale scale, int displacement, int instructionStartPosition) {
+    public AMD64Address(Register base, Register index, Scale scale, int displacement, Object displacementAnnotation) {
+        this(base, index, scale, displacement, displacementAnnotation, -1);
+    }
+
+    AMD64Address(Register base, Register index, Scale scale, int displacement, Object displacementAnnotation, int instructionStartPosition) {
         this.base = base;
         this.index = index;
         this.scale = scale;
         this.displacement = displacement;
+        this.displacementAnnotation = displacementAnnotation;
         this.instructionStartPosition = instructionStartPosition;
 
         assert scale != null;
@@ -126,6 +134,11 @@ public final class AMD64Address extends AbstractAddress {
          */
         public final int log2;
 
+        /**
+         * Creates a {@link Scale} for the scaling factor in {@code scale}.
+         *
+         * @throws IllegalArgumentException if {@code scale} is an unsupported scaling factor
+         */
         public static Scale fromInt(int scale) {
             switch (scale) {
                 case 1:
@@ -137,10 +150,15 @@ public final class AMD64Address extends AbstractAddress {
                 case 8:
                     return Times8;
                 default:
-                    return null;
+                    throw new IllegalArgumentException("Unsupported SIB addressing mode scaling factor: " + scale);
             }
         }
 
+        /**
+         * Creates a {@link Scale} for the log2 scaling factor {@code shift}.
+         *
+         * @throws IllegalArgumentException if {@code shift} is an unsupported scaling factor
+         */
         public static Scale fromShift(int shift) {
             switch (shift) {
                 case 0:
@@ -152,8 +170,22 @@ public final class AMD64Address extends AbstractAddress {
                 case 3:
                     return Times8;
                 default:
-                    return null;
+                    throw GraalError.shouldNotReachHere("Unsupported SIB addressing mode scaling factor: " + (1 << shift));
             }
+        }
+
+        /**
+         * Determines if the scaling factor {@code scale} is supported.
+         */
+        public static boolean isScaleSupported(int scale) {
+            return CodeUtil.isPowerOf2(scale) && scale <= 8;
+        }
+
+        /**
+         * Determines if the log2 scaling factor {@code shift} is supported.
+         */
+        public static boolean isScaleShiftSupported(int shift) {
+            return shift >= 0 && shift <= 3;
         }
     }
 
@@ -174,6 +206,9 @@ public final class AMD64Address extends AbstractAddress {
             s.append(" - ").append(-getDisplacement());
         } else if (getDisplacement() > 0) {
             s.append(sep).append(getDisplacement());
+        }
+        if (displacementAnnotation != null) {
+            s.append(" + ").append(displacementAnnotation);
         }
         s.append("]");
         return s.toString();
@@ -207,5 +242,9 @@ public final class AMD64Address extends AbstractAddress {
      */
     public int getDisplacement() {
         return displacement;
+    }
+
+    public Object getDisplacementAnnotation() {
+        return displacementAnnotation;
     }
 }
