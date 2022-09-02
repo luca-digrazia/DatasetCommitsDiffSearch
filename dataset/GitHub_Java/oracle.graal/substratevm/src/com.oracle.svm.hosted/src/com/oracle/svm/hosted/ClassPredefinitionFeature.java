@@ -30,14 +30,18 @@ package com.oracle.svm.hosted;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.configure.ConfigurationFile;
 import com.oracle.svm.core.configure.ConfigurationFiles;
 import com.oracle.svm.core.configure.PredefinedClassesConfigurationParser;
 import com.oracle.svm.core.configure.PredefinedClassesRegistry;
@@ -51,29 +55,76 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
 
 @AutomaticFeature
 public class ClassPredefinitionFeature implements Feature {
-
-    private final Map<String, String> nameToCanonicalHash = new HashMap<>();
-    private final Map<String, Class<?>> canonicalHashToClass = new HashMap<>();
+    private final Map<String, PredefinedClass> nameToRecord = new HashMap<>();
 
     @Override
     public void afterRegistration(AfterRegistrationAccess arg) {
+        ImageSingletons.add(PredefinedClassesSupport.class, new PredefinedClassesSupport());
+
+        /*
+         * NOTE: loading the class predefinition configuration should be done as early as possible
+         * so that their classes are already known for other configuration (reflection, proxies).
+         */
         AfterRegistrationAccessImpl access = (AfterRegistrationAccessImpl) arg;
         PredefinedClassesRegistry registry = new PredefinedClassesRegistryImpl();
         ImageSingletons.add(PredefinedClassesRegistry.class, registry);
         PredefinedClassesConfigurationParser parser = new PredefinedClassesConfigurationParser(registry);
         ConfigurationParserUtils.parseAndRegisterConfigurations(parser, access.getImageClassLoader(), "class predefinition",
                         ConfigurationFiles.Options.PredefinedClassesConfigurationFiles, ConfigurationFiles.Options.PredefinedClassesConfigurationResources,
-                        ConfigurationFiles.PREDEFINED_CLASSES_NAME);
+                        ConfigurationFile.PREDEFINED_CLASSES_NAME.getFileName());
+    }
+
+    @Override
+    public void beforeAnalysis(BeforeAnalysisAccess access) {
+        List<String> skipped = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        nameToRecord.forEach((name, record) -> {
+            if (record.definedClass != null) {
+                /*
+                 * Initialization of a class at image build time can have unintended side effects
+                 * when the class is not supposed to be loaded yet, so we generally disallow it.
+                 *
+                 * Exempt are annotations, which must be initialized at image build time, and enums,
+                 * which are initialized during the image build if they are used in an annotation.
+                 */
+                if (!record.definedClass.isAnnotation() && !record.definedClass.isEnum()) {
+                    RuntimeClassInitialization.initializeAtRunTime(record.definedClass);
+                }
+            } else if (record.pendingSubtypes != null) {
+                StringBuilder msg = new StringBuilder();
+                msg.append("Type ").append(name).append(" is neither on the classpath nor predefined and prevents the predefinition of these subtypes (and potentially their subtypes): ");
+                boolean first = true;
+                for (PredefinedClass superRecord : record.pendingSubtypes) {
+                    msg.append(first ? "" : ", ").append(superRecord.name);
+                    first = false;
+                }
+                errors.add(msg.toString());
+            } else if (record.data == null) {
+                skipped.add(record.name);
+            }
+        });
+        if (!skipped.isEmpty()) {
+            int limit = 10;
+            String names = skipped.stream().limit(limit).collect(Collectors.joining(", "));
+            if (skipped.size() > limit) {
+                names += ", ...";
+            }
+            System.out.printf("Skipped %d predefined class(es) because the classpath already contains a class with the same name: %s%n", skipped.size(), names);
+        }
+        if (!errors.isEmpty()) {
+            throw UserError.abort(errors);
+        }
     }
 
     private class PredefinedClassesRegistryImpl implements PredefinedClassesRegistry {
-        PredefinedClassesRegistryImpl() {
-        }
-
         @Override
         public void add(String nameInfo, String providedHash, Path basePath) {
+            if (!PredefinedClassesSupport.supportsBytecodes()) {
+                throw UserError.abort("Cannot predefine class with hash %s from %s because class predefinition is disabled. Enable this feature using option %s.",
+                                providedHash, basePath, PredefinedClassesSupport.ENABLE_BYTECODES_OPTION);
+            }
             try {
-                Path path = basePath.resolve(providedHash + ConfigurationFiles.PREDEFINED_CLASSES_AGENT_EXTRACTED_NAME_SUFFIX);
+                Path path = basePath.resolve(providedHash + ConfigurationFile.PREDEFINED_CLASSES_AGENT_EXTRACTED_NAME_SUFFIX);
                 byte[] data = Files.readAllBytes(path);
 
                 // Compute our own hash code, the files could have been messed with.
@@ -89,42 +140,138 @@ public class ClassPredefinitionFeature implements Feature {
                 byte[] canonicalData = writer.toByteArray();
                 String canonicalHash = PredefinedClassesSupport.hash(canonicalData, 0, canonicalData.length);
 
-                Class<?> alreadyDefined = canonicalHashToClass.get(canonicalHash);
-                if (alreadyDefined != null) {
-                    PredefinedClassesSupport.registerClass(hash, alreadyDefined);
+                String className = transformClassName(reader.getClassName());
+                PredefinedClass record = nameToRecord.computeIfAbsent(className, PredefinedClass::new);
+                if (record.canonicalHash != null) {
+                    if (!canonicalHash.equals(record.canonicalHash)) {
+                        throw UserError.abort("More than one predefined class with the same name provided: " + className);
+                    }
+                    if (record.definedClass != null) {
+                        PredefinedClassesSupport.registerClass(hash, record.definedClass);
+                    } else {
+                        record.addAliasHash(hash);
+                    }
                     return;
                 }
+                record.canonicalHash = canonicalHash;
+                record.data = data;
+                record.addAliasHash(hash);
 
-                String className = reader.getClassName().replace('/', '.');
-                if (NativeImageSystemClassLoader.singleton().forNameOrNull(className, false) != null) {
-                    System.out.println("Warning: skipping predefined class because the classpath already provides a class with name: " + className);
-                    return;
+                // A class cannot be defined unless its superclass and all interfaces are loaded
+                boolean pendingSupertypes = false;
+                String superclassName = transformClassName(reader.getSuperName());
+                if (NativeImageSystemClassLoader.singleton().forNameOrNull(superclassName, false) == null) {
+                    addPendingSupertype(record, superclassName);
+                    pendingSupertypes = true;
+                }
+                for (String intf : reader.getInterfaces()) {
+                    String interfaceName = transformClassName(intf);
+                    if (NativeImageSystemClassLoader.singleton().forNameOrNull(interfaceName, false) == null) {
+                        addPendingSupertype(record, interfaceName);
+                        pendingSupertypes = true;
+                    }
                 }
 
-                String existing = nameToCanonicalHash.get(className);
-                if (existing != null && !canonicalHash.equals(existing)) {
-                    throw UserError.abort("More than one pre-defined class with the same name provided: " + className);
+                if (!pendingSupertypes) {
+                    defineClass(record);
                 }
-
-                Class<?> definedClass = NativeImageSystemClassLoader.singleton().predefineClass(className, data, 0, data.length);
-                canonicalHashToClass.put(canonicalHash, definedClass);
-                nameToCanonicalHash.put(className, canonicalHash);
-
-                /*
-                 * Initialization of the class at image build time can have unintended side effects
-                 * when the class is not even supposed to be loaded yet, so we disallow it.
-                 */
-                RuntimeClassInitialization.initializeAtRunTime(definedClass);
-
-                /*
-                 * We use the canonical hash to unify different representations of the same class
-                 * (to some extent) instead of failing, but we don't register the class with the
-                 * canonical hash because it is synthetic (or equal to the other hash anyway).
-                 */
-                PredefinedClassesSupport.registerClass(hash, definedClass);
             } catch (IOException t) {
-                throw UserError.abort(t, "Failed to pre-define class with hash %s from %s as specified in configuration", providedHash, basePath);
+                throw UserError.abort(t, "Failed to prepare class with hash %s from %s for predefinition", providedHash, basePath);
             }
+        }
+
+        private void addPendingSupertype(PredefinedClass record, String superName) {
+            PredefinedClass superRecord = nameToRecord.computeIfAbsent(superName, PredefinedClass::new);
+            assert superRecord.definedClass == null : "Must have been found with forName above";
+            superRecord.addPendingSubtype(record);
+            record.addPendingSupertype(superRecord);
+        }
+
+        private void defineClass(PredefinedClass record) {
+            if (NativeImageSystemClassLoader.singleton().forNameOrNull(record.name, false) == null) {
+                record.definedClass = NativeImageSystemClassLoader.singleton().predefineClass(record.name, record.data, 0, record.data.length);
+
+                if (record.aliasHashes != null) {
+                    /*
+                     * Note that we don't register the class with the canonical hash because we only
+                     * use it to unify different representations of the class (to some extent) and
+                     * it is synthetic or equal to another hash anyway.
+                     */
+                    for (String hash : record.aliasHashes) {
+                        PredefinedClassesSupport.registerClass(hash, record.definedClass);
+                    }
+                }
+            }
+            // else: will be reported as skipped
+
+            record.data = null;
+            record.aliasHashes = null;
+
+            if (record.pendingSubtypes != null) {
+                for (PredefinedClass subtype : record.pendingSubtypes) {
+                    boolean removed = subtype.pendingSupertypes.remove(record);
+                    assert removed : "must have been in list";
+                    if (subtype.pendingSupertypes.isEmpty()) {
+                        record.pendingSupertypes = null;
+                        defineClass(subtype);
+                    }
+                }
+                record.pendingSubtypes = null;
+            }
+        }
+
+        private String transformClassName(String className) {
+            return className.replace('/', '.');
+        }
+    }
+
+    static final class PredefinedClass {
+        final String name;
+
+        /** If already loaded, the {@link Class} object, otherwise null. */
+        Class<?> definedClass;
+
+        /** If not yet loaded, classes which need this class to be loaded first, otherwise null. */
+        List<PredefinedClass> pendingSubtypes;
+
+        /** If pending, classes which need to be loaded before this class, otherwise null. */
+        List<PredefinedClass> pendingSupertypes;
+
+        /** If loaded or pending load, the canonical hash of this class, otherwise null. */
+        String canonicalHash;
+
+        /** If pending, the class data for this class, otherwise null. */
+        byte[] data;
+
+        /** If pending, hashes that alias to this class, otherwise null. */
+        List<String> aliasHashes;
+
+        PredefinedClass(String name) {
+            this.name = name;
+        }
+
+        void addAliasHash(String hash) {
+            assert definedClass == null : "must not already be loaded";
+            if (aliasHashes == null) {
+                aliasHashes = new ArrayList<>();
+            }
+            aliasHashes.add(hash);
+        }
+
+        void addPendingSubtype(PredefinedClass record) {
+            assert definedClass == null : "must not already be loaded";
+            if (pendingSubtypes == null) {
+                pendingSubtypes = new ArrayList<>();
+            }
+            pendingSubtypes.add(record);
+        }
+
+        public void addPendingSupertype(PredefinedClass record) {
+            assert definedClass == null : "must not already be loaded";
+            if (pendingSupertypes == null) {
+                pendingSupertypes = new ArrayList<>();
+            }
+            pendingSupertypes.add(record);
         }
     }
 }

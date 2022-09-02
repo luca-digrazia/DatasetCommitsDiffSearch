@@ -1332,11 +1332,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
          * we use the class loader of the caller class instead of the module's loader.
          */
         Class<?> caller = Target_jdk_internal_reflect_Reflection.getCallerClass();
-        try {
-            return forName(className, false, caller.getClassLoader());
-        } catch (ClassNotFoundException e) {
-            return null;
-        }
+        return ClassForNameSupport.forNameOrNull(className, caller.getClassLoader());
     }
 
     @Substitute
