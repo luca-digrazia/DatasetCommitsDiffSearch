@@ -255,8 +255,8 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     void readModule() {
-        Assert.assertIntEqual(read4(), MAGIC, "Invalid MAGIC number");
-        Assert.assertIntEqual(read4(), VERSION, "Invalid VERSION number");
+        Assert.assertEquals(read4(), MAGIC, "Invalid MAGIC number");
+        Assert.assertEquals(read4(), VERSION, "Invalid VERSION number");
         readSections();
         wasmLanguage.getContextReference().get().registerModule(wasmModule);
     }
@@ -306,7 +306,7 @@ public class BinaryReader extends BinaryStreamReader {
                 default:
                     Assert.fail("invalid section ID: " + sectionID);
             }
-            Assert.assertIntEqual(offset - startOffset, size, String.format("Declared section (0x%02X) size is incorrect", sectionID));
+            Assert.assertEquals(offset - startOffset, size, String.format("Declared section (0x%02X) size is incorrect", sectionID));
         }
     }
 
@@ -343,7 +343,7 @@ public class BinaryReader extends BinaryStreamReader {
                 case ImportIdentifier.TABLE: {
                     // TODO: This table is normally supposed to be provided by the external environment (e.g. JS).
                     byte elemType = read1();
-                    Assert.assertIntEqual(elemType, 0x70, "Invalid element type for table import");
+                    Assert.assertEquals(elemType, 0x70, "Invalid element type for table import");
                     byte limitsPrefix = read1();
                     switch (limitsPrefix) {
                         case 0x00: {
@@ -408,7 +408,7 @@ public class BinaryReader extends BinaryStreamReader {
         // this loop should be executed at most once.
         for (byte tableIndex = 0; tableIndex != numTables; ++tableIndex) {
             byte elemType = read1();
-            Assert.assertIntEqual(elemType, 0x70, "Invalid element type for table");
+            Assert.assertEquals(elemType, 0x70, "Invalid element type for table");
             byte limitsPrefix = read1();
             switch (limitsPrefix) {
                 case 0x00: {
@@ -460,7 +460,7 @@ public class BinaryReader extends BinaryStreamReader {
             int codeEntrySize = readUnsignedInt32();
             int startOffset = offset;
             readCodeEntry(moduleFunctionIndex + entry, rootNodes[entry]);
-            Assert.assertIntEqual(offset - startOffset, codeEntrySize, String.format("Code entry %d size is incorrect", entry));
+            Assert.assertEquals(offset - startOffset, codeEntrySize, String.format("Code entry %d size is incorrect", entry));
         }
         moduleFunctionIndex += numCodeEntries;
     }
@@ -526,9 +526,9 @@ public class BinaryReader extends BinaryStreamReader {
 
     private void checkValidStateOnBlockExit(byte returnTypeId, ExecutionState state, int initialStackSize) {
         if (returnTypeId == 0x40) {
-            Assert.assertIntEqual(state.stackSize(), initialStackSize, "Void function left values in the stack");
+            Assert.assertEquals(state.stackSize(), initialStackSize, "Void function left values in the stack");
         } else {
-            Assert.assertIntEqual(state.stackSize(), initialStackSize + 1, "Function left more than 1 values left in stack");
+            Assert.assertEquals(state.stackSize(), initialStackSize + 1, "Function left more than 1 values left in stack");
         }
     }
 
@@ -653,17 +653,7 @@ public class BinaryReader extends BinaryStreamReader {
                     WasmFunction function = wasmModule.symbolTable().function(functionIndex);
                     state.pop(function.numArguments());
                     state.push(function.returnTypeLength());
-
-                    // We deliberately do not create the call node during parsing,
-                    // because the call target is only created after the code entry is parsed.
-                    // Furthermore, if the call target is imported from another module,
-                    // then that other module might not have been parsed yet.
-                    // Therefore, the call node must be created lazily,
-                    // i.e. during the first execution.
-                    // Therefore, we store the WasmFunction the corresponding index,
-                    // which is replaced with the call node during the first execution.
-                    callNodes.add(new WasmCallStubNode(function));
-
+                    callNodes.add(Truffle.getRuntime().createDirectCallNode(function.getCallTarget()));
                     break;
                 }
                 case CALL_INDIRECT: {
@@ -676,7 +666,7 @@ public class BinaryReader extends BinaryStreamReader {
                     state.pop(numArguments);
                     state.push(returnLength);
                     callNodes.add(Truffle.getRuntime().createIndirectCallNode());
-                    Assert.assertIntEqual(read1(), 0x00, "CALL_INDIRECT: Instruction must end with 0x00");
+                    Assert.assertEquals(read1(), 0x00, "CALL_INDIRECT: Instruction must end with 0x00");
                     break;
                 }
                 case DROP:
@@ -692,7 +682,7 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.get");
+                    Assert.assertLessEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.get");
                     state.push();
                     break;
                 }
@@ -701,9 +691,9 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.set");
+                    Assert.assertLessEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.set");
                     // Assert there is a value on the top of the stack.
-                    Assert.assertIntGreater(state.stackSize(), 0, "local.set requires at least one element in the stack");
+                    Assert.assertLarger(state.stackSize(), 0, "local.set requires at least one element in the stack");
                     state.pop();
                     break;
                 }
@@ -712,16 +702,16 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee");
+                    Assert.assertLessEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee");
                     // Assert there is a value on the top of the stack.
-                    Assert.assertIntGreater(state.stackSize(), 0, "local.tee requires at least one element in the stack");
+                    Assert.assertLarger(state.stackSize(), 0, "local.tee requires at least one element in the stack");
                     break;
                 }
                 case GLOBAL_GET: {
                     int globalIndex = readLocalIndex(bytesConsumed);
                     state.saveNumericLiteral(globalIndex);
                     state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertIntLessOrEqual(globalIndex, wasmModule.globals().size(), "Invalid global index for global.get");
+                    Assert.assertLessEqual(globalIndex, wasmModule.globals().size(), "Invalid global index for global.get");
                     state.push();
                     break;
                 }
@@ -730,9 +720,9 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(globalIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertIntLessOrEqual(globalIndex, wasmModule.globals().size(), "Invalid global index for global.set");
+                    Assert.assertLessEqual(globalIndex, wasmModule.globals().size(), "Invalid global index for global.set");
                     // Assert there is a value on the top of the stack.
-                    Assert.assertIntGreater(state.stackSize(), 0, "global.set requires at least one element in the stack");
+                    Assert.assertLarger(state.stackSize(), 0, "global.set requires at least one element in the stack");
                     state.pop();
                     break;
                 }
@@ -757,7 +747,7 @@ public class BinaryReader extends BinaryStreamReader {
                     int offset = readUnsignedInt32(bytesConsumed);  // offset
                     state.saveNumericLiteral(offset);
                     state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertIntGreater(state.stackSize(), 0, String.format("load instruction 0x%02X requires at least one element in the stack", opcode));
+                    Assert.assertLarger(state.stackSize(), 0, String.format("load instruction 0x%02X requires at least one element in the stack", opcode));
                     state.pop();   // Base address.
                     state.push();  // Loaded value.
                     break;
@@ -778,7 +768,7 @@ public class BinaryReader extends BinaryStreamReader {
                     int offset = readUnsignedInt32(bytesConsumed);  // offset
                     state.saveNumericLiteral(offset);
                     state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertIntGreater(state.stackSize(), 1, String.format("store instruction 0x%02X requires at least two elements in the stack", opcode));
+                    Assert.assertLarger(state.stackSize(), 1, String.format("store instruction 0x%02X requires at least two elements in the stack", opcode));
                     state.pop();  // Value to store.
                     state.pop();  // Base address.
                     break;
@@ -1076,7 +1066,7 @@ public class BinaryReader extends BinaryStreamReader {
         for (int i = 0; i != numElements; ++i) {
             int tableIndex = readUnsignedInt32();
             // At the moment, WebAssembly only supports one table instance, thus the only valid table index is 0.
-            Assert.assertIntEqual(tableIndex, 0, "Invalid table index");
+            Assert.assertEquals(tableIndex, 0, "Invalid table index");
             int offset = 0;
             byte instruction;
 
@@ -1196,7 +1186,7 @@ public class BinaryReader extends BinaryStreamReader {
         for (int i = 0; i != numDataSections; ++i) {
             int memIndex = readUnsignedInt32();
             // At the moment, WebAssembly only supports one memory instance, thus the only valid memory index is 0.
-            Assert.assertIntEqual(memIndex, 0, "Invalid memory index");
+            Assert.assertEquals(memIndex, 0, "Invalid memory index");
             long offset = 0;
             byte instruction;
             do {
