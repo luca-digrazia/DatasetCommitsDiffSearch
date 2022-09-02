@@ -49,44 +49,14 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.test.OSUtils;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Array;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
-import java.net.URI;
-import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.AccessMode;
-import java.nio.file.CopyOption;
-import java.nio.file.DirectoryStream;
-import java.nio.file.FileVisitOption;
-import java.nio.file.FileVisitResult;
-import java.nio.file.FileVisitor;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileAttribute;
-import java.nio.file.attribute.FileTime;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.io.FileSystem;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -104,12 +74,6 @@ public class TruffleFileTest extends AbstractPolyglotTest {
     @After
     public void tearDown() throws Exception {
         resetLanguageHomes();
-        for (Class<? extends BaseDetector> clz : Arrays.asList(DuplicateMimeTypeLanguage1.Detector.class, DuplicateMimeTypeLanguage2.Detector.class)) {
-            BaseDetector instance = BaseDetector.getInstance(clz);
-            if (instance != null) {
-                instance.reset();
-            }
-        }
     }
 
     @Test
@@ -192,114 +156,6 @@ public class TruffleFileTest extends AbstractPolyglotTest {
         // Order is not deterministic can be either 'text/x-duplicate-mime-1' or
         // 'text/x-duplicate-mime-2'
         assertTrue("text/x-duplicate-mime-1".equals(result) || "text/x-duplicate-mime-2".equals(result));
-        Predicate<TruffleFile> failingRecognizer = (tf) -> {
-            throw silenceException(RuntimeException.class, new IOException());
-        };
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).recognizer = failingRecognizer;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime-1");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime-2");
-        result = file.getMimeType();
-        assertEquals("text/x-duplicate-mime-2", result);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime-1");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).recognizer = failingRecognizer;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime-2");
-        result = file.getMimeType();
-        assertEquals("text/x-duplicate-mime-1", result);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).recognizer = failingRecognizer;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime-1");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).recognizer = failingRecognizer;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime-2");
-        result = file.getMimeType();
-        assertNull(result);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).recognizer = (tf) -> true;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime-1");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).recognizer = (tf) -> true;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime-2");
-        result = languageEnv.getInternalTruffleFile("").getMimeType();
-        assertNull(result);
-        assertEquals(0, BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).resetFindMimeTypeCalled());
-        assertEquals(0, BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).resetFindMimeTypeCalled());
-    }
-
-    @Test
-    public void testGetEncoding() throws IOException {
-        TruffleFile file = languageEnv.getPublicTruffleFile("/folder/filename.duplicate");
-        Charset encoding = TestAPIAccessor.languageAccess().getEncoding(file, null);
-        assertNull(encoding);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType(null);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setEncoding(null);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setEncoding(null);
-        encoding = TestAPIAccessor.languageAccess().getEncoding(file, null);
-        assertNull(encoding);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setEncoding(null);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setEncoding(StandardCharsets.UTF_16);
-        encoding = TestAPIAccessor.languageAccess().getEncoding(file, "text/x-duplicate-mime");
-        assertEquals(StandardCharsets.UTF_16, encoding);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setEncoding(StandardCharsets.UTF_8);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setEncoding(null);
-        encoding = TestAPIAccessor.languageAccess().getEncoding(file, "text/x-duplicate-mime");
-        assertEquals(StandardCharsets.UTF_8, encoding);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setEncoding(StandardCharsets.UTF_8);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setEncoding(StandardCharsets.UTF_16);
-        encoding = TestAPIAccessor.languageAccess().getEncoding(file, "text/x-duplicate-mime");
-        // Order is not deterministic can be either 'UTF-8' or 'UTF-16'
-        assertTrue(StandardCharsets.UTF_8.equals(encoding) || StandardCharsets.UTF_16.equals(encoding));
-        Predicate<TruffleFile> failingRecognizer = (tf) -> {
-            throw silenceException(RuntimeException.class, new IOException());
-        };
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).recognizer = failingRecognizer;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setEncoding(StandardCharsets.UTF_8);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setEncoding(StandardCharsets.UTF_16);
-        encoding = TestAPIAccessor.languageAccess().getEncoding(file, "text/x-duplicate-mime");
-        assertEquals(StandardCharsets.UTF_16, encoding);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setEncoding(StandardCharsets.UTF_8);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).recognizer = failingRecognizer;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setEncoding(StandardCharsets.UTF_16);
-        encoding = TestAPIAccessor.languageAccess().getEncoding(file, "text/x-duplicate-mime");
-        assertEquals(StandardCharsets.UTF_8, encoding);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).recognizer = failingRecognizer;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setEncoding(StandardCharsets.UTF_8);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).recognizer = failingRecognizer;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setEncoding(StandardCharsets.UTF_16);
-        encoding = TestAPIAccessor.languageAccess().getEncoding(file, "text/x-duplicate-mime");
-        assertNull(encoding);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).recognizer = (tf) -> true;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage1.Detector.class).setEncoding(StandardCharsets.UTF_8);
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).reset();
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).recognizer = (tf) -> true;
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setMimeType("text/x-duplicate-mime");
-        BaseDetector.getInstance(DuplicateMimeTypeLanguage2.Detector.class).setEncoding(StandardCharsets.UTF_8);
-        encoding = TestAPIAccessor.languageAccess().getEncoding(languageEnv.getInternalTruffleFile(""), "text/x-duplicate-mime");
-        assertNull(encoding);
     }
 
     @Test
@@ -377,118 +233,10 @@ public class TruffleFileTest extends AbstractPolyglotTest {
         Path cwdPath = new File("").toPath().toRealPath();
         Assume.assumeTrue(cwdPath.getNameCount() > 1);
         Path langHomePath = cwdPath.getParent().resolve("home");
-        System.setProperty(String.format("org.graalvm.language.%s.home", ProxyLanguage.ID), langHomePath.toString());
+        System.setProperty(String.format("%s.home", ProxyLanguage.ID), langHomePath.toString());
         TruffleFile file = languageEnv.getInternalTruffleFile("../home");
         file.exists();  // Language home should be accessible
         file.resolve("file").exists();  // File in language home should be accessible
-    }
-
-    @Test
-    public void testNormalizeEmptyPath() {
-        setupEnv(Context.newBuilder().allowIO(true).build());
-        TruffleFile file = languageEnv.getInternalTruffleFile("");
-        assertEquals("", file.normalize().getPath());
-        file = languageEnv.getInternalTruffleFile(".");
-        assertEquals(".", file.normalize().getPath());
-        file = languageEnv.getInternalTruffleFile("a/..");
-        assertEquals(".", file.normalize().getPath());
-    }
-
-    /**
-     * Test checking that a {@link FileSystem} method for a non path operation is never called for
-     * an empty path.
-     */
-    @Test
-    public void testEmptyPath() throws Exception {
-        setupEnv(Context.newBuilder().allowIO(true).fileSystem(new EmptyPathTestFs()).build());
-        TruffleFile file = languageEnv.getInternalTruffleFile("");
-        TruffleFile otherFile = languageEnv.getInternalTruffleFile("other");
-
-        Map<Type, Object> defaultParameterValues = new HashMap<>();
-        defaultParameterValues.put(int.class, 0);
-        defaultParameterValues.put(String.class, "");
-        defaultParameterValues.put(TruffleFile.class, otherFile);
-        defaultParameterValues.put(Object.class, otherFile);
-        defaultParameterValues.put(Set.class, Collections.emptySet());
-        defaultParameterValues.put(Charset.class, StandardCharsets.UTF_8);
-        defaultParameterValues.put(OpenOption[].class, new OpenOption[0]);
-        defaultParameterValues.put(LinkOption[].class, new LinkOption[0]);
-        defaultParameterValues.put(CopyOption[].class, new CopyOption[0]);
-        defaultParameterValues.put(FileVisitOption[].class, new FileVisitOption[0]);
-        defaultParameterValues.put(FileAttribute[].class, new FileAttribute<?>[0]);
-        defaultParameterValues.put(FileTime.class, FileTime.fromMillis(System.currentTimeMillis()));
-        defaultParameterValues.put(TruffleFile.AttributeDescriptor.class, TruffleFile.SIZE);
-        defaultParameterValues.put(TruffleFile.class.getMethod("getAttributes", Collection.class, LinkOption[].class).getGenericParameterTypes()[0], Collections.singleton(TruffleFile.SIZE));
-        defaultParameterValues.put(FileVisitor.class, new FileVisitor<TruffleFile>() {
-            @Override
-            public FileVisitResult preVisitDirectory(TruffleFile t, BasicFileAttributes bfa) throws IOException {
-                return FileVisitResult.TERMINATE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(TruffleFile t, BasicFileAttributes bfa) throws IOException {
-                return FileVisitResult.TERMINATE;
-            }
-
-            @Override
-            public FileVisitResult visitFileFailed(TruffleFile t, IOException ioe) throws IOException {
-                return FileVisitResult.TERMINATE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(TruffleFile t, IOException ioe) throws IOException {
-                return FileVisitResult.TERMINATE;
-            }
-        });
-
-        Set<Method> untestedMethods = new HashSet<>();
-        for (Method m : EmptyPathTestFs.class.getMethods()) {
-            if (m.isDefault()) {
-                System.out.println(m.getName());
-            }
-        }
-        nextMethod: for (Method m : TruffleFile.class.getDeclaredMethods()) {
-            if ((m.getModifiers() & Modifier.PUBLIC) == Modifier.PUBLIC) {
-                Type[] paramTypes = m.getGenericParameterTypes();
-                Object[] params = new Object[paramTypes.length];
-                for (int i = 0; i < paramTypes.length; i++) {
-                    Type paramType = paramTypes[i];
-                    Object param = defaultParameterValues.get(paramType);
-                    if (param == null) {
-                        param = defaultParameterValues.get(erase(paramType));
-                    }
-                    if (param == null) {
-                        untestedMethods.add(m);
-                        continue nextMethod;
-                    }
-                    params[i] = param;
-                }
-                try {
-                    m.invoke(file, params);
-                } catch (InvocationTargetException e) {
-                    if (!(e.getCause() instanceof NoSuchFileException)) {
-                        throw new AssertionError("Unexpected exception.", e);
-                    }
-                } catch (ReflectiveOperationException e) {
-                    throw new AssertionError("Unexpected exception.", e);
-                }
-            }
-        }
-        assertTrue("Failed to check methods: " + untestedMethods.stream().map(Method::getName).collect(Collectors.joining(", ")), untestedMethods.isEmpty());
-    }
-
-    private static Type erase(Type type) {
-        if (type instanceof ParameterizedType) {
-            return ((ParameterizedType) type).getRawType();
-        } else if (type instanceof GenericArrayType) {
-            GenericArrayType gat = (GenericArrayType) type;
-            Class<?> erasedComponent = (Class<?>) erase(gat.getGenericComponentType());
-            return Array.newInstance(erasedComponent, 0).getClass();
-        } else if (type instanceof TypeVariable) {
-            return erase(((TypeVariable<?>) type).getBounds()[0]);
-        } else {
-            return type;
-        }
     }
 
     private static void resetLanguageHomes() throws ReflectiveOperationException {
@@ -498,19 +246,12 @@ public class TruffleFileTest extends AbstractPolyglotTest {
         reset.invoke(null);
     }
 
-    @SuppressWarnings({"unchecked", "unused"})
-    private static <T extends Throwable> T silenceException(Class<T> type, Throwable t) throws T {
-        throw (T) t;
-    }
-
     public static class BaseDetector implements TruffleFile.FileTypeDetector {
 
         private static Map<Class<? extends BaseDetector>, BaseDetector> INSTANCES = new HashMap<>();
 
         private int findMimeTypeCalled;
         private String mimeType;
-        private Charset encoding;
-        Predicate<TruffleFile> recognizer;
 
         protected BaseDetector() {
             INSTANCES.put(getClass(), this);
@@ -526,20 +267,10 @@ public class TruffleFileTest extends AbstractPolyglotTest {
             mimeType = value;
         }
 
-        void setEncoding(Charset value) {
-            encoding = value;
-        }
-
-        void reset() {
-            findMimeTypeCalled = 0;
-            mimeType = null;
-            encoding = null;
-            recognizer = null;
-        }
-
         @Override
         public String findMimeType(TruffleFile file) throws IOException {
-            if (getRecognizer().test(file)) {
+            String name = file.getName();
+            if (name != null && name.endsWith(".duplicate")) {
                 findMimeTypeCalled++;
                 return mimeType;
             } else {
@@ -549,23 +280,12 @@ public class TruffleFileTest extends AbstractPolyglotTest {
 
         @Override
         public Charset findEncoding(TruffleFile file) throws IOException {
-            if (getRecognizer().test(file)) {
-                return encoding;
-            } else {
-                return null;
-            }
+            return null;
         }
 
         @SuppressWarnings("unchecked")
         static <T extends BaseDetector> T getInstance(Class<T> clazz) {
             return (T) INSTANCES.get(clazz);
-        }
-
-        private Predicate<TruffleFile> getRecognizer() {
-            if (recognizer == null) {
-                recognizer = (file) -> file.getName() != null && file.getName().endsWith(".duplicate");
-            }
-            return recognizer;
         }
     }
 
@@ -584,124 +304,4 @@ public class TruffleFileTest extends AbstractPolyglotTest {
 
     }
 
-    static final class EmptyPathTestFs implements FileSystem {
-
-        @Override
-        public Path parsePath(URI uri) {
-            return Paths.get(uri);
-        }
-
-        @Override
-        public Path parsePath(String path) {
-            return Paths.get(path);
-        }
-
-        @Override
-        public Path toAbsolutePath(Path path) {
-            // Path operations are allowed
-            return path.toAbsolutePath();
-        }
-
-        @Override
-        public Path toRealPath(Path path, LinkOption... linkOptions) throws IOException {
-            // Path operations are allowed
-            return path.toRealPath(linkOptions);
-        }
-
-        @Override
-        public String getSeparator() {
-            // Path operations are allowed
-            return FileSystem.super.getSeparator();
-        }
-
-        @Override
-        public String getPathSeparator() {
-            // Path operations are allowed
-            return FileSystem.super.getPathSeparator();
-        }
-
-        @Override
-        public void checkAccess(Path path, Set<? extends AccessMode> modes, LinkOption... linkOptions) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public void createDirectory(Path dir, FileAttribute<?>... attrs) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public void delete(Path path) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public SeekableByteChannel newByteChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public DirectoryStream<Path> newDirectoryStream(Path dir, DirectoryStream.Filter<? super Path> filter) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public Map<String, Object> readAttributes(Path path, String attributes, LinkOption... options) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public void setAttribute(Path path, String attribute, Object value, LinkOption... options) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public void move(Path source, Path target, CopyOption... options) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public Path readSymbolicLink(Path link) throws IOException {
-            throw fail();
-        }
-
-        @Override
-        public void setCurrentWorkingDirectory(Path currentWorkingDirectory) {
-            throw fail();
-        }
-
-        @Override
-        public String getMimeType(Path path) {
-            throw fail();
-        }
-
-        @Override
-        public Charset getEncoding(Path path) {
-            throw fail();
-        }
-
-        @Override
-        public Path getTempDirectory() {
-            throw fail();
-        }
-
-        @Override
-        public void createLink(Path link, Path existing) throws IOException {
-            fail();
-        }
-
-        @Override
-        public void createSymbolicLink(Path link, Path target, FileAttribute<?>... attrs) throws IOException {
-            fail();
-        }
-
-        @Override
-        public void copy(Path source, Path target, CopyOption... options) throws IOException {
-            fail();
-        }
-
-        private static RuntimeException fail() {
-            throw new RuntimeException("Should not reach here.");
-        }
-    }
 }

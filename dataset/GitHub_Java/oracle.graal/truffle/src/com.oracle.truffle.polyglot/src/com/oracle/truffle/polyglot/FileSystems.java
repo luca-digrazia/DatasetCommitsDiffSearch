@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -74,7 +74,6 @@ import java.util.function.Function;
 
 import com.oracle.truffle.api.TruffleFile;
 import java.nio.charset.Charset;
-import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.polyglot.io.FileSystem;
 
 final class FileSystems {
@@ -109,12 +108,8 @@ final class FileSystems {
         return new LanguageHomeFileSystem();
     }
 
-    static boolean hasAllAccess(FileSystem fileSystem) {
-        return fileSystem instanceof InternalFileSystem && ((InternalFileSystem) fileSystem).hasAllAccess();
-    }
-
-    static boolean isInternal(FileSystem fileSystem) {
-        return fileSystem instanceof InternalFileSystem;
+    static boolean isDefaultFileSystem(FileSystem fileSystem) {
+        return fileSystem != null && fileSystem.getClass() == NIOFileSystem.class && FILE_SCHEME.equals(((NIOFileSystem) fileSystem).delegate.getScheme());
     }
 
     static boolean hasNoIOFileSystem(TruffleFile file) {
@@ -140,21 +135,6 @@ final class FileSystems {
      */
     static void resetDefaultFileSystemProvider() {
         DEFAULT_FILE_SYSTEM_PROVIDER.set(null);
-    }
-
-    static String getRelativePathInLanguageHome(TruffleFile file) {
-        FileSystem fs = EngineAccessor.LANGUAGE.getFileSystem(file);
-        Path path = EngineAccessor.LANGUAGE.getPath(file);
-        for (LanguageCache cache : LanguageCache.languages().values()) {
-            final String languageHome = cache.getLanguageHome();
-            if (languageHome != null) {
-                Path languageHomePath = fs.parsePath(languageHome);
-                if (path.startsWith(languageHomePath)) {
-                    return languageHomePath.relativize(path).toString();
-                }
-            }
-        }
-        return null;
     }
 
     private static FileSystem newFileSystem(final FileSystemProvider fileSystemProvider) {
@@ -191,7 +171,7 @@ final class FileSystems {
         return true;
     }
 
-    static final class PreInitializeContextFileSystem implements InternalFileSystem {
+    static final class PreInitializeContextFileSystem implements FileSystem {
 
         private FileSystem delegate; // effectively final after patch context
         private Function<Path, PreInitializePath> factory;
@@ -210,37 +190,6 @@ final class FileSystems {
             Objects.requireNonNull(newDelegate, "NewDelegate must be non null.");
             this.delegate = newDelegate;
             this.factory = new ImageExecutionTimeFactory();
-        }
-
-        String pathToString(Path path) {
-            if (delegate != INVALID_FILESYSTEM) {
-                return path.toString();
-            }
-            verifyImageState();
-            return ((PreInitializePath) path).resolve(newDefaultFileSystem()).toString();
-        }
-
-        URI absolutePathtoURI(Path path) {
-            if (delegate != INVALID_FILESYSTEM) {
-                return path.toUri();
-            }
-            verifyImageState();
-            Path resolved = ((PreInitializePath) path).resolve(newDefaultFileSystem());
-            if (!resolved.isAbsolute()) {
-                throw new IllegalArgumentException("Path must be absolute.");
-            }
-            return resolved.toUri();
-        }
-
-        private static void verifyImageState() {
-            if (ImageInfo.inImageBuildtimeCode()) {
-                throw new IllegalStateException("Reintroducing absolute path into an image heap.");
-            }
-        }
-
-        @Override
-        public boolean hasAllAccess() {
-            return delegate instanceof InternalFileSystem && ((InternalFileSystem) delegate).hasAllAccess();
         }
 
         @Override
@@ -427,37 +376,30 @@ final class FileSystems {
         }
 
         private final class PreInitializePath implements Path {
-
-            private volatile Object delegatePath;
+            private Object delegatePath;
 
             PreInitializePath(Path delegatePath) {
                 this.delegatePath = delegatePath;
             }
 
             private Path getDelegate() {
-                Path result = resolve(delegate);
-                delegatePath = result;
-                return result;
-            }
-
-            private Path resolve(FileSystem fs) {
-                Object current = delegatePath;
-                if (current instanceof Path) {
-                    return (Path) current;
-                } else if (current instanceof ImageHeapPath) {
-                    ImageHeapPath imageHeapPath = (ImageHeapPath) current;
+                if (delegatePath instanceof Path) {
+                    return (Path) delegatePath;
+                } else if (delegatePath instanceof ImageHeapPath) {
+                    ImageHeapPath imageHeapPath = (ImageHeapPath) delegatePath;
                     String languageId = imageHeapPath.languageId;
                     String path = imageHeapPath.path;
                     Path result;
                     String newLanguageHome;
                     if (languageId != null && (newLanguageHome = LanguageCache.languages().get(languageId).getLanguageHome()) != null) {
-                        result = fs.parsePath(newLanguageHome).resolve(path);
+                        result = delegate.parsePath(newLanguageHome).resolve(path);
                     } else {
-                        result = fs.parsePath(path);
+                        result = delegate.parsePath(path);
                     }
+                    delegatePath = result;
                     return result;
                 } else {
-                    throw new IllegalStateException("Unknown delegate " + String.valueOf(current));
+                    throw new IllegalStateException("Unknown delegate " + String.valueOf(delegatePath));
                 }
             }
 
@@ -639,7 +581,7 @@ final class FileSystems {
         }
     }
 
-    private static final class NIOFileSystem implements InternalFileSystem {
+    private static final class NIOFileSystem implements FileSystem {
 
         private final FileSystemProvider delegate;
         private final boolean explicitUserDir;
@@ -659,11 +601,6 @@ final class FileSystems {
             this.delegate = fileSystemProvider;
             this.explicitUserDir = explicitUserDir;
             this.userDir = userDir;
-        }
-
-        @Override
-        public boolean hasAllAccess() {
-            return FILE_SCHEME.equals(delegate.getScheme());
         }
 
         @Override
@@ -859,14 +796,9 @@ final class FileSystems {
         }
     }
 
-    private static class DeniedIOFileSystem implements InternalFileSystem {
+    private static class DeniedIOFileSystem implements FileSystem {
 
         DeniedIOFileSystem() {
-        }
-
-        @Override
-        public boolean hasAllAccess() {
-            return false;
         }
 
         @Override
@@ -1076,12 +1008,7 @@ final class FileSystems {
         }
     }
 
-    private static final class InvalidFileSystem implements InternalFileSystem {
-
-        @Override
-        public boolean hasAllAccess() {
-            return false;
-        }
+    private static final class InvalidFileSystem implements FileSystem {
 
         @Override
         public Path parsePath(URI uri) {
@@ -1197,10 +1124,6 @@ final class FileSystems {
             }
             return detectors;
         }
-    }
-
-    private interface InternalFileSystem extends FileSystem {
-        boolean hasAllAccess();
     }
 
     private static SecurityException forbidden(final Path path) {
