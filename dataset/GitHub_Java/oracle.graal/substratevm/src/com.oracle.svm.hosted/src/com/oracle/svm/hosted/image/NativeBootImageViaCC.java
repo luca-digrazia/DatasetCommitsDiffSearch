@@ -86,16 +86,12 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
 
     class BinutilsCCLinkerInvocation extends CCLinkerInvocation {
 
-        private final boolean staticExecWithDynamicallyLinkLibC = SubstrateOptions.StaticExecutableWithDynamicLibC.getValue();
+        private final boolean shouldDynamicallyLinkLibC = SubstrateOptions.StaticExecutableWithDynamicLibC.getValue();
         private final Set<String> libCLibaries = new HashSet<>(Arrays.asList("pthread", "dl", "rt"));
 
         BinutilsCCLinkerInvocation() {
             additionalPreOptions.add("-z");
             additionalPreOptions.add("noexecstack");
-            if (SubstrateOptions.UseOnlyWritableBootImageHeap.getValue()) {
-                additionalPreOptions.add("-fuse-ld=gold");
-                additionalPreOptions.add("-Wl,--rosegment");
-            }
 
             if (removeUnusedSymbols()) {
                 /* Perform garbage collection of unused input sections. */
@@ -146,7 +142,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                 case EXECUTABLE:
                     break;
                 case STATIC_EXECUTABLE:
-                    if (!staticExecWithDynamicallyLinkLibC) {
+                    if (!shouldDynamicallyLinkLibC) {
                         cmd.add("-static");
                     }
                     break;
@@ -162,18 +158,13 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         protected List<String> getLibrariesCommand() {
             List<String> cmd = new ArrayList<>();
             for (String lib : libs) {
-                if (staticExecWithDynamicallyLinkLibC) {
+                if (shouldDynamicallyLinkLibC) {
                     String linkingMode = libCLibaries.contains(lib)
                                     ? "dynamic"
                                     : "static";
                     cmd.add("-Wl,-B" + linkingMode);
                 }
                 cmd.add("-l" + lib);
-            }
-
-            // Make sure libgcc gets statically linked
-            if (staticExecWithDynamicallyLinkLibC) {
-                cmd.add("-static-libgcc");
             }
             return cmd;
         }
