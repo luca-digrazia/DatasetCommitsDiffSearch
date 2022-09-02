@@ -179,6 +179,10 @@ public abstract class ThreadLocalHandshake {
             this.threads = Collections.synchronizedSet(new HashSet<>(Arrays.asList(initialThreads)));
         }
 
+        boolean isSideEffecting() {
+            return sideEffecting;
+        }
+
         @Override
         public boolean isCancelled() {
             return cancelled;
@@ -231,17 +235,6 @@ public abstract class ThreadLocalHandshake {
             return null;
         }
 
-        public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-            if (sync) {
-                phaser.awaitAdvanceInterruptibly(0, timeout, unit);
-                phaser.awaitAdvanceInterruptibly(1, timeout, unit);
-                // still need to:
-            } else {
-                phaser.awaitAdvanceInterruptibly(0, timeout, unit);
-            }
-            return null;
-        }
-
         public boolean isDone() {
             return cancelled || phaser.getUnarrivedParties() == 0;
         }
@@ -253,6 +246,17 @@ public abstract class ThreadLocalHandshake {
             } else {
                 return false;
             }
+        }
+
+        public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+            if (sync) {
+                phaser.awaitAdvanceInterruptibly(0, timeout, unit);
+                phaser.awaitAdvanceInterruptibly(1, timeout, unit);
+                // still need to:
+            } else {
+                phaser.awaitAdvanceInterruptibly(0, timeout, unit);
+            }
+            return null;
         }
 
         @Override
@@ -506,7 +510,7 @@ public abstract class ThreadLocalHandshake {
                     }
                 }
             } finally {
-                setBlockedImpl(location, prev, false);
+                setBlockedImpl(location, prev, true);
             }
         }
 
@@ -525,7 +529,7 @@ public abstract class ThreadLocalHandshake {
                     }
                 }
             } finally {
-                setBlockedImpl(location, prev, false);
+                setBlockedImpl(location, prev, true);
             }
         }
 
