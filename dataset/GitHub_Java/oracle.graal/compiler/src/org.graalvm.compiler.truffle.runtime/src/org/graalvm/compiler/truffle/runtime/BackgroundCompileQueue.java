@@ -39,7 +39,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope;
 import org.graalvm.options.OptionValues;
 
@@ -86,7 +85,7 @@ public class BackgroundCompileQueue {
             }
             threads = Math.max(1, threads);
 
-            ThreadFactory factory = newThreadFactory("TruffleCompilerThread");
+            TruffleCompilerThreadFactory factory = new TruffleCompilerThreadFactory("TruffleCompilerThread");
 
             return compilationExecutorService = new ThreadPoolExecutor(threads, threads, 0, TimeUnit.MILLISECONDS,
                             new PriorityBlockingQueue<>(), factory) {
@@ -96,10 +95,6 @@ public class BackgroundCompileQueue {
                 }
             };
         }
-    }
-
-    protected ThreadFactory newThreadFactory(String threadNamePrefix) {
-        return new TruffleCompilerThreadFactory(threadNamePrefix);
     }
 
     public CancellableCompileTask submitTask(Priority priority, OptimizedCallTarget target, Request request) {
