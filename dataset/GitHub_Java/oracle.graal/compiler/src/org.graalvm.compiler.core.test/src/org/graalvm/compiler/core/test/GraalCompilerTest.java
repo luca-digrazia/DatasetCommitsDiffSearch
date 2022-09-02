@@ -224,27 +224,27 @@ public abstract class GraalCompilerTest extends GraalTest {
      * Can be overridden by unit tests to verify properties of the graph.
      *
      * @param graph the graph at the end of HighTier
-     * @throws AssertionError if the verification fails
      */
-    protected void checkHighTierGraph(StructuredGraph graph) {
+    protected boolean checkHighTierGraph(StructuredGraph graph) {
+        return true;
     }
 
     /**
      * Can be overridden by unit tests to verify properties of the graph.
      *
      * @param graph the graph at the end of MidTier
-     * @throws AssertionError if the verification fails
      */
-    protected void checkMidTierGraph(StructuredGraph graph) {
+    protected boolean checkMidTierGraph(StructuredGraph graph) {
+        return true;
     }
 
     /**
      * Can be overridden by unit tests to verify properties of the graph.
      *
      * @param graph the graph at the end of LowTier
-     * @throws AssertionError if the verification fails
      */
-    protected void checkLowTierGraph(StructuredGraph graph) {
+    protected boolean checkLowTierGraph(StructuredGraph graph) {
+        return true;
     }
 
     protected static void breakpoint() {
@@ -288,7 +288,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
             @Override
             protected void run(StructuredGraph graph) {
-                checkHighTierGraph(graph);
+                assert checkHighTierGraph(graph) : "failed HighTier graph check";
             }
 
             @Override
@@ -305,7 +305,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
             @Override
             protected void run(StructuredGraph graph) {
-                checkMidTierGraph(graph);
+                assert checkMidTierGraph(graph) : "failed MidTier graph check";
             }
 
             @Override
@@ -322,7 +322,7 @@ public abstract class GraalCompilerTest extends GraalTest {
 
             @Override
             protected void run(StructuredGraph graph) {
-                checkLowTierGraph(graph);
+                assert checkLowTierGraph(graph) : "failed LowTier graph check";
             }
 
             @Override
