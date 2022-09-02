@@ -1,6 +1,8 @@
 package com.oracle.truffle.espresso.impl;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,19 +23,19 @@ public class InterfaceTables {
         this.itables = tmp.toArray(new InterfaceTable[0]);
     }
 
-    InterfaceTables(Klass interfKlass, ObjectKlass[] superInterfaces, Method[] declaredMethods) {
+    InterfaceTables(Symbol<Name> name, ObjectKlass[] superInterfaces, Method[] declaredMethods) {
         ArrayList<InterfaceTable> tmp = new ArrayList<>();
-        tmp.add(new InterfaceTable(interfKlass, declaredMethods));
+        tmp.add(new InterfaceTable(name, declaredMethods));
         for (ObjectKlass interf : superInterfaces) {
             tmp.addAll(Arrays.asList(interf.getItable().itables));
         }
         this.itables = tmp.toArray(new InterfaceTable[0]);
     }
 
-    public Method lookupMethod(Klass interfKlass, int index) {
+    public Method lookupMethod(Symbol<Name> interfName, int index) {
         for (InterfaceTable itable : itables) {
-            if (itable.getKlass() == interfKlass) {
-                return itable.lookupMethod(interfKlass, index);
+            if (itable.getName() == interfName) {
+                return itable.lookupMethod(interfName, index);
             }
         }
         return null;
@@ -42,11 +44,11 @@ public class InterfaceTables {
 }
 
 class InterfaceTable {
-    private final Klass thisInterfKlass;
+    private final Symbol<Name> iname;
     @CompilationFinal(dimensions = 1) private final Method[] table;
 
     InterfaceTable(ObjectKlass interf, Klass thisKlass) {
-        this.thisInterfKlass = interf;
+        this.iname = interf.getName();
         table = Arrays.copyOf(interf.getItable().itables[0].table, interf.getDeclaredMethods().length);
         for (int i = 0; i < table.length; i++) {
             Method im = table[i];
@@ -58,8 +60,8 @@ class InterfaceTable {
         }
     }
 
-    InterfaceTable(Klass thisKlass, Method[] declaredMethods) {
-        this.thisInterfKlass = thisKlass;
+    InterfaceTable(Symbol<Name> name, Method[] declaredMethods) {
+        this.iname = name;
         table = declaredMethods;
         int i = 0;
         for (Method m : declaredMethods) {
@@ -67,12 +69,12 @@ class InterfaceTable {
         }
     }
 
-    public final Klass getKlass() {
-        return thisInterfKlass;
+    public final Symbol<Name> getName() {
+        return iname;
     }
 
-    public final Method lookupMethod(Klass interfKlass, int index) {
-        assert thisInterfKlass == interfKlass;
+    public final Method lookupMethod(Symbol<Name> name, int index) {
+        assert name == iname;
         return table[index];
     }
 }
