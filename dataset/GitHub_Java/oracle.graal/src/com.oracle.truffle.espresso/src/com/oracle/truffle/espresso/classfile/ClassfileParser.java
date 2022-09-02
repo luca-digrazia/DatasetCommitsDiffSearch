@@ -201,6 +201,11 @@ public final class ClassfileParser {
         this.constantPoolPatches = constantPoolPatches;
     }
 
+    // Note: only used for reading the class name from class bytes
+    private ClassfileParser(ClassfileStream stream, EspressoContext context) {
+        this(stream, "", null, context, null);
+    }
+
     void handleBadConstant(Tag tag, ClassfileStream s) {
         if (tag == Tag.MODULE || tag == Tag.PACKAGE) {
             if (majorVersion >= JAVA_9_VERSION) {
@@ -258,41 +263,19 @@ public final class ClassfileParser {
 
     /**
      * Verifies that the class file version is supported.
+     *
+     * HotSpot comment: A legal major_version.minor_version must be one of the following:
+     * 
+     * <li>Major_version = 45, any minor_version.
+     * <li>Major_version >= 46 and major_version <= current_major_version and minor_version = 0.
+     * <li>Major_version = current_major_version and minor_version = 65535 and --enable-preview is
+     * present.
+     * 
      * 
      * @param major the major version number
      * @param minor the minor version number
      */
     private void verifyVersion(int major, int minor) {
-        if (context.getJavaVersion().java8OrEarlier()) {
-            versionCheck8(context, major, minor);
-        } else {
-            versionCheck11(context, major, minor);
-        }
-    }
-
-    /**
-     * HotSpot rules (8): A legal major_version.minor_version must be one of the following:
-     *
-     * <li>Major_version >= 45 and major_version <= current_major_version, any minor version.
-     * <li>Major_version = current_major_version and minor_version <= MAX_SUPPORTED_MINOR (= 0).
-     */
-    private static void versionCheck8(EspressoContext context, int major, int minor) {
-        if (major < JAVA_MIN_SUPPORTED_VERSION ||
-                        major > context.getJavaVersion().classFileVersion() ||
-                        (major == context.getJavaVersion().classFileVersion() && minor > JAVA_MAX_SUPPORTED_MINOR_VERSION)) {
-            throw unsupportedClassVersionError("Unsupported major.minor version " + major + "." + minor);
-        }
-    }
-
-    /**
-     * HotSpot comment (11): A legal major_version.minor_version must be one of the following:
-     *
-     * <li>Major_version = 45, any minor_version.
-     * <li>Major_version >= 46 and major_version <= current_major_version and minor_version = 0.
-     * <li>Major_version = current_major_version and minor_version = 65535 and --enable-preview is
-     * present.
-     */
-    private static void versionCheck11(EspressoContext context, int major, int minor) {
         if (major < JAVA_MIN_SUPPORTED_VERSION ||
                         major > context.getJavaVersion().classFileVersion() ||
                         major != JAVA_1_1_VERSION && minor != 0 ||
@@ -423,6 +406,38 @@ public final class ClassfileParser {
         stream.checkEndOfFile();
 
         return new ParserKlass(pool, classFlags, thisKlassName, thisKlassType, superKlass, superInterfaces, methods, fields, attributes, thisKlassIndex);
+    }
+
+    public static Symbol<Symbol.Name> getClassName(byte[] bytes, EspressoContext context) {
+        return new ClassfileParser(new ClassfileStream(bytes, null), context).getClassName();
+    }
+
+    private Symbol<Symbol.Name> getClassName() {
+
+        readMagic();
+
+        minorVersion = stream.readU2();
+        majorVersion = stream.readU2();
+        verifyVersion(majorVersion, minorVersion);
+
+        try (DebugCloseable closeable = CONSTANT_POOL.scope(context.getTimers())) {
+            if (constantPoolPatches == null) {
+                this.pool = ConstantPool.parse(context.getLanguage(), stream, this, majorVersion, minorVersion);
+            } else {
+                this.pool = ConstantPool.parse(context.getLanguage(), stream, this, constantPoolPatches, context, majorVersion, minorVersion);
+            }
+        }
+
+        // JVM_ACC_MODULE is defined in JDK-9 and later.
+        if (majorVersion >= JAVA_9_VERSION) {
+            classFlags = stream.readU2() & (JVM_RECOGNIZED_CLASS_MODIFIERS | ACC_MODULE);
+        } else {
+            classFlags = stream.readU2() & (JVM_RECOGNIZED_CLASS_MODIFIERS);
+        }
+
+        int thisKlassIndex = stream.readU2();
+
+        return pool.classAt(thisKlassIndex).getName(pool);
     }
 
     private ParserMethod[] parseMethods(boolean isInterface) {
@@ -1569,5 +1584,4 @@ public final class ClassfileParser {
             return hash;
         }
     }
-
 }
