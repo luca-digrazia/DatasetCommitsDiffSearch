@@ -58,12 +58,7 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
         } else {
             Iterator<EventFactory.Provider> it = TruffleRuntimeServices.load(EventFactory.Provider.class).iterator();
             EventFactory.Provider provider = it.hasNext() ? it.next() : null;
-            if (provider == null) {
-                factory = null;
-            } else {
-                CompilerDebugAccessor.jdkServicesAccessor().exportTo(provider.getClass());
-                factory = provider == null ? null : provider.getEventFactory();
-            }
+            factory = provider == null ? null : provider.getEventFactory();
         }
     }
 
@@ -79,6 +74,14 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
     public static void install(GraalTruffleRuntime runtime) {
         if (factory != null) {
             runtime.addListener(new JFRListener(runtime));
+        }
+    }
+
+    @Override
+    public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
+        CompilationData data = getCurrentData();
+        if (data != null) {
+            handleFailedCompilation(data, reason, false, false);
         }
     }
 
@@ -118,13 +121,7 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
 
     @Override
     public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanentBailout) {
-        CompilationData data = getCurrentData();
-        statistics.finishCompilation(data.finish(), bailout, 0);
-        if (data.event != null) {
-            data.event.failed(isPermanentFailure(bailout, permanentBailout), reason);
-            data.event.publish();
-        }
-        currentCompilation.remove();
+        handleFailedCompilation(getCurrentData(), reason, bailout, isPermanentFailure(bailout, permanentBailout));
     }
 
     @Override
@@ -178,6 +175,15 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
 
     private CompilationData getCurrentData() {
         return currentCompilation.get();
+    }
+
+    private void handleFailedCompilation(CompilationData data, CharSequence message, boolean bailout, boolean permanent) {
+        statistics.finishCompilation(data.finish(), bailout, 0);
+        if (data.event != null) {
+            data.event.failed(permanent, message);
+            data.event.publish();
+        }
+        currentCompilation.remove();
     }
 
     private static final class CompilationData {

@@ -22,27 +22,28 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.truffle.jfr.jdk11;
+package org.graalvm.compiler.truffle.jfr;
 
-import jdk.jfr.BooleanFlag;
-import jdk.jfr.Category;
-import jdk.jfr.Description;
-import jdk.jfr.Label;
-import jdk.jfr.StackTrace;
+/**
+ * The JFR event describing a Truffle compilation.
+ */
+public interface CompilationEvent extends RootFunctionEvent {
 
-@Category("Truffle Compiler")
-@Label("Compilation Failure")
-@Description("Truffe Compilation Failures")
-@StackTrace(false)
-class CompilationFailureEventImpl extends RootFunctionEventImpl {
+    void compilationStarted();
 
-    @Label("Permanent Failure") @Description("Permanent Failure") @BooleanFlag public boolean permanentFailure;
+    void failed(boolean permanent, CharSequence reason);
 
-    @Label("Failure Reason") @Description("Failure Reason") public String failureReason;
+    void succeeded();
 
-    CompilationFailureEventImpl(String source, String rootFunction, boolean permanent, CharSequence reason) {
-        super(source, rootFunction);
-        this.permanentFailure = permanent;
-        this.failureReason = reason == null ? null : reason.toString();
-    }
+    void setCompiledCodeSize(int size);
+
+    void setCompiledCodeAddress(long addr);
+
+    void setInlinedCalls(int count);
+
+    void setDispatchedCalls(int count);
+
+    void setGraalNodeCount(int count);
+
+    void setPartialEvaluationNodeCount(int count);
 }

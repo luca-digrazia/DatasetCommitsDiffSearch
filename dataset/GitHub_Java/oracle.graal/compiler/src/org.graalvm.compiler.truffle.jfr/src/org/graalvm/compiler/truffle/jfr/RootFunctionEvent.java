@@ -22,27 +22,11 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.truffle.jfr.jdk11;
+package org.graalvm.compiler.truffle.jfr;
 
-import jdk.jfr.BooleanFlag;
-import jdk.jfr.Category;
-import jdk.jfr.Description;
-import jdk.jfr.Label;
-import jdk.jfr.StackTrace;
+import com.oracle.truffle.api.RootCallTarget;
 
-@Category("Truffle Compiler")
-@Label("Compilation Failure")
-@Description("Truffe Compilation Failures")
-@StackTrace(false)
-class CompilationFailureEventImpl extends RootFunctionEventImpl {
+public interface RootFunctionEvent extends Event {
 
-    @Label("Permanent Failure") @Description("Permanent Failure") @BooleanFlag public boolean permanentFailure;
-
-    @Label("Failure Reason") @Description("Failure Reason") public String failureReason;
-
-    CompilationFailureEventImpl(String source, String rootFunction, boolean permanent, CharSequence reason) {
-        super(source, rootFunction);
-        this.permanentFailure = permanent;
-        this.failureReason = reason == null ? null : reason.toString();
-    }
+    void setRootFunction(RootCallTarget target);
 }

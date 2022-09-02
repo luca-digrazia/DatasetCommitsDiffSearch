@@ -28,34 +28,31 @@ import jdk.jfr.BooleanFlag;
 import jdk.jfr.Category;
 import jdk.jfr.Description;
 import jdk.jfr.DataAmount;
-import jdk.jfr.Event;
 import jdk.jfr.Label;
 import jdk.jfr.MemoryAddress;
 import jdk.jfr.StackTrace;
-import com.oracle.truffle.api.RootCallTarget;
+import jdk.jfr.Unsigned;
 import org.graalvm.compiler.truffle.jfr.CompilationEvent;
 
 @Category("Truffle Compiler")
 @Label("Compilation")
 @Description("Truffe Compilation")
 @StackTrace(false)
-class CompilationEventImpl extends Event implements CompilationEvent {
+class CompilationEventImpl extends RootFunctionEventImpl implements CompilationEvent {
 
     @Label("Succeeded") @Description("Compilation Status") @BooleanFlag public boolean success;
 
-    @Label("Source") @Description("Compiled Source") public String source;
-
-    @Label("Compiled Code Size") @Description("Compiled Code Size") @DataAmount public int compiledCodeSize;
+    @Label("Compiled Code Size") @Description("Compiled Code Size") @DataAmount @Unsigned public int compiledCodeSize;
 
     @Label("Compiled Code Address") @Description("Compiled Code Address") @MemoryAddress public long compiledCodeAddress;
 
-    @Label("Inlined Calls") @Description("Inlined Calls") public int inlinedCalls;
+    @Label("Inlined Calls") @Description("Inlined Calls") @Unsigned public int inlinedCalls;
 
-    @Label("Dispatched Calls") @Description("Dispatched Calls") public int dispatchedCalls;
+    @Label("Dispatched Calls") @Description("Dispatched Calls") @Unsigned public int dispatchedCalls;
 
-    @Label("Graal Nodes") @Description("Graal Nodes Count") public int graalNodeCount;
+    @Label("Graal Nodes") @Description("Graal Node Count") @Unsigned public int graalNodeCount;
 
-    @Label("Partial Eval Nodes") @Description("Partial Evalualtion Nodes Count") public int peNodeCount;
+    @Label("Truffle Nodes") @Description("Truffle Node Count") @Unsigned public int peNodeCount;
 
     private transient CompilationFailureEventImpl failure;
 
@@ -74,12 +71,7 @@ class CompilationEventImpl extends Event implements CompilationEvent {
     public void failed(boolean permanent, CharSequence reason) {
         end();
         this.success = false;
-        this.failure = new CompilationFailureEventImpl(source, permanent, reason);
-    }
-
-    @Override
-    public void setSource(RootCallTarget target) {
-        this.source = EventFactoryImpl.targetName(target);
+        this.failure = new CompilationFailureEventImpl(source, rootFunction, permanent, reason);
     }
 
     @Override
@@ -114,9 +106,9 @@ class CompilationEventImpl extends Event implements CompilationEvent {
 
     @Override
     public void publish() {
-        commit();
+        super.publish();
         if (failure != null) {
-            failure.commit();
+            failure.publish();
         }
     }
 }
