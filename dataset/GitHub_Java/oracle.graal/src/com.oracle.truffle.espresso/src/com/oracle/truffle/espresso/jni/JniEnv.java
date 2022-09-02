@@ -927,42 +927,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     // endregion Set*Field
 
-    private boolean booleanOrDefault(Object result) {
-        return (result instanceof Boolean || getContext().SpecCompliancyMode == STRICT) ? (boolean) result : false;
-    }
-
-    private byte byteOrDefault(Object result) {
-        return (result instanceof Byte || getContext().SpecCompliancyMode == STRICT) ? (byte) result : (byte) 0;
-    }
-
-    private char charOrDefault(Object result) {
-        return (result instanceof Character || getContext().SpecCompliancyMode == STRICT) ? (char) result : '\0';
-    }
-
-    private short shortOrDefault(Object result) {
-        return (result instanceof Short || getContext().SpecCompliancyMode == STRICT) ? (short) result : (short) 0;
-    }
-
-    private int intOrDefault(Object result) {
-        return (result instanceof Integer || getContext().SpecCompliancyMode == STRICT) ? (int) result : 0;
-    }
-
-    private long longOrDefault(Object result) {
-        return (result instanceof Long || getContext().SpecCompliancyMode == STRICT) ? (long) result : 0L;
-    }
-
-    private float floatOrDefault(Object result) {
-        return (result instanceof Float || getContext().SpecCompliancyMode == STRICT) ? (float) result : 0.0f;
-    }
-
-    private double doubleOrDefault(Object result) {
-        return (result instanceof Double || getContext().SpecCompliancyMode == STRICT) ? (double) result : 0.0d;
-    }
-
-    private StaticObject objectOrDefault(Object result) {
-        return (result instanceof StaticObject || getContext().SpecCompliancyMode == STRICT) ? (StaticObject) result : StaticObject.NULL;
-    }
-
     // region Call*Method
 
     private Object callVirtualMethodGeneric(StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
@@ -997,63 +961,63 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public @Host(Object.class) StaticObject CallObjectMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return objectOrDefault(result);
+        return (result instanceof StaticObject || getContext().SpecCompliancyMode == STRICT) ? (StaticObject) result : StaticObject.NULL;
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public boolean CallBooleanMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return booleanOrDefault(result);
+        return (result instanceof Boolean || getContext().SpecCompliancyMode == STRICT) ? (boolean) result : false;
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public char CallCharMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return charOrDefault(result);
+        return (result instanceof Character || getContext().SpecCompliancyMode == STRICT) ? (char) result : '\0';
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public byte CallByteMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return byteOrDefault(result);
+        return (result instanceof Byte || getContext().SpecCompliancyMode == STRICT) ? (byte) result : (byte) 0;
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public short CallShortMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return shortOrDefault(result);
+        return (result instanceof Short || getContext().SpecCompliancyMode == STRICT) ? (short) result : (short) 0;
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public int CallIntMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return intOrDefault(result);
+        return (result instanceof Integer || getContext().SpecCompliancyMode == STRICT) ? (int) result : 0;
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public float CallFloatMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return floatOrDefault(result);
+        return (result instanceof Float || getContext().SpecCompliancyMode == STRICT) ? (float) result : 0.0f;
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public double CallDoubleMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return doubleOrDefault(result);
+        return (result instanceof Double || getContext().SpecCompliancyMode == STRICT) ? (double) result : 0.0d;
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public long CallLongMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return longOrDefault(result);
+        return (result instanceof Long || getContext().SpecCompliancyMode == STRICT) ? (long) result : 0L;
     }
 
     @SuppressWarnings("unused")
@@ -1074,7 +1038,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return objectOrDefault(result);
+        return (result instanceof StaticObject || getContext().SpecCompliancyMode == STRICT) ? (StaticObject) result : StaticObject.NULL;
     }
 
     @JniImpl
@@ -1084,7 +1048,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return booleanOrDefault(result);
+        return (result instanceof Boolean || getContext().SpecCompliancyMode == STRICT) ? (boolean) result : false;
     }
 
     @JniImpl
@@ -1094,7 +1058,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return charOrDefault(result);
+        return (result instanceof Character || getContext().SpecCompliancyMode == STRICT) ? (char) result : '\0';
     }
 
     @JniImpl
@@ -1104,7 +1068,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return byteOrDefault(result);
+        return (result instanceof Byte || getContext().SpecCompliancyMode == STRICT) ? (byte) result : (byte) 0;
     }
 
     @JniImpl
@@ -1114,7 +1078,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return shortOrDefault(result);
+        return (result instanceof Short || getContext().SpecCompliancyMode == STRICT) ? (short) result : (short) 0;
     }
 
     @JniImpl
@@ -1124,7 +1088,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return intOrDefault(result);
+        return (result instanceof Integer || getContext().SpecCompliancyMode == STRICT) ? (int) result : 0;
     }
 
     @JniImpl
@@ -1134,7 +1098,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return floatOrDefault(result);
+        return (result instanceof Float || getContext().SpecCompliancyMode == STRICT) ? (float) result : 0.0f;
     }
 
     @JniImpl
@@ -1144,7 +1108,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return doubleOrDefault(result);
+        return (result instanceof Double || getContext().SpecCompliancyMode == STRICT) ? (double) result : 0.0d;
     }
 
     @JniImpl
@@ -1154,7 +1118,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return longOrDefault(result);
+        return (result instanceof Long || getContext().SpecCompliancyMode == STRICT) ? (long) result : 0L;
     }
 
     @JniImpl
@@ -1177,7 +1141,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return objectOrDefault(result);
+        return (result instanceof StaticObject || getContext().SpecCompliancyMode == STRICT) ? (StaticObject) result : StaticObject.NULL;
     }
 
     @JniImpl
@@ -1186,7 +1150,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return booleanOrDefault(result);
+        return (result instanceof Boolean || getContext().SpecCompliancyMode == STRICT) ? (boolean) result : false;
     }
 
     @JniImpl
@@ -1195,7 +1159,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return charOrDefault(result);
+        return (result instanceof Character || getContext().SpecCompliancyMode == STRICT) ? (char) result : '\0';
     }
 
     @JniImpl
@@ -1204,7 +1168,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return byteOrDefault(result);
+        return (result instanceof Byte || getContext().SpecCompliancyMode == STRICT) ? (byte) result : (byte) 0;
     }
 
     @JniImpl
@@ -1213,9 +1177,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return shortOrDefault(result);
+        return (result instanceof Short || getContext().SpecCompliancyMode == STRICT) ? (short) result : (short) 0;
     }
-
 
     @JniImpl
     public int CallStaticIntMethodVarargs(@Host(Class.class) StaticObject clazz, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
@@ -1223,7 +1186,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return intOrDefault(result);
+        return (result instanceof Integer || getContext().SpecCompliancyMode == STRICT) ? (int) result : 0;
     }
 
     @JniImpl
@@ -1232,7 +1195,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return floatOrDefault(result);
+        return (result instanceof Float || getContext().SpecCompliancyMode == STRICT) ? (float) result : 0.0f;
     }
 
     @JniImpl
@@ -1241,7 +1204,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return doubleOrDefault(result);
+        return (result instanceof Double || getContext().SpecCompliancyMode == STRICT) ? (double) result : 0.0d;
     }
 
     @JniImpl
@@ -1250,9 +1213,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return longOrDefault(result);
+        return (result instanceof Long || getContext().SpecCompliancyMode == STRICT) ? (long) result : 0L;
     }
-
 
     @JniImpl
     public void CallStaticVoidMethodVarargs(@Host(Class.class) StaticObject clazz, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
