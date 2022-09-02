@@ -48,8 +48,7 @@ public final class OptimizedIndirectCallNode extends IndirectCallNode {
     @Override
     public Object call(CallTarget target, Object... arguments) {
         try {
-            OptimizedCallTarget optimizedTarget = ((OptimizedCallTarget) target);
-            return optimizedTarget.callIndirect(this, arguments);
+            return ((OptimizedCallTarget) target).callIndirect(this, arguments);
         } catch (Throwable t) {
             if (exceptionProfile == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();

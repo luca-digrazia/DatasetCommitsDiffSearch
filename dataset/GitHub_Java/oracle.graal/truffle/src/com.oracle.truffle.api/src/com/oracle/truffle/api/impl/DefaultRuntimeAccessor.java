@@ -130,11 +130,6 @@ final class DefaultRuntimeAccessor extends Accessor {
             return args;
         }
 
-        @Override
-        public void flushCompileQueue(Object runtimeData) {
-            // default runtime has no compile queue.
-        }
-
         @SuppressWarnings("unchecked")
         @Override
         public <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull, boolean exact) {
