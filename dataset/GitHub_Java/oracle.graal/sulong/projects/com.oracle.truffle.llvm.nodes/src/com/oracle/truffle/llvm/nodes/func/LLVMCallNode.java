@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.nodes.func;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -47,7 +48,7 @@ public final class LLVMCallNode extends LLVMExpressionNode {
     public static final int USER_ARGUMENT_OFFSET = 1;
 
     @Children private final LLVMExpressionNode[] argumentNodes;
-    @Children private final ArgumentNode[] prepareArgumentNodes;
+    @Children private volatile ArgumentNode[] prepareArgumentNodes;
     @Child private LLVMLookupDispatchTargetNode dispatchTargetNode;
     @Child private LLVMDispatchNode dispatchNode;
 
@@ -55,7 +56,6 @@ public final class LLVMCallNode extends LLVMExpressionNode {
 
     public LLVMCallNode(FunctionType functionType, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, LLVMSourceLocation source) {
         this.argumentNodes = argumentNodes;
-        this.prepareArgumentNodes = createPrepareArgumentNodes(argumentNodes);
         this.dispatchTargetNode = LLVMLookupDispatchTargetNodeGen.create(functionNode);
         this.dispatchNode = LLVMDispatchNodeGen.create(functionType);
         this.source = source;
@@ -67,14 +67,30 @@ public final class LLVMCallNode extends LLVMExpressionNode {
         Object function = dispatchTargetNode.executeGeneric(frame);
 
         Object[] argValues = new Object[argumentNodes.length];
+        ArgumentNode[] prepareNodes = getPrepareArgumentNodes();
         for (int i = 0; i < argumentNodes.length; i++) {
-            argValues[i] = prepareArgumentNodes[i].executeWithTarget(argumentNodes[i].executeGeneric(frame));
+            argValues[i] = prepareNodes[i].executeWithTarget(argumentNodes[i].executeGeneric(frame));
         }
 
         return dispatchNode.executeDispatch(function, argValues);
     }
 
-    private static ArgumentNode[] createPrepareArgumentNodes(LLVMExpressionNode[] argumentNodes) {
+    private ArgumentNode[] getPrepareArgumentNodes() {
+        ArgumentNode[] nodes = prepareArgumentNodes;
+        if (nodes == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            synchronized (this) {
+                nodes = prepareArgumentNodes;
+                if (nodes == null) {
+                    nodes = insert(createPrepareArgumentNodes());
+                    prepareArgumentNodes = nodes;
+                }
+            }
+        }
+        return nodes;
+    }
+
+    private ArgumentNode[] createPrepareArgumentNodes() {
         ArgumentNode[] nodes = new ArgumentNode[argumentNodes.length];
         for (int i = 0; i < nodes.length; i++) {
             nodes[i] = ArgumentNodeGen.create();
