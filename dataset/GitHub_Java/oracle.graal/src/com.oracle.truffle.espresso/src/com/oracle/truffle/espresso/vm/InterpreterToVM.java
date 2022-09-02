@@ -120,7 +120,15 @@ public final class InterpreterToVM implements ContextAccess {
     }
 
     public byte getArrayByte(int index, StaticObject arr) {
-        return arr.getArrayByte(index, getMeta());
+        Object raw = arr.unwrap();
+        try {
+            if (raw instanceof boolean[]) {
+                return (byte) (((boolean[]) raw)[index] ? 1 : 0);
+            }
+            return ((byte[]) raw)[index];
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public char getArrayChar(int index, StaticObject arr) {
@@ -174,7 +182,17 @@ public final class InterpreterToVM implements ContextAccess {
     }
 
     public void setArrayByte(byte value, int index, StaticObject arr) {
-        arr.setArrayByte(value, index, getMeta());
+        Object raw = arr.unwrap();
+        try {
+            if (raw instanceof boolean[]) {
+                assert value == 0 || value == 1;
+                ((boolean[]) raw)[index] = (value != 0);
+            } else {
+                ((byte[]) raw)[index] = value;
+            }
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw getMeta().throwExWithMessage(ArrayIndexOutOfBoundsException.class, e.getMessage());
+        }
     }
 
     public void setArrayChar(char value, int index, StaticObject arr) {

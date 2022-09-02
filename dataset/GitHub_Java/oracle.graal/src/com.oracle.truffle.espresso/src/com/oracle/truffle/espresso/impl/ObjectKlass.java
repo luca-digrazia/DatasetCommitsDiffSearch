@@ -28,7 +28,6 @@ import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.classfile.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.InnerClassesAttribute;
@@ -194,11 +193,10 @@ public final class ObjectKlass extends Klass {
         return isPrepared() || isInitialized();
     }
 
-    @ExplodeLoop
     private synchronized void actualInit() {
         if (!(isInitializedOrPrepared())) { // Check under lock
             if (initState == ERRONEOUS) {
-                throw getMeta().throwExWithMessage(NoClassDefFoundError.class, "Erroneous class: " + getName());
+                throw new NoClassDefFoundError("Erroneous class: " + getName());
             }
             initState = PREPARED;
             if (getSuperKlass() != null) {
@@ -511,11 +509,7 @@ public final class ObjectKlass extends Klass {
     private void verifyKlass() {
         if (VERIFY) {
             for (Method m : declaredMethods) {
-                try {
-                    MethodVerifier.verify(m);
-                } catch (Throwable e) {
-                    throw e;
-                }
+                MethodVerifier.verify(m);
             }
         }
     }

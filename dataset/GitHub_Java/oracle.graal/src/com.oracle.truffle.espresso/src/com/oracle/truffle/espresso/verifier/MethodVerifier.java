@@ -935,7 +935,7 @@ public final class MethodVerifier implements ContextAccess {
         int curOpcode;
         curOpcode = code.opcode(BCI);
         if (!(curOpcode <= QUICK)) {
-            throw new VerifyError("invalid bytecode: " + code.readUByte(BCI));
+            throw new VerifyError("invalid bytecode: " + code.readByte(BCI - 1));
         }
         // @formatter:off
         // Checkstyle: stop
@@ -1207,18 +1207,12 @@ public final class MethodVerifier implements ContextAccess {
                 
                 case JSR: // fall through
                 case JSR_W: {
-                    if (majorVersion >= 51) {
-                        throw new VerifyError("JSR/RET bytecode in version >= 51");
-                    }
                     stack.push(ReturnAddress);
                     branch(code.readBranchDest(BCI), stack, locals);
                     // RET will need to branch here to finish the job.
                     return BCI;
                 }
                 case RET: {
-                    if (majorVersion >= 51) {
-                        throw new VerifyError("JSR/RET bytecode in version >= 51");
-                    }
                     locals.load(code.readLocalIndex(BCI), ReturnAddress);
                     return BCI;
                 }
@@ -1301,7 +1295,7 @@ public final class MethodVerifier implements ContextAccess {
                     if (curOpcode == GETFIELD) {
                         Symbol<Type> fieldHolderType = getTypes().fromName(frc.getHolderKlassName(pool));
                         Operand fieldHolder = kindToOperand(fieldHolderType);
-                        Operand receiver = checkInitAccess(stack.popRef(fieldHolder), fieldHolder);
+                        Operand receiver = stack.popRef(fieldHolder);
                         checkProtectedField(receiver, fieldHolderType, code.readCPI(BCI));
                         if (receiver.isArrayType()) {
                             throw new VerifyError("Trying to access field of an array type: " + receiver);
@@ -1321,11 +1315,14 @@ public final class MethodVerifier implements ContextAccess {
                     }
                     FieldRefConstant frc = (FieldRefConstant) pc;
                     Symbol<Type> type = frc.getType(pool);
-                    Operand toPut = stack.pop(kindToOperand(type));
-                    checkInit(toPut);
+                    Operand op = kindToOperand(type);
+                    stack.pop(op);
+                    if (op.isUninit()) {
+                        throw new VerifyError("Storing uninitialized reference in a field.");
+                    }
                     if (curOpcode == PUTFIELD) {
                         Operand fieldHolder = kindToOperand(getTypes().fromName(frc.getHolderKlassName(pool)));
-                        Operand receiver = checkInitAccess(stack.popRef(fieldHolder), fieldHolder);
+                        Operand receiver = checkInit(stack.popRef(fieldHolder));
                         if (receiver.isArrayType()) {
                             throw new VerifyError("Trying to access field of an array type: " + receiver);
                         }
@@ -1343,72 +1340,42 @@ public final class MethodVerifier implements ContextAccess {
                     // @formatter:on
                 {
                     // Check padding.
-                    if (curOpcode == INVOKEINTERFACE && code.readUByte(BCI + 4) != 0) {
+                    if (curOpcode == INVOKEINTERFACE && code.readByte(BCI + 3) != 0) {
                         throw new VerifyError("4th byte after INVOKEINTERFACE must be 0.");
                     }
-
                     // Check CP validity
                     PoolConstant pc = pool.at(code.readCPI(BCI));
                     if (!(pc instanceof MethodRefConstant)) {
                         throw new VerifyError("Invalid CP constant for a MethodRef: " + pc.getClass().getName());
                     }
                     MethodRefConstant mrc = (MethodRefConstant) pc;
-
-                    // Checks versioning
-                    if (majorVersion <= 51) {
-                        if ((curOpcode == INVOKESTATIC || curOpcode == INVOKESPECIAL) && pc.tag() == INTERFACE_METHOD_REF) {
-                            throw new VerifyError(Bytecodes.nameOf(curOpcode) + " refers to an interface method with classfile version " + majorVersion);
-                        }
+                    // Check a weird thing
+                    if (majorVersion <= 51 && curOpcode == INVOKESPECIAL && mrc.tag() == INTERFACE_METHOD_REF) {
+                        throw new VerifyError("Only classfile of version >51 can use INVOKESPECIAL on interface methods");
                     }
                     Symbol<Name> calledMethodName = mrc.getName(pool);
-
                     // Check guest is not invoking <clinit>
                     if (calledMethodName == Name.CLINIT) {
-                        throw new VerifyError("Invocation of class initializer!");
+                        throw new ClassFormatError("Invocation of class initializer!");
                     }
-
                     // Only INVOKESPECIAL can call <init>
                     if (curOpcode != INVOKESPECIAL && calledMethodName == Name.INIT) {
                         throw new VerifyError("Invocation of instance initializer with opcode other than INVOKESPECIAL");
                     }
                     Symbol<Signature> calledMethodSignature = mrc.getSignature(pool);
                     Operand[] parsedSig = getOperandSig(calledMethodSignature);
-
                     // Check signature is well formed.
                     if (parsedSig.length == 0) {
                         throw new ClassFormatError("Method ref with no return value !");
                     }
-
-                    // Check signature conforms with count argument
-                    if (curOpcode == INVOKEINTERFACE) {
-                        int count = code.readUByte(BCI + 3);
-                        if (count <= 0) {
-                            throw new VerifyError("Invalid count argument for INVOKEINTERFACE: " + count);
-                        }
-                        int descCount = 1; // Has a receiver.
-                        for (int i = parsedSig.length - 2; i >= 0; i--) {
-                            descCount++;
-                            if (isType2(parsedSig[i])) {
-                                descCount++;
-                            }
-                            stack.pop(parsedSig[i]);
-                        }
-                        if (count != descCount) {
-                            throw new VerifyError("Inconsistent redundant argument count for INVOKEINTERFACE.");
-                        }
-                    } else {
-                        for (int i = parsedSig.length - 2; i >= 0; i--) {
-                            stack.pop(parsedSig[i]);
-                        }
+                    for (int i = parsedSig.length - 2; i >= 0; i--) {
+                        stack.pop(parsedSig[i]);
                     }
                     Symbol<Type> methodHolder = getTypes().fromName(mrc.getHolderKlassName(pool));
                     Operand methodHolderOp = kindToOperand(methodHolder);
 
                     if (curOpcode == INVOKESPECIAL) {
                         if (calledMethodName == Name.INIT) {
-                            if (parsedSig[parsedSig.length - 1] != Void) {
-                                throw new VerifyError("<init> method with non-void return type.");
-                            }
                             UninitReferenceOperand toInit = (UninitReferenceOperand) stack.popUninitRef(methodHolderOp);
                             if (toInit.newBCI != -1) {
                                 if (code.opcode(toInit.newBCI) != NEW) {
@@ -1755,19 +1722,11 @@ public final class MethodVerifier implements ContextAccess {
     /**
      * Checks that a given operand is initialized when accessing fields/methods.
      */
-    private Operand checkInitAccess(Operand op, Operand holder) {
+    private Operand checkInit(Operand op) {
         if (op.isUninit()) {
-            if (methodName == Name.INIT && holder.getType() == thisKlass.getType()) {
-                return op;
+            if (methodName != Name.INIT) {
+                throw new VerifyError("Accessing field or calling method of an uninitialized reference.");
             }
-            throw new VerifyError("Accessing field or calling method of an uninitialized reference.");
-        }
-        return op;
-    }
-
-    private static Operand checkInit(Operand op) {
-        if (op.isUninit()) {
-            throw new VerifyError("Accessing field or calling method of an uninitialized reference.");
         }
         return op;
     }
