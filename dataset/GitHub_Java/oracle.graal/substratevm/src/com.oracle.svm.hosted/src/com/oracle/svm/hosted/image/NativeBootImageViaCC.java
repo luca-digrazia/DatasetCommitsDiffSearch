@@ -71,11 +71,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         if (SubstrateOptions.RemoveUnusedSymbols.hasBeenSet()) {
             return SubstrateOptions.RemoveUnusedSymbols.getValue();
         }
-        /*
-         * The Darwin linker sometimes segfaults when option -dead_strip is used. Thus, Linux is the
-         * only platform were RemoveUnusedSymbols can be safely enabled per default.
-         */
-        return Platform.includedIn(Platform.LINUX.class);
+        return Platform.includedIn(InternalPlatform.PLATFORM_JNI.class);
     }
 
     class BinutilsCCLinkerInvocation extends CCLinkerInvocation {
