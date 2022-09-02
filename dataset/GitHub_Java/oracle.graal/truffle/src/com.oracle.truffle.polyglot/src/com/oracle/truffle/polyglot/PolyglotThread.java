@@ -41,7 +41,6 @@
 package com.oracle.truffle.polyglot;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -82,7 +81,6 @@ final class PolyglotThread extends Thread {
         // walking can determine in which context the frame was executed
         callTarget.call(languageContext, this, new PolyglotThreadRunnable() {
             @Override
-            @TruffleBoundary
             public void execute() {
                 PolyglotThread.super.run();
             }
