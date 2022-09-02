@@ -26,6 +26,8 @@ package org.graalvm.compiler.core.common.spi;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Provides additional meta data about JVMCI objects that is not provided by the VM itself, and
@@ -45,5 +47,14 @@ public interface MetaAccessExtensionProvider {
      * allocation node. If the method returns false, then the dynamic allocation would throw an
      * exception at run time and therefore canonicalization would miss that exception.
      */
-    boolean canConstantFoldDynamicAllocation(JavaType type);
+    boolean canConstantFoldDynamicAllocation(ResolvedJavaType type);
+
+    /**
+     * Checks if the invocation of the provided method is guaranteed to include a safepoint.
+     *
+     * @param isDirect Whether the method is being directly invoked. For indirect calls, a method is
+     *            guaranteed to have a safepoint only if all possible destinations are guaranteed to
+     *            contain a safepoint.
+     */
+    boolean isGuaranteedSafepoint(ResolvedJavaMethod method, boolean isDirect);
 }

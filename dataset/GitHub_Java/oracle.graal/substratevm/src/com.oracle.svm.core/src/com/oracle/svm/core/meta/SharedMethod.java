@@ -64,36 +64,28 @@ public interface SharedMethod extends ResolvedJavaMethod {
 
     int getDeoptOffsetInImage();
 
-    /**
-     * Returns whether the method is {@link Uninterruptible}, either by explicit annotation of the
-     * method or implicitly due to other annotations or flags.
-     */
-    default boolean isUninterruptible() {
-        if (DirectAnnotationAccess.isAnnotationPresent(this, Uninterruptible.class)) {
-            /* Explicit annotated method, so definitely uninterruptible. */
-            return true;
-        }
-
-        CFunction cFunctionAnnotation = DirectAnnotationAccess.getAnnotation(this, CFunction.class);
-        InvokeCFunctionPointer cFunctionPointerAnnotation = DirectAnnotationAccess.getAnnotation(this, InvokeCFunctionPointer.class);
-        if ((cFunctionAnnotation != null && cFunctionAnnotation.transition() == CFunction.Transition.NO_TRANSITION) ||
-                        (cFunctionPointerAnnotation != null && cFunctionPointerAnnotation.transition() == CFunction.Transition.NO_TRANSITION)) {
+    static boolean isGuaranteedSafepoint(SharedMethod method) {
+        if (DirectAnnotationAccess.isAnnotationPresent(method, Uninterruptible.class)) {
             /*
-             * If a method transfers from Java to C without a transition, then it is implicitly
-             * treated as uninterruptible. This avoids annotating many methods with multiple
-             * annotations.
+             * Methods annotated with {@link Uninterruptible} do not have safepoints.
              */
-            return true;
+            return false;
         }
-
-        if (isEntryPoint()) {
+        if ((DirectAnnotationAccess.isAnnotationPresent(method, CFunction.class) && DirectAnnotationAccess.getAnnotation(method, CFunction.class).transition() == CFunction.Transition.NO_TRANSITION) ||
+                        (DirectAnnotationAccess.isAnnotationPresent(method, InvokeCFunctionPointer.class) &&
+                                        DirectAnnotationAccess.getAnnotation(method, InvokeCFunctionPointer.class).transition() == CFunction.Transition.NO_TRANSITION)) {
             /*
-             * The synthetic graphs for C-to-Java transition set up the the fixed registers used for
-             * safepoint an stack overflow checks, so they must be uninterruptible themselves.
+             * If a method transfers from Java to C without a transition, then safepoint is not
+             * guaranteed.
              */
-            return true;
+            return false;
         }
-
-        return false;
+        if (method.isEntryPoint()) {
+            /*
+             * If a method is transferring from C to Java, then safepoint is not guaranteed.
+             */
+            return false;
+        }
+        return true;
     }
 }

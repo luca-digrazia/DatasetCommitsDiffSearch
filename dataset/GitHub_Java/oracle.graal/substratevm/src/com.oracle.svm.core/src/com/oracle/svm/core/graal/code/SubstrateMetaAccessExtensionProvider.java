@@ -58,14 +58,15 @@ public class SubstrateMetaAccessExtensionProvider implements MetaAccessExtension
 
         // check if the method itself indicates it will not have a safepoint.
         SharedMethod sharedMethod = (SharedMethod) method;
-        if (sharedMethod.isUninterruptible()) {
+        if (!SharedMethod.isGuaranteedSafepoint(sharedMethod)) {
             return false;
         }
 
         // for indirect calls, confirming all implementations also have safepoints.
         if (!isDirect) {
-            for (SharedMethod implementation : sharedMethod.getImplementations()) {
-                if (implementation.isUninterruptible()) {
+            SharedMethod[] implementations = sharedMethod.getImplementations();
+            for (SharedMethod impl : implementations) {
+                if (!SharedMethod.isGuaranteedSafepoint(impl)) {
                     return false;
                 }
             }

@@ -443,10 +443,9 @@ public final class GraalFeature implements Feature {
         AnalysisMethod aMethod = (AnalysisMethod) method;
         SubstrateMethod sMethod = objectReplacer.createMethod(aMethod);
 
-        if (!methods.containsKey(aMethod)) {
-            methods.put(aMethod, new CallTreeNode(aMethod, aMethod, null, 0, ""));
-            config.registerAsInvoked(aMethod);
-        }
+        assert !methods.containsKey(aMethod);
+        methods.put(aMethod, new CallTreeNode(aMethod, aMethod, null, 0, ""));
+        config.registerAsInvoked(aMethod);
 
         return sMethod;
     }
