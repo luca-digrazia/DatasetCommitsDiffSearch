@@ -145,7 +145,7 @@ public class BinaryParser extends BinaryStreamParser {
                     readElementSection();
                     break;
                 case Section.CODE:
-                    readCodeSection(context);
+                    readCodeSection();
                     break;
                 case Section.DATA:
                     readDataSection();
@@ -321,18 +321,17 @@ public class BinaryParser extends BinaryStreamParser {
         }
     }
 
-    private void readCodeSection(WasmContext context) {
+    private void readCodeSection() {
         int numCodeEntries = readVectorLength();
         WasmRootNode[] rootNodes = new WasmRootNode[numCodeEntries];
         for (int entry = 0; entry != numCodeEntries; ++entry) {
             rootNodes[entry] = createCodeEntry(moduleFunctionIndex + entry);
         }
-        for (int entryIndex = 0; entryIndex != numCodeEntries; ++entryIndex) {
+        for (int entry = 0; entry != numCodeEntries; ++entry) {
             int codeEntrySize = readUnsignedInt32();
             int startOffset = offset;
-            readCodeEntry(context, moduleFunctionIndex + entryIndex, rootNodes[entryIndex]);
-            Assert.assertIntEqual(offset - startOffset, codeEntrySize, String.format("Code entry %d size is incorrect", entryIndex));
-            context.linker().resolveCodeEntry(module, entryIndex);
+            readCodeEntry(moduleFunctionIndex + entry, rootNodes[entry]);
+            Assert.assertIntEqual(offset - startOffset, codeEntrySize, String.format("Code entry %d size is incorrect", entry));
         }
         moduleFunctionIndex += numCodeEntries;
     }
@@ -354,7 +353,7 @@ public class BinaryParser extends BinaryStreamParser {
         return rootNode;
     }
 
-    private void readCodeEntry(WasmContext context, int funcIndex, WasmRootNode rootNode) {
+    private void readCodeEntry(int funcIndex, WasmRootNode rootNode) {
         /*
          * Initialise the code entry local variables (which contain the parameters and the locals).
          */
@@ -364,7 +363,7 @@ public class BinaryParser extends BinaryStreamParser {
         byte returnTypeId = module.symbolTable().function(funcIndex).returnType();
         ExecutionState state = new ExecutionState();
         state.pushStackState(0);
-        WasmBlockNode bodyBlock = readBlockBody(context, rootNode.codeEntry(), state, returnTypeId, returnTypeId);
+        WasmBlockNode bodyBlock = readBlockBody(rootNode.codeEntry(), state, returnTypeId, returnTypeId);
         state.popStackState();
         rootNode.setBody(bodyBlock);
 
@@ -410,17 +409,17 @@ public class BinaryParser extends BinaryStreamParser {
         }
     }
 
-    private WasmBlockNode readBlock(WasmContext context, WasmCodeEntry codeEntry, ExecutionState state) {
+    private WasmBlockNode readBlock(WasmCodeEntry codeEntry, ExecutionState state) {
         byte blockTypeId = readBlockType();
-        return readBlockBody(context, codeEntry, state, blockTypeId, blockTypeId);
+        return readBlockBody(codeEntry, state, blockTypeId, blockTypeId);
     }
 
-    private LoopNode readLoop(WasmContext context, WasmCodeEntry codeEntry, ExecutionState state) {
+    private LoopNode readLoop(WasmCodeEntry codeEntry, ExecutionState state) {
         byte blockTypeId = readBlockType();
-        return readLoop(context, codeEntry, state, blockTypeId);
+        return readLoop(codeEntry, state, blockTypeId);
     }
 
-    private WasmBlockNode readBlockBody(WasmContext context, WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId, byte continuationTypeId) {
+    private WasmBlockNode readBlockBody(WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId, byte continuationTypeId) {
         ArrayList<Node> nestedControlTable = new ArrayList<>();
         ArrayList<Node> callNodes = new ArrayList<>();
         int startStackSize = state.stackSize();
@@ -448,7 +447,7 @@ public class BinaryParser extends BinaryStreamParser {
                     // Save the current block's stack pointer, in case we branch out of
                     // the nested block (continuation stack pointer).
                     state.pushStackState(state.stackSize());
-                    WasmBlockNode nestedBlock = readBlock(context, codeEntry, state);
+                    WasmBlockNode nestedBlock = readBlock(codeEntry, state);
                     nestedControlTable.add(nestedBlock);
                     state.popStackState();
                     break;
@@ -457,7 +456,7 @@ public class BinaryParser extends BinaryStreamParser {
                     // Save the current block's stack pointer, in case we branch out of
                     // the nested block (continuation stack pointer).
                     state.pushStackState(state.stackSize());
-                    LoopNode loopBlock = readLoop(context, codeEntry, state);
+                    LoopNode loopBlock = readLoop(codeEntry, state);
                     nestedControlTable.add(loopBlock);
                     state.popStackState();
                     break;
@@ -468,7 +467,7 @@ public class BinaryParser extends BinaryStreamParser {
                     // For the if block, we save the stack size reduced by 1, because of the
                     // condition value that will be popped before executing the if statement.
                     state.pushStackState(state.stackSize() - 1);
-                    WasmIfNode ifNode = readIf(context, codeEntry, state);
+                    WasmIfNode ifNode = readIf(codeEntry, state);
                     nestedControlTable.add(ifNode);
                     state.popStackState();
                     break;
@@ -562,10 +561,11 @@ public class BinaryParser extends BinaryStreamParser {
                     //
                     // Furthermore, if the call target is imported from another module,
                     // then that other module might not have been parsed yet.
-                    // Therefore, the call node will be created lazily during linking,
-                    // after the call target from the other module exists.
+                    // Therefore, the call node must be created lazily,
+                    // i.e. during the first execution.
+                    // Therefore, we store the WasmFunction the corresponding index,
+                    // which is replaced with the call node during the first execution.
                     callNodes.add(new WasmCallStubNode(function));
-                    context.linker().resolveCallsite(module, currentBlock, callNodes.size() - 1, function);
 
                     break;
                 }
@@ -934,9 +934,9 @@ public class BinaryParser extends BinaryStreamParser {
         return currentBlock;
     }
 
-    private LoopNode readLoop(WasmContext context, WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId) {
+    private LoopNode readLoop(WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId) {
         int initialStackPointer = state.stackSize();
-        WasmBlockNode loopBlock = readBlockBody(context, codeEntry, state, returnTypeId, ValueTypes.VOID_TYPE);
+        WasmBlockNode loopBlock = readBlockBody(codeEntry, state, returnTypeId, ValueTypes.VOID_TYPE);
 
         // TODO: Hack to correctly set the stack pointer for abstract interpretation.
         // If a block has branch instructions that target "shallower" blocks which return no value,
@@ -949,7 +949,7 @@ public class BinaryParser extends BinaryStreamParser {
         return Truffle.getRuntime().createLoopNode(loopBlock);
     }
 
-    private WasmIfNode readIf(WasmContext context, WasmCodeEntry codeEntry, ExecutionState state) {
+    private WasmIfNode readIf(WasmCodeEntry codeEntry, ExecutionState state) {
         byte blockTypeId = readBlockType();
         int initialStackPointer = state.stackSize();
 
@@ -958,7 +958,7 @@ public class BinaryParser extends BinaryStreamParser {
 
         // Read true branch.
         int startOffset = offset();
-        WasmBlockNode trueBranchBlock = readBlockBody(context, codeEntry, state, blockTypeId, blockTypeId);
+        WasmBlockNode trueBranchBlock = readBlockBody(codeEntry, state, blockTypeId, blockTypeId);
 
         // TODO: Hack to correctly set the stack pointer for abstract interpretation.
         // If a block has branch instructions that target "shallower" blocks which return no value,
@@ -979,7 +979,7 @@ public class BinaryParser extends BinaryStreamParser {
                 state.pop();
             }
 
-            falseBranchBlock = readBlockBody(context, codeEntry, state, blockTypeId, blockTypeId);
+            falseBranchBlock = readBlockBody(codeEntry, state, blockTypeId, blockTypeId);
 
             if (blockTypeId != ValueTypes.VOID_TYPE) {
                 // TODO: Hack to correctly set the stack pointer for abstract interpretation.

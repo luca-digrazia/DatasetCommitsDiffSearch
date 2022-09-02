@@ -46,29 +46,16 @@ import static org.graalvm.wasm.ValueTypes.I32_TYPE;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
-import org.graalvm.wasm.WasmOptions;
 import org.graalvm.wasm.constants.GlobalModifier;
 import org.graalvm.wasm.predefined.BuiltinModule;
 import org.graalvm.wasm.ReferenceTypes;
-import org.graalvm.wasm.predefined.testutil.TestutilModule;
 
 public class EmscriptenModule extends BuiltinModule {
     @Override
     protected WasmModule createModule(WasmLanguage language, WasmContext context, String name) {
-        final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy = WasmOptions.StoreConstantsInPool.getValue(context.environment().getOptions());
-        WasmModule module = new WasmModule(name, null, storeConstantsPolicy);
+        WasmModule module = new WasmModule(name, null);
         importMemory(context, module, "memory", "memory", 32, 4096);
         exportMemory(context, module, "memory");
-
-        final WasmModule testutil = context.modules().get("testutil");
-        if (testutil != null) {
-            // Emscripten only allows extern symbols through the 'env' module, so we need to
-            // re-export some symbols from the testutil module.
-            if (testutil.symbolTable().function(TestutilModule.Names.SAVE_BINARY_FILE) != null) {
-                importFunction(context, module, "testutil", TestutilModule.Names.SAVE_BINARY_FILE, types(I32_TYPE, I32_TYPE, I32_TYPE), types(), "_" + TestutilModule.Names.SAVE_BINARY_FILE);
-            }
-        }
-
         defineFunction(context, module, "abort", types(I32_TYPE), types(), new AbortNode(language, module));
         defineFunction(context, module, "abortOnCannotGrowMemory", types(I32_TYPE), types(I32_TYPE), new AbortOnCannotGrowMemory(language, module));
         defineFunction(context, module, "_abort", types(), types(), new AbortNode(language, module));
@@ -86,10 +73,10 @@ public class EmscriptenModule extends BuiltinModule {
         defineFunction(context, module, "___syscall54", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("___syscall54", language, module));
         defineFunction(context, module, "___syscall6", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("___syscall6", language, module));
         defineFunction(context, module, "setTempRet0", types(I32_TYPE), types(), new UnimplementedNode("setTempRet0", language, module));
-        defineGlobal(context, module, "__table_base", I32_TYPE, (byte) GlobalModifier.CONSTANT, 0);
-        defineGlobal(context, module, "__memory_base", I32_TYPE, (byte) GlobalModifier.CONSTANT, 0);
-        defineGlobal(context, module, "DYNAMICTOP_PTR", I32_TYPE, (byte) GlobalModifier.CONSTANT, 0);
-        defineGlobal(context, module, "DYNAMIC_BASE", I32_TYPE, (byte) GlobalModifier.CONSTANT, 0);
+        defineGlobal(context, module, "__table_base", I32_TYPE, GlobalModifier.CONSTANT, 0);
+        defineGlobal(context, module, "__memory_base", I32_TYPE, GlobalModifier.CONSTANT, 0);
+        defineGlobal(context, module, "DYNAMICTOP_PTR", I32_TYPE, GlobalModifier.CONSTANT, 0);
+        defineGlobal(context, module, "DYNAMIC_BASE", I32_TYPE, GlobalModifier.CONSTANT, 0);
         defineTable(context, module, "table", 0, -1, ReferenceTypes.FUNCREF);
         return module;
     }

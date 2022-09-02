@@ -97,6 +97,8 @@ public class WasmFunction implements TruffleObject {
     public CallTarget resolveCallTarget() {
         if (callTarget == null) {
             CompilerDirectives.transferToInterpreter();
+            // TODO: If this is an imported function, the call target might not yet be resolved.
+            // Check this, and wait until the call target gets resolved.
             throw new RuntimeException("Call target was not resolved.");
         }
         return callTarget;
