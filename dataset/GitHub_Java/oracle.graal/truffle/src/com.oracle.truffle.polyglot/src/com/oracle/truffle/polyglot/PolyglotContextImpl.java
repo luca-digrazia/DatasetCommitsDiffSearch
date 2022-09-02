@@ -45,7 +45,6 @@ import static com.oracle.truffle.polyglot.EngineAccessor.LANGUAGE;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -908,7 +907,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     @Override
     public Value asValue(Object hostValue) {
-        checkClosed();
         try {
             PolyglotLanguageContext targetLanguageContext;
             if (hostValue instanceof Value) {
@@ -1436,13 +1434,13 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     private static boolean overridesPatchContext(String languageId) {
-        LanguageCache cache = LanguageCache.languages().get(languageId);
-        for (Method m : cache.loadLanguage().getClass().getDeclaredMethods()) {
-            if (m.getName().equals("patchContext")) {
-                return true;
-            }
+        try {
+            LanguageCache cache = LanguageCache.languages().get(languageId);
+            cache.loadLanguage().getClass().getDeclaredMethod("patchContext", Object.class, TruffleLanguage.Env.class);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
         }
-        return false;
     }
 
 }

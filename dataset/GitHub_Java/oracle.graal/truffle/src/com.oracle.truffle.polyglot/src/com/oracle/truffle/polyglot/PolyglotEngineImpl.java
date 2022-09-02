@@ -163,7 +163,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     final Assumption noInnerContexts = Truffle.getRuntime().createAssumption("No inner contexts.");
     final Assumption noThreadTimingNeeded = Truffle.getRuntime().createAssumption("No enter timing needed.");
     final Assumption noPriorityChangeNeeded = Truffle.getRuntime().createAssumption("No priority change needed.");
-    final Assumption customHostClassLoader = Truffle.getRuntime().createAssumption("No custom host class loader needed.");
 
     volatile OptionDescriptors allOptions;
     volatile boolean closed;
@@ -411,17 +410,21 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         return true;
     }
 
-    private static void createInstruments(Map<PolyglotInstrument, Map<String, String>> instrumentsOptions, boolean allowExperimentalOptions) {
+    private void createInstruments(Map<PolyglotInstrument, Map<String, String>> instrumentsOptions, boolean allowExperimentalOptions) {
         for (PolyglotInstrument instrument : instrumentsOptions.keySet()) {
             instrument.getOptionValues().putAll(instrumentsOptions.get(instrument), allowExperimentalOptions);
         }
         ensureInstrumentsCreated(instrumentsOptions.keySet());
     }
 
-    private static void ensureInstrumentsCreated(Collection<? extends PolyglotInstrument> instruments) {
-        for (PolyglotInstrument instrument : instruments) {
-            // we got options for this instrument -> create it.
-            instrument.ensureCreated();
+    private void ensureInstrumentsCreated(Collection<? extends PolyglotInstrument> instruments) {
+        try {
+            for (PolyglotInstrument instrument : instruments) {
+                // we got options for this instrument -> create it.
+                instrument.ensureCreated();
+            }
+        } catch (Throwable e) {
+            throw PolyglotImpl.wrapGuestException(this, e);
         }
     }
 
@@ -493,7 +496,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             }
 
             if (group.equals(OPTION_GROUP_IMAGE_BUILD_TIME)) {
-                throw PolyglotEngineException.illegalArgument("Image build-time option '" + key + "' cannot be set at runtime");
+                throw new IllegalArgumentException("Image build-time option '" + key + "' cannot be set at runtime");
             }
 
             if (group.equals(OPTION_GROUP_LOG)) {
@@ -561,7 +564,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         final String prefix = "log.";
         final String suffix = ".level";
         if (!optionKey.startsWith(prefix) || !optionKey.endsWith(suffix)) {
-            throw PolyglotEngineException.illegalArgument(optionKey);
+            throw new IllegalArgumentException(optionKey);
         }
         final int start = prefix.length();
         final int end = optionKey.length() - suffix.length();
@@ -613,13 +616,13 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 for (LanguageInfo language : languages.values()) {
                     ids.add(language.getId());
                 }
-                throw PolyglotEngineException.illegalState("No language for id " + languageId + " found. Supported languages are: " + ids);
+                throw new IllegalStateException("No language for id " + languageId + " found. Supported languages are: " + ids);
             } else {
                 Set<String> mimeTypes = new LinkedHashSet<>();
                 for (LanguageInfo language : languages.values()) {
                     mimeTypes.addAll(language.getMimeTypes());
                 }
-                throw PolyglotEngineException.illegalState("No language for MIME type " + mimeType + " found. Supported languages are: " + mimeTypes);
+                throw new IllegalStateException("No language for MIME type " + mimeType + " found. Supported languages are: " + mimeTypes);
             }
         } else {
             return null;
@@ -715,7 +718,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 continue;
             }
             if (visitedIds.contains(dependency)) {
-                initErrors.put(language.getId(), PolyglotEngineException.illegalState("Illegal cyclic language dependency found:" + language.getId() + " -> " + dependency));
+                initErrors.put(language.getId(), new PolyglotIllegalStateException("Illegal cyclic language dependency found:" + language.getId() + " -> " + dependency));
                 continue;
             }
             visitedIds.add(dependency);
@@ -759,7 +762,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
      */
     void checkState() {
         if (closed) {
-            throw PolyglotEngineException.illegalState("Engine is already closed.");
+            throw new IllegalStateException("Engine is already closed.");
         }
     }
 
@@ -784,9 +787,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 limits = l = new EngineLimits(this);
             }
             l.initialize(context.config.limits, context);
-        }
-        if (context.config.hostClassLoader != null) {
-            context.engine.customHostClassLoader.invalidate();
         }
     }
 
@@ -858,21 +858,17 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
     @Override
     public Language requirePublicLanguage(String id) {
-        try {
-            checkState();
-            Language language = idToPublicLanguage.get(id);
-            if (language == null) {
-                String misspelledGuess = matchSpellingError(idToPublicLanguage.keySet(), id);
-                String didYouMean = "";
-                if (misspelledGuess != null) {
-                    didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
-                }
-                throw PolyglotEngineException.illegalArgument(String.format("A language with id '%s' is not installed. %sInstalled languages are: %s.", id, didYouMean, getLanguages().keySet()));
+        checkState();
+        Language language = idToPublicLanguage.get(id);
+        if (language == null) {
+            String misspelledGuess = matchSpellingError(idToPublicLanguage.keySet(), id);
+            String didYouMean = "";
+            if (misspelledGuess != null) {
+                didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
             }
-            return language;
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(this, t);
+            throw new PolyglotIllegalArgumentException(String.format("A language with id '%s' is not installed. %sInstalled languages are: %s.", id, didYouMean, getLanguages().keySet()));
         }
+        return language;
     }
 
     private static String matchSpellingError(Set<String> allIds, String enteredId) {
@@ -887,33 +883,25 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
     @Override
     public Instrument requirePublicInstrument(String id) {
-        try {
-            checkState();
-            Instrument instrument = idToPublicInstrument.get(id);
-            if (instrument == null) {
-                String misspelledGuess = matchSpellingError(idToPublicInstrument.keySet(), id);
-                String didYouMean = "";
-                if (misspelledGuess != null) {
-                    didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
-                }
-                throw PolyglotEngineException.illegalState(String.format("An instrument with id '%s' is not installed. %sInstalled instruments are: %s.", id, didYouMean, getInstruments().keySet()));
+        checkState();
+        Instrument instrument = idToPublicInstrument.get(id);
+        if (instrument == null) {
+            String misspelledGuess = matchSpellingError(idToPublicInstrument.keySet(), id);
+            String didYouMean = "";
+            if (misspelledGuess != null) {
+                didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
             }
-            return instrument;
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(this, t);
+            throw new PolyglotIllegalStateException(String.format("An instrument with id '%s' is not installed. %sInstalled instruments are: %s.", id, didYouMean, getInstruments().keySet()));
         }
+        return instrument;
     }
 
     @Override
     public void close(Engine sourceEngine, boolean cancelIfExecuting) {
-        try {
-            if (sourceEngine != creatorApi) {
-                throw PolyglotEngineException.illegalState("Engine instances that were indirectly received using Context.get() cannot be closed.");
-            }
-            ensureClosed(cancelIfExecuting, true);
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(this, t);
+        if (sourceEngine != creatorApi) {
+            throw new IllegalStateException("Engine instances that were indirectly received using Context.get() cannot be closed.");
         }
+        ensureClosed(cancelIfExecuting, true);
     }
 
     @TruffleBoundary
@@ -925,7 +913,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             }
             if (fail) {
                 Set<String> languageNames = classToLanguage.keySet();
-                throw PolyglotEngineException.illegalArgument("Cannot find language " + languageClass + " among " + languageNames);
+                throw new IllegalArgumentException("Cannot find language " + languageClass + " among " + languageNames);
             }
         }
         return foundLanguage;
@@ -936,7 +924,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         PolyglotLanguageContext context = foundLanguage.getCurrentLanguageContext();
         if (!context.isCreated()) {
             CompilerDirectives.transferToInterpreter();
-            throw PolyglotEngineException.illegalState(String.format("A context for language %s was not yet created.", languageClass.getName()));
+            throw new IllegalStateException(String.format("A context for language %s was not yet created.", languageClass.getName()));
         }
         return context.getLanguageInstance();
     }
@@ -959,7 +947,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                         assert !Thread.holdsLock(context);
                         synchronized (context) {
                             if (context.hasActiveOtherThread(false) && context.closingThread == null) {
-                                throw PolyglotEngineException.illegalState(String.format("One of the context instances is currently executing. " +
+                                throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
                                                 "Set cancelIfExecuting to true to stop the execution on this thread."));
                             }
                         }
@@ -969,7 +957,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     assert !Thread.holdsLock(context);
                     boolean closeCompleted = context.closeImpl(cancelIfExecuting, cancelIfExecuting, true);
                     if (!closeCompleted && !cancelIfExecuting) {
-                        throw PolyglotEngineException.illegalState(String.format("One of the context instances is currently executing. " +
+                        throw new IllegalStateException(String.format("One of the context instances is currently executing. " +
                                         "Set cancelIfExecuting to true to stop the execution on this thread."));
                     }
                     context.checkSubProcessFinished();
@@ -1012,9 +1000,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             }
             // don't commit to the close if still running as this might cause races in the executing
             // context.
-            if (this.runtimeData != null) {
-                EngineAccessor.ACCESSOR.onEngineClosed(this.runtimeData);
-            }
             if (closeContexts) {
                 Object loggers = getEngineLoggers();
                 if (loggers != null) {
@@ -1031,6 +1016,9 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             } else if (logHandler != null) {
                 // called from shutdown hook, at least flush the logging handler
                 logHandler.flush();
+            }
+            if (this.runtimeData != null) {
+                EngineAccessor.ACCESSOR.onEngineClosed(this.runtimeData);
             }
         }
     }
@@ -1051,32 +1039,20 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
     @Override
     public Map<String, Instrument> getInstruments() {
-        try {
-            checkState();
-            return idToPublicInstrument;
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(this, t);
-        }
+        checkState();
+        return idToPublicInstrument;
     }
 
     @Override
     public Map<String, Language> getLanguages() {
-        try {
-            checkState();
-            return idToPublicLanguage;
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(this, t);
-        }
+        checkState();
+        return idToPublicLanguage;
     }
 
     @Override
     public OptionDescriptors getOptions() {
-        try {
-            checkState();
-            return engineOptions;
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(this, t);
-        }
+        checkState();
+        return engineOptions;
     }
 
     OptionDescriptors getAllOptions() {
@@ -1129,7 +1105,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         assert policy != null;
         HostClassCache cache = HostClassCache.findOrInitialize(getAPIAccess(), policy, contextClassLoader);
         if (this.hostClassCache != null && this.hostClassCache != cache) {
-            throw PolyglotEngineException.illegalState("Found different host access configuration for a context with a shared engine. " +
+            throw new IllegalStateException("Found different host access configuration for a context with a shared engine. " +
                             "The host access configuration must be the same for all contexts of an engine. " +
                             "Provide the same host access configuration using the Context.Builder.allowHostAccess method when constructing the context.");
         } else {
@@ -1290,11 +1266,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
     @Override
     public String getImplementationName() {
-        try {
-            return Truffle.getRuntime().getName();
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(this, t);
-        }
+        return Truffle.getRuntime().getName();
     }
 
     private static final String DISABLE_PRIVILEGES_VALUE = ImageBuildTimeOptions.get(ImageBuildTimeOptions.DISABLE_PRIVILEGES_NAME);
@@ -1337,113 +1309,108 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     PolyglotAccess polyglotAccess, boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO,
                     boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter, Map<String, String> options,
                     Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream, boolean allowCreateProcess, ProcessHandler processHandler,
-                    EnvironmentAccess environmentAccess, Map<String, String> environment, ZoneId zone, Object limitsImpl, String currentWorkingDirectory, ClassLoader hostClassLoader) {
-        try {
-            PolyglotContextImpl context;
+                    EnvironmentAccess environmentAccess, Map<String, String> environment, ZoneId zone, Object limitsImpl, String currentWorkingDirectory) {
+        PolyglotContextImpl context;
+        synchronized (this) {
+            checkState();
+            if (boundEngine && !contexts.isEmpty()) {
+                throw new IllegalArgumentException("Automatically created engines cannot be used to create more than one context. " +
+                                "Use Engine.newBuilder().build() to construct a new engine and pass it using Context.newBuilder().engine(engine).build().");
+            }
+
+            initializeHostAccess(hostAccess);
+        }
+        EconomicSet<String> allowedLanguages = EconomicSet.create();
+        if (onlyLanguages.length == 0) {
+            allowedLanguages.addAll(getLanguages().keySet());
+        } else {
+            allowedLanguages.addAll(Arrays.asList(onlyLanguages));
+        }
+        getAPIAccess().validatePolyglotAccess(polyglotAccess, allowedLanguages);
+        final FileSystem fs;
+        final FileSystem internalFs;
+        if (!ALLOW_IO) {
+            if (fileSystem == null) {
+                throw new IllegalArgumentException("A FileSystem must be provided when the allowIO() privilege is removed at image build time");
+            }
+            fs = fileSystem;
+            internalFs = fileSystem;
+        } else if (allowHostIO) {
+            fs = fileSystem != null ? fileSystem : FileSystems.newDefaultFileSystem();
+            internalFs = fs;
+        } else {
+            fs = FileSystems.newNoIOFileSystem();
+            internalFs = FileSystems.newLanguageHomeFileSystem();
+        }
+        if (currentWorkingDirectory != null) {
+            fs.setCurrentWorkingDirectory(fs.parsePath(currentWorkingDirectory));
+            internalFs.setCurrentWorkingDirectory(internalFs.parsePath(currentWorkingDirectory));
+        }
+        final OutputStream useOut;
+        if (configOut == null || configOut == INSTRUMENT.getOut(this.out)) {
+            useOut = this.out;
+        } else {
+            useOut = INSTRUMENT.createDelegatingOutput(configOut, this.out);
+        }
+        final OutputStream useErr;
+        if (configErr == null || configErr == INSTRUMENT.getOut(this.err)) {
+            useErr = this.err;
+        } else {
+            useErr = INSTRUMENT.createDelegatingOutput(configErr, this.err);
+        }
+
+        Handler useHandler = PolyglotLogHandler.asHandler(logHandlerOrStream);
+        useHandler = useHandler != null ? useHandler : logHandler;
+        useHandler = useHandler != null ? useHandler
+                        : PolyglotLogHandler.createStreamHandler(
+                                        configErr == null ? INSTRUMENT.getOut(this.err) : configErr,
+                                        false, true);
+
+        final InputStream useIn = configIn == null ? this.in : configIn;
+
+        final ProcessHandler useProcessHandler;
+        if (allowCreateProcess) {
+            if (!ALLOW_CREATE_PROCESS) {
+                throw new IllegalArgumentException("Cannot allowCreateProcess() because the privilege is removed at image build time");
+            }
+            useProcessHandler = processHandler != null ? processHandler : ProcessHandlers.newDefaultProcessHandler();
+        } else {
+            useProcessHandler = null;
+        }
+
+        if (!ALLOW_ENVIRONMENT_ACCESS && environmentAccess != EnvironmentAccess.NONE) {
+            throw new IllegalArgumentException("Cannot allow EnvironmentAccess because the privilege is removed at image build time");
+        }
+        PolyglotLimits polyglotLimits = (PolyglotLimits) limitsImpl;
+        PolyglotContextConfig config = new PolyglotContextConfig(this, useOut, useErr, useIn,
+                        allowHostLookup, polyglotAccess, allowNativeAccess, allowCreateThread, allowHostClassLoading,
+                        allowExperimentalOptions, classFilter, arguments, allowedLanguages, options, fs, internalFs, useHandler, allowCreateProcess, useProcessHandler,
+                        environmentAccess, environment, zone, polyglotLimits);
+        context = loadPreinitializedContext(config, hostAccess);
+        boolean replayEvents = false;
+        if (context == null) {
             synchronized (this) {
                 checkState();
-                if (boundEngine && !contexts.isEmpty()) {
-                    throw PolyglotEngineException.illegalArgument("Automatically created engines cannot be used to create more than one context. " +
-                                    "Use Engine.newBuilder().build() to construct a new engine and pass it using Context.newBuilder().engine(engine).build().");
-                }
-
-                initializeHostAccess(hostAccess);
+                context = new PolyglotContextImpl(this, config);
+                addContext(context);
             }
-            EconomicSet<String> allowedLanguages = EconomicSet.create();
-            if (onlyLanguages.length == 0) {
-                allowedLanguages.addAll(getLanguages().keySet());
-            } else {
-                allowedLanguages.addAll(Arrays.asList(onlyLanguages));
-            }
-            String error = getAPIAccess().validatePolyglotAccess(polyglotAccess, allowedLanguages);
-            if (error != null) {
-                throw PolyglotEngineException.illegalArgument(error);
-            }
-            final FileSystem fs;
-            final FileSystem internalFs;
-            if (!ALLOW_IO) {
-                if (fileSystem == null) {
-                    throw PolyglotEngineException.illegalArgument("A FileSystem must be provided when the allowIO() privilege is removed at image build time");
-                }
-                fs = fileSystem;
-                internalFs = fileSystem;
-            } else if (allowHostIO) {
-                fs = fileSystem != null ? fileSystem : FileSystems.newDefaultFileSystem();
-                internalFs = fs;
-            } else {
-                fs = FileSystems.newNoIOFileSystem();
-                internalFs = FileSystems.newLanguageHomeFileSystem();
-            }
-            if (currentWorkingDirectory != null) {
-                fs.setCurrentWorkingDirectory(fs.parsePath(currentWorkingDirectory));
-                internalFs.setCurrentWorkingDirectory(internalFs.parsePath(currentWorkingDirectory));
-            }
-            final OutputStream useOut;
-            if (configOut == null || configOut == INSTRUMENT.getOut(this.out)) {
-                useOut = this.out;
-            } else {
-                useOut = INSTRUMENT.createDelegatingOutput(configOut, this.out);
-            }
-            final OutputStream useErr;
-            if (configErr == null || configErr == INSTRUMENT.getOut(this.err)) {
-                useErr = this.err;
-            } else {
-                useErr = INSTRUMENT.createDelegatingOutput(configErr, this.err);
-            }
-
-            Handler useHandler = PolyglotLoggers.asHandler(logHandlerOrStream);
-            useHandler = useHandler != null ? useHandler : logHandler;
-            useHandler = useHandler != null ? useHandler
-                            : PolyglotLoggers.createStreamHandler(
-                                            configErr == null ? INSTRUMENT.getOut(this.err) : configErr,
-                                            false, true);
-
-            final InputStream useIn = configIn == null ? this.in : configIn;
-
-            final ProcessHandler useProcessHandler;
-            if (allowCreateProcess) {
-                if (!ALLOW_CREATE_PROCESS) {
-                    throw PolyglotEngineException.illegalArgument("Cannot allowCreateProcess() because the privilege is removed at image build time");
-                }
-                useProcessHandler = processHandler != null ? processHandler : ProcessHandlers.newDefaultProcessHandler();
-            } else {
-                useProcessHandler = null;
-            }
-
-            if (!ALLOW_ENVIRONMENT_ACCESS && environmentAccess != EnvironmentAccess.NONE) {
-                throw PolyglotEngineException.illegalArgument("Cannot allow EnvironmentAccess because the privilege is removed at image build time");
-            }
-            PolyglotLimits polyglotLimits = (PolyglotLimits) limitsImpl;
-            PolyglotContextConfig config = new PolyglotContextConfig(this, useOut, useErr, useIn,
-                            allowHostLookup, polyglotAccess, allowNativeAccess, allowCreateThread, allowHostClassLoading,
-                            allowExperimentalOptions, classFilter, arguments, allowedLanguages, options, fs, internalFs, useHandler, allowCreateProcess, useProcessHandler,
-                            environmentAccess, environment, zone, polyglotLimits, hostClassLoader);
-            context = loadPreinitializedContext(config, hostAccess);
-            boolean replayEvents = false;
-            if (context == null) {
-                synchronized (this) {
-                    checkState();
-                    context = new PolyglotContextImpl(this, config);
-                    addContext(context);
-                }
-            } else if (context.engine == this) {
-                replayEvents = true;
-            }
-
-            if (replayEvents && EngineAccessor.INSTRUMENT.hasContextBindings(this)) {
-                // replace events for preinitialized contexts
-                // events must be replayed without engine lock.
-                final Object prev = enter(context);
-                try {
-                    context.replayInstrumentationEvents();
-                } finally {
-                    leave(prev, context);
-                }
-            }
-            return context.creatorApi;
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(this, t);
+        } else if (context.engine == this) {
+            replayEvents = true;
         }
+
+        if (replayEvents && EngineAccessor.INSTRUMENT.hasContextBindings(this)) {
+            // replace events for preinitialized contexts
+            // events must be replayed without engine lock.
+            final Object prev = enter(context);
+            try {
+                context.replayInstrumentationEvents();
+            } catch (Throwable e) {
+                throw PolyglotImpl.wrapGuestException(this, e);
+            } finally {
+                leave(prev, context);
+            }
+        }
+        return context.creatorApi;
     }
 
     private PolyglotContextImpl loadPreinitializedContext(PolyglotContextConfig config, HostAccess hostAccess) {
@@ -1505,7 +1472,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             synchronized (this) {
                 res = engineLoggers;
                 if (res == null) {
-                    res = LANGUAGE.createEngineLoggers(PolyglotLoggers.createEngineSPI(this), logLevels);
+                    res = LANGUAGE.createEngineLoggers(this, logLevels);
                     for (ContextWeakReference contextRef : contexts) {
                         PolyglotContextImpl context = contextRef.get();
                         if (context != null && !context.config.logLevels.isEmpty()) {
