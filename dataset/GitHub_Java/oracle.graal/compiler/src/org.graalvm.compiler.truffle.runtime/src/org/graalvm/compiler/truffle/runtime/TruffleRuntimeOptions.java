@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.compiler.truffle.options.OptionValuesImpl;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -98,35 +96,18 @@ public final class TruffleRuntimeOptions {
      * Get Truffle-related compilation options as a Map to be passed to the compiler. Some
      * Truffle-like options are converted into Graal compiler options.
      */
-    public static Map<String, Object> getOptionsForCompiler(OptimizedCallTarget callTarget) {
-        Map<String, Object> map = new HashMap<>();
-        OptionValues values = callTarget.getOptionValues();
+    public static Map<String, Object> getOptionsForCompiler() {
+        final OptionValues values = getOptions();
+        final Map<String, Object> map = new HashMap<>();
 
-        for (OptionDescriptor desc : PolyglotCompilerOptions.getDescriptors()) {
+        for (OptionDescriptor desc : values.getDescriptors()) {
             final OptionKey<?> key = desc.getKey();
-            if (PolyglotCompilerOptions.hasBeenSet(values, key)) {
-                Object value = PolyglotCompilerOptions.getValue(values, key);
-                if (!isPrimitiveType(value)) {
-                    value = CompilerRuntimeAccessor.engineAccessor().getUnparsedOptionValue(values, key);
-                }
-                map.put(desc.getName(), value);
+            if (values.hasBeenSet(key)) {
+                map.put(desc.getName(), values.get(key));
             }
         }
 
         return map;
-    }
-
-    private static boolean isPrimitiveType(Object value) {
-        Class<?> valueClass = value.getClass();
-        return valueClass == Boolean.class ||
-                        valueClass == Byte.class ||
-                        valueClass == Short.class ||
-                        valueClass == Character.class ||
-                        valueClass == Integer.class ||
-                        valueClass == Long.class ||
-                        valueClass == Float.class ||
-                        valueClass == Double.class ||
-                        valueClass == String.class;
     }
 
     public static class TruffleRuntimeOptionsOverrideScope implements AutoCloseable {
