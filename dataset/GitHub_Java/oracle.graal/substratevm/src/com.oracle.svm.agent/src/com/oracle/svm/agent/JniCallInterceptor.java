@@ -37,7 +37,6 @@ import static com.oracle.svm.agent.Support.handles;
 import static com.oracle.svm.agent.Support.jniFunctions;
 import static com.oracle.svm.agent.Support.jvmtiEnv;
 import static com.oracle.svm.agent.Support.jvmtiFunctions;
-import static com.oracle.svm.agent.Support.toCString;
 import static com.oracle.svm.jni.JNIObjectHandles.nullHandle;
 import static org.graalvm.word.WordFactory.nullPointer;
 
@@ -46,13 +45,11 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
-import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.c.type.WordPointer;
 
 import com.oracle.svm.agent.jvmti.JvmtiEnv;
 import com.oracle.svm.agent.jvmti.JvmtiError;
 import com.oracle.svm.agent.restrict.JniAccessVerifier;
-import com.oracle.svm.configure.config.ConfigurationMethod;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIErrors;
@@ -201,13 +198,8 @@ final class JniCallInterceptor {
         int result;
         if (accessVerifier == null || accessVerifier.verifyThrowNew(env, clazz, callerClass)) {
             result = jniFunctions().getThrowNew().invoke(env, clazz, message);
-        } else { // throw NoSuchMethodError like HotSpot
-            try (CCharPointerHolder errorMessage = toCString(Agent.MESSAGE_PREFIX + "configuration does not permit access to method: " +
-                            getClassNameOr(env, clazz, "(null)", "(?)") + "." + ConfigurationMethod.CONSTRUCTOR_NAME + "(Ljava/lang/String;)V")) {
-
-                jniFunctions().getThrowNew().invoke(env, handles().javaLangNoSuchMethodError, errorMessage.get());
-            }
-            result = JNIErrors.JNI_ERR();
+        } else {
+            result = JNIErrors.JNI_EINVAL();
         }
         if (shouldTrace()) {
             traceCall(env, "ThrowNew", clazz, nullHandle(), callerClass, (result == JNIErrors.JNI_OK()), TraceWriter.UNKNOWN_VALUE);
