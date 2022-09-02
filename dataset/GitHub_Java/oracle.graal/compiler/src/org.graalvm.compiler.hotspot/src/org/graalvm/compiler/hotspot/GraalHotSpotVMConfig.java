@@ -903,11 +903,9 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     // Checkstyle: resume
 
-    private static int inInitializer = 0;
+    private static boolean hotSpotMarkIdValuesSet;
 
     static {
-        inInitializer = 1;
-
         HotSpotMarkId.FRAME_COMPLETE.setMustBePresent(JVMCI ? jvmciGE(JVMCI_20_1_b01) : JDK_8245443);
         HotSpotMarkId.DEOPT_MH_HANDLER_ENTRY.setMustBePresent(JVMCI ? jvmciGE(JVMCI_20_2_b01) : false);
 
@@ -924,12 +922,11 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
         HotSpotMarkId.VERIFY_OOP_COUNT_ADDRESS.setMustBePresent(verifyOopsMarkSupported);
 
         HotSpotMarkId.setValues(JVMCI_PRERELEASE);
-
-        inInitializer = 2;
+        hotSpotMarkIdValuesSet = true;
     }
 
-    static boolean inInitializer() {
-        return inInitializer == 1;
+    static void ensureHotSpotMarkIdValuesSet() {
+        assert hotSpotMarkIdValuesSet;
     }
 
     protected boolean check() {
