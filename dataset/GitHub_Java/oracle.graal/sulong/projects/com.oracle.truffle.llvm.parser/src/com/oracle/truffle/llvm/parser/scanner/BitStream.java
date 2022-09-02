@@ -72,8 +72,8 @@ public final class BitStream {
     }
 
     public long read(long offset, int bits) {
-        if (Long.compareUnsigned(bits, Long.SIZE) > 0) {
-            throw new LLVMParserException(String.format("Cannot read more than %s bits (%s)", Long.SIZE, Integer.toUnsignedString(bits)));
+        if (bits > Long.SIZE) {
+            throw new LLVMParserException(String.format("Cannot read more than %s bits (%s)", Long.SIZE, bits));
         }
         int byteIndex = (int) (offset >> BYTE_BITS_SHIFT);
         int bitOffsetInByte = (int) (offset & BYTE_BITS_MASK);
