@@ -68,6 +68,7 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
     private Group wrappedRoot;
     private Group[] captureGroups;
     private final List<LookBehindAssertion> lookBehinds = new ArrayList<>();
+    private final List<MatchFound> endPoints = new ArrayList<>();
     private final List<PositionAssertion> reachableCarets = new ArrayList<>();
     private final List<PositionAssertion> reachableDollars = new ArrayList<>();
     private ASTNodeSet<PositionAssertion> nfaAnchoredInitialStates;
@@ -192,6 +193,10 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
         return lookBehinds;
     }
 
+    public List<MatchFound> getEndPoints() {
+        return endPoints;
+    }
+
     public List<PositionAssertion> getReachableCarets() {
         return reachableCarets;
     }
@@ -245,6 +250,7 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
     public void createEndPoint(RegexASTSubtreeRootNode assertion) {
         nodeCount.inc();
         MatchFound end = new MatchFound();
+        endPoints.add(end);
         assertion.setMatchFound(end);
     }
 
