@@ -66,7 +66,6 @@ import com.oracle.truffle.api.TruffleLanguage.ContextPolicy;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.TruffleOptions;
 import java.util.WeakHashMap;
-import com.oracle.truffle.api.TruffleFile.FileTypeDetector;
 
 /**
  * Ahead-of-time initialization. If the JVM is started with {@link TruffleOptions#AOT}, it populates
@@ -92,11 +91,9 @@ final class LanguageCache implements Comparable<LanguageCache> {
     private final ClassLoader loader;
     private final TruffleLanguage<?> globalInstance;
     private final Set<String> services;
-    private final List<String> fileTypeDetectorClassNames;
     private String languageHome;
     private volatile ContextPolicy policy;
     private volatile Class<? extends TruffleLanguage<?>> languageClass;
-    private volatile List<? extends FileTypeDetector> fileTypeDetectors;
 
     private LanguageCache(String id, String prefix, Properties info, ClassLoader loader, String url) {
         this.loader = loader;
@@ -138,20 +135,8 @@ final class LanguageCache implements Comparable<LanguageCache> {
         }
         this.services = Collections.unmodifiableSet(servicesClassNames);
 
-        List<String> detectorClassNames = new ArrayList<>();
-        for (int fileTypeDetectorCounter = 0;; fileTypeDetectorCounter++) {
-            String nth = prefix + "fileTypeDetector" + fileTypeDetectorCounter;
-            String fileTypeDetectorClassName = info.getProperty(nth);
-            if (fileTypeDetectorClassName == null) {
-                break;
-            }
-            detectorClassNames.add(fileTypeDetectorClassName);
-        }
-        this.fileTypeDetectorClassNames = Collections.unmodifiableList(detectorClassNames);
-
         if (TruffleOptions.AOT) {
             initializeLanguageClass();
-            initializeFileTypeDetectors();
             assert languageClass != null;
             assert policy != null;
         }
@@ -197,15 +182,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
             Collections.addAll(servicesClassNames, services);
             this.services = Collections.unmodifiableSet(servicesClassNames);
         }
-        this.fileTypeDetectorClassNames = Collections.emptyList();
-    }
-
-    static List<FileTypeDetector> fileTypeDetectors(ClassLoader loader) {
-        List<FileTypeDetector> res = new ArrayList<>();
-        for (LanguageCache cache : languages(loader).values()) {
-            res.addAll(cache.getFileTypeDetectors());
-        }
-        return res;
     }
 
     static Map<String, LanguageCache> languageMimes() {
@@ -460,11 +436,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         return services.contains(clazz.getName()) || services.contains(clazz.getCanonicalName());
     }
 
-    List<? extends FileTypeDetector> getFileTypeDetectors() {
-        initializeFileTypeDetectors();
-        return fileTypeDetectors;
-    }
-
     @SuppressWarnings("unchecked")
     private void initializeLanguageClass() {
         if (languageClass == null) {
@@ -482,26 +453,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
                     } catch (ClassNotFoundException e) {
                         throw new IllegalStateException("Cannot load language " + name + ". Language implementation class " + className + " failed to load.", e);
                     }
-                }
-            }
-        }
-    }
-
-    private void initializeFileTypeDetectors() {
-        if (fileTypeDetectors == null) {
-            synchronized (this) {
-                if (fileTypeDetectors == null) {
-                    List<FileTypeDetector> instances = new ArrayList<>(fileTypeDetectorClassNames.size());
-                    for (String className : fileTypeDetectorClassNames) {
-                        try {
-                            Class<? extends FileTypeDetector> detectorClass = Class.forName(className, true, loader).asSubclass(FileTypeDetector.class);
-                            FileTypeDetector instance = detectorClass.getDeclaredConstructor().newInstance();
-                            instances.add(instance);
-                        } catch (ReflectiveOperationException e) {
-                            throw new IllegalStateException("Cannot instantiate FileTypeDetector, class  " + className + ".", e);
-                        }
-                    }
-                    fileTypeDetectors = Collections.unmodifiableList(instances);
                 }
             }
         }
