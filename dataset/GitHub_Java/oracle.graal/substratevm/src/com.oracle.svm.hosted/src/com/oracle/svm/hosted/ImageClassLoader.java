@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,46 +26,38 @@ package com.oracle.svm.hosted;
 
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.net.URI;
-import java.nio.channels.ClosedByInterruptException;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.FileVisitResult;
-import java.nio.file.FileVisitor;
-import java.nio.file.Files;
+import java.net.URL;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
+import java.util.Enumeration;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.Optional;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import org.graalvm.collections.EconomicSet;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-import com.oracle.svm.core.util.InterruptImageBuilding;
-import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.core.TypeResult;
 
 public final class ImageClassLoader {
 
-    private static final int CLASS_LENGTH = ".class".length();
+    /*
+     * This cannot be a HostedOption because the option parsing already relies on the list of loaded
+     * classes.
+     */
+    private static final int CLASS_LOADING_MAX_SCALING = 8;
     private static final int CLASS_LOADING_TIMEOUT_IN_MINUTES = 10;
 
     static {
@@ -74,214 +68,289 @@ public final class ImageClassLoader {
         Word.ensureInitialized();
     }
 
-    private final Platform platform;
-    private final ClassLoader classLoader;
-    private final String[] classpath;
-    private final EconomicSet<Class<?>> systemClasses = EconomicSet.create();
+    public final Platform platform;
+    final NativeImageClassLoaderSupport classLoaderSupport;
+
+    private final EconomicSet<Class<?>> applicationClasses = EconomicSet.create();
+    private final EconomicSet<Class<?>> hostedOnlyClasses = EconomicSet.create();
     private final EconomicSet<Method> systemMethods = EconomicSet.create();
     private final EconomicSet<Field> systemFields = EconomicSet.create();
 
-    private ImageClassLoader(Platform platform, String[] classpath, ClassLoader classLoader) {
+    ImageClassLoader(Platform platform, NativeImageClassLoaderSupport classLoaderSupport) {
         this.platform = platform;
-        this.classpath = classpath;
-        this.classLoader = classLoader;
+        this.classLoaderSupport = classLoaderSupport;
     }
 
-    public static ImageClassLoader create(Platform platform, String[] classpathAll, ClassLoader classLoader) {
-        ArrayList<String> classpathFiltered = new ArrayList<>(classpathAll.length);
-        classpathFiltered.addAll(Arrays.asList(classpathAll));
-
-        /* The Graal SDK is on the boot class path, and it contains annotated types. */
-        for (String s : System.getProperty("sun.boot.class.path").split(File.pathSeparator)) {
-            if (s.contains("graal-sdk")) {
-                classpathFiltered.add(s);
-            }
+    public void initAllClasses() {
+        final ForkJoinPool executor = new ForkJoinPool(Math.min(Runtime.getRuntime().availableProcessors(), CLASS_LOADING_MAX_SCALING));
+        classLoaderSupport.initAllClasses(executor, this);
+        boolean completed = executor.awaitQuiescence(CLASS_LOADING_TIMEOUT_IN_MINUTES, TimeUnit.MINUTES);
+        if (!completed) {
+            throw shouldNotReachHere("timed out while initializing classes");
         }
-
-        ImageClassLoader result = new ImageClassLoader(platform, classpathFiltered.toArray(new String[classpathFiltered.size()]), classLoader);
-        result.initAllClasses();
-        return result;
-    }
-
-    private static Path toRealPath(Path p) {
-        try {
-            return p.toRealPath();
-        } catch (IOException e) {
-            throw VMError.shouldNotReachHere("Path.toRealPath failed for " + p);
-        }
-    }
-
-    private void initAllClasses() {
-        final ForkJoinPool executor = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
-
-        Set<Path> uniquePaths = new TreeSet<>(Comparator.comparing(t -> toRealPath(t)));
-        uniquePaths.addAll(Arrays.stream(classpath).map(Paths::get).collect(Collectors.toList()));
-        uniquePaths.parallelStream().forEach(path -> loadClassesFromPath(executor, path));
-
-        executor.awaitQuiescence(CLASS_LOADING_TIMEOUT_IN_MINUTES, TimeUnit.MINUTES);
-    }
-
-    private void loadClassesFromPath(ForkJoinPool executor, Path path) {
-        if (Files.exists(path)) {
-            if (path.getFileName().toString().endsWith(".jar")) {
-                try {
-                    try (FileSystem jarFileSystem = FileSystems.newFileSystem(URI.create("jar:file:" + path), Collections.emptyMap())) {
-                        initAllClasses(jarFileSystem.getPath("/"), executor);
-                    }
-                } catch (ClosedByInterruptException ignored) {
-                    throw new InterruptImageBuilding();
-                } catch (IOException e) {
-                    throw shouldNotReachHere(e);
-                }
-            } else {
-                initAllClasses(path, executor);
-            }
-        }
+        executor.shutdownNow();
     }
 
     private void findSystemElements(Class<?> systemClass) {
+        Method[] declaredMethods = null;
         try {
-            for (Method systemMethod : systemClass.getDeclaredMethods()) {
-                if (NativeImageGenerator.includedIn(platform, systemMethod.getAnnotation(Platforms.class))) {
+            declaredMethods = systemClass.getDeclaredMethods();
+        } catch (Throwable t) {
+            handleClassLoadingError(t);
+        }
+        if (declaredMethods != null) {
+            for (Method systemMethod : declaredMethods) {
+                if (annotationsAvailable(systemMethod) && NativeImageGenerator.includedIn(platform, systemMethod.getAnnotation(Platforms.class))) {
                     synchronized (systemMethods) {
                         systemMethods.add(systemMethod);
                     }
                 }
             }
+        }
+
+        Field[] declaredFields = null;
+        try {
+            declaredFields = systemClass.getDeclaredFields();
         } catch (Throwable t) {
             handleClassLoadingError(t);
         }
-        try {
-            for (Field systemField : systemClass.getDeclaredFields()) {
-                if (NativeImageGenerator.includedIn(platform, systemField.getAnnotation(Platforms.class))) {
+        if (declaredFields != null) {
+            for (Field systemField : declaredFields) {
+                if (annotationsAvailable(systemField) && NativeImageGenerator.includedIn(platform, systemField.getAnnotation(Platforms.class))) {
                     synchronized (systemFields) {
                         systemFields.add(systemField);
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * @param element The element to check
+     * @return Returns true if the annotations on the {@code element} can be loaded without any
+     *         errors.
+     */
+    private static boolean canLoadAnnotations(AnnotatedElement element) {
+        try {
+            element.getAnnotations();
+            return true;
         } catch (Throwable t) {
             handleClassLoadingError(t);
+            return false;
+        }
+    }
+
+    /**
+     * @param element The element to check
+     * @return Returns true if and only if the the {@code element} has any annotations present and
+     *         the {@link AnnotatedElement#getAnnotations()} did not throw any error.
+     */
+    private static boolean annotationsAvailable(AnnotatedElement element) {
+        try {
+            final Annotation[] annotations = element.getAnnotations();
+            return annotations.length != 0;
+        } catch (Throwable t) {
+            handleClassLoadingError(t);
+            return false;
         }
     }
 
     @SuppressWarnings("unused")
-    private void handleClassLoadingError(Throwable t) {
+    static void handleClassLoadingError(Throwable t) {
         /* we ignore class loading errors due to incomplete paths that people often have */
     }
 
-    private void initAllClasses(final Path root, ForkJoinPool executor) {
-        FileVisitor<Path> visitor = new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                executor.execute(() -> {
-                    String fileName = root.relativize(file).toString().replace('/', '.');
-                    if (fileName.endsWith(".class")) {
-                        String className = fileName.substring(0, fileName.length() - CLASS_LENGTH);
-                        try {
-                            Class<?> systemClass = Class.forName(className, false, classLoader);
-                            if (includedInPlatform(systemClass)) {
-                                synchronized (systemClasses) {
-                                    systemClasses.add(systemClass);
-                                }
-                                findSystemElements(systemClass);
-                            }
-                        } catch (Throwable t) {
-                            handleClassLoadingError(t);
-                        }
-                    }
-                });
-                return FileVisitResult.CONTINUE;
+    void handleClass(Class<?> clazz) {
+        boolean inPlatform = true;
+        boolean isHostedOnly = false;
+
+        AnnotatedElement cur = clazz.getPackage();
+        if (cur == null) {
+            cur = clazz;
+        }
+        do {
+            if (!canLoadAnnotations(cur)) {
+                return;
+            }
+            Platforms platformsAnnotation = cur.getAnnotation(Platforms.class);
+            if (containsHostedOnly(platformsAnnotation)) {
+                isHostedOnly = true;
+            } else if (!NativeImageGenerator.includedIn(platform, platformsAnnotation)) {
+                inPlatform = false;
             }
 
-            @Override
-            public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-                /* Silently ignore inaccessible files or directories. */
-                return FileVisitResult.CONTINUE;
+            if (cur instanceof Package) {
+                cur = clazz;
+            } else {
+                try {
+                    cur = ((Class<?>) cur).getEnclosingClass();
+                } catch (Throwable t) {
+                    handleClassLoadingError(t);
+                    cur = null;
+                }
             }
-        };
+        } while (cur != null);
 
-        try {
-            Files.walkFileTree(root, visitor);
-        } catch (IOException ex) {
-            throw shouldNotReachHere(ex);
+        if (inPlatform) {
+            if (isHostedOnly) {
+                synchronized (hostedOnlyClasses) {
+                    hostedOnlyClasses.add(clazz);
+                }
+
+            } else {
+                synchronized (applicationClasses) {
+                    applicationClasses.add(clazz);
+                }
+                findSystemElements(clazz);
+            }
         }
     }
 
-    private boolean includedInPlatform(Class<?> clazz) {
-        Class<?> cur = clazz;
-        do {
-            if (!NativeImageGenerator.includedIn(platform, cur.getAnnotation(Platforms.class))) {
-                return false;
+    private static boolean containsHostedOnly(Platforms platformsAnnotation) {
+        if (platformsAnnotation != null) {
+            for (Class<? extends Platform> platformClass : platformsAnnotation.value()) {
+                if (platformClass == Platform.HOSTED_ONLY.class) {
+                    return true;
+                }
             }
-            cur = cur.getEnclosingClass();
-        } while (cur != null);
-        return true;
+        }
+        return false;
     }
 
-    public InputStream findResourceByName(String resource) {
-        return classLoader.getResourceAsStream(resource);
+    public Enumeration<URL> findResourcesByName(String resource) throws IOException {
+        return classLoaderSupport.getClassLoader().getResources(resource);
     }
 
+    public InputStream findResourceAsStreamByName(String resource) {
+        return classLoaderSupport.getClassLoader().getResourceAsStream(resource);
+    }
+
+    /**
+     * @deprecated use {@link #findClassOrFail(String)} instead.
+     */
+    @Deprecated
     public Class<?> findClassByName(String name) {
         return findClassByName(name, true);
     }
 
+    /**
+     * @deprecated use {@link #findClass(String)} or {@link #findClassOrFail(String)} instead.
+     */
+    @Deprecated
     public Class<?> findClassByName(String name, boolean failIfClassMissing) {
+        TypeResult<Class<?>> result = findClass(name);
+        if (failIfClassMissing) {
+            return result.getOrFail();
+        } else {
+            return result.get();
+        }
+    }
+
+    /** Find class or fail if exception occurs. */
+    public Class<?> findClassOrFail(String name) {
+        return findClass(name).getOrFail();
+    }
+
+    /** Find class, return result encoding class or failure reason. */
+    public TypeResult<Class<?>> findClass(String name) {
         try {
             if (name.indexOf('.') == -1) {
                 switch (name) {
                     case "boolean":
-                        return boolean.class;
+                        return TypeResult.forClass(boolean.class);
                     case "char":
-                        return char.class;
+                        return TypeResult.forClass(char.class);
                     case "float":
-                        return float.class;
+                        return TypeResult.forClass(float.class);
                     case "double":
-                        return double.class;
+                        return TypeResult.forClass(double.class);
                     case "byte":
-                        return byte.class;
+                        return TypeResult.forClass(byte.class);
                     case "short":
-                        return short.class;
+                        return TypeResult.forClass(short.class);
                     case "int":
-                        return int.class;
+                        return TypeResult.forClass(int.class);
                     case "long":
-                        return long.class;
+                        return TypeResult.forClass(long.class);
                     case "void":
-                        return void.class;
+                        return TypeResult.forClass(void.class);
                 }
             }
-
-            return Class.forName(name, false, classLoader);
-        } catch (ClassNotFoundException ex) {
-            if (failIfClassMissing) {
-                throw shouldNotReachHere("class " + name + " not found");
-            }
+            return TypeResult.forClass(forName(name));
+        } catch (ClassNotFoundException | LinkageError ex) {
+            return TypeResult.forException(name, ex);
         }
-        return null;
     }
 
+    Class<?> forName(String name) throws ClassNotFoundException {
+        return Class.forName(name, false, classLoaderSupport.getClassLoader());
+    }
+
+    public Class<?> forName(String className, Object module) throws ClassNotFoundException {
+        if (module == null) {
+            return forName(className);
+        }
+        return classLoaderSupport.loadClassFromModule(module, className);
+    }
+
+    /**
+     * Deprecated. Use {@link ImageClassLoader#classpath()} instead.
+     *
+     * @return image classpath as a list of strings.
+     */
+    @Deprecated
     public List<String> getClasspath() {
-        return Collections.unmodifiableList(Arrays.asList(classpath));
+        return classpath().stream().map(Path::toString).collect(Collectors.toList());
     }
 
-    public <T> List<Class<? extends T>> findSubclasses(Class<T> baseClass) {
+    public List<Path> classpath() {
+        return classLoaderSupport.classpath();
+    }
+
+    public List<Path> modulepath() {
+        return classLoaderSupport.modulepath();
+    }
+
+    public List<Path> applicationClassPath() {
+        return classLoaderSupport.applicationClassPath();
+    }
+
+    public List<Path> applicationModulePath() {
+        return classLoaderSupport.applicationModulePath();
+    }
+
+    public <T> List<Class<? extends T>> findSubclasses(Class<T> baseClass, boolean includeHostedOnly) {
         ArrayList<Class<? extends T>> result = new ArrayList<>();
-        for (Class<?> systemClass : systemClasses) {
+        addSubclasses(applicationClasses, baseClass, result);
+        if (includeHostedOnly) {
+            addSubclasses(hostedOnlyClasses, baseClass, result);
+        }
+        return result;
+    }
+
+    private static <T> void addSubclasses(EconomicSet<Class<?>> classes, Class<T> baseClass, ArrayList<Class<? extends T>> result) {
+        for (Class<?> systemClass : classes) {
             if (baseClass.isAssignableFrom(systemClass)) {
                 result.add(systemClass.asSubclass(baseClass));
             }
         }
+    }
+
+    public List<Class<?>> findAnnotatedClasses(Class<? extends Annotation> annotationClass, boolean includeHostedOnly) {
+        ArrayList<Class<?>> result = new ArrayList<>();
+        addAnnotatedClasses(applicationClasses, annotationClass, result);
+        if (includeHostedOnly) {
+            addAnnotatedClasses(hostedOnlyClasses, annotationClass, result);
+        }
         return result;
     }
 
-    public List<Class<?>> findAnnotatedClasses(Class<? extends Annotation> annotationClass) {
-        ArrayList<Class<?>> result = new ArrayList<>();
-        for (Class<?> systemClass : systemClasses) {
+    private static void addAnnotatedClasses(EconomicSet<Class<?>> classes, Class<? extends Annotation> annotationClass, ArrayList<Class<?>> result) {
+        for (Class<?> systemClass : classes) {
             if (systemClass.getAnnotation(annotationClass) != null) {
                 result.add(systemClass);
             }
         }
-        return result;
     }
 
     public List<Method> findAnnotatedMethods(Class<? extends Annotation> annotationClass) {
@@ -311,7 +380,7 @@ public final class ImageClassLoader {
         return result;
     }
 
-    List<Field> findAnnotatedFields(Class<? extends Annotation> annotationClass) {
+    public List<Field> findAnnotatedFields(Class<? extends Annotation> annotationClass) {
         ArrayList<Field> result = new ArrayList<>();
         for (Field field : systemFields) {
             if (field.getAnnotation(annotationClass) != null) {
@@ -323,7 +392,7 @@ public final class ImageClassLoader {
 
     @SuppressWarnings("unchecked")
     public List<Class<? extends Annotation>> allAnnotations() {
-        return StreamSupport.stream(systemClasses.spliterator(), false)
+        return StreamSupport.stream(applicationClasses.spliterator(), false)
                         .filter(Class::isAnnotation)
                         .map(clazz -> (Class<? extends Annotation>) clazz)
                         .collect(Collectors.toList());
@@ -333,9 +402,9 @@ public final class ImageClassLoader {
      * Returns all annotations on classes, methods, and fields (enabled or disabled based on the
      * parameters) of the given annotation class.
      */
-    <T extends Annotation> List<T> findAnnotations(Class<T> annotationClass) {
+    public <T extends Annotation> List<T> findAnnotations(Class<T> annotationClass) {
         List<T> result = new ArrayList<>();
-        for (Class<?> clazz : findAnnotatedClasses(annotationClass)) {
+        for (Class<?> clazz : findAnnotatedClasses(annotationClass, false)) {
             result.add(clazz.getAnnotation(annotationClass));
         }
         for (Method method : findAnnotatedMethods(annotationClass)) {
@@ -348,10 +417,18 @@ public final class ImageClassLoader {
     }
 
     public ClassLoader getClassLoader() {
-        return classLoader;
+        return classLoaderSupport.getClassLoader();
     }
 
-    public static boolean isHostedClass(Class<?> clazz) {
-        return clazz.getName().contains("hosted") || clazz.getName().contains("hotspot");
+    public Optional<String> getMainClassFromModule(Object module) {
+        return classLoaderSupport.getMainClassFromModule(module);
+    }
+
+    public Optional<? extends Object> findModule(String moduleName) {
+        return classLoaderSupport.findModule(moduleName);
+    }
+
+    public void processAddExportsAndAddOpens(OptionValues parsedHostedOptions) {
+        classLoaderSupport.processAddExportsAndAddOpens(parsedHostedOptions);
     }
 }
