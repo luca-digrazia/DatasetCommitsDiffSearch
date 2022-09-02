@@ -67,7 +67,7 @@ public final class AnnotationsEncoding {
     }
 
     public Annotation[] getAnnotations() {
-        return allAnnotations == null ? EMPTY_ANNOTATION_ARRAY : allAnnotations.clone();
+        return allAnnotations == null ? EMPTY_ANNOTATION_ARRAY : allAnnotations;
     }
 
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
