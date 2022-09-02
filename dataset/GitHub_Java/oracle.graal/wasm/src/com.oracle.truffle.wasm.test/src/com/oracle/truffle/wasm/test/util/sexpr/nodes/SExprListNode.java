@@ -50,7 +50,7 @@ public class SExprListNode extends SExprNode {
     }
 
     public SExprNode nodeAt(int index) {
-        Assert.assertIntIn(index, 0, nodes.size() - 1, "SExprListNode: requested nodeAt out-of-bounds");
+        Assert.assertInRange(index, 0, nodes.size() - 1, "SExprListNode: requested nodeAt out-of-bounds");
         return nodes.get(index);
     }
 
