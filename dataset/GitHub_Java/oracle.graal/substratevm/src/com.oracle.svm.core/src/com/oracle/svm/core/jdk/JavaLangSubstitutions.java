@@ -224,7 +224,6 @@ final class Target_java_lang_Throwable {
 }
 
 @TargetClass(java.lang.Runtime.class)
-@SuppressWarnings({"static-method"})
 final class Target_java_lang_Runtime {
 
     @Substitute
@@ -241,16 +240,6 @@ final class Target_java_lang_Runtime {
 
     @Substitute
     public void runFinalization() {
-    }
-
-    @Substitute
-    @Platforms({Platform.LINUX_AND_JNI.class, Platform.DARWIN_AND_JNI.class, Platform.WINDOWS.class})
-    private int availableProcessors() {
-        if (SubstrateOptions.MultiThreaded.getValue()) {
-            return Jvm.JVM_ActiveProcessorCount();
-        } else {
-            return 1;
-        }
     }
 
     // Checkstyle: stop
@@ -321,11 +310,6 @@ final class Target_java_lang_System {
     }
 
     @Substitute
-    private static void setProperties(Properties props) {
-        ImageSingletons.lookup(SystemPropertiesSupport.class).setProperties(props);
-    }
-
-    @Substitute
     public static String setProperty(String key, String value) {
         checkKey(key);
         return ImageSingletons.lookup(SystemPropertiesSupport.class).setProperty(key, value);
@@ -363,24 +347,6 @@ final class Target_java_lang_System {
         // Substituted because the original is caller-sensitive, which we don't support
         Runtime.getRuntime().load(filename);
     }
-
-    /*
-     * Note that there is no substitution for getSecurityManager, but instead getSecurityManager it
-     * is intrinsified in SubstrateGraphBuilderPlugins to always return null. This allows better
-     * constant folding of SecurityManager code already during static analysis.
-     */
-    @Substitute
-    private static void setSecurityManager(SecurityManager s) {
-        if (s != null) {
-            /*
-             * We deliberately treat this as a non-recoverable fatal error. We want to prevent bugs
-             * where an exception is silently ignored by an application and then necessary security
-             * checks are not in place.
-             */
-            throw VMError.shouldNotReachHere("Installing a SecurityManager is not yet supported");
-        }
-    }
-
 }
 
 @TargetClass(java.lang.StrictMath.class)
