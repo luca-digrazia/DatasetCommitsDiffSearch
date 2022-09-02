@@ -30,8 +30,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
 
-import com.oracle.svm.hosted.c.info.RawPointerToInfo;
-import org.graalvm.nativeimage.c.struct.RawPointerTo;
 import org.graalvm.nativeimage.c.struct.RawStructure;
 
 import com.oracle.svm.core.config.ConfigurationValues;
@@ -114,12 +112,6 @@ public final class RawStructureLayoutPlanner extends NativeInfoTreeVisitor {
         }
 
         planLayout(info);
-    }
-
-    @Override
-    protected void visitRawPointerToInfo(RawPointerToInfo info) {
-        info.getSizeInfo().setProperty(getSizeInBytes(info.getAnnotatedElement()));
-        assert info.getSignednessInfo() == null;
     }
 
     private void computeSize(StructFieldInfo info) {

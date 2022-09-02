@@ -38,7 +38,7 @@ import java.util.stream.Stream;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.nativeimage.hosted.Feature;
 
-import com.oracle.graal.pointsto.BigBang;
+import com.oracle.graal.pointsto.reports.ReportUtils;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.option.HostedOptionKey;
@@ -81,9 +81,8 @@ public class HostedHeapDumpFeature implements Feature {
                 if (validPhases.contains(value)) {
                     phases.add(value);
                 } else {
-                    throw UserError.abort("Invalid value " + value + " given for " +
-                                    SubstrateOptionsParser.commandArgument(Options.DumpHeap, "") + '.' +
-                                    " Valid values are: " + String.join(", ", validPhases) + '.');
+                    throw UserError.abort("Invalid value %s given for %s. Valid values are: %s.", value,
+                                    SubstrateOptionsParser.commandArgument(Options.DumpHeap, ""), String.join(", ", validPhases));
                 }
             }
             return !phases.isEmpty();
@@ -101,7 +100,7 @@ public class HostedHeapDumpFeature implements Feature {
     public void duringSetup(DuringSetupAccess access) {
         DuringSetupAccessImpl config = (DuringSetupAccessImpl) access;
         dumpLocation = getDumpLocation();
-        imageName = getImageName(config.getBigBang());
+        imageName = ReportUtils.extractImageName(config.getHostVM().getImageName());
         timeStamp = getTimeStamp();
     }
 
@@ -132,12 +131,6 @@ public class HostedHeapDumpFeature implements Feature {
         } catch (IOException e) {
             throw new Error("Cannot create heap dumps directory.", e);
         }
-    }
-
-    private static String getImageName(BigBang bigbang) {
-        String imageName = bigbang.getHostVM().getImageName();
-        imageName = imageName.substring(imageName.lastIndexOf("/") + 1);
-        return imageName;
     }
 
     private static String getTimeStamp() {

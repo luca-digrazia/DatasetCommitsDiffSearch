@@ -26,7 +26,6 @@ package com.oracle.svm.hosted.c;
 
 import java.io.IOException;
 import java.lang.reflect.AnnotatedElement;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -82,7 +81,6 @@ import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.c.info.ElementInfo;
 import com.oracle.svm.hosted.classinitialization.ClassInitializationSupport;
@@ -405,17 +403,8 @@ public final class NativeLibraries {
         }
     }
 
-    public void processCLibraryAnnotations(ImageClassLoader loader) {
-        for (Class<?> clazz : loader.findAnnotatedClasses(CLibrary.class, false)) {
-            if (makeContext(getDirectives(metaAccess.lookupJavaType(clazz))).isInConfiguration()) {
-                annotated.add(clazz.getAnnotation(CLibrary.class));
-            }
-        }
-        for (Method method : loader.findAnnotatedMethods(CLibrary.class)) {
-            if (makeContext(getDirectives(metaAccess.lookupJavaType(method.getDeclaringClass()))).isInConfiguration()) {
-                annotated.add(method.getAnnotation(CLibrary.class));
-            }
-        }
+    public void addAnnotated(CLibrary library) {
+        annotated.add(library);
     }
 
     public void addStaticJniLibrary(String library, String... dependencies) {

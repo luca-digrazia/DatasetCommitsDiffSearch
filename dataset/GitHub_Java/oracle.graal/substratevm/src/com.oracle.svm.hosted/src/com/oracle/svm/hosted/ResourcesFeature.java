@@ -74,14 +74,10 @@ public final class ResourcesFeature implements Feature {
     public static class Options {
         @Option(help = "Regexp to match names of resources to be included in the image.", type = OptionType.User)//
         public static final HostedOptionKey<String[]> IncludeResources = new HostedOptionKey<>(new String[0]);
-
-        @Option(help = "Regexp to match names of resources to be excluded from the image.", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> ExcludeResources = new HostedOptionKey<>(new String[0]);
     }
 
     private boolean sealed = false;
     private Set<String> newResources = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private Set<String> ignoredResources = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private int loadedConfigurations;
 
     private class ResourcesRegistryImpl implements ResourcesRegistry {
@@ -89,12 +85,6 @@ public final class ResourcesFeature implements Feature {
         public void addResources(String pattern) {
             UserError.guarantee(!sealed, "Resources added too late: %s", pattern);
             newResources.add(pattern);
-        }
-
-        @Override
-        public void ignoreResources(String pattern) {
-            UserError.guarantee(!sealed, "Resources ignored too late: %s", pattern);
-            ignoredResources.add(pattern);
         }
 
         @Override
@@ -117,7 +107,6 @@ public final class ResourcesFeature implements Feature {
                         ConfigurationFiles.RESOURCES_NAME);
 
         newResources.addAll(Arrays.asList(Options.IncludeResources.getValue()));
-        ignoredResources.addAll(Arrays.asList(Options.ExcludeResources.getValue()));
     }
 
     @Override
@@ -128,12 +117,15 @@ public final class ResourcesFeature implements Feature {
 
         access.requireAnalysisIteration();
         DebugContext debugContext = ((DuringAnalysisAccessImpl) access).getDebugContext();
-        final Pattern[] includePatterns = compilePatterns(newResources);
-        final Pattern[] excludePatterns = compilePatterns(ignoredResources);
+        final Pattern[] patterns = newResources.stream()
+                        .filter(s -> s.length() > 0)
+                        .map(Pattern::compile)
+                        .collect(Collectors.toList())
+                        .toArray(new Pattern[]{});
 
         if (JavaVersionUtil.JAVA_SPEC > 8) {
             try {
-                ModuleSupport.findResourcesInModules(name -> matches(includePatterns, excludePatterns, name),
+                ModuleSupport.findResourcesInModules(name -> matches(patterns, name),
                                 (resName, content) -> registerResource(debugContext, resName, content));
             } catch (IOException ex) {
                 throw UserError.abort(ex, "Can not read resources from modules. This is possible due to incorrect module path or missing module visibility directives");
@@ -167,23 +159,15 @@ public final class ResourcesFeature implements Feature {
         for (File element : todo) {
             try {
                 if (element.isDirectory()) {
-                    scanDirectory(debugContext, element, "", includePatterns, excludePatterns);
+                    scanDirectory(debugContext, element, "", patterns);
                 } else {
-                    scanJar(debugContext, element, includePatterns, excludePatterns);
+                    scanJar(debugContext, element, patterns);
                 }
             } catch (IOException ex) {
                 throw UserError.abort("Unable to handle classpath element '%s'. Make sure that all classpath entries are either directories or valid jar files.", element);
             }
         }
         newResources.clear();
-    }
-
-    private static Pattern[] compilePatterns(Set<String> patterns) {
-        return patterns.stream()
-                        .filter(s -> s.length() > 0)
-                        .map(Pattern::compile)
-                        .collect(Collectors.toList())
-                        .toArray(new Pattern[]{});
     }
 
     @Override
@@ -202,18 +186,18 @@ public final class ResourcesFeature implements Feature {
         }
     }
 
-    private void scanDirectory(DebugContext debugContext, File f, String relativePath, Pattern[] includePatterns, Pattern[] excludePatterns) throws IOException {
+    private void scanDirectory(DebugContext debugContext, File f, String relativePath, Pattern... patterns) throws IOException {
         if (f.isDirectory()) {
             File[] files = f.listFiles();
             if (files == null) {
                 throw UserError.abort("Cannot scan directory %s", f);
             } else {
                 for (File ch : files) {
-                    scanDirectory(debugContext, ch, relativePath.isEmpty() ? ch.getName() : relativePath + "/" + ch.getName(), includePatterns, excludePatterns);
+                    scanDirectory(debugContext, ch, relativePath.isEmpty() ? ch.getName() : relativePath + "/" + ch.getName(), patterns);
                 }
             }
         } else {
-            if (matches(includePatterns, excludePatterns, relativePath)) {
+            if (matches(patterns, relativePath)) {
                 try (FileInputStream is = new FileInputStream(f)) {
                     registerResource(debugContext, relativePath, is);
                 }
@@ -221,7 +205,7 @@ public final class ResourcesFeature implements Feature {
         }
     }
 
-    private static void scanJar(DebugContext debugContext, File element, Pattern[] includePatterns, Pattern[] excludePatterns) throws IOException {
+    private static void scanJar(DebugContext debugContext, File element, Pattern... patterns) throws IOException {
         JarFile jf = new JarFile(element);
         Enumeration<JarEntry> en = jf.entries();
 
@@ -232,13 +216,13 @@ public final class ResourcesFeature implements Feature {
             if (e.isDirectory()) {
                 String dirName = e.getName().substring(0, e.getName().length() - 1);
                 allEntries.add(dirName);
-                if (matches(includePatterns, excludePatterns, dirName)) {
+                if (matches(patterns, dirName)) {
                     matchedDirectoryResources.put(dirName, new ArrayList<>());
                 }
                 continue;
             }
             allEntries.add(e.getName());
-            if (matches(includePatterns, excludePatterns, e.getName())) {
+            if (matches(patterns, e.getName())) {
                 try (InputStream is = jf.getInputStream(e)) {
                     registerResource(debugContext, e.getName(), is);
                 }
@@ -260,19 +244,12 @@ public final class ResourcesFeature implements Feature {
         });
     }
 
-    private static boolean matches(Pattern[] includePatterns, Pattern[] excludePatterns, String relativePath) {
-        for (Pattern p : excludePatterns) {
-            if (p.matcher(relativePath).matches()) {
-                return false;
-            }
-        }
-
-        for (Pattern p : includePatterns) {
+    private static boolean matches(Pattern[] patterns, String relativePath) {
+        for (Pattern p : patterns) {
             if (p.matcher(relativePath).matches()) {
                 return true;
             }
         }
-
         return false;
     }
 

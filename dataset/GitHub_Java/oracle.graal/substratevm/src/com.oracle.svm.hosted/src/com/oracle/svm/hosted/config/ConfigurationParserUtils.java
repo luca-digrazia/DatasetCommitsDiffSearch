@@ -42,14 +42,12 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import com.oracle.svm.core.configure.DynamicClassesConfigurationParser;
 import org.graalvm.nativeimage.impl.ReflectionRegistry;
 
 import com.oracle.svm.core.configure.ConfigurationFiles;
 import com.oracle.svm.core.configure.ConfigurationParser;
 import com.oracle.svm.core.configure.ReflectionConfigurationParser;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.LocatableMultiOptionValue;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
@@ -73,11 +71,12 @@ public final class ConfigurationParserUtils {
      * @return the total number of successfully parsed configuration files and resources.
      */
     public static int parseAndRegisterConfigurations(ConfigurationParser parser, ImageClassLoader classLoader, String featureName,
-                    HostedOptionKey<LocatableMultiOptionValue.Strings> configFilesOption, HostedOptionKey<LocatableMultiOptionValue.Strings> configResourcesOption, String directoryFileName) {
+                    HostedOptionKey<String[]> configFilesOption, HostedOptionKey<String[]> configResourcesOption, String directoryFileName) {
 
         int parsedCount = 0;
 
-        Stream<Path> files = Stream.concat(OptionUtils.flatten(",", configFilesOption.getValue()).stream().map(Paths::get), ConfigurationFiles.findConfigurationFiles(directoryFileName).stream());
+        Stream<Path> files = Stream.concat(OptionUtils.flatten(",", configFilesOption.getValue()).stream().map(Paths::get),
+                        ConfigurationFiles.findConfigurationFiles(directoryFileName).stream());
         parsedCount += files.map(Path::toAbsolutePath).mapToInt(path -> {
             if (!Files.exists(path)) {
                 throw UserError.abort("The %s configuration file \"%s\" does not exist.", featureName, path);
@@ -124,18 +123,12 @@ public final class ConfigurationParserUtils {
                 throw UserError.abort("Could not open %s: %s", url, e.getMessage());
             }
         }).sum();
+
         return parsedCount;
     }
 
-    private static void doParseAndRegister(ConfigurationParser parser, Reader reader, String featureName, Object location, HostedOptionKey<LocatableMultiOptionValue.Strings> option) {
+    private static void doParseAndRegister(ConfigurationParser parser, Reader reader, String featureName, Object location, HostedOptionKey<String[]> option) {
         try {
-            /**
-             * DynamicClassesConfigurationParser needs to know the configuration file location
-             * because the dumped class files are stored in the same directory
-             */
-            if (parser instanceof DynamicClassesConfigurationParser) {
-                ((DynamicClassesConfigurationParser) parser).setConfigurationFileLocation(location);
-            }
             parser.parseAndRegister(reader);
         } catch (IOException | JSONParserException e) {
             String errorMessage = e.getMessage();

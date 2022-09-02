@@ -38,6 +38,7 @@ import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.word.Pointer;
 
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.svm.core.SubstrateOptions;
@@ -104,7 +105,12 @@ public class LLVMFeature implements Feature, GraalFeature {
             }
         });
 
-        ImageSingletons.add(ExceptionUnwind.class, LLVMExceptionUnwind.createRaiseExceptionHandler());
+        ImageSingletons.add(ExceptionUnwind.class, new ExceptionUnwind() {
+            @Override
+            protected void customUnwindException(Pointer callerSP) {
+                LLVMExceptionUnwind.raiseException();
+            }
+        });
 
         ImageSingletons.add(TargetGraphBuilderPlugins.class, new LLVMGraphBuilderPlugins());
 

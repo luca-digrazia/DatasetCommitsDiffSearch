@@ -306,17 +306,6 @@ public final class NativeImageHeap implements ImageHeap {
         }
     }
 
-    @Override
-    public int countDynamicHubs() {
-        int count = 0;
-        for (ObjectInfo o : getObjects()) {
-            if (o.getObject() instanceof DynamicHub) {
-                count++;
-            }
-        }
-        return count;
-    }
-
     /**
      * Adds an object to the image heap that tries to span {@code size} bytes. Note that there is no
      * guarantee that the created object will exactly span {@code size} bytes. If it is not possible
@@ -652,11 +641,14 @@ public final class NativeImageHeap implements ImageHeap {
             return clazz;
         }
 
+        /**
+         * The offset of an object within a partition. <em>Probably you want
+         * {@link #getAddress()}</em>.
+         */
         @Override
-        public long getOffset() {
+        public long getOffsetInPartition() {
             assert offsetInPartition >= 0;
-            assert partition != null;
-            return partition.getStartOffset() + offsetInPartition;
+            return offsetInPartition;
         }
 
         @Override
@@ -665,22 +657,11 @@ public final class NativeImageHeap implements ImageHeap {
             this.offsetInPartition = value;
         }
 
-        @Override
-        public ImageHeapPartition getPartition() {
-            return partition;
-        }
-
-        @Override
-        public void setHeapPartition(ImageHeapPartition value) {
-            assert this.partition == null;
-            this.partition = value;
-        }
-
         /**
          * Returns the index into the {@link RelocatableBuffer} to which this object is written.
          */
         public int getIndexInBuffer(long index) {
-            long result = getOffset() + index;
+            long result = getPartition().getStartOffset() + getOffsetInPartition() + index;
             return NumUtil.safeToInt(result);
         }
 
@@ -695,16 +676,16 @@ public final class NativeImageHeap implements ImageHeap {
              * the beginning of the heap. So, all heap-base-relative addresses must be adjusted by
              * that offset.
              */
-            return Heap.getHeap().getImageHeapOffsetInAddressSpace() + getOffset();
+            return Heap.getHeap().getImageHeapOffsetInAddressSpace() + getPartition().getStartOffset() + getOffsetInPartition();
         }
 
         /**
          * Similar to {@link #getAddress()} but this method is typically used to get the address of
          * a field within an object.
          */
-        public long getAddress(long delta) {
-            assert delta >= 0 && delta < getSize() : "Index: " + delta + " out of bounds: [0 .. " + getSize() + ").";
-            return getAddress() + delta;
+        public long getAddress(long offset) {
+            assert offset >= 0 && offset < getSize() : "Index: " + offset + " out of bounds: [0 .. " + getSize() + ").";
+            return getAddress() + offset;
         }
 
         @Override
@@ -712,8 +693,19 @@ public final class NativeImageHeap implements ImageHeap {
             return size;
         }
 
+        @Override
+        public ImageHeapPartition getPartition() {
+            return partition;
+        }
+
         int getIdentityHashCode() {
             return identityHashCode;
+        }
+
+        @Override
+        public void setHeapPartition(ImageHeapPartition value) {
+            assert this.partition == null;
+            this.partition = value;
         }
 
         @Override

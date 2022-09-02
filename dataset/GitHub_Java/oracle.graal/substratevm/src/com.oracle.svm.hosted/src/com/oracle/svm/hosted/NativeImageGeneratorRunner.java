@@ -35,11 +35,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TimerTask;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.debug.DebugContext;
@@ -82,11 +80,9 @@ import jdk.vm.ci.code.Architecture;
 public class NativeImageGeneratorRunner implements ImageBuildTask {
 
     private volatile NativeImageGenerator generator;
-    public static final String IMAGE_BUILDER_ARG_FILE_OPTION = "--image-args-file=";
 
     public static void main(String[] args) {
-        List<String> arguments = new ArrayList<>(Arrays.asList(args));
-        arguments = extractDriverArguments(arguments);
+        ArrayList<String> arguments = new ArrayList<>(Arrays.asList(args));
         final String[] classPath = extractImagePathEntries(arguments, SubstrateOptions.IMAGE_CLASSPATH_PREFIX);
         int watchPID = extractWatchPID(arguments);
         TimerTask timerTask = null;
@@ -174,21 +170,6 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         NativeImageGenerator.setSystemPropertiesForImageEarly();
 
         return new ImageClassLoader(NativeImageGenerator.defaultPlatform(nativeImageClassLoader), nativeImageClassLoaderSupport);
-    }
-
-    public static List<String> extractDriverArguments(List<String> args) {
-        ArrayList<String> result = args.stream().filter(arg -> !arg.startsWith(IMAGE_BUILDER_ARG_FILE_OPTION)).collect(Collectors.toCollection(ArrayList::new));
-        Optional<String> argsFile = args.stream().filter(arg -> arg.startsWith(IMAGE_BUILDER_ARG_FILE_OPTION)).findFirst();
-
-        if (argsFile.isPresent()) {
-            String argFilePath = argsFile.get().substring(IMAGE_BUILDER_ARG_FILE_OPTION.length());
-            try {
-                result.addAll(Files.readAllLines(Paths.get(argFilePath)));
-            } catch (IOException e) {
-                throw VMError.shouldNotReachHere("Exception occurred during image builder argument file processing.", e);
-            }
-        }
-        return result;
     }
 
     public static String[] extractImagePathEntries(List<String> arguments, String pathPrefix) {

@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.core.util;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Collections;
 
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -49,7 +47,7 @@ public class UserError {
         }
 
         protected UserException(Iterable<String> messages) {
-            super(String.join("\n", messages));
+            super(String.join(System.lineSeparator(), messages));
             this.messages = messages;
         }
 
@@ -61,66 +59,75 @@ public class UserError {
     /**
      * Stop compilation immediately and report the message to the user.
      *
-     * @param message the error message to be reported to the user.
+     * @param format format string
+     * @param args arguments for the format string that are {@link #formatArguments(Object...)
+     *            preprocessed} before being sent to {@link String#format(String, Object...)}
      */
-    public static UserException abort(String message) {
-        throw new UserException(message);
+    public static UserException abort(String format, Object... args) {
+        // Checkstyle: stop
+        throw new UserException(String.format(format, formatArguments(args)));
+        // Checkstyle: resume
     }
 
     /**
-     * Stop compilation immediately and report the message to the user. Relevant parts of the stack
-     * trace of the exception that caused the abort are appended to the error message.
+     * Stop compilation immediately and report the message to the user.
      *
-     * @param message the error message to be reported to the user.
-     * @param ex the exception that caused the abort.
+     * @param cause the exception that caused the abort.
+     * @param format format string
+     * @param args arguments for the format string that are {@link #formatArguments(Object...)
+     *            preprocessed} before being sent to {@link String#format(String, Object...)}
      */
-    public static UserException abort(String message, Throwable ex) {
-        /*
-         * Filter out the internal parts of the exception stack trace by creating a new exception
-         * that wraps the original exception, and then only keeping the non-internal parts of the
-         * stack trace that are after the first "Caused by:" part.
-         */
-        StringWriter s = new StringWriter();
-        Exception wrapper = new Exception(ex);
-        wrapper.printStackTrace(new PrintWriter(s));
-        String stackTrace = s.toString();
-
-        int start = stackTrace.indexOf("Caused by:");
-        if (start != -1) {
-            stackTrace = stackTrace.substring(start);
-        }
-
-        throw UserError.abort(message + System.lineSeparator() + stackTrace);
+    public static UserException abort(Throwable cause, String format, Object... args) {
+        // Checkstyle: stop
+        throw ((UserException) new UserException(String.format(format, formatArguments(args))).initCause(cause));
+        // Checkstyle: resume
     }
 
     /**
      * Concisely reports user errors.
      *
-     * @param message the error message to be reported to the user.
+     * @param format format string
+     * @param args arguments for the format string that are {@link #formatArguments(Object...)
+     *            preprocessed} before being sent to {@link String#format(String, Object...)}
      */
-    public static void guarantee(boolean condition, String message, Object... args) {
+    public static void guarantee(boolean condition, String format, Object... args) {
         if (!condition) {
             // Checkstyle: stop
-            throw UserError.abort(String.format(message, formatArguments(args)));
+            throw UserError.abort(format, args);
             // Checkstyle: resume
         }
     }
 
-    private static Object[] formatArguments(Object... args) {
-        Object[] stringArgs = new Object[args.length];
+    /**
+     * Processes {@code args} to convert selected values to strings.
+     * <ul>
+     * <li>A {@link ResolvedJavaType} is converted with {@link ResolvedJavaType#toJavaName}
+     * {@code (true)}.</li>
+     * <li>A {@link ResolvedJavaMethod} is converted with {@link ResolvedJavaMethod#format}
+     * {@code ("%H.%n($p)")}.</li>
+     * <li>A {@link ResolvedJavaField} is converted with {@link ResolvedJavaField#format}
+     * {@code ("%H.%n")}.</li>
+     * </ul>
+     * All other values are copied to the returned array unmodified.
+     *
+     * @param args arguments to process
+     * @return a copy of {@code args} with certain values converted to strings as described above
+     */
+    public static Object[] formatArguments(Object... args) {
+        Object[] newArgs = new Object[args.length];
         for (int i = 0; i < args.length; i++) {
             Object arg = args[i];
             if (arg instanceof ResolvedJavaType) {
-                stringArgs[i] = ((ResolvedJavaType) arg).toJavaName(true);
+                newArgs[i] = ((ResolvedJavaType) arg).toJavaName(true);
             } else if (arg instanceof ResolvedJavaMethod) {
-                stringArgs[i] = ((ResolvedJavaMethod) arg).format("%H.%n(%p)");
+                newArgs[i] = ((ResolvedJavaMethod) arg).format("%H.%n(%p)");
             } else if (arg instanceof ResolvedJavaField) {
-                stringArgs[i] = ((ResolvedJavaField) arg).format("%H.%n");
+                newArgs[i] = ((ResolvedJavaField) arg).format("%H.%n");
             } else {
-                stringArgs[i] = String.valueOf(arg);
+                newArgs[i] = arg;
             }
         }
-        return stringArgs;
+        return newArgs;
     }
 
     /**
@@ -131,5 +138,4 @@ public class UserError {
     public static UserException abort(Iterable<String> messages) {
         throw new UserException(messages);
     }
-
 }

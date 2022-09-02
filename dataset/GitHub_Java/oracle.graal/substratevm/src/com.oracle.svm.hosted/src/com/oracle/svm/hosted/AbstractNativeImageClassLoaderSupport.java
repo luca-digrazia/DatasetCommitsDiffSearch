@@ -176,28 +176,30 @@ public abstract class AbstractNativeImageClassLoaderSupport {
         }
 
         private void loadClassesFromPath(Path path) {
-            if (ClasspathUtils.isJar(path)) {
-                try {
-                    URI jarURI = new URI("jar:" + path.toAbsolutePath().toUri());
-                    FileSystem probeJarFileSystem;
+            if (Files.exists(path)) {
+                if (Files.isRegularFile(path)) {
                     try {
-                        probeJarFileSystem = FileSystems.newFileSystem(jarURI, Collections.emptyMap());
-                    } catch (UnsupportedOperationException e) {
-                        /* Silently ignore invalid jar-files on image-classpath */
-                        probeJarFileSystem = null;
-                    }
-                    if (probeJarFileSystem != null) {
-                        try (FileSystem jarFileSystem = probeJarFileSystem) {
-                            loadClassesFromPath(jarFileSystem.getPath("/"), Collections.emptySet());
+                        URI jarURI = new URI("jar:" + path.toAbsolutePath().toUri());
+                        FileSystem probeJarFileSystem;
+                        try {
+                            probeJarFileSystem = FileSystems.newFileSystem(jarURI, Collections.emptyMap());
+                        } catch (UnsupportedOperationException e) {
+                            /* Silently ignore invalid jar-files on image-classpath */
+                            probeJarFileSystem = null;
                         }
+                        if (probeJarFileSystem != null) {
+                            try (FileSystem jarFileSystem = probeJarFileSystem) {
+                                loadClassesFromPath(jarFileSystem.getPath("/"), Collections.emptySet());
+                            }
+                        }
+                    } catch (ClosedByInterruptException ignored) {
+                        throw new InterruptImageBuilding();
+                    } catch (IOException | URISyntaxException e) {
+                        throw shouldNotReachHere(e);
                     }
-                } catch (ClosedByInterruptException ignored) {
-                    throw new InterruptImageBuilding();
-                } catch (IOException | URISyntaxException e) {
-                    throw shouldNotReachHere(e);
+                } else {
+                    loadClassesFromPath(path, excludeDirectories);
                 }
-            } else {
-                loadClassesFromPath(path, excludeDirectories);
             }
         }
 

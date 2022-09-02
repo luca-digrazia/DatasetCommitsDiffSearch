@@ -24,46 +24,164 @@
  */
 package com.oracle.svm.hosted;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.net.URL;
 import java.security.SecureClassLoader;
+import java.util.Enumeration;
+import java.util.WeakHashMap;
 import java.util.jar.JarFile;
 
+import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.util.ReflectionUtil;
 
 /**
  * NativeImageCustomSystemClassLoader is a minimal {@link ClassLoader} that forwards loading of a
- * class to a {@link NativeImageSystemClassLoader#delegate} {@link ClassLoader}. If such
- * delegate is null, then NativeImageSystemClassLoader forwards the class loading operation to the default
- * system class loader
+ * class to a {@link NativeImageSystemClassLoader#nativeImageClassLoader} {@link ClassLoader}. If
+ * such delegate is null, then NativeImageSystemClassLoader forwards the class loading operation to
+ * the default system class loader.
  * 
- * This ClassLoader is necessary to enable the loading of classes/resources during image build-time. This
- * class must be used a replacement for {@link ClassLoader#getSystemClassLoader()} and its parent
- * must be the default system class loader. The delegate is set to an instance of
- * {@link NativeImageClassLoader}.
+ * This ClassLoader is necessary to enable the loading of classes/resources during image build-time.
+ * This class must be used as a replacement for {@link ClassLoader#getSystemClassLoader()} and its
+ * parent must be the default system class loader. The delegate is set to an instance of
+ * {@link NativeImageClassLoaderSupport}.
  */
 public final class NativeImageSystemClassLoader extends SecureClassLoader {
 
-    private ClassLoader delegate = null;
-    private final ClassLoader defaultSystemClassLoader;
+    public final ClassLoader defaultSystemClassLoader;
+    private volatile ClassLoader nativeImageClassLoader = null;
+
+    private WeakHashMap<ClassLoader, Boolean> disallowedClassLoaders = new WeakHashMap<>();
 
     public NativeImageSystemClassLoader(ClassLoader defaultSystemClassLoader) {
         super(defaultSystemClassLoader);
         this.defaultSystemClassLoader = defaultSystemClassLoader;
     }
 
-    public void setDelegate(ClassLoader delegateClassLoader) {
-        this.delegate = delegateClassLoader;
+    public static NativeImageSystemClassLoader singleton() {
+        ClassLoader loader = ClassLoader.getSystemClassLoader();
+        if (loader instanceof NativeImageSystemClassLoader) {
+            return ((NativeImageSystemClassLoader) loader);
+        }
+
+        throw UserError.abort("NativeImageSystemClassLoader is not the default system class loader. This might create problems when using reflection during class initialization at build-time." +
+                        "To fix this error add -Djava.system.class.loader=%s", NativeImageSystemClassLoader.class.getCanonicalName());
     }
 
-    public ClassLoader getDefaultSystemClassLoader() {
-        return defaultSystemClassLoader;
+    public void setNativeImageClassLoader(ClassLoader nativeImageClassLoader) {
+        if (nativeImageClassLoader == null && this.nativeImageClassLoader != null) {
+            /*
+             * If the active nativeImageClassLoader gets uninstalled (by setting null) remember it
+             * in the disallowedClassLoaders map to allow checking for left-over instances from
+             * previous builds. See {@code SVMHost.checkType}.
+             */
+            disallowedClassLoaders.put(this.nativeImageClassLoader, Boolean.TRUE);
+        }
+        this.nativeImageClassLoader = nativeImageClassLoader;
+    }
+
+    public ClassLoader getNativeImageClassLoader() {
+        return nativeImageClassLoader;
+    }
+
+    public boolean isNativeImageClassLoader(ClassLoader c) {
+        ClassLoader loader = nativeImageClassLoader;
+        if (loader == null) {
+            return false;
+        }
+        if (c == loader) {
+            return true;
+        }
+        return false;
+    }
+
+    public boolean isDisallowedClassLoader(ClassLoader c) {
+        return disallowedClassLoaders.containsKey(c);
+    }
+
+    /**
+     * Several classloader methods are terminal methods that get invoked when resolving a class or
+     * accessing resources, unfortunately they are protected methods meant to be overridden. Since
+     * this class delegates to the appropriate ClassLoader, the methods need to be called via
+     * reflection to by pass the protected visibility
+     */
+    private static final Method loadClass = ReflectionUtil.lookupMethod(ClassLoader.class, "loadClass",
+                    String.class, boolean.class);
+    private static final Method findResource = ReflectionUtil.lookupMethod(ClassLoader.class, "findResource",
+                    String.class);
+
+    private static final Method findResources = ReflectionUtil.lookupMethod(ClassLoader.class, "findResources",
+                    String.class);
+
+    static Class<?> loadClass(ClassLoader classLoader, String name, boolean resolve) throws ClassNotFoundException {
+        Class<?> loadedClass = null;
+        try {
+            /* invoke the "loadClass" method on the current class loader */
+            loadedClass = ((Class<?>) loadClass.invoke(classLoader, name, resolve));
+        } catch (Exception e) {
+            if (e.getCause() instanceof ClassNotFoundException) {
+                throw ((ClassNotFoundException) e.getCause());
+            }
+            String message = String.format("Can not load class: %s, with class loader: %s", name, classLoader);
+            VMError.shouldNotReachHere(message, e);
+        }
+        return loadedClass;
+    }
+
+    static URL findResource(ClassLoader classLoader, String name) {
+        try {
+            // invoke the "findResource" method on the current class loader
+            return (URL) findResource.invoke(classLoader, name);
+        } catch (ReflectiveOperationException e) {
+            String message = String.format("Can not find resource: %s using class loader: %s", name, classLoader);
+            VMError.shouldNotReachHere(message, e);
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    static Enumeration<URL> findResources(ClassLoader classLoader, String name) {
+        try {
+            // invoke the "findResources" method on the current class loader
+            return (Enumeration<URL>) findResources.invoke(classLoader, name);
+        } catch (ReflectiveOperationException e) {
+            String message = String.format("Can not find resources: %s using class loader: %s", name, classLoader);
+            VMError.shouldNotReachHere(message, e);
+        }
+
+        return null;
     }
 
     @Override
-    public Class<?> loadClass(String name) throws ClassNotFoundException {
-        ClassLoader cl = delegate != null ? delegate : defaultSystemClassLoader;
-        return cl.loadClass(name);
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        return loadClass(getActiveClassLoader(), name, resolve);
+    }
+
+    @Override
+    protected URL findResource(String name) {
+        return findResource(getActiveClassLoader(), name);
+    }
+
+    @Override
+    protected Enumeration<URL> findResources(String name) throws IOException {
+        return findResources(getActiveClassLoader(), name);
+    }
+
+    @Override
+    public String toString() {
+        final String clString = super.toString();
+        return clString + " {" +
+                        "delegate=" + nativeImageClassLoader +
+                        ", defaultSystemClassLoader=" + defaultSystemClassLoader +
+                        '}';
+    }
+
+    private ClassLoader getActiveClassLoader() {
+        ClassLoader delegate = nativeImageClassLoader;
+        return delegate != null
+                        ? delegate
+                        : defaultSystemClassLoader;
     }
 
     /**
@@ -71,15 +189,15 @@ public final class NativeImageSystemClassLoader extends SecureClassLoader {
      * agent during startup. See
      * {@link java.lang.instrument.Instrumentation#appendToSystemClassLoaderSearch(JarFile)} }
      * 
-     * @param filePath the path to the jar file that will be added to the class path
+     * @param classPathEntry the classpath entry that will be added to the class path
      */
     @SuppressWarnings("unused")
-    private void appendToClassPathForInstrumentation(String filePath) {
+    private void appendToClassPathForInstrumentation(String classPathEntry) {
         try {
             Method method = ReflectionUtil.lookupMethod(getParent().getClass(), "appendToClassPathForInstrumentation", String.class);
-            method.invoke(getParent(), filePath);
+            method.invoke(getParent(), classPathEntry);
         } catch (ReflectiveOperationException e) {
-            String message = String.format("Can not add jar: %s to class path. Due to %s", filePath, e);
+            String message = String.format("Can not add jar: %s to class path. Due to %s", classPathEntry, e);
             VMError.shouldNotReachHere(message, e);
         }
     }

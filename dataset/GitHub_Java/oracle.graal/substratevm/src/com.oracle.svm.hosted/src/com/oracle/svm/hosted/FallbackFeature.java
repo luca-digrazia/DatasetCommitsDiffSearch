@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.hosted;
 
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -60,7 +58,6 @@ public class FallbackFeature implements Feature {
     private final List<String> resourceCalls = new ArrayList<>();
     private final List<String> jniCalls = new ArrayList<>();
     private final List<String> proxyCalls = new ArrayList<>();
-    private final List<String> serializationCalls = new ArrayList<>();
 
     private static class AutoProxyInvoke {
         private final ResolvedJavaMethod method;
@@ -170,11 +167,6 @@ public class FallbackFeature implements Feature {
             addCheck(Proxy.class.getMethod("newProxyInstance", ClassLoader.class, Class[].class, InvocationHandler.class), this::collectProxyInvokes);
 
             addCheck(System.class.getMethod("loadLibrary", String.class), this::collectJNIInvokes);
-
-            addCheck(ObjectInputStream.class.getMethod("readObject"), this::collectDeserializationInvokes);
-            addCheck(ObjectInputStream.class.getMethod("readUnshared"), this::collectDeserializationInvokes);
-            addCheck(ObjectOutputStream.class.getMethod("writeObject", Object.class), this::collectSerializationInvokes);
-            addCheck(ObjectOutputStream.class.getMethod("writeUnshared", Object.class), this::collectSerializationInvokes);
         } catch (NoSuchMethodException e) {
             throw VMError.shouldNotReachHere("Registering ReflectionInvocationChecks failed", e);
         }
@@ -196,14 +188,6 @@ public class FallbackFeature implements Feature {
         if (!containsAutoProxyInvoke(invokeLocation.getMethod(), invokeLocation.getBCI())) {
             proxyCalls.add("Dynamic proxy method " + check.locationString(invokeLocation));
         }
-    }
-
-    private void collectDeserializationInvokes(ReflectionInvocationCheck check, BytecodePosition invokeLocation) {
-        serializationCalls.add("Deserialization method " + check.locationString(invokeLocation));
-    }
-
-    private void collectSerializationInvokes(ReflectionInvocationCheck check, BytecodePosition invokeLocation) {
-        serializationCalls.add("Serialization method " + check.locationString(invokeLocation));
     }
 
     static FallbackImageRequest reportFallback(String message) {
@@ -228,7 +212,7 @@ public class FallbackFeature implements Feature {
         throw request;
     }
 
-    public static UserError.UserException reportAsFallback(RuntimeException original) {
+    static UserError.UserException reportAsFallback(RuntimeException original) {
         if (SubstrateOptions.FallbackThreshold.getValue() == SubstrateOptions.NoFallback) {
             throw UserError.abort(original, "%s", original.getMessage());
         }
@@ -271,7 +255,6 @@ public class FallbackFeature implements Feature {
     public FallbackImageRequest resourceFallback = null;
     public FallbackImageRequest jniFallback = null;
     public FallbackImageRequest proxyFallback = null;
-    public FallbackImageRequest serializationFallback = null;
 
     @Override
     public void afterAnalysis(AfterAnalysisAccess a) {
@@ -312,10 +295,6 @@ public class FallbackFeature implements Feature {
         if (!proxyCalls.isEmpty()) {
             proxyCalls.add(ABORT_MSG_PREFIX + " due to dynamic proxy use without configuration.");
             proxyFallback = new FallbackImageRequest(proxyCalls);
-        }
-        if (!serializationCalls.isEmpty()) {
-            serializationCalls.add(ABORT_MSG_PREFIX + " due to serialization use without configuration.");
-            serializationFallback = new FallbackImageRequest(serializationCalls);
         }
     }
 }
