@@ -1,111 +1,246 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.tck;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.impl.TVMCI;
-import com.oracle.truffle.api.nodes.RootNode;
+import java.io.Closeable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
+
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.PolyglotAccess;
 import org.junit.Test;
+import org.junit.runners.model.FrameworkField;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.Statement;
 import org.junit.runners.model.TestClass;
+
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.TruffleLanguage.ContextPolicy;
+import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.impl.TVMCI;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.tck.TruffleRunner.Inject;
+import com.oracle.truffle.tck.TruffleRunner.RunWithPolyglotRule;
 
-final class TruffleTestInvoker<T extends CallTarget> extends TVMCI.TestAccessor<T> {
+final class TruffleTestInvoker<C extends Closeable, T extends CallTarget> extends TVMCI.TestAccessor<C, T> {
 
-    static TruffleTestInvoker<?> create() {
-        TVMCI.Test<?> testTvmci = Truffle.getRuntime().getCapability(TVMCI.Test.class);
+    static TruffleTestInvoker<?, ?> create() {
+        TVMCI.Test<?, ?> testTvmci = Truffle.getRuntime().getCapability(TVMCI.Test.class);
         return new TruffleTestInvoker<>(testTvmci);
     }
 
-    private TruffleTestInvoker(TVMCI.Test<T> testTvmci) {
+    @TruffleLanguage.Registration(id = "truffletestinvoker", name = "truffletestinvoker", version = "", contextPolicy = ContextPolicy.SHARED)
+    public static class TruffleTestInvokerLanguage extends TruffleLanguage<Env> {
+
+        @Override
+        protected Env createContext(Env env) {
+            return env;
+        }
+
+        @Override
+        protected void initializeContext(Env context) throws Exception {
+            context.exportSymbol("language", context.asGuestValue(this));
+            context.exportSymbol("env", context.asGuestValue(context));
+        }
+
+        @Override
+        protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
+            return true;
+        }
+    }
+
+    private static class TestStatement extends Statement {
+
+        private final RunWithPolyglotRule rule;
+        private final Statement stmt;
+
+        TestStatement(RunWithPolyglotRule rule, Statement stmt) {
+            this.rule = rule;
+            this.stmt = stmt;
+        }
+
+        @Override
+        public void evaluate() throws Throwable {
+            Context prevContext = rule.context;
+            try (Context context = rule.contextBuilder.allowPolyglotAccess(PolyglotAccess.ALL).build()) {
+                rule.context = context;
+
+                context.initialize("truffletestinvoker");
+                context.enter();
+                TruffleLanguage<?> prevLang = rule.testLanguage;
+                Env prevEnv = rule.testEnv;
+                try {
+                    rule.testLanguage = context.getPolyglotBindings().getMember("language").asHostObject();
+                    rule.testEnv = context.getPolyglotBindings().getMember("env").asHostObject();
+                    stmt.evaluate();
+                } catch (Throwable t) {
+                    throw t;
+                } finally {
+                    rule.testLanguage = prevLang;
+                    rule.testEnv = prevEnv;
+                    context.leave();
+                }
+            } finally {
+                rule.context = prevContext;
+            }
+        }
+
+    }
+
+    private TruffleTestInvoker(TVMCI.Test<C, T> testTvmci) {
         super(testTvmci);
     }
 
-    private static int getWarmupIterations(FrameworkMethod method) {
-        TruffleRunner.Warmup warmup = method.getAnnotation(TruffleRunner.Warmup.class);
-        if (warmup != null) {
-            return warmup.value();
-        } else {
-            return 3;
+    private interface NodeConstructor extends Function<Object, RootNode> {
+    }
+
+    static class TruffleTestClass extends TestClass {
+
+        TruffleTestClass(Class<?> cls) {
+            super(cls);
+        }
+
+        @Override
+        protected void scanAnnotatedMembers(Map<Class<? extends Annotation>, List<FrameworkMethod>> methodsForAnnotations,
+                        Map<Class<? extends Annotation>, List<FrameworkField>> fieldsForAnnotations) {
+            super.scanAnnotatedMembers(methodsForAnnotations, fieldsForAnnotations);
+
+            for (List<FrameworkMethod> methods : methodsForAnnotations.values()) {
+                methods.replaceAll(m -> new TruffleFrameworkMethod(this, m.getMethod()));
+            }
         }
     }
 
-    private static RootNode[] createTestRootNodes(TestClass testClass, FrameworkMethod testMethod, Object test) {
-        int paramCount = testMethod.getMethod().getParameterCount();
-        if (paramCount == 0) {
+    private static class TruffleFrameworkMethod extends FrameworkMethod {
+
+        private final int warmupIterations;
+        private final NodeConstructor[] nodeConstructors;
+
+        TruffleFrameworkMethod(TestClass testClass, Method method) {
+            super(method);
+
+            int paramCount = method.getParameterCount();
+            if (paramCount == 0) {
+                // non-truffle test
+                nodeConstructors = null;
+            } else {
+                nodeConstructors = new NodeConstructor[paramCount];
+
+                for (int i = 0; i < paramCount; i++) {
+                    Inject testRootNode = findRootNodeAnnotation(method.getParameterAnnotations()[i]);
+                    if (testRootNode != null) {
+                        nodeConstructors[i] = getNodeConstructor(testRootNode, testClass);
+                    }
+                }
+            }
+
+            TruffleRunner.Warmup warmup = method.getAnnotation(TruffleRunner.Warmup.class);
+            if (warmup != null) {
+                warmupIterations = warmup.value();
+            } else {
+                warmupIterations = 3;
+            }
+        }
+
+        boolean hasNodeConstructors() {
+            return nodeConstructors != null;
+        }
+
+        RootNode[] createTestRootNodes(Object test) {
+            RootNode[] ret = new RootNode[nodeConstructors.length];
+            for (int i = 0; i < ret.length; i++) {
+                if (nodeConstructors[i] != null) {
+                    ret[i] = nodeConstructors[i].apply(test);
+                }
+            }
+            return ret;
+        }
+    }
+
+    Statement createStatement(String testName, FrameworkMethod method, Object test) {
+        final TruffleFrameworkMethod truffleMethod = (TruffleFrameworkMethod) method;
+        if (!truffleMethod.hasNodeConstructors()) {
             // non-truffle test
             return null;
         }
-
-        RootNode[] testNodes = new RootNode[paramCount];
-
-        for (int i = 0; i < paramCount; i++) {
-            Inject testRootNode = findRootNodeAnnotation(testMethod.getMethod().getParameterAnnotations()[i]);
-            Function<Object, RootNode> cons = getNodeConstructor(testRootNode, testClass);
-            testNodes[i] = cons.apply(test);
-        }
-
-        return testNodes;
-    }
-
-    Statement createStatement(String testName, TestClass testClass, FrameworkMethod method, Object test) {
-        final RootNode[] testNodes = createTestRootNodes(testClass, method, test);
-        if (testNodes == null) {
-            return null;
-        }
-
-        final int warmupIterations = getWarmupIterations(method);
 
         return new Statement() {
 
             @Override
             public void evaluate() throws Throwable {
-                ArrayList<T> callTargets = new ArrayList<>(testNodes.length);
-                for (RootNode testNode : testNodes) {
-                    callTargets.add(createTestCallTarget(testName, testNode));
-                }
+                try (C testContext = createTestContext(testName)) {
+                    final RootNode[] testNodes = truffleMethod.createTestRootNodes(test);
+                    ArrayList<T> callTargets = new ArrayList<>(testNodes.length);
+                    for (RootNode testNode : testNodes) {
+                        if (testNode != null) {
+                            callTargets.add(createTestCallTarget(testContext, testNode));
+                        } else {
+                            callTargets.add(null);
+                        }
+                    }
 
-                Object[] args = callTargets.toArray();
-                for (int i = 0; i < warmupIterations; i++) {
-                    method.invokeExplosively(test, args);
-                }
+                    Object[] args = callTargets.toArray();
+                    for (int i = 0; i < truffleMethod.warmupIterations; i++) {
+                        truffleMethod.invokeExplosively(test, args);
+                    }
 
-                for (T callTarget : callTargets) {
-                    finishWarmup(callTarget);
+                    for (T callTarget : callTargets) {
+                        finishWarmup(testContext, callTarget);
+                    }
+                    truffleMethod.invokeExplosively(test, args);
                 }
-                method.invokeExplosively(test, args);
             }
         };
+    }
+
+    static Statement withTruffleContext(RunWithPolyglotRule rule, Statement stmt) {
+        return new TestStatement(rule, stmt);
     }
 
     private static Inject findRootNodeAnnotation(Annotation[] annotations) {
@@ -117,7 +252,7 @@ final class TruffleTestInvoker<T extends CallTarget> extends TVMCI.TestAccessor<
         return null;
     }
 
-    private static Function<Object, RootNode> getNodeConstructor(Inject annotation, TestClass testClass) {
+    private static NodeConstructor getNodeConstructor(Inject annotation, TestClass testClass) {
         Class<? extends RootNode> nodeClass = annotation.value();
         try {
             Constructor<? extends RootNode> cons = nodeClass.getConstructor(testClass.getJavaClass());
