@@ -47,6 +47,7 @@ import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Value;
 
 /**
@@ -109,7 +110,8 @@ public class GraalHotSpotVMConfigNode extends FloatingNode implements LIRLowerab
     }
 
     @SuppressWarnings("unused")
-    public static boolean intrinsify(GraphBuilderContext b, @InjectedNodeParameter Stamp returnStamp, @InjectedNodeParameter GraalHotSpotVMConfig config, HotSpotMarkId mark) {
+    public static boolean intrinsify(GraphBuilderContext b, ResolvedJavaMethod method, @InjectedNodeParameter Stamp returnStamp, @InjectedNodeParameter GraalHotSpotVMConfig config,
+                    HotSpotMarkId mark) {
         HotSpotReplacementsImpl replacements = (HotSpotReplacementsImpl) b.getReplacements();
         if (replacements.isEncodingSnippets()) {
             // This plugin must be deferred so that these constants aren't embedded in libgraal
