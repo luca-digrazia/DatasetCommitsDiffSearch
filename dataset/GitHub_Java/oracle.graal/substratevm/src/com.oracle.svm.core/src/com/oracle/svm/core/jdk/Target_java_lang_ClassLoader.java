@@ -31,19 +31,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.security.NoSuchAlgorithmException;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Vector;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Enumeration;
-import java.util.Collections;
-import java.util.Vector;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
+import com.oracle.svm.core.annotate.Inject;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
@@ -51,7 +51,6 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.hub.ClassForNameSupport;
 import com.oracle.svm.core.hub.DynamicHub;
-import com.oracle.svm.core.util.JavaClassUtil;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -188,7 +187,7 @@ final class Target_jdk_internal_loader_Loader {
 
 @TargetClass(ClassLoader.class)
 @SuppressWarnings("static-method")
-final class Target_java_lang_ClassLoader {
+public final class Target_java_lang_ClassLoader {
 
     /**
      * This field can be safely deleted, but that would require substituting the entire constructor
@@ -216,6 +215,10 @@ final class Target_java_lang_ClassLoader {
 
     @Alias //
     private static ClassLoader scl;
+
+    @Inject
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = JfrIDRecomputation.class)
+    public int jfrID;
 
     @Substitute
     public static ClassLoader getSystemClassLoader() {
@@ -295,11 +298,8 @@ final class Target_java_lang_ClassLoader {
     @Alias
     private native boolean checkName(String name);
 
-    @Substitute
-    @SuppressWarnings("unused")
-    Class<?> loadClass(String name, boolean resolve) {
-        throw VMError.unsupportedFeature("Target_java_lang_ClassLoader.loadClass(String, boolean)");
-    }
+    @Delete
+    native Class<?> loadClass(String name, boolean resolve);
 
     @Delete
     native Class<?> findBootstrapClassOrNull(String name);
@@ -415,26 +415,14 @@ final class Target_java_lang_ClassLoader {
     @Delete
     private static native void registerNatives();
 
-    @Substitute
-    @SuppressWarnings("unused")
-    Class<?> defineClass(String name, byte[] b, int off, int len)
-                    throws ClassFormatError {
-        String definedClassName = name == null ? JavaClassUtil.getClassName(b) : name;
-        ClassLoaderHelper.verifyClassUnchanged(definedClassName, b);
-        return ClassLoaderHelper.doDefineClass(definedClassName);
-    }
+    @Delete
+    private native Class<?> defineClass(String name, byte[] b, int off, int len);
 
-    @Substitute
-    @SuppressWarnings("unused")
-    private Class<?> defineClass(String name, byte[] b, int off, int len, ProtectionDomain protectionDomain) {
-        throw VMError.unsupportedFeature("Define class with protection domain is not supported");
-    }
+    @Delete
+    private native Class<?> defineClass(String name, byte[] b, int off, int len, ProtectionDomain protectionDomain);
 
-    @Substitute
-    @SuppressWarnings("unused")
-    private Class<?> defineClass(String name, java.nio.ByteBuffer b, ProtectionDomain protectionDomain) {
-        throw VMError.unsupportedFeature("Define class with protection domain is not supported");
-    }
+    @Delete
+    private native Class<?> defineClass(String name, java.nio.ByteBuffer b, ProtectionDomain protectionDomain);
 
     @Delete
     @TargetElement(onlyWith = JDK8OrEarlier.class)
@@ -528,43 +516,6 @@ class PackageFieldTransformer implements RecomputeFieldValue.CustomFieldValueTra
             return useConcurrentHashMap ? new ConcurrentHashMap<String, Package>() : new HashMap<String, Package>();
         } else {
             return useConcurrentHashMap ? packages : new HashMap<>(packages);
-        }
-    }
-}
-
-final class ClassLoaderHelper {
-    public static Class<?> doDefineClass(String className) {
-        try {
-            return ClassForNameSupport.forName(className, false);
-        } catch (ClassNotFoundException e) {
-            ClassFormatError error = new ClassFormatError("Class " + className + " has not been prepared.");
-            error.initCause(e);
-            throw error;
-        }
-    }
-
-    /**
-     * Verify the runtime defined class' SHA value is the same as the configured.
-     *
-     * @param className Dynamically generated class' full qualified name
-     * @param classContents The definition of the class
-     */
-    public static void verifyClassUnchanged(String className, byte[] classContents) {
-        try {
-            String configedChecksum = ClassForNameSupport.getDynamicClassChecksum(className);
-            String runtimeSHA = JavaClassUtil.getSHAWithoutSourceFileInfo(classContents);
-            if (!configedChecksum.equals(runtimeSHA)) {
-                throw new ClassFormatError(
-                                "Previously prepared class " + className + " has different contents from the dynamically generated one in runtime. The runtime checksum is " + runtimeSHA);
-            }
-        } catch (ClassNotFoundException e) {
-            ClassFormatError error = new ClassFormatError("Class " + className + " has not been prepared.");
-            error.initCause(e);
-            throw error;
-        } catch (NoSuchAlgorithmException e) {
-            ClassFormatError error = new ClassFormatError("Cannot calculate SHA-256 value from class " + className);
-            error.initCause(e);
-            throw error;
         }
     }
 }
