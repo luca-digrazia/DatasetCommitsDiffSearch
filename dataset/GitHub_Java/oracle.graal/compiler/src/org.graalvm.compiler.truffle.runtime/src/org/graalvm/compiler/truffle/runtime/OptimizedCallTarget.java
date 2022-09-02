@@ -26,6 +26,7 @@ package org.graalvm.compiler.truffle.runtime;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -261,11 +262,12 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      * It is only set to non-null in {@link #compile(boolean)} in a synchronized block.
      *
      * It is only {@linkplain #resetCompilationTask() set to null} by the
-     * {@linkplain CompilationTask task} itself when: 1) The task is canceled before the compilation
-     * has started, or 2) The compilation has finished (successfully or not). Canceling the task
-     * after the compilation has started does not reset the task until the compilation finishes.
+     * {@linkplain CancellableCompileTask task} itself when: 1) The task is canceled before the
+     * compilation has started, or 2) The compilation has finished (successfully or not). Canceling
+     * the task after the compilation has started does not reset the task until the compilation
+     * finishes.
      */
-    private volatile CompilationTask compilationTask;
+    private volatile CancellableCompileTask compilationTask;
 
     private volatile boolean needsSplit;
 
@@ -641,7 +643,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                 return false;
             }
 
-            CompilationTask task = null;
+            CancellableCompileTask task = null;
             // Do not try to compile this target concurrently,
             // but do not block other threads if compilation is not asynchronous.
             synchronized (this) {
@@ -666,7 +668,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return false;
     }
 
-    public final boolean maybeWaitForTask(CompilationTask task) {
+    public final boolean maybeWaitForTask(CancellableCompileTask task) {
         boolean mayBeAsynchronous = engine.backgroundCompilation;
         runtime().finishCompilation(this, task, mayBeAsynchronous);
         // not async compile and compilation successful
@@ -682,7 +684,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     public final void waitForCompilation() {
-        CompilationTask task = compilationTask;
+        CancellableCompileTask task = compilationTask;
         if (task != null) {
             runtime().finishCompilation(this, task, false);
         }
@@ -799,7 +801,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     private boolean cancelAndResetCompilationTask() {
-        CompilationTask task = this.compilationTask;
+        CancellableCompileTask task = this.compilationTask;
         if (task != null) {
             synchronized (this) {
                 task = this.compilationTask;
@@ -954,8 +956,27 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return false;
     }
 
-    public final void accept(NodeVisitor visitor) {
-        getRootNode().accept(visitor);
+    public final void accept(NodeVisitor visitor, TruffleInlining inlingDecision) {
+        if (inlingDecision != null) {
+            inlingDecision.accept(this, visitor);
+        } else {
+            getRootNode().accept(visitor);
+        }
+    }
+
+    public final Iterable<Node> nodeIterable(TruffleInlining inliningDecision) {
+        Iterator<Node> iterator = nodeIterator(inliningDecision);
+        return () -> iterator;
+    }
+
+    public final Iterator<Node> nodeIterator(TruffleInlining inliningDecision) {
+        Iterator<Node> iterator;
+        if (inliningDecision != null) {
+            iterator = inliningDecision.makeNodeIterator(this);
+        } else {
+            iterator = NodeUtil.makeRecursiveIterator(this.getRootNode());
+        }
+        return iterator;
     }
 
     @Override
@@ -1346,7 +1367,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return System.identityHashCode(this);
     }
 
-    final CompilationTask getCompilationTask() {
+    final CancellableCompileTask getCompilationTask() {
         return compilationTask;
     }
 
