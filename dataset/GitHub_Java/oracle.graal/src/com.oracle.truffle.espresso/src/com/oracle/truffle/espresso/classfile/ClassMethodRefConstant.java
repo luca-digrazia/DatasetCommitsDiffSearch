@@ -161,9 +161,6 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
          * the invoked object has a concrete implementation of the method.
          */
         private static Method lookupMethod(Klass klass, Symbol<Name> name, Symbol<Signature> signature) {
-            if (name.toString().contains("linkTo")) {
-                int i = 1;
-            }
             Method method = lookupClassMethod(klass, name, signature);
             if (method != null) {
                 return method;
@@ -180,19 +177,7 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
                     }
                 }
             }
-            if (klass.getType() == Symbol.Type.MethodHandle) {
-                return lookupPolysigMethod(klass, name, signature);
-            }
-            return null;
-        }
 
-        private static Method lookupPolysigMethod(Klass klass, Symbol<Name> name, Symbol<Signature> signature) {
-            assert(klass.getType() == Symbol.Type.MethodHandle);
-            for (Method m: klass.getDeclaredMethods()) {
-                if ((m.isNative()) && m.getName() == name) {
-                    return m;
-                }
-            }
             return null;
         }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,6 +36,11 @@ public final class JniThreadLocalPendingException {
 
     public void set(StaticObject t) {
         // TODO(peterssen): Warn about overwritten pending exceptions.
+        // if (pendingException.get() != null) {
+        // System.err.println("Overwriting pending exception: " + pendingException.get().getKlass()
+        // + " with
+        // " + (t == null ? "<null>" : t.getKlass()));
+        // }
         pendingException.set(t);
     }
 
