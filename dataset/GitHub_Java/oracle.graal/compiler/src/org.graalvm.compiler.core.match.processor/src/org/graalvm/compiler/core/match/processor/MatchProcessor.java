@@ -343,15 +343,10 @@ public class MatchProcessor extends AbstractProcessor {
         final boolean commutative;
 
         /**
-         * Can multiple users of this node subsume it.
+         * Can multiple users of this node subsume it. Constants can be swallowed into a match even
+         * if there are multiple users.
          */
         final boolean shareable;
-
-        /**
-         * Can this node be swallowed into a match. Constants can be consumed by a match even if it
-         * has multiple users.
-         */
-        final boolean consumable;
 
         /**
          * Can this node be subsumed into a match even if there are side effecting nodes between
@@ -361,8 +356,7 @@ public class MatchProcessor extends AbstractProcessor {
 
         final Set<Element> originatingElements = new HashSet<>();
 
-        TypeDescriptor(TypeMirror mirror, String shortName, String nodeClass, String nodePackage, List<String> inputs,
-                        boolean commutative, boolean shareable, boolean consumable, boolean ignoresSideEffects) {
+        TypeDescriptor(TypeMirror mirror, String shortName, String nodeClass, String nodePackage, List<String> inputs, boolean commutative, boolean shareable, boolean ignoresSideEffects) {
             this.mirror = mirror;
             this.shortName = shortName;
             this.nodeClass = nodeClass;
@@ -370,7 +364,6 @@ public class MatchProcessor extends AbstractProcessor {
             this.inputs = inputs;
             this.commutative = commutative;
             this.shareable = shareable;
-            this.consumable = consumable;
             this.ignoresSideEffects = ignoresSideEffects;
             assert !commutative || inputs.size() == 2;
         }
@@ -383,9 +376,9 @@ public class MatchProcessor extends AbstractProcessor {
 
     private TypeDescriptor valueType;
 
-    private void declareType(TypeMirror mirror, String shortName, String nodeClass, String nodePackage, List<String> inputs,
-                    boolean commutative, boolean shareable, boolean consumable, boolean ignoresSideEffects, Element element) {
-        TypeDescriptor descriptor = new TypeDescriptor(mirror, shortName, nodeClass, nodePackage, inputs, commutative, shareable, consumable, ignoresSideEffects);
+    private void declareType(TypeMirror mirror, String shortName, String nodeClass, String nodePackage, List<String> inputs, boolean commutative, boolean shareable, boolean ignoresSideEffects,
+                    Element element) {
+        TypeDescriptor descriptor = new TypeDescriptor(mirror, shortName, nodeClass, nodePackage, inputs, commutative, shareable, ignoresSideEffects);
         descriptor.originatingElements.add(element);
         knownTypes.put(shortName, descriptor);
     }
@@ -468,7 +461,7 @@ public class MatchProcessor extends AbstractProcessor {
 
         private String formatPrefix() {
             if (nodeType == valueType) {
-                return String.format("new MatchPattern(%s, false, false, false", name != null ? ("\"" + name + "\"") : "null");
+                return String.format("new MatchPattern(%s, false, false", name != null ? ("\"" + name + "\"") : "null");
             } else {
                 return String.format("new MatchPattern(%s.class, %s", nodeType.nodeClass, name != null ? ("\"" + name + "\"") : "null");
             }
@@ -477,13 +470,13 @@ public class MatchProcessor extends AbstractProcessor {
         private String formatSuffix() {
             if (nodeType != null) {
                 if (inputs.length != nodeType.inputs.size()) {
-                    return ", true, " + nodeType.consumable + ", " + nodeType.ignoresSideEffects + ")";
+                    return ", true, " + nodeType.ignoresSideEffects + ")";
                 } else {
                     if (nodeType.inputs.size() > 0) {
-                        return ", " + nodeType.nodeClass + "_positions, " + !nodeType.shareable + ", " + nodeType.consumable + ", " + nodeType.ignoresSideEffects + ")";
+                        return ", " + nodeType.nodeClass + "_positions, " + !nodeType.shareable + ", " + nodeType.ignoresSideEffects + ")";
                     }
                     if (nodeType.shareable) {
-                        return ", false, " + nodeType.consumable + ", " + nodeType.ignoresSideEffects + ")";
+                        return ", false, " + nodeType.ignoresSideEffects + ")";
                     }
                 }
             }
@@ -739,7 +732,7 @@ public class MatchProcessor extends AbstractProcessor {
             // Define a TypeDescriptor for the generic node but don't enter it into the nodeTypes
             // table since it shouldn't be mentioned in match rules.
             TypeMirror valueTypeMirror = getTypeElement(VALUE_NODE_CLASS_NAME).asType();
-            valueType = new TypeDescriptor(valueTypeMirror, "Value", "ValueNode", "org.graalvm.compiler.nodes", Collections.emptyList(), false, false, false, false);
+            valueType = new TypeDescriptor(valueTypeMirror, "Value", "ValueNode", "org.graalvm.compiler.nodes", Collections.emptyList(), false, false, false);
 
             Map<TypeElement, MatchRuleDescriptor> map = new HashMap<>();
 
@@ -849,9 +842,8 @@ public class MatchProcessor extends AbstractProcessor {
 
         boolean commutative = getAnnotationValue(matchable, "commutative", Boolean.class);
         boolean shareable = getAnnotationValue(matchable, "shareable", Boolean.class);
-        boolean consumable = getAnnotationValue(matchable, "consumable", Boolean.class);
         boolean ignoresSideEffects = getAnnotationValue(matchable, "ignoresSideEffects", Boolean.class);
-        declareType(nodeClassMirror, shortName, nodeClass, nodePackage, inputs, commutative, shareable, consumable, ignoresSideEffects, element);
+        declareType(nodeClassMirror, shortName, nodeClass, nodePackage, inputs, commutative, shareable, ignoresSideEffects, element);
     }
 
     private void processMatchRules(Map<TypeElement, MatchRuleDescriptor> map, Element element, List<AnnotationMirror> matchRules) {

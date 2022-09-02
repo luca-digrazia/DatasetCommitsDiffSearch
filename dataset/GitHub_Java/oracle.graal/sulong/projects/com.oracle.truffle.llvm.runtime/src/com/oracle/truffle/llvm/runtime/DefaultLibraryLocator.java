@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.TruffleFile;
+import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -49,7 +50,7 @@ public final class DefaultLibraryLocator extends LibraryLocator {
     public TruffleFile locateLibrary(LLVMContext context, String lib, Object reason) {
         Path libPath = Paths.get(lib);
         if (libPath.isAbsolute()) {
-            return locateAbsolute(context, libPath);
+            return locateAbsolute(context, lib, libPath);
         }
         return locateGlobal(context, lib);
     }
@@ -69,20 +70,14 @@ public final class DefaultLibraryLocator extends LibraryLocator {
         return null;
     }
 
-    public static TruffleFile locateAbsolute(LLVMContext context, Path libPath) {
+    public static TruffleFile locateAbsolute(LLVMContext context, String lib, Path libPath) {
         assert libPath.isAbsolute();
         traceTry(context, libPath);
         TruffleFile file = context.getEnv().getInternalTruffleFile(libPath.toUri());
         if (file.exists()) {
             return file;
         } else {
-            /*
-             * On OSX Big Sur, some system libraries don't exist as a file. These libraries are
-             * native libraries anyway, Sulong can do nothing with these libraries, so we can just
-             * return null here. The NFI will later re-try locating these libraries, and they will
-             * be found via the dlopen cache.
-             */
-            return null;
+            throw new LLVMLinkerException(String.format("Library \"%s\" does not exist.", lib));
         }
     }
 
