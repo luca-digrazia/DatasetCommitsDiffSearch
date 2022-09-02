@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, 2020, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2020, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,86 +42,6 @@ public interface DebugInfoProvider {
      * Access details of a specific type.
      */
     interface DebugTypeInfo {
-        enum DebugTypeKind {
-            PRIMITIVE,
-            ENUM,
-            INSTANCE,
-            INTERFACE,
-            ARRAY;
-
-            @Override
-            public String toString() {
-                switch (this) {
-                    case PRIMITIVE:
-                        return "primitive";
-                    case ENUM:
-                        return "enum";
-                    case INSTANCE:
-                        return "instance";
-                    case INTERFACE:
-                        return "interface";
-                    case ARRAY:
-                        return "array";
-                    default:
-                        return "???";
-                }
-            }
-        };
-
-        void debugContext(Consumer<DebugContext> action);
-
-        /**
-         * @return the fully qualified name of the debug type.
-         */
-        String typeName();
-
-        DebugTypeKind typeKind();
-
-        int size();
-    }
-
-    interface DebugEnumTypeInfo extends DebugInstanceTypeInfo {
-    }
-
-    interface DebugInstanceTypeInfo extends DebugTypeInfo {
-        int headerSize();
-        Stream<DebugFieldInfo> fieldInfoProvider();
-    }
-
-    interface DebugInterfaceTypeInfo extends DebugTypeInfo {
-    }
-
-    interface DebugArrayTypeInfo extends DebugTypeInfo {
-        int headerSize();
-        int lengthOffset();
-        String elementType();
-    }
-
-    interface DebugPrimitiveTypeInfo extends DebugTypeInfo {
-        /*
-         * NUMERIC excludes boolean and void
-         */
-        int FLAG_NUMERIC = 1 << 0;
-        /*
-         * INTEGRAL excludes float and double
-         */
-        int FLAG_INTEGRAL = 1 << 1;
-        /*
-         * SIGNED excludes char
-         */
-        int FLAG_SIGNED = 1 << 2;
-        int bitCount();
-        int flags();
-    }
-
-    interface DebugFieldInfo {
-        String ownerType();
-
-        String valueType();
-
-        int offset();
-
-        int size();
     }
 
     /**
@@ -156,11 +76,6 @@ public interface DebugInfoProvider {
          * @return the name of the compiled method including signature.
          */
         String methodName();
-
-        /**
-         * @return the symbolNameForMethod string
-         */
-        String symbolNameForMethod();
 
         /**
          * @return the lowest address containing code generated for the method represented as an
@@ -249,11 +164,6 @@ public interface DebugInfoProvider {
          * @return the name of the outer or inlined method including signature.
          */
         String methodName();
-
-        /**
-         * @return the symbolNameForMethod string
-         */
-        String symbolNameForMethod();
 
         /**
          * @return the lowest address containing code generated for an outer or inlined code segment
