@@ -41,7 +41,6 @@ import org.graalvm.compiler.options.OptionsParser;
 
 import jdk.vm.ci.common.InitTimer;
 import jdk.vm.ci.common.NativeImageReinitialize;
-import jdk.vm.ci.services.Services;
 
 /**
  * The {@link #defaultOptions()} method returns the options values initialized in a HotSpot VM. The
@@ -90,14 +89,15 @@ public class HotSpotGraalOptionValues {
     }
 
     /**
-     * Gets and parses options based on {@linkplain Services#getSavedProperties() saved system
-     * properties}. The values for these options are initialized by parsing the file denoted by the
-     * {@value #GRAAL_OPTIONS_FILE_PROPERTY_NAME} property followed by parsing the options encoded
-     * in properties whose names start with {@value #GRAAL_OPTION_PROPERTY_PREFIX}. Key/value pairs
-     * are parsed from the aforementioned file with {@link Properties#load(java.io.Reader)}.
+     * Global options. The values for these options are initialized by parsing the file denoted by
+     * the {@code VM.getSavedProperty(String) saved} system property named
+     * {@value #GRAAL_OPTIONS_FILE_PROPERTY_NAME} if the file exists followed by parsing the options
+     * encoded in saved system properties whose names start with
+     * {@value #GRAAL_OPTION_PROPERTY_PREFIX}. Key/value pairs are parsed from the aforementioned
+     * file with {@link Properties#load(java.io.Reader)}.
      */
     @SuppressWarnings("try")
-    public static EconomicMap<OptionKey<?>, Object> parseOptions() {
+    private static OptionValues initializeOptions() {
         EconomicMap<OptionKey<?>, Object> values = OptionValues.newOptionMap();
         try (InitTimer t = timer("InitializeOptions")) {
 
@@ -142,11 +142,7 @@ public class HotSpotGraalOptionValues {
             }
 
             OptionsParser.parseOptions(optionSettings, values, loader);
-            return values;
+            return new OptionValues(values);
         }
-    }
-
-    private static OptionValues initializeOptions() {
-        return new OptionValues(parseOptions());
     }
 }
