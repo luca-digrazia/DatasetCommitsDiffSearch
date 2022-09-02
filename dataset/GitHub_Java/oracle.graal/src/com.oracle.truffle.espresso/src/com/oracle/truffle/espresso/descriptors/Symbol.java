@@ -175,8 +175,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> target = StaticSymbols.putName("target");
         public static final Symbol<Name> isCompiled = StaticSymbols.putName("isCompiled");
         public static final Symbol<Name> compileToBytecode = StaticSymbols.putName("compileToBytecode");
-        public static final Symbol<Name> address = StaticSymbols.putName("address");
-        public static final Symbol<Name> capacity = StaticSymbols.putName("capacity");
 
         public static final Symbol<Name> lookup = StaticSymbols.putName("lookup");
         public static final Symbol<Name> findMethodHandleType = StaticSymbols.putName("findMethodHandleType");
@@ -188,12 +186,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> getSignature = StaticSymbols.putName("getSignature");
         public static final Symbol<Name> signature = StaticSymbols.putName("signature");
         public static final Symbol<Name> getParameterTypes = StaticSymbols.putName("getParameterTypes");
-
-        public static final Symbol<Name> classes = StaticSymbols.putName("classes");
-        public static final Symbol<Name> classEnabled = StaticSymbols.putName("classEnabled");
-        public static final Symbol<Name> packages = StaticSymbols.putName("packages");
-        public static final Symbol<Name> packageEnabled = StaticSymbols.putName("packageEnabled");
-        public static final Symbol<Name> deflt = StaticSymbols.putName("deflt");
 
         // Polymorphic signature method names
         public static final Symbol<Name> invoke = StaticSymbols.putName("invoke");
@@ -307,7 +299,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> IllegalMonitorStateException = StaticSymbols.putType(IllegalMonitorStateException.class);
         public static final Symbol<Type> IllegalArgumentException = StaticSymbols.putType(IllegalArgumentException.class);
         public static final Symbol<Type> ClassNotFoundException = StaticSymbols.putType(ClassNotFoundException.class);
-        public static final Symbol<Type> NoClassDefFoundError = StaticSymbols.putType(NoClassDefFoundError.class);
         public static final Symbol<Type> InterruptedException = StaticSymbols.putType(InterruptedException.class);
         public static final Symbol<Type> NegativeArraySizeException = StaticSymbols.putType(NegativeArraySizeException.class);
         public static final Symbol<Type> RuntimeException = StaticSymbols.putType(RuntimeException.class);
@@ -318,9 +309,6 @@ public final class Symbol<T> extends ByteSequence {
 
         public static final Symbol<Type> sun_misc_VM = StaticSymbols.putType(VM.class);
         public static final Symbol<Type> ThreadStateEnum = StaticSymbols.putType(Thread.State.class);
-
-        public static final Symbol<Type> sun_nio_ch_DirectBuffer = StaticSymbols.putType(sun.nio.ch.DirectBuffer.class);
-        public static final Symbol<Type> Buffer = StaticSymbols.putType(java.nio.Buffer.class);
 
         // Guest reflection.
         public static final Symbol<Type> Field = StaticSymbols.putType(java.lang.reflect.Field.class);
@@ -356,8 +344,6 @@ public final class Symbol<T> extends ByteSequence {
 
         public static final Symbol<Type> MethodType = StaticSymbols.putType(java.lang.invoke.MethodType.class);
 
-        public static final Symbol<Type> AssertionStatusDirectives = StaticSymbols.putType("Ljava/lang/AssertionStatusDirectives;");
-
         public static final Symbol<Type> MethodHandles = StaticSymbols.putType(java.lang.invoke.MethodHandles.class);
         public static final Symbol<Type> Lookup = StaticSymbols.putType(java.lang.invoke.MethodHandles.Lookup.class);
         public static final Symbol<Type> CallSite = StaticSymbols.putType(java.lang.invoke.CallSite.class);
@@ -391,7 +377,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> String_String = StaticSymbols.putSignature(Type.String, Type.String);
         public static final Symbol<Signature> _void_String_array = StaticSymbols.putSignature(Type._void, Type.String_array);
         public static final Symbol<Signature> Class_boolean_int_String = StaticSymbols.putSignature(Type.Class, Type._boolean, Type._int, Type.String);
-        public static final Symbol<Signature> Class_String_boolean_ClassLoader = StaticSymbols.putSignature(Type.Class, Type.String, Type._boolean, Type.ClassLoader);
 
         public static final Symbol<Signature> _void_Throwable = StaticSymbols.putSignature(Type._void, Type.Throwable);
         public static final Symbol<Signature> _void_String_Throwable = StaticSymbols.putSignature(Type._void, Type.String, Type.Throwable);

@@ -35,8 +35,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Parameter;
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,12 +45,12 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
-import java.util.stream.Collectors;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -90,7 +88,6 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.EspressoProperties;
-import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
@@ -129,14 +126,13 @@ public final class VM extends NativeEnv implements ContextAccess {
         try {
             EspressoProperties props = getContext().getVmProperties();
 
-            List<Path> libjavaSearchPaths = new ArrayList<>();
-            libjavaSearchPaths.addAll(props.bootLibraryPath());
-            libjavaSearchPaths.addAll(props.javaLibraryPath());
+            List<String> libjavaSearchPaths = new ArrayList<>(Arrays.asList(props.getBootLibraryPath().split(File.pathSeparator)));
+            libjavaSearchPaths.addAll(Arrays.asList(props.getJavaLibraryPath().split(File.pathSeparator)));
 
-            mokapotLibrary = loadLibrary(props.espressoLibraryPath(), "mokapot");
+            mokapotLibrary = loadLibrary(props.getEspressoLibraryPath().split(File.pathSeparator), "mokapot");
 
             assert mokapotLibrary != null;
-            javaLibrary = loadLibrary(libjavaSearchPaths, "java");
+            javaLibrary = loadLibrary(libjavaSearchPaths.toArray(new String[0]), "java");
 
             initializeMokapotContext = NativeLibrary.lookupAndBind(mokapotLibrary,
                             "initializeMokapotContext", "(env, sint64, (string): pointer): sint64");
@@ -676,7 +672,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public long JVM_LoadLibrary(String name) {
         try {
-            TruffleObject lib = NativeLibrary.loadLibrary(Paths.get(name));
+            TruffleObject lib = NativeLibrary.loadLibrary(name);
             Field f = lib.getClass().getDeclaredField("handle");
             f.setAccessible(true);
             long handle = (long) f.get(lib);
@@ -777,17 +773,16 @@ public final class VM extends NativeEnv implements ContextAccess {
             setProperty.invokeWithConversions(properties, entry.getKey(), entry.getValue());
         }
 
-        EspressoProperties props = getContext().getVmProperties();
-
         // TODO(peterssen): Use EspressoProperties to store classpath.
         EspressoError.guarantee(options.hasBeenSet(EspressoOptions.Classpath), "Classpath must be defined.");
-        setProperty.invokeWithConversions(properties, "java.class.path", props.classpath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+        setProperty.invokeWithConversions(properties, "java.class.path", options.get(EspressoOptions.Classpath));
 
-        setProperty.invokeWithConversions(properties, "java.home", props.javaHome().toString());
-        setProperty.invokeWithConversions(properties, "sun.boot.class.path", props.bootClasspath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
-        setProperty.invokeWithConversions(properties, "java.library.path", props.javaLibraryPath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
-        setProperty.invokeWithConversions(properties, "sun.boot.library.path", props.bootLibraryPath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
-        setProperty.invokeWithConversions(properties, "java.ext.dirs", props.extDirs().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+        EspressoProperties props = getContext().getVmProperties();
+        setProperty.invokeWithConversions(properties, "java.home", props.getJavaHome());
+        setProperty.invokeWithConversions(properties, "sun.boot.class.path", props.getBootClasspath());
+        setProperty.invokeWithConversions(properties, "java.library.path", props.getJavaLibraryPath());
+        setProperty.invokeWithConversions(properties, "sun.boot.library.path", props.getBootLibraryPath());
+        setProperty.invokeWithConversions(properties, "java.ext.dirs", props.getExtDirs());
 
         return properties;
     }
@@ -877,7 +872,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                                 return null;
                             }
                         });
-        return StaticObject.createArray(getMeta().Class_Array, result.toArray(StaticObject.EMPTY_ARRAY));
+        return new StaticObject(getMeta().Class_Array, result.toArray(StaticObject.EMPTY_ARRAY));
     }
 
     private static boolean isIgnoredBySecurityStackWalk(Method m, Meta meta) {
@@ -1109,31 +1104,12 @@ public final class VM extends NativeEnv implements ContextAccess {
         for (int i = 0; i < packages.length; i++) {
             array[i] = getMeta().toGuestString(packages[i]);
         }
-        StaticObject result = StaticObject.createArray(getMeta().String.getArrayClass(), array);
+        StaticObject result = new StaticObject(getMeta().String.getArrayClass(), array);
         return result;
     }
 
     @VmImpl
     public static long JVM_FreeMemory() {
         return Runtime.getRuntime().freeMemory();
-    }
-
-    /**
-     * Espresso only supports basic -ea and -esa options. Complex per-class/package filters are
-     * unsupported.
-     */
-    @VmImpl
-    @JniImpl
-    public @Host(typeName = "Ljava/lang/AssertionStatusDirectives;") StaticObject JVM_AssertionStatusDirectives(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused) {
-        Meta meta = getMeta();
-        StaticObject instance = meta.AssertionStatusDirectives.allocateInstance();
-        meta.AssertionStatusDirectives.lookupMethod(Name.INIT, Signature._void).invokeDirect(instance);
-        meta.AssertionStatusDirectives_classes.set(instance, meta.String.allocateArray(0));
-        meta.AssertionStatusDirectives_classEnabled.set(instance, meta._boolean.allocateArray(0));
-        meta.AssertionStatusDirectives_packages.set(instance, meta.String.allocateArray(0));
-        meta.AssertionStatusDirectives_packageEnabled.set(instance, meta._boolean.allocateArray(0));
-        boolean ea = getContext().getEnv().getOptions().get(EspressoOptions.EnableAssertions);
-        meta.AssertionStatusDirectives_deflt.set(instance, ea);
-        return instance;
     }
 }
