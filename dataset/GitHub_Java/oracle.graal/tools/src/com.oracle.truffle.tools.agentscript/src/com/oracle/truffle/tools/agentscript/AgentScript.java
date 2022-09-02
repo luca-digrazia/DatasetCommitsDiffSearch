@@ -25,29 +25,45 @@
 package com.oracle.truffle.tools.agentscript;
 
 import com.oracle.truffle.api.source.Source;
-import org.graalvm.tools.insight.Insight;
+import java.util.function.Function;
+import org.graalvm.polyglot.Engine;
 
 /**
- * @deprecated Use {@link Insight}.
+ * Programatic access to the scripting agent. Obtain an instance of this interface via its
+ * {@link #ID}:
+ * <p>
+ * {@codesnippet Embedding#createAgentObject}
+ * 
+ * and then {@link Function#apply(java.lang.Object) evaluate} {@link org.graalvm.polyglot.Source}
+ * scripts written in any language accessing the {@code agent} variable exposed to them. Use
+ * {@link #VERSION current version API} when dealing with the {@code agent} variable.
  */
-@Deprecated
 public interface AgentScript {
     /**
-     * @deprecated Use {@link Insight}.
+     * The ID of the agent script instrument is {@code "agentscript"}. Use it to obtain access to an
+     * {@link AgentScript} instances inside of your {@link Engine}:
+     * <p>
+     * {@codesnippet Embedding#createAgentObject}
      */
-    @Deprecated String ID = "agentscript";
+    String ID = "agentscript";
 
     /**
-     * @deprecated Same as {@link Insight#VERSION}.
-     * @Deprecated
+     * Version of the agent script instrument. The current version understands following Java-like
+     * polyglot <em>API</em> made available to the
+     * {@link #registerAgentScript(com.oracle.truffle.api.source.Source) registered agent scripts}
+     * via {@code agent} reference:
+     * <p>
+     * {@codesnippet AgentScriptAPI}
      */
-    @Deprecated String VERSION = Insight.VERSION;
+    String VERSION = "0.4";
 
     /**
-     * @deprecated See {@link Insight} for usage details.
+     * Loads an agent script file into the system. The script file may be written in any GraalVM
+     * supported language and shall access {@code agent} variable which provides following
+     * {@link #VERSION polyglot-ready API}.
+     * 
+     * @param file the file with the code for the agent
      */
-    @Deprecated
-    @SuppressWarnings("unused")
     default void registerAgentScript(Source file) {
         throw new UnsupportedOperationException();
     }
