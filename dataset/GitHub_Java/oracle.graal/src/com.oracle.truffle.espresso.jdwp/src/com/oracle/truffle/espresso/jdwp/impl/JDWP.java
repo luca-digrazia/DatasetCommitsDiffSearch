@@ -49,6 +49,7 @@ import static com.oracle.truffle.espresso.jdwp.api.TagConstants.VOID;
 final class JDWP {
 
     public static final String JAVA_LANG_OBJECT = "Ljava/lang/Object;";
+    public static final Object INVALID_VALUE = new Object();
 
     private static final boolean CAN_GET_INSTANCE_INFO = false;
 
@@ -2580,7 +2581,7 @@ final class JDWP {
 
                 Object thisValue = frame.getThisValue();
 
-                if (thisValue == CallFrame.INVALID_VALUE) {
+                if (thisValue == INVALID_VALUE) {
                     reply.errorCode(ErrorCodes.INVALID_OBJECT);
                     return new CommandResult(reply);
                 }
@@ -2590,7 +2591,7 @@ final class JDWP {
                         int slot = input.readInt();
                         Object value = frame.getVariable("" + slot);
 
-                        if (value == CallFrame.INVALID_VALUE) {
+                        if (value == INVALID_VALUE) {
                             reply.errorCode(ErrorCodes.INVALID_OBJECT);
                             return new CommandResult(reply);
                         }
@@ -2630,7 +2631,7 @@ final class JDWP {
 
                 Object thisValue = frame.getThisValue();
 
-                if (thisValue == CallFrame.INVALID_VALUE) {
+                if (thisValue == INVALID_VALUE) {
                     reply.errorCode(ErrorCodes.INVALID_OBJECT);
                     return new CommandResult(reply);
                 }
@@ -2669,7 +2670,7 @@ final class JDWP {
 
                 Object thisValue = frame.getThisValue();
 
-                if (thisValue == CallFrame.INVALID_VALUE) {
+                if (thisValue == INVALID_VALUE) {
                     reply.errorCode(ErrorCodes.INVALID_OBJECT);
                     return new CommandResult(reply);
                 }

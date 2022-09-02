@@ -120,8 +120,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private final ExceptionsAttribute exceptionsAttribute;
 
     @CompilationFinal private int refKind;
-    @CompilationFinal //
-    private volatile CallTarget callTarget;
 
     @CompilationFinal(dimensions = 1) //
     private ObjectKlass[] checkedExceptions;
@@ -359,6 +357,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
      * Ensure any callTarget is called immediately before a BCI is advanced, or it could violate the
      * specs on class init.
      */
+    @TruffleBoundary
     public CallTarget getCallTarget() {
         return getMethodVersion().getCallTarget();
     }
@@ -566,8 +565,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return Signatures.parameterCount(getParsedSignature(), false);
     }
 
-    public static Method getHostReflectiveMethodRoot(StaticObject seed, Meta meta) {
+    public static Method getHostReflectiveMethodRoot(StaticObject seed) {
         assert seed.getKlass().getMeta().java_lang_reflect_Method.isAssignableFrom(seed.getKlass());
+        Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
@@ -579,8 +579,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return target;
     }
 
-    public static Method getHostReflectiveConstructorRoot(StaticObject seed, Meta meta) {
+    public static Method getHostReflectiveConstructorRoot(StaticObject seed) {
         assert seed.getKlass().getMeta().java_lang_reflect_Constructor.isAssignableFrom(seed.getKlass());
+        Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
@@ -814,8 +815,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
         // BCI slot is always the latest.
         FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
-        EspressoRootNode root = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result.getMethodVersion(), frameDescriptor, bciSlot));
-        result.getMethodVersion().callTarget = Truffle.getRuntime().createCallTarget(root);
+        EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result.getMethodVersion(), frameDescriptor, bciSlot));
+        result.getMethodVersion().callTarget = Truffle.getRuntime().createCallTarget(rootNode);
 
         return result;
     }
@@ -940,11 +941,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     public MethodVersion getMethodVersion() {
         MethodVersion version = methodVersion;
-        if (!version.getAssumption().isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            do {
-                version = methodVersion;
-            } while (!version.getAssumption().isValid());
+        while (!version.getAssumption().isValid()) {
+            version = methodVersion;
         }
         return version;
     }

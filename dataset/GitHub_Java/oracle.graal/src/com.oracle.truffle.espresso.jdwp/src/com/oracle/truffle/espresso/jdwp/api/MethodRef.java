@@ -212,15 +212,5 @@ public interface MethodRef {
      */
     boolean isObsolete();
 
-    /**
-     * Returns the last bci of the method.
-     * @return last bci
-     */
     long getLastBCI();
-
-    /**
-     * Determines if the method was compiled with a variable table.
-     * @return true if the method has a variable table
-     */
-    boolean hasVariableTable();
 }
