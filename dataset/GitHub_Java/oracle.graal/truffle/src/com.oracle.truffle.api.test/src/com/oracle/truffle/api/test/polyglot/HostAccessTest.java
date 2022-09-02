@@ -65,17 +65,12 @@ public class HostAccessTest {
 
     @Test
     public void usefulToStringExplicit() {
-        Assert.assertEquals("HostAccessPolicy.EXPLICIT", HostAccessPolicy.EXPLICIT.toString());
+        Assert.assertEquals("HostAccess.EXPLICIT", HostAccessPolicy.EXPLICIT.toString());
     }
 
     @Test
     public void usefulToStringPublic() {
-        Assert.assertEquals("HostAccessPolicy.ALL", HostAccessPolicy.ALL.toString());
-    }
-
-    @Test
-    public void usefulToStringNone() {
-        Assert.assertEquals("HostAccessPolicy.NONE", HostAccessPolicy.NONE.toString());
+        Assert.assertEquals("HostAccess.PUBLIC", HostAccessPolicy.PUBLIC.toString());
     }
 
     public static class MyEquals {
@@ -135,7 +130,7 @@ public class HostAccessTest {
 
     @Test
     public void publicCanAccessObjectEquals() throws Exception {
-        HostAccessPolicy config = HostAccessPolicy.ALL;
+        HostAccessPolicy config = HostAccessPolicy.PUBLIC;
 
         Context c = Context.newBuilder().allowHostAccess(config).build();
 
@@ -183,7 +178,7 @@ public class HostAccessTest {
         Context c1 = Context.newBuilder().engine(shared).allowHostAccess(config).build();
         Context c2;
         try {
-            c2 = Context.newBuilder().engine(shared).allowHostAccess(HostAccessPolicy.ALL).build();
+            c2 = Context.newBuilder().engine(shared).allowHostAccess(HostAccessPolicy.PUBLIC).build();
         } catch (IllegalStateException ex) {
             Assert.assertNotEquals("Can't have one engine between two HostAccess configs: " + ex.getMessage(), -1, ex.getMessage().indexOf("Cannot share engine"));
             return;
