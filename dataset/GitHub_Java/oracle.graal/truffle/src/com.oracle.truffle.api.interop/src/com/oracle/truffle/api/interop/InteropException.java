@@ -53,11 +53,13 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
  */
 public abstract class InteropException extends Exception {
 
+    @TruffleBoundary
     InteropException(String message, Throwable cause) {
         super(message, cause);
         validateTruffleException(cause);
     }
 
+    @TruffleBoundary
     InteropException(String message) {
         super(message);
     }
@@ -98,8 +100,9 @@ public abstract class InteropException extends Exception {
      */
     @SuppressWarnings("sync-override")
     @Override
+    @TruffleBoundary
     public final Throwable fillInStackTrace() {
-        return this;
+        return super.fillInStackTrace();
     }
 
     private static void validateTruffleException(Throwable t) {
