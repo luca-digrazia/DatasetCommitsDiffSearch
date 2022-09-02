@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -61,7 +61,6 @@ import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.debug.SuspensionFilter;
 import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
 import org.graalvm.polyglot.Source;
-import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class SuspendedEventTest extends AbstractDebugTest {
 
@@ -161,115 +160,10 @@ public class SuspendedEventTest extends AbstractDebugTest {
                 checkState(event, 4, true, "STATEMENT(CALL(foo))").prepareStepInto(1);
             });
             expectSuspended((SuspendedEvent event) -> {
-                DebugStackFrame frame = event.getStackFrames().iterator().next();
-                checkState(event, 2, true, "STATEMENT(CONSTANT(42))").prepareUnwindFrame(frame, frame.getScope().convertRawValue(InstrumentationTestLanguage.class, 41));
+                checkState(event, 2, true, "STATEMENT(CONSTANT(42))").
+                        prepareUnwindFrame(event.getStackFrames().iterator().next(), 41);
             });
             assertEquals("41", expectDone());
-        }
-    }
-
-    @Test
-    public void testForceEarlyReturnValueNotInterop() throws Throwable {
-        final Source source = testSource("ROOT(\n" +
-                        "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
-                        "  DEFINE(foo, CALL(bar)), \n" +
-                        "  STATEMENT(CALL(foo))\n" +
-                        ")\n");
-
-        try (DebuggerSession session = startSession()) {
-            session.suspendNextExecution();
-            startEval(source);
-
-            expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 4, true, "STATEMENT(CALL(foo))").prepareStepInto(1);
-            });
-            expectSuspended((SuspendedEvent event) -> {
-                DebugStackFrame frame = event.getStackFrames().iterator().next();
-                Object notInterop = new Object();
-                boolean expectedException = false;
-                try {
-                    checkState(event, 2, true, "STATEMENT(CONSTANT(42))").prepareUnwindFrame(frame, frame.getScope().convertRawValue(InstrumentationTestLanguage.class, notInterop));
-                } catch (IllegalArgumentException ex) {
-                    expectedException = true;
-                }
-                Assert.assertTrue("Expected IllegalArgumentException not triggered!", expectedException);
-            });
-        }
-    }
-
-    @Test
-    public void testConvertRawValueIllegalLanguage() throws Throwable {
-        final Source source = testSource("ROOT(\n" +
-                        "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
-                        "  DEFINE(foo, CALL(bar)), \n" +
-                        "  STATEMENT(CALL(foo))\n" +
-                        ")\n");
-
-        try (DebuggerSession session = startSession()) {
-            session.suspendNextExecution();
-            startEval(source);
-
-            expectSuspended((SuspendedEvent event) -> {
-                DebugStackFrame frame = event.getStackFrames().iterator().next();
-                DebugValue debugValue = frame.getScope().convertRawValue(ProxyLanguage.class, 41);
-                Assert.assertEquals(null, debugValue);
-                event.prepareContinue();
-            });
-            Assert.assertEquals("42", expectDone());
-        }
-    }
-
-    @Test
-    public void testConvertRawValueNullLanguage() throws Throwable {
-        final Source source = testSource("ROOT(\n" +
-                "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
-                "  DEFINE(foo, CALL(bar)), \n" +
-                "  STATEMENT(CALL(foo))\n" +
-                ")\n");
-
-        try (DebuggerSession session = startSession()) {
-            session.suspendNextExecution();
-            startEval(source);
-
-            expectSuspended((SuspendedEvent event) -> {
-                DebugStackFrame frame = event.getStackFrames().iterator().next();
-                boolean expectedException = false;
-                try {
-                   frame.getScope().convertRawValue(null, 41);
-                } catch (NullPointerException ex) {
-                    expectedException = true;
-                }
-                Assert.assertTrue("Expected NPE not caught", expectedException);
-                event.prepareContinue();
-            });
-            Assert.assertEquals("42", expectDone());
-        }
-    }
-
-    @Test
-    public void testConvertRawValueNullArgument() throws Throwable {
-        final Source source = testSource("ROOT(\n" +
-                "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
-                "  DEFINE(foo, CALL(bar)), \n" +
-                "  STATEMENT(CALL(foo))\n" +
-                ")\n");
-
-        try (DebuggerSession session = startSession()) {
-            session.suspendNextExecution();
-            startEval(source);
-
-            expectSuspended((SuspendedEvent event) -> {
-                DebugStackFrame frame = event.getStackFrames().iterator().next();
-                boolean expectedException = false;
-                try {
-                    frame.getScope().convertRawValue(InstrumentationTestLanguage.class, null);
-                } catch (IllegalArgumentException ex) {
-                    expectedException = true;
-                }
-                Assert.assertTrue("Expected IllegalArgumentException not caught", expectedException);
-                event.prepareContinue();
-            });
-            Assert.assertEquals("42", expectDone());
         }
     }
 
