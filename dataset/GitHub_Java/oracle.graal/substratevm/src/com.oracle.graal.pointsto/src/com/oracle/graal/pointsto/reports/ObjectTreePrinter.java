@@ -29,12 +29,11 @@ import static com.oracle.graal.pointsto.reports.ReportUtils.CONNECTING_INDENT;
 import static com.oracle.graal.pointsto.reports.ReportUtils.EMPTY_INDENT;
 import static com.oracle.graal.pointsto.reports.ReportUtils.LAST_CHILD;
 import static com.oracle.graal.pointsto.reports.ReportUtils.fieldComparator;
-import static com.oracle.graal.pointsto.reports.ReportUtils.positionComparator;
+import static com.oracle.graal.pointsto.reports.ReportUtils.methodComparator;
 
 import java.io.File;
 import java.io.PrintWriter;
 import java.util.ArrayDeque;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.Iterator;
@@ -42,13 +41,11 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.graalvm.compiler.options.OptionValues;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.ObjectScanner;
-import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 
@@ -66,13 +63,8 @@ public final class ObjectTreePrinter extends ObjectScanner {
     }
 
     private static void doPrint(PrintWriter out, BigBang bigbang) {
-        if (!PointstoOptions.ExhaustiveHeapScan.getValue(bigbang.getOptions())) {
-            String types = Arrays.stream(bigbang.skippedHeapTypes()).map(t -> t.toJavaName()).collect(Collectors.joining(", "));
-            System.out.println("Exhaustive heap scanning is disabled. The object tree will not contain all instances of types: " + types);
-            System.out.println("Exhaustive heap scanning can be turned on using -H:+ExhaustiveHeapScan.");
-        }
         ObjectTreePrinter printer = new ObjectTreePrinter(bigbang);
-        printer.scanBootImageHeapRoots(fieldComparator, positionComparator);
+        printer.scanBootImageHeapRoots(fieldComparator, methodComparator);
         printer.printTypeHierarchy(out);
     }
 
@@ -336,11 +328,12 @@ public final class ObjectTreePrinter extends ObjectScanner {
             return;
         }
 
-        if (constantToNode.containsKey(receiver) && constantToNode.containsKey(fieldValue)) {
-            ObjectNode receiverNode = (ObjectNode) constantToNode.get(receiver);
-            ObjectNodeBase valueNode = constantToNode.get(fieldValue);
-            receiverNode.addField(field, valueNode);
-        }
+        assert constantToNode.containsKey(receiver);
+        assert constantToNode.containsKey(fieldValue);
+
+        ObjectNode receiverNode = (ObjectNode) constantToNode.get(receiver);
+        ObjectNodeBase valueNode = constantToNode.get(fieldValue);
+        receiverNode.addField(field, valueNode);
     }
 
     @Override
@@ -353,11 +346,12 @@ public final class ObjectTreePrinter extends ObjectScanner {
 
     @Override
     public void forNonNullArrayElement(JavaConstant array, AnalysisType arrayType, JavaConstant elementConstant, AnalysisType elementType, int index) {
-        if (constantToNode.containsKey(array) && constantToNode.containsKey(elementConstant)) {
-            ArrayObjectNode arrayNode = (ArrayObjectNode) constantToNode.get(array);
-            ObjectNodeBase valueNode = constantToNode.get(elementConstant);
-            arrayNode.addElement(index, valueNode);
-        }
+        assert constantToNode.containsKey(array);
+        assert constantToNode.containsKey(elementConstant);
+
+        ArrayObjectNode arrayNode = (ArrayObjectNode) constantToNode.get(array);
+        ObjectNodeBase valueNode = constantToNode.get(elementConstant);
+        arrayNode.addElement(index, valueNode);
     }
 
     @Override
@@ -383,6 +377,10 @@ public final class ObjectTreePrinter extends ObjectScanner {
         });
     }
 
+    private static AnalysisType constantType(BigBang bb, JavaConstant scannedValue) {
+        return bb.getMetaAccess().lookupJavaType(constantAsObject(bb, scannedValue).getClass());
+    }
+
     static String constantAsString(BigBang bb, JavaConstant constant) {
         Object object = constantAsObject(bb, constant);
         if (object instanceof String) {
@@ -396,6 +394,10 @@ public final class ObjectTreePrinter extends ObjectScanner {
         } else {
             return escape(JavaKind.Object.format(object));
         }
+    }
+
+    private static Object constantAsObject(BigBang bb, JavaConstant constant) {
+        return bb.getSnippetReflectionProvider().asObject(Object.class, constant);
     }
 
     private static String escape(String str) {
