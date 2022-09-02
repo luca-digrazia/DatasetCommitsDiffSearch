@@ -148,14 +148,10 @@ public class LibGraal {
             Services.initializeJVMCI();
 
             HotSpotJVMCIRuntime runtime = HotSpotJVMCIRuntime.runtime();
-
             long[] nativeInterface = (long[]) runtimeRegisterNativeMethods.invoke(runtime, LibGraal.class);
             return nativeInterface[1];
-        } catch (InvocationTargetException e) {
-            if (e.getTargetException() instanceof UnsupportedOperationException) {
-                return 0L;
-            }
-            throw new InternalError(e);
+        } catch (UnsupportedOperationException e) {
+            return 0L;
         } catch (Throwable throwable) {
             throw new InternalError(throwable);
         }

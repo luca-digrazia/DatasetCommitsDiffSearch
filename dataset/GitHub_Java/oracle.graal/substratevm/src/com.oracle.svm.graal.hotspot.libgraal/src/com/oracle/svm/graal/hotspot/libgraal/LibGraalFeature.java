@@ -106,19 +106,14 @@ import com.oracle.svm.hosted.FeatureImpl.DuringSetupAccessImpl;
 import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.jni.hosted.JNIFeature;
 import com.oracle.svm.reflect.hosted.ReflectionFeature;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.net.URL;
 
 import jdk.vm.ci.common.NativeImageReinitialize;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotSignature;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import org.graalvm.compiler.hotspot.HotSpotGraalManagementRegistration;
 
 public final class LibGraalFeature implements com.oracle.svm.core.graal.GraalFeature {
 
@@ -565,10 +560,6 @@ final class Target_jdk_vm_ci_hotspot_SharedLibraryJVMCIReflection {
 
 @TargetClass(className = "org.graalvm.compiler.hotspot.HotSpotGraalRuntime", onlyWith = LibGraalFeature.IsEnabled.class)
 final class Target_org_graalvm_compiler_hotspot_HotSpotGraalRuntime {
-
-    @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClassName = "org.graalvm.compiler.hotspot.management.libgraal.HotSpotGraalManagement", isFinal = true)
-    private static HotSpotGraalManagementRegistration AOT_INJECTED_MANAGEMENT;
-
     @Substitute
     private static void shutdownLibGraal() {
         VMRuntime.shutdown();
@@ -651,32 +642,5 @@ final class Target_org_graalvm_compiler_core_GraalServiceThread {
     @SuppressWarnings("static-method")
     void afterRun() {
         LibGraal.detachCurrentThread(HotSpotJVMCIRuntime.runtime());
-    }
-}
-
-@TargetClass(className = "org.graalvm.compiler.hotspot.management.libgraal.HotSpotGraalManagement", onlyWith = LibGraalFeature.IsEnabled.class)
-final class Target_org_graalvm_compiler_hotspot_management_libgraal_HotSpotGraalManagement {
-
-    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_HotSpotGraalManagement.HotSpotDelegateComputer.class, isFinal = true)
-    private static byte[] HS_DELEGATE_CLASS;
-
-    static final class HotSpotDelegateComputer implements RecomputeFieldValue.CustomFieldValueComputer {
-        @Override
-        public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
-            URL url = Thread.currentThread().getContextClassLoader().getResource("org/graalvm/compiler/hotspot/management/libgraal/runtime/SVMHotSpotGraalRuntimeMBean.class");
-            if (url == null) {
-                throw UserError.abort("Cannot find SVMHotSpotGraalRuntimeMBean class");
-            }
-            try (InputStream in = url.openStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-                byte[] buffer = new byte[4096];
-                int len;
-                while ((len = in.read(buffer)) > 0) {
-                    out.write(buffer, 0, len);
-                }
-                return out.toByteArray();
-            } catch (IOException ioe) {
-                throw UserError.abort("Cannot load SVMHotSpotGraalRuntimeMBean class due to: " + ioe.getMessage());
-            }
-        }
     }
 }

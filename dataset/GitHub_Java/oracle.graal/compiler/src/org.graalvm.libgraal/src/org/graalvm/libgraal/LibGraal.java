@@ -131,9 +131,15 @@ public class LibGraal {
         throw shouldNotReachHere();
     }
 
+    static final long isolate;
+    static {
+        // Prevent javac from inlining this field.
+        isolate = 0L;
+    }
+
     /**
-     * Determines if the current thread is {@linkplain #attachCurrentThread attached} to the peer
-     * runtime.
+     * Determines if the current thread is
+     * {@linkplain #attachCurrentThread(HotSpotJVMCIRuntime, boolean) attached} to the peer runtime.
      */
     @SuppressWarnings("unused")
     static boolean isCurrentThreadAttached(HotSpotJVMCIRuntime runtime) {
@@ -143,26 +149,19 @@ public class LibGraal {
     /**
      * Ensures the current thread is attached to the peer runtime.
      *
-     * @param isDaemon if the thread is not yet attached, should it be attached as a daemon
-     * @param isolate if non-null, the isolate for the current thread is returned in element 0
      * @return {@code true} if this call attached the current thread, {@code false} if the current
      *         thread was already attached
      */
     @SuppressWarnings("unused")
-    public static boolean attachCurrentThread(HotSpotJVMCIRuntime runtime, boolean isDaemon, long[] isolate) {
+    public static boolean attachCurrentThread(HotSpotJVMCIRuntime runtime, boolean isDaemon) {
         throw shouldNotReachHere();
     }
 
     /**
      * Detaches the current thread from the peer runtime.
-     *
-     * @param release if {@code true} and the VM supports releasing the {@code JavaVM} associated
-     *            with libgraal runtimes and this is the last thread attached to a libgraal runtime,
-     *            then this call destroys the associated {@code JavaVM} instance, releasing its
-     *            resources
      */
     @SuppressWarnings("unused")
-    public static void detachCurrentThread(HotSpotJVMCIRuntime runtime, boolean release) {
+    public static void detachCurrentThread(HotSpotJVMCIRuntime runtime) {
         throw shouldNotReachHere();
     }
 
