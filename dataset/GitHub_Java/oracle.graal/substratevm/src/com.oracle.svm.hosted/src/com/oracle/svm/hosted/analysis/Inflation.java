@@ -52,7 +52,6 @@ import org.graalvm.word.WordBase;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.ObjectScanner;
-import com.oracle.graal.pointsto.ObjectScanner.ScanReason;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.flow.MethodTypeFlow;
 import com.oracle.graal.pointsto.flow.MethodTypeFlowBuilder;
@@ -108,6 +107,10 @@ public class Inflation extends BigBang {
         genericInterfacesMap = new HashMap<>();
         annotatedInterfacesMap = new HashMap<>();
         interfacesEncodings = new HashMap<>();
+    }
+
+    public SVMAnalysisPolicy svmAnalysisPolicy() {
+        return (SVMAnalysisPolicy) super.analysisPolicy();
     }
 
     @Override
@@ -286,40 +289,6 @@ public class Inflation extends BigBang {
         }
     }
 
-    /** Modified copy of {@link Arrays#equals(Object[], Object[])}. */
-    private static boolean shallowEquals(Object[] a, Object[] a2) {
-        if (a == a2) {
-            return true;
-        } else if (a == null || a2 == null) {
-            return false;
-        }
-        int length = a.length;
-        if (a2.length != length) {
-            return false;
-        }
-        for (int i = 0; i < length; i++) {
-            /* Modification: use reference equality. */
-            if (a[i] != a2[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /** Modified copy of {@link Arrays#hashCode(Object[])}. */
-    private static int shallowHashCode(Object[] a) {
-        if (a == null) {
-            return 0;
-        }
-        int result = 1;
-
-        for (Object element : a) {
-            /* Modification: use identity hash code. */
-            result = 31 * result + System.identityHashCode(element);
-        }
-        return result;
-    }
-
     class AnnotatedInterfacesEncodingKey {
         final AnnotatedType[] interfaces;
 
@@ -327,22 +296,14 @@ public class Inflation extends BigBang {
             this.interfaces = aInterfaces;
         }
 
-        /*
-         * JDK 12 introduced a broken implementation of hashCode() and equals() for the
-         * implementation classes of annotated types, leading to an infinite recursion. Tracked as
-         * JDK-8224012. As a workaround, we use shallow implementations that only depend on the
-         * identity hash code and reference equality. This is the same behavior as on JDK 8 and JDK
-         * 11 anyway.
-         */
-
         @Override
         public boolean equals(Object obj) {
-            return obj instanceof AnnotatedInterfacesEncodingKey && shallowEquals(interfaces, ((AnnotatedInterfacesEncodingKey) obj).interfaces);
+            return obj instanceof AnnotatedInterfacesEncodingKey && Arrays.equals(interfaces, ((AnnotatedInterfacesEncodingKey) obj).interfaces);
         }
 
         @Override
         public int hashCode() {
-            return shallowHashCode(interfaces);
+            return Arrays.hashCode(interfaces);
         }
     }
 
@@ -474,7 +435,7 @@ public class Inflation extends BigBang {
     private void scanHub(ObjectScanner objectScanner, AnalysisType type) {
         SVMHost svmHost = (SVMHost) hostVM;
         JavaConstant hubConstant = SubstrateObjectConstant.forObject(svmHost.dynamicHub(type));
-        objectScanner.scanConstant(hubConstant, ScanReason.HUB);
+        objectScanner.scanConstant(hubConstant, "Hub");
     }
 
     private void handleUnknownValueField(AnalysisField field) {

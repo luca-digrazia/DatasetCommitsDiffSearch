@@ -28,7 +28,6 @@ import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 import static jdk.vm.ci.common.JVMCIError.unimplemented;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
@@ -53,8 +52,6 @@ import com.oracle.graal.pointsto.infrastructure.GraphProvider;
 import com.oracle.graal.pointsto.infrastructure.WrappedJavaMethod;
 import com.oracle.graal.pointsto.infrastructure.WrappedSignature;
 import com.oracle.graal.pointsto.results.StaticAnalysisResults;
-import com.oracle.graal.pointsto.util.AnalysisError;
-import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantPool;
@@ -143,7 +140,8 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
             assert Modifier.isStatic(getModifiers());
             assert getSignature().getParameterCount(false) == 0;
             try {
-                Method switchTableMethod = ReflectionUtil.lookupMethod(getDeclaringClass().getJavaClass(), getName());
+                Method switchTableMethod = getDeclaringClass().getJavaClass().getDeclaredMethod(getName());
+                switchTableMethod.setAccessible(true);
                 switchTableMethod.invoke(null);
             } catch (ReflectiveOperationException ex) {
                 throw GraalError.shouldNotReachHere(ex);
@@ -403,24 +401,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
             return new AnalysisMethod[0];
         }
         return implementations;
-    }
-
-    public Executable getJavaMethod() {
-        try {
-            ResolvedJavaMethod.Parameter[] parameters = getParameters();
-            Class<?>[] parameterTypes = new Class<?>[parameters == null ? 0 : parameters.length];
-            for (int i = 0; i < parameterTypes.length; i++) {
-                parameterTypes[i] = universe.lookup(parameters[i].getType()).getJavaClass();
-            }
-            Class<?> declaringClass = getDeclaringClass().getJavaClass();
-            if (isConstructor()) {
-                return declaringClass.getDeclaredConstructor(parameterTypes);
-            } else {
-                return declaringClass.getDeclaredMethod(getName(), parameterTypes);
-            }
-        } catch (NoSuchMethodException e) {
-            throw AnalysisError.shouldNotReachHere();
-        }
     }
 
     @Override

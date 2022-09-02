@@ -837,6 +837,7 @@ class RuntimeStrengthenStampsPhase extends StrengthenStampsPhase {
     private final GraalObjectReplacer objectReplacer;
 
     RuntimeStrengthenStampsPhase(HostedUniverse hUniverse, GraalObjectReplacer objectReplacer) {
+        super(false);
         this.hUniverse = hUniverse;
         this.objectReplacer = objectReplacer;
     }
