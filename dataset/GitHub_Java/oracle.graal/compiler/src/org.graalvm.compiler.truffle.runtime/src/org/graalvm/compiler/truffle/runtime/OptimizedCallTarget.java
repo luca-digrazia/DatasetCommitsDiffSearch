@@ -592,6 +592,18 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     /**
+     * Returns <code>true</code> if this target can be compiled in principle, else
+     * <code>false</code>.
+     */
+    final boolean acceptForCompilation() {
+        return engine.acceptForCompilation(getRootNode());
+    }
+
+    final boolean isCompilationFailed() {
+        return compilationFailed;
+    }
+
+    /**
      * Returns <code>true</code> if the call target was already compiled or was compiled
      * synchronously. Returns <code>false</code> if compilation was not scheduled or is happening in
      * the background. Use {@link #isSubmittedForCompilation()} to find out whether it is submitted
@@ -664,15 +676,9 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     public abstract long getCodeAddress();
 
     /**
-     * Determines if this call target has valid machine code that can be entered attached to it.
+     * Determines if this call target has valid machine code attached to it.
      */
     public abstract boolean isValid();
-
-    /**
-     * Determines if this call target has machine code that might still have live activations
-     * attached to it.
-     */
-    public abstract boolean isAlive();
 
     /**
      * Determines if this call target has valid machine code attached to it, and that this code was
@@ -690,7 +696,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      */
     public final void invalidate(Object source, CharSequence reason) {
         cachedNonTrivialNodeCount = -1;
-        if (isAlive()) {
+        if (isValid()) {
             invalidateCode();
             runtime().getListener().onCompilationInvalidated(this, source, reason);
         }
@@ -794,7 +800,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         if (action.ordinal() >= ExceptionAction.Print.ordinal()) {
             GraalTruffleRuntime rt = runtime();
             Map<String, Object> properties = new LinkedHashMap<>();
-            properties.put("AST", getNonTrivialNodeCount());
+            properties.put("ASTSize", getNonTrivialNodeCount());
             rt.logEvent(this, 0, "opt fail", toString(), properties, serializedException.get());
             if (action == ExceptionAction.ExitVM) {
                 String reason;
@@ -1463,4 +1469,5 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     final void setNonTrivialNodeCount(int nonTrivialNodeCount) {
         this.cachedNonTrivialNodeCount = nonTrivialNodeCount;
     }
+
 }

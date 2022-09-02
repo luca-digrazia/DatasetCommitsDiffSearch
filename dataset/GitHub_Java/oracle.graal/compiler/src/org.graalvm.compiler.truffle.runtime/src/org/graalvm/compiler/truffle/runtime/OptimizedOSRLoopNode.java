@@ -216,7 +216,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                     if (target.isValid()) {
                         return callOSR(target, frame);
                     }
-                    invalidateOSRTarget("OSR compilation failed or cancelled");
+                    invalidateOSRTarget(this, "OSR compilation failed or cancelled");
                     return repeatableNode.initialLoopStatus();
                 }
                 iterations++;
@@ -235,7 +235,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             return status;
         } else {
             if (!target.isValid()) {
-                invalidateOSRTarget("OSR compilation got invalidated");
+                invalidateOSRTarget(this, "OSR compilation got invalidated");
             }
             return status;
         }
@@ -310,14 +310,14 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         this.compiledOSRLoop = null;
     }
 
-    private void invalidateOSRTarget(CharSequence reason) {
+    private void invalidateOSRTarget(Object source, CharSequence reason) {
         atomic(new Runnable() {
             @Override
             public void run() {
                 OptimizedCallTarget target = compiledOSRLoop;
                 if (target != null) {
                     resetCompiledOSRLoop();
-                    target.invalidate(reason);
+                    target.invalidate(source, reason);
                 }
             }
         });
@@ -334,7 +334,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
         // using static methods with LoopNode return type ensures
         // that only one loop node implementation gets loaded.
-        if (engine.compilation && engineOptions.get(PolyglotCompilerOptions.OSR)) {
+        if (engine.compilation && TruffleRuntimeOptions.getPolyglotOptionValue(engineOptions, PolyglotCompilerOptions.OSR)) {
             return createDefault(repeat, engineOptions);
         } else {
             return OptimizedLoopNode.create(repeat);
@@ -343,8 +343,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
     private static LoopNode createDefault(RepeatingNode repeatableNode, OptionValues options) {
         return new OptimizedDefaultOSRLoopNode(repeatableNode,
-                        options.get(PolyglotCompilerOptions.OSRCompilationThreshold),
-                        options.get(PolyglotCompilerOptions.FirstTierBackedgeCounts));
+                        TruffleRuntimeOptions.getPolyglotOptionValue(options, PolyglotCompilerOptions.OSRCompilationThreshold),
+                        TruffleRuntimeOptions.getPolyglotOptionValue(options, PolyglotCompilerOptions.FirstTierBackedgeCounts));
     }
 
     /**
