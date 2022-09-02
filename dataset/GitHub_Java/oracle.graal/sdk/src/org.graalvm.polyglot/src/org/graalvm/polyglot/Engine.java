@@ -130,7 +130,7 @@ public final class Engine implements AutoCloseable {
     }
 
     private static final class ImplHolder {
-        private static AbstractPolyglotImpl IMPL = initEngineImpl();
+        private static final AbstractPolyglotImpl IMPL = initEngineImpl();
 
         /**
          * Performs context pre-initialization.
@@ -561,7 +561,7 @@ public final class Engine implements AutoCloseable {
                 throw new IllegalStateException("The Polyglot API implementation failed to load.");
             }
             Engine engine = polyglot.buildEngine(out, err, in, options, useSystemProperties, allowExperimentalOptions,
-                            boundEngine, messageTransport, customLogHandler, polyglot.createHostLanguage(polyglot.createHostAccess()), false);
+                            boundEngine, messageTransport, customLogHandler, polyglot.createHostLanguage(polyglot.createHostAccess()));
             return engine;
         }
 
@@ -866,12 +866,12 @@ public final class Engine implements AutoCloseable {
 
         @Override
         public Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, boolean useSystemProperties, boolean allowExperimentalOptions, boolean boundEngine,
-                        MessageTransport messageInterceptor, Object logHandlerOrStream, Object hostLanguage, boolean hostLanguageOnly) {
+                        MessageTransport messageInterceptor, Object logHandlerOrStream, Object hostLanguage) {
             throw noPolyglotImplementationFound();
         }
 
         @Override
-        public Object createHostLanguage(AbstractHostAccess access) {
+        public Object createHostLanguage(HostLanguageAccess access) {
             throw noPolyglotImplementationFound();
         }
 
@@ -881,7 +881,7 @@ public final class Engine implements AutoCloseable {
         }
 
         @Override
-        public AbstractHostAccess createHostAccess() {
+        public HostLanguageAccess createHostAccess() {
             throw noPolyglotImplementationFound();
         }
 

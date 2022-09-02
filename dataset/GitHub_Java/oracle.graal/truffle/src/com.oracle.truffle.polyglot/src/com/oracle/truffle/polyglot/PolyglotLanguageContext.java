@@ -436,10 +436,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     }
 
     void ensureCreated(PolyglotLanguage accessingLanguage) {
-        ensureCreated(accessingLanguage, null);
-    }
-
-    void ensureCreated(PolyglotLanguage accessingLanguage, PolyglotLanguageInstance customInstance) {
         if (creatingThread == Thread.currentThread()) {
             throw PolyglotEngineException.illegalState(String.format("Cyclic access to language context for language %s. " +
                             "The context is currently being created.", language.getId()));
@@ -466,7 +462,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
             Map<String, Object> creatorConfig = context.creator == language ? context.creatorArguments : Collections.emptyMap();
             PolyglotContextConfig envConfig = context.config;
-            PolyglotLanguageInstance lang = customInstance != null ? customInstance : language.allocateInstance(envConfig.getLanguageOptionValues(language));
+            PolyglotLanguageInstance lang = language.allocateInstance(envConfig.getLanguageOptionValues(language));
             try {
                 synchronized (context) {
                     if (lazy == null) {
@@ -494,15 +490,15 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                                 List<Object> languageServicesCollector = new ArrayList<>();
                                 Object contextImpl = LANGUAGE.createEnvContext(localEnv, languageServicesCollector);
                                 language.initializeContextClass(contextImpl);
+                                if (language.isHost()) {
+                                    context.initializeHostContext(contextImpl, context.config);
+                                }
                                 context.contextImpls[lang.language.index] = contextImpl;
                                 String errorMessage = verifyServices(language.info, languageServicesCollector, language.cache.getServices());
                                 if (errorMessage != null) {
                                     throw PolyglotEngineException.illegalState(errorMessage);
                                 }
                                 this.languageServices = languageServicesCollector;
-                                if (language.isHost()) {
-                                    context.initializeHostContext(this, context.config);
-                                }
                                 lang.language.profile.notifyContextCreate(this, localEnv);
                                 wasCreated = true;
                                 if (eventsEnabled) {
@@ -653,9 +649,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 if (newEnv != null) {
                     env = newEnv;
                     lazy.languageInstance.patchFirstOptions(newOptionValues);
-                    if (!this.language.isHost()) {
-                        LOG.log(Level.FINE, "Successfully patched context of language: {0}", this.language.getId());
-                    }
+                    LOG.log(Level.FINE, "Successfully patched context of language: {0}", this.language.getId());
                     return true;
                 }
                 LOG.log(Level.FINE, "Failed to patch context of language: {0}", this.language.getId());

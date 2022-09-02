@@ -73,7 +73,7 @@ import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.HostAccess.TargetMappingPrecedence;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractHostAccess;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.HostLanguageAccess;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
 import org.graalvm.polyglot.io.ProcessHandler;
@@ -245,13 +245,13 @@ public abstract class Accessor {
 
     public abstract static class HostSupport extends Support {
 
-        static final String IMPL_CLASS_NAME = "com.oracle.truffle.host.HostAccessor$HostImpl";
+        static final String IMPL_CLASS_NAME = "com.oracle.truffle.polyglot.host.HostAccessor$HostImpl";
 
         protected HostSupport() {
             super(IMPL_CLASS_NAME);
         }
 
-        public abstract TruffleLanguage<?> createDefaultHostLanguage(AbstractPolyglotImpl polyglot, AbstractHostAccess access);
+        public abstract TruffleLanguage<?> createDefaultHostLanguage(AbstractPolyglotImpl polyglot, HostLanguageAccess access);
 
         public abstract boolean isHostBoundaryValue(Object value);
 
@@ -603,14 +603,6 @@ public abstract class Accessor {
         public abstract Future<Void> submitThreadLocal(Object polyglotLanguageContext, Object sourcePolyglotObject, Thread[] threads, ThreadLocalAction action, boolean needsEnter);
 
         public abstract Object getContext(Object polyglotLanguageContext);
-
-        public abstract ClassLoader getSomClassloader(Object polyglotLanguageInstance);
-
-        public abstract void setSomClassloader(Object polyglotLanguageInstance, ClassLoader cl);
-
-        public abstract boolean areSomSafetyChecksRelaxed(Object polyglotLanguageInstance);
-
-        public abstract String getSomStorageStrategy(Object polyglotLanguageInstance);
     }
 
     public abstract static class LanguageSupport extends Support {
@@ -760,14 +752,6 @@ public abstract class Accessor {
         public abstract boolean isSideEffectingTLAction(ThreadLocalAction action);
 
         public abstract void performTLAction(ThreadLocalAction action, ThreadLocalAction.Access access);
-
-        public abstract ClassLoader getSomClassloader(TruffleLanguage<?> language);
-
-        public abstract void setSomClassloader(TruffleLanguage<?> language, ClassLoader cl);
-
-        public abstract boolean areSomSafetyChecksRelaxed(TruffleLanguage<?> language);
-
-        public abstract String getSomStorageStrategy(TruffleLanguage<?> language);
     }
 
     public abstract static class InstrumentSupport extends Support {
@@ -940,16 +924,6 @@ public abstract class Accessor {
         }
 
         public abstract TruffleProcessBuilder createProcessBuilder(Object polylgotLanguageContext, FileSystem fileSystem, List<String> command);
-    }
-
-    public abstract static class SomSupport extends Support {
-
-        static final String IMPL_CLASS_NAME = "com.oracle.truffle.api.staticobject.SomAccessor";
-
-        protected SomSupport() {
-            super(IMPL_CLASS_NAME);
-        }
-
     }
 
     public abstract static class RuntimeSupport {
@@ -1166,8 +1140,7 @@ public abstract class Accessor {
                         "org.graalvm.compiler.truffle.runtime.debug.CompilerDebugAccessor".equals(thisClassName) ||
                         "com.oracle.truffle.api.dsl.DSLAccessor".equals(thisClassName) ||
                         "com.oracle.truffle.api.memory.MemoryFenceAccessor".equals(thisClassName) ||
-                        "com.oracle.truffle.api.library.LibraryAccessor".equals(thisClassName) ||
-                        "com.oracle.truffle.api.staticobject.SomAccessor".equals(thisClassName)) {
+                        "com.oracle.truffle.api.library.LibraryAccessor".equals(thisClassName)) {
             // OK, classes allowed to use accessors
         } else {
             throw new IllegalStateException(thisClassName);

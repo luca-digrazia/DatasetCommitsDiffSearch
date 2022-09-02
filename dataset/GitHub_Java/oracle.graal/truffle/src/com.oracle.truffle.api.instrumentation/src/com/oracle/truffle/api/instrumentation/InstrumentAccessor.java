@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,26 +40,43 @@
  */
 package com.oracle.truffle.api.instrumentation;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.TruffleContext;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.impl.Accessor;
-import com.oracle.truffle.api.impl.DispatchOutputStream;
-import com.oracle.truffle.api.nodes.LanguageInfo;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+import java.util.function.Supplier;
+
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.io.MessageTransport;
 
-import java.io.InputStream;
-import java.util.Set;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleContext;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.impl.DispatchOutputStream;
+import com.oracle.truffle.api.instrumentation.InstrumentationHandler.InstrumentClientInstrumenter;
+import com.oracle.truffle.api.instrumentation.TruffleInstrument.ContextLocalFactory;
+import com.oracle.truffle.api.instrumentation.TruffleInstrument.ContextThreadLocalFactory;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.LanguageInfo;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 
 final class InstrumentAccessor extends Accessor {
 
     static final InstrumentAccessor ACCESSOR = new InstrumentAccessor();
+
+    static final NodeSupport NODES = ACCESSOR.nodeSupport();
+    static final SourceSupport SOURCE = ACCESSOR.sourceSupport();
+    static final JDKSupport JDK = ACCESSOR.jdkSupport();
+    static final LanguageSupport LANGUAGE = ACCESSOR.languageSupport();
+    static final EngineSupport ENGINE = ACCESSOR.engineSupport();
+    static final InteropSupport INTEROP = ACCESSOR.interopSupport();
 
     private InstrumentAccessor() {
     }
@@ -80,9 +97,8 @@ final class InstrumentAccessor extends Accessor {
         return ACCESSOR.interopSupport();
     }
 
-    @Override
-    protected InstrumentSupport instrumentSupport() {
-        return new InstrumentImpl();
+    static RuntimeSupport runtimeAccess() {
+        return ACCESSOR.runtimeSupport();
     }
 
     protected boolean isTruffleObject(Object value) {
@@ -92,18 +108,19 @@ final class InstrumentAccessor extends Accessor {
     static final class InstrumentImpl extends InstrumentSupport {
 
         @Override
-        public Object createInstrumentationHandler(Object vm, DispatchOutputStream out, DispatchOutputStream err, InputStream in, MessageTransport messageInterceptor) {
-            return new InstrumentationHandler(vm, out, err, in, messageInterceptor);
+        public Object createInstrumentationHandler(Object polyglotEngine, DispatchOutputStream out, DispatchOutputStream err, InputStream in, MessageTransport messageInterceptor,
+                        boolean strongReferences) {
+            return new InstrumentationHandler(polyglotEngine, out, err, in, messageInterceptor);
         }
 
         @Override
-        public void initializeInstrument(Object instrumentationHandler, Object key, Class<?> instrumentClass) {
-            ((InstrumentationHandler) instrumentationHandler).initializeInstrument(key, instrumentClass);
+        public void initializeInstrument(Object instrumentationHandler, Object polyglotInstrument, String instrumentClassName, Supplier<? extends Object> instrumentSupplier) {
+            ((InstrumentationHandler) instrumentationHandler).initializeInstrument(polyglotInstrument, instrumentClassName, instrumentSupplier);
         }
 
         @Override
-        public void createInstrument(Object instrumentationHandler, Object key, String[] expectedServices, OptionValues options) {
-            ((InstrumentationHandler) instrumentationHandler).createInstrument(key, expectedServices, options);
+        public void createInstrument(Object instrumentationHandler, Object polyglotInstrument, String[] expectedServices, OptionValues options) {
+            ((InstrumentationHandler) instrumentationHandler).createInstrument(polyglotInstrument, expectedServices, options);
         }
 
         @Override
@@ -120,11 +137,22 @@ final class InstrumentAccessor extends Accessor {
         }
 
         @Override
-        public OptionDescriptors describeOptions(Object instrumentationHandler, Object key, String requiredGroup) {
-            InstrumentationHandler.InstrumentClientInstrumenter instrumenter = (InstrumentationHandler.InstrumentClientInstrumenter) ((InstrumentationHandler) instrumentationHandler).instrumenterMap.get(key);
+        public OptionDescriptors describeEngineOptions(Object instrumentationHandler, Object key, String requiredGroup) {
+            InstrumentClientInstrumenter instrumenter = (InstrumentClientInstrumenter) ((InstrumentationHandler) instrumentationHandler).instrumenterMap.get(key);
             OptionDescriptors descriptors = instrumenter.instrument.getOptionDescriptors();
+            return validateOptions(requiredGroup, instrumenter, descriptors);
+        }
+
+        @Override
+        public OptionDescriptors describeContextOptions(Object instrumentationHandler, Object key, String requiredGroup) {
+            InstrumentClientInstrumenter instrumenter = (InstrumentClientInstrumenter) ((InstrumentationHandler) instrumentationHandler).instrumenterMap.get(key);
+            OptionDescriptors descriptors = instrumenter.instrument.getContextOptionDescriptors();
+            return validateOptions(requiredGroup, instrumenter, descriptors);
+        }
+
+        private static OptionDescriptors validateOptions(String requiredGroup, InstrumentClientInstrumenter instrumenter, OptionDescriptors descriptors) {
             if (descriptors == null) {
-                descriptors = OptionDescriptors.EMPTY;
+                return OptionDescriptors.EMPTY;
             }
             String groupPlusDot = requiredGroup + ".";
             for (OptionDescriptor descriptor : descriptors) {
@@ -138,18 +166,18 @@ final class InstrumentAccessor extends Accessor {
         }
 
         @Override
-        public void finalizeInstrument(Object instrumentationHandler, Object key) {
-            ((InstrumentationHandler) instrumentationHandler).finalizeInstrumenter(key);
+        public void finalizeInstrument(Object instrumentationHandler, Object polyglotInstrument) {
+            ((InstrumentationHandler) instrumentationHandler).finalizeInstrumenter(polyglotInstrument);
         }
 
         @Override
-        public void disposeInstrument(Object instrumentationHandler, Object key, boolean cleanupRequired) {
-            ((InstrumentationHandler) instrumentationHandler).disposeInstrumenter(key, cleanupRequired);
+        public void disposeInstrument(Object instrumentationHandler, Object polyglotInstrument, boolean cleanupRequired) {
+            ((InstrumentationHandler) instrumentationHandler).disposeInstrumenter(polyglotInstrument, cleanupRequired);
         }
 
         @Override
-        public void collectEnvServices(Set<Object> collectTo, Object languageShared, TruffleLanguage<?> language) {
-            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(languageShared);
+        public void collectEnvServices(Set<Object> collectTo, Object polyglotLanguage, TruffleLanguage<?> language) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(polyglotLanguage);
             Instrumenter instrumenter = instrumentationHandler.forLanguage(language);
             collectTo.add(instrumenter);
             AllocationReporter allocationReporter = instrumentationHandler.getAllocationReporter(InstrumentAccessor.langAccess().getLanguageInfo(language));
@@ -157,13 +185,13 @@ final class InstrumentAccessor extends Accessor {
         }
 
         @Override
-        public <T> T getInstrumentationHandlerService(Object vm, Object key, Class<T> type) {
-            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) vm;
-            return instrumentationHandler.lookup(key, type);
+        public <T> T getInstrumentationHandlerService(Object instrumentationHandler, Object key, Class<T> type) {
+            return ((InstrumentationHandler) instrumentationHandler).lookup(key, type);
         }
 
         @Override
-        public void onFirstExecution(RootNode rootNode) {
+        public void onFirstExecution(RootNode rootNode, boolean validate) {
+            assert !validate || validEngine(rootNode);
             InstrumentationHandler handler = getHandler(rootNode);
             if (handler != null) {
                 handler.onFirstExecution(rootNode);
@@ -179,8 +207,9 @@ final class InstrumentAccessor extends Accessor {
         }
 
         @Override
-        public Iterable<Scope> findTopScopes(TruffleLanguage.Env env) {
-            return TruffleInstrument.Env.findTopScopes(env);
+        public boolean hasContextBindings(Object engine) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+            return instrumentationHandler.hasContextBindings();
         }
 
         @Override
@@ -198,15 +227,45 @@ final class InstrumentAccessor extends Accessor {
         }
 
         @Override
+        public void notifyContextResetLimit(Object engine, TruffleContext context) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+            instrumentationHandler.notifyContextResetLimit(context);
+        }
+
+        @Override
+        public void notifyLanguageContextCreate(Object engine, TruffleContext context, LanguageInfo info) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+            instrumentationHandler.notifyLanguageContextCreate(context, info);
+        }
+
+        @Override
         public void notifyLanguageContextCreated(Object engine, TruffleContext context, LanguageInfo info) {
             InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
             instrumentationHandler.notifyLanguageContextCreated(context, info);
         }
 
         @Override
+        public void notifyLanguageContextCreateFailed(Object engine, TruffleContext context, LanguageInfo info) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+            instrumentationHandler.notifyLanguageContextCreateFailed(context, info);
+        }
+
+        @Override
+        public void notifyLanguageContextInitialize(Object engine, TruffleContext context, LanguageInfo info) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+            instrumentationHandler.notifyLanguageContextInitialize(context, info);
+        }
+
+        @Override
         public void notifyLanguageContextInitialized(Object engine, TruffleContext context, LanguageInfo info) {
             InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
             instrumentationHandler.notifyLanguageContextInitialized(context, info);
+        }
+
+        @Override
+        public void notifyLanguageContextInitializeFailed(Object engine, TruffleContext context, LanguageInfo info) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+            instrumentationHandler.notifyLanguageContextInitializeFailed(context, info);
         }
 
         @Override
@@ -238,13 +297,17 @@ final class InstrumentAccessor extends Accessor {
         @Override
         public org.graalvm.polyglot.SourceSection createSourceSection(Object instrumentEnv, org.graalvm.polyglot.Source source, com.oracle.truffle.api.source.SourceSection ss) {
             TruffleInstrument.Env env = (TruffleInstrument.Env) instrumentEnv;
-            return engineAccess().createSourceSection(env.getVMObject(), source, ss);
+            return engineAccess().createSourceSection(env.getPolyglotInstrument(), source, ss);
         }
 
         @Override
-        public void patchInstrumentationHandler(Object vm, DispatchOutputStream out, DispatchOutputStream err, InputStream in) {
-            final InstrumentationHandler instrumentationHandler = (InstrumentationHandler) vm;
-            instrumentationHandler.patch(out, err, in);
+        public void patchInstrumentationHandler(Object instrumentationHandler, DispatchOutputStream out, DispatchOutputStream err, InputStream in) {
+            ((InstrumentationHandler) instrumentationHandler).patch(out, err, in);
+        }
+
+        @Override
+        public void finalizeStoreInstrumentationHandler(Object instrumentationHandler) {
+            ((InstrumentationHandler) instrumentationHandler).finalizeStore();
         }
 
         @Override
@@ -252,16 +315,82 @@ final class InstrumentAccessor extends Accessor {
             return identifier instanceof ProbeNode.EventProviderWithInputChainNode.SavedInputValueID;
         }
 
+        @Override
+        public Collection<CallTarget> getLoadedCallTargets(Object instrumentationHandler) {
+            Collection<RootNode> roots = ((InstrumentationHandler) instrumentationHandler).loadedRoots;
+            List<CallTarget> targets = new ArrayList<>();
+            for (RootNode root : roots) {
+                CallTarget target = root.getCallTarget();
+                if (target != null) {
+                    targets.add(target);
+                }
+            }
+            return targets;
+        }
+
+        @Override
+        public Object getPolyglotInstrument(Object instrumentEnv) {
+            return ((TruffleInstrument.Env) instrumentEnv).getPolyglotInstrument();
+        }
+
         private static InstrumentationHandler getHandler(RootNode rootNode) {
-            LanguageInfo info = rootNode.getLanguageInfo();
-            if (info == null) {
+            Object polyglotEngineImpl = nodesAccess().getPolyglotEngine(rootNode);
+            if (polyglotEngineImpl == null) {
                 return null;
             }
-            Object languageShared = nodesAccess().getEngineObject(info);
-            if (languageShared == null) {
-                return null;
+            return (InstrumentationHandler) engineAccess().getInstrumentationHandler(polyglotEngineImpl);
+        }
+
+        @Override
+        public boolean isInstrumentable(Node node) {
+            return InstrumentationHandler.isInstrumentableNode(node);
+        }
+
+        private static boolean validEngine(RootNode rootNode) {
+            Object currentPolyglotEngine = InstrumentAccessor.engineAccess().getCurrentPolyglotEngine();
+            if (!InstrumentAccessor.engineAccess().skipEngineValidation(rootNode) &&
+                            currentPolyglotEngine != InstrumentAccessor.nodesAccess().getPolyglotEngine(rootNode)) {
+                throw InstrumentAccessor.engineAccess().invalidSharingError(currentPolyglotEngine);
             }
-            return (InstrumentationHandler) engineAccess().getInstrumentationHandler(languageShared);
+            return true;
+        }
+
+        @Override
+        public Object invokeContextLocalFactory(Object factory, TruffleContext truffleContext) {
+            Object result = ((ContextLocalFactory<?>) factory).create(truffleContext);
+            if (result == null) {
+                throw new IllegalStateException(String.format("%s.create is not allowed to return null.", ContextLocalFactory.class.getSimpleName()));
+            }
+            return result;
+        }
+
+        @Override
+        public Object invokeContextThreadLocalFactory(Object factory, TruffleContext truffleContext, Thread t) {
+            Object result = ((ContextThreadLocalFactory<?>) factory).create(truffleContext, t);
+            if (result == null) {
+                throw new IllegalStateException(String.format("%s.create is not allowed to return null.", ContextThreadLocalFactory.class.getSimpleName()));
+            }
+            return result;
+        }
+
+        @Override
+        @ExplodeLoop
+        public void notifyEnter(Object instrumentationHandler, TruffleContext truffleContext) {
+            InstrumentationHandler handler = (InstrumentationHandler) instrumentationHandler;
+            CompilerAsserts.partialEvaluationConstant(handler);
+            for (ThreadsActivationListener listener : handler.getThreadsActivationListeners()) {
+                listener.onEnterThread(truffleContext);
+            }
+        }
+
+        @Override
+        @ExplodeLoop
+        public void notifyLeave(Object instrumentationHandler, TruffleContext truffleContext) {
+            InstrumentationHandler handler = (InstrumentationHandler) instrumentationHandler;
+            CompilerAsserts.partialEvaluationConstant(handler);
+            for (ThreadsActivationListener listener : handler.getThreadsActivationListeners()) {
+                listener.onLeaveThread(truffleContext);
+            }
         }
 
     }
