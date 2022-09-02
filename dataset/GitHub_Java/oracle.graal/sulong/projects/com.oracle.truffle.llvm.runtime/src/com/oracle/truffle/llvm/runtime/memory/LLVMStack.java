@@ -34,7 +34,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -204,17 +203,6 @@ public final class LLVMStack {
     }
 
     /**
-     * This holder class prevents the stackAccess object from being inserted as a cache child node.
-     */
-    public static final class LLVMStackAccessHolder {
-        public final LLVMStackAccess stackAccess;
-
-        public LLVMStackAccessHolder(LLVMStackAccess stackAccess) {
-            this.stackAccess = stackAccess;
-        }
-    }
-
-/**
      * Only a single instance of this node needs (and is allowed to) exist for each
      * {@link LLVMRootNode}.
      */
@@ -394,13 +382,12 @@ public final class LLVMStack {
             this.stackAccess = stackAccess;
         }
 
-        protected final LLVMStackAccessHolder createStackAccessHolder() {
+        protected final LLVMStackAccess ensureStackAccess() {
             if (stackAccess == null) {
-                return new LLVMStackAccessHolder(((LLVMRootNode) getRootNode()).getStackAccess());
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                stackAccess = ((LLVMRootNode) getRootNode()).getStackAccess();
             }
-            // This branch should be executed when this node is used as an uncached one only. See uses of setStackAccess.
-            assert getRootNode() == null;
-            return new LLVMStackAccessHolder(stackAccess);
+            return stackAccess;
         }
 
         @Override
@@ -416,8 +403,8 @@ public final class LLVMStack {
         }
 
         @Specialization
-        protected LLVMPointer doOp(VirtualFrame frame, @Cached("createStackAccessHolder()") LLVMStackAccessHolder stackAccessHolder) {
-            return stackAccessHolder.stackAccess.executeAllocate(frame, size, alignment);
+        protected LLVMPointer doOp(VirtualFrame frame) {
+            return ensureStackAccess().executeAllocate(frame, size, alignment);
         }
     }
 
@@ -431,13 +418,13 @@ public final class LLVMStack {
         public abstract LLVMPointer executeWithTarget(VirtualFrame frame, long sizeInBytes);
 
         @Specialization
-        protected LLVMPointer doOp(VirtualFrame frame, int nr, @Cached("createStackAccessHolder()") LLVMStackAccessHolder stackAccessHolder) {
-            return doOp(frame, (long) nr, stackAccessHolder);
+        protected LLVMPointer doOp(VirtualFrame frame, int nr) {
+            return doOp(frame, (long) nr);
         }
 
         @Specialization
-        protected LLVMPointer doOp(VirtualFrame frame, long nr, @Cached("createStackAccessHolder()") LLVMStackAccessHolder stackAccessHolder) {
-            return stackAccessHolder.stackAccess.executeAllocate(frame, size * nr, alignment);
+        protected LLVMPointer doOp(VirtualFrame frame, long nr) {
+            return ensureStackAccess().executeAllocate(frame, size * nr, alignment);
         }
     }
 
