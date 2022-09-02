@@ -25,11 +25,8 @@
 package com.oracle.svm.core.posix;
 
 import java.io.File;
-import java.nio.ByteOrder;
 
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.Pointer;
@@ -40,20 +37,13 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.CErrorNumber;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.os.AbstractRawFileOperationSupport;
-import com.oracle.svm.core.os.AbstractRawFileOperationSupport.RawFileOperationSupportHolder;
+import com.oracle.svm.core.os.RawFileOperationSupport;
 import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Fcntl;
 import com.oracle.svm.core.posix.headers.Unistd;
-import com.oracle.svm.core.util.VMError;
 
-public class PosixRawFileOperationSupport extends AbstractRawFileOperationSupport {
+public class PosixRawFileOperationSupport extends RawFileOperationSupport {
     private static final int DEFAULT_PERMISSIONS = 0666;
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public PosixRawFileOperationSupport(boolean useNativeByteOrder) {
-        super(useNativeByteOrder);
-    }
 
     @Override
     public RawFileDescriptor open(File file, FileAccessMode mode) {
@@ -144,15 +134,14 @@ public class PosixRawFileOperationSupport extends AbstractRawFileOperationSuppor
     }
 
     private static int parseMode(FileAccessMode mode) {
-        switch (mode) {
-            case READ:
-                return Fcntl.O_RDONLY();
-            case READ_WRITE:
-                return Fcntl.O_RDWR() | Fcntl.O_CREAT();
-            case WRITE:
-                return Fcntl.O_WRONLY() | Fcntl.O_CREAT();
-            default:
-                throw VMError.shouldNotReachHere();
+        if (mode == FileAccessMode.READ) {
+            return Fcntl.O_RDONLY();
+        } else if (mode == FileAccessMode.READ_WRITE) {
+            return Fcntl.O_RDWR() | Fcntl.O_CREAT();
+        } else if (mode == FileAccessMode.WRITE) {
+            return Fcntl.O_WRONLY() | Fcntl.O_CREAT();
+        } else {
+            throw new IllegalArgumentException("Illegal file access mode '" + mode + "'.");
         }
     }
 }
@@ -161,13 +150,6 @@ public class PosixRawFileOperationSupport extends AbstractRawFileOperationSuppor
 class PosixRawFileOperationFeature implements Feature {
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
-        ByteOrder nativeByteOrder = ByteOrder.nativeOrder();
-        assert nativeByteOrder == ByteOrder.LITTLE_ENDIAN || nativeByteOrder == ByteOrder.BIG_ENDIAN;
-
-        PosixRawFileOperationSupport littleEndianSupport = new PosixRawFileOperationSupport(ByteOrder.LITTLE_ENDIAN == nativeByteOrder);
-        PosixRawFileOperationSupport bigEndianSupport = new PosixRawFileOperationSupport(ByteOrder.BIG_ENDIAN == nativeByteOrder);
-        PosixRawFileOperationSupport nativeByteOrderSupport = nativeByteOrder == ByteOrder.LITTLE_ENDIAN ? littleEndianSupport : bigEndianSupport;
-
-        ImageSingletons.add(RawFileOperationSupportHolder.class, new RawFileOperationSupportHolder(littleEndianSupport, bigEndianSupport, nativeByteOrderSupport));
+        ImageSingletons.add(RawFileOperationSupport.class, new PosixRawFileOperationSupport());
     }
 }
