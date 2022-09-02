@@ -53,7 +53,7 @@ public interface JfrBuffer extends PointerBase {
     void setSize(UnsignedWord value);
 
     /**
-     * Returns the committed position. Any data before this position is valid event data.
+     * Returns the committed position. Any data before this position is valid event data
      */
     @RawField
     Pointer getPos();
@@ -65,7 +65,8 @@ public interface JfrBuffer extends PointerBase {
     void setPos(Pointer value);
 
     /**
-     * Returns the offset to the committed position pointer.
+     * Returns the offset to the committed position pointer
+     * @return
      */
     @RawFieldOffset
     static int offsetOfPos() {
@@ -81,7 +82,7 @@ public interface JfrBuffer extends PointerBase {
     int getAcquired();
 
     /**
-     * Sets the acquired value.
+     * Sets the acquired value
      * @see JfrBufferAccess#acquire(JfrBuffer)
      * @see JfrBufferAccess#release(JfrBuffer)
      */
@@ -89,7 +90,7 @@ public interface JfrBuffer extends PointerBase {
     void setAcquired(int value);
 
     /**
-     * Returns the offset to the acquired integer.
+     * Returns the offset to the acquired integer
      */
     @RawFieldOffset
     static int offsetOfAcquired() {
