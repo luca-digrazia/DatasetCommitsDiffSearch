@@ -96,10 +96,8 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 
-import com.oracle.graal.pointsto.infrastructure.UniverseMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisType;
-import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.graal.pointsto.nodes.AnalysisArraysCopyOfNode;
 import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionLoadNode;
 import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionStoreNode;
@@ -463,7 +461,9 @@ public class SubstrateGraphBuilderPlugins {
                     RuntimeReflection.register(field);
 
                     // register the field for unsafe access
-                    registerAsUnsafeAccessed(metaAccess, field);
+                    AnalysisField targetField = (AnalysisField) metaAccess.lookupJavaField(field);
+                    targetField.registerAsAccessed();
+                    targetField.registerAsUnsafeAccessed();
                 } catch (NoSuchFieldException e) {
                     /*
                      * Ignore the exception. : If the field does not exist, there will be an error
@@ -475,13 +475,6 @@ public class SubstrateGraphBuilderPlugins {
                 }
             }
         }
-    }
-
-    private static void registerAsUnsafeAccessed(MetaAccessProvider metaAccess, Field field) {
-        AnalysisField targetField = (AnalysisField) metaAccess.lookupJavaField(field);
-        targetField.registerAsAccessed();
-        AnalysisUniverse universe = (AnalysisUniverse) ((UniverseMetaAccess) metaAccess).getUniverse();
-        targetField.registerAsUnsafeAccessed(universe);
     }
 
     private static void registerObjectPlugins(InvocationPlugins plugins) {
@@ -591,7 +584,9 @@ public class SubstrateGraphBuilderPlugins {
 
         if (analysis) {
             /* Register the field for unsafe access. */
-            registerAsUnsafeAccessed(metaAccess, targetField);
+            AnalysisField analysisTargetField = (AnalysisField) metaAccess.lookupJavaField(targetField);
+            analysisTargetField.registerAsAccessed();
+            analysisTargetField.registerAsUnsafeAccessed();
             /* Return false; the call is not replaced. */
             return false;
         } else {
