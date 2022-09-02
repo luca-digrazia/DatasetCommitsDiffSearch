@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,15 +24,15 @@
  */
 package com.oracle.svm.core.genscavenge;
 
+import java.lang.ref.Reference;
+
 import org.graalvm.compiler.word.Word;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 
-import com.oracle.svm.core.annotate.MustNotAllocate;
+import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.genscavenge.CardTable.ReferenceToYoungObjectReferenceVisitor;
 import com.oracle.svm.core.genscavenge.CardTable.ReferenceToYoungObjectVisitor;
-import com.oracle.svm.core.heap.DiscoverableReference;
-import com.oracle.svm.core.heap.NativeImageInfo;
 import com.oracle.svm.core.heap.ObjectReferenceVisitor;
 import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.hub.DynamicHub;
@@ -38,6 +40,7 @@ import com.oracle.svm.core.hub.InteriorObjRefWalker;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
+import com.oracle.svm.core.thread.JavaVMOperation;
 import com.oracle.svm.core.thread.VMOperation;
 
 /**
@@ -59,7 +62,6 @@ public class HeapVerifierImpl implements HeapVerifier {
     private final Log witnessLog;
 
     protected HeapVerifierImpl() {
-        super();
         /*
          * The constructor is called during native image generation, at which point there isn't a
          * Heap, so the heap field must be initialized lazily.
@@ -112,9 +114,8 @@ public class HeapVerifierImpl implements HeapVerifier {
         }
         final UnsignedWord header = ObjectHeaderImpl.readHeaderFromPointerCarefully(ptr);
         trace.string("  header: ").hex(header);
-        final ObjectHeaderImpl ohi = ObjectHeaderImpl.getObjectHeaderImpl();
-        if (ohi.isForwardedHeader(header)) {
-            final Object obj = ohi.getForwardedObject(header);
+        if (ObjectHeaderImpl.isForwardedHeader(header)) {
+            final Object obj = ObjectHeaderImpl.getForwardedObject(ptr);
             final Pointer op = Word.objectToUntrackedPointer(obj);
             trace.string("  forwards to ").hex(op).newline();
             if (!verifyObjectAt(op)) {
@@ -123,28 +124,20 @@ public class HeapVerifierImpl implements HeapVerifier {
             }
         } else {
             final Object obj = ptr.toObject();
-            trace.string("  obj: ").hex(Word.objectToUntrackedPointer(obj)).string("  obj.getClass: ").string(obj.getClass().getName()).string("  objectHeader: ").string(ohi.toStringFromObject(obj));
+            trace.string("  obj: ").hex(Word.objectToUntrackedPointer(obj)).string("  obj.getClass: ").string(obj.getClass().getName());
             final DynamicHub hub = ObjectHeaderImpl.readDynamicHubFromObjectCarefully(obj);
             if (!(hub.getClass().getName().equals("java.lang.Class"))) {
                 getWitnessLog().string("[HeapVerifierImpl.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  hub is not a class").string("]").newline();
                 return false;
             }
-            if (slowlyFindObjectInBootImage(obj)) {
-                if (!ohi.isBootImageCarefully(obj)) {
-                    try (Log witness = getWitnessLog()) {
-                        witness.string("[HeapVerifierImpl.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  obj: ").object(obj);
-                        witness.string("  header: ").string(ohi.toStringFromHeader(header)).string("  native image object but not native image object header").string("]").newline();
-                    }
-                    return false;
+
+            HeapImpl heap = HeapImpl.getHeapImpl();
+            if (heap.isInImageHeap(obj) != heap.isInImageHeapSlow(obj)) {
+                try (Log witness = getWitnessLog()) {
+                    witness.string("[HeapVerifierImpl.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  obj: ").object(obj);
+                    witness.string("  mismatch between isInImageHeap() and isInImageHeapSlow()").string("]").newline();
                 }
-            } else {
-                if (ohi.isNonHeapAllocatedCarefully(obj)) {
-                    try (Log witness = getWitnessLog()) {
-                        witness.string("[HeapVerifierImpl.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  obj: ").object(obj);
-                        witness.string("  header: ").string(ohi.toStringFromHeader(header)).string("  Not native image, but not heap allocated.").string("]").newline();
-                    }
-                    return false;
-                }
+                return false;
             }
             trace.newline();
             /*
@@ -160,8 +153,8 @@ public class HeapVerifierImpl implements HeapVerifier {
                 getWitnessLog().string("[HeapVerifierImpl.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  contains references to forwarded objects").string("]").newline();
                 return false;
             }
-            if (!verifyDiscoverableReference(obj)) {
-                getWitnessLog().string("[HeapVerifierImpl.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  DiscoverableReference fails to verify.").string("]").newline();
+            if (!verifyReferenceObject(obj)) {
+                getWitnessLog().string("[HeapVerifierImpl.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  Reference object fails to verify.").string("]").newline();
                 return false;
             }
         }
@@ -171,7 +164,7 @@ public class HeapVerifierImpl implements HeapVerifier {
     }
 
     /** A VMOperation that verifies the heap. */
-    protected static final class VerifyVMOperation extends VMOperation {
+    protected static final class VerifyVMOperation extends JavaVMOperation {
 
         private final String message;
         private final HeapVerifierImpl verifier;
@@ -179,7 +172,7 @@ public class HeapVerifierImpl implements HeapVerifier {
         private boolean result;
 
         VerifyVMOperation(String message, HeapVerifierImpl verifier, HeapVerifier.Occasion occasion) {
-            super("HeapVerification", CallerEffect.BLOCKS_CALLER, SystemEffect.CAUSES_SAFEPOINT);
+            super("HeapVerification", SystemEffect.SAFEPOINT);
             this.message = message;
             this.verifier = verifier;
             this.occasion = occasion;
@@ -187,7 +180,7 @@ public class HeapVerifierImpl implements HeapVerifier {
         }
 
         @Override
-        @MustNotAllocate(reason = "Must not allocate while verifying the heap.")
+        @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate while verifying the heap.")
         public void operate() {
             /* Install the provided verifier as the verifier for the duration of this operation. */
             final HeapVerifierImpl previousVerifier = HeapImpl.getHeapImpl().getHeapVerifierImpl();
@@ -199,6 +192,7 @@ public class HeapVerifierImpl implements HeapVerifier {
         public boolean getResult() {
             return result;
         }
+
     }
 
     @Override
@@ -240,6 +234,11 @@ public class HeapVerifierImpl implements HeapVerifier {
         return result;
     }
 
+    void verifyDirtyCard(boolean isTo) {
+        OldGeneration oldGen = HeapImpl.getHeapImpl().getOldGeneration();
+        oldGen.verifyDirtyCards(isTo);
+    }
+
     @Override
     public Log getTraceLog() {
         return (HeapOptions.TraceHeapVerification.getValue() ? Log.log() : Log.noopLog());
@@ -251,10 +250,11 @@ public class HeapVerifierImpl implements HeapVerifier {
     }
 
     private boolean verifyBootImageObjects() {
-        final boolean ropResult = verifyBootImageObjects(NativeImageInfo.firstReadOnlyPrimitiveObject, NativeImageInfo.lastReadOnlyPrimitiveObject);
-        final boolean rorResult = verifyBootImageObjects(NativeImageInfo.firstReadOnlyReferenceObject, NativeImageInfo.lastReadOnlyReferenceObject);
-        final boolean rwpResult = verifyBootImageObjects(NativeImageInfo.firstWritablePrimitiveObject, NativeImageInfo.lastWritablePrimitiveObject);
-        final boolean rwrResult = verifyBootImageObjects(NativeImageInfo.firstWritableReferenceObject, NativeImageInfo.lastWritableReferenceObject);
+        ImageHeapInfo info = HeapImpl.getImageHeapInfo();
+        final boolean ropResult = verifyBootImageObjects(info.firstReadOnlyPrimitiveObject, info.lastReadOnlyPrimitiveObject);
+        final boolean rorResult = verifyBootImageObjects(info.firstReadOnlyReferenceObject, info.lastReadOnlyReferenceObject);
+        final boolean rwpResult = verifyBootImageObjects(info.firstWritablePrimitiveObject, info.lastWritablePrimitiveObject);
+        final boolean rwrResult = verifyBootImageObjects(info.firstWritableReferenceObject, info.lastWritableReferenceObject);
         return ropResult && rorResult && rwpResult && rwrResult;
     }
 
@@ -276,7 +276,7 @@ public class HeapVerifierImpl implements HeapVerifier {
         while (currentPointer.belowOrEqual(lastPointer)) {
             final Object currentObject = currentPointer.toObject();
             /* Make sure obj is marked as a SystemType object. */
-            if (!ObjectHeaderImpl.getObjectHeaderImpl().isNonHeapAllocatedCarefully(currentObject)) {
+            if (!HeapImpl.getHeapImpl().isInImageHeap(currentObject)) {
                 result = false;
                 try (Log witness = getWitnessLog()) {
                     witness.string("[HeapVerifierImpl.verifyBootImageObjects:").string("  [ firstPointer: ").hex(firstPointer).string("  .. lastPointer: ").hex(lastPointer).string(" ]");
@@ -319,9 +319,8 @@ public class HeapVerifierImpl implements HeapVerifier {
         trace.string("[HeapVerifierImpl.noReferencesToZappedObjectsVerifier:");
         trace.string("  obj: ").object(obj).string("  obj.getClass: ").string(obj.getClass().getName());
 
-        final ObjectHeaderImpl ohi = ObjectHeaderImpl.getObjectHeaderImpl();
         final UnsignedWord header = ObjectHeaderImpl.readHeaderFromObjectCarefully(obj);
-        trace.string("  header: ").hex(header).string("  objectHeader: ").string(ohi.toStringFromObject(obj));
+        trace.string("  header: ").hex(header);
 
         final Pointer objPointer = Word.objectToUntrackedPointer(obj);
         trace.string("  objPointer: ").hex(objPointer);
@@ -331,7 +330,7 @@ public class HeapVerifierImpl implements HeapVerifier {
             try (Log witness = getWitnessLog()) {
                 witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(getCause());
                 witness.string("  obj: ").string(obj.getClass().getName()).string("@").hex(objPointer);
-                witness.string("  header: ").hex(header).string("  objectHeader: ").string(ohi.toStringFromObject(obj)).string("]").newline();
+                witness.string("  header: ").hex(header).string("]").newline();
             }
         }
 
@@ -350,14 +349,7 @@ public class HeapVerifierImpl implements HeapVerifier {
             }
 
             /* Consider the field pointer. */
-            if (objPointer.equal(HeapPolicy.getProducedHeapChunkZapValue())) {
-                try (Log witness = verifier.getWitnessLog()) {
-                    witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(verifier.getCause());
-                    witness.string("  contains zapped field Pointer: ").hex(objPointer).string("  at: ").hex(objRef).string("]").newline();
-                }
-                return false;
-            }
-            if (objPointer.equal(HeapPolicy.getConsumedHeapChunkZapValue())) {
+            if (!compressed && (objPointer.equal(HeapPolicy.getProducedHeapChunkZapWord()) || objPointer.equal(HeapPolicy.getConsumedHeapChunkZapWord()))) {
                 try (Log witness = verifier.getWitnessLog()) {
                     witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(verifier.getCause());
                     witness.string("  contains zapped field Pointer: ").hex(objPointer).string("  at: ").hex(objRef).string("]").newline();
@@ -370,8 +362,7 @@ public class HeapVerifierImpl implements HeapVerifier {
                     witness.string("  at: ").hex(objRef).string("  contains fieldPointer: ").hex(objPointer).string("  that is not a reference to the heap").newline();
                     witness.string("    Foolishly trying to look at the object pointed to by the fieldPointer:");
                     final UnsignedWord fieldHeader = ObjectHeaderImpl.readHeaderFromPointerCarefully(objPointer);
-                    final ObjectHeaderImpl ohi = ObjectHeaderImpl.getObjectHeaderImpl();
-                    witness.string("  fieldHeader: ").string(ohi.toStringFromHeader(fieldHeader));
+                    witness.string("  fieldHeader: ").hex(fieldHeader);
                     final Object fieldObject = objPointer.toObject();
                     witness.string("  fieldObject: ").object(fieldObject).string("]").newline();
                 }
@@ -379,14 +370,7 @@ public class HeapVerifierImpl implements HeapVerifier {
             }
             /* It is probably safe to look at the referenced object. */
             final Word readWord = objPointer.readWord(0);
-            if (readWord.equal(HeapPolicy.getProducedHeapChunkZapValue())) {
-                try (Log witness = verifier.getWitnessLog()) {
-                    witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(verifier.getCause());
-                    witness.string("  contains fieldPointer: ").hex(objPointer).string("  to zapped memory: ").hex(readWord).string("  at: ").hex(objRef).string("]").newline();
-                }
-                return false;
-            }
-            if (readWord.equal(HeapPolicy.getConsumedHeapChunkZapValue())) {
+            if (readWord.equal(HeapPolicy.getProducedHeapChunkZapWord()) || readWord.equal(HeapPolicy.getConsumedHeapChunkZapWord())) {
                 try (Log witness = verifier.getWitnessLog()) {
                     witness.string("[HeapVerifierImpl.noReferencesOutsideHeap:").string("  cause: ").string(verifier.getCause());
                     witness.string("  contains fieldPointer: ").hex(objPointer).string("  to zapped memory: ").hex(readWord).string("  at: ").hex(objRef).string("]").newline();
@@ -431,8 +415,7 @@ public class HeapVerifierImpl implements HeapVerifier {
             if (objPointer.isNull()) {
                 return true;
             }
-            final ObjectHeaderImpl ohi = heap.getObjectHeaderImpl();
-            if (ohi.isPointerToForwardedObjectCarefully(objPointer)) {
+            if (ObjectHeaderImpl.isPointerToForwardedObjectCarefully(objPointer)) {
                 try (Log witness = verifier.getWitnessLog()) {
                     witness.string("[HeapVerifierImpl.noReferencesToForwardedObjectsVerifier:").string("  cause: ").string(verifier.getCause());
                     witness.string("  contains fieldPointer: ").hex(objPointer).string("  to forwarded object at: ").hex(objRef).string("]").newline();
@@ -445,14 +428,12 @@ public class HeapVerifierImpl implements HeapVerifier {
 
     private static final HeapVerifierImpl.NoReferencesToForwardedObjectsVisitor noReferencesToForwardedObjectsVisitor = new NoReferencesToForwardedObjectsVisitor();
 
-    private static boolean verifyDiscoverableReference(Object object) {
-        boolean result = true;
+    private static boolean verifyReferenceObject(Object object) {
         Object obj = KnownIntrinsics.convertUnknownValue(object, Object.class);
-        if (obj instanceof DiscoverableReference) {
-            final DiscoverableReference dr = (DiscoverableReference) obj;
-            result = DiscoverableReferenceProcessing.verify(dr);
+        if (obj instanceof Reference) {
+            return ReferenceObjectProcessing.verify((Reference<?>) obj);
         }
-        return result;
+        return true;
     }
 
     public enum ChunkLimit {
@@ -461,10 +442,10 @@ public class HeapVerifierImpl implements HeapVerifier {
     }
 
     static boolean slowlyFindPointer(Pointer p) {
-        if (slowlyFindPointerInBootImage(p)) {
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        if (heap.isInImageHeapSlow(p)) {
             return true;
         }
-        final HeapImpl heap = HeapImpl.getHeapImpl();
         if (slowlyFindPointerInYoungGeneration(p)) {
             return true;
         }
@@ -473,21 +454,6 @@ public class HeapVerifierImpl implements HeapVerifier {
         }
         heap.getHeapVerifierImpl().getWitnessLog().string("[HeapVerifierImpl.slowlyFindPointer:").string("  did not find pointer in heap: ").hex(p).string("]").newline();
         return false;
-    }
-
-    /* Used by runtime verification code. */
-    private static boolean slowlyFindObjectInBootImage(Object obj) {
-        final Pointer objectPointer = Word.objectToUntrackedPointer(obj);
-        return slowlyFindPointerInBootImage(objectPointer);
-    }
-
-    static boolean slowlyFindPointerInBootImage(Pointer objectPointer) {
-        boolean result = false;
-        result |= NativeImageInfo.isInReadOnlyPrimitivePartition(objectPointer);
-        result |= NativeImageInfo.isInReadOnlyReferencePartition(objectPointer);
-        result |= NativeImageInfo.isInWritablePrimitivePartition(objectPointer);
-        result |= NativeImageInfo.isInWritableReferencePartition(objectPointer);
-        return result;
     }
 
     private static boolean slowlyFindPointerInYoungGeneration(Pointer p) {
@@ -547,7 +513,7 @@ public class HeapVerifierImpl implements HeapVerifier {
         if (p.isNull()) {
             return 0;
         }
-        if (slowlyFindPointerInBootImage(p)) {
+        if (HeapImpl.getHeapImpl().isInImageHeapSlow(p)) {
             return 1;
         }
         if (youngGen.slowlyFindPointer(p)) {

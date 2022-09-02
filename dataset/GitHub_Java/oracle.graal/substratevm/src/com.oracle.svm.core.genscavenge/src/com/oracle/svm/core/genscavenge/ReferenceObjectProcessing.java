@@ -38,7 +38,6 @@ import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.heap.ReferenceInternals;
 import com.oracle.svm.core.heap.ReferenceQueueInternals;
-import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 
@@ -47,16 +46,16 @@ public class ReferenceObjectProcessing {
 
     @AlwaysInline("GC performance")
     public static void discoverIfReference(Object object) {
-        assert object != null;
-        DynamicHub hub = KnownIntrinsics.readHub(object);
-        if (probability(SLOW_PATH_PROBABILITY, hub.isReferenceInstanceClass())) {
-            handleDiscoverableReference(object);
+        final Object obj = KnownIntrinsics.convertUnknownValue(object, Object.class);
+        /* TODO: What's the cost of this type test, since it will be a concrete subtype? */
+        if (probability(SLOW_PATH_PROBABILITY, obj instanceof Reference)) {
+            handleDiscoverableReference(obj);
         }
     }
 
-    private static void handleDiscoverableReference(Object obj) {
-        Reference<?> dr = KnownIntrinsics.convertUnknownValue(obj, Reference.class);
-        Log trace = Log.noopLog().string("[ReferenceObjectProcessing.handleDiscoverableReference:");
+    private static void handleDiscoverableReference(final Object obj) {
+        final Log trace = Log.noopLog().string("[ReferenceObjectProcessing.handleDiscoverableReference:");
+        final Reference<?> dr = (Reference<?>) obj;
         trace.string("  dr: ").object(dr);
         /*
          * If the Reference has been allocated but not initialized, do not do anything with it. The

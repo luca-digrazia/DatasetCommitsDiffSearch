@@ -53,18 +53,15 @@ import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.hosted.Feature.FeatureAccess;
 import org.graalvm.word.Pointer;
-import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MemoryUtil;
-import com.oracle.svm.core.MemoryWalker;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.code.CodeInfo;
 import com.oracle.svm.core.code.RuntimeCodeInfoMemory;
 import com.oracle.svm.core.deopt.DeoptimizationSupport;
 import com.oracle.svm.core.heap.AllocationFreeList;
@@ -74,8 +71,8 @@ import com.oracle.svm.core.heap.GC;
 import com.oracle.svm.core.heap.GCCause;
 import com.oracle.svm.core.heap.NoAllocationVerifier;
 import com.oracle.svm.core.heap.ObjectVisitor;
-import com.oracle.svm.core.heap.ReferenceHandler;
 import com.oracle.svm.core.hub.LayoutEncoding;
+import com.oracle.svm.core.jdk.CleanerSupport;
 import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
@@ -144,6 +141,7 @@ public class GCImpl implements GC {
         this.collectionEpoch = WordFactory.zero();
         this.collectionWatcherList = AllocationFreeList.factory();
         this.noAllocationVerifier = NoAllocationVerifier.factory("GCImpl.GCImpl()", false);
+        this.discoveredReferencesListHead = null;
         this.completeCollection = false;
         this.sizeBefore = WordFactory.zero();
 
@@ -160,7 +158,7 @@ public class GCImpl implements GC {
         this.runtimeCodeCacheWalker = new RuntimeCodeCacheWalker(greyToBlackObjRefVisitor);
         this.runtimeCodeCacheCleaner = new RuntimeCodeCacheCleaner();
 
-        this.blackenImageHeapRootsTimer = new Timer("blackenImageHeapRootsTimer");
+        this.blackenBootImageRootsTimer = new Timer("blackenBootImageRoots");
         this.blackenDirtyCardRootsTimer = new Timer("blackenDirtyCardRoots");
         this.blackenStackRootsTimer = new Timer("blackenStackRoots");
         this.cheneyScanFromRootsTimer = new Timer("cheneyScanFromRoots");
@@ -315,6 +313,9 @@ public class GCImpl implements GC {
 
         postcondition();
 
+        /* Distribute any discovered references to their queues. */
+        ReferenceObjectProcessing.Scatterer.distributeReferences();
+
         trace.string("]").newline();
     }
 
@@ -335,7 +336,7 @@ public class GCImpl implements GC {
             verboseGCLog.string("     AlignedChunkSize: ").unsigned(HeapPolicy.getAlignedHeapChunkSize()).newline();
             verboseGCLog.string("  LargeArrayThreshold: ").unsigned(HeapPolicy.getLargeArrayThreshold()).string("]").newline();
             if (HeapOptions.PrintHeapShape.getValue()) {
-                HeapImpl.getHeapImpl().logImageHeapPartitionBoundaries(verboseGCLog).newline();
+                HeapImpl.getHeapImpl().bootImageHeapBoundariesToLog(verboseGCLog).newline();
             }
         }
 
@@ -522,6 +523,9 @@ public class GCImpl implements GC {
         try (GreyToBlackObjRefVisitor.Counters gtborv = greyToBlackObjRefVisitor.openCounters()) {
             final Log trace = Log.noopLog().string("[GCImpl.scavenge:").string("  fromDirtyRoots: ").bool(fromDirtyRoots).newline();
 
+            /* Empty the list of DiscoveredReferences before walking the heap. */
+            ReferenceObjectProcessing.clearDiscoveredList();
+
             try (Timer rst = rootScanTimer.open()) {
                 trace.string("  Cheney scan: ");
                 if (fromDirtyRoots) {
@@ -532,9 +536,9 @@ public class GCImpl implements GC {
             }
 
             trace.string("  Discovered references: ");
+            /* Process the list of DiscoveredReferences after walking the heap. */
             try (Timer drt = referenceObjectsTimer.open()) {
-                Reference<?> newlyPendingList = ReferenceObjectProcessing.processDiscoveredReferences();
-                HeapImpl.getHeapImpl().addToReferencePendingList(newlyPendingList);
+                ReferenceObjectProcessing.processDiscoveredReferences();
             }
 
             trace.string("  Release spaces: ");
@@ -602,7 +606,7 @@ public class GCImpl implements GC {
              * Native image Objects are grey at the beginning of a collection, so I need to blacken
              * them.
              */
-            blackenImageHeapRoots();
+            blackenBootImageRoots();
 
             /* Visit all the Objects promoted since the snapshot. */
             scanGreyObjects(false);
@@ -675,7 +679,7 @@ public class GCImpl implements GC {
              * Native image Objects are grey at the beginning of a collection, so I need to blacken
              * them.
              */
-            blackenImageHeapRoots();
+            blackenBootImageRoots();
 
             /* Visit all the Objects promoted since the snapshot, transitively. */
             scanGreyObjects(true);
@@ -781,44 +785,23 @@ public class GCImpl implements GC {
         trace.string("]").newline();
     }
 
-    private void blackenImageHeapRoots() {
-        Log trace = Log.noopLog().string("[blackenImageHeapRoots:").newline();
-        HeapImpl.getHeapImpl().walkNativeImageHeapRegions(blackenImageHeapRootsVisitor);
-        trace.string("]").newline();
-    }
-
-    private final BlackenImageHeapRootsVisitor blackenImageHeapRootsVisitor = new BlackenImageHeapRootsVisitor();
-
-    private class BlackenImageHeapRootsVisitor implements MemoryWalker.Visitor {
-        @Override
-        @SuppressWarnings("try")
-        public <T> boolean visitNativeImageHeapRegion(T region, MemoryWalker.NativeImageHeapRegionAccess<T> access) {
-            if (access.containsReferences(region) && access.isWritable(region)) {
-                try (Timer timer = blackenImageHeapRootsTimer.open()) {
-                    ImageHeapInfo imageHeapInfo = HeapImpl.getImageHeapInfo();
-                    Pointer cur = Word.objectToUntrackedPointer(imageHeapInfo.firstWritableReferenceObject);
-                    final Pointer last = Word.objectToUntrackedPointer(imageHeapInfo.lastWritableReferenceObject);
-                    while (cur.belowOrEqual(last)) {
-                        Object obj = cur.toObject();
-                        if (obj != null) {
-                            greyToBlackObjectVisitor.visitObjectInline(obj);
-                        }
-                        cur = LayoutEncoding.getObjectEnd(obj);
-                    }
+    @SuppressWarnings("try")
+    private void blackenBootImageRoots() {
+        final Log trace = Log.noopLog().string("[blackenBootImageRoots:").newline();
+        try (Timer bbirt = blackenBootImageRootsTimer.open()) {
+            /* Walk through the native image heap roots. */
+            ImageHeapInfo imageHeapInfo = HeapImpl.getImageHeapInfo();
+            Pointer cur = Word.objectToUntrackedPointer(imageHeapInfo.firstWritableReferenceObject);
+            final Pointer last = Word.objectToUntrackedPointer(imageHeapInfo.lastWritableReferenceObject);
+            while (cur.belowOrEqual(last)) {
+                Object obj = cur.toObject();
+                if (obj != null) {
+                    greyToBlackObjectVisitor.visitObjectInline(obj);
                 }
+                cur = LayoutEncoding.getObjectEnd(obj);
             }
-            return true;
         }
-
-        @Override
-        public <T extends PointerBase> boolean visitHeapChunk(T heapChunk, MemoryWalker.HeapChunkAccess<T> access) {
-            throw VMError.shouldNotReachHere();
-        }
-
-        @Override
-        public <T extends CodeInfo> boolean visitCode(T codeInfo, MemoryWalker.CodeAccess<T> access) {
-            throw VMError.shouldNotReachHere();
-        }
+        trace.string("]").newline();
     }
 
     @SuppressWarnings("try")
@@ -967,8 +950,7 @@ public class GCImpl implements GC {
             return;
         }
 
-        ReferenceHandler.maybeProcessCurrentlyPending();
-
+        CleanerSupport.drainReferenceQueues();
         visitWatchersReport();
     }
 
@@ -1077,6 +1059,16 @@ public class GCImpl implements GC {
         policy = newPolicy;
     }
 
+    private Reference<?> discoveredReferencesListHead = null;
+
+    Reference<?> getDiscoveredReferencesListHead() {
+        return discoveredReferencesListHead;
+    }
+
+    void setDiscoveredReferencesListHead(Reference<?> newList) {
+        discoveredReferencesListHead = newList;
+    }
+
     GreyToBlackObjectVisitor getGreyToBlackObjectVisitor() {
         return greyToBlackObjectVisitor;
     }
@@ -1084,7 +1076,7 @@ public class GCImpl implements GC {
     /*
      * Timers.
      */
-    private final Timer blackenImageHeapRootsTimer;
+    private final Timer blackenBootImageRootsTimer;
     private final Timer blackenDirtyCardRootsTimer;
     private final Timer blackenStackRootsTimer;
     private final Timer cheneyScanFromRootsTimer;
@@ -1118,7 +1110,7 @@ public class GCImpl implements GC {
         walkThreadLocalsTimer.reset();
         walkRuntimeCodeCacheTimer.reset();
         cleanRuntimeCodeCacheTimer.reset();
-        blackenImageHeapRootsTimer.reset();
+        blackenBootImageRootsTimer.reset();
         blackenDirtyCardRootsTimer.reset();
         scanGreyObjectsTimer.reset();
         referenceObjectsTimer.reset();
@@ -1144,7 +1136,7 @@ public class GCImpl implements GC {
             logOneTimer(log, "          ", walkThreadLocalsTimer);
             logOneTimer(log, "          ", walkRuntimeCodeCacheTimer);
             logOneTimer(log, "          ", cleanRuntimeCodeCacheTimer);
-            logOneTimer(log, "          ", blackenImageHeapRootsTimer);
+            logOneTimer(log, "          ", blackenBootImageRootsTimer);
             logOneTimer(log, "          ", blackenDirtyCardRootsTimer);
             logOneTimer(log, "          ", scanGreyObjectsTimer);
             logOneTimer(log, "      ", referenceObjectsTimer);
