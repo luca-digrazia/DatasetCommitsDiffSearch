@@ -26,17 +26,27 @@ package com.oracle.svm.core.configure;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import com.oracle.svm.core.util.json.JSONParserException;
 
 public abstract class ConfigurationParser {
+    public void parseAndRegister(Path path) throws IOException {
+        try (Reader reader = Files.newBufferedReader(path)) {
+            parseAndRegister(reader);
+        }
+    }
 
     public abstract void parseAndRegister(Reader reader) throws IOException;
 
     @SuppressWarnings("unchecked")
-    static List<Object> asList(Object data, String errorMessage) {
+    protected static List<Object> asList(Object data, String errorMessage) {
         if (data instanceof List) {
             return (List<Object>) data;
         }
@@ -44,31 +54,65 @@ public abstract class ConfigurationParser {
     }
 
     @SuppressWarnings("unchecked")
-    static Map<String, Object> asMap(Object data, String errorMessage) {
+    protected static Map<String, Object> asMap(Object data, String errorMessage) {
         if (data instanceof Map) {
             return (Map<String, Object>) data;
         }
         throw new JSONParserException(errorMessage);
     }
 
-    static String asString(Object value) {
+    protected static void checkAttributes(Map<String, Object> map, String type, Collection<String> requiredAttrs, Collection<String> optionalAttrs) {
+        List<String> unseenRequired = new ArrayList<>(requiredAttrs);
+        for (String key : map.keySet()) {
+            boolean required = unseenRequired.remove(key);
+            if (!required && !optionalAttrs.contains(key)) {
+                List<String> supported = new ArrayList<>(requiredAttrs);
+                supported.addAll(optionalAttrs);
+                throw new JSONParserException("Unknown attribute '" + key + "' (supported attributes: " + supported + ") in resource definition");
+
+            }
+        }
+        if (!unseenRequired.isEmpty()) {
+            throw new JSONParserException("Missing attribute '" + unseenRequired.get(0) + "' in " + type);
+        }
+    }
+
+    protected static void checkAttributes(Map<String, Object> data, String type, List<String> requiredAttrs) {
+        checkAttributes(data, type, requiredAttrs, Collections.emptyList());
+    }
+
+    protected static String asString(Object value) {
         if (value instanceof String) {
             return (String) value;
         }
         throw new JSONParserException("Invalid string value \"" + value + "\".");
     }
 
-    static String asString(Object value, String propertyName) {
+    protected static String asString(Object value, String propertyName) {
         if (value instanceof String) {
             return (String) value;
         }
         throw new JSONParserException("Invalid string value \"" + value + "\" for element '" + propertyName + "'");
     }
 
-    static boolean asBoolean(Object value, String propertyName) {
+    protected static String asNullableString(Object value, String propertyName) {
+        return (value == null) ? null : asString(value, propertyName);
+    }
+
+    protected static boolean asBoolean(Object value, String propertyName) {
         if (value instanceof Boolean) {
             return (boolean) value;
         }
         throw new JSONParserException("Invalid boolean value '" + value + "' for element '" + propertyName + "'");
+    }
+
+    protected static long asLong(Object value, String propertyName) {
+        if (value instanceof Long) {
+            return (long) value;
+        }
+        if (value instanceof Integer) {
+            return (int) value;
+        }
+        throw new JSONParserException("Invalid long value '" + value + "' for element '" + propertyName + "'");
     }
 }
