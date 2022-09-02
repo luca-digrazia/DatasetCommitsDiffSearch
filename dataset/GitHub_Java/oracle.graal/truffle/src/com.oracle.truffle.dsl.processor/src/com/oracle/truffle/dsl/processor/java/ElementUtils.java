@@ -84,7 +84,6 @@ import com.oracle.truffle.dsl.processor.CompileErrorException;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
 import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror;
-import com.oracle.truffle.dsl.processor.java.model.GeneratedElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror.DeclaredCodeTypeMirror;
 
 /**
@@ -185,7 +184,7 @@ public class ElementUtils {
     public static ExecutableElement findExecutableElement(DeclaredType type, String name) {
         List<? extends ExecutableElement> elements = ElementFilter.methodsIn(type.asElement().getEnclosedElements());
         for (ExecutableElement executableElement : elements) {
-            if (executableElement.getSimpleName().toString().equals(name) && !isDeprecated(executableElement)) {
+            if (executableElement.getSimpleName().toString().equals(name)) {
                 return executableElement;
             }
         }
@@ -473,11 +472,11 @@ public class ElementUtils {
             return false;
         }
 
-        if (from.getKind() == TypeKind.ARRAY && to.getKind() == TypeKind.ARRAY) {
+        if (from instanceof ArrayType && to instanceof ArrayType) {
             return isAssignable(((ArrayType) from).getComponentType(), ((ArrayType) to).getComponentType());
         }
 
-        if (from.getKind() == TypeKind.ARRAY || to.getKind() == TypeKind.ARRAY) {
+        if (from instanceof ArrayType || to instanceof ArrayType) {
             return false;
         }
 
@@ -816,13 +815,13 @@ public class ElementUtils {
     }
 
     public static boolean isDeprecated(TypeMirror baseType) {
-        if (baseType != null && baseType.getKind() == TypeKind.DECLARED) {
-            return isDeprecated(((DeclaredType) baseType).asElement());
+        if (baseType instanceof DeclaredType) {
+            return isDeprecated((TypeElement) ((DeclaredType) baseType).asElement());
         }
         return false;
     }
 
-    public static boolean isDeprecated(Element baseType) {
+    public static boolean isDeprecated(TypeElement baseType) {
         DeclaredType deprecated = ProcessorContext.getInstance().getDeclaredType(Deprecated.class);
         return ElementUtils.findAnnotationMirror(baseType.getAnnotationMirrors(), deprecated) != null;
     }
@@ -1024,7 +1023,8 @@ public class ElementUtils {
         if (value == null) {
             return null;
         }
-        Object unboxedValue = unboxAnnotationValue(value);
+
+        Object unboxedValue = value.accept(new AnnotationValueVisitorImpl(), null);
         if (unboxedValue != null) {
             if (expectedType == TypeMirror.class && unboxedValue instanceof String) {
                 return null;
@@ -1034,10 +1034,6 @@ public class ElementUtils {
             }
         }
         return expectedType.cast(unboxedValue);
-    }
-
-    public static Object unboxAnnotationValue(AnnotationValue value) {
-        return value.accept(new AnnotationValueVisitorImpl(), null);
     }
 
     private static class AnnotationValueVisitorImpl extends AbstractAnnotationValueVisitor8<Object, Void> {
@@ -1667,28 +1663,6 @@ public class ElementUtils {
         }
         return false;
 
-    }
-
-    public static String getBinaryName(TypeElement provider) {
-        if (provider instanceof GeneratedElement) {
-            String packageName = getPackageName(provider);
-            Element enclosing = provider.getEnclosingElement();
-            StringBuilder b = new StringBuilder();
-            b.append(provider.getSimpleName().toString());
-            while (enclosing != null) {
-                ElementKind kind = enclosing.getKind();
-                if ((kind.isClass() || kind.isInterface()) && enclosing instanceof TypeElement) {
-                    b.insert(0, enclosing.getSimpleName().toString() + "$");
-                } else {
-                    break;
-                }
-                enclosing = enclosing.getEnclosingElement();
-            }
-            b.insert(0, packageName + ".");
-            return b.toString();
-        } else {
-            return ProcessorContext.getInstance().getEnvironment().getElementUtils().getBinaryName(provider).toString();
-        }
     }
 
 }
