@@ -84,6 +84,8 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_SQRT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_STORE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_SUB;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.F64_TRUNC;
+import static com.oracle.truffle.wasm.binary.constants.Instructions.GLOBAL_GET;
+import static com.oracle.truffle.wasm.binary.constants.Instructions.GLOBAL_SET;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_ADD;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_AND;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_CLZ;
@@ -315,25 +317,31 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     DirectCallNode callNode = callNodeTable[callNodeOffset];
                     callNodeOffset++;
 
-                    Object[] args = createArgumentsForCall(frame, function, numArgs, stackPointer);
+                    Object[] args = createArguementsForCall(frame, function, numArgs, stackPointer);
                     stackPointer -= args.length;
 
                     Object result = callNode.call(args);
+                    // At the moment, WebAssembly functions may return up to one value.
+                    // As per the WebAssembly specification, this restriction may be lifted in the future.
                     switch (returnType) {
                         case ValueTypes.I32_TYPE: {
                             pushInt(frame, stackPointer, (int) result);
+                            stackPointer++;
                             break;
                         }
                         case ValueTypes.I64_TYPE: {
                             push(frame, stackPointer, (long) result);
+                            stackPointer++;
                             break;
                         }
                         case ValueTypes.F32_TYPE: {
                             pushFloat(frame, stackPointer, (float) result);
+                            stackPointer++;
                             break;
                         }
                         case ValueTypes.F64_TYPE: {
                             pushDouble(frame, stackPointer, (double) result);
+                            stackPointer++;
                             break;
                         }
                         default: {
@@ -342,7 +350,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                         }
                     }
 
-                    stackPointer++;
                     break;
                 }
                 case DROP: {
@@ -455,6 +462,76 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                             pushDouble(frame, stackPointer, value);
                             stackPointer++;
                             setDouble(frame, index, value);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case GLOBAL_GET: {
+                    int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
+                    byte constantLength = codeEntry().byteConstant(byteConstantOffset);
+                    byteConstantOffset++;
+                    offset += constantLength;
+                    byte type = wasmModule().globals().type(index);
+                    switch (type) {
+                        case ValueTypes.I32_TYPE: {
+                            int value = wasmModule().globals().getAsInt(index);
+                            pushInt(frame, stackPointer, value);
+                            stackPointer++;
+                            break;
+                        }
+                        case ValueTypes.I64_TYPE: {
+                            long value = wasmModule().globals().getAsLong(index);
+                            push(frame, stackPointer, value);
+                            stackPointer++;
+                            break;
+                        }
+                        case ValueTypes.F32_TYPE: {
+                            float value = wasmModule().globals().getAsFloat(index);
+                            pushFloat(frame, stackPointer, value);
+                            stackPointer++;
+                            break;
+                        }
+                        case ValueTypes.F64_TYPE: {
+                            double value = wasmModule().globals().getAsDouble(index);
+                            pushDouble(frame, stackPointer, value);
+                            stackPointer++;
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case GLOBAL_SET: {
+                    int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
+                    byte constantLength = codeEntry().byteConstant(byteConstantOffset);
+                    byteConstantOffset++;
+                    offset += constantLength;
+                    byte type = wasmModule().globals().type(index);
+                    // For global.set, we don't need to make sure that the referenced global is mutable.
+                    // This is taken care of by validation during wat to wasm compilation.
+                    switch (type) {
+                        case ValueTypes.I32_TYPE: {
+                            stackPointer--;
+                            int value = popInt(frame, stackPointer);
+                            wasmModule().globals().setInt(index, value);
+                            break;
+                        }
+                        case ValueTypes.I64_TYPE: {
+                            stackPointer--;
+                            long value = pop(frame, stackPointer);
+                            wasmModule().globals().setLong(index, value);
+                            break;
+                        }
+                        case ValueTypes.F32_TYPE: {
+                            stackPointer--;
+                            float value = popAsFloat(frame, stackPointer);
+                            wasmModule().globals().setFloat(index, value);
+                            break;
+                        }
+                        case ValueTypes.F64_TYPE: {
+                            stackPointer--;
+                            double value = popAsDouble(frame, stackPointer);
+                            wasmModule().globals().setDouble(index, value);
                             break;
                         }
                     }
@@ -1579,7 +1656,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @ExplodeLoop
-    private Object[] createArgumentsForCall(VirtualFrame frame, WasmFunction function, int numArgs, int stackPointer) {
+    private Object[] createArguementsForCall(VirtualFrame frame, WasmFunction function, int numArgs, int stackPointer) {
         Object[] args = new Object[numArgs];
         for (int i = 0; i != numArgs; ++i) {
             stackPointer--;
