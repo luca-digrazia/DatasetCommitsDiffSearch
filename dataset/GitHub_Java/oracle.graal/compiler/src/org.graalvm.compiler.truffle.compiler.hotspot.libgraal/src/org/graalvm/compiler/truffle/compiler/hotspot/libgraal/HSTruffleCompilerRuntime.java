@@ -357,11 +357,6 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
         throw new UnsupportedOperationException("Should never be called in the compiler.");
     }
 
-    @Override
-    public TruffleCompiler getTruffleCompilerIfAvailable() {
-        return null;
-    }
-
     private static class HSConsumer extends HSObject implements Consumer<OptimizedAssumptionDependency> {
 
         HSConsumer(HotSpotToSVMScope<HotSpotToSVM.Id> scope, JObject handle) {
