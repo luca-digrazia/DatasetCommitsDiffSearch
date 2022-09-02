@@ -48,7 +48,6 @@ import com.oracle.svm.configure.filters.FilterConfigurationParser;
 import com.oracle.svm.configure.filters.ModuleFilterTools;
 import com.oracle.svm.configure.filters.RuleNode;
 import com.oracle.svm.configure.json.JsonWriter;
-import com.oracle.svm.configure.trace.AccessAdvisor;
 import com.oracle.svm.configure.trace.TraceProcessor;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.util.VMError;
@@ -113,9 +112,7 @@ public class ConfigurationTool {
     @SuppressWarnings("fallthrough")
     private static void generate(Iterator<String> argsIter, boolean acceptTraceFileArgs) throws IOException {
         List<URI> traceInputs = new ArrayList<>();
-        boolean builtinCallerFilter = true;
-        boolean builtinHeuristicFilter = true;
-        List<Path> callerFilterFiles = new ArrayList<>();
+        boolean filter = true;
 
         ConfigurationSet inputSet = new ConfigurationSet();
         ConfigurationSet outputSet = new ConfigurationSet();
@@ -165,18 +162,8 @@ public class ConfigurationTool {
                 case "--trace-input":
                     traceInputs.add(requirePathUri(current, value));
                     break;
-                case "--no-filter": // legacy
-                    builtinCallerFilter = false;
-                    builtinHeuristicFilter = false;
-                    break;
-                case "--no-builtin-caller-filter":
-                    builtinCallerFilter = false;
-                    break;
-                case "--no-builtin-heuristic-filter":
-                    builtinHeuristicFilter = false;
-                    break;
-                case "--caller-filter-file":
-                    callerFilterFiles.add(requirePath(current, value));
+                case "--no-filter":
+                    filter = false;
                     break;
                 case "--":
                     if (acceptTraceFileArgs) {
@@ -194,26 +181,6 @@ public class ConfigurationTool {
             }
         }
 
-        RuleNode callersFilter = null;
-        if (!builtinCallerFilter) {
-            callersFilter = RuleNode.createRoot();
-            callersFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
-        }
-        if (!callerFilterFiles.isEmpty()) {
-            if (callersFilter == null) {
-                callersFilter = AccessAdvisor.copyBuiltinFilterTree();
-            }
-            for (Path path : callerFilterFiles) {
-                try {
-                    FilterConfigurationParser parser = new FilterConfigurationParser(callersFilter);
-                    parser.parseAndRegister(new FileReader(path.toFile()));
-                } catch (Exception e) {
-                    throw new UsageException("Cannot parse filter file " + path + ": " + e);
-                }
-            }
-            callersFilter.removeRedundantNodes();
-        }
-
         TraceProcessor p;
         try {
             p = new TraceProcessor(inputSet.loadJniConfig(ConfigurationSet.FAIL_ON_EXCEPTION), inputSet.loadReflectConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
@@ -223,10 +190,7 @@ public class ConfigurationTool {
         } catch (Throwable t) {
             throw new RuntimeException(t);
         }
-        p.setHeuristicsEnabled(builtinHeuristicFilter);
-        if (callersFilter != null) {
-            p.setCallerFilterTree(callersFilter);
-        }
+        p.setHeuristicsEnabled(filter);
         if (traceInputs.isEmpty() && inputSet.isEmpty()) {
             throw new UsageException("No inputs specified.");
         }
@@ -280,13 +244,13 @@ public class ConfigurationTool {
             String current = parts[0];
             String value = (parts.length > 1) ? parts[1] : null;
             switch (current) {
-                case "--include-packages-from-modules":
-                case "--exclude-packages-from-modules":
+                case "--include-modules":
+                case "--exclude-modules":
                     if (SubstrateUtil.HOSTED) {
                         if (rootNode != null) {
                             throw new UsageException(current + " must be specified before other rule-creating arguments");
                         }
-                        RuleNode.Inclusion inclusion = current.startsWith("--include") ? RuleNode.Inclusion.Include : RuleNode.Inclusion.Exclude;
+                        RuleNode.Inclusion inclusion = current.equals("--include-modules") ? RuleNode.Inclusion.Include : RuleNode.Inclusion.Exclude;
                         String[] moduleNames = (value != null) ? value.split(",") : new String[0];
                         rootNode = ModuleFilterTools.generateFromModules(moduleNames, inclusion, reduce);
                     } else {
