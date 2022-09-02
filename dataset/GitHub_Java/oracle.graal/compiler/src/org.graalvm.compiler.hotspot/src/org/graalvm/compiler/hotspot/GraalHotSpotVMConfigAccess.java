@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,7 @@ package org.graalvm.compiler.hotspot;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Formatter;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,7 @@ import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.hotspot.JVMCIVersionCheck.Version;
 import org.graalvm.compiler.hotspot.JVMCIVersionCheck.Version2;
 import org.graalvm.compiler.hotspot.JVMCIVersionCheck.Version3;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 
 import jdk.vm.ci.common.JVMCIError;
@@ -88,9 +90,6 @@ public class GraalHotSpotVMConfigAccess {
             case "x86_64":
                 arch = "amd64";
                 break;
-            case "sparcv9":
-                arch = "sparc";
-                break;
         }
         osArch = arch;
         assert KNOWN_ARCHITECTURES.contains(arch) : arch;
@@ -112,8 +111,8 @@ public class GraalHotSpotVMConfigAccess {
         return getProperty(name, null);
     }
 
-    public static final Set<String> KNOWN_ARCHITECTURES = new HashSet<>(Arrays.asList("amd64", "sparc", "aarch64"));
-    public static final Set<String> KNOWN_OS_NAMES = new HashSet<>(Arrays.asList("windows", "linux", "darwin", "solaris"));
+    public static final Set<String> KNOWN_ARCHITECTURES = new HashSet<>(Arrays.asList("amd64", "aarch64"));
+    public static final Set<String> KNOWN_OS_NAMES = new HashSet<>(Arrays.asList("windows", "linux", "darwin"));
 
     /**
      * Name for current OS. Will be a value in {@value #KNOWN_OS_NAMES}.
@@ -126,22 +125,35 @@ public class GraalHotSpotVMConfigAccess {
     public final String osArch;
 
     protected static final Version JVMCI_0_55 = new Version2(0, 55);
+    protected static final Version JVMCI_21_1_b02 = new Version3(21, 1, 2);
+    public static final Version JVMCI_20_3_b04 = new Version3(20, 3, 4);
+    protected static final Version JVMCI_20_2_b04 = new Version3(20, 2, 4);
+    protected static final Version JVMCI_20_2_b01 = new Version3(20, 2, 1);
+    protected static final Version JVMCI_20_1_b01 = new Version3(20, 1, 1);
     protected static final Version JVMCI_20_0_b03 = new Version3(20, 0, 3);
     protected static final Version JVMCI_19_3_b03 = new Version3(19, 3, 3);
     protected static final Version JVMCI_19_3_b04 = new Version3(19, 3, 4);
     protected static final Version JVMCI_19_3_b07 = new Version3(19, 3, 7);
 
     public static boolean jvmciGE(Version v) {
-        return !JVMCI_VERSION.isLessThan(v);
+        return JVMCI && !JVMCI_VERSION.isLessThan(v);
     }
 
     public static final int JDK = JavaVersionUtil.JAVA_SPEC;
+    public static final int JDK_UPDATE = GraalServices.getJavaUpdateVersion();
     public static final boolean IS_OPENJDK = getProperty("java.vm.name", "").startsWith("OpenJDK");
-    public static final Version JVMCI_VERSION = Version.parse(getProperty("java.vm.version"));
-    public static final boolean JVMCI = JVMCI_VERSION != null;
+    public static final Version JVMCI_VERSION;
+    public static final boolean JVMCI;
+    public static final boolean JDK_PRERELEASE;
+    static {
+        String vmVersion = getProperty("java.vm.version");
+        JVMCI_VERSION = Version.parse(vmVersion);
+        JDK_PRERELEASE = vmVersion.contains("SNAPSHOT") || vmVersion.contains("-dev");
+        JVMCI = JVMCI_VERSION != null;
+    }
 
-    private List<String> missing;
-    private List<String> unexpected;
+    private final List<String> missing = new ArrayList<>();
+    private final List<String> unexpected = new ArrayList<>();
 
     /**
      * Records an error if {@code map.contains(name) != expectPresent}. That is, it's an error if
@@ -152,50 +164,90 @@ public class GraalHotSpotVMConfigAccess {
     private boolean isPresent(String name, Map<String, ?> map, boolean expectPresent) {
         if (map.containsKey(name)) {
             if (!expectPresent) {
-                unexpected = recordError(name, unexpected, String.valueOf(map.get(name)));
+                recordError(name, unexpected, String.valueOf(map.get(name)));
             }
             return true;
         }
         if (expectPresent) {
-            missing = recordError(name, missing, null);
+            recordError(name, missing, null);
         }
 
         return false;
     }
 
-    private static List<String> recordError(String name, List<String> list, String unexpectedValue) {
-        List<String> result = list == null ? new ArrayList<>() : list;
-        StackTraceElement[] trace = new Exception().getStackTrace();
+    // Only defer errors while in the GraalHotSpotVMConfig
+    // constructor until reportErrors() is called.
+    private boolean deferErrors = this instanceof GraalHotSpotVMConfig;
+
+    private void recordError(String name, List<String> list, String unexpectedValue) {
+        if (JDK_PRERELEASE) {
+            return;
+        }
         String message = name;
-        for (StackTraceElement e : trace) {
-            if (!e.getClassName().equals(GraalHotSpotVMConfigAccess.class.getName())) {
-                message += " at " + e;
-                break;
+        if (deferErrors) {
+            StackTraceElement[] trace = new Exception().getStackTrace();
+            for (StackTraceElement e : trace) {
+                if (e.getClassName().equals(GraalHotSpotVMConfigAccess.class.getName())) {
+                    // Skip methods in GraalHotSpotVMConfigAccess
+                    continue;
+                }
+                // Looking for the field assignment in a constructor
+                if (e.getMethodName().equals("<init>")) {
+                    message += " at " + e;
+                    break;
+                }
             }
         }
         if (unexpectedValue != null) {
             message += " [value: " + unexpectedValue + "]";
         }
-        result.add(message);
-        return result;
+        list.add(message);
+        if (!deferErrors) {
+            reportErrors();
+        }
     }
 
     protected void reportErrors() {
-        if (missing != null || unexpected != null) {
+        deferErrors = false;
+        if (!missing.isEmpty() || !unexpected.isEmpty()) {
             String jvmci = JVMCI_VERSION == null ? "" : " jvmci-" + JVMCI_VERSION;
-            String runtime = String.format("JDK %d%s %s-%s (java.home=%s, java.vm.name=%s)", JDK, jvmci, osName, osArch,
+            String runtime = String.format("JDK %d%s %s-%s (java.home=%s, java.vm.name=%s, java.vm.version=%s)",
+                            JDK, jvmci, osName, osArch,
                             getProperty("java.home"),
-                            getProperty("java.vm.name"));
+                            getProperty("java.vm.name"),
+                            getProperty("java.vm.version"));
             List<String> messages = new ArrayList<>();
-            if (missing != null) {
+            if (!missing.isEmpty()) {
                 messages.add(String.format("VM config values missing that should be present in %s:%n    %s", runtime,
                                 missing.stream().sorted().collect(Collectors.joining(System.lineSeparator() + "    "))));
             }
-            if (unexpected != null) {
+            if (!unexpected.isEmpty()) {
                 messages.add(String.format("VM config values not expected to be present in %s:%n    %s", runtime,
                                 unexpected.stream().sorted().collect(Collectors.joining(System.lineSeparator() + "    "))));
             }
-            throw new JVMCIError(String.join(System.lineSeparator(), messages));
+            reportError(String.join(System.lineSeparator(), messages));
+        }
+    }
+
+    static void reportError(String rawErrorMessage) {
+        String value = System.getenv("JVMCI_CONFIG_CHECK");
+        Formatter errorMessage = new Formatter().format(rawErrorMessage);
+        String javaHome = getProperty("java.home");
+        String vmName = getProperty("java.vm.name");
+        errorMessage.format("%nSet the JVMCI_CONFIG_CHECK environment variable to \"ignore\" to suppress ");
+        errorMessage.format("this error or to \"warn\" to emit a warning and continue execution.%n");
+        errorMessage.format("Currently used Java home directory is %s.%n", javaHome);
+        errorMessage.format("Currently used VM configuration is: %s%n", vmName);
+        if ("ignore".equals(value)) {
+            return;
+        } else if ("warn".equals(value) || JDK_PRERELEASE) {
+            System.err.println(errorMessage.toString());
+        } else if (!JVMCI && Assertions.assertionsEnabled()) {
+            // We cannot control when VM config updates are made in non JVMCI JDKs so
+            // only issue a warning and only when assertions are enabled.
+            System.err.println(errorMessage.toString());
+        } else if (JVMCI) {
+            throw new JVMCIError(errorMessage.toString());
         }
     }
 
@@ -316,7 +368,7 @@ public class GraalHotSpotVMConfigAccess {
         try {
             return access.getFlag(name, type);
         } catch (JVMCIError e) {
-            missing = recordError(name, missing, null);
+            recordError(name, missing, null);
             return getDefault(type);
         }
     }
@@ -324,37 +376,26 @@ public class GraalHotSpotVMConfigAccess {
     /**
      * @see HotSpotVMConfigAccess#getFlag(String, Class, Object)
      */
-    @SuppressWarnings("deprecation")
     public <T> T getFlag(String name, Class<T> type, T notPresent, boolean expectPresent) {
         if (expectPresent) {
             return getFlag(name, type);
         }
+        // Expecting flag not to be present
         if (Assertions.assertionsEnabled()) {
             // There's more overhead for checking unexpectedly
-            // present flag values due to the fact that a VM call
-            // not exposed by JVMCI is needed to determine whether
-            // a flag value is available. As such, only pay the
-            // overhead when running with assertions enabled.
-            T sentinel;
-            if (type == Boolean.class) {
-                sentinel = type.cast(new Boolean(false));
-            } else if (type == Byte.class) {
-                sentinel = type.cast(new Byte((byte) 123));
-            } else if (type == Integer.class) {
-                sentinel = type.cast(new Integer(1234567890));
-            } else if (type == Long.class) {
-                sentinel = type.cast(new Long(1234567890987654321L));
-            } else if (type == String.class) {
-                sentinel = type.cast(new String("1234567890987654321"));
-            } else {
-                throw new JVMCIError("Unsupported flag type: " + type.getName());
-            }
-            T value = access.getFlag(name, type, sentinel);
-            if (value != sentinel) {
-                unexpected = recordError(name, unexpected, String.valueOf(value));
+            // present flag values due to the fact that private
+            // JVMCI method (i.e., jdk.vm.ci.hotspot.CompilerToVM.getFlagValue)
+            // is needed to determine whether a flag value is available.
+            // As such, only incur the overhead when running with assertions enabled.
+            try {
+                T value = access.getFlag(name, type, null);
+                // Flag value present -> fail
+                recordError(name, unexpected, String.valueOf(value));
+            } catch (JVMCIError e) {
+                // Flag value not present -> pass
             }
         }
-        return notPresent;
+        return access.getFlag(name, type, notPresent);
     }
 
     private static <T> T getDefault(Class<T> type) {
