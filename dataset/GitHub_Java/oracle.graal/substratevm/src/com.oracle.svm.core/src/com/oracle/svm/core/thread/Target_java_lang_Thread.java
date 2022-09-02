@@ -50,7 +50,7 @@ import com.oracle.svm.core.util.VMError;
 
 @TargetClass(Thread.class)
 @SuppressWarnings({"unused"})
-public final class Target_java_lang_Thread {
+final class Target_java_lang_Thread {
 
     /** Every thread has a boolean for noting whether this thread is interrupted. */
     @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
@@ -169,19 +169,7 @@ public final class Target_java_lang_Thread {
         daemon = asDaemon;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    @Substitute
-    public long getId() {
-        return tid;
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    @Substitute
-    public boolean isDaemon() {
-        return daemon;
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "called from uninterruptible code", mayBeInlined = true)
     @Substitute
     static Thread currentThread() {
         return JavaThreads.currentThread.get();
@@ -388,11 +376,10 @@ public final class Target_java_lang_Thread {
     @Substitute
     @TargetElement(onlyWith = JDK14OrLater.class)
     private static void clearInterruptEvent() {
-        // In the JDK, this is a noop except on Windows
-        // The JDK resets the interrupt event used by Process.waitFor
-        // ResetEvent((HANDLE) JVM_GetThreadInterruptEvent());
-        // Our implementation in WindowsJavaThreads.java takes care
-        // of this ResetEvent.
-        VMError.unimplemented();
+        /*
+         * In the JDK, this is a no-op except on Windows. The JDK resets the interrupt event used by
+         * Process.waitFor ResetEvent((HANDLE) JVM_GetThreadInterruptEvent()); Our implementation in
+         * WindowsJavaThreads.java takes care of this ResetEvent.
+         */
     }
 }
