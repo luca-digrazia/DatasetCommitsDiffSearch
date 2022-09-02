@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -53,7 +53,6 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
-import com.oracle.truffle.dsl.processor.ProcessorContext;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import java.lang.reflect.Field;
 import javax.lang.model.element.AnnotationMirror;
@@ -81,22 +80,14 @@ public class JDTCompiler extends AbstractCompiler {
         return workaround;
     }
 
-    private static final class AllMembersDeclarationOrder {
-    }
-
     @Override
     public List<? extends Element> getAllMembersInDeclarationOrder(ProcessingEnvironment environment, TypeElement type) {
-        Map<TypeElement, List<? extends Element>> cache = ProcessorContext.getInstance().getCacheMap(AllMembersDeclarationOrder.class);
-        return cache.computeIfAbsent(type, (t) -> sortBySourceOrder(newElementList(environment.getElementUtils().getAllMembers(type))));
-    }
-
-    private static final class EnclosedDeclarationOrder {
+        return sortBySourceOrder(newElementList(environment.getElementUtils().getAllMembers(type)));
     }
 
     @Override
     public List<? extends Element> getEnclosedElementsInDeclarationOrder(TypeElement type) {
-        Map<TypeElement, List<? extends Element>> cache = ProcessorContext.getInstance().getCacheMap(EnclosedDeclarationOrder.class);
-        return cache.computeIfAbsent(type, (t) -> sortBySourceOrder(newElementList(t.getEnclosedElements())));
+        return sortBySourceOrder(newElementList(type.getEnclosedElements()));
     }
 
     private static List<? extends Element> sortBySourceOrder(List<Element> elements) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,16 +42,11 @@ package com.oracle.truffle.dsl.processor.java.compiler;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
-
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.QualifiedNameable;
 import javax.tools.Diagnostic;
-
-import com.oracle.truffle.dsl.processor.ProcessorContext;
 
 public abstract class AbstractCompiler implements Compiler {
 
@@ -77,35 +72,25 @@ public abstract class AbstractCompiler implements Compiler {
         if (o == null) {
             return null;
         }
-        return lookupField(o.getClass(), fieldName).get(o);
-    }
-
-    protected static Field lookupField(Class<?> clazz, String fieldName) {
-        // finding the right field can be expensive -> cache it.
-        Map<Class<?>, Map<String, Field>> fieldsCache = ProcessorContext.getInstance().getCacheMap(AbstractCompiler.class);
-        Map<String, Field> map = fieldsCache.computeIfAbsent(clazz, (c) -> new HashMap<>());
-        return map.computeIfAbsent(fieldName, (name) -> {
-            Field field = null;
-            Class<?> currentClass = clazz;
-            try {
-                field = currentClass.getField(fieldName);
-            } catch (NoSuchFieldException e) {
-                while (currentClass != null) {
-                    try {
-                        field = currentClass.getDeclaredField(fieldName);
-                        break;
-                    } catch (NoSuchFieldException e1) {
-                        currentClass = currentClass.getSuperclass();
-                    }
-                }
-                if (field == null) {
-                    throw new AssertionError(e);
+        Class<?> clazz = o.getClass();
+        Field field = null;
+        try {
+            field = clazz.getField(fieldName);
+        } catch (NoSuchFieldException e) {
+            while (clazz != null) {
+                try {
+                    field = clazz.getDeclaredField(fieldName);
+                    break;
+                } catch (NoSuchFieldException e1) {
+                    clazz = clazz.getSuperclass();
                 }
             }
-            field.setAccessible(true);
-            return field;
-        });
-
+            if (field == null) {
+                throw e;
+            }
+        }
+        field.setAccessible(true);
+        return field.get(o);
     }
 
     @Override
