@@ -65,9 +65,4 @@ public class NullKlass implements KlassRef {
     public Object getPrepareThread() {
         return null;
     }
-
-    @Override
-    public boolean isAssignable(KlassRef klass) {
-        return false;
-    }
 }

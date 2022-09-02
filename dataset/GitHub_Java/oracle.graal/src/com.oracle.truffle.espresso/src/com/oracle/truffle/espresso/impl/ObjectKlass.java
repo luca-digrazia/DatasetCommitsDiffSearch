@@ -41,6 +41,7 @@ import com.oracle.truffle.espresso.classfile.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.InnerClassesAttribute;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
+import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -109,7 +110,7 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal private volatile int initState = LOADED;
 
     @CompilationFinal //
-    boolean hasDeclaredDefaultMethods = false;
+    boolean needsRecursiveInit = false;
 
     @CompilationFinal private int computedModifiers = -1;
 
@@ -268,23 +269,16 @@ public final class ObjectKlass extends Klass {
                     prepare();
                     initState = PREPARED;
                     if (getContext().isMainThreadCreated()) {
-                        if (getContext().getJDWPListener() != null) {
-                            try {
-                                prepareThread = getContext().getGuestThreadFromHost(Thread.currentThread());
-                            } catch (Exception e) {
-                                // happens when running tests, because we don't always create a guest thread
-                                prepareThread = getContext().getMainThread();
-                            }
-                            getContext().getJDWPListener().classPrepared(this, prepareThread);
-                        }
+                        prepareThread = getContext().getGuestThreadFromHost(Thread.currentThread());
+                        VMEventListeners.getDefault().classPrepared(this, getContext().getCurrentThread());
                     }
                     if (getSuperKlass() != null) {
                         getSuperKlass().initialize();
                     }
                     for (ObjectKlass interf : getSuperInterfaces()) {
-                        // Initialize all super interfaces, direct and indirect, with default
-                        // methods.
-                        interf.recursiveInitialize();
+                        if (interf.needsRecursiveInit) {
+                            interf.recursiveInitialize();
+                        }
                     }
                     Method clinit = getClassInitializer();
                     if (clinit != null) {
@@ -387,7 +381,7 @@ public final class ObjectKlass extends Klass {
 
     private void recursiveInitialize() {
         if (!isInitialized()) { // Skip synchronization and locks if already init.
-            if (hasDeclaredDefaultMethods()) {
+            if (needsRecursiveInit) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 verify();
                 actualInit();
@@ -883,13 +877,5 @@ public final class ObjectKlass extends Klass {
         }
         // Remember to strip ACC_SUPER bit
         return modifiers & ~ACC_SUPER & JVM_ACC_WRITTEN_FLAGS;
-    }
-
-    /**
-     * Returns true if the interface has declared (not inherited) default methods, false otherwise.
-     */
-    private boolean hasDeclaredDefaultMethods() {
-        assert !hasDeclaredDefaultMethods || isInterface();
-        return hasDeclaredDefaultMethods;
     }
 }
