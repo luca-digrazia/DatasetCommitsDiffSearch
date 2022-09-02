@@ -282,11 +282,6 @@ final class InstrumentAccessor extends Accessor {
         }
 
         @Override
-        public void finalizeStoreInstrumentationHandler(Object instrumentationHandler) {
-            ((InstrumentationHandler) instrumentationHandler).finalizeStore();
-        }
-
-        @Override
         public boolean isInputValueSlotIdentifier(Object identifier) {
             return identifier instanceof ProbeNode.EventProviderWithInputChainNode.SavedInputValueID;
         }
