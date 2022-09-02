@@ -70,7 +70,7 @@ import jdk.vm.ci.meta.SpeculationLog;
  * Note: {@code PartialEvaluator} looks up this class and a number of its methods by name.
  */
 @SuppressWarnings("deprecation")
-public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootCallTarget, ReplaceObserver {
+public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootCallTarget, ReplaceObserver, com.oracle.truffle.api.LoopCountReceiver {
 
     private static final String NODE_REWRITING_ASSUMPTION_NAME = "nodeRewritingAssumption";
     static final String CALL_BOUNDARY_METHOD_NAME = "callProxy";
@@ -131,7 +131,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         uninitializedNodeCount = runtime().getTvmci().adoptChildrenAndCount(this.rootNode);
         RuntimeOptionsCache.reinitialize();
         knownCallNodes = RuntimeOptionsCache.isLegacySplitting() ? null : new ArrayList<>(1);
-        runtime().getTvmci().setCallTarget(rootNode, this);
     }
 
     public Assumption getNodeRewritingAssumption() {
@@ -426,11 +425,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return (OptimizedCallTarget) runtime().createClonedCallTarget(this, clonedRoot);
     }
 
-    /**
-     * Gets the speculation log used to collect all failed speculations in the compiled code for
-     * this call target. Note that this may differ from the speculation log
-     * {@linkplain CompilableTruffleAST#getCompilationSpeculationLog() used for compilation}.
-     */
+    @Override
     public synchronized SpeculationLog getSpeculationLog() {
         if (speculationLog == null) {
             speculationLog = ((GraalTruffleRuntime) Truffle.getRuntime()).createSpeculationLog();
@@ -564,6 +559,14 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     final void onLoopCount(int count) {
+        getCompilationProfile().reportLoopCount(count);
+    }
+
+    /*
+     * For compatibility of Graal runtime with older Truffle runtime. Remove after 0.12.
+     */
+    @Override
+    public void reportLoopCount(int count) {
         getCompilationProfile().reportLoopCount(count);
     }
 
