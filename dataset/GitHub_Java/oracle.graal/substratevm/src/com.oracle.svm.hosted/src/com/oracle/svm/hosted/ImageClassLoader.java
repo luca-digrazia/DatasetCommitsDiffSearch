@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,7 +51,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -76,7 +75,6 @@ public final class ImageClassLoader {
 
     private static final String CLASS_EXTENSION = ".class";
     private static final int CLASS_EXTENSION_LENGTH = CLASS_EXTENSION.length();
-    private static final int CLASS_LOADING_MAX_SCALING = 8;
     private static final int CLASS_LOADING_TIMEOUT_IN_MINUTES = 10;
 
     static {
@@ -137,24 +135,10 @@ public final class ImageClassLoader {
     }
 
     private void initAllClasses() {
-        final ForkJoinPool executor = new ForkJoinPool(Math.min(Runtime.getRuntime().availableProcessors(), CLASS_LOADING_MAX_SCALING));
+        final ForkJoinPool executor = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
 
         if (JavaVersionUtil.JAVA_SPEC > 8) {
-            Set<String> modules = new HashSet<>();
-            modules.add("jdk.internal.vm.ci");
-            Path javaHome = Paths.get(System.getProperty("java.home"));
-            if (!Files.exists(javaHome)) {
-                throw new AssertionError("Java home is not reachable.");
-            }
-            Path list = javaHome.resolve(Paths.get("lib", "native-image-modules.list"));
-            if (Files.exists(list)) {
-                try {
-                    Files.readAllLines(list).stream().map(s -> s.trim()).filter(s -> !s.isEmpty() && !s.startsWith("#")).forEach(modules::add);
-                } catch (IOException e) {
-                    throw shouldNotReachHere(e);
-                }
-            }
-            for (String moduleResource : ModuleSupport.getModuleResources(modules)) {
+            for (String moduleResource : ModuleSupport.getJVMCIModuleResources()) {
                 if (moduleResource.endsWith(CLASS_EXTENSION)) {
                     executor.execute(() -> handleClassFileName(moduleResource, '/'));
                 }
@@ -168,11 +152,7 @@ public final class ImageClassLoader {
                                         .collect(Collectors.toList()));
         uniquePaths.parallelStream().forEach(path -> loadClassesFromPath(executor, path));
 
-        boolean completed = executor.awaitQuiescence(CLASS_LOADING_TIMEOUT_IN_MINUTES, TimeUnit.MINUTES);
-        if (!completed) {
-            throw shouldNotReachHere("timed out while initializing classes");
-        }
-        executor.shutdownNow();
+        executor.awaitQuiescence(CLASS_LOADING_TIMEOUT_IN_MINUTES, TimeUnit.MINUTES);
     }
 
     static Stream<Path> toClassPathEntries(String classPathEntry) {
