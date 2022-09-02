@@ -116,8 +116,6 @@ public class NativeImage {
 
     static final Map<String, String[]> graalCompilerFlags = getCompilerFlags();
 
-    static Boolean useJVMCINativeLibrary = null;
-
     static String getResource(String resourceName) {
         try (InputStream input = NativeImage.class.getResourceAsStream(resourceName)) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
@@ -295,48 +293,9 @@ public class NativeImage {
 
             String[] flagsForVersion = graalCompilerFlags.get(javaVersion);
             if (flagsForVersion == null) {
-                showError(String.format("Image building not supported for Java version %s in %s with VM configuration \"%s\"",
-                                System.getProperty("java.version"),
-                                System.getProperty("java.home"),
-                                System.getProperty("java.vm.name")));
+                showError("Image building not supported for Java version " + javaVersion);
             }
-
-            if (useJVMCINativeLibrary == null) {
-                useJVMCINativeLibrary = false;
-                ProcessBuilder pb = new ProcessBuilder();
-                List<String> command = pb.command();
-                command.add(getJavaExecutable().toString());
-                command.add("-XX:+PrintFlagsFinal");
-                command.add("-version");
-                try {
-                    Process process = pb.start();
-                    try (java.util.Scanner inputScanner = new java.util.Scanner(process.getInputStream())) {
-                        while (inputScanner.hasNextLine()) {
-                            String line = inputScanner.nextLine();
-                            if (line.contains("bool UseJVMCINativeLibrary")) {
-                                String value = SubstrateUtil.split(line, "=")[1];
-                                if (value.trim().startsWith("true")) {
-                                    useJVMCINativeLibrary = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    process.waitFor();
-                    process.destroy();
-                } catch (Exception e) {
-                    /* Probing fails silently */
-                }
-            }
-
-            ArrayList<String> builderJavaArgs = new ArrayList<>();
-            builderJavaArgs.addAll(Arrays.asList(flagsForVersion));
-            if (useJVMCINativeLibrary) {
-                builderJavaArgs.add("-XX:+UseJVMCINativeLibrary");
-            } else {
-                builderJavaArgs.add("-XX:-UseJVMCICompiler");
-            }
-            return builderJavaArgs;
+            return Arrays.asList(flagsForVersion);
         }
 
         /**
@@ -513,7 +472,7 @@ public class NativeImage {
 
         @Override
         public List<Path> getBuilderUpgradeModulePath() {
-            return getJars(rootDir.resolve(Paths.get("lib", "jvmci")), "graal", "graal-management");
+            return getJars(rootDir.resolve(Paths.get("lib", "jvmci")), "graal");
         }
 
         @Override
@@ -1204,11 +1163,7 @@ public class NativeImage {
             try {
                 nativeImage.prepareImageBuildArgs();
             } catch (NativeImageError e) {
-                if (nativeImage.isVerbose()) {
-                    throw showError("Requirements for building native images are not fulfilled", e);
-                } else {
-                    throw showError("Requirements for building native images are not fulfilled [cause: " + e.getMessage() + "]", null);
-                }
+                throw showError("Requirements for building native images are not fulfilled", nativeImage.isVerbose() ? e : null);
             }
             int buildStatus = nativeImage.completeImageBuild();
             if (buildStatus == 2) {
@@ -1413,7 +1368,6 @@ public class NativeImage {
 
     static List<Path> getJars(Path dir, String... jarBaseNames) {
         try {
-            List<String> baseNameList = Arrays.asList(jarBaseNames);
             return Files.list(dir)
                             .filter(p -> {
                                 String jarFileName = p.getFileName().toString();
@@ -1421,6 +1375,7 @@ public class NativeImage {
                                 if (!jarFileName.toLowerCase().endsWith(jarSuffix)) {
                                     return false;
                                 }
+                                List<String> baseNameList = Arrays.asList(jarBaseNames);
                                 if (baseNameList.isEmpty()) {
                                     return true;
                                 }
