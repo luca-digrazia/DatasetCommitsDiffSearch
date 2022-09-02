@@ -345,13 +345,8 @@ public abstract class GraalCompilerTest extends GraalTest {
     }
 
     public GraalCompilerTest() {
-        this(new ConcurrentHashMap<>());
-    }
-
-    public GraalCompilerTest(Map<ResolvedJavaMethod, InstalledCode> cache) {
         this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         this.providers = getBackend().getProviders();
-        this.cache = cache;
     }
 
     /**
@@ -928,7 +923,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
     }
 
-    private Map<ResolvedJavaMethod, InstalledCode> cache;
+    private Map<ResolvedJavaMethod, InstalledCode> cache = new ConcurrentHashMap<>();
 
     /**
      * Gets installed code for a given method, compiling it first if necessary. The graph is parsed
