@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,43 +40,35 @@
  */
 package com.oracle.truffle.regex.tregex.matchers;
 
+import com.oracle.truffle.regex.charset.CodePointSet;
+import com.oracle.truffle.regex.charset.ImmutableSortedListOfRanges;
+import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
+
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.truffle.regex.charset.CodePointSet;
-import com.oracle.truffle.regex.charset.CodePointSetAccumulator;
-import com.oracle.truffle.regex.charset.Range;
-import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
-import com.oracle.truffle.regex.tregex.string.Encodings;
-
 public class MatcherBuilderTest {
 
-    private static final int MAX_VALUE = Character.MAX_CODE_POINT;
+    private static final int MAX_VALUE = CodePointSet.getFull().getMaxValue();
 
-    private final CodePointSetAccumulator acc = new CodePointSetAccumulator();
-
-    private CodePointSet single(int i) {
+    private static CodePointSet single(int i) {
         return range(i, i);
     }
 
-    private CodePointSet range(int i, int j) {
-        return multi(i, j);
+    private static CodePointSet range(int i, int j) {
+        return CodePointSet.create(i, j);
     }
 
-    private CodePointSet range(int[] i) {
+    private static CodePointSet range(int[] i) {
         Assert.assertEquals(i.length, 2);
-        return multi(i);
+        return range(i[0], i[1]);
     }
 
-    private CodePointSet multi(int... values) {
+    private static CodePointSet multi(int... values) {
         assert (values.length & 1) == 0;
-        acc.clear();
-        for (int i = 0; i < values.length; i += 2) {
-            acc.addRange(values[i], values[i + 1]);
-        }
-        return acc.toCodePointSet();
+        return CodePointSet.create(values);
     }
 
     private static String matchError(String errorMsg, CodePointSet m, CodePointSet expected) {
@@ -92,17 +84,11 @@ public class MatcherBuilderTest {
     }
 
     private static void checkMatch(String errorMsg, CodePointSet m, CodePointSet expected) {
-        Assert.assertEquals(matchError(errorMsg, m, expected), expected, m);
+        Assert.assertArrayEquals(matchError(errorMsg, m, expected), expected.getRanges(), m.getRanges());
     }
 
     private static void checkMatch(String errorMsg, CodePointSet m, int... values) {
-        int i = 0;
-        for (Range r : m) {
-            if (r.lo != values[i] || r.hi != values[i + 1]) {
-                Assert.fail(matchError(errorMsg, m, values));
-            }
-            i += 2;
-        }
+        Assert.assertArrayEquals(matchError(errorMsg, m, values), values, m.getRanges());
     }
 
     private static void checkContains(CodePointSet a, CodePointSet b, boolean expected) {
@@ -111,26 +97,25 @@ public class MatcherBuilderTest {
     }
 
     private static void checkInverse(CodePointSet a, int... values) {
-        checkMatch("inverse(" + a + ")", a.createInverse(Encodings.UTF_16), values);
+        checkMatch("inverse(" + a + ")", a.createInverse(), values);
     }
 
     private static void checkIntersection(CodePointSet a, CodePointSet b, int... values) {
-        CompilationBuffer compilationBuffer = new CompilationBuffer(Encodings.UTF_16);
-        CodePointSet intersection = a.createIntersection(b, compilationBuffer);
+        CodePointSet intersection = a.createIntersection(b, new CompilationBuffer());
         checkMatch("intersection(" + a + "," + b + ")", intersection, values);
         assertTrue("intersection(" + a + "," + b + ")", a.intersects(b) == intersection.matchesSomething());
-        CodePointSet.IntersectAndSubtractResult<CodePointSet> result = a.intersectAndSubtract(b, compilationBuffer);
-        checkMatch("intersectAndSubtract(" + a + "," + b + ")[0]", result.subtractedA, a.subtract(intersection, compilationBuffer));
-        checkMatch("intersectAndSubtract(" + a + "," + b + ")[1]", result.subtractedB, b.subtract(intersection, compilationBuffer));
+        ImmutableSortedListOfRanges.IntersectAndSubtractResult<CodePointSet> result = a.intersectAndSubtract(b, new CompilationBuffer());
+        checkMatch("intersectAndSubtract(" + a + "," + b + ")[0]", result.subtractedA, a.subtract(intersection, new CompilationBuffer()));
+        checkMatch("intersectAndSubtract(" + a + "," + b + ")[1]", result.subtractedB, b.subtract(intersection, new CompilationBuffer()));
         checkMatch("intersectAndSubtract(" + a + "," + b + ")[2]", result.intersection, intersection);
     }
 
     private static void checkSubtraction(CodePointSet a, CodePointSet b, int... values) {
-        checkMatch("subtraction(" + a + "," + b + ")", a.subtract(b, new CompilationBuffer(Encodings.UTF_16)), values);
+        checkMatch("subtraction(" + a + "," + b + ")", a.subtract(b, new CompilationBuffer()), values);
     }
 
     private static void checkUnion(CodePointSet a, CodePointSet b, int... values) {
-        checkMatch("union(" + a + "," + b + ")", a.union(b, new CompilationBuffer(Encodings.UTF_16)), values);
+        checkMatch("union(" + a + "," + b + ")", a.union(b, new CompilationBuffer()), values);
     }
 
     @Test
