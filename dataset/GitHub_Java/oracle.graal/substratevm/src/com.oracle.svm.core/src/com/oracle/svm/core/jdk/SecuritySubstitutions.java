@@ -328,7 +328,6 @@ final class Target_javax_crypto_JceSecurity {
      * image build time.
      */
     @Alias @InjectAccessors(JceSecurityAccessor.class) //
-    @TargetElement(onlyWith = JDK15OrEarlier.class)//
     static SecureRandom RANDOM;
 
     /*
