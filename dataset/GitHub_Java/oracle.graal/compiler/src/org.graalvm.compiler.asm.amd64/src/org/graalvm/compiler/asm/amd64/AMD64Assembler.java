@@ -1882,7 +1882,7 @@ public class AMD64Assembler extends AMD64BaseAssembler {
             // is the same however, seems to be rather unlikely case.
             // Note: use jccb() if label to be bound is very close to get
             // an 8-bit displacement
-            l.addPatchAt(position(), this);
+            l.addPatchAt(position());
             emitByte(0x0F);
             emitByte(0x80 | cc.getValue());
             emitInt(0);
@@ -1900,7 +1900,7 @@ public class AMD64Assembler extends AMD64BaseAssembler {
             emitByte(0x70 | cc.getValue());
             emitByte((int) ((disp - shortSize) & 0xFF));
         } else {
-            l.addPatchAt(position(), this);
+            l.addPatchAt(position());
             emitByte(0x70 | cc.getValue());
             emitByte(0);
         }
@@ -1929,7 +1929,7 @@ public class AMD64Assembler extends AMD64BaseAssembler {
             // the forward jump will not run beyond 256 bytes, use jmpb to
             // force an 8-bit displacement.
 
-            l.addPatchAt(position(), this);
+            l.addPatchAt(position());
             emitByte(0xE9);
             emitInt(0);
         }
@@ -1956,7 +1956,8 @@ public class AMD64Assembler extends AMD64BaseAssembler {
             emitByte(0xEB);
             emitByte((int) ((offs - shortSize) & 0xFF));
         } else {
-            l.addPatchAt(position(), this);
+
+            l.addPatchAt(position());
             emitByte(0xEB);
             emitByte(0);
         }
@@ -3004,6 +3005,18 @@ public class AMD64Assembler extends AMD64BaseAssembler {
         emitByte(0x99);
     }
 
+    public final void repStosb() {
+        emitByte(0xf3);
+        rexw();
+        emitByte(0xaa);
+    }
+
+    public final void repStosq() {
+        emitByte(0xf3);
+        rexw();
+        emitByte(0xab);
+    }
+
     public final void cmovq(ConditionFlag cc, Register dst, Register src) {
         prefixq(dst, src);
         emitByte(0x0F);
@@ -3397,7 +3410,7 @@ public class AMD64Assembler extends AMD64BaseAssembler {
              * behaving code we should always fail with an exception instead of having an assert.
              */
             if (!NumUtil.isByte(imm8)) {
-                throw new InternalError("Displacement too large to be encoded as a byte: " + imm8);
+                throw new InternalError("branch displacement out of range: " + imm8);
             }
             emitByte(imm8, branch + 1);
 
