@@ -348,7 +348,6 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
     private final BranchProfile unbalancedMonitorProfile = BranchProfile.create();
 
-    // only maintained/accessed for instrumentation purposes
     private int currentBCI;
 
     @TruffleBoundary
