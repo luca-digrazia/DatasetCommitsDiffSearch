@@ -41,16 +41,12 @@
 package org.graalvm.wasm.exception;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.nodes.Node;
 
 import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.ExceptionType;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
 
-@ExportLibrary(InteropLibrary.class)
-public class BinaryParserException extends AbstractTruffleException {
+public class BinaryParserException extends RuntimeException implements TruffleException {
 
     private static final long serialVersionUID = -84137683950579647L;
 
@@ -64,9 +60,18 @@ public class BinaryParserException extends AbstractTruffleException {
         CompilerAsserts.neverPartOfCompilation();
     }
 
-    @ExportMessage
-    @SuppressWarnings("static-method")
-    ExceptionType getExceptionType() {
-        return ExceptionType.PARSE_ERROR;
+    @Override
+    public Node getLocation() {
+        return null;
+    }
+
+    @Override
+    public boolean isSyntaxError() {
+        return true;
+    }
+
+    @Override
+    public boolean isInternalError() {
+        return false;
     }
 }
