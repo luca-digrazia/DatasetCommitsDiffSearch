@@ -848,7 +848,7 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
         AArch64MacroAssembler asm = new AArch64MacroAssembler(getTarget());
         try (ScratchRegister scratch = asm.getScratchRegister()) {
             Register scratchRegister = scratch.getRegister();
-            asm.ldr(64, scratchRegister, AArch64Address.createUnscaledImmediateAddress(methodIdArg.getRegister(), offset));
+            asm.loadAddress(scratchRegister, AArch64Address.createUnscaledImmediateAddress(methodIdArg.getRegister(), offset), 8);
             asm.jmp(scratchRegister);
         }
         result.recordMark(asm.position(), SubstrateAArch64Backend.MARK_PROLOGUE_DECD_RSP);
