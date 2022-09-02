@@ -22,14 +22,13 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
+import com.oracle.truffle.espresso.impl.Stable;
+import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
+
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.espresso.impl.Stable;
-import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
 
 /**
  * Lock implementation for guest objects. Provides a similar interface to {@link Object} built-in
@@ -103,10 +102,24 @@ public interface EspressoLock extends Lock {
     /**
      * Creates a new {@code EspressoLock} instance.
      */
-    @TruffleBoundary // ReentrantLock.<init> blacklisted by SVM
     static EspressoLock create() {
         return new EspressoLockImpl();
     }
+
+    /**
+     * Returns the number of entries for which the thread obtained the lock.
+     *
+     * @param thread a thread
+     * @return the hold count of the lock for the given thread
+     */
+    int getHoldCount(Thread thread);
+
+    /**
+     * Returns an array of all waiting threads of the lock.
+     *
+     * @return an estimate of all currently waiting threads
+     */
+    Thread[] getWaitingThreads();
 }
 
 final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
@@ -154,7 +167,6 @@ final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
     }
 
     @Override
-    @TruffleBoundary // ReentrantLock.getOwner blacklisted by SVM
     public Thread getOwnerThread() {
         return getOwner();
     }
@@ -163,5 +175,18 @@ final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
     public Condition newCondition() {
         // Disable arbitrary conditions.
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Thread[] getWaitingThreads() {
+        return getQueuedThreads().toArray(new Thread[0]);
+    }
+
+    @Override
+    public int getHoldCount(Thread thread) {
+        if (thread != getOwnerThread()) {
+            return 0;
+        }
+        return getHoldCount();
     }
 }
