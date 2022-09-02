@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,7 +39,6 @@ import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.CompilerPhaseScope;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.lir.LIR;
@@ -79,7 +78,7 @@ public class LIRCompilerBackend {
     public static <T extends CompilationResult> void emitBackEnd(StructuredGraph graph, Object stub, ResolvedJavaMethod installedCodeOwner, Backend backend, T compilationResult,
                     CompilationResultBuilderFactory factory, RegisterConfig registerConfig, LIRSuites lirSuites) {
         DebugContext debug = graph.getDebug();
-        try (DebugContext.Scope s = debug.scope("BackEnd", graph, graph.getLastSchedule()); DebugCloseable a = BackEnd.start(debug)) {
+        try (DebugContext.Scope s = debug.scope("BackEnd", graph.getLastSchedule()); DebugCloseable a = BackEnd.start(debug)) {
             LIRGenerationResult lirGen = null;
             lirGen = emitLIR(backend, graph, stub, registerConfig, lirSuites);
             try (DebugContext.Scope s2 = debug.scope("CodeGen", lirGen, lirGen.getLIR())) {
@@ -201,7 +200,7 @@ public class LIRCompilerBackend {
                     ResolvedJavaMethod installedCodeOwner,
                     CompilationResultBuilderFactory factory) {
         DebugContext debug = lirGenRes.getLIR().getDebug();
-        try (DebugCloseable a = EmitCode.start(debug); CompilerPhaseScope cps = debug.enterCompilerPhase("Emit code");) {
+        try (DebugCloseable a = EmitCode.start(debug)) {
             LIRGenerationProvider lirBackend = (LIRGenerationProvider) backend;
 
             FrameMap frameMap = lirGenRes.getFrameMap();

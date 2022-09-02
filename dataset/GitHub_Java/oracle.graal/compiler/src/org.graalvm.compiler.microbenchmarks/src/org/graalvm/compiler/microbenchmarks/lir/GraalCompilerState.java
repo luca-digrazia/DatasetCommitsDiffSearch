@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,12 +47,11 @@ import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.alloc.ComputeBlockOrder;
 import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
-import org.graalvm.compiler.core.common.jfr.JFRContext;
 import org.graalvm.compiler.core.gen.LIRCompilerBackend;
 import org.graalvm.compiler.core.gen.LIRGenerationProvider;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Builder;
+import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
@@ -124,7 +123,7 @@ public abstract class GraalCompilerState {
         this.options = Graal.getRequiredCapability(OptionValues.class);
         this.backend = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend();
         this.providers = backend.getProviders();
-        this.debug = new Builder(options).build();
+        this.debug = DebugContext.create(options, DebugHandlersFactory.LOADER);
     }
 
     protected boolean useProfilingInfo() {
@@ -321,7 +320,7 @@ public abstract class GraalCompilerState {
     protected final void prepareRequest() {
         assert originalGraph != null : "call initialzeMethod first";
         CompilationIdentifier compilationId = backend.getCompilationIdentifier(originalGraph.method());
-        graph = originalGraph.copyWithIdentifier(compilationId, originalGraph.getDebug(), JFRContext.DISABLED_JFR);
+        graph = originalGraph.copyWithIdentifier(compilationId, originalGraph.getDebug());
         assert !graph.isFrozen();
         ResolvedJavaMethod installedCodeOwner = graph.method();
         request = new Request<>(graph, installedCodeOwner, getProviders(), getBackend(), getDefaultGraphBuilderSuite(), OptimisticOptimizations.ALL,
@@ -377,7 +376,7 @@ public abstract class GraalCompilerState {
         codeEmittingOrder = ComputeBlockOrder.computeCodeEmittingOrder(blocks.length, startBlock);
         linearScanOrder = ComputeBlockOrder.computeLinearScanOrder(blocks.length, startBlock);
 
-        LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder, getGraphOptions(), getGraphDebug(), getGraphJFR());
+        LIR lir = new LIR(cfg, linearScanOrder, codeEmittingOrder, getGraphOptions(), getGraphDebug());
         LIRGenerationProvider lirBackend = (LIRGenerationProvider) request.backend;
         RegisterAllocationConfig registerAllocationConfig = request.backend.newRegisterAllocationConfig(registerConfig, null);
         lirGenRes = lirBackend.newLIRGenerationResult(graph.compilationId(), lir, registerAllocationConfig, request.graph, stub);
@@ -391,10 +390,6 @@ public abstract class GraalCompilerState {
 
     protected DebugContext getGraphDebug() {
         return graph.getDebug();
-    }
-
-    protected JFRContext getGraphJFR() {
-        return graph.getJFR();
     }
 
     private static ControlFlowGraph deepCopy(ControlFlowGraph cfg) {

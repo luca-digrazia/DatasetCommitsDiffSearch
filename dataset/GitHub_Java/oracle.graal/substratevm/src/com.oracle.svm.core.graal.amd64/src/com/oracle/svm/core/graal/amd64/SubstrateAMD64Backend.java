@@ -27,7 +27,6 @@ package com.oracle.svm.core.graal.amd64;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 import static com.oracle.svm.core.util.VMError.unimplemented;
 import static jdk.vm.ci.amd64.AMD64.rax;
-import static jdk.vm.ci.amd64.AMD64.rbp;
 import static jdk.vm.ci.amd64.AMD64.rdi;
 import static jdk.vm.ci.amd64.AMD64.rsp;
 import static jdk.vm.ci.amd64.AMD64.xmm0;
@@ -630,15 +629,10 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
             int frameSize = tasm.frameMap.frameSize();
 
             if (((SubstrateAMD64RegisterConfig) tasm.frameMap.getRegisterConfig()).shouldUseBasePointer()) {
-                /*
-                 * Note that we never use the `enter` instruction so that we have a predictable code
-                 * pattern at each method prologue. And `enter` seems to be slower than the explicit
-                 * code.
-                 */
-                asm.push(rbp);
-                asm.movq(rbp, rsp);
+                asm.enter(frameSize);
+            } else {
+                asm.decrementq(rsp, frameSize);
             }
-            asm.decrementq(rsp, frameSize);
 
             tasm.recordMark(MARK_PROLOGUE_DECD_RSP);
             tasm.recordMark(MARK_PROLOGUE_END);
@@ -652,8 +646,7 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
             tasm.recordMark(MARK_EPILOGUE_START);
 
             if (((SubstrateAMD64RegisterConfig) tasm.frameMap.getRegisterConfig()).shouldUseBasePointer()) {
-                asm.movq(rsp, rbp);
-                asm.pop(rbp);
+                asm.leave();
             } else {
                 asm.incrementq(rsp, frameSize);
             }
