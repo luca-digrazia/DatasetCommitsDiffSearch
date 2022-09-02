@@ -192,10 +192,6 @@ public class SubstrateOptions {
         }
     };
 
-    /* Same option name and specification as the Java HotSpot VM. */
-    @Option(help = "Maximum total size of NIO direct-buffer allocations")//
-    public static final RuntimeOptionKey<Long> MaxDirectMemorySize = new RuntimeOptionKey<>(0L);
-
     @Option(help = "Verify naming conventions during image construction.")//
     public static final HostedOptionKey<Boolean> VerifyNamingConventions = new HostedOptionKey<>(false);
 
@@ -427,6 +423,10 @@ public class SubstrateOptions {
     @APIOption(name = "native-image-info")//
     @Option(help = "Show native-toolchain information and image-build settings", type = User)//
     public static final HostedOptionKey<Boolean> DumpTargetInfo = new HostedOptionKey<>(false);
+
+    @APIOption(name = "install-exit-handlers")//
+    @Option(help = "Provide java.lang.Terminator exit handlers for executable images", type = User)//
+    public static final HostedOptionKey<Boolean> InstallExitHandlers = new HostedOptionKey<>(false);
 
     @Option(help = "file:doc-files/UseMuslCHelp.txt", type = OptionType.Expert)//
     public static final HostedOptionKey<String> UseMuslC = new HostedOptionKey<>(null);
