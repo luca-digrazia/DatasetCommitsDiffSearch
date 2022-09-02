@@ -175,8 +175,4 @@ public class MulNode extends BinaryArithmeticNode<Mul> implements NarrowableArit
         }
         nodeValueMap.setResult(this, gen.emitMul(op1, op2, false));
     }
-
-    protected boolean isExact() {
-        return false;
-    }
 }
