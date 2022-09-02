@@ -28,39 +28,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The kind of a completion entry.
+ * Completion item tags are extra annotations that tweak the rendering of a completion item.
+ *
+ * @since 3.15.0
  */
-public enum CompletionItemKind {
+public enum CompletionItemTag {
 
-    Text(1),
-    Method(2),
-    Function(3),
-    Constructor(4),
-    Field(5),
-    Variable(6),
-    Class(7),
-    Interface(8),
-    Module(9),
-    Property(10),
-    Unit(11),
-    Value(12),
-    Enum(13),
-    Keyword(14),
-    Snippet(15),
-    Color(16),
-    File(17),
-    Reference(18),
-    Folder(19),
-    EnumMember(20),
-    Constant(21),
-    Struct(22),
-    Event(23),
-    Operator(24),
-    TypeParameter(25);
+    /**
+     * Render a completion as obsolete, usually using a strike-out.
+     */
+    Deprecated(1);
 
     private final int intValue;
 
-    CompletionItemKind(int intValue) {
+    CompletionItemTag(int intValue) {
         this.intValue = intValue;
     }
 
@@ -68,15 +49,15 @@ public enum CompletionItemKind {
         return intValue;
     }
 
-    private static final Map<Integer, CompletionItemKind> lookup = new HashMap<>();
+    private static final Map<Integer, CompletionItemTag> lookup = new HashMap<>();
 
     static {
-        for (CompletionItemKind value : CompletionItemKind.values()) {
+        for (CompletionItemTag value : CompletionItemTag.values()) {
             lookup.put(value.getIntValue(), value);
         }
     }
 
-    public static CompletionItemKind get(Integer intValue) {
+    public static CompletionItemTag get(Integer intValue) {
         return lookup.get(intValue);
     }
 }

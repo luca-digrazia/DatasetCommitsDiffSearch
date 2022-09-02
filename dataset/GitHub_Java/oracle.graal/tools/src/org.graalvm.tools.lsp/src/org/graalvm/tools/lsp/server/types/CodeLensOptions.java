@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,23 +25,23 @@
 package org.graalvm.tools.lsp.server.types;
 
 import com.oracle.truffle.tools.utils.json.JSONObject;
+import java.util.Objects;
 
 /**
- * Code Lens options.
+ * Code Lens provider options of a [CodeLensRequest](#CodeLensRequest).
  */
-public class CodeLensOptions {
-
-    final JSONObject jsonData;
+public class CodeLensOptions extends WorkDoneProgressOptions {
 
     CodeLensOptions(JSONObject jsonData) {
-        this.jsonData = jsonData;
+        super(jsonData);
     }
 
     /**
      * Code lens has a resolve provider as well.
      */
+    @SuppressFBWarnings("NP_BOOLEAN_RETURN_NULL")
     public Boolean getResolveProvider() {
-        return jsonData.optBoolean("resolveProvider");
+        return jsonData.has("resolveProvider") ? jsonData.getBoolean("resolveProvider") : null;
     }
 
     public CodeLensOptions setResolveProvider(Boolean resolveProvider) {
@@ -61,7 +61,10 @@ public class CodeLensOptions {
             return false;
         }
         CodeLensOptions other = (CodeLensOptions) obj;
-        if (this.getResolveProvider() != other.getResolveProvider()) {
+        if (!Objects.equals(this.getResolveProvider(), other.getResolveProvider())) {
+            return false;
+        }
+        if (!Objects.equals(this.getWorkDoneProgress(), other.getWorkDoneProgress())) {
             return false;
         }
         return true;
@@ -69,9 +72,12 @@ public class CodeLensOptions {
 
     @Override
     public int hashCode() {
-        int hash = 7;
+        int hash = 5;
         if (this.getResolveProvider() != null) {
-            hash = 43 * hash + Boolean.hashCode(this.getResolveProvider());
+            hash = 59 * hash + Boolean.hashCode(this.getResolveProvider());
+        }
+        if (this.getWorkDoneProgress() != null) {
+            hash = 59 * hash + Boolean.hashCode(this.getWorkDoneProgress());
         }
         return hash;
     }

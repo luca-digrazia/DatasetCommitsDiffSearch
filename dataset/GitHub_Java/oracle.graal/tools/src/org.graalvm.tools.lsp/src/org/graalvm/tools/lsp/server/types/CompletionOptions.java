@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,12 +34,10 @@ import java.util.Objects;
 /**
  * Completion options.
  */
-public class CompletionOptions {
-
-    final JSONObject jsonData;
+public class CompletionOptions extends WorkDoneProgressOptions {
 
     CompletionOptions(JSONObject jsonData) {
-        this.jsonData = jsonData;
+        super(jsonData);
     }
 
     /**
@@ -76,10 +74,44 @@ public class CompletionOptions {
     }
 
     /**
+     * The list of all possible characters that commit a completion. This field can be used if
+     * clients don't support individual commmit characters per completion item. See
+     * `ClientCapabilities.textDocument.completion.completionItem.commitCharactersSupport`
+     *
+     * If a server provides both `allCommitCharacters` and commit characters on an individual
+     * completion item the ones on the completion item win.
+     *
+     * @since 3.2.0
+     */
+    public List<String> getAllCommitCharacters() {
+        final JSONArray json = jsonData.optJSONArray("allCommitCharacters");
+        if (json == null) {
+            return null;
+        }
+        final List<String> list = new ArrayList<>(json.length());
+        for (int i = 0; i < json.length(); i++) {
+            list.add(json.getString(i));
+        }
+        return Collections.unmodifiableList(list);
+    }
+
+    public CompletionOptions setAllCommitCharacters(List<String> allCommitCharacters) {
+        if (allCommitCharacters != null) {
+            final JSONArray json = new JSONArray();
+            for (String string : allCommitCharacters) {
+                json.put(string);
+            }
+            jsonData.put("allCommitCharacters", json);
+        }
+        return this;
+    }
+
+    /**
      * The server provides support to resolve additional information for a completion item.
      */
+    @SuppressFBWarnings("NP_BOOLEAN_RETURN_NULL")
     public Boolean getResolveProvider() {
-        return jsonData.optBoolean("resolveProvider");
+        return jsonData.has("resolveProvider") ? jsonData.getBoolean("resolveProvider") : null;
     }
 
     public CompletionOptions setResolveProvider(Boolean resolveProvider) {
@@ -102,7 +134,13 @@ public class CompletionOptions {
         if (!Objects.equals(this.getTriggerCharacters(), other.getTriggerCharacters())) {
             return false;
         }
-        if (this.getResolveProvider() != other.getResolveProvider()) {
+        if (!Objects.equals(this.getAllCommitCharacters(), other.getAllCommitCharacters())) {
+            return false;
+        }
+        if (!Objects.equals(this.getResolveProvider(), other.getResolveProvider())) {
+            return false;
+        }
+        if (!Objects.equals(this.getWorkDoneProgress(), other.getWorkDoneProgress())) {
             return false;
         }
         return true;
@@ -110,12 +148,18 @@ public class CompletionOptions {
 
     @Override
     public int hashCode() {
-        int hash = 2;
+        int hash = 5;
         if (this.getTriggerCharacters() != null) {
-            hash = 29 * hash + Objects.hashCode(this.getTriggerCharacters());
+            hash = 17 * hash + Objects.hashCode(this.getTriggerCharacters());
+        }
+        if (this.getAllCommitCharacters() != null) {
+            hash = 17 * hash + Objects.hashCode(this.getAllCommitCharacters());
         }
         if (this.getResolveProvider() != null) {
-            hash = 29 * hash + Boolean.hashCode(this.getResolveProvider());
+            hash = 17 * hash + Boolean.hashCode(this.getResolveProvider());
+        }
+        if (this.getWorkDoneProgress() != null) {
+            hash = 17 * hash + Boolean.hashCode(this.getWorkDoneProgress());
         }
         return hash;
     }

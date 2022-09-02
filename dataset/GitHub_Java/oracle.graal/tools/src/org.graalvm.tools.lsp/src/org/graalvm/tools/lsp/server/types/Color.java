@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,40 +29,38 @@ import com.oracle.truffle.tools.utils.json.JSONObject;
 /**
  * Represents a color in RGBA space.
  */
-public class Color {
-
-    final JSONObject jsonData;
+public class Color extends JSONBase {
 
     Color(JSONObject jsonData) {
-        this.jsonData = jsonData;
+        super(jsonData);
     }
 
     /**
      * The red component of this color in the range [0-1].
      */
-    public int getRed() {
-        return jsonData.getInt("red");
+    public double getRed() {
+        return jsonData.getDouble("red");
     }
 
     /**
      * The green component of this color in the range [0-1].
      */
-    public int getGreen() {
-        return jsonData.getInt("green");
+    public double getGreen() {
+        return jsonData.getDouble("green");
     }
 
     /**
      * The blue component of this color in the range [0-1].
      */
-    public int getBlue() {
-        return jsonData.getInt("blue");
+    public double getBlue() {
+        return jsonData.getDouble("blue");
     }
 
     /**
      * The alpha component of this color in the range [0-1].
      */
-    public int getAlpha() {
-        return jsonData.getInt("alpha");
+    public double getAlpha() {
+        return jsonData.getDouble("alpha");
     }
 
     @Override
@@ -94,18 +92,18 @@ public class Color {
 
     @Override
     public int hashCode() {
-        int hash = 2;
-        hash = 53 * hash + Integer.hashCode(this.getRed());
-        hash = 53 * hash + Integer.hashCode(this.getGreen());
-        hash = 53 * hash + Integer.hashCode(this.getBlue());
-        hash = 53 * hash + Integer.hashCode(this.getAlpha());
+        int hash = 7;
+        hash = 23 * hash + Double.hashCode(this.getRed());
+        hash = 23 * hash + Double.hashCode(this.getGreen());
+        hash = 23 * hash + Double.hashCode(this.getBlue());
+        hash = 23 * hash + Double.hashCode(this.getAlpha());
         return hash;
     }
 
     /**
      * Creates a new Color literal.
      */
-    public static Color create(int red, int green, int blue, int alpha) {
+    public static Color create(double red, double green, double blue, double alpha) {
         final JSONObject json = new JSONObject();
         json.put("red", red);
         json.put("green", green);

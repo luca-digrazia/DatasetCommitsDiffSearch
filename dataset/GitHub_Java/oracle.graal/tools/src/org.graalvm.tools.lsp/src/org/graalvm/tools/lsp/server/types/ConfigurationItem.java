@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,19 +27,17 @@ package org.graalvm.tools.lsp.server.types;
 import com.oracle.truffle.tools.utils.json.JSONObject;
 import java.util.Objects;
 
-public class ConfigurationItem {
-
-    final JSONObject jsonData;
+public class ConfigurationItem extends JSONBase {
 
     ConfigurationItem(JSONObject jsonData) {
-        this.jsonData = jsonData;
+        super(jsonData);
     }
 
     /**
      * The scope to get the configuration section for.
      */
     public String getScopeUri() {
-        return jsonData.optString("scopeUri");
+        return jsonData.optString("scopeUri", null);
     }
 
     public ConfigurationItem setScopeUri(String scopeUri) {
@@ -51,7 +49,7 @@ public class ConfigurationItem {
      * The configuration section asked for.
      */
     public String getSection() {
-        return jsonData.optString("section");
+        return jsonData.optString("section", null);
     }
 
     public ConfigurationItem setSection(String section) {
@@ -82,7 +80,7 @@ public class ConfigurationItem {
 
     @Override
     public int hashCode() {
-        int hash = 5;
+        int hash = 7;
         if (this.getScopeUri() != null) {
             hash = 37 * hash + Objects.hashCode(this.getScopeUri());
         }

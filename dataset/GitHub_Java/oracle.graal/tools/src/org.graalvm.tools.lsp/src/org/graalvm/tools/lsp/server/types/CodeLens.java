@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,18 +28,16 @@ import com.oracle.truffle.tools.utils.json.JSONObject;
 import java.util.Objects;
 
 /**
- * A code lens represents a [command](#Command) that should be shown along with
- * source text, like the number of references, a way to run tests, etc.
+ * A code lens represents a [command](#Command) that should be shown along with source text, like
+ * the number of references, a way to run tests, etc.
  *
- * A code lens is _unresolved_ when no command is associated to it. For performance
- * reasons the creation of a code lens and resolving should be done to two stages.
+ * A code lens is _unresolved_ when no command is associated to it. For performance reasons the
+ * creation of a code lens and resolving should be done to two stages.
  */
-public class CodeLens {
-
-    final JSONObject jsonData;
+public class CodeLens extends JSONBase {
 
     CodeLens(JSONObject jsonData) {
-        this.jsonData = jsonData;
+        super(jsonData);
     }
 
     /**
@@ -67,9 +65,8 @@ public class CodeLens {
     }
 
     /**
-     * An data entry field that is preserved on a code lens item between
-     * a [CodeLensRequest](#CodeLensRequest) and a [CodeLensResolveRequest]
-     * (#CodeLensResolveRequest)
+     * An data entry field that is preserved on a code lens item between a
+     * [CodeLensRequest](#CodeLensRequest) and a [CodeLensResolveRequest] (#CodeLensResolveRequest).
      */
     public Object getData() {
         return jsonData.opt("data");
@@ -106,13 +103,13 @@ public class CodeLens {
 
     @Override
     public int hashCode() {
-        int hash = 5;
-        hash = 19 * hash + Objects.hashCode(this.getRange());
+        int hash = 7;
+        hash = 73 * hash + Objects.hashCode(this.getRange());
         if (this.getCommand() != null) {
-            hash = 19 * hash + Objects.hashCode(this.getCommand());
+            hash = 73 * hash + Objects.hashCode(this.getCommand());
         }
         if (this.getData() != null) {
-            hash = 19 * hash + Objects.hashCode(this.getData());
+            hash = 73 * hash + Objects.hashCode(this.getData());
         }
         return hash;
     }

@@ -28,36 +28,41 @@ import com.oracle.truffle.tools.utils.json.JSONObject;
 import java.util.Objects;
 
 /**
- * The parameters of a [CodeLensRequest](#CodeLensRequest).
+ * The client capabilities of a [DeclarationRequest](#DeclarationRequest).
+ *
+ * Since 3.14.0
  */
-public class CodeLensParams extends WorkDoneProgressParams {
+public class DeclarationClientCapabilities extends JSONBase {
 
-    CodeLensParams(JSONObject jsonData) {
+    DeclarationClientCapabilities(JSONObject jsonData) {
         super(jsonData);
     }
 
     /**
-     * The document to request code lens for.
+     * Whether declaration supports dynamic registration. If this is set to `true` the client
+     * supports the new `DeclarationRegistrationOptions` return value for the corresponding server
+     * capability as well.
      */
-    public TextDocumentIdentifier getTextDocument() {
-        return new TextDocumentIdentifier(jsonData.getJSONObject("textDocument"));
+    @SuppressFBWarnings("NP_BOOLEAN_RETURN_NULL")
+    public Boolean getDynamicRegistration() {
+        return jsonData.has("dynamicRegistration") ? jsonData.getBoolean("dynamicRegistration") : null;
     }
 
-    public CodeLensParams setTextDocument(TextDocumentIdentifier textDocument) {
-        jsonData.put("textDocument", textDocument.jsonData);
+    public DeclarationClientCapabilities setDynamicRegistration(Boolean dynamicRegistration) {
+        jsonData.putOpt("dynamicRegistration", dynamicRegistration);
         return this;
     }
 
     /**
-     * An optional token that a server can use to report partial results (e.g. streaming) to the
-     * client.
+     * The client supports additional metadata in the form of declaration links.
      */
-    public Object getPartialResultToken() {
-        return jsonData.opt("partialResultToken");
+    @SuppressFBWarnings("NP_BOOLEAN_RETURN_NULL")
+    public Boolean getLinkSupport() {
+        return jsonData.has("linkSupport") ? jsonData.getBoolean("linkSupport") : null;
     }
 
-    public CodeLensParams setPartialResultToken(Object partialResultToken) {
-        jsonData.putOpt("partialResultToken", partialResultToken);
+    public DeclarationClientCapabilities setLinkSupport(Boolean linkSupport) {
+        jsonData.putOpt("linkSupport", linkSupport);
         return this;
     }
 
@@ -72,14 +77,11 @@ public class CodeLensParams extends WorkDoneProgressParams {
         if (this.getClass() != obj.getClass()) {
             return false;
         }
-        CodeLensParams other = (CodeLensParams) obj;
-        if (!Objects.equals(this.getTextDocument(), other.getTextDocument())) {
+        DeclarationClientCapabilities other = (DeclarationClientCapabilities) obj;
+        if (!Objects.equals(this.getDynamicRegistration(), other.getDynamicRegistration())) {
             return false;
         }
-        if (!Objects.equals(this.getPartialResultToken(), other.getPartialResultToken())) {
-            return false;
-        }
-        if (!Objects.equals(this.getWorkDoneToken(), other.getWorkDoneToken())) {
+        if (!Objects.equals(this.getLinkSupport(), other.getLinkSupport())) {
             return false;
         }
         return true;
@@ -87,20 +89,18 @@ public class CodeLensParams extends WorkDoneProgressParams {
 
     @Override
     public int hashCode() {
-        int hash = 2;
-        hash = 53 * hash + Objects.hashCode(this.getTextDocument());
-        if (this.getPartialResultToken() != null) {
-            hash = 53 * hash + Objects.hashCode(this.getPartialResultToken());
+        int hash = 7;
+        if (this.getDynamicRegistration() != null) {
+            hash = 17 * hash + Boolean.hashCode(this.getDynamicRegistration());
         }
-        if (this.getWorkDoneToken() != null) {
-            hash = 53 * hash + Objects.hashCode(this.getWorkDoneToken());
+        if (this.getLinkSupport() != null) {
+            hash = 17 * hash + Boolean.hashCode(this.getLinkSupport());
         }
         return hash;
     }
 
-    public static CodeLensParams create(TextDocumentIdentifier textDocument) {
+    public static DeclarationClientCapabilities create() {
         final JSONObject json = new JSONObject();
-        json.put("textDocument", textDocument.jsonData);
-        return new CodeLensParams(json);
+        return new DeclarationClientCapabilities(json);
     }
 }

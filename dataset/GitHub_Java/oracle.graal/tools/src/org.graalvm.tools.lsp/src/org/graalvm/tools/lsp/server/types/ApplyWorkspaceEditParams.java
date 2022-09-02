@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,21 +30,18 @@ import java.util.Objects;
 /**
  * The parameters passed via a apply workspace edit request.
  */
-public class ApplyWorkspaceEditParams {
-
-    final JSONObject jsonData;
+public class ApplyWorkspaceEditParams extends JSONBase {
 
     ApplyWorkspaceEditParams(JSONObject jsonData) {
-        this.jsonData = jsonData;
+        super(jsonData);
     }
 
     /**
-     * An optional label of the workspace edit. This label is
-     * presented in the user interface for example on an undo
-     * stack to undo the workspace edit.
+     * An optional label of the workspace edit. This label is presented in the user interface for
+     * example on an undo stack to undo the workspace edit.
      */
     public String getLabel() {
-        return jsonData.optString("label");
+        return jsonData.optString("label", null);
     }
 
     public ApplyWorkspaceEditParams setLabel(String label) {
@@ -89,9 +86,9 @@ public class ApplyWorkspaceEditParams {
     public int hashCode() {
         int hash = 7;
         if (this.getLabel() != null) {
-            hash = 29 * hash + Objects.hashCode(this.getLabel());
+            hash = 19 * hash + Objects.hashCode(this.getLabel());
         }
-        hash = 29 * hash + Objects.hashCode(this.getEdit());
+        hash = 19 * hash + Objects.hashCode(this.getEdit());
         return hash;
     }
 

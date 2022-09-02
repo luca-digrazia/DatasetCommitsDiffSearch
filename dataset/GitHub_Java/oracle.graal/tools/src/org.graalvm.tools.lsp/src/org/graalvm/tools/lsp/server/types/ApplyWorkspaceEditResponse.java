@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,16 +25,15 @@
 package org.graalvm.tools.lsp.server.types;
 
 import com.oracle.truffle.tools.utils.json.JSONObject;
+import java.util.Objects;
 
 /**
  * A response returned from the apply workspace edit request.
  */
-public class ApplyWorkspaceEditResponse {
-
-    final JSONObject jsonData;
+public class ApplyWorkspaceEditResponse extends JSONBase {
 
     ApplyWorkspaceEditResponse(JSONObject jsonData) {
-        this.jsonData = jsonData;
+        super(jsonData);
     }
 
     /**
@@ -50,12 +49,26 @@ public class ApplyWorkspaceEditResponse {
     }
 
     /**
-     * Depending on the client's failure handling strategy `failedChange` might
-     * contain the index of the change that failed. This property is only available
-     * if the client signals a `failureHandlingStrategy` in its client capabilities.
+     * An optional textual description for why the edit was not applied. This may be used by the
+     * server for diagnostic logging or to provide a suitable error for a request that triggered the
+     * edit.
+     */
+    public String getFailureReason() {
+        return jsonData.optString("failureReason", null);
+    }
+
+    public ApplyWorkspaceEditResponse setFailureReason(String failureReason) {
+        jsonData.putOpt("failureReason", failureReason);
+        return this;
+    }
+
+    /**
+     * Depending on the client's failure handling strategy `failedChange` might contain the index of
+     * the change that failed. This property is only available if the client signals a
+     * `failureHandlingStrategy` in its client capabilities.
      */
     public Integer getFailedChange() {
-        return jsonData.optInt("failedChange");
+        return jsonData.has("failedChange") ? jsonData.getInt("failedChange") : null;
     }
 
     public ApplyWorkspaceEditResponse setFailedChange(Integer failedChange) {
@@ -78,7 +91,10 @@ public class ApplyWorkspaceEditResponse {
         if (this.isApplied() != other.isApplied()) {
             return false;
         }
-        if (this.getFailedChange() != other.getFailedChange()) {
+        if (!Objects.equals(this.getFailureReason(), other.getFailureReason())) {
+            return false;
+        }
+        if (!Objects.equals(this.getFailedChange(), other.getFailedChange())) {
             return false;
         }
         return true;
@@ -86,10 +102,13 @@ public class ApplyWorkspaceEditResponse {
 
     @Override
     public int hashCode() {
-        int hash = 7;
-        hash = 97 * hash + Boolean.hashCode(this.isApplied());
+        int hash = 5;
+        hash = 53 * hash + Boolean.hashCode(this.isApplied());
+        if (this.getFailureReason() != null) {
+            hash = 53 * hash + Objects.hashCode(this.getFailureReason());
+        }
         if (this.getFailedChange() != null) {
-            hash = 97 * hash + Integer.hashCode(this.getFailedChange());
+            hash = 53 * hash + Integer.hashCode(this.getFailedChange());
         }
         return hash;
     }

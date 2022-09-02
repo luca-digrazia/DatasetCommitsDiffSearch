@@ -28,36 +28,24 @@ import com.oracle.truffle.tools.utils.json.JSONObject;
 import java.util.Objects;
 
 /**
- * The parameters of a [CodeLensRequest](#CodeLensRequest).
+ * The client capabilities of a [CodeLensRequest](#CodeLensRequest).
  */
-public class CodeLensParams extends WorkDoneProgressParams {
+public class CodeLensClientCapabilities extends JSONBase {
 
-    CodeLensParams(JSONObject jsonData) {
+    CodeLensClientCapabilities(JSONObject jsonData) {
         super(jsonData);
     }
 
     /**
-     * The document to request code lens for.
+     * Whether code lens supports dynamic registration.
      */
-    public TextDocumentIdentifier getTextDocument() {
-        return new TextDocumentIdentifier(jsonData.getJSONObject("textDocument"));
+    @SuppressFBWarnings("NP_BOOLEAN_RETURN_NULL")
+    public Boolean getDynamicRegistration() {
+        return jsonData.has("dynamicRegistration") ? jsonData.getBoolean("dynamicRegistration") : null;
     }
 
-    public CodeLensParams setTextDocument(TextDocumentIdentifier textDocument) {
-        jsonData.put("textDocument", textDocument.jsonData);
-        return this;
-    }
-
-    /**
-     * An optional token that a server can use to report partial results (e.g. streaming) to the
-     * client.
-     */
-    public Object getPartialResultToken() {
-        return jsonData.opt("partialResultToken");
-    }
-
-    public CodeLensParams setPartialResultToken(Object partialResultToken) {
-        jsonData.putOpt("partialResultToken", partialResultToken);
+    public CodeLensClientCapabilities setDynamicRegistration(Boolean dynamicRegistration) {
+        jsonData.putOpt("dynamicRegistration", dynamicRegistration);
         return this;
     }
 
@@ -72,14 +60,8 @@ public class CodeLensParams extends WorkDoneProgressParams {
         if (this.getClass() != obj.getClass()) {
             return false;
         }
-        CodeLensParams other = (CodeLensParams) obj;
-        if (!Objects.equals(this.getTextDocument(), other.getTextDocument())) {
-            return false;
-        }
-        if (!Objects.equals(this.getPartialResultToken(), other.getPartialResultToken())) {
-            return false;
-        }
-        if (!Objects.equals(this.getWorkDoneToken(), other.getWorkDoneToken())) {
+        CodeLensClientCapabilities other = (CodeLensClientCapabilities) obj;
+        if (!Objects.equals(this.getDynamicRegistration(), other.getDynamicRegistration())) {
             return false;
         }
         return true;
@@ -87,20 +69,15 @@ public class CodeLensParams extends WorkDoneProgressParams {
 
     @Override
     public int hashCode() {
-        int hash = 2;
-        hash = 53 * hash + Objects.hashCode(this.getTextDocument());
-        if (this.getPartialResultToken() != null) {
-            hash = 53 * hash + Objects.hashCode(this.getPartialResultToken());
-        }
-        if (this.getWorkDoneToken() != null) {
-            hash = 53 * hash + Objects.hashCode(this.getWorkDoneToken());
+        int hash = 7;
+        if (this.getDynamicRegistration() != null) {
+            hash = 23 * hash + Boolean.hashCode(this.getDynamicRegistration());
         }
         return hash;
     }
 
-    public static CodeLensParams create(TextDocumentIdentifier textDocument) {
+    public static CodeLensClientCapabilities create() {
         final JSONObject json = new JSONObject();
-        json.put("textDocument", textDocument.jsonData);
-        return new CodeLensParams(json);
+        return new CodeLensClientCapabilities(json);
     }
 }
