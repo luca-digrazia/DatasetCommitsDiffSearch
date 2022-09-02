@@ -43,8 +43,6 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso.FinalizationFeature;
-import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.options.OptionMap;
 import org.graalvm.polyglot.Engine;
 
@@ -84,6 +82,7 @@ import com.oracle.truffle.espresso.perf.DebugTimer;
 import com.oracle.truffle.espresso.perf.TimerCollection;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_ref_Reference;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
 
@@ -393,10 +392,8 @@ public final class EspressoContext {
                                         "Allow native access on context creation e.g. contextBuilder.allowNativeAccess(true)");
         assert !this.initialized;
         eventListener = new EmptyListener();
-        if (!ImageInfo.inImageRuntimeCode()) {
-            // Setup finalization support in the host VM.
-            FinalizationFeature.ensureInitialized();
-        }
+        // Inject PublicFinalReference in the host VM.
+        Target_java_lang_ref_Reference.ensureInitialized();
         spawnVM();
         this.initialized = true;
         this.jdwpContext = new JDWPContextImpl(this);
@@ -695,19 +692,6 @@ public final class EspressoContext {
             allocationReporter.onReturnValue(object, 0, AllocationReporter.SIZE_UNKNOWN);
         }
         return object;
-    }
-
-    public boolean needsVerify(StaticObject classLoader) {
-        switch (Verify) {
-            case NONE:
-                return false;
-            case REMOTE:
-                return !StaticObject.isNull(classLoader);
-            case ALL:
-                return true;
-            default:
-                return true;
-        }
     }
 
     public void prepareDispose() {
