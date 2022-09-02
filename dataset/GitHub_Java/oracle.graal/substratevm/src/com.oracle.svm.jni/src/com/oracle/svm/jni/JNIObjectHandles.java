@@ -93,31 +93,19 @@ public final class JNIObjectHandles {
     }
 
     @SuppressWarnings("unchecked")
-    private static ThreadLocalHandles<ObjectHandle> getLocals() {
+    private static ThreadLocalHandles<JNIObjectHandle> getLocals() {
         if (handles.get() == null) {
-            handles.set(new ThreadLocalHandles<>(NATIVE_CALL_MIN_LOCAL_HANDLE_CAPACITY));
+            handles.set(new ThreadLocalHandles<JNIObjectHandle>(NATIVE_CALL_MIN_LOCAL_HANDLE_CAPACITY));
         }
         return handles.get();
-    }
-
-    private static boolean isInLocalRange(JNIObjectHandle handle) {
-        return ThreadLocalHandles.isInRange((ObjectHandle) handle);
-    }
-
-    private static ObjectHandle decodeLocal(JNIObjectHandle handle) {
-        return (ObjectHandle) handle;
-    }
-
-    private static JNIObjectHandle encodeLocal(ObjectHandle handle) {
-        return (JNIObjectHandle) handle;
     }
 
     public static <T> T getObject(JNIObjectHandle handle) {
         if (handle.equal(nullHandle())) {
             return null;
         }
-        if (isInLocalRange(handle)) {
-            return getLocals().getObject(decodeLocal(handle));
+        if (ThreadLocalHandles.isInRange(handle)) {
+            return getLocals().getObject(handle);
         }
         if (useImageHeapHandles() && JNIImageHeapHandles.isInRange(handle)) {
             return JNIImageHeapHandles.getObject(handle);
@@ -129,7 +117,7 @@ public final class JNIObjectHandles {
     }
 
     public static JNIObjectRefType getHandleType(JNIObjectHandle handle) {
-        if (isInLocalRange(handle)) {
+        if (ThreadLocalHandles.isInRange(handle)) {
             return JNIObjectRefType.Local;
         }
         if (useImageHeapHandles() && JNIImageHeapHandles.isInRange(handle)) {
@@ -145,19 +133,19 @@ public final class JNIObjectHandles {
         if (useImageHeapHandles() && JNIImageHeapHandles.isInImageHeap(obj)) {
             return JNIImageHeapHandles.asLocal(obj);
         }
-        return encodeLocal(getLocals().create(obj));
+        return getLocals().create(obj);
     }
 
     public static JNIObjectHandle newLocalRef(JNIObjectHandle ref) {
         if (useImageHeapHandles() && JNIImageHeapHandles.isInRange(ref)) {
             return JNIImageHeapHandles.toLocal(ref);
         }
-        return encodeLocal(getLocals().create(getObject(ref)));
+        return getLocals().create(getObject(ref));
     }
 
     public static void deleteLocalRef(JNIObjectHandle localRef) {
         if (!useImageHeapHandles() || !JNIImageHeapHandles.isInRange(localRef)) {
-            getLocals().delete(decodeLocal(localRef));
+            getLocals().delete(localRef);
         }
     }
 
