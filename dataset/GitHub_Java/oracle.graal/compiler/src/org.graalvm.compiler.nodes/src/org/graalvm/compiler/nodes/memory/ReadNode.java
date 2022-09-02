@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -32,8 +34,8 @@ import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.CanonicalizableLocation;
@@ -44,6 +46,7 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
+import org.graalvm.compiler.nodes.spi.ArrayLengthProvider;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
@@ -68,11 +71,12 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerableAccess,
     protected ReadNode(NodeClass<? extends ReadNode> c, AddressNode address, LocationIdentity location, Stamp stamp, GuardingNode guard, BarrierType barrierType, boolean nullCheck,
                     FrameState stateBefore) {
         super(c, address, location, stamp, guard, barrierType, nullCheck, stateBefore);
+        this.lastLocationAccess = null;
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        LIRKind readKind = gen.getLIRGeneratorTool().getLIRKind(getAccessStamp());
+        LIRKind readKind = gen.getLIRGeneratorTool().getLIRKind(getAccessStamp(NodeView.DEFAULT));
         gen.setResult(this, gen.getLIRGeneratorTool().getArithmetic().emitLoad(readKind, gen.operand(address), gen.state(this)));
     }
 
@@ -93,7 +97,7 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerableAccess,
 
     @SuppressWarnings("try")
     @Override
-    public FloatingAccessNode asFloatingNode(MemoryNode lastLocationAccess) {
+    public FloatingAccessNode asFloatingNode() {
         try (DebugCloseable position = withNodeSourcePosition()) {
             return graph().unique(new FloatingReadNode(getAddress(), getLocationIdentity(), lastLocationAccess, stamp(NodeView.DEFAULT), getGuard(), getBarrierType()));
         }
@@ -105,31 +109,34 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerableAccess,
     }
 
     public static ValueNode canonicalizeRead(ValueNode read, AddressNode address, LocationIdentity locationIdentity, CanonicalizerTool tool) {
+        NodeView view = NodeView.from(tool);
         MetaAccessProvider metaAccess = tool.getMetaAccess();
         if (tool.canonicalizeReads() && address instanceof OffsetAddressNode) {
             OffsetAddressNode objAddress = (OffsetAddressNode) address;
             ValueNode object = objAddress.getBase();
-            if (metaAccess != null && object.isConstant() && !object.isNullConstant() && objAddress.getOffset().isConstant()) {
+            // Note: readConstant cannot be used to read the array length, so in order to avoid an
+            // unnecessary CompilerToVM.readFieldValue call ending in an IllegalArgumentException,
+            // check if we are reading the array length location first.
+            if (locationIdentity.equals(ARRAY_LENGTH_LOCATION)) {
+                ValueNode length = GraphUtil.arrayLength(object, ArrayLengthProvider.FindLengthMode.CANONICALIZE_READ, tool.getConstantReflection());
+                if (length != null) {
+                    return length;
+                }
+            } else if (metaAccess != null && object.isConstant() && !object.isNullConstant() && objAddress.getOffset().isConstant()) {
                 long displacement = objAddress.getOffset().asJavaConstant().asLong();
                 int stableDimension = ((ConstantNode) object).getStableDimension();
                 if (locationIdentity.isImmutable() || stableDimension > 0) {
-                    Constant constant = read.stamp(NodeView.DEFAULT).readConstant(tool.getConstantReflection().getMemoryAccessProvider(), object.asConstant(), displacement);
+                    Constant constant = read.stamp(view).readConstant(tool.getConstantReflection().getMemoryAccessProvider(), object.asConstant(), displacement);
                     boolean isDefaultStable = locationIdentity.isImmutable() || ((ConstantNode) object).isDefaultStable();
                     if (constant != null && (isDefaultStable || !constant.isDefaultForKind())) {
-                        return ConstantNode.forConstant(read.stamp(NodeView.DEFAULT), constant, Math.max(stableDimension - 1, 0), isDefaultStable, metaAccess);
+                        return ConstantNode.forConstant(read.stamp(view), constant, Math.max(stableDimension - 1, 0), isDefaultStable, metaAccess);
                     }
-                }
-            }
-            if (locationIdentity.equals(ARRAY_LENGTH_LOCATION)) {
-                ValueNode length = GraphUtil.arrayLength(object);
-                if (length != null) {
-                    return length;
                 }
             }
             if (locationIdentity instanceof CanonicalizableLocation) {
                 CanonicalizableLocation canonicalize = (CanonicalizableLocation) locationIdentity;
                 ValueNode result = canonicalize.canonicalizeRead(read, address, object, tool);
-                assert result != null && result.stamp(NodeView.DEFAULT).isCompatible(read.stamp(NodeView.DEFAULT));
+                assert result != null && result.stamp(view).isCompatible(read.stamp(view));
                 return result;
             }
 
@@ -148,7 +155,7 @@ public class ReadNode extends FloatableAccessNode implements LIRLowerableAccess,
     }
 
     @Override
-    public Stamp getAccessStamp() {
-        return stamp(NodeView.DEFAULT);
+    public Stamp getAccessStamp(NodeView view) {
+        return stamp(view);
     }
 }
