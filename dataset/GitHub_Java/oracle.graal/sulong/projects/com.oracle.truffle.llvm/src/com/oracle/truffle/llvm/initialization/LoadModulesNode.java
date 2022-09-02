@@ -118,7 +118,7 @@ public final class LoadModulesNode extends LLVMRootNode {
     final LLVMLanguage language;
     private boolean hasInitialised;
 
-    protected enum LLVMLoadingPhase {
+    private enum LLVMLoadingPhase {
         ALL,
         BUILD_SCOPES,
         INIT_SYMBOLS,
