@@ -54,8 +54,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -105,7 +103,7 @@ import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotAccess;
 
 /*
- * This class is exported to the GraalVM SDK. Keep that in mind when changing its class or package name.
+ * This class is exported to the Graal SDK. Keep that in mind when changing its class or package name.
  */
 /**
  * Internal service implementation of the polyglot API.
@@ -115,14 +113,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
     static final Object[] EMPTY_ARGS = new Object[0];
 
     static final String OPTION_GROUP_ENGINE = "engine";
-
-    @SuppressWarnings("serial") private static final HostException STACKOVERFLOW_ERROR = new HostException(new StackOverflowError() {
-        @SuppressWarnings("sync-override")
-        @Override
-        public Throwable fillInStackTrace() {
-            return this;
-        }
-    });
 
     private final PolyglotSource sourceImpl = new PolyglotSource(this);
     private final PolyglotSourceSection sourceSectionImpl = new PolyglotSourceSection(this);
@@ -274,11 +264,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
     }
 
     @Override
-    public <S, T> Object newTargetTypeMapping(Class<S> sourceType, Class<T> targetType, Predicate<S> acceptsValue, Function<S, T> convertValue) {
-        return new PolyglotTargetMapping(sourceType, targetType, acceptsValue, convertValue);
-    }
-
-    @Override
     @TruffleBoundary
     public Value asValue(Object hostValue) {
         PolyglotContextImpl currentContext = PolyglotContextImpl.current();
@@ -376,14 +361,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         } else if (e instanceof InteropException) {
             throw ((InteropException) e).raise();
         }
-        try {
-            return new HostException(e);
-        } catch (StackOverflowError stack) {
-            /*
-             * Cannot create a new host exception. Use a readily prepared instance.
-             */
-            return STACKOVERFLOW_ERROR;
-        }
+        return new HostException(e);
     }
 
     @TruffleBoundary

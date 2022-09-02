@@ -126,7 +126,7 @@ public class LanguageSPITest {
         langContext = null;
         Engine engine = Engine.create();
 
-        Context context = Context.newBuilder(LanguageSPITestLanguage.ID).allowPolyglotAccess(PolyglotAccess.ALL).build();
+        Context context = Context.create(LanguageSPITestLanguage.ID);
         assertTrue(context.initialize(LanguageSPITestLanguage.ID));
         assertNotNull(langContext);
         assertEquals(0, langContext.disposeCalled);
@@ -1633,7 +1633,7 @@ public class LanguageSPITest {
             }
         });
 
-        Context c = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build();
+        Context c = Context.create();
         Value languageBindings = c.eval(ProxyLanguage.ID, "");
         Value polyglotBindings = c.getPolyglotBindings();
 
@@ -1671,7 +1671,7 @@ public class LanguageSPITest {
             }
         });
 
-        Context c = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build();
+        Context c = Context.create();
         ExecutorService service = Executors.newFixedThreadPool(20);
 
         Value languageBindings = c.eval(ProxyLanguage.ID, "");
@@ -1737,7 +1737,7 @@ public class LanguageSPITest {
                 return super.toString(context, value);
             }
         });
-        Context c = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build();
+        Context c = Context.create();
         c.eval(ProxyLanguage.ID, "");
 
         assertEquals("Make sure language specific toString was invoked.", "myStringToString", c.getPolyglotBindings().getMember("exportedValue").toString());

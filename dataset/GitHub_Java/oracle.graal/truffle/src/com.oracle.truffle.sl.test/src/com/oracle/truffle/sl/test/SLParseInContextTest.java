@@ -51,8 +51,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -97,9 +95,6 @@ public class SLParseInContextTest {
         @Override
         protected CallTarget parse(ParsingRequest request) throws Exception {
             return Truffle.getRuntime().createCallTarget(new RootNode(this) {
-
-                @CompilationFinal private ContextReference<Env> reference;
-
                 @Override
                 public Object execute(VirtualFrame frame) {
                     return parseAndEval();
@@ -107,12 +102,8 @@ public class SLParseInContextTest {
 
                 @TruffleBoundary
                 private Object parseAndEval() {
-                    if (reference == null) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        this.reference = lookupContextReference(EvalLang.class);
-                    }
                     Source aPlusB = Source.newBuilder("sl", "a + b", "plus.sl").build();
-                    return reference.get().parsePublic(aPlusB, "a", "b").call(30, 12);
+                    return getContextReference().get().parse(aPlusB, "a", "b").call(30, 12);
                 }
             });
         }
