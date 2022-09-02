@@ -56,7 +56,6 @@ import org.graalvm.compiler.replacements.ReplacementsImpl;
 
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.common.NativeImageReinitialize;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
@@ -257,7 +256,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
 
     @SuppressWarnings("try")
     @Override
-    public StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod original, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition,
+    public StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod recursiveEntry, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition,
                     OptionValues options) {
         if (IS_IN_NATIVE_IMAGE || UseEncodedGraphs.getValue(options)) {
             maybeEncodeSnippets(options);
@@ -265,7 +264,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
             // Snippets graphs can contain foreign object references and
             // outlive a single compilation.
             try (CompilationContext scope = HotSpotGraalServices.enterGlobalCompilationContext()) {
-                StructuredGraph graph = getEncodedSnippets().getEncodedSnippet(method, original, this, args, AllowAssumptions.NO, options);
+                StructuredGraph graph = getEncodedSnippets().getEncodedSnippet(method, this, args, AllowAssumptions.NO, options);
                 if (graph == null) {
                     throw GraalError.shouldNotReachHere("snippet not found: " + method.format("%H.%n(%p)"));
                 }
@@ -274,7 +273,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
         }
 
         assert registeredSnippets == null || registeredSnippets.contains(method) : "Asking for snippet method that was never registered: " + method.format("%H.%n(%p)");
-        return super.getSnippet(method, original, args, trackNodeSourcePosition, replaceePosition, options);
+        return super.getSnippet(method, recursiveEntry, args, trackNodeSourcePosition, replaceePosition, options);
     }
 
     @Override
@@ -294,19 +293,5 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
             return (T) getProviders().getConfig();
         }
         return super.getInjectedArgument(capability);
-    }
-
-    public ResolvedJavaMethod findSnippetMethod(ResolvedJavaMethod thisMethod) {
-        if (!IS_IN_NATIVE_IMAGE && snippetEncoder != null) {
-            return snippetEncoder.findSnippetMethod(thisMethod);
-        }
-        return null;
-    }
-
-    public static MetaAccessProvider noticeTypes(MetaAccessProvider metaAccess) {
-        if (!IS_IN_NATIVE_IMAGE && snippetEncoder != null) {
-            return snippetEncoder.noticeTypes(metaAccess);
-        }
-        return metaAccess;
     }
 }

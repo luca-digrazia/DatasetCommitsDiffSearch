@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,9 +28,12 @@ import java.util.HashMap;
 
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.nodes.IfNode;
+import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.calc.AbsNode;
 import org.graalvm.compiler.nodes.calc.ReinterpretNode;
+import org.graalvm.compiler.replacements.amd64.AMD64CountLeadingZerosNode;
+import org.graalvm.compiler.replacements.amd64.AMD64CountTrailingZerosNode;
 import org.graalvm.compiler.replacements.nodes.BitCountNode;
 import org.graalvm.compiler.replacements.nodes.BitScanForwardNode;
 import org.graalvm.compiler.replacements.nodes.BitScanReverseNode;
@@ -130,15 +135,15 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
         return Math.sqrt(value) + Math.log(value) + Math.log10(value) + Math.sin(value) + Math.cos(value) + Math.tan(value);
     }
 
-    public void testSubstitution(String testMethodName, Class<?> intrinsicClass, Class<?> holder, String methodName, boolean optional, Object... args) {
+    public void testSubstitution(String testMethodName, Class<?> holder, String methodName, boolean optional, Object[] args, Class<?>... intrinsicClasses) {
         ResolvedJavaMethod realJavaMethod = getResolvedJavaMethod(holder, methodName);
         ResolvedJavaMethod testJavaMethod = getResolvedJavaMethod(testMethodName);
         StructuredGraph graph = testGraph(testMethodName);
 
         // Check to see if the resulting graph contains the expected node
-        StructuredGraph replacement = getReplacements().getSubstitution(realJavaMethod, -1, false);
+        StructuredGraph replacement = getReplacements().getInlineSubstitution(realJavaMethod, 0, Invoke.InlineControl.Normal, false, null, graph.allowAssumptions(), graph.getOptions());
         if (replacement == null && !optional) {
-            assertInGraph(graph, intrinsicClass);
+            assertInGraph(graph, intrinsicClasses);
         }
 
         for (Object l : args) {
@@ -157,7 +162,7 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
     public void testCharSubstitutions() {
         Object[] args = new Character[]{Character.MIN_VALUE, (char) -1, (char) 0, (char) 1, Character.MAX_VALUE};
 
-        testSubstitution("charReverseBytes", ReverseBytesNode.class, Character.class, "reverseBytes", false, args);
+        testSubstitution("charReverseBytes", Character.class, "reverseBytes", false, args, ReverseBytesNode.class);
     }
 
     public static char charReverseBytes(char value) {
@@ -181,7 +186,7 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
     public void testShortSubstitutions() {
         Object[] args = new Short[]{Short.MIN_VALUE, -1, 0, 1, Short.MAX_VALUE};
 
-        testSubstitution("shortReverseBytes", ReverseBytesNode.class, Short.class, "reverseBytes", false, args);
+        testSubstitution("shortReverseBytes", Short.class, "reverseBytes", false, args, ReverseBytesNode.class);
     }
 
     public static short shortReverseBytes(short value) {
@@ -205,10 +210,10 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
     public void testIntegerSubstitutions() {
         Object[] args = new Object[]{Integer.MIN_VALUE, -1, 0, 1, Integer.MAX_VALUE};
 
-        testSubstitution("integerReverseBytes", ReverseBytesNode.class, Integer.class, "reverseBytes", false, args);
-        testSubstitution("integerNumberOfLeadingZeros", BitScanReverseNode.class, Integer.class, "numberOfLeadingZeros", true, args);
-        testSubstitution("integerNumberOfTrailingZeros", BitScanForwardNode.class, Integer.class, "numberOfTrailingZeros", false, args);
-        testSubstitution("integerBitCount", BitCountNode.class, Integer.class, "bitCount", true, args);
+        testSubstitution("integerReverseBytes", Integer.class, "reverseBytes", false, args, ReverseBytesNode.class);
+        testSubstitution("integerNumberOfLeadingZeros", Integer.class, "numberOfLeadingZeros", true, args, BitScanReverseNode.class, AMD64CountLeadingZerosNode.class);
+        testSubstitution("integerNumberOfTrailingZeros", Integer.class, "numberOfTrailingZeros", false, args, BitScanForwardNode.class, AMD64CountTrailingZerosNode.class);
+        testSubstitution("integerBitCount", Integer.class, "bitCount", true, args, BitCountNode.class);
     }
 
     public static int integerReverseBytes(int value) {
@@ -231,10 +236,10 @@ public class StandardMethodSubstitutionsTest extends MethodSubstitutionTest {
     public void testLongSubstitutions() {
         Object[] args = new Object[]{Long.MIN_VALUE, -1L, 0L, 1L, Long.MAX_VALUE};
 
-        testSubstitution("longReverseBytes", ReverseBytesNode.class, Long.class, "reverseBytes", false, args);
-        testSubstitution("longNumberOfLeadingZeros", BitScanReverseNode.class, Long.class, "numberOfLeadingZeros", true, args);
-        testSubstitution("longNumberOfTrailingZeros", BitScanForwardNode.class, Long.class, "numberOfTrailingZeros", false, args);
-        testSubstitution("longBitCount", BitCountNode.class, Long.class, "bitCount", true, args);
+        testSubstitution("longReverseBytes", Long.class, "reverseBytes", false, args, ReverseBytesNode.class);
+        testSubstitution("longNumberOfLeadingZeros", Long.class, "numberOfLeadingZeros", true, args, BitScanReverseNode.class, AMD64CountLeadingZerosNode.class);
+        testSubstitution("longNumberOfTrailingZeros", Long.class, "numberOfTrailingZeros", false, args, BitScanForwardNode.class, AMD64CountTrailingZerosNode.class);
+        testSubstitution("longBitCount", Long.class, "bitCount", true, args, BitCountNode.class);
     }
 
     public static long longReverseBytes(long value) {

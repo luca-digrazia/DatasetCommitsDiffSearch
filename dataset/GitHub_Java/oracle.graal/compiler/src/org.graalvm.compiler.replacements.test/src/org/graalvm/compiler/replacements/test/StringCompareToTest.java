@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,57 +24,96 @@
  */
 package org.graalvm.compiler.replacements.test;
 
+import static org.graalvm.compiler.core.common.GraalOptions.RemoveNeverExecutedCode;
+
+import java.util.List;
+
+import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.nodes.ArrayCompareToNode;
+import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Test;
 
-import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.aarch64.AArch64;
+import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Tests compareTo method intrinsic.
  */
-public class StringCompareToTest extends MethodSubstitutionTest {
+public class StringCompareToTest extends StringSubstitutionTestBase {
 
-    private final ResolvedJavaMethod realMethod;
-    private final ResolvedJavaMethod testMethod;
-    private final InstalledCode testCode;
+    // The compareTo() implementation in java.lang.String has 4 calls to compareTo implementation.
+    private static final int EXPECT_NODE_COUNT = 4;
+    private static final String DISABLE_COMPACTSTRINGS_FLAG = "-XX:-CompactStrings";
 
-    private final String[] testData = new String[]{
-                    "A", "\uFF21", "AB", "A", "a", "Ab", "AA", "\uFF21",
-                    "A\uFF21", "ABC", "AB", "ABcD", "ABCD\uFF21\uFF21", "ABCD\uFF21", "ABCDEFG\uFF21", "ABCD",
-                    "ABCDEFGH\uFF21\uFF21", "\uFF22", "\uFF21\uFF22", "\uFF21A",
-                    "\uFF21\uFF21",
-                    "\u043c\u0430\u043c\u0430\u0020\u043c\u044b\u043b\u0430\u0020\u0440\u0430\u043c\u0443\u002c\u0020\u0440\u0430\u043c\u0430\u0020\u0441\u044a\u0435\u043b\u0430\u0020\u043c\u0430\u043c\u0443",
-                    "crazy dog jumps over laszy fox"
-    };
-
-    /**
-     * Initialize variables
-     */
     public StringCompareToTest() {
-        realMethod = getResolvedJavaMethod(String.class, "compareTo", String.class);
-        testMethod = getResolvedJavaMethod("stringCompareTo");
-        StructuredGraph graph = testGraph("stringCompareTo");
-
-        // Check to see if the resulting graph contains the expected node
-        StructuredGraph replacement = getReplacements().getSubstitution(realMethod, -1, false);
-        if (replacement == null) {
-            assertInGraph(graph, ArrayCompareToNode.class);
-        }
-
-        // Force compilation
-        testCode = getCode(testMethod);
-        Assert.assertNotNull(testCode);
+        initSubstitution(
+                        getResolvedJavaMethod(String.class, "compareTo", String.class),
+                        getResolvedJavaMethod("stringCompareTo"),
+                        ArrayCompareToNode.class);
     }
 
-    private void executeStringCompareTo(String s0, String s1) {
-        Object expected = invokeSafe(realMethod, s0, s1);
-        // Verify that the original method and the substitution produce the same value
-        assertDeepEquals(expected, invokeSafe(testMethod, null, s0, s1));
-        // Verify that the generated code and the original produce the same value
-        assertDeepEquals(expected, executeVarargsSafe(testCode, s0, s1));
+    private int countNode(ResolvedJavaMethod method, Class<?> expectedNode, OptionValues options) {
+        StructuredGraph graph = parseForCompile(method, options);
+        applyFrontEnd(graph);
+
+        int c = 0;
+        for (Node node : graph.getNodes()) {
+            if (expectedNode.isInstance(node)) {
+                c += 1;
+            }
+        }
+
+        return c;
+    }
+
+    @Override
+    protected void initSubstitution(ResolvedJavaMethod theRealMethod,
+                    ResolvedJavaMethod theTestMethod, Class<?> expectedNode) {
+        Assume.assumeTrue((getTarget().arch instanceof AMD64) || (getTarget().arch instanceof AArch64));
+
+        realMethod = theRealMethod;
+        testMethod = theTestMethod;
+
+        StructuredGraph graph = testGraph(testMethod.getName());
+
+        // Check to see if the resulting graph contains the expected node
+        StructuredGraph replacement = getReplacements().getInlineSubstitution(realMethod, 0, Invoke.InlineControl.Normal, false, null, graph.allowAssumptions(), graph.getOptions());
+        if (replacement == null) {
+            assertInGraph(graph, expectedNode);
+        }
+
+        OptionValues options;
+        boolean needCheckNode = true;
+
+        if (JavaVersionUtil.JAVA_SPEC <= 8) {
+            needCheckNode = false;
+        } else {
+            List<String> vmArgs = GraalServices.getInputArguments();
+            Assume.assumeTrue(vmArgs != null);
+            for (String vmArg : vmArgs) {
+                if (vmArg.equals(DISABLE_COMPACTSTRINGS_FLAG)) {
+                    needCheckNode = false;
+                }
+            }
+        }
+
+        if (needCheckNode) {
+            options = new OptionValues(getInitialOptions(), RemoveNeverExecutedCode, false);
+            Assert.assertEquals(EXPECT_NODE_COUNT, countNode(testMethod, expectedNode, options));
+        } else {
+            options = getInitialOptions();
+        }
+
+        // Force compilation.
+        testCode = getCode(testMethod, options);
+        Assert.assertNotNull(testCode);
     }
 
     public static int stringCompareTo(String a, String b) {
@@ -80,22 +121,20 @@ public class StringCompareToTest extends MethodSubstitutionTest {
     }
 
     @Test
+    @Override
     public void testEqualString() {
-        String s = "equal-string";
-        executeStringCompareTo(s, new String(s.toCharArray()));
+        super.testEqualString();
     }
 
     @Test
+    @Override
     public void testDifferentString() {
-        executeStringCompareTo("some-string", "different-string");
+        super.testDifferentString();
     }
 
     @Test
+    @Override
     public void testAllStrings() {
-        for (String s0 : testData) {
-            for (String s1 : testData) {
-                executeStringCompareTo(s0, s1);
-            }
-        }
+        super.testAllStrings();
     }
 }
