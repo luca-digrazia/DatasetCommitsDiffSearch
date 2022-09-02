@@ -32,7 +32,6 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.Type;
 import java.util.Map;
-import java.util.function.Supplier;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Inject;
@@ -43,10 +42,7 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
-import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.hosted.NativeImageOptions;
-import com.oracle.svm.reflect.hosted.ReflectionObjectReplacer;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -56,14 +52,14 @@ public final class Target_java_lang_reflect_Executable {
 
     /**
      * The parameters field doesn't need a value recomputation. Its value is pre-loaded in the
-     * {@link ReflectionObjectReplacer}.
+     * {@link com.oracle.svm.reflect.hosted.ReflectionMetadataFeature}.
      */
     @Alias //
     Parameter[] parameters;
 
     /**
      * The declaredAnnotations field doesn't need a value recomputation. Its value is pre-loaded in
-     * the {@link ReflectionObjectReplacer}.
+     * the {@link com.oracle.svm.reflect.hosted.ReflectionMetadataFeature}.
      */
     @Alias //
     Map<Class<? extends Annotation>, Annotation> declaredAnnotations;
@@ -72,16 +68,16 @@ public final class Target_java_lang_reflect_Executable {
     Annotation[][] parameterAnnotations;
 
     @Inject @RecomputeFieldValue(kind = Kind.Custom, declClass = AnnotatedReceiverTypeComputer.class) //
-    Object annotatedReceiverType;
+    AnnotatedType annotatedReceiverType;
 
     @Inject @RecomputeFieldValue(kind = Kind.Custom, declClass = AnnotatedParameterTypesComputer.class) //
-    Object[] annotatedParameterTypes;
+    AnnotatedType[] annotatedParameterTypes;
 
     @Inject @RecomputeFieldValue(kind = Kind.Custom, declClass = AnnotatedReturnTypeComputer.class) //
-    Object annotatedReturnType;
+    AnnotatedType annotatedReturnType;
 
     @Inject @RecomputeFieldValue(kind = Kind.Custom, declClass = AnnotatedExceptionTypesComputer.class) //
-    Object[] annotatedExceptionTypes;
+    AnnotatedType[] annotatedExceptionTypes;
 
     @Alias //
     @TargetElement(onlyWith = JDK8OrEarlier.class)
@@ -116,28 +112,25 @@ public final class Target_java_lang_reflect_Executable {
     public AnnotatedType getAnnotatedReceiverType() {
         Target_java_lang_reflect_Executable holder = ReflectionHelper.getHolder(this);
         /* The annotatedReceiverType can be null. */
-        return (AnnotatedType) AnnotatedTypeEncoder.decodeAnnotationTypes(holder.annotatedReceiverType);
+        return holder.annotatedReceiverType;
     }
 
     @Substitute
     public AnnotatedType[] getAnnotatedParameterTypes() {
         Target_java_lang_reflect_Executable holder = ReflectionHelper.getHolder(this);
-        return (AnnotatedType[]) ReflectionHelper.requireNonNull(AnnotatedTypeEncoder.decodeAnnotationTypes(holder.annotatedParameterTypes),
-                        "Annotated parameter types must be computed during native image generation");
+        return ReflectionHelper.requireNonNull(holder.annotatedParameterTypes, "Annotated parameter types must be computed during native image generation");
     }
 
     @Substitute
     public AnnotatedType getAnnotatedReturnType0(@SuppressWarnings("unused") Type returnType) {
         Target_java_lang_reflect_Executable holder = ReflectionHelper.getHolder(this);
-        return (AnnotatedType) ReflectionHelper.requireNonNull(AnnotatedTypeEncoder.decodeAnnotationTypes(holder.annotatedReturnType),
-                        "Annotated return type must be computed during native image generation");
+        return ReflectionHelper.requireNonNull(holder.annotatedReturnType, "Annotated return type must be computed during native image generation");
     }
 
     @Substitute
     public AnnotatedType[] getAnnotatedExceptionTypes() {
         Target_java_lang_reflect_Executable holder = ReflectionHelper.getHolder(this);
-        return (AnnotatedType[]) ReflectionHelper.requireNonNull(AnnotatedTypeEncoder.decodeAnnotationTypes(holder.annotatedExceptionTypes),
-                        "Annotated exception types must be computed during native image generation");
+        return ReflectionHelper.requireNonNull(holder.annotatedExceptionTypes, "Annotated exception types must be computed during native image generation");
     }
 
     public static final class ParameterAnnotationsComputer implements CustomFieldValueComputer {
@@ -154,7 +147,7 @@ public final class Target_java_lang_reflect_Executable {
         @Override
         public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
             Executable executable = (Executable) receiver;
-            return AnnotatedTypeEncoder.encodeAnnotationTypes(executable::getAnnotatedReceiverType, receiver);
+            return executable.getAnnotatedReceiverType();
         }
     }
 
@@ -163,7 +156,7 @@ public final class Target_java_lang_reflect_Executable {
         @Override
         public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
             Executable executable = (Executable) receiver;
-            return AnnotatedTypeEncoder.encodeAnnotationTypes(executable::getAnnotatedParameterTypes, receiver);
+            return executable.getAnnotatedParameterTypes();
         }
     }
 
@@ -172,7 +165,7 @@ public final class Target_java_lang_reflect_Executable {
         @Override
         public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
             Executable executable = (Executable) receiver;
-            return AnnotatedTypeEncoder.encodeAnnotationTypes(executable::getAnnotatedReturnType, receiver);
+            return executable.getAnnotatedReturnType();
         }
     }
 
@@ -181,40 +174,7 @@ public final class Target_java_lang_reflect_Executable {
         @Override
         public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
             Executable executable = (Executable) receiver;
-            return AnnotatedTypeEncoder.encodeAnnotationTypes(executable::getAnnotatedExceptionTypes, receiver);
-        }
-    }
-
-    private static final class AnnotatedTypeEncoder {
-        static Object encodeAnnotationTypes(Supplier<Object> supplier, Object receiver) {
-            try {
-                return supplier.get();
-            } catch (InternalError e) {
-                return e;
-            } catch (LinkageError e) {
-                if (NativeImageOptions.AllowIncompleteClasspath.getValue()) {
-                    return e;
-                }
-                Executable culprit = (Executable) receiver;
-                String message = "Encountered an error while processing annotated types for type: " + culprit.getDeclaringClass().getName() + ", executable: " + culprit.getName() + ". " +
-                                "To avoid the issue at build time, use " + SubstrateOptionsParser.commandArgument(NativeImageOptions.AllowIncompleteClasspath, "+") + ". " +
-                                "The error is then reported at runtime when these annotated types are first accessed.";
-                throw new UnsupportedOperationException(message, e);
-            }
-        }
-
-        static Object decodeAnnotationTypes(Object value) {
-            if (value == null) {
-                return null;
-            } else if (value instanceof AnnotatedType || value instanceof AnnotatedType[]) {
-                return value;
-            } else if (value instanceof LinkageError) {
-                throw (LinkageError) value;
-            } else if (value instanceof InternalError) {
-                throw (InternalError) value;
-            } else {
-                throw VMError.shouldNotReachHere("Unexpected value while decoding annotation types: " + value.toString());
-            }
+            return executable.getAnnotatedExceptionTypes();
         }
     }
 }
