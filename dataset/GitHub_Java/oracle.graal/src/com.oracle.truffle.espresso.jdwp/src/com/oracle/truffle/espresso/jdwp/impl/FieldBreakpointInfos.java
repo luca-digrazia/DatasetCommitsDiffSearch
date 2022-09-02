@@ -24,13 +24,10 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 
-public final class FieldBreakpointInfos {
+public class FieldBreakpointInfos {
 
-    // TODO(optimize class using CompilerDirectives)
-    private FieldIds ids = new FieldIds();
+    private final FieldIds ids = new FieldIds();
     private FieldBreakpointInfo[][] infos = new FieldBreakpointInfo[0][0];
-
-    private volatile int fieldCount;
 
     public void addInfo(FieldBreakpointInfo info) {
         FieldRef field = info.getField();
@@ -59,27 +56,17 @@ public final class FieldBreakpointInfos {
             temp[array.length] = info;
             infos[index] = temp;
         }
-        // keep track of active fields having watches
-        fieldCount++;
     }
 
-    public boolean removeInfo(int requestId) {
+    public void removeInfo(int requestId) {
         for (int i = 0; i < infos.length; i++) {
             for (int j = 0; i < infos[i].length; j++) {
                 if (infos[i][j].getRequestId() == requestId) {
                     infos[i][j] = null;
-                    // currently no intermediate cleanup done, so we're leaking space
+                    // currently no cleanup done, so we're leaking space
                 }
             }
         }
-        fieldCount--;
-        if (fieldCount <= 0) {
-            // no more active field watches,
-            infos = new FieldBreakpointInfo[0][0];
-            ids = new FieldIds();
-            return true;
-        }
-        return false;
     }
 
     public FieldBreakpointInfo[] getInfos(FieldRef field) {
@@ -92,8 +79,7 @@ public final class FieldBreakpointInfos {
         }
     }
 
-    private static final class FieldIds {
-
+    private static class FieldIds {
         private volatile int uniqueId;
 
         private FieldRef[] fieldRefs = new FieldRef[0];

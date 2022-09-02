@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.jdwp.api;
 
-import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
-
 import java.lang.ref.WeakReference;
 
 /**
@@ -51,7 +49,7 @@ public class Ids<T> {
     private final T nullObject;
 
     public Ids(T nullObject) {
-        objects[0] = new WeakReference<>(nullObject);
+        getIdAsLong(nullObject);
         this.nullObject = nullObject;
     }
 
@@ -61,16 +59,11 @@ public class Ids<T> {
      * @return the ID of the object
      */
     public long getIdAsLong(T object) {
-        if (object == null) {
-            JDWPLogger.log("Null object when getting ID", JDWPLogger.LogLevel.IDS);
-            return 0;
-        }
         // lookup in cache
         for (int i = 1; i < objects.length; i++) {
             // really slow lookup path
             Object obj = objects[i].get();
             if (obj == object) {
-                JDWPLogger.log("ID cache hit for object: " + object + " with ID: " + i, JDWPLogger.LogLevel.IDS);
                 return i;
             }
         }
@@ -84,17 +77,11 @@ public class Ids<T> {
      * @return the object stored under the ID
      */
     public T fromId(int id) {
-        if (id == 0) {
-            JDWPLogger.log("Null object from ID: " + id, JDWPLogger.LogLevel.IDS);
-            return nullObject;
-        }
         WeakReference<T> ref = objects[id];
         T o = ref.get();
         if (o == null) {
-            JDWPLogger.log("object with ID: " + id + " was garbage collected", JDWPLogger.LogLevel.IDS);
-            return null;
+            return nullObject;
         } else {
-            JDWPLogger.log("returning object: " + o + " for ID: " + id, JDWPLogger.LogLevel.IDS);
             return o;
         }
     }
@@ -112,7 +99,6 @@ public class Ids<T> {
         System.arraycopy(objects, 1, expandedArray, 1, objects.length - 1);
         expandedArray[objects.length] = new WeakReference<>(object);
         objects = expandedArray;
-        JDWPLogger.log("Generating new ID: " + id + " for object: " + object, JDWPLogger.LogLevel.IDS);
         return id;
     }
 }
