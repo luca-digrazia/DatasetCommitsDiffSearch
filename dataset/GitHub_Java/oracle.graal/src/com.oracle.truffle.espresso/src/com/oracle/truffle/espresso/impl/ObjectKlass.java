@@ -37,7 +37,6 @@ import com.oracle.truffle.espresso.classfile.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.InnerClassesAttribute;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
-import com.oracle.truffle.espresso.debugger.VMEventListeners;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -108,11 +107,11 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal //
     boolean needsRecursiveInit = false;
 
-    public static final int LOADED = 0;
-    public static final int LINKED = 1;
-    public static final int PREPARED = 2;
-    public static final int INITIALIZED = 3;
-    public static final int ERRONEOUS = 99;
+    private static final int LOADED = 0;
+    private static final int LINKED = 1;
+    private static final int PREPARED = 2;
+    private static final int INITIALIZED = 3;
+    private static final int ERRONEOUS = 99;
 
     public final Attribute getAttribute(Symbol<Name> name) {
         return linkedKlass.getAttribute(name);
@@ -204,10 +203,6 @@ public final class ObjectKlass extends Klass {
         return initState == INITIALIZED;
     }
 
-    public int getState() {
-        return initState;
-    }
-
     private boolean isPrepared() {
         return initState == PREPARED;
     }
@@ -235,8 +230,6 @@ public final class ObjectKlass extends Klass {
                      */
                     prepare();
                     initState = PREPARED;
-                    VMEventListeners.getDefault().classPrepared(this, getContext().getHost2Guest(Thread.currentThread()));
-
                     if (getSuperKlass() != null) {
                         getSuperKlass().initialize();
                     }
