@@ -42,11 +42,6 @@ import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 
 public final class InstalledCodeObserverSupport {
-    private static final InstalledCodeObserverHandleAction ACTION_ATTACH = h -> getAccessor(h).attachToCurrentIsolate(h);
-    private static final InstalledCodeObserverHandleAction ACTION_DETACH = h -> getAccessor(h).detachFromCurrentIsolate(h);
-    private static final InstalledCodeObserverHandleAction ACTION_RELEASE = h -> getAccessor(h).release(h);
-    private static final InstalledCodeObserverHandleAction ACTION_ACTIVATE = h -> getAccessor(h).activate(h);
-
     private final List<InstalledCodeObserver.Factory> observerFactories = new ArrayList<>();
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -58,14 +53,12 @@ public final class InstalledCodeObserverSupport {
     }
 
     public InstalledCodeObserver[] createObservers(DebugContext debug, SharedMethod method, CompilationResult compilation, Pointer code) {
-        List<InstalledCodeObserver> observers = new ArrayList<>();
+        InstalledCodeObserver[] observers = new InstalledCodeObserver[observerFactories.size()];
+        int index = 0;
         for (InstalledCodeObserver.Factory factory : observerFactories) {
-            InstalledCodeObserver observer = factory.create(debug, method, compilation, code);
-            if (observer != null) {
-                observers.add(observer);
-            }
+            observers[index++] = factory.create(debug, method, compilation, code);
         }
-        return observers.toArray(new InstalledCodeObserver[0]);
+        return observers;
     }
 
     public static NonmovableArray<InstalledCodeObserverHandle> installObservers(InstalledCodeObserver[] observers) {
@@ -86,19 +79,11 @@ public final class InstalledCodeObserverSupport {
     }
 
     public static void activateObservers(NonmovableArray<InstalledCodeObserverHandle> observerHandles) {
-        forEach(observerHandles, ACTION_ACTIVATE);
-    }
-
-    public static void detachFromCurrentIsolate(NonmovableArray<InstalledCodeObserverHandle> observerHandles) {
-        forEach(observerHandles, ACTION_DETACH);
-    }
-
-    public static void attachToCurrentIsolate(NonmovableArray<InstalledCodeObserverHandle> observerHandles) {
-        forEach(observerHandles, ACTION_ATTACH);
+        forEach(observerHandles, h -> getAccessor(h).activate(h));
     }
 
     public static void removeObservers(NonmovableArray<InstalledCodeObserverHandle> observerHandles) {
-        forEach(observerHandles, ACTION_RELEASE);
+        forEach(observerHandles, h -> getAccessor(h).release(h));
     }
 
     private interface InstalledCodeObserverHandleAction {

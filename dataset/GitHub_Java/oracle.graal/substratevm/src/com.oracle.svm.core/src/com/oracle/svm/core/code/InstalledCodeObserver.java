@@ -40,7 +40,7 @@ public interface InstalledCodeObserver {
 
     interface Factory {
         /** Creates an observer for the specified code. */
-        InstalledCodeObserver create(DebugContext debug, SharedMethod method, CompilationResult compilation, Pointer code, int codeSize);
+        InstalledCodeObserver create(DebugContext debug, SharedMethod method, CompilationResult compilation, Pointer code);
     }
 
     /**
@@ -65,18 +65,11 @@ public interface InstalledCodeObserver {
         void setAccessor(InstalledCodeObserverHandleAccessor accessor);
     }
 
-    @SuppressWarnings("unused")
     interface InstalledCodeObserverHandleAccessor {
         default void activate(InstalledCodeObserverHandle handle) {
         }
 
         default void release(InstalledCodeObserverHandle handle) {
-        }
-
-        default void detachFromCurrentIsolate(InstalledCodeObserverHandle handle) {
-        }
-
-        default void attachToCurrentIsolate(InstalledCodeObserverHandle handle) {
         }
 
         @Uninterruptible(reason = "Called from uninterruptible code", mayBeInlined = true)

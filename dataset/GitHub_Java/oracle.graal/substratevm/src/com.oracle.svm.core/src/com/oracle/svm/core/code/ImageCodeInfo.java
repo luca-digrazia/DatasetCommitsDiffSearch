@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.core.code;
 
-import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -34,12 +33,14 @@ import org.graalvm.word.ComparableWord;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.MemoryWalker;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownObjectField;
 import com.oracle.svm.core.annotate.UnknownPrimitiveField;
 import com.oracle.svm.core.c.NonmovableArray;
 import com.oracle.svm.core.c.NonmovableArrays;
 import com.oracle.svm.core.c.NonmovableObjectArray;
+import com.oracle.svm.core.jdk.UninterruptibleUtils;
 import com.oracle.svm.core.util.VMError;
 
 public class ImageCodeInfo {
@@ -66,20 +67,21 @@ public class ImageCodeInfo {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     ImageCodeInfo() {
-        NonmovableObjectArray<Object> objfields = NonmovableArrays.createObjectArray(CodeInfoImpl.OBJFIELDS_COUNT);
-        NonmovableArrays.setObject(objfields, CodeInfoImpl.NAME_OBJFIELD, CODE_INFO_NAME);
-        // The image code info is never invalidated, so we consider it as always tethered.
-        NonmovableArrays.setObject(objfields, CodeInfoImpl.TETHER_OBJFIELD, new CodeInfoTether(true));
+        NonmovableObjectArray<Object> objfields = NonmovableArrays.createObjectArray(CodeInfo.OBJFIELDS_COUNT);
+        NonmovableArrays.setObject(objfields, CodeInfo.NAME_OBJFIELD, CODE_INFO_NAME);
+        Object tether = SubstrateOptions.getRuntimeAssertionsForClass(ImageCodeInfo.class.getName()) ? //
+                        new UninterruptibleUtils.AtomicInteger(0) : new Object();
+        NonmovableArrays.setObject(objfields, CodeInfo.TETHER_OBJFIELD, tether);
         // no InstalledCode for image code
         objectFields = NonmovableArrays.getHostedArray(objfields);
 
-        int runtimeInfoSize = SizeOf.get(CodeInfoImpl.class);
+        int runtimeInfoSize = SizeOf.get(CodeInfo.class);
         runtimeCodeInfoData = new byte[runtimeInfoSize];
     }
 
     @Uninterruptible(reason = "Executes during isolate creation.")
     CodeInfo prepareCodeInfo() {
-        CodeInfoImpl info = NonmovableArrays.addressOf(NonmovableArrays.fromImageHeap(runtimeCodeInfoData), 0);
+        CodeInfo info = NonmovableArrays.addressOf(NonmovableArrays.fromImageHeap(runtimeCodeInfoData), 0);
         assert info.getCodeStart().isNull() : "already initialized";
 
         info.setObjectFields(NonmovableArrays.fromImageHeap(objectFields));
@@ -87,7 +89,7 @@ public class ImageCodeInfo {
         info.setCodeSize(codeSize);
         info.setCodeInfoIndex(NonmovableArrays.fromImageHeap(codeInfoIndex));
         info.setCodeInfoEncodings(NonmovableArrays.fromImageHeap(codeInfoEncodings));
-        info.setStackReferenceMapEncoding(NonmovableArrays.fromImageHeap(referenceMapEncoding));
+        info.setReferenceMapEncoding(NonmovableArrays.fromImageHeap(referenceMapEncoding));
         info.setFrameInfoEncodings(NonmovableArrays.fromImageHeap(frameInfoEncodings));
         info.setFrameInfoObjectConstants(NonmovableArrays.fromImageHeap(frameInfoObjectConstants));
         info.setFrameInfoSourceClasses(NonmovableArrays.fromImageHeap(frameInfoSourceClasses));
@@ -110,7 +112,7 @@ public class ImageCodeInfo {
      * {@link ImageCodeInfo} and provide accesses during image generation.
      */
     @Platforms(Platform.HOSTED_ONLY.class)
-    public class HostedImageCodeInfo implements CodeInfoImpl {
+    class HostedImageCodeInfo implements CodeInfo {
         @Override
         public CodePointer getCodeStart() {
             return codeStart;
@@ -122,7 +124,7 @@ public class ImageCodeInfo {
         }
 
         @Override
-        public NonmovableArray<Byte> getStackReferenceMapEncoding() {
+        public NonmovableArray<Byte> getReferenceMapEncoding() {
             return NonmovableArrays.fromImageHeap(referenceMapEncoding);
         }
 
@@ -157,7 +159,7 @@ public class ImageCodeInfo {
         }
 
         @Override
-        public void setStackReferenceMapEncoding(NonmovableArray<Byte> array) {
+        public void setReferenceMapEncoding(NonmovableArray<Byte> array) {
             referenceMapEncoding = NonmovableArrays.getHostedArray(array);
         }
 
@@ -232,32 +234,32 @@ public class ImageCodeInfo {
         }
 
         @Override
-        public int getState() {
+        public boolean getCodeConstantsLive() {
             throw VMError.shouldNotReachHere("not supported for image code");
         }
 
         @Override
-        public void setState(int state) {
+        public void setCodeConstantsLive(boolean codeConstantsLive) {
             throw VMError.shouldNotReachHere("not supported for image code");
         }
 
         @Override
-        public NonmovableArray<Byte> getCodeConstantsReferenceMapEncoding() {
+        public NonmovableArray<Byte> getObjectsReferenceMapEncoding() {
             throw VMError.shouldNotReachHere("not supported for image code");
         }
 
         @Override
-        public void setCodeConstantsReferenceMapEncoding(NonmovableArray<Byte> objectsReferenceMapEncoding) {
+        public void setObjectsReferenceMapEncoding(NonmovableArray<Byte> objectsReferenceMapEncoding) {
             throw VMError.shouldNotReachHere("not supported for image code");
         }
 
         @Override
-        public long getCodeConstantsReferenceMapIndex() {
+        public long getObjectsReferenceMapIndex() {
             throw VMError.shouldNotReachHere("not supported for image code");
         }
 
         @Override
-        public void setCodeConstantsReferenceMapIndex(long objectsReferenceMapIndex) {
+        public void setObjectsReferenceMapIndex(long objectsReferenceMapIndex) {
             throw VMError.shouldNotReachHere("not supported for image code");
         }
 
@@ -298,11 +300,6 @@ public class ImageCodeInfo {
 
         @Override
         public void setCodeObserverHandles(NonmovableArray<InstalledCodeObserver.InstalledCodeObserverHandle> handles) {
-            throw VMError.shouldNotReachHere("not supported for image code");
-        }
-
-        @Override
-        public Word getGCData() {
             throw VMError.shouldNotReachHere("not supported for image code");
         }
 
