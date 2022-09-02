@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime.debug;
 
-import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.Inlining;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.TraceInlining;
 import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.TruffleFunctionInlining;
 
@@ -53,7 +52,7 @@ public final class TraceInliningListener extends AbstractGraalTruffleRuntimeList
         if (!target.getOptionValue(TraceInlining) || inliningDecision == null) {
             return;
         }
-        if (target.getOptionValue(Inlining)) {
+        if (TruffleRuntimeOptions.getValue(TruffleFunctionInlining)) {
             runtime.logEvent(0, "inline start", target.toString(), target.getDebugProperties(null));
             logInliningDecisionRecursive(target, inliningDecision, 1);
             runtime.logEvent(0, "inline done", target.toString(), target.getDebugProperties(inliningDecision));

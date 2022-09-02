@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -61,28 +61,24 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
 
     @Override
     public void onCompilationQueued(OptimizedCallTarget target) {
-        if (target.engine.traceCompilationDetails) {
-            Map<String, Object> properties = new LinkedHashMap<>();
-            properties.putAll(target.getDebugProperties(null));
-            properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
-            runtime.logEvent(0, "opt queued", target.toString(), properties);
+        if (target.getOptionValue(TraceCompilationDetails)) {
+            runtime.logEvent(0, "opt queued", target.toString(), target.getDebugProperties(null));
         }
     }
 
     @Override
     public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
-        if (target.engine.traceCompilationDetails) {
+        if (target.getOptionValue(TraceCompilationDetails)) {
             Map<String, Object> properties = new LinkedHashMap<>();
-            properties.putAll(target.getDebugProperties(null));
+            addSourceInfo(properties, source);
             properties.put("Reason", reason);
-            properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
             runtime.logEvent(0, "opt unqueued", target.toString(), properties);
         }
     }
 
     @Override
     public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanentBailout) {
-        if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
+        if (target.getOptionValue(TraceCompilation) || target.getOptionValue(TraceCompilationDetails)) {
             if (!isPermanentFailure(bailout, permanentBailout)) {
                 onCompilationDequeued(target, null, "Non permanent bailout: " + reason);
             }
@@ -92,28 +88,25 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
 
     @Override
     public void onCompilationStarted(OptimizedCallTarget target) {
-        if (target.engine.traceCompilationDetails) {
+        if (target.getOptionValue(TraceCompilationDetails)) {
             runtime.logEvent(0, "opt start", target.toString(), target.getDebugProperties(null));
         }
 
-        if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
+        if (target.getOptionValue(TraceCompilation) || target.getOptionValue(TraceCompilationDetails)) {
             currentCompilation.set(new Times());
         }
     }
 
     @Override
     public void onCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
-        if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
-            Map<String, Object> properties = new LinkedHashMap<>();
-            properties.putAll(target.getDebugProperties(null));
-            properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
-            runtime.logEvent(0, "opt deopt", target.toString(), properties);
+        if (target.getOptionValue(TraceCompilation) || target.getOptionValue(TraceCompilationDetails)) {
+            runtime.logEvent(0, "opt deopt", target.toString(), target.getDebugProperties(null));
         }
     }
 
     @Override
     public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph) {
-        if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
+        if (target.getOptionValue(TraceCompilation) || target.getOptionValue(TraceCompilationDetails)) {
             final Times current = currentCompilation.get();
             current.timePartialEvaluationFinished = System.nanoTime();
             current.nodeCountPartialEval = graph.getNodeCount();
@@ -122,7 +115,7 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
 
     @Override
     public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
-        if (!target.engine.traceCompilation && !target.engine.traceCompilationDetails) {
+        if (!target.getOptionValue(TraceCompilation) && !target.getOptionValue(TraceCompilationDetails)) {
             return;
         }
 
@@ -175,10 +168,16 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     public void onCompilationInvalidated(OptimizedCallTarget target, Object source, CharSequence reason) {
         if (target.getOptionValue(TraceCompilation) || target.getOptionValue(TraceCompilationDetails)) {
             Map<String, Object> properties = new LinkedHashMap<>();
-            properties.putAll(target.getDebugProperties(null));
+            addSourceInfo(properties, source);
             properties.put("Reason", reason);
-            properties.put("Source", formatSourceSection(target.getRootNode().getSourceSection()));
             runtime.logEvent(0, "opt invalidated", target.toString(), properties);
+        }
+    }
+
+    private static void addSourceInfo(Map<String, Object> properties, Object source) {
+        if (source != null) {
+            properties.put("SourceClass", source.getClass().getSimpleName());
+            properties.put("Source", source);
         }
     }
 
