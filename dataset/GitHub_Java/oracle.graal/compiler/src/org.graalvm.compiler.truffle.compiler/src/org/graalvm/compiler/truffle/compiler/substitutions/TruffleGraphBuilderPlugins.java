@@ -33,7 +33,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.function.Supplier;
 
 import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -126,7 +125,7 @@ public class TruffleGraphBuilderPlugins {
     private static void registerObjectsPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
         ResolvedJavaType objectsType = TruffleCompilerRuntime.getRuntime().resolveType(metaAccess, "java.util.Objects");
         Registration r = new Registration(plugins, new ResolvedJavaSymbol(objectsType));
-        InvocationPlugin requireNonNullPlugin = new InvocationPlugin() {
+        InvocationPlugin plugin = new InvocationPlugin() {
 
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
@@ -134,15 +133,8 @@ public class TruffleGraphBuilderPlugins {
                 b.addPush(JavaKind.Object, nullChecked);
                 return true;
             }
-
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode obj, ValueNode msg) {
-                return apply(b, targetMethod, receiver, obj);
-            }
         };
-        r.register1("requireNonNull", Object.class, requireNonNullPlugin);
-        r.register2("requireNonNull", Object.class, String.class, requireNonNullPlugin);
-        r.register2("requireNonNull", Object.class, Supplier.class, requireNonNullPlugin);
+        r.register1("requireNonNull", Object.class, plugin);
     }
 
     public static void registerOptimizedAssumptionPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, KnownTruffleTypes types) {
