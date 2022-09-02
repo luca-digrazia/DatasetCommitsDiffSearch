@@ -189,16 +189,19 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
 
             try (ScratchRegister sc = masm.getScratchRegister()) {
                 int wordSize = 8;
-                Register scratch = sc.getRegister();
+                Register rscratch1 = sc.getRegister();
                 assert totalFrameSize > 0;
-                AArch64Address.AddressingMode addressingMode = AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED;
-                if (AArch64Address.isValidImmediateAddress(64, addressingMode, frameSize)) {
+                if (frameSize < 1 << 9) {
                     masm.sub(64, sp, sp, totalFrameSize);
-                    masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, addressingMode, sp, frameSize));
+                    masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED, sp, frameSize));
                 } else {
-                    int frameRecordSize = 2 * wordSize;
-                    masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -frameRecordSize));
-                    masm.sub(64, sp, sp, totalFrameSize - frameRecordSize, scratch);
+                    masm.stp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_PRE_INDEXED, sp, -2 * wordSize));
+                    if (frameSize < 1 << 12) {
+                        masm.sub(64, sp, sp, totalFrameSize - 2 * wordSize);
+                    } else {
+                        masm.mov(rscratch1, totalFrameSize - 2 * wordSize);
+                        masm.sub(64, sp, sp, rscratch1);
+                    }
                 }
             }
             if (HotSpotMarkId.FRAME_COMPLETE.isAvailable()) {
@@ -232,17 +235,20 @@ public class AArch64HotSpotBackend extends HotSpotHostBackend implements LIRGene
             crb.blockComment("[method epilogue]");
             try (ScratchRegister sc = masm.getScratchRegister()) {
                 int wordSize = 8;
-                Register scratch = sc.getRegister();
+                Register rscratch1 = sc.getRegister();
                 final int frameSize = frameMap.frameSize();
                 assert totalFrameSize > 0;
-                AArch64Address.AddressingMode addressingMode = AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED;
-                if (AArch64Address.isValidImmediateAddress(64, addressingMode, frameSize)) {
-                    masm.ldp(64, fp, lr, AArch64Address.createImmediateAddress(64, addressingMode, sp, frameSize));
+                if (frameSize < 1 << 9) {
+                    masm.ldp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED, sp, frameSize));
                     masm.add(64, sp, sp, totalFrameSize);
                 } else {
-                    int frameRecordSize = 2 * wordSize;
-                    masm.add(64, sp, sp, totalFrameSize - frameRecordSize, scratch);
-                    masm.ldp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_POST_INDEXED, sp, frameRecordSize));
+                    if (frameSize < 1 << 12) {
+                        masm.add(64, sp, sp, totalFrameSize - 2 * wordSize);
+                    } else {
+                        masm.mov(rscratch1, totalFrameSize - 2 * wordSize);
+                        masm.add(64, sp, sp, rscratch1);
+                    }
+                    masm.ldp(64, fp, lr, AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_PAIR_POST_INDEXED, sp, 2 * wordSize));
                 }
             }
 
