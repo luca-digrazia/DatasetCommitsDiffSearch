@@ -22,6 +22,7 @@
  */
 package com.oracle.truffle.espresso.impl;
 
+import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 import java.lang.ref.WeakReference;
@@ -35,8 +36,8 @@ public final class HotSwapClassInfo extends ClassInfo {
     private byte[] bytes;
     private byte[] patchedBytes;
     private final StaticObject classLoader;
-    private final String originalName;
-    private String newName;
+    private final Symbol<Symbol.Name> originalName;
+    private Symbol<Symbol.Name> newName;
 
     // below fields constitute the "fingerprint" of the class relevant for matching
     private String classFingerprint;
@@ -44,12 +45,18 @@ public final class HotSwapClassInfo extends ClassInfo {
     private String fieldFingerprint;
     private String enclosingMethodFingerprint;
 
+    final String finalClassFingerprint;
+    final String finalMethodFingerprint;
+    final String finalFieldFingerprint;
+    final String finalEnclosingMethodFingerprint;
+
     private final ArrayList<HotSwapClassInfo> innerClasses;
     private HotSwapClassInfo outerClassInfo;
     private int nextNewClass = 1;
 
-    HotSwapClassInfo(ObjectKlass klass, String originalName, StaticObject classLoader, String classFingerprint, String methodFingerprint, String fieldFingerprint, String enclosingMethodFingerprint,
-                             ArrayList<HotSwapClassInfo> inners, byte[] bytes) {
+    HotSwapClassInfo(ObjectKlass klass, Symbol<Symbol.Name> originalName, StaticObject classLoader, String classFingerprint, String methodFingerprint, String fieldFingerprint,
+                    String enclosingMethodFingerprint,
+                    ArrayList<HotSwapClassInfo> inners, byte[] bytes) {
         this.thisKlass = new WeakReference<>(klass);
         this.originalName = originalName;
         this.classLoader = classLoader;
@@ -59,6 +66,11 @@ public final class HotSwapClassInfo extends ClassInfo {
         this.enclosingMethodFingerprint = enclosingMethodFingerprint;
         this.innerClasses = inners;
         this.bytes = bytes;
+
+        this.finalClassFingerprint = classFingerprint;
+        this.finalMethodFingerprint = methodFingerprint;
+        this.finalFieldFingerprint = fieldFingerprint;
+        this.finalEnclosingMethodFingerprint = enclosingMethodFingerprint;
     }
 
     @Override
@@ -66,16 +78,20 @@ public final class HotSwapClassInfo extends ClassInfo {
         return thisKlass.get();
     }
 
+    public void setKlass(ObjectKlass klass) {
+        thisKlass = new WeakReference<>(klass);
+    }
+
     @Override
-    public String getName() {
+    public Symbol<Symbol.Name> getName() {
         return originalName;
     }
 
-    public String getNewName() {
+    public Symbol<Symbol.Name> getNewName() {
         return newName != null ? newName : originalName;
     }
 
-    public void rename(String name) {
+    public void rename(Symbol<Symbol.Name> name) {
         this.newName = name;
     }
 
@@ -83,12 +99,9 @@ public final class HotSwapClassInfo extends ClassInfo {
         return newName != null && !newName.equals(originalName);
     }
 
-    public void setKlass(ObjectKlass klass) {
-        thisKlass = new WeakReference<>(klass);
-    }
-
-    public HotSwapClassInfo[] getInnerClasses() {
-        return innerClasses.toArray(new HotSwapClassInfo[innerClasses.size()]);
+    @Override
+    public ArrayList<? extends ClassInfo> getInnerClasses() {
+        return innerClasses;
     }
 
     public void addInnerClass(HotSwapClassInfo inner) {
@@ -96,7 +109,7 @@ public final class HotSwapClassInfo extends ClassInfo {
         inner.setOuterClass(this);
     }
 
-    public boolean knowsInnerClass(String innerName) {
+    public boolean knowsInnerClass(Symbol<Symbol.Name> innerName) {
         for (ClassInfo innerClass : innerClasses) {
             if (innerName.equals(innerClass.getName())) {
                 return true;
@@ -113,23 +126,27 @@ public final class HotSwapClassInfo extends ClassInfo {
         return outerClassInfo;
     }
 
-    void outerRenamed(String oldName, String newName) {
-        methodFingerprint = methodFingerprint != null ? methodFingerprint.replace(oldName, newName) : null;
-        fieldFingerprint = fieldFingerprint != null ? fieldFingerprint.replace(oldName, newName) : null;
+    void outerRenamed(String oldName, String replacementName) {
+        methodFingerprint = methodFingerprint != null ? methodFingerprint.replace(oldName, replacementName) : null;
+        fieldFingerprint = fieldFingerprint != null ? fieldFingerprint.replace(oldName, replacementName) : null;
     }
 
+    @Override
     public String getClassFingerprint() {
         return classFingerprint;
     }
 
+    @Override
     public String getMethodFingerprint() {
         return methodFingerprint;
     }
 
+    @Override
     public String getFieldFingerprint() {
         return fieldFingerprint;
     }
 
+    @Override
     public String getEnclosingMethodFingerprint() {
         return enclosingMethodFingerprint;
     }
@@ -144,8 +161,8 @@ public final class HotSwapClassInfo extends ClassInfo {
         return bytes;
     }
 
-    public void patchBytes(byte[] patchedBytes) {
-        this.patchedBytes = patchedBytes;
+    public void patchBytes(byte[] patchBytes) {
+        this.patchedBytes = patchBytes;
     }
 
     public boolean isPatched() {
@@ -158,5 +175,9 @@ public final class HotSwapClassInfo extends ClassInfo {
 
     public String addHotClassMarker() {
         return getNewName() + InnerClassRedefiner.HOT_CLASS_MARKER + nextNewClass++;
+    }
+
+    public ArrayList<HotSwapClassInfo> getHotSwapInnerClasses() {
+        return innerClasses;
     }
 }
