@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,6 @@ import java.util.function.Function;
 
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGenerator;
 
-import jdk.vm.ci.amd64.AMD64Kind;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.Value;
 
@@ -50,7 +49,7 @@ public abstract class HashFunction {
      * @param min {@code value} is guaranteed to be greater or equal to this minimum
      * @return the hash value within int range
      */
-    public abstract int apply(long value, long min);
+    public abstract int apply(int value, int min);
 
     /**
      * Generates LIR that implements the hash function in terms of value and min.
@@ -110,25 +109,25 @@ public abstract class HashFunction {
                       (gen, prime) -> (val, min) -> gen.emitShr(gen.emitMul(val, prime, false), min));
 
         addWithPrimes("rotateRight(val, prime)", 3,
-                      prime -> (val, min) -> Long.rotateRight(val, prime),
+                      prime -> (val, min) -> Integer.rotateRight(val, prime),
                       (gen, prime) -> (val, min) -> gen.emitRor(val, prime));
 
         addWithPrimes("rotateRight(val, prime) + val", 4,
-                      prime -> (val, min) -> Long.rotateRight(val, prime) + val,
+                      prime -> (val, min) -> Integer.rotateRight(val, prime) + val,
                       (gen, prime) -> (val, min) -> gen.emitAdd(gen.emitRor(val, prime), val, false));
 
         addWithPrimes("rotateRight(val, prime) ^ val", 4,
-                      prime -> (val, min) -> Long.rotateRight(val, prime) ^ val,
+                      prime -> (val, min) -> Integer.rotateRight(val, prime) ^ val,
                       (gen, prime) -> (val, min) -> gen.emitXor(gen.emitRor(val, prime), val));
       //@formatter:on
     }
 
-    private static void add(String toString, int effort, BiFunction<Long, Long, Long> f, Function<ArithmeticLIRGenerator, BiFunction<Value, Value, Value>> gen) {
+    private static void add(String toString, int effort, BiFunction<Integer, Integer, Integer> f, Function<ArithmeticLIRGenerator, BiFunction<Value, Value, Value>> gen) {
         instances.add(new HashFunction() {
 
             @Override
-            public int apply(long value, long min) {
-                return f.apply(value, min).intValue();
+            public int apply(int value, int min) {
+                return f.apply(value, min);
             }
 
             @Override
@@ -143,20 +142,12 @@ public abstract class HashFunction {
 
             @Override
             public Value gen(Value val, Value min, ArithmeticLIRGenerator t) {
-                return gen.apply(t).apply(toDWORD(val, t), toDWORD(min, t));
-            }
-
-            private Value toDWORD(Value v, ArithmeticLIRGenerator t) {
-                if (v.getPlatformKind() != AMD64Kind.DWORD) {
-                    return t.emitNarrow(v, 32);
-                } else {
-                    return v;
-                }
+                return gen.apply(t).apply(t.emitNarrow(val, 32), t.emitNarrow(min, 32));
             }
         });
     }
 
-    private static void addWithPrimes(String toString, int effort, Function<Integer, BiFunction<Long, Long, Long>> f,
+    private static void addWithPrimes(String toString, int effort, Function<Integer, BiFunction<Integer, Integer, Integer>> f,
                     BiFunction<ArithmeticLIRGenerator, Value, BiFunction<Value, Value, Value>> gen) {
         for (int p : mersennePrimes) {
             add(toString, effort, f.apply(p), g -> gen.apply(g, g.getLIRGen().emitJavaConstant(JavaConstant.forInt(p))));
