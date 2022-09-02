@@ -31,7 +31,8 @@ package com.oracle.truffle.llvm.runtime.nodes.memory.store;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectWriteNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
@@ -41,10 +42,9 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public abstract class LLVMStoreNodeCommon extends LLVMStoreNode {
 
-    @CompilationFinal private LLVMMemory llvmMemory;
+    @CompilationFinal private LanguageReference<LLVMLanguage> languageRef;
 
     @Child private LLVMDerefHandleGetReceiverNode derefHandleGetReceiverNode;
-    @CompilationFinal private boolean hasSeenHandleMemory;
 
     protected LLVMDerefHandleGetReceiverNode getDerefHandleGetReceiverNode() {
         if (derefHandleGetReceiverNode == null) {
@@ -63,21 +63,14 @@ public abstract class LLVMStoreNodeCommon extends LLVMStoreNode {
     }
 
     protected boolean isAutoDerefHandle(long addr) {
-        if (!hasSeenHandleMemory) {
-            if (!LLVMNativeMemory.isHandleMemory(addr)) {
-                return false;
-            }
+        if (languageRef == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            hasSeenHandleMemory = true;
+            languageRef = lookupLanguageReference(LLVMLanguage.class);
         }
-        return getLLVMMemoryCached().isDerefHandleMemory(addr);
-    }
-
-    protected final LLVMMemory getLLVMMemoryCached() {
-        if (llvmMemory == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            llvmMemory = getLLVMMemory();
+        // checking the bit is cheaper than getting the assumption in interpreted mode
+        if (CompilerDirectives.inCompiledCode() && languageRef.get().getNoDerefHandleAssumption().isValid()) {
+            return false;
         }
-        return llvmMemory;
+        return LLVMNativeMemory.isDerefHandleMemory(addr);
     }
 }

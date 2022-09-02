@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,6 +35,7 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -44,7 +45,7 @@ public abstract class LLVMI64StoreNode extends LLVMStoreNodeCommon {
     @Specialization(guards = "!isAutoDerefHandle(address)")
     protected void doOp(LLVMNativePointer address, long value,
                     @CachedLanguage LLVMLanguage language) {
-        language.getLLVMMemory().putI64(address, value);
+        language.getCapability(LLVMMemory.class).putI64(address, value);
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)")
@@ -62,14 +63,14 @@ public abstract class LLVMI64StoreNode extends LLVMStoreNodeCommon {
     @Specialization(guards = "!isAutoDerefHandle(address)")
     protected void doOpNative(LLVMNativePointer address, LLVMNativePointer value,
                     @CachedLanguage LLVMLanguage language) {
-        language.getLLVMMemory().putI64(address, value.asNative());
+        language.getCapability(LLVMMemory.class).putI64(address, value.asNative());
     }
 
     @Specialization(replaces = "doOpNative", guards = "!isAutoDerefHandle(addr)")
     protected void doOp(LLVMNativePointer addr, Object value,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toAddress,
                     @CachedLanguage LLVMLanguage language) {
-        language.getLLVMMemory().putI64(addr, toAddress.executeWithTarget(value).asNative());
+        language.getCapability(LLVMMemory.class).putI64(addr, toAddress.executeWithTarget(value).asNative());
     }
 
     @Specialization(limit = "3")
