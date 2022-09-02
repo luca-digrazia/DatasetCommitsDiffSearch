@@ -275,7 +275,8 @@ public interface EspressoProperties {
 
         Path espressoHome = HomeFinder.getInstance().getLanguageHomes().get(EspressoLanguage.ID);
 
-        // Inject hotswap.jar
+        // Inject hotswap.jar on boot class path on java 8
+        // Espresso HotSwap plugin support is currently only available in debugging mode
         if (options.get(EspressoOptions.JDWPOptions) != null) {
             Path hotswapJar = espressoHome.resolve("lib").resolve("hotswap.jar");
             if (Files.isReadable(hotswapJar)) {
@@ -288,7 +289,7 @@ public interface EspressoProperties {
             JDWP.LOGGER.fine(() -> "Espresso HotSwap Plugin support is disabled. HotSwap is only supported in debug mode.");
         }
 
-        // Inject polyglot.jar
+        // Inject polyglot.jar on JDK 8.
         if (options.get(EspressoOptions.Polyglot)) {
             Path polyglotJar = espressoHome.resolve("lib").resolve("polyglot.jar");
             if (Files.isReadable(polyglotJar)) {
