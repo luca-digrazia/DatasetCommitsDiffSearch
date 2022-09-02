@@ -38,7 +38,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.graalvm.component.installer.BundleConstants;
@@ -207,15 +206,15 @@ public class WebCatalog implements SoftwareChannel {
         oldGraalPref.append('.');
 
         String graalVersionString;
-        Version normalizedVersion;
+        String normalizedVersion;
 
         if (matchVersion != null) {
             graalVersionString = matchVersion.getVersion().displayString();
-            normalizedVersion = matchVersion.getVersion().installVersion();
+            normalizedVersion = matchVersion.getVersion().toString();
         } else {
             // read from the release file
             graalVersionString = graalCaps.get(CommonConstants.CAP_GRAALVM_VERSION).toLowerCase();
-            normalizedVersion = local.getGraalVersion().installVersion();
+            normalizedVersion = local.getGraalVersion().toString();
         }
 
         StringBuilder graalPref = new StringBuilder(oldGraalPref);
@@ -224,7 +223,7 @@ public class WebCatalog implements SoftwareChannel {
 
         oldGraalPref.append('_').append(sb);
         graalPref.append(sb).append('/');
-        graalPref.append("(?<ver>[^/]+)$"); // NOI18N
+        graalPref.append(Pattern.quote(normalizedVersion));
 
         try (FileInputStream fis = new FileInputStream(dn.getLocalFile())) {
             loadProps.load(fis);
@@ -235,21 +234,8 @@ public class WebCatalog implements SoftwareChannel {
         Pattern oldPrefixPattern = Pattern.compile(oldGraalPref.toString(), Pattern.CASE_INSENSITIVE);
         Pattern newPrefixPattern = Pattern.compile(graalPref.toString(), Pattern.CASE_INSENSITIVE);
         Stream<String> propNames = loadProps.stringPropertyNames().stream();
-        boolean foundPrefix = propNames.anyMatch(p -> {
-            if (oldPrefixPattern.matcher(p).matches()) {
-                return true;
-            }
-            Matcher m = newPrefixPattern.matcher(p);
-            if (!m.find() || m.start() > 0) {
-                return false;
-            }
-            try {
-                Version v = Version.fromString(m.group("ver")); // NOI18N
-                return normalizedVersion.match(Version.Match.Type.INSTALLABLE).test(v);
-            } catch (IllegalArgumentException ex) {
-                return false;
-            }
-        });
+        boolean foundPrefix = propNames.anyMatch(p -> oldPrefixPattern.matcher(p).matches() ||
+                        newPrefixPattern.matcher(p).find());
         if (!foundPrefix) {
             boolean graalPrefixFound = false;
             boolean componentFound = false;
