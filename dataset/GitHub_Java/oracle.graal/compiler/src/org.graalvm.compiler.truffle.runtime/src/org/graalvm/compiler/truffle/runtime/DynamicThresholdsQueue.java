@@ -31,15 +31,15 @@ public class DynamicThresholdsQueue extends TraversingBlockingQueue {
     private final GraalTruffleRuntime runtime;
     private final int threads;
     private final double minScale;
-    private final int minNormalLoad;
-    private final int maxNormalLoad;
+    private final int normalLoad;
+    private final double plateauWidth;
 
-    public DynamicThresholdsQueue(GraalTruffleRuntime runtime, int threads, double minScale, int minNormalLoad, int maxNormalLoad) {
+    public DynamicThresholdsQueue(GraalTruffleRuntime runtime, int threads, double minScale, int normalLoad, double plateauWidth) {
         this.runtime = runtime;
         this.threads = threads;
         this.minScale = minScale;
-        this.minNormalLoad = minNormalLoad;
-        this.maxNormalLoad = maxNormalLoad;
+        this.normalLoad = normalLoad;
+        this.plateauWidth = plateauWidth;
     }
 
     private double load() {
@@ -77,28 +77,18 @@ public class DynamicThresholdsQueue extends TraversingBlockingQueue {
     }
 
     private void scaleThresholds() {
-        runtime.setCompilationThresholdScale(FixedPointMath.toFixedPoint(scale()));
+        runtime.setCompilationThresholdScale(scale());
     }
 
-    /**
-     * @return f(x) where x is the load of the queue and f is a function that
-     *
-     *         - Grows linearly between coordinates (0, minScale) and (minNormalLoad, 1)
-     *
-     *         - Equals 1 for all x between minNormalLoad and maxNormalLoad (inclusively)
-     *
-     *         - For all x > maxNormalLoad - grows at the same rate as for x < minNormalLoad, but
-     *         starting at coordinate (maxNormalLoad, 1)
-     */
     private double scale() {
         double x = load();
-        if (minNormalLoad <= x && x <= maxNormalLoad) {
+        if ((1 - plateauWidth) * normalLoad <= x && x <= (1 + plateauWidth) * normalLoad) {
             return 1;
         }
-        double slope = (1 - minScale) / (minNormalLoad - 1);
-        if (x < minNormalLoad) {
+        double slope = (1 - minScale) / ((1 - plateauWidth) * normalLoad);
+        if (x < (1 - plateauWidth) * normalLoad) {
             return slope * x + minScale;
         }
-        return slope * x + (1 - slope * maxNormalLoad);
+        return slope * x - (1 + plateauWidth) * slope * normalLoad + 1;
     }
 }
