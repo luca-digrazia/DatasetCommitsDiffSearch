@@ -31,7 +31,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.ClassRegistries;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -51,9 +50,9 @@ import sun.misc.Unsafe;
 @EspressoSubstitutions
 public final class Target_sun_misc_Unsafe {
 
-    static final int SAFETY_FIELD_OFFSET = 123456789;
+    public static final int SAFETY_FIELD_OFFSET = 123456789;
 
-    private static final Unsafe U;
+    private static Unsafe U;
 
     static {
         try {
@@ -70,8 +69,8 @@ public final class Target_sun_misc_Unsafe {
     public static @Host(Class.class) StaticObject defineAnonymousClass(
                     @Host(Unsafe.class) StaticObject self,
                     @Host(Class.class) StaticObject hostClass,
-                    @Host(byte[].class) StaticObject data,
-                    @Host(Object[].class) StaticObject constantPoolPatches) {
+                    @Host(typeName = "[B") StaticObject data,
+                    @Host(typeName = "[Ljava/lang/Object;") StaticObject constantPoolPatches) {
 
         EspressoContext context = self.getKlass().getContext();
         Meta meta = context.getMeta();
@@ -84,13 +83,14 @@ public final class Target_sun_misc_Unsafe {
         StaticObject[] patches = StaticObject.isNull(constantPoolPatches) ? null : constantPoolPatches.unwrap();
         Klass hostKlass = hostClass.getMirrorKlass();
         ClassfileStream cfs = new ClassfileStream(bytes, null);
-        ParserKlass parserKlass = ClassfileParser.parse(cfs, null, hostKlass, context, patches);
+        ClassfileParser parser = new ClassfileParser(cfs, null, hostKlass, context, patches);
+        ParserKlass parserKlass = parser.parseClass();
         StaticObject classLoader = hostKlass.getDefiningClassLoader();
-        return defineAnonymousKlass(parserKlass, context, classLoader, hostKlass).mirror();
+        return defineAnonymousKlass(parserKlass, context, classLoader, parser.getThisKlassIndex(), hostKlass).mirror();
     }
 
-    private static ObjectKlass defineAnonymousKlass(ParserKlass parserKlass, EspressoContext context, StaticObject classLoader, Klass hostKlass) {
-        Symbol<Type> superKlassType = parserKlass.getSuperKlass();
+    private static ObjectKlass defineAnonymousKlass(ParserKlass parserKlass, EspressoContext context, StaticObject classLoader, int thisKlassIndex, Klass hostKlass) {
+        Symbol<Symbol.Type> superKlassType = parserKlass.getSuperKlass();
         ClassRegistries classRegistry = context.getRegistries();
 
         // TODO(garcia): Superclass must be a class, and non-final.
@@ -100,7 +100,7 @@ public final class Target_sun_misc_Unsafe {
 
         assert superKlass == null || !superKlass.isInterface();
 
-        final Symbol<Type>[] superInterfacesTypes = parserKlass.getSuperInterfaces();
+        final Symbol<Symbol.Type>[] superInterfacesTypes = parserKlass.getSuperInterfaces();
 
         LinkedKlass[] linkedInterfaces = superInterfacesTypes.length == 0
                         ? LinkedKlass.EMPTY_ARRAY
@@ -121,7 +121,7 @@ public final class Target_sun_misc_Unsafe {
 
         ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, classLoader, hostKlass);
 
-        klass.getConstantPool().setKlassAt(parserKlass.getThisKlassIndex(), klass);
+        klass.getConstantPool().setKlassAt(thisKlassIndex, klass);
 
         return klass;
     }
@@ -408,7 +408,6 @@ public final class Target_sun_misc_Unsafe {
 
     // region get*Volatile(Object holder, long offset)
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static boolean getBooleanVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
@@ -419,7 +418,6 @@ public final class Target_sun_misc_Unsafe {
         return holder.getByteFieldVolatile(f) != 0;
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static byte getByteVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
@@ -430,7 +428,6 @@ public final class Target_sun_misc_Unsafe {
         return holder.getByteFieldVolatile(f);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static short getShortVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
@@ -441,7 +438,6 @@ public final class Target_sun_misc_Unsafe {
         return holder.getShortFieldVolatile(f);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static char getCharVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
@@ -462,7 +458,6 @@ public final class Target_sun_misc_Unsafe {
         return holder.getFloatFieldVolatile(f);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static int getIntVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject unsafe, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
@@ -483,7 +478,6 @@ public final class Target_sun_misc_Unsafe {
         return holder.getLongFieldVolatile(f);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static double getDoubleVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
@@ -494,7 +488,6 @@ public final class Target_sun_misc_Unsafe {
         return holder.getDoubleField(f);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static Object getObjectVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset) {
         if (holder.isArray()) {
@@ -546,7 +539,6 @@ public final class Target_sun_misc_Unsafe {
 
     // endregion get*(long offset)
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putObjectVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, Object value) {
         if (holder.isArray()) {
@@ -561,7 +553,6 @@ public final class Target_sun_misc_Unsafe {
         holder.setFieldVolatile(f, value);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putIntVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, int value) {
         if (holder.isArray()) {
@@ -576,7 +567,6 @@ public final class Target_sun_misc_Unsafe {
         holder.setIntFieldVolatile(f, value);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putLongVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, long value) {
         if (holder.isArray()) {
@@ -591,7 +581,6 @@ public final class Target_sun_misc_Unsafe {
         holder.setLongFieldVolatile(f, value);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putBooleanVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, boolean value) {
         if (holder.isArray()) {
@@ -606,7 +595,6 @@ public final class Target_sun_misc_Unsafe {
         holder.setBooleanFieldVolatile(f, value);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putCharVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, char value) {
         if (holder.isArray()) {
@@ -621,7 +609,6 @@ public final class Target_sun_misc_Unsafe {
         holder.setCharFieldVolatile(f, value);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putShortVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, short value) {
         if (holder.isArray()) {
@@ -636,7 +623,6 @@ public final class Target_sun_misc_Unsafe {
         holder.setShortFieldVolatile(f, value);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putFloatVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, float value) {
         if (holder.isArray()) {
@@ -651,7 +637,6 @@ public final class Target_sun_misc_Unsafe {
         holder.setFloatFieldVolatile(f, value);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putDoubleVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, double value) {
         if (holder.isArray()) {
@@ -666,7 +651,6 @@ public final class Target_sun_misc_Unsafe {
         holder.setDoubleFieldVolatile(f, value);
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static void putByteVolatile(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset, byte value) {
         if (holder.isArray()) {
@@ -881,8 +865,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        // TODO(peterssen): Volatile is stronger than needed.
-        holder.setIntFieldVolatile(f, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -895,8 +878,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        // TODO(peterssen): Volatile is stronger than needed.
-        holder.setLongFieldVolatile(f, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -909,8 +891,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        // TODO(peterssen): Volatile is stronger than needed.
-        holder.setFieldVolatile(f, value);
+        f.set(holder, value);
     }
 
     // endregion put*(Object holder, long offset, * value)
@@ -1121,18 +1102,5 @@ public final class Target_sun_misc_Unsafe {
     @Substitution(hasReceiver = true)
     public static long reallocateMemory(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, long address, long bytes) {
         return U.reallocateMemory(address, bytes);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static @Host(Object.class) StaticObject getAndSetObject(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject holder, long offset,
-                    @Host(Object.class) StaticObject value) {
-        if (holder.isArray()) {
-            return (StaticObject) U.getAndSetObject((holder).unwrap(), offset, value);
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        assert f != null;
-        return f.getAndSetObject(holder, value);
     }
 }
