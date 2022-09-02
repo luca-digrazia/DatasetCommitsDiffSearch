@@ -25,10 +25,13 @@
 
 package com.oracle.svm.core.jdk;
 
+import java.nio.file.Path;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
@@ -148,6 +151,13 @@ final class Target_java_nio_file_spi_FileSystemProvider {
     public static List<FileSystemProvider> installedProviders() {
         return ImageSingletons.lookup(FileSystemProviderSupport.class).installedProvidersImmutable;
     }
+}
+
+@TargetClass(className = "jdk.internal.jimage.ImageReader", innerClass = "SharedImageReader", onlyWith = JDK11OrLater.class)
+final class Target_jdk_internal_jimage_ImageReader_SharedImageReader {
+    @Alias //
+    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.NewInstance, declClass = HashMap.class, isFinal = true) //
+    static Map<Path, Target_jdk_internal_jimage_ImageReader_SharedImageReader> OPEN_FILES;
 }
 
 /**
