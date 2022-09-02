@@ -249,7 +249,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         return true;
     }
 
-    private static final class MergeCoalesceBuilder {
+    private static class MergeCoallesceBuilder {
 
         private final List<KeyData> newKeyData = new ArrayList<>();
         private final ArrayList<AbstractBeginNode> newSuccessors = new ArrayList<>();
@@ -261,18 +261,18 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
 
         private boolean canRewire;
 
-        MergeCoalesceBuilder(IntegerSwitchNode switchNode) {
+        MergeCoallesceBuilder(IntegerSwitchNode switchNode) {
             this.switchNode = switchNode;
         }
 
-        private static final class MergeMarker implements Iterable<Integer> {
+        private static class MergeMarker implements Iterable<Integer> {
             private final ArrayList<Integer> indexes = new ArrayList<>();
             private final EconomicSet<EndNode> ends = EconomicSet.create();
             private boolean hasDefault = false;
 
             private static final int DEFAULT_KEY = -1;
 
-            void update(int index, EndNode end) {
+            final void update(int index, EndNode end) {
                 if (index == DEFAULT_KEY) {
                     hasDefault = true;
                 }
@@ -280,16 +280,16 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
                 ends.add(end);
             }
 
-            int visitedEnds() {
+            final int visitedEnds() {
                 return ends.size();
             }
 
-            boolean hasDefault() {
-                return hasDefault;
+            final int size() {
+                return indexes.size();
             }
 
-            Iterable<EndNode> ends() {
-                return ends;
+            final boolean hasDefault() {
+                return hasDefault;
             }
 
             @Override
@@ -298,7 +298,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
             }
         }
 
-        boolean canRewire() {
+        final boolean canRewire() {
             return canRewire;
         }
 
@@ -317,7 +317,8 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
                     EndNode endNode = (EndNode) next;
                     AbstractMergeNode merge = endNode.merge();
                     if ((merge instanceof MergeNode) &&
-                                    merge.phis().isEmpty()) {
+                                    merge.phis().isEmpty() &&
+                                    !merge.isUsedAsGuardInput()) {
                         // Multiple keys wire to the same trivial merge.
                         if (mergeKeys.containsKey(merge)) {
                             mergeKeys.get(merge).update(i, endNode);
@@ -346,35 +347,17 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
             while (cursor.advance()) {
                 AbstractMergeNode merge = cursor.getKey();
                 MergeMarker marker = cursor.getValue();
-                if (marker.visitedEnds() > 1) {
-                    /* Ensure that we coalesce more than a single branch. */
+                if (marker.size() > 1 &&
+                                merge.forwardEndCount() == marker.visitedEnds()) {
+                    /* Ensure that all ends of the merge come from the switch. */
                     canRewire = true;
-                    boolean partialCoalesce = merge.forwardEndCount() != marker.visitedEnds();
 
                     /* Rewire anchoring links, etc... to the new node */
-                    AbstractBeginNode begin;
-                    if (partialCoalesce) {
-                        /*
-                         * If one or more branches are not from the switch, or one of them can not
-                         * be coalesced (/ex: begin used as a guard), we can still save a few
-                         * begin/ends.
-                         */
-                        for (EndNode end : marker.ends()) {
-                            /* Detach visited ends from the merge */
-                            merge.removeEnd(end);
-                        }
-                        /* Attach a new end that will serve as the new target branch */
-                        EndNode newEnd = switchNode.graph().add(new EndNode());
-                        merge.addForwardEnd(newEnd);
-                        begin = BeginNode.begin(newEnd);
-                    } else {
-                        FixedNode next = merge.next();
-                        merge.setNext(null);
-                        begin = BeginNode.begin(next);
-                        merge.replaceAtUsages(begin, InputType.Anchor);
-                        merge.replaceAtUsages(begin, InputType.Guard);
-                        assert merge.hasNoUsages();
-                    }
+                    FixedNode next = merge.next();
+                    merge.setNext(null);
+                    AbstractBeginNode begin = BeginNode.begin(next);
+                    merge.replaceAtUsages(begin, InputType.Anchor);
+                    assert merge.hasNoUsages();
 
                     int successorIndex = addNewSuccessor(begin, newSuccessors);
                     if (marker.hasDefault()) {
@@ -394,6 +377,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
                             /* Rewire to the same successor */
                             AbstractBeginNode successorBegin = switchNode.keySuccessor(index);
                             assert successorBegin.next() instanceof EndNode;
+                            assert ((EndNode) successorBegin.next()).merge() == merge;
                             addKeyData(successorIndex, index);
                         }
                     }
@@ -425,7 +409,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
     }
 
     /**
-     * Coalesces branches of the switch that trivially merges together.
+     * Coallesces branches of the switch that trivially merges together.
      */
     public boolean tryMergeCommonSuccessors() {
         /*-
@@ -452,7 +436,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
          *
          */
 
-        MergeCoalesceBuilder builder = new MergeCoalesceBuilder(this);
+        MergeCoallesceBuilder builder = new MergeCoallesceBuilder(this);
         for (int i = 0; i < keyCount(); i++) {
             builder.tryMergeBranch(keySuccessor(i), i);
         }
@@ -464,7 +448,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         }
         builder.prepareMerge();
         if (!builder.canRewire()) {
-            // Detected merges could not be coalesced.
+            // Detected merges could not be coallesced.
             return false;
         }
         builder.commit();
