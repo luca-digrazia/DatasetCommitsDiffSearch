@@ -1,25 +1,3 @@
-/*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.truffle.espresso.processor;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -32,10 +10,12 @@ import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -76,7 +56,7 @@ public abstract class EspressoProcessor extends AbstractProcessor {
      * @see EspressoProcessor#IMPORT_STATIC_OBJECT
      * @see EspressoProcessor#IMPORT_TRUFFLE_OBJECT
      */
-    abstract String generateImports(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper);
+    abstract String generateImports(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, boolean hasMetaInjection, SubstitutionHelper helper);
 
     /**
      * Generates the string corresponding to the Constructor for the current substitutor. In
@@ -84,7 +64,8 @@ public abstract class EspressoProcessor extends AbstractProcessor {
      * 
      * @see EspressoProcessor#SUBSTITUTOR
      */
-    abstract String generateConstructor(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper);
+    abstract String generateFactoryConstructorBody(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, boolean hasMetaInjection,
+                    SubstitutionHelper helper);
 
     /**
      * Generates th string that corresponds to the code of the invoke method for the current
@@ -98,7 +79,7 @@ public abstract class EspressoProcessor extends AbstractProcessor {
      * @see EspressoProcessor#FACTORY_IS_NULL
      * @see EspressoProcessor#STATIC_OBJECT_NULL
      */
-    abstract String generateInvoke(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper);
+    abstract String generateInvoke(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, SubstitutionHelper helper, boolean hasMetaInjection);
 
     EspressoProcessor(String SUBSTITUTION_PACKAGE, String SUBSTITUTOR, String COLLECTOR, String COLLECTOR_INSTANCE_NAME) {
         this.SUBSTITUTION_PACKAGE = SUBSTITUTION_PACKAGE;
@@ -127,9 +108,18 @@ public abstract class EspressoProcessor extends AbstractProcessor {
     protected HashSet<String> classes = new HashSet<>();
     protected StringBuilder collector = null;
 
+    // Special annotations
+    TypeElement guestCall;
+    private static final String GUEST_CALL = "com.oracle.truffle.espresso.substitutions.GuestCall";
+
+    TypeElement injectMeta;
+    private static final String INJECT_META = "com.oracle.truffle.espresso.substitutions.InjectMeta";
+
     // Global constants
-    private static final String INSTANCE_NAME = "theInstance";
-    private static final String GETTER = "getInstance";
+    private static final String FACTORY = "Factory";
+    private static final String FACTORY_INSTANCE = "factory";
+    private static final String FACTORY_GETTER = "getFactory";
+    private static final String COLLECTOR_GETTER = "getCollector";
 
     private static final String COPYRIGHT = "/* Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.\n" +
                     " * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.\n" +
@@ -157,15 +147,30 @@ public abstract class EspressoProcessor extends AbstractProcessor {
     private static final String AT_LINK = "@link ";
     private static final String FACTORY_IS_NULL = "InteropLibrary.getFactory().getUncached().isNull";
     private static final String PRIVATE_STATIC_FINAL = "private static final";
+    private static final String PUBLIC_FINAL = "public final";
+    private static final String PRIVATE_FINAL = "private final";
     private static final String PUBLIC_STATIC_FINAL = "public static final";
+    private static final String PUBLIC_STATIC_FINAL_CLASS = "public static final class ";
     private static final String PUBLIC_FINAL_CLASS = "public final class ";
     private static final String OVERRIDE = "@Override";
+    private static final String SUPPRESS_UNUSED = "@SuppressWarnings(\"unused\")";
 
     static final String STATIC_OBJECT_NULL = "StaticObject.NULL";
 
     static final String IMPORT_INTEROP_LIBRARY = "import com.oracle.truffle.api.interop.InteropLibrary;\n";
     static final String IMPORT_STATIC_OBJECT = "import com.oracle.truffle.espresso.runtime.StaticObject;\n";
     static final String IMPORT_TRUFFLE_OBJECT = "import com.oracle.truffle.api.interop.TruffleObject;\n";
+    static final String IMPORT_META = "import com.oracle.truffle.espresso.meta.Meta;\n";
+    static final String IMPORT_DIRECT_CALL_NODE = "import com.oracle.truffle.api.nodes.DirectCallNode;\n";
+
+    static final String META_CLASS = "Meta ";
+    static final String META_VAR = "meta";
+    static final String META_ARG = META_CLASS + META_VAR;
+
+    private static final String SET_META = "this." + META_VAR + " = " + META_VAR + ";";
+
+    static final String DIRECT_CALL_NODE = "DirectCallNode";
+    static final String CREATE = "create";
 
     static final String PUBLIC_FINAL_OBJECT = "public final Object ";
     static final String ARGS_NAME = "args";
@@ -173,6 +178,7 @@ public abstract class EspressoProcessor extends AbstractProcessor {
     static final String TAB_1 = "    ";
     static final String TAB_2 = TAB_1 + TAB_1;
     static final String TAB_3 = TAB_2 + TAB_1;
+    static final String TAB_4 = TAB_3 + TAB_1;
 
     private static final Map<String, NativeSimpleType> classToNative = buildClassToNative();
 
@@ -192,8 +198,7 @@ public abstract class EspressoProcessor extends AbstractProcessor {
     }
 
     public static NativeSimpleType classToType(String clazz, boolean javaToNative) {
-        // TODO(peterssen): Allow native-sized words.
-        return classToNative.getOrDefault(clazz,  NativeSimpleType.SINT64 /* javaToNative ? NativeSimpleType.NULLABLE : NativeSimpleType.OBJECT */ );
+        return classToNative.getOrDefault(clazz, javaToNative ? NativeSimpleType.NULLABLE : NativeSimpleType.OBJECT);
     }
 
     @Override
@@ -213,12 +218,16 @@ public abstract class EspressoProcessor extends AbstractProcessor {
         if (done) {
             return false;
         }
+        guestCall = processingEnv.getElementUtils().getTypeElement(GUEST_CALL);
+        injectMeta = processingEnv.getElementUtils().getTypeElement(INJECT_META);
         processImpl(roundEnv);
         // We are done, push the collector.
         commitFiles();
         done = true;
         return false;
     }
+
+    // Utility Methods
 
     static AnnotationMirror getAnnotation(TypeMirror e, TypeElement type) {
         for (AnnotationMirror annotationMirror : e.getAnnotationMirrors()) {
@@ -238,23 +247,41 @@ public abstract class EspressoProcessor extends AbstractProcessor {
         return null;
     }
 
+    boolean hasMetaInjection(ExecutableElement method) {
+        List<? extends VariableElement> params = method.getParameters();
+        return params.size() > 0 && getAnnotation(params.get(params.size() - 1).asType(), injectMeta) != null;
+    }
+
+    boolean isActualParameter(VariableElement param) {
+        boolean b1 = getAnnotation(param.asType(), guestCall) == null;
+        boolean b2 = getAnnotation(param.asType(), injectMeta) == null;
+        return b1 && b2;
+    }
+
+    static boolean checkFirst(StringBuilder str, boolean first) {
+        if (!first) {
+            str.append(", ");
+        }
+        return false;
+    }
+
     private void initCollector() {
         this.collector = new StringBuilder();
         collector.append(COPYRIGHT);
         collector.append(IMPORTS_COLLECTOR).append("\n");
         collector.append("// ").append(GENERATED_BY).append(SUBSTITUTOR).append("\n");
         collector.append(PUBLIC_FINAL_CLASS).append(COLLECTOR).append(" {\n");
-        collector.append(generateInstance("ArrayList<>", COLLECTOR_INSTANCE_NAME, "List<" + SUBSTITUTOR + ">"));
+        collector.append(generateInstance("ArrayList<>", COLLECTOR_INSTANCE_NAME, "List<" + SUBSTITUTOR + "." + FACTORY + ">"));
         collector.append(TAB_1).append("private ").append(COLLECTOR).append("() {\n").append(TAB_1).append("}\n");
-        collector.append(generateGetter(COLLECTOR_INSTANCE_NAME, "List<" + SUBSTITUTOR + ">", GETTER)).append("\n");
+        collector.append(generateGetter(COLLECTOR_INSTANCE_NAME, "List<" + SUBSTITUTOR + "." + FACTORY + ">", COLLECTOR_GETTER)).append("\n");
         collector.append(TAB_1).append("static {\n");
     }
 
-    final String getSubstitutorQualifiedName(String substitutorName) {
+    private String getSubstitutorQualifiedName(String substitutorName) {
         return SUBSTITUTION_PACKAGE + "." + substitutorName;
     }
 
-    static StringBuilder signatureSuffixBuilder(List<String> parameterTypes) {
+    private static StringBuilder signatureSuffixBuilder(List<String> parameterTypes) {
         StringBuilder str = new StringBuilder();
         str.append("_").append(parameterTypes.size());
         return str;
@@ -266,8 +293,8 @@ public abstract class EspressoProcessor extends AbstractProcessor {
         return str.toString();
     }
 
-    void addSubstitutor(StringBuilder str, String substitutorName) {
-        str.append(TAB_2).append(COLLECTOR_INSTANCE_NAME).append(".add(").append(substitutorName).append(".").append(GETTER).append("()").append(");\n");
+    private void addSubstitutor(StringBuilder str, String substitutorName) {
+        str.append(TAB_2).append(COLLECTOR_INSTANCE_NAME).append(".add(").append(substitutorName).append(".").append(FACTORY_GETTER).append("()").append(");\n");
     }
 
     static String castTo(String obj, String clazz) {
@@ -300,6 +327,15 @@ public abstract class EspressoProcessor extends AbstractProcessor {
         return extractSimpleType(method.getReturnType().toString());
     }
 
+    static boolean appendInvocationMetaInformation(StringBuilder str, List<String> guestCalls, boolean hasMetaInjection, boolean first) {
+        str.append(getGuestCallsForInvoke(guestCalls, first));
+        if (hasMetaInjection) {
+            injectMeta(str, first);
+            return false;
+        }
+        return first;
+    }
+
     // Commits a single substitution.
     void commitSubstitution(Element method, String substitutorName, String classFile) {
         try {
@@ -328,17 +364,22 @@ public abstract class EspressoProcessor extends AbstractProcessor {
         }
     }
 
-    static String generateGeneratedBy(String className, String targetMethodName, List<String> parameterTypes) {
+    @SuppressWarnings("unused")
+    private static String generateGeneratedBy(String className, String targetMethodName, List<String> parameterTypes, List<String> guestCalls, boolean hasMetaInjection) {
         StringBuilder str = new StringBuilder();
         str.append("/**\n * ").append(GENERATED_BY).append("{").append(AT_LINK).append(className).append("#").append(targetMethodName).append("(");
         boolean first = true;
         for (String param : parameterTypes) {
-            if (first) {
-                first = false;
-            } else {
-                str.append(", ");
-            }
+            first = checkFirst(str, first);
             str.append(param);
+        }
+        for (String call : guestCalls) {
+            first = checkFirst(str, first);
+            str.append(DIRECT_CALL_NODE);
+        }
+        if (hasMetaInjection) {
+            first = checkFirst(str, first);
+            str.append(META_CLASS);
         }
         str.append(")}\n */");
         return str.toString();
@@ -359,11 +400,91 @@ public abstract class EspressoProcessor extends AbstractProcessor {
      */
     // Checkstyle: resume
     // @formatter:on
-    static String generateInstance(String substitutorName, String instanceName, String instanceClass) {
+    private static String generateInstance(String substitutorName, String instanceName, String instanceClass) {
         StringBuilder str = new StringBuilder();
         str.append(TAB_1).append(PRIVATE_STATIC_FINAL).append(" ").append(instanceClass).append(" ").append(instanceName);
         str.append(" = new ").append(substitutorName).append("();\n");
         return str.toString();
+    }
+
+    private String generateFactory(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, boolean hasMetaInjection, SubstitutionHelper helper) {
+        StringBuilder str = new StringBuilder();
+        str.append(TAB_1).append(PRIVATE_STATIC_FINAL).append(" ").append(FACTORY).append(" ").append(FACTORY_INSTANCE);
+        str.append(" = new ").append(FACTORY).append("();").append("\n\n");
+        str.append(TAB_1).append(PUBLIC_STATIC_FINAL_CLASS).append(FACTORY).append(" extends ").append(SUBSTITUTOR).append(".").append(FACTORY).append(" {\n");
+        str.append(TAB_2).append("private ").append(FACTORY).append("() {\n");
+        str.append(generateFactoryConstructorBody(className, targetMethodName, parameterTypeName, guestCalls, hasMetaInjection, helper)).append("\n");
+        str.append(TAB_2).append(OVERRIDE).append("\n");
+        str.append(TAB_2).append(PUBLIC_FINAL).append(" ").append(SUBSTITUTOR).append(" ").append(CREATE).append("(");
+        str.append(META_CLASS).append(META_VAR).append(") {\n");
+        str.append(TAB_3).append("return new ").append(className).append("(").append(META_VAR).append(");\n");
+        str.append(TAB_2).append("}\n");
+        str.append(TAB_1).append("}\n");
+        return str.toString();
+    }
+
+    static private String generateInstanceFields(List<String> guestCalls, boolean hasMetaInjection) {
+        if (guestCalls.isEmpty() && !hasMetaInjection) {
+            return "";
+        }
+        StringBuilder str = new StringBuilder();
+        for (String call : guestCalls) {
+            str.append(TAB_1).append(PRIVATE_FINAL).append(" ").append(DIRECT_CALL_NODE).append(" ").append(call).append(";\n");
+        }
+        if (hasMetaInjection) {
+            str.append(TAB_1).append(PRIVATE_FINAL).append(" ").append(META_ARG).append(";\n");
+        }
+        return str.toString();
+    }
+
+    private static String generateGuestCalls(List<String> guestCalls) {
+        if (guestCalls.isEmpty()) {
+            return "";
+        }
+        StringBuilder str = new StringBuilder();
+        for (String call : guestCalls) {
+            str.append("\n").append(TAB_2).append(call).append(" = ").append(DIRECT_CALL_NODE).append(".").append(CREATE).append("(");
+            str.append(META_VAR).append(".").append(call).append(".").append("getCallTarget").append("());");
+        }
+        return str.toString();
+    }
+
+    List<String> getGuestCalls(ExecutableElement method) {
+        ArrayList<String> guestCalls = new ArrayList<>();
+        for (VariableElement param : method.getParameters()) {
+            if (getAnnotation(param.asType(), guestCall) != null) {
+                guestCalls.add(param.getSimpleName().toString());
+            }
+        }
+        return guestCalls;
+    }
+
+    static String getGuestCallsForInvoke(List<String> guestCalls, boolean wasFirst) {
+        StringBuilder str = new StringBuilder();
+        boolean first = wasFirst;
+        for (String call : guestCalls) {
+            first = checkFirst(str, first);
+            str.append("\n");
+            str.append(TAB_3).append(call);
+        }
+        return str.toString();
+    }
+
+    private static String generateConstructor(String substitutorName, List<String> guestCalls, boolean hasMetaInjection) {
+        StringBuilder str = new StringBuilder();
+        str.append(TAB_1).append("private ").append(substitutorName).append("(").append(META_ARG).append(") {");
+        str.append(generateGuestCalls(guestCalls)).append("\n");
+        if (hasMetaInjection) {
+            str.append(TAB_2).append(SET_META).append("\n");
+        }
+        str.append(TAB_1).append("}\n");
+        return str.toString();
+    }
+
+    static boolean injectMeta(StringBuilder str, boolean first) {
+        checkFirst(str, first);
+        str.append(META_VAR);
+        return false;
     }
 
     // @formatter:off
@@ -379,7 +500,7 @@ public abstract class EspressoProcessor extends AbstractProcessor {
      */
     // Checkstyle: resume
     // @formatter:on
-    static String generateGetter(String instanceName, String className, String getterName) {
+    private static String generateGetter(String instanceName, String className, String getterName) {
         StringBuilder str = new StringBuilder();
         str.append(TAB_1).append(PUBLIC_STATIC_FINAL).append(" ").append(className).append(" ").append(getterName).append("() {\n");
         str.append(TAB_2).append("return ").append(instanceName).append(";\n");
@@ -393,33 +514,43 @@ public abstract class EspressoProcessor extends AbstractProcessor {
      * @param className The name of the class where the substituted method is found.
      * @param targetMethodName The name of the substituted method.
      * @param parameterTypeName The list of *Host* parameter types of the substituted method.
+     * @param guestCalls The list of called guest method in the substitution
+     * @param hasMetaInjection Whether this substitution needs the meta injected
      * @param helper A helper structure.
      * @return The string forming the substitutor.
      */
-    String spawnSubstitutor(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
+    String spawnSubstitutor(String className, String targetMethodName, List<String> parameterTypeName, List<String> guestCalls, boolean hasMetaInjection, SubstitutionHelper helper) {
         String substitutorName = getSubstitutorClassName(className, targetMethodName, parameterTypeName);
         StringBuilder classFile = new StringBuilder();
         // Header
         classFile.append(COPYRIGHT);
         classFile.append(PACKAGE);
-        classFile.append(generateImports(substitutorName, targetMethodName, parameterTypeName, helper));
+        classFile.append(IMPORT_META);
+        if (!guestCalls.isEmpty()) {
+            classFile.append(IMPORT_DIRECT_CALL_NODE);
+        }
+        classFile.append(generateImports(substitutorName, targetMethodName, parameterTypeName, guestCalls, hasMetaInjection, helper));
 
         // Class
-        classFile.append(generateGeneratedBy(className, targetMethodName, parameterTypeName)).append("\n");
+        classFile.append(generateGeneratedBy(className, targetMethodName, parameterTypeName, guestCalls, hasMetaInjection)).append("\n");
         classFile.append(PUBLIC_FINAL_CLASS).append(substitutorName).append(EXTENSION);
 
-        // Instance
-        classFile.append(generateInstance(substitutorName, INSTANCE_NAME, SUBSTITUTOR)).append("\n");
+        // Instance Factory
+        classFile.append(generateFactory(substitutorName, targetMethodName, parameterTypeName, guestCalls, hasMetaInjection, helper)).append("\n");
+
+        // Instance variables
+        classFile.append(generateInstanceFields(guestCalls, hasMetaInjection)).append("\n");
 
         // Constructor
-        classFile.append(generateConstructor(substitutorName, targetMethodName, parameterTypeName, helper)).append("\n");
+        classFile.append(TAB_1).append(SUPPRESS_UNUSED).append("\n");
+        classFile.append(generateConstructor(substitutorName, guestCalls, hasMetaInjection)).append("\n");
 
         // Getter
-        classFile.append(generateGetter(INSTANCE_NAME, SUBSTITUTOR, GETTER)).append("\n");
+        classFile.append(generateGetter(FACTORY_INSTANCE, FACTORY, FACTORY_GETTER)).append("\n");
 
         // Invoke method
         classFile.append(TAB_1).append(OVERRIDE).append("\n");
-        classFile.append(generateInvoke(className, targetMethodName, parameterTypeName, helper));
+        classFile.append(generateInvoke(className, targetMethodName, parameterTypeName, guestCalls, helper, hasMetaInjection));
 
         // End
         return classFile.toString();
