@@ -51,7 +51,6 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.c.CGlobalData;
 import com.oracle.svm.core.c.CGlobalDataFactory;
 import com.oracle.svm.core.c.function.CEntryPointActions;
-import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveDetachThreadEpilogue;
@@ -93,7 +92,7 @@ public final class PosixJavaThreads extends JavaThreads {
                         "PosixJavaThreads.start0: pthread_attr_init");
         PosixUtils.checkStatusIs0(
                         Pthread.pthread_attr_setdetachstate(attributes, Pthread.PTHREAD_CREATE_JOINABLE()),
-                        "PosixJavaThreads.start0: pthread_attr_setdetachstate");
+                        "PosixJavaThreads.start0: pthread_attr_init");
         UnsignedWord threadStackSize = WordFactory.unsigned(stackSize);
         /* If there is a chosen stack size, use it as the stack size. */
         if (threadStackSize.notEqual(WordFactory.zero())) {
@@ -179,7 +178,7 @@ public final class PosixJavaThreads extends JavaThreads {
         @SuppressWarnings("unused")
         static void enter(ThreadStartData data) {
             int code = CEntryPointActions.enterAttachThread(data.getIsolate(), false);
-            if (code != CEntryPointErrors.NO_ERROR) {
+            if (code != 0) {
                 CEntryPointActions.failFatally(code, errorMessage.get());
             }
         }
@@ -205,7 +204,7 @@ public final class PosixJavaThreads extends JavaThreads {
 }
 
 @TargetClass(Thread.class)
-@Platforms({InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
+@Platforms({InternalPlatform.LINUX_AND_JNI.class, InternalPlatform.DARWIN_AND_JNI.class})
 final class Target_java_lang_Thread {
     @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
     boolean hasPthreadIdentifier;
@@ -362,7 +361,7 @@ class PosixParkEventFactory implements ParkEventFactory {
 }
 
 @AutomaticFeature
-@Platforms({InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
+@Platforms({InternalPlatform.LINUX_AND_JNI.class, InternalPlatform.DARWIN_AND_JNI.class})
 class PosixThreadsFeature implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {

@@ -47,7 +47,6 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.c.CGlobalData;
 import com.oracle.svm.core.c.CGlobalDataFactory;
 import com.oracle.svm.core.c.function.CEntryPointActions;
-import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveDetachThreadEpilogue;
@@ -120,7 +119,7 @@ public final class WindowsJavaThreads extends JavaThreads {
         @SuppressWarnings("unused")
         static void enter(WindowsThreadStartData data) {
             int code = CEntryPointActions.enterAttachThread(data.getIsolate(), false);
-            if (code != CEntryPointErrors.NO_ERROR) {
+            if (code != 0) {
                 CEntryPointActions.failFatally(code, errorMessage.get());
             }
         }

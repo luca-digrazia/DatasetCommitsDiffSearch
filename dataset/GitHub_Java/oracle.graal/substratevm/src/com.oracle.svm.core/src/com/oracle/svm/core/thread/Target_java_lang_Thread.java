@@ -114,13 +114,6 @@ final class Target_java_lang_Thread {
     @Delete//
     static int threadInitNumber;
 
-    /*
-     * For unstarted threads created during image generation like the main thread, we do not want to
-     * inherit a (more or less random) access control context.
-     */
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    private AccessControlContext inheritedAccessControlContext;
-
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ThreadStatusRecomputation.class) //
     volatile int threadStatus;
 
@@ -289,21 +282,6 @@ final class Target_java_lang_Thread {
         JavaThreads.unpark(JavaThreads.fromTarget(this));
         /* Interrupt anyone waiting on a VMCondVar. */
         JavaThreads.interruptVMCondVars();
-    }
-
-    @Substitute
-    private void stop0(Object o) {
-        VMError.unimplemented();
-    }
-
-    @Substitute
-    private void suspend0() {
-        VMError.unimplemented();
-    }
-
-    @Substitute
-    private void resume0() {
-        VMError.unimplemented();
     }
 
     @Substitute
