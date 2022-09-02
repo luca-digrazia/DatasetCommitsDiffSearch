@@ -42,14 +42,12 @@ public final class LLVMParserRuntime {
     private final ExternalLibrary library;
     private final LLVMScope fileScope;
     private final NodeFactory nodeFactory;
-    private final int bcID;
 
-    public LLVMParserRuntime(LLVMContext context, ExternalLibrary library, LLVMScope fileScope, NodeFactory nodeFactory, int bcID) {
+    public LLVMParserRuntime(LLVMContext context, ExternalLibrary library, LLVMScope fileScope, NodeFactory nodeFactory) {
         this.context = context;
         this.library = library;
         this.fileScope = fileScope;
         this.nodeFactory = nodeFactory;
-        this.bcID = bcID;
     }
 
     public ExternalLibrary getLibrary() {
@@ -70,10 +68,6 @@ public final class LLVMParserRuntime {
 
     public NodeFactory getNodeFactory() {
         return nodeFactory;
-    }
-
-    public int getID() {
-        return bcID;
     }
 
     public LLVMFunctionDescriptor lookupFunction(String name, boolean preferGlobalScope) {
