@@ -27,7 +27,6 @@ package org.graalvm.compiler.truffle.runtime.debug;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
@@ -85,7 +84,7 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     private Map<String, Object> queueProperties(OptimizedCallTarget target, int tier) {
         Map<String, Object> properties = new LinkedHashMap<>();
         GraalTruffleRuntimeListener.addASTSizeProperty(target, properties);
-        properties.put("Tier", tier);
+        properties.put("Tier", Integer.toString(tier)); // to avoid padding
         properties.put("Calls/Thres", String.format("%7d/%5d", target.getCallCount(), target.engine.callThresholdInInterpreter));
         properties.put("CallsAndLoop/Thres", String.format("%7d/%5d", target.getCallAndLoopCount(), target.engine.callAndLoopThresholdInInterpreter));
         properties.put("Src", formatSourceSection(target.getRootNode().getSourceSection()));
@@ -100,7 +99,7 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
             if (!isPermanentFailure(bailout, permanentBailout)) {
                 onCompilationDequeued(target, null, "Non permanent bailout: " + reason, tier);
             } else {
-                Map<String, Object> properties = compilationEndProperties(target, null, null, null, tier);
+                Map<String, Object> properties = queueProperties(target, tier);
                 properties.put("Reason", reason);
                 runtime.logEvent(target, 0, "opt failed", properties);
             }
@@ -144,22 +143,14 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
             return;
         }
 
-        Map<String, Object> properties = compilationEndProperties(target, inliningDecision, graph, result, tier);
-
-        runtime.logEvent(target, 0, "opt done", properties);
-
-        currentCompilation.set(null);
-    }
-
-    private Map<String, Object> compilationEndProperties(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result, int tier) {
         long timeCompilationFinished = System.nanoTime();
-        int nodeCountLowered = graph == null ? 0 : graph.getNodeCount();
+        int nodeCountLowered = graph.getNodeCount();
         Times compilation = currentCompilation.get();
 
         int calls = 0;
         int inlinedCalls;
         if (inliningDecision == null) {
-            CallCountVisitor visitor = new CallCountVisitor();
+            TraceCompilationListener.CallCountVisitor visitor = new TraceCompilationListener.CallCountVisitor();
             target.accept(visitor);
             calls = visitor.calls;
             inlinedCalls = 0;
@@ -171,21 +162,24 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
         int dispatchedCalls = calls - inlinedCalls;
         Map<String, Object> properties = new LinkedHashMap<>();
         GraalTruffleRuntimeListener.addASTSizeProperty(target, properties);
-        properties.put("Tier", tier);
+        properties.put("Tier", Integer.toString(tier)); // to avoid padding
         properties.put("Time", String.format("%4.0f(%4.0f+%-4.0f)ms", //
                         (timeCompilationFinished - compilation.timeCompilationStarted) / 1e6, //
                         (compilation.timePartialEvaluationFinished - compilation.timeCompilationStarted) / 1e6, //
                         (timeCompilationFinished - compilation.timePartialEvaluationFinished) / 1e6));
         properties.put("Inlined", String.format("%3dY %3dN", inlinedCalls, dispatchedCalls));
         properties.put("IR", String.format("%5d/%5d", compilation.nodeCountPartialEval, nodeCountLowered));
-        properties.put("CodeSize", result == null ? 0 : result.getTargetCodeSize());
+        properties.put("CodeSize", result.getTargetCodeSize());
         if (target.getCodeAddress() != 0) {
             properties.put("Addr", "0x" + Long.toHexString(target.getCodeAddress()));
         } else {
             properties.put("Addr", "N/A");
         }
         properties.put("Src", formatSourceSection(target.getRootNode().getSourceSection()));
-        return properties;
+
+        runtime.logEvent(target, 0, "opt done", properties);
+
+        currentCompilation.set(null);
     }
 
     private static String formatSourceSection(SourceSection sourceSection) {

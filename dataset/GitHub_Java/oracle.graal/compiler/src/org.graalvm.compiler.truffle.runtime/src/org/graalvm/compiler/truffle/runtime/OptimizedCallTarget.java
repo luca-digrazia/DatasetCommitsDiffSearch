@@ -504,7 +504,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
          * important that this method stays small. It is compiled as a special stub that calls into
          * the optimized code or if the call target is not yet optimized calls into profiledPERoot
          * directly. In order to avoid deoptimizations in this method it has optimizations disabled.
-         * Any additional code here will likely have significant impact on the intepreter call
+         * Any additional code here will likely have significant impact on the interpreter call
          * performance.
          */
         if (interpreterCall()) {
@@ -857,14 +857,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             }
         }
         return false;
-    }
-
-    public final boolean onInvalidate(Object source, CharSequence reason, boolean wasActive) {
-        cachedNonTrivialNodeCount = -1;
-        if (wasActive) {
-            GraalTruffleRuntime.getRuntime().getListener().onCompilationInvalidated(this, source, reason);
-        }
-        return cancelCompilation(reason) || wasActive;
     }
 
     @Override
