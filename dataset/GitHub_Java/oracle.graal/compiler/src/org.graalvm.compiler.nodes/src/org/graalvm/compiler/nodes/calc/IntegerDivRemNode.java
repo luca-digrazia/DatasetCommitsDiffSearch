@@ -27,7 +27,6 @@ package org.graalvm.compiler.nodes.calc;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_32;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
-import jdk.vm.ci.code.CodeUtil;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -86,45 +85,58 @@ public abstract class IntegerDivRemNode extends FixedBinaryNode implements Lower
         return type;
     }
 
-    protected static ValueNode canonicalizeSignedDivConstant(ValueNode forX, long c, NodeView view) {
-        assert c != 1 && c != -1;
-        if (c == 0) {
+    protected static ValueNode canonicalizeDivConstant(ValueNode forX, long c, NodeView view) {
+        boolean isDivisorPositive = c >= 0;
+        long divisor = isDivisorPositive ? c : -c;
+        int bitSize = forX.stamp(view).getStackKind().getBitCount();
+        Pair<Long, Integer> nums = magicDivideConstants(divisor, bitSize);
+        if (nums == null) {
             return null;
         }
-        IntegerStamp dividendStamp = (IntegerStamp) forX.stamp(view);
-        int bitSize = dividendStamp.getBits();
-        Pair<Long, Integer> nums = magicDivideConstants(c, bitSize);
+
         long magicNum = nums.getLeft().longValue();
         int shiftNum = nums.getRight().intValue();
-        ConstantNode m = ConstantNode.forIntegerBits(bitSize, magicNum);
-        ValueNode quot = new IntegerMulHighNode(m, forX);
-        if (c > 0 && magicNum < 0) {
-            quot = BinaryArithmeticNode.add(quot, forX, NodeView.DEFAULT);
-        } else if (c < 0 && magicNum > 0) {
-            quot = BinaryArithmeticNode.sub(quot, forX, NodeView.DEFAULT);
+        ValueNode value;
+        if (bitSize == Integer.SIZE) {
+            value = new MulNode(new SignExtendNode(forX, Long.SIZE), ConstantNode.forLong(magicNum));
+            if (magicNum < 0) {
+                value = new RightShiftNode(value, ConstantNode.forInt(bitSize));
+                value = new AddNode(forX, new NarrowNode(value, bitSize));
+                if (shiftNum != 0) {
+                    value = new RightShiftNode(value, ConstantNode.forInt(shiftNum));
+                }
+            } else {
+                value = new RightShiftNode(value, ConstantNode.forInt(bitSize + shiftNum));
+                value = new NarrowNode(value, bitSize);
+            }
+        } else {
+            assert bitSize == Long.SIZE;
+            value = new IntegerMulHighNode(forX, ConstantNode.forLong(magicNum));
+            if (magicNum < 0) {
+                value = new AddNode(forX, value);
+            }
+            if (shiftNum != 0) {
+                value = new RightShiftNode(value, ConstantNode.forInt(shiftNum));
+            }
         }
-        if (shiftNum > 0) {
-            ConstantNode s = ConstantNode.forInt(shiftNum);
-            quot = new RightShiftNode(quot, s);
+
+        ValueNode subValue = new RightShiftNode(forX, ConstantNode.forInt(bitSize - 1));
+        if (isDivisorPositive) {
+            return new SubNode(value, subValue);
         }
-        if (c < 0) {
-            ConstantNode s = ConstantNode.forInt(bitSize - 1);
-            ValueNode sign = UnsignedRightShiftNode.create(quot, s, NodeView.DEFAULT);
-            quot = BinaryArithmeticNode.add(quot, sign, NodeView.DEFAULT);
-        } else if (dividendStamp.canBeNegative()) {
-            ConstantNode s = ConstantNode.forInt(bitSize - 1);
-            ValueNode sign = UnsignedRightShiftNode.create(forX, s, NodeView.DEFAULT);
-            quot = BinaryArithmeticNode.add(quot, sign, NodeView.DEFAULT);
-        }
-        return quot;
+        return new SubNode(subValue, value);
     }
 
     /**
-     * Borrowed from Hacker's Delight by Henry S. Warren, Jr. Figure 10-1.
+     * Borrowed from Hacker's Delight by Henry S. Warren, Jr.
      */
     private static Pair<Long, Integer> magicDivideConstants(long divisor, int size) {
+        if (divisor == 0 || divisor == 1) {
+            return null;
+        }
+
         final long twoW = 1L << (size - 1);                // 2 ^ (size - 1).
-        long t = twoW + (divisor >>> 63);
+        long t = twoW + (divisor >>> (size - 1));
         long ad = Math.abs(divisor);
         long anc = t - 1 - Long.remainderUnsigned(t, ad);  // Absolute value of nc.
         long q1 = Long.divideUnsigned(twoW, anc);          // Init. q1 = 2**p/|nc|.
@@ -151,7 +163,8 @@ public abstract class IntegerDivRemNode extends FixedBinaryNode implements Lower
             delta = ad - r2;
         } while (Long.compareUnsigned(q1, delta) < 0 || (q1 == delta && r1 == 0));
 
-        long magic = CodeUtil.signExtend(q2 + 1, size);
+        long m = q2 + 1;
+        Long magic = size == Integer.SIZE ? Long.valueOf((int) m) : m;
         if (divisor < 0) {
             magic = -magic;
         }

@@ -206,10 +206,6 @@ public class PosixUtils {
         return errorString(errno, defaultMsg);
     }
 
-    public static IOException newIOExceptionWithLastError(String defaultMsg) {
-        return new IOException(PosixUtils.lastErrorString(defaultMsg));
-    }
-
     /** Return the error string for the given error number, or a default message. */
     public static String errorString(int errno, String defaultMsg) {
         String result = "";
@@ -248,13 +244,13 @@ public class PosixUtils {
             }
             if (devnull < 0) {
                 setFD(fd, handle);
-                throw PosixUtils.newIOExceptionWithLastError("open /dev/null failed");
+                throw new IOException(lastErrorString("open /dev/null failed"));
             } else {
                 dup2(devnull, handle);
                 close(devnull);
             }
         } else if (close(handle) == -1) {
-            throw PosixUtils.newIOExceptionWithLastError("close failed");
+            throw new IOException(lastErrorString("close failed"));
         }
     }
 
@@ -275,7 +271,7 @@ public class PosixUtils {
             // EOF
             return -1;
         } else if (nread.equal(-1)) {
-            throw PosixUtils.newIOExceptionWithLastError("Read error");
+            throw new IOException(lastErrorString("Read error"));
         }
         return retPtr.read() & 0xFF;
     }
@@ -308,7 +304,7 @@ public class PosixUtils {
                     LibC.memcpy(pin.addressOfArrayElement(off), buf, (UnsignedWord) nread);
                 }
             } else if (nread.equal(-1)) {
-                throw PosixUtils.newIOExceptionWithLastError("Read error");
+                throw new IOException(lastErrorString("Read error"));
             } else {
                 // EOF
                 nread = WordFactory.signed(-1);
@@ -334,7 +330,7 @@ public class PosixUtils {
         n = write(handle, bufPtr, WordFactory.unsigned(1));
 
         if (n.equal(-1)) {
-            throw PosixUtils.newIOExceptionWithLastError("Write error");
+            throw new IOException(lastErrorString("Write error"));
         }
     }
 
@@ -361,7 +357,7 @@ public class PosixUtils {
                 SignedWord n = write(fd, curBuf, curLen);
 
                 if (n.equal(-1)) {
-                    throw PosixUtils.newIOExceptionWithLastError("Write error");
+                    throw new IOException(lastErrorString("Write error"));
                 }
                 curBuf = curBuf.addressOf(n);
                 curLen = curLen.subtract((UnsignedWord) n);
