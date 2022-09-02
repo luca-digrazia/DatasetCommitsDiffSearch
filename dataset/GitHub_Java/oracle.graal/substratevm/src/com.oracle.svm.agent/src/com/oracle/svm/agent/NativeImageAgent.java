@@ -215,7 +215,7 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
         }
         if (!callerFilterFiles.isEmpty()) {
             if (callersFilter == null) {
-                callersFilter = AccessAdvisor.copyBuiltinCallerFilterTree();
+                callersFilter = AccessAdvisor.copyBuiltinFilterTree();
             }
             for (String path : callerFilterFiles) {
                 try {
