@@ -85,7 +85,6 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
     private final boolean ignoreCase;
     private final boolean unicode;
     private final boolean backrefWithNullTargetSucceeds;
-    private final boolean monitorCaptureGroupsInEmptyCheck;
     private final boolean loneSurrogates;
     private final boolean loopbackInitialState;
     private final InnerLiteral innerLiteral;
@@ -104,7 +103,6 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         this.ignoreCase = nfaMap.getAst().getFlags().isIgnoreCase();
         this.unicode = nfaMap.getAst().getFlags().isUnicode();
         this.backrefWithNullTargetSucceeds = nfaMap.getAst().getOptions().getFlavor() != RubyFlavor.INSTANCE;
-        this.monitorCaptureGroupsInEmptyCheck = nfaMap.getAst().getOptions().getFlavor() == RubyFlavor.INSTANCE;
         this.loneSurrogates = nfaMap.getAst().getProperties().hasLoneSurrogates();
         this.nQuantifiers = nfaMap.getAst().getQuantifierCount().getCount();
         this.nZeroWidthQuantifiers = nfaMap.getAst().getZeroWidthQuantifierCount().getCount();
@@ -516,9 +514,9 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
                     enteredZeroWidthQuantifier.set(q.getZeroWidthIndex());
                     break;
                 case exitZeroWidth:
-                    if (enteredZeroWidthQuantifier.get(q.getZeroWidthIndex()) || (locals.getZeroWidthQuantifierGuardIndex(q) == index &&
-                                    (!monitorCaptureGroupsInEmptyCheck || locals.isResultUnmodifiedByZeroWidthQuantifier(q, transition, index)) &&
-                                    (!q.hasIndex() || locals.getQuantifierCount(q) + extraQuantifierPasses[q.getIndex()] > q.getMin()))) {
+                    if (enteredZeroWidthQuantifier.get(q.getZeroWidthIndex()) ||
+                                    (locals.getZeroWidthQuantifierGuardIndex(q) == index && locals.isResultUnmodifiedByZeroWidthQuantifier(q, transition, index) &&
+                                                    (!q.hasIndex() || locals.getQuantifierCount(q) + extraQuantifierPasses[q.getIndex()] > q.getMin()))) {
                         return false;
                     }
                     break;
