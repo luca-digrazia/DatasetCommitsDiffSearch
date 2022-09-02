@@ -111,16 +111,11 @@ public final class BinaryParser {
             // unsupported file
             return null;
         }
-        if (bcSource != null) {
-            LibraryLocator.traceParseBitcode(context, bcSource.getPath());
-        }
+        LibraryLocator.traceParseBitcode(context, bcSource.getPath());
         return new BinaryParserResult(libraries, paths, bitcode, locator);
     }
 
     public static String getOrigin(Source source) {
-        if (source == null) {
-            return null;
-        }
         String sourcePath = source.getPath();
         if (sourcePath == null) {
             return null;
