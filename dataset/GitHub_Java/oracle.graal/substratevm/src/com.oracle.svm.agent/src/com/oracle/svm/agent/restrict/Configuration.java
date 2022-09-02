@@ -27,14 +27,11 @@ package com.oracle.svm.agent.restrict;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.oracle.svm.agent.Agent;
-
 public class Configuration {
     private final Map<String, ConfigurationType> types = new HashMap<>();
 
     public void add(ConfigurationType type) {
         if (types.containsKey(type.getName())) {
-            System.err.println(Agent.MESSAGE_PREFIX + "duplicate registration of type " + type.getName());
             return;
         }
         types.put(type.getName(), type);
