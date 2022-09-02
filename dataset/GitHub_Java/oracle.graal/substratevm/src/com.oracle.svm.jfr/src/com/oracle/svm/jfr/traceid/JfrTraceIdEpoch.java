@@ -77,17 +77,14 @@ public class JfrTraceIdEpoch {
         epoch = !epoch;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean isChangedTag() {
         return changedTag;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public void setChangedTag(boolean changedTag) {
         this.changedTag = changedTag;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean hasChangedTag() {
         if (isChangedTag()) {
             setChangedTag(false);
@@ -103,7 +100,6 @@ public class JfrTraceIdEpoch {
         }
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     long thisEpochBit() {
         return epoch ? EPOCH_1_BIT : EPOCH_0_BIT;
     }
