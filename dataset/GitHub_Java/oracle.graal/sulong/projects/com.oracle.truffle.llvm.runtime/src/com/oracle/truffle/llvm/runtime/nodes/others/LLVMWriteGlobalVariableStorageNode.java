@@ -29,11 +29,19 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.others;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.object.FinalLocationException;
+import com.oracle.truffle.api.object.IncompatibleLocationException;
+import com.oracle.truffle.api.object.Location;
+import com.oracle.truffle.api.object.Property;
+import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
@@ -42,33 +50,99 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class LLVMWriteGlobalVariableStorageNode extends LLVMNode {
 
-    public abstract void execute(LLVMPointer pointer, LLVMGlobal descriptor);
+    private final LLVMGlobal descriptor;
 
-    @SuppressWarnings("unused")
+    LLVMWriteGlobalVariableStorageNode(LLVMGlobal descriptor) {
+        this.descriptor = descriptor;
+    }
+
+    public abstract void execute(LLVMPointer value);
+
     @Specialization
-    void doWrite(LLVMPointer pointer, LLVMGlobal descriptor,
+    void doWrite(LLVMPointer value,
                     @CachedContext(LLVMLanguage.class) LLVMContext context,
-                    @Cached WriteDynamicObjectHelper writeHelper,
-                    @Cached(value = "context.findGlobal(descriptor.getID())", dimensions = 1) LLVMPointer[] globals) {
-        synchronized (globals) {
-            writeHelper.execute(globals, descriptor, pointer);
+                    @Cached WriteDynamicObjectHelper writeHelper) {
+        DynamicObject global = context.getGlobalStorage();
+        synchronized (global) {
+            writeHelper.execute(global, descriptor, value);
         }
     }
 
     abstract static class WriteDynamicObjectHelper extends LLVMNode {
 
-        public abstract void execute(LLVMPointer[] globals, LLVMGlobal descriptor, LLVMPointer value);
+        public abstract void execute(DynamicObject object, LLVMGlobal descriptor, LLVMPointer value);
 
-        @Specialization
-        protected void doDirect(LLVMPointer[] globals, LLVMGlobal descriptor, LLVMPointer value) {
+        static Location getLocationOrNull(Property property) {
+            return property == null ? null : property.getLocation();
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(limit = "3", //
+                        guards = {
+                                        "object.getShape() == cachedShape",
+                                        "loc != null",
+                                        "loc.canSet(value)"
+                        }, //
+                        assumptions = {
+                                        "layoutAssumption"
+
+                        })
+        protected void doDirect(DynamicObject object, LLVMGlobal descriptor, LLVMPointer value,
+                        @Cached("object.getShape()") Shape cachedShape,
+                        @Cached("cachedShape.getValidAssumption()") Assumption layoutAssumption,
+                        @Cached("getLocationOrNull(cachedShape.getProperty(descriptor))") Location loc) {
             CompilerAsserts.partialEvaluationConstant(descriptor);
             try {
-                int index = descriptor.getIndex();
-                globals[index] = value;
-            } catch (Exception e) {
+                loc.set(object, value);
+
+            } catch (IncompatibleLocationException | FinalLocationException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new RuntimeException("Global write is inconsistent.");
+                // cannot happen due to guard
+                throw new RuntimeException("Location.canSet is inconsistent with Location.set");
             }
+        }
+
+        @SuppressWarnings("unused")
+        @Specialization(limit = "3", //
+                        guards = {
+                                        "object.getShape() == cachedShape",
+                                        "loc == null || !loc.canSet(value)",
+                                        "newLoc.canSet(value)"
+                        }, //
+                        assumptions = {
+                                        "layoutAssumption",
+                                        "newLayoutAssumption"
+                        })
+        protected void defineDirect(DynamicObject object, LLVMGlobal descriptor, LLVMPointer value,
+                        @Cached("object.getShape()") Shape cachedShape,
+                        @Cached("cachedShape.getValidAssumption()") Assumption layoutAssumption,
+                        @Cached("getLocationOrNull(cachedShape.getProperty(descriptor))") Location loc,
+                        @Cached("cachedShape.defineProperty(descriptor, value, 0)") Shape newShape,
+                        @Cached("newShape.getValidAssumption()") Assumption newLayoutAssumption,
+                        @Cached("getLocationOrNull(newShape.getProperty(descriptor))") Location newLoc) {
+            CompilerAsserts.partialEvaluationConstant(descriptor);
+            try {
+                newLoc.set(object, value, cachedShape, newShape);
+            } catch (IncompatibleLocationException e) {
+                CompilerDirectives.transferToInterpreter();
+                // cannot happen due to guard
+                throw new RuntimeException("Location.canSet is inconsistent with Location.set");
+            }
+        }
+
+        @TruffleBoundary
+        @Specialization(guards = {
+                        "object.getShape().isValid()"
+        }, replaces = {"doDirect", "defineDirect"})
+        protected static void doIndirect(DynamicObject object, LLVMGlobal descriptor, LLVMPointer value) {
+            object.define(descriptor, value);
+        }
+
+        @Specialization(guards = "!object.getShape().isValid()")
+        protected static void defineDirect2(DynamicObject object, LLVMGlobal descriptor, LLVMPointer value) {
+            CompilerDirectives.transferToInterpreter();
+            object.updateShape();
+            doIndirect(object, descriptor, value);
         }
     }
 }
