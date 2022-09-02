@@ -36,7 +36,7 @@ class Config {
         this.warmupIterations = 10;
         this.iterations = 10;
         this.mode = "default";
-        this.metric = new PeakTimeMetric();
+        this.metric = new NoMetric();
     }
 
     @Override

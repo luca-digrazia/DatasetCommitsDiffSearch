@@ -166,7 +166,6 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
     @Override
     protected void launch(Context.Builder contextBuilder) {
         validateArguments();
-        contextBuilder.allowAllAccess(true);
         runHarness(contextBuilder);
     }
 

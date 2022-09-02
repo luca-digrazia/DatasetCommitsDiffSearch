@@ -46,7 +46,7 @@ interface Metric {
     }
 
     default String unit() {
-        return "n/a";
+        return "";
     }
 
     String name();
