@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,14 +25,17 @@
 package com.oracle.svm.core.windows;
 
 import java.io.Console;
+
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
+import org.graalvm.word.WordFactory;
+
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.windows.headers.LibC;
+import com.oracle.svm.core.jdk.Jvm;
 
 @TargetClass(java.lang.System.class)
 @Platforms(Platform.WINDOWS.class)
@@ -41,30 +44,20 @@ final class Target_java_lang_System {
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) static volatile Console cons;
 
     @Substitute
-    @Uninterruptible(reason = "Called from uninterruptible code.")
-    public static long currentTimeMillis() {
-        return nanoTime() / WindowsUtils.NANOSECS_PER_MILLISEC;
-    }
-
-    @Substitute
-    @Uninterruptible(reason = "Called from uninterruptible code.")
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     protected static long nanoTime() {
         return WindowsUtils.getNanoCounter();
     }
 
     @Substitute
     public static String mapLibraryName(String libname) {
-        return "lib" + libname + ".dll";
+        return libname + ".dll";
     }
-}
-
-@TargetClass(className = "java.lang.Shutdown")
-@Platforms(Platform.WINDOWS.class)
-final class Target_java_lang_Shutdown {
 
     @Substitute
-    static void halt0(int status) {
-        LibC.exit(status);
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static long currentTimeMillis() {
+        return Jvm.JVM_CurrentTimeMillis(WordFactory.nullPointer(), WordFactory.nullPointer());
     }
 }
 

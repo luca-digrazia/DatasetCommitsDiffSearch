@@ -28,19 +28,21 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CLibrary;
+import org.graalvm.nativeimage.c.type.VoidPointer;
+import org.graalvm.nativeimage.impl.InternalPlatform;
 
 //Checkstyle: stop
 
 /**
  * Definitions for Hotspot JVM internal functions
  *
- * We declare an initialize function in order to ensure that the jvm lib is on the link line.
- * This allows the core library dependencies on JVM_ functions to be satisfied by our jvm
- * library (jvm.lib or libjvm.a).
+ * We declare an initialize function in order to ensure that the jvm lib is on the link line. This
+ * allows the core library dependencies on JVM_ functions to be satisfied by our jvm library
+ * (jvm.lib or libjvm.a).
  *
  */
-@Platforms({Platform.LINUX_AND_JNI.class, Platform.DARWIN_AND_JNI.class, Platform.WINDOWS.class})
-@CLibrary("jvm")
+@Platforms(InternalPlatform.PLATFORM_JNI.class)
+@CLibrary(value = "jvm", requireStatic = true)
 public class Jvm {
 
     @CFunction(transition = CFunction.Transition.NO_TRANSITION)
@@ -48,4 +50,12 @@ public class Jvm {
 
     @CFunction(transition = CFunction.Transition.NO_TRANSITION)
     public static native int JVM_ActiveProcessorCount();
+
+    @Platforms(Platform.WINDOWS.class)
+    @CFunction(transition = CFunction.Transition.NO_TRANSITION)
+    public static native VoidPointer JVM_RegisterSignal(int sig, VoidPointer handler);
+
+    @Platforms(Platform.WINDOWS.class)
+    @CFunction(transition = CFunction.Transition.NO_TRANSITION)
+    public static native long JVM_CurrentTimeMillis(VoidPointer ignored0, VoidPointer ignored1);
 }
