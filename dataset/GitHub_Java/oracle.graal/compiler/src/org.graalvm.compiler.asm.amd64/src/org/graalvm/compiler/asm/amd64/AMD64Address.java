@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,7 +41,6 @@ public final class AMD64Address extends AbstractAddress {
     private final Register index;
     private final Scale scale;
     private final int displacement;
-    private final Object displacementAnnotation;
 
     /**
      * The start of the instruction, i.e., the value that is used as the key for looking up
@@ -79,7 +78,7 @@ public final class AMD64Address extends AbstractAddress {
      * @param scale the scaling factor
      */
     public AMD64Address(Register base, Register index, Scale scale) {
-        this(base, index, scale, 0, null, -1);
+        this(base, index, scale, 0, -1);
     }
 
     /**
@@ -92,19 +91,14 @@ public final class AMD64Address extends AbstractAddress {
      * @param displacement the displacement
      */
     public AMD64Address(Register base, Register index, Scale scale, int displacement) {
-        this(base, index, scale, displacement, null, -1);
+        this(base, index, scale, displacement, -1);
     }
 
-    public AMD64Address(Register base, Register index, Scale scale, int displacement, Object displacementAnnotation) {
-        this(base, index, scale, displacement, displacementAnnotation, -1);
-    }
-
-    AMD64Address(Register base, Register index, Scale scale, int displacement, Object displacementAnnotation, int instructionStartPosition) {
+    AMD64Address(Register base, Register index, Scale scale, int displacement, int instructionStartPosition) {
         this.base = base;
         this.index = index;
         this.scale = scale;
         this.displacement = displacement;
-        this.displacementAnnotation = displacementAnnotation;
         this.instructionStartPosition = instructionStartPosition;
 
         assert scale != null;
@@ -207,9 +201,6 @@ public final class AMD64Address extends AbstractAddress {
         } else if (getDisplacement() > 0) {
             s.append(sep).append(getDisplacement());
         }
-        if (displacementAnnotation != null) {
-            s.append(" + ").append(displacementAnnotation);
-        }
         s.append("]");
         return s.toString();
     }
@@ -242,9 +233,5 @@ public final class AMD64Address extends AbstractAddress {
      */
     public int getDisplacement() {
         return displacement;
-    }
-
-    public Object getDisplacementAnnotation() {
-        return displacementAnnotation;
     }
 }

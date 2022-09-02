@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,7 +56,6 @@ import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage;
 import org.graalvm.compiler.hotspot.HotSpotLIRGenerationResult;
 import org.graalvm.compiler.hotspot.HotSpotLIRGenerator;
 import org.graalvm.compiler.hotspot.HotSpotLockStack;
-import org.graalvm.compiler.hotspot.HotSpotMarkId;
 import org.graalvm.compiler.hotspot.debug.BenchmarkCounters;
 import org.graalvm.compiler.hotspot.meta.HotSpotConstantLoadAction;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
@@ -78,7 +77,6 @@ import org.graalvm.compiler.lir.amd64.AMD64Move;
 import org.graalvm.compiler.lir.amd64.AMD64Move.MoveFromRegOp;
 import org.graalvm.compiler.lir.amd64.AMD64PrefetchOp;
 import org.graalvm.compiler.lir.amd64.AMD64ReadTimestampCounter;
-import org.graalvm.compiler.lir.amd64.AMD64ReadTimestampCounterWithProcid;
 import org.graalvm.compiler.lir.amd64.AMD64RestoreRegistersOp;
 import org.graalvm.compiler.lir.amd64.AMD64SaveRegistersOp;
 import org.graalvm.compiler.lir.amd64.AMD64VZeroUpper;
@@ -478,7 +476,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     @Override
-    public Value emitLoadConfigValue(HotSpotMarkId markId, LIRKind kind) {
+    public Value emitLoadConfigValue(int markId, LIRKind kind) {
         Variable result = newVariable(kind);
         append(new AMD64HotSpotLoadConfigValueOp(markId, result));
         return result;
@@ -604,7 +602,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
             if (encoding.hasBase() || GeneratePIC.getValue(options)) {
                 if (GeneratePIC.getValue(options)) {
                     Variable baseAddress = newVariable(lirKindTool.getWordKind());
-                    AMD64HotSpotMove.BaseMove move = new AMD64HotSpotMove.BaseMove(baseAddress);
+                    AMD64HotSpotMove.BaseMove move = new AMD64HotSpotMove.BaseMove(baseAddress, config);
                     append(move);
                     base = baseAddress;
                 } else {
@@ -635,7 +633,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
             if (encoding.hasBase() || GeneratePIC.getValue(options)) {
                 if (GeneratePIC.getValue(options)) {
                     Variable baseAddress = newVariable(uncompressedKind);
-                    AMD64HotSpotMove.BaseMove move = new AMD64HotSpotMove.BaseMove(baseAddress);
+                    AMD64HotSpotMove.BaseMove move = new AMD64HotSpotMove.BaseMove(baseAddress, config);
                     append(move);
                     base = baseAddress;
                 } else {
@@ -691,30 +689,5 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     @Override
     protected StrategySwitchOp createStrategySwitchOp(SwitchStrategy strategy, LabelRef[] keyTargets, LabelRef defaultTarget, Variable key, AllocatableValue temp) {
         return new AMD64HotSpotStrategySwitchOp(strategy, keyTargets, defaultTarget, key, temp);
-    }
-
-    @Override
-    public Value emitTimeStamp() {
-        AMD64ReadTimestampCounter timestamp = new AMD64ReadTimestampCounter();
-        append(timestamp);
-        // Combine RDX and RAX into a single 64-bit register.
-        AllocatableValue lo = timestamp.getLowResult();
-        Value hi = getArithmetic().emitZeroExtend(timestamp.getHighResult(), 32, 64);
-        return combineLoAndHi(lo, hi);
-    }
-
-    @Override
-    public Value emitTimeStampWithProcid() {
-        AMD64ReadTimestampCounterWithProcid timestamp = new AMD64ReadTimestampCounterWithProcid();
-        append(timestamp);
-        // Combine RDX and RAX into a single 64-bit register.
-        AllocatableValue lo = timestamp.getLowResult();
-        Value hi = getArithmetic().emitZeroExtend(timestamp.getHighResult(), 32, 64);
-        return combineLoAndHi(lo, hi);
-    }
-
-    private Value combineLoAndHi(Value lo, Value hi) {
-        Value shiftedHi = getArithmetic().emitShl(hi, emitConstant(LIRKind.value(AMD64Kind.DWORD), JavaConstant.forInt(32)));
-        return getArithmetic().emitOr(shiftedHi, lo);
     }
 }
