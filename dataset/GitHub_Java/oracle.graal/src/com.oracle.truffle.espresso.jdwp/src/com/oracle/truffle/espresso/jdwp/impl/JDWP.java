@@ -857,9 +857,6 @@ class JDWP {
                     return new JDWPResult(reply);
                 }
 
-                if (JDWPDebuggerController.isDebug(JDWPDebuggerController.Debug.PACKET)) {
-                    System.out.println("trying to invoke method: " + method.getNameAsString());
-                }
                 try {
                     // we have to call the method in the correct thread, so post a
                     // Callable to the controller and wait for the result to appear
@@ -870,6 +867,7 @@ class JDWP {
                             return method.invokeMethod(callee, args);
                         }
                     });
+
                     controller.postJobForThread(job);
                     ThreadJob.JobResult result = job.getResult();
 
@@ -1238,9 +1236,6 @@ class JDWP {
                 }
 
                 int suspensionCount = ThreadSuspension.getSuspensionCount(thread);
-                if (JDWPDebuggerController.isDebug(JDWPDebuggerController.Debug.THREAD)) {
-                    System.out.println("suspension count: " + suspensionCount + " returned for thread: " + thread);
-                }
                 reply.writeInt(suspensionCount);
                 return new JDWPResult(reply);
             }
@@ -1446,9 +1441,6 @@ class JDWP {
                 long classLoaderId = input.readLong();
 
                 Object classLoader = verifyClassLoader(classLoaderId, reply, context);
-                if (classLoader == null) {
-                    return new JDWPResult(reply);
-                }
 
                 // TODO(Gregersen) - we will need all classes for which this classloader was the initiating loader
                 KlassRef[] klasses = context.getInitiatedClasses(classLoader);

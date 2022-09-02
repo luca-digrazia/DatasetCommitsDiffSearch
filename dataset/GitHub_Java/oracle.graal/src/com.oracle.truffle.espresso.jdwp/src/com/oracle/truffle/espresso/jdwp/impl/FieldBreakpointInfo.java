@@ -32,6 +32,8 @@ public class FieldBreakpointInfo extends AbstractBreakpointInfo implements Break
     private final FieldRef field;
     private boolean modificationBreakpoint;
     private boolean accessBreakpoint;
+    private Object receiver;
+    private Object value;
 
     public FieldBreakpointInfo(RequestFilter filter, KlassRef klassRef, FieldRef fieldRef) {
         super(filter);
@@ -62,5 +64,21 @@ public class FieldBreakpointInfo extends AbstractBreakpointInfo implements Break
 
     public boolean isAccessBreakpoint() {
         return accessBreakpoint;
+    }
+
+    public void setReceiver(Object object) {
+        this.receiver = object;
+    }
+
+    public Object getReceiver() {
+        return receiver;
+    }
+
+    public void setValue(Object val) {
+        this.value = val;
+    }
+
+    public Object getValue() {
+        return value;
     }
 }
