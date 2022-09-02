@@ -50,6 +50,7 @@ import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.nodes.LanguageInfo;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
@@ -206,6 +207,13 @@ final class SafepointStackSampler {
             return null;
         }
 
+        void beforeVisit(Node topOfStackNode) {
+            thread = Thread.currentThread();
+            assert nextFrameIndex == 0 : "not cleaned";
+            startTime = System.nanoTime();
+            targets[nextFrameIndex] = topOfStackNode.getRootNode().getCallTarget();
+        }
+
         void resetAndReturn() {
             if (synthetic != null) {
                 return;
@@ -236,6 +244,10 @@ final class SafepointStackSampler {
             }
             return entries;
         }
+
+        void afterVisit() {
+            this.endTime = System.nanoTime();
+        }
     }
 
     private class SampleAction extends ThreadLocalAction {
@@ -259,10 +271,7 @@ final class SafepointStackSampler {
                 return;
             }
             StackVisitor visitor = fetchStackVisitor();
-            visitor.thread = Thread.currentThread();
-            assert visitor.nextFrameIndex == 0 : "not cleaned";
-            visitor.startTime = System.nanoTime();
-            visitor.targets[visitor.nextFrameIndex] = access.getLocation().getRootNode().getCallTarget();
+            visitor.beforeVisit(access.getLocation());
             Truffle.getRuntime().iterateFrames(visitor);
             stackOverflowed(visitor.overflowed);
             if (cancelled) {
@@ -271,7 +280,7 @@ final class SafepointStackSampler {
             } else {
                 completed.put(access.getThread(), visitor);
             }
-            visitor.endTime = System.nanoTime();
+            visitor.afterVisit();
         }
 
         List<StackVisitor> getStacks() {
