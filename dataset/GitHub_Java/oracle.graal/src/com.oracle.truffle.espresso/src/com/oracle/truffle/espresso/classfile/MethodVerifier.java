@@ -327,7 +327,6 @@ public class MethodVerifier implements ContextAccess {
 
         abstract boolean canMerge(Operand other);
 
-        // Called only after canMerge returned false, as finding common superType is expensive.
         abstract Operand mergeInto(Operand other);
     }
 
@@ -395,7 +394,6 @@ public class MethodVerifier implements ContextAccess {
                 try {
                     klass = thisKlass.getMeta().loadKlass(type, thisKlass.getDefiningClassLoader());
                 } catch (Exception e) {
-                    // TODO(garcia) fine grain this catch
                 }
                 if (klass == null) {
                     throw new NoClassDefFoundError(type.toString());
@@ -707,6 +705,9 @@ public class MethodVerifier implements ContextAccess {
                 int bc = code.currentBC(bci);
                 if (Bytecodes.isBranch(bc)) {
                     int target = code.readBranchDest(bci);
+                    if (target >= code.endBCI()) {
+                        throw new VerifyError("Control flow falls through code end");
+                    }
                     if (verified[target] == UNREACHABLE) {
                         throw new VerifyError("Jump to the middle of an instruction: " + target);
                     }
@@ -725,47 +726,21 @@ public class MethodVerifier implements ContextAccess {
             case LOOKUPSWITCH: {
                 BytecodeLookupSwitch switchHelper = code.getBytecodeLookupSwitch();
                 int low = 0;
-                int high = switchHelper.numberOfCases(bci);
-                int oldKey = 0;
-                boolean init = false;
-                int target;
-                for (int i = low; i < high; i++) {
-                    int newKey = switchHelper.keyAt(bci, i - low);
-                    if (init && newKey <= oldKey) {
-                        throw new VerifyError("Unsorted keys in LOOKUPSWITCH");
-                    }
-                    init = true;
-                    oldKey = newKey;
-                    target = switchHelper.targetAt(bci, i - low);
-                    if (verified[target] == UNREACHABLE) {
-                        throw new VerifyError("Jump to the middle of an instruction: " + target);
-                    }
-                    verified[target] = JUMP_TARGET;
+                int high = switchHelper.numberOfCases(bci) - 1;
+                for (int i = low; i <= high; i++) {
+                    verified[switchHelper.targetAt(bci, i - low)] = JUMP_TARGET;
                 }
-                target = switchHelper.defaultTarget(bci);
-                if (verified[target] == UNREACHABLE) {
-                    throw new VerifyError("Jump to the middle of an instruction: " + target);
-                }
-                verified[target] = JUMP_TARGET;
+                verified[switchHelper.defaultTarget(bci)] = JUMP_TARGET;
             }
                 return;
             case TABLESWITCH: {
                 BytecodeTableSwitch switchHelper = code.getBytecodeTableSwitch();
                 int low = switchHelper.lowKey(bci);
                 int high = switchHelper.highKey(bci);
-                int target;
-                for (int i = low; i != high + 1; i++) {
-                    target = switchHelper.targetAt(bci, i - low);
-                    if (verified[target] == UNREACHABLE) {
-                        throw new VerifyError("Jump to the middle of an instruction: " + target);
-                    }
-                    verified[target] = JUMP_TARGET;
+                for (int i = low; i < high; i++) {
+                    verified[switchHelper.targetAt(bci, i - low)] = JUMP_TARGET;
                 }
-                target = switchHelper.defaultTarget(bci);
-                if (verified[target] == UNREACHABLE) {
-                    throw new VerifyError("Jump to the middle of an instruction: " + target);
-                }
-                verified[target] = JUMP_TARGET;
+                verified[switchHelper.defaultTarget(bci)] = JUMP_TARGET;
             }
                 return;
             default:
@@ -782,11 +757,7 @@ public class MethodVerifier implements ContextAccess {
      * @return true or throws ClassFormatError or VerifyError
      */
     private synchronized boolean verify() {
-        try {
-            initVerifier();
-        } catch (IndexOutOfBoundsException e) {
-            throw new VerifyError("Invalid jump: " + e.getMessage() + " in method " + thisKlass.getName() + "." + methodName);
-        }
+        initVerifier();
         if (code.endBCI() == 0) {
             throw new VerifyError("Control flow falls through code end");
         }
@@ -800,7 +771,6 @@ public class MethodVerifier implements ContextAccess {
                     stackFrames[nextBCI] = frame;
                 }
                 stack = frame.extractStack(maxStack);
-                locals = frame.extractLocals();
                 nextBCI = verifySafe(nextBCI, stack, locals);
             } else {
                 nextBCI = verifySafe(nextBCI, stack, locals);
@@ -831,7 +801,7 @@ public class MethodVerifier implements ContextAccess {
             return true;
         }
         Stack newStack = frame.extractStack(maxStack);
-        Locals newLocals = frame.extractLocals();
+        Locals newLocals = locals.copy();
         int nextBCI = BCI;
         while (verified[nextBCI] != DONE) {
             nextBCI = verifySafe(nextBCI, newStack, newLocals);
@@ -1149,7 +1119,7 @@ public class MethodVerifier implements ContextAccess {
                     BytecodeTableSwitch switchHelper = code.getBytecodeTableSwitch();
                     int low = switchHelper.lowKey(BCI);
                     int high = switchHelper.highKey(BCI);
-                    for (int i = low; i <= high; i++) {
+                    for (int i = low; i < high; i++) {
                         branch(switchHelper.targetAt(BCI, i - low), stack, locals);
                     }
                     return switchHelper.defaultTarget(BCI);
@@ -1542,6 +1512,10 @@ public class MethodVerifier implements ContextAccess {
             this.registers = registers;
         }
 
+        Locals copy() {
+            return new Locals(registers.clone());
+        }
+
         Operand[] extract() {
             return registers.clone();
         }
@@ -1587,9 +1561,41 @@ public class MethodVerifier implements ContextAccess {
         }
     }
 
+    private static class StackFrame {
+        Operand[] stack;
+        int stackSize;
+        int top;
+        Operand[] locals;
+
+        StackFrame(Stack stack, Locals locals) {
+            this.stack = stack.extract();
+            this.stackSize = stack.size;
+            this.top = stack.top;
+            this.locals = locals.extract();
+        }
+
+        public StackFrame(Operand[] stack, int stackSize, int top, Operand[] locals) {
+            this.stack = stack;
+            this.stackSize = stackSize;
+            this.top = top;
+            this.locals = locals;
+        }
+
+        Stack extractStack(int maxStack) {
+            Stack res = new Stack(maxStack);
+            System.arraycopy(stack, 0, res.stack, 0, top);
+            res.size = stackSize;
+            res.top = top;
+            return res;
+        }
+
+        Locals extractLocals() {
+            return new Locals(locals.clone());
+        }
+    }
+
     private static class Stack {
         private final Operand[] stack;
-
         private int top;
         private int size;
 
@@ -1895,39 +1901,7 @@ public class MethodVerifier implements ContextAccess {
             }
             return init;
         }
-    }
 
-    private static class StackFrame {
-        Operand[] stack;
-        int stackSize;
-        int top;
-        Operand[] locals;
-
-        StackFrame(Stack stack, Locals locals) {
-            this.stack = stack.extract();
-            this.stackSize = stack.size;
-            this.top = stack.top;
-            this.locals = locals.extract();
-        }
-
-        public StackFrame(Operand[] stack, int stackSize, int top, Operand[] locals) {
-            this.stack = stack;
-            this.stackSize = stackSize;
-            this.top = top;
-            this.locals = locals;
-        }
-
-        Stack extractStack(int maxStack) {
-            Stack res = new Stack(maxStack);
-            System.arraycopy(stack, 0, res.stack, 0, top);
-            res.size = stackSize;
-            res.top = top;
-            return res;
-        }
-
-        Locals extractLocals() {
-            return new Locals(locals.clone());
-        }
     }
 
     public StackFrame mergeFrames(Stack stack, Locals locals, StackFrame stackMap) {

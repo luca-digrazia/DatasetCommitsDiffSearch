@@ -23,8 +23,8 @@
 
 package com.oracle.truffle.espresso.impl;
 
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
@@ -46,7 +46,7 @@ public final class BootClassRegistry extends ClassRegistry {
     static final DebugCounter loadKlassCount = DebugCounter.create("BCL loadKlassCount");
     static final DebugCounter loadKlassCacheHits = DebugCounter.create("BCL loadKlassCacheHits");
 
-    private final Map<String, String> packageMap = new ConcurrentHashMap<>();
+    private final Map<String, String> packageMap = new HashMap<>();
 
     public BootClassRegistry(EspressoContext context) {
         super(context);
@@ -59,7 +59,7 @@ public final class BootClassRegistry extends ClassRegistry {
     }
 
     @Override
-    public Klass loadKlass(Symbol<Type> type) {
+    public Klass loadKlass(Symbol<Type> type, Symbol<Type> instigator) {
         if (Types.isArray(type)) {
             Symbol<Type> elemental = getTypes().getElementalType(type);
             Klass elementalKlass = loadKlass(elemental);
@@ -86,7 +86,7 @@ public final class BootClassRegistry extends ClassRegistry {
 
         // Defining a class also loads the superclass and the superinterfaces which excludes the
         // use of computeIfAbsent to insert the class since the map is modified.
-        ObjectKlass result = defineKlass(type, classpathFile.contents);
+        ObjectKlass result = defineKlass(type, classpathFile.contents, instigator);
         packageMap.put(result.getRuntimePackage(), classpathFile.classpathEntry.path());
 
         return result;
@@ -95,10 +95,6 @@ public final class BootClassRegistry extends ClassRegistry {
     public String getPackagePath(String pkgName) {
         String result = packageMap.get(pkgName);
         return result;
-    }
-
-    public String[] getPackagePaths() {
-        return packageMap.values().toArray(new String[0]);
     }
 
     @Override
