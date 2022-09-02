@@ -40,11 +40,13 @@
  */
 package com.oracle.truffle.regex.analysis;
 
+import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
 import com.oracle.truffle.regex.tregex.parser.RegexLexer;
 import com.oracle.truffle.regex.tregex.parser.Token;
+import com.oracle.truffle.regex.tregex.string.Encodings;
 
 /**
  * Generates a "unified" regular expression representation where all single characters are replaced
@@ -61,7 +63,7 @@ public final class RegexUnifier {
 
     public RegexUnifier(RegexSource source) {
         this.source = source;
-        this.lexer = new RegexLexer(source, RegexOptions.DEFAULT);
+        this.lexer = new RegexLexer(source, RegexFlags.parseFlags(source.getFlags()), Encodings.UTF_32, RegexOptions.DEFAULT);
         this.dump = new StringBuilder(source.getPattern().length());
     }
 
@@ -136,7 +138,7 @@ public final class RegexUnifier {
             }
         }
         dump.append("/");
-        dump.append(source.getFlags().getSource());
+        dump.append(source.getFlags());
         return dump.toString();
     }
 }
