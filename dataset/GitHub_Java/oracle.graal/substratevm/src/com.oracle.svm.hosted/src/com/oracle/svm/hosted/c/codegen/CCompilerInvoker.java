@@ -106,14 +106,17 @@ public abstract class CCompilerInvoker {
         }
 
         @Override
-        protected CompilerInfo createCompilerInfo(Scanner scanner) {
+        protected CompilerInfo createCompilerInfo(List<String> lines) {
+            if (lines.isEmpty()) {
+                return null;
+            }
             try {
                 /* For cl.exe the first line holds all necessary information */
+                Scanner scanner = new Scanner(lines.get(0));
                 scanner.findInLine(Pattern.quote("Microsoft (R) C/C++ Optimizing Compiler Version "));
                 scanner.useDelimiter(Pattern.quote("."));
                 int major = scanner.nextInt();
                 int minor = scanner.nextInt();
-                scanner.reset(); /* back to default delimiters */
                 scanner.findInLine(" for ");
                 Class<? extends Architecture> arch;
                 switch (scanner.next()) {
@@ -216,9 +219,7 @@ public abstract class CCompilerInvoker {
         Process process = null;
         try {
             process = pb.start();
-            try (Scanner scanner = new Scanner(process.getInputStream())) {
-                compilerInfo = createCompilerInfo(scanner);
-            }
+            compilerInfo = createCompilerInfo(FileUtils.readAllLines(process.getInputStream()));
             process.waitFor();
         } catch (InterruptedException ex) {
             throw new InterruptImageBuilding();
@@ -236,8 +237,7 @@ public abstract class CCompilerInvoker {
         return Arrays.asList("-v");
     }
 
-    @SuppressWarnings("unused")
-    protected CompilerInfo createCompilerInfo(Scanner scanner) {
+    protected CompilerInfo createCompilerInfo(List<String> lines) {
         return null;
     }
 
