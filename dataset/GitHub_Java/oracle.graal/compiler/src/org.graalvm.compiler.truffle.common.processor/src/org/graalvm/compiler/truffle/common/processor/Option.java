@@ -105,29 +105,25 @@ public class Option {
             .type("Boolean")
             .category("INTERNAL")
             .def("true")
-            .help("Enable automatic inlining of call targets")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.Inlining} instead."), // COMPILER
+            .help("Enable automatic inlining of call targets"), // COMPILER
 
         option("TruffleInliningMaxCallerSize")
             .type("Integer")
             .category("EXPERT")
             .def("2250")
-            .help("Stop inlining if caller's cumulative tree size would exceed this limit")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.InliningNodeBudget} instead."),
+            .help("Stop inlining if caller's cumulative tree size would exceed this limit"),
 
         option("TruffleMaximumRecursiveInlining")
             .type("Integer")
             .category("EXPERT")
             .def("2")
-            .help("Maximum level of recursive inlining")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.InliningRecursionDepth} instead."),
+            .help("Maximum level of recursive inlining"),
 
         option("TruffleSplitting")
             .type("Boolean")
             .category("EXPERT")
             .def("true")
-            .help("Enable call target splitting")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.Splitting} instead."),
+            .help("Enable call target splitting"),
 
         option("TruffleOSR")
             .type("Boolean")
@@ -221,15 +217,13 @@ public class Option {
             .type("Boolean")
             .category("INTERNAL")
             .def("false")
-            .help("Print information for compilation results")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.TraceCompilation} instead."),
+            .help("Print information for compilation results"),
 
         option("TraceTruffleCompilationDetails")
             .type("Boolean")
             .category("INTERNAL")
             .def("false")
-            .help("Print information for compilation queuing")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.TraceCompilationDetails} instead."),
+            .help("Print information for compilation queuing"),
 
         option("TraceTruffleCompilationPolymorphism")
             .type("Boolean")
@@ -283,15 +277,13 @@ public class Option {
             .type("Boolean")
             .category("INTERNAL")
             .def("false")
-            .help("Print information for inlining for each compilation.")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.TraceInlining} instead."),
+            .help("Print information for inlining for each compilation."),
 
         option("TraceTruffleSplitting")
             .type("Boolean")
             .category("INTERNAL")
             .def("false")
-            .help("Print information for each splitted call site.")
-            .javadocExtra("Deprecated: Use {@code PolyglotCompilerOptions.TraceSplitting} instead."),
+            .help("Print information for each splitted call site."),
 
         option("TraceTruffleAssumptions")
             .type("Boolean")
