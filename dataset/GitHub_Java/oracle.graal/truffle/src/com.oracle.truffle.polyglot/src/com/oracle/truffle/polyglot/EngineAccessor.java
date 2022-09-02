@@ -51,12 +51,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -64,7 +62,7 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
-import org.graalvm.nativeimage.ImageInfo;
+import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.PolyglotException;
@@ -96,6 +94,9 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import java.util.HashMap;
+import java.util.ServiceLoader;
+import org.graalvm.nativeimage.ImageInfo;
 
 final class EngineAccessor extends Accessor {
 
@@ -107,7 +108,6 @@ final class EngineAccessor extends Accessor {
     static final LanguageSupport LANGUAGE = ACCESSOR.languageSupport();
     static final JDKSupport JDKSERVICES = ACCESSOR.jdkSupport();
     static final InteropSupport INTEROP = ACCESSOR.interopSupport();
-    static final RuntimeSupport RUNTIME = ACCESSOR.runtimeSupport();
 
     private static List<AbstractClassLoaderSupplier> locatorLoaders() {
         if (ImageInfo.inImageRuntimeCode()) {
@@ -145,6 +145,51 @@ final class EngineAccessor extends Accessor {
     @Override
     protected void initializeNativeImageTruffleLocator() {
         super.initializeNativeImageTruffleLocator();
+    }
+
+    @Override
+    protected OptionDescriptors getCompilerOptions() {
+        return super.getCompilerOptions();
+    }
+
+    @Override
+    protected void initializeProfile(CallTarget target, Class<?>[] argumentTypes) {
+        super.initializeProfile(target, argumentTypes);
+    }
+
+    @Override
+    protected CallInlined getCallInlined() {
+        return super.getCallInlined();
+    }
+
+    @Override
+    protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
+        super.reloadEngineOptions(runtimeData, optionValues);
+    }
+
+    @Override
+    protected void onEngineClosed(Object runtimeData) {
+        super.onEngineClosed(runtimeData);
+    }
+
+    @Override
+    protected OutputStream getConfiguredLogStream() {
+        return super.getConfiguredLogStream();
+    }
+
+    @Override
+    protected CastUnsafe getCastUnsafe() {
+        return super.getCastUnsafe();
+    }
+
+    @Override
+    protected CallProfiled getCallProfiled() {
+        return super.getCallProfiled();
+    }
+
+    @Override
+    protected boolean isGuestCallStackElement(StackTraceElement element) {
+        return super.isGuestCallStackElement(element);
     }
 
     static final class EngineImpl extends EngineSupport {
@@ -281,7 +326,7 @@ final class EngineAccessor extends Accessor {
         @Override
         public <T> T lookup(InstrumentInfo info, Class<T> serviceClass) {
             PolyglotInstrument instrument = (PolyglotInstrument) LANGUAGE.getPolyglotInstrument(info);
-            return instrument.lookupInternal(serviceClass);
+            return instrument.lookup(serviceClass, false);
         }
 
         @Override
@@ -987,16 +1032,6 @@ final class EngineAccessor extends Accessor {
         @Override
         public Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> getFileTypeDetectorsSupplier(Object polyglotContext) {
             return ((PolyglotContextImpl) polyglotContext).engine.getFileTypeDetectorsSupplier();
-        }
-
-        @Override
-        public int getAsynchronousStackDepth(Object polylgotLanguage) {
-            return ((PolyglotLanguage) polylgotLanguage).engine.getAsynchronousStackDepth();
-        }
-
-        @Override
-        public void setAsynchronousStackDepth(Object polyglotInstrument, int depth) {
-            getEngine(polyglotInstrument).setAsynchronousStackDepth((PolyglotInstrument) polyglotInstrument, depth);
         }
 
         @Override

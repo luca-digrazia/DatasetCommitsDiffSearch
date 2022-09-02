@@ -147,20 +147,17 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
         private final List<Pattern> expected;
         private final List<Pattern> unexpected;
         private final List<Pattern> failedUnexpected;
-        private final List<LogEntry> allEvents;
         private volatile State state;
 
         private TestHandler(List<Pattern> expected, List<Pattern> unexpected) {
             this.expected = expected;
             this.unexpected = unexpected;
             this.failedUnexpected = new ArrayList<>();
-            this.allEvents = new ArrayList<>();
             this.state = State.NEW;
         }
 
         @Override
-        public synchronized void publish(LogRecord lr) {
-            allEvents.add(new LogEntry(Thread.currentThread().getId(), state, lr.getMessage()));
+        public void publish(LogRecord lr) {
             switch (state) {
                 case NEW:
                     return;
@@ -194,11 +191,11 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
         public void close() throws SecurityException {
         }
 
-        synchronized void start() {
+        void start() {
             state = State.ACTIVE;
         }
 
-        synchronized void assertLogs() {
+        void assertLogs() {
             state = State.DISPOSED;
             StringBuilder sb = new StringBuilder();
             if (!expected.isEmpty()) {
@@ -213,13 +210,7 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
                     sb.append(p.toString()).append("\n");
                 }
             }
-            if (sb.length() > 0) {
-                sb.append("All log records:\n");
-                for (LogEntry entry : allEvents) {
-                    sb.append(entry).append("\n");
-                }
-                Assert.fail(sb.toString());
-            }
+            Assert.assertEquals(sb.toString(), 0, sb.length());
         }
 
         static Builder newBuilder() {
@@ -259,23 +250,6 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
 
             private static Pattern toPattern(String substring) {
                 return Pattern.compile(".*" + Pattern.quote(substring) + ".*");
-            }
-        }
-
-        private static final class LogEntry {
-            private final long threadId;
-            private final State state;
-            private final String message;
-
-            LogEntry(long threadId, State state, String message) {
-                this.threadId = threadId;
-                this.state = state;
-                this.message = message;
-            }
-
-            @Override
-            public String toString() {
-                return String.format("Thread %d, State: %s, Message: %s", threadId, state, message);
             }
         }
     }

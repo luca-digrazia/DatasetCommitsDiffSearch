@@ -54,6 +54,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -91,21 +92,23 @@ public final class TruffleLogger {
 
     private final String name;
     private final LoggerCache loggerCache;
+    private final Function<LoggerCache, ? extends Handler> handlerProvider;
     @CompilerDirectives.CompilationFinal private volatile int levelNum;
     @CompilerDirectives.CompilationFinal private volatile Assumption levelNumStable;
     private volatile Level levelObj;
     private volatile TruffleLogger parent;
     private Collection<ChildLoggerRef> children;
 
-    private TruffleLogger(final String loggerName, final LoggerCache loggerCache) {
+    private TruffleLogger(final String loggerName, final LoggerCache loggerCache, final Function<LoggerCache, ? extends Handler> handlerProvider) {
         this.name = loggerName;
         this.loggerCache = loggerCache;
+        this.handlerProvider = handlerProvider;
         this.levelNum = DEFAULT_VALUE;
         this.levelNumStable = Truffle.getRuntime().createAssumption("Log Level Value stable for: " + loggerName);
     }
 
     private TruffleLogger(LoggerCache loggerCache) {
-        this(ROOT_NAME, loggerCache);
+        this(ROOT_NAME, loggerCache, new PolyglotLogHandlerProvider());
     }
 
     /**
@@ -804,8 +807,8 @@ public final class TruffleLogger {
     private void callHandlers(final LogRecord record) {
         CompilerAsserts.neverPartOfCompilation("Log handler should never be called from compiled code.");
         for (TruffleLogger current = this; current != null; current = current.getParent()) {
-            if (current == loggerCache.polyglotRootLogger) {
-                LanguageAccessor.engineAccess().getLogHandler(loggerCache.getSPI()).publish(record);
+            if (current.handlerProvider != null) {
+                current.handlerProvider.apply(loggerCache).publish(record);
             }
         }
     }
@@ -1048,7 +1051,7 @@ public final class TruffleLogger {
         private TruffleLogger getOrCreateLogger(final String loggerName) {
             TruffleLogger found = getLogger(loggerName);
             if (found == null) {
-                for (final TruffleLogger logger = new TruffleLogger(loggerName, this); found == null;) {
+                for (final TruffleLogger logger = new TruffleLogger(loggerName, this, null); found == null;) {
                     if (addLogger(logger)) {
                         found = logger;
                         break;
@@ -1374,6 +1377,26 @@ public final class TruffleLogger {
                 super(context, referenceQueue);
                 configuredLoggers = logLevels;
             }
+        }
+    }
+
+    private static final class PolyglotLogHandlerProvider implements Function<LoggerCache, Handler> {
+
+        private volatile Handler cachedHander;
+
+        @Override
+        public Handler apply(LoggerCache loggerCache) {
+            Handler result = cachedHander;
+            if (result == null) {
+                synchronized (this) {
+                    result = cachedHander;
+                    if (result == null) {
+                        result = LanguageAccessor.engineAccess().getLogHandler(loggerCache.getSPI());
+                        cachedHander = result;
+                    }
+                }
+            }
+            return result;
         }
     }
 }

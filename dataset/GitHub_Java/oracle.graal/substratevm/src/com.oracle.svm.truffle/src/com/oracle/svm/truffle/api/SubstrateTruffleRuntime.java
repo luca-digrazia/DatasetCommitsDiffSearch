@@ -412,13 +412,6 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    public void log(CompilableTruffleAST compilable, String message) {
-        if (!TruffleFeature.getSupport().tryLog(this, compilable, message)) {
-            super.log(compilable, message);
-        }
-    }
-
-    @Override
     protected OutputStream getDefaultLogStream() {
         return TTY.out;
     }
