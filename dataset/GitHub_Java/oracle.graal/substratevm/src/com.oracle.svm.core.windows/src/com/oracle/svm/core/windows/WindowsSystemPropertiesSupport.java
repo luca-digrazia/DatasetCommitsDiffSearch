@@ -47,7 +47,6 @@ import com.oracle.svm.core.windows.headers.FileAPI;
 import com.oracle.svm.core.windows.headers.LibC;
 import com.oracle.svm.core.windows.headers.LibC.WCharPointer;
 import com.oracle.svm.core.windows.headers.Process;
-import com.oracle.svm.core.windows.headers.SysinfoAPI;
 import com.oracle.svm.core.windows.headers.WinBase;
 
 @Platforms(Platform.WINDOWS.class)
@@ -125,7 +124,7 @@ public class WindowsSystemPropertiesSupport extends SystemPropertiesSupport {
     @Override
     protected String osVersionValue() {
         ByteBuffer versionBytes = ByteBuffer.allocate(4);
-        versionBytes.putInt(SysinfoAPI.GetVersion());
+        versionBytes.putInt(WinBase.GetVersion());
         int majorVersion = versionBytes.get(3);
         int minorVersion = versionBytes.get(2);
         return majorVersion + "." + minorVersion;
