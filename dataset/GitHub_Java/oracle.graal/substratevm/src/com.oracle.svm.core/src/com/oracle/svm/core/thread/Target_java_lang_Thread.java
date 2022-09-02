@@ -217,7 +217,7 @@ final class Target_java_lang_Thread {
         }
 
         /* Choose a stack size based on parameters, command line flags, and system restrictions. */
-        long chosenStackSize = SubstrateOptions.StackSize.getHostedValue();
+        long chosenStackSize = SubstrateOptions.hostedStackSize();
         if (stackSize != 0) {
             /* If the user set a thread stack size at thread creation, then use that. */
             chosenStackSize = stackSize;

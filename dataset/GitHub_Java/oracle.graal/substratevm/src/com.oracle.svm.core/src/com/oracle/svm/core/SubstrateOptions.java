@@ -45,6 +45,7 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.HostedOptionValues;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.RuntimeOptionKey;
+import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.option.XOptions;
 
 public class SubstrateOptions {
@@ -151,41 +152,45 @@ public class SubstrateOptions {
     public static final RuntimeOptionKey<Boolean> VerboseGC = new RuntimeOptionKey<>(false);
 
     @Option(help = "The minimum heap size at run-time, in bytes.", type = OptionType.User)//
-    public static final RuntimeOptionKey<Long> MinHeapSize = new RuntimeOptionKey<Long>(0L) {
+    public static final RuntimeOptionKey<String> MinHeapSize = new RuntimeOptionKey<String>("0") {
         @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Long oldValue, Long newValue) {
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
             if (!SubstrateUtil.HOSTED) {
-                XOptions.getXms().setValue(newValue);
+                long size = SubstrateOptionsParser.parseLong(newValue);
+                XOptions.getXms().setValue(size);
             }
         }
     };
 
     @Option(help = "The maximum heap size at run-time, in bytes.", type = OptionType.User)//
-    public static final RuntimeOptionKey<Long> MaxHeapSize = new RuntimeOptionKey<Long>(0L) {
+    public static final RuntimeOptionKey<String> MaxHeapSize = new RuntimeOptionKey<String>("0") {
         @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Long oldValue, Long newValue) {
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
             if (!SubstrateUtil.HOSTED) {
-                XOptions.getXmx().setValue(newValue);
+                long size = SubstrateOptionsParser.parseLong(newValue);
+                XOptions.getXmx().setValue(size);
             }
         }
     };
 
     @Option(help = "The maximum size of the young generation at run-time, in bytes", type = OptionType.User)//
-    public static final RuntimeOptionKey<Long> MaxNewSize = new RuntimeOptionKey<Long>(0L) {
+    public static final RuntimeOptionKey<String> MaxNewSize = new RuntimeOptionKey<String>("0") {
         @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Long oldValue, Long newValue) {
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
             if (!SubstrateUtil.HOSTED) {
-                XOptions.getXmn().setValue(newValue);
+                long size = SubstrateOptionsParser.parseLong(newValue);
+                XOptions.getXmn().setValue(size);
             }
         }
     };
 
     @Option(help = "The size of each thread stack at run-time, in bytes.", type = OptionType.User)//
-    public static final RuntimeOptionKey<Long> StackSize = new RuntimeOptionKey<Long>(0L) {
+    public static final RuntimeOptionKey<String> StackSize = new RuntimeOptionKey<String>("0") {
         @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Long oldValue, Long newValue) {
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
             if (!SubstrateUtil.HOSTED) {
-                XOptions.getXss().setValue(newValue);
+                long size = SubstrateOptionsParser.parseLong(newValue);
+                XOptions.getXss().setValue(size);
             }
         }
     };
@@ -398,21 +403,21 @@ public class SubstrateOptions {
 
     @Fold
     public static long hostedMinHeapSize() {
-        return MinHeapSize.getValue();
+        return SubstrateOptionsParser.parseLong(MinHeapSize.getValue());
     }
 
     @Fold
     public static long hostedMaxHeapSize() {
-        return MaxHeapSize.getValue();
+        return SubstrateOptionsParser.parseLong(MaxHeapSize.getValue());
     }
 
     @Fold
     public static long hostedMaxNewSize() {
-        return MaxNewSize.getValue();
+        return SubstrateOptionsParser.parseLong(MaxNewSize.getValue());
     }
 
     @Fold
     public static long hostedStackSize() {
-        return StackSize.getValue();
+        return SubstrateOptionsParser.parseLong(StackSize.getValue());
     }
 }
