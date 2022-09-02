@@ -24,7 +24,6 @@ package com.oracle.truffle.espresso.vm;
 
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_ABSTRACT;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_LAMBDA_FORM_COMPILED;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_PUBLIC;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_1;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_2;
@@ -841,7 +840,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         return false;
     }
 
-    private static FrameInstance getCallerFrame(int depth, boolean securityStackWalk) {
+    private static FrameInstance getCallerFrame(int depth) {
         // TODO(peterssen): HotSpot verifies that the method is marked as @CallerSensitive.
         // Non-Espresso frames (e.g TruffleNFI) are ignored.
         // The call stack should look like this:
@@ -860,12 +859,8 @@ public final class VM extends NativeEnv implements ContextAccess {
                             @Override
                             public FrameInstance visitFrame(FrameInstance frameInstance) {
                                 Method m = getMethodFromFrame(frameInstance);
-                                if (m != null) {
-                                    if (!securityStackWalk || !isIgnoredBySecurityStackWalk(m, m.getMeta())) {
-                                        if (--depthCounter[0] < 0) {
-                                            return frameInstance;
-                                        }
-                                    }
+                                if (m != null && --depthCounter[0] < 0) {
+                                    return frameInstance;
                                 }
                                 return null;
                             }
@@ -896,7 +891,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     private static Method getCallerMethod(int depth) {
-        FrameInstance callerFrame = getCallerFrame(depth, true);
+        FrameInstance callerFrame = getCallerFrame(depth);
         if (callerFrame == null) {
             return null;
         }
@@ -940,7 +935,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         if (meta.MethodAccessorImpl.isAssignableFrom(holderKlass)) {
             return true;
         }
-        if (MethodHandleIntrinsics.isMethodHandleIntrinsic(m, meta) || (m.getModifiers() & ACC_LAMBDA_FORM_COMPILED) != 0) {
+        if (MethodHandleIntrinsics.isMethodHandleIntrinsic(m, meta)) {
             return true;
         }
         return false;
@@ -1096,7 +1091,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         if (StaticObject.isNull(action)) {
             throw getMeta().throwEx(NullPointerException.class);
         }
-        FrameInstance callerFrame = getCallerFrame(0, false);
+        FrameInstance callerFrame = getCallerFrame(0);
         assert callerFrame != null : "No caller ?";
         Klass caller = getMethodFromFrame(callerFrame).getDeclaringKlass();
         StaticObject acc = context;
