@@ -81,20 +81,12 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public static final int JNI_TRUE = 1;
     public static final int JNI_FALSE = 0;
 
-    // enum jobjectRefType
-    static final int JNIInvalidRefType = 0;
-    static final int JNILocalRefType = 1;
-    static final int JNIGlobalRefType = 2;
-    static final int JNIWeakGlobalRefType = 3;
-
     // This is an arbitrary constant. The hard limit is defined by the host VM.
     private static final int MAX_JNI_LOCAL_CAPACITY = 1 << 14;
 
     private final EspressoContext context;
 
-    private final JNIHandles handles;
-
-    private @Word long jniEnvPtr;
+    private long jniEnvPtr;
 
     // Load native library nespresso.dll (Windows) or libnespresso.so (Unixes) at runtime.
     private final TruffleObject nespressoLibrary;
@@ -286,9 +278,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         @Override
         public Object popObject() {
             try {
-                @Word
-                long handle = (long) InteropLibrary.getFactory().getUncached().execute(popObject, nativePointer);
-                TruffleObject result = getHandles().get(Math.toIntExact(handle));
+                TruffleObject result = (TruffleObject) InteropLibrary.getFactory().getUncached().execute(popObject, nativePointer);
                 if (result instanceof StaticObject) {
                     return result;
                 } else {
@@ -310,7 +300,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         }
     }
 
-    public Object[] popVarArgs(@Word long varargsPtr, final Symbol<Type>[] signature) {
+    public Object[] popVarArgs(long varargsPtr, final Symbol<Type>[] signature) {
         VarArgs varargs = new VarArgsImpl(varargsPtr);
         int paramCount = Signatures.parameterCount(signature, false);
         Object[] args = new Object[paramCount];
@@ -337,6 +327,10 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         return args;
     }
 
+    public VarArgs varargs(long nativePointer) {
+        return new VarArgsImpl(nativePointer);
+    }
+
     private JniEnv(EspressoContext context) {
         try {
             EspressoProperties props = context.getVmProperties();
@@ -359,10 +353,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             popFloat = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_float", "(sint64): float");
             popDouble = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_double", "(sint64): double");
             popLong = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_long", "(sint64): sint64");
-            popObject = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_object", "(sint64): sint64" /*
-                                                                                                        * return
-                                                                                                        * word
-                                                                                                        */);
+            popObject = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_object", "(sint64): object");
 
             Callback lookupJniImplCallback = new Callback(LOOKUP_JNI_IMPL_PARAMETER_COUNT, new Callback.Function() {
                 @Override
