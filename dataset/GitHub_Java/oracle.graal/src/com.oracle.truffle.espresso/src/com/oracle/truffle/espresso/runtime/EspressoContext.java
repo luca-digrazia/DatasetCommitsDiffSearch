@@ -559,7 +559,7 @@ public final class EspressoContext {
                 @Override
                 public Thread get() {
                     threadManager.unregisterMainThread();
-                    startCloserThread(0);
+                    startCloserThread();
                     return closer;
                 }
             };
@@ -613,7 +613,6 @@ public final class EspressoContext {
 
     public void interruptActiveThreads() {
         assert isClosing();
-        assert Thread.currentThread() instanceof CloserThread;
         invalidateNoThreadStop("Killing the VM");
         Thread initiatingThread = Thread.currentThread();
 
@@ -707,7 +706,7 @@ public final class EspressoContext {
                 // TODO(garcia): Tell truffle to forget about this thread
                 // Or
                 // TODO(garcia): Gracefully exit and allow stopping threads in native.
-                System.exit(((CloserThread) Thread.currentThread()).code);
+                System.exit(0);
             }
         }
     }
@@ -945,29 +944,27 @@ public final class EspressoContext {
         return contextReady;
     }
 
-    public void doExit(int code) {
+    public void doExit() {
         isClosing = true;
-        startCloserThread(code);
+        startCloserThread();
         Object sync = getSynchronizer();
         synchronized (sync) {
             sync.notifyAll();
         }
     }
 
-    public synchronized void startCloserThread(int code) {
+    public synchronized void startCloserThread() {
         if (closer == null) {
-            closer = new CloserThread(closingPayload, code);
+            closer = new Thread(new Closer(closingPayload));
             closer.start();
         }
     }
 
-    private class CloserThread extends Thread implements Supplier<Integer> {
+    private class Closer implements Runnable {
         private final Runnable payload;
-        private final int code;
 
-        public CloserThread(Runnable payload, int code) {
+        public Closer(Runnable payload) {
             this.payload = payload;
-            this.code = code;
         }
 
         private boolean hasActiveNonDaemon() {
@@ -1008,11 +1005,6 @@ public final class EspressoContext {
             waitForClose();
             interruptActiveThreads();
             payload.run();
-        }
-
-        @Override
-        public Integer get() {
-            return code;
         }
     }
 }

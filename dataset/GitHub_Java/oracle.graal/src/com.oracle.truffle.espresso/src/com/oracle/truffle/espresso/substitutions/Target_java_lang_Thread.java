@@ -152,11 +152,10 @@ public final class Target_java_lang_Thread {
                     // check if death cause throwable is set, if not throw ThreadDeath
                     StaticObject deathThrowable = (StaticObject) getDeathThrowable(thread);
                     throw deathThrowable != null ? Meta.throwException(deathThrowable) : Meta.throwException(meta.java_lang_ThreadDeath);
-                case SHUTDOWN:
+                case DISSIDENT:
                     // This thread refuses to stop. Send a host exception.
                     // throw getMeta().throwEx(ThreadDeath.class);
-                    assert context.isClosing();
-                    throw new EspressoExitException(context.getExitStatus());
+                    throw new EspressoExitException(0);
             }
         }
         if (context.shouldCheckSuspend()) {
@@ -463,7 +462,7 @@ public final class Target_java_lang_Thread {
      * Forces the thread to stop execution at the next safepoint by throwing a host exit exception.
      */
     public static void forceKillThread(StaticObject thread) {
-        setThreadStop(thread, KillStatus.SHUTDOWN);
+        setThreadStop(thread, KillStatus.DISSIDENT);
     }
 
     public static void setDeathThrowable(StaticObject self, Object deathThrowable) {
@@ -500,7 +499,7 @@ public final class Target_java_lang_Thread {
          * Thread is uncooperative: needs to be killed with a host exception. Very dangerous state
          * to be in.
          */
-        SHUTDOWN
+        DISSIDENT
     }
 
     public static class SuspendLock {
