@@ -9,7 +9,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.JavaKind;
-import com.oracle.truffle.espresso.runtime.EspressoException;
 
 abstract class Operand {
     static public Operand[] EMPTY_ARRAY = new Operand[0];
@@ -207,12 +206,8 @@ class ReferenceOperand extends Operand {
                 } else {
                     klass = thisKlass.getMeta().loadKlass(type, thisKlass.getDefiningClassLoader());
                 }
-            } catch (EspressoException e) {
+            } catch (Exception e) {
                 // TODO(garcia) fine grain this catch
-                if (thisKlass.getMeta().ClassNotFoundException.isAssignableFrom(e.getException().getKlass())) {
-                    throw new NoClassDefFoundError(type.toString());
-                }
-                throw e;
             }
             if (klass == null) {
                 throw new NoClassDefFoundError(type.toString());

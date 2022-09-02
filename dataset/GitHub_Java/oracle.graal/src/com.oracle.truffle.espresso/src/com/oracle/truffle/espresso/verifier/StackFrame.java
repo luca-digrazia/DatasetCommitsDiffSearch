@@ -92,6 +92,7 @@ class StackFrame {
         if (other == subroutineModificationStack) {
             return;
         }
+        assert subroutineModificationStack.depth() == other.depth();
         subroutineModificationStack.merge(other);
     }
 }
