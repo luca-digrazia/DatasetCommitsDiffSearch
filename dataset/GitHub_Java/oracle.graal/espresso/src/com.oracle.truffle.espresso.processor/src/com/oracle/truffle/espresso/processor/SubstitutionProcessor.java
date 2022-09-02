@@ -111,14 +111,11 @@ public final class SubstitutionProcessor extends EspressoProcessor {
         return tabulation + clazz + " " + ARG_NAME + index + " = " + castTo(ARGS_NAME + "[" + index + "]", clazz) + ";\n";
     }
 
-    private String extractInvocation(String className, int nParameters, SubstitutionHelper helper) {
+    private static String extractInvocation(String className, String methodName, String nodeMethodName, int nParameters, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         if (helper.isNodeTarget()) {
-            ExecutableElement nodeExecute = findNodeExecute(helper.getNodeTarget());
-            String nodeMethodName = nodeExecute.getSimpleName().toString();
             str.append("this.node.").append(nodeMethodName).append("(");
         } else {
-            String methodName = helper.getMethodTarget().getSimpleName().toString();
             str.append(className).append(".").append(methodName).append("(");
         }
         boolean first = true;
@@ -268,7 +265,7 @@ public final class SubstitutionProcessor extends EspressoProcessor {
             checkSubstitutionElement(element);
 
             // Obtain the name of the element to be substituted in.
-            String targetMethodName = getSubstutitutedMethodName(element);
+            String elementName = element.getSimpleName().toString();
 
             /**
              * Obtain the actual target method to call in the substitution. This is the method that
@@ -281,7 +278,7 @@ public final class SubstitutionProcessor extends EspressoProcessor {
             List<String> espressoTypes = getEspressoTypes(targetMethod);
 
             // Spawn the name of the Substitutor we will create.
-            String substitutorName = getSubstitutorClassName(className, element.getSimpleName().toString(), espressoTypes);
+            String substitutorName = getSubstitutorClassName(className, elementName, espressoTypes);
 
             String actualMethodName = getSubstutitutedMethodName(element);
 
@@ -302,10 +299,9 @@ public final class SubstitutionProcessor extends EspressoProcessor {
 
             // Create the contents of the source file
             String classFile = spawnSubstitutor(
-                            substitutorName,
                             targetPackage,
                             className,
-                            targetMethodName,
+                            elementName,
                             espressoTypes, helper);
             commitSubstitution(substitutionAnnotation, targetPackage, substitutorName, classFile);
         }
@@ -614,11 +610,16 @@ public final class SubstitutionProcessor extends EspressoProcessor {
         for (String argType : parameterTypeName) {
             str.append(extractArg(argIndex++, argType, TAB_2));
         }
+        String nodeMethodName = null;
+        if (helper.isNodeTarget()) {
+            ExecutableElement nodeExecute = findNodeExecute(helper.getNodeTarget());
+            nodeMethodName = nodeExecute.getSimpleName().toString();
+        }
         if (h.returnType.equals("V")) {
-            str.append(TAB_2).append(extractInvocation(targetClass, argIndex, helper));
+            str.append(TAB_2).append(extractInvocation(targetClass, targetMethodName, nodeMethodName, argIndex, helper));
             str.append(TAB_2).append("return StaticObject.NULL;\n");
         } else {
-            str.append(TAB_2).append("return ").append(extractInvocation(targetClass, argIndex, helper));
+            str.append(TAB_2).append("return ").append(extractInvocation(targetClass, targetMethodName, nodeMethodName, argIndex, helper));
         }
         str.append(TAB_1).append("}\n");
         str.append("}");
