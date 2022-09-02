@@ -106,7 +106,7 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.interop.AbstractTruffleException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -284,7 +284,13 @@ public class LanguageSPITest {
     }
 
     @SuppressWarnings("serial")
+    @ExportLibrary(InteropLibrary.class)
     static class Interrupted extends AbstractTruffleException {
+
+        @ExportMessage
+        ExceptionType getExceptionType() {
+            return ExceptionType.CANCEL;
+        }
     }
 
     @SuppressWarnings({"serial"})
@@ -304,7 +310,7 @@ public class LanguageSPITest {
         @ExportMessage
         @SuppressWarnings("static-method")
         ExceptionType getExceptionType() {
-            return ExceptionType.PARSE_ERROR;
+            return ExceptionType.SYNTAX_ERROR;
         }
 
         @ExportMessage
@@ -359,6 +365,8 @@ public class LanguageSPITest {
                 if (!(cause instanceof PolyglotException)) {
                     throw new AssertionError(cause);
                 }
+                PolyglotException polyglotException = (PolyglotException) cause;
+                assertTrue(polyglotException.isCancelled());
             }
             engine.close();
         } finally {

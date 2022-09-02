@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,7 +40,9 @@
  */
 package com.oracle.truffle.nfi.impl;
 
-import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.interop.AbstractTruffleException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.nodes.Node;
 
 /**
@@ -48,7 +50,8 @@ import com.oracle.truffle.api.nodes.Node;
  */
 
 @SuppressWarnings("serial")
-final class NFIUnsatisfiedLinkError extends AbstractTruffleException {
+@ExportLibrary(InteropLibrary.class)
+public class NFIUnsatisfiedLinkError extends AbstractTruffleException {
 
     NFIUnsatisfiedLinkError(String message) {
         this(message, null);

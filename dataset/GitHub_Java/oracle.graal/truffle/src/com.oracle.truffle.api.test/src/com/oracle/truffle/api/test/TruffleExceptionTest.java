@@ -52,7 +52,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.interop.AbstractTruffleException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
@@ -71,6 +71,7 @@ import java.util.function.Function;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.PolyglotException;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -85,15 +86,27 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
     }
 
     @Test
-    public void testTruffleException() {
+    public void testCatchableTruffleException() {
         setupEnv(createContext(verifyingHandler), new ProxyLanguage() {
             @Override
             protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                return createAST(AbstractTruffleException.class, languageInstance, (n) -> new TruffleExceptionImpl("Test exception", n));
+                return createAST(AbstractTruffleException.class, languageInstance, (n) -> new TruffleExceptionImpl("Test exception", false, n));
             }
         });
         verifyingHandler.expect(BlockNode.Kind.TRY, BlockNode.Kind.CATCH, BlockNode.Kind.FINALLY);
         context.eval(ProxyLanguage.ID, "Test");
+    }
+
+    @Test
+    public void testUnCatchableTruffleException() {
+        setupEnv(createContext(verifyingHandler), new ProxyLanguage() {
+            @Override
+            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
+                return createAST(AbstractTruffleException.class, languageInstance, (n) -> new TruffleExceptionImpl("Test unwind exception", true, n));
+            }
+        });
+        verifyingHandler.expect(BlockNode.Kind.TRY);
+        assertFails(() -> context.eval(ProxyLanguage.ID, "Test"), PolyglotException.class, (e) -> Assert.assertTrue(e.isCancelled()));
     }
 
     static Context createContext(VerifyingHandler handler) {
@@ -106,11 +119,6 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
                         new BlockNode(testClass, BlockNode.Kind.CATCH),
                         new BlockNode(testClass, BlockNode.Kind.FINALLY));
         return Truffle.getRuntime().createCallTarget(new TestRootNode(lang, "test", tryCatch));
-    }
-
-    @SuppressWarnings({"unchecked", "unused"})
-    static <T extends Throwable> T sthrow(Class<T> type, Throwable t) throws T {
-        throw (T) t;
     }
 
     private static final class TestRootNode extends RootNode {
@@ -131,13 +139,12 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            body.executeVoid(frame);
-            return true;
+            return body.execute(frame);
         }
     }
 
     private abstract static class StatementNode extends Node {
-        abstract void executeVoid(VirtualFrame frame);
+        abstract Object execute(VirtualFrame frame);
     }
 
     static class BlockNode extends StatementNode {
@@ -158,10 +165,12 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
 
         @Override
         @ExplodeLoop
-        void executeVoid(VirtualFrame frame) {
+        Object execute(VirtualFrame frame) {
+            Object res = null;
             for (StatementNode child : children) {
-                child.executeVoid(frame);
+                res = child.execute(frame);
             }
+            return res;
         }
     }
 
@@ -176,8 +185,9 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
         }
 
         @Override
-        void executeVoid(VirtualFrame frame) {
+        Object execute(VirtualFrame frame) {
             log.fine(message);
+            return true;
         }
     }
 
@@ -186,8 +196,8 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
         @Child private BlockNode block;
         @Child private BlockNode catchBlock;
         @Child private BlockNode finallyBlock;
-        @Child private InteropLibrary exceptions = InteropLibrary.getFactory().createDispatched(5);
-        private final BranchProfile exceptionProfile = BranchProfile.create();
+        @Child private InteropLibrary interop = InteropLibrary.getFactory().createDispatched(5);
+        private final BranchProfile exception = BranchProfile.create();
 
         TryCatchNode(BlockNode block, BlockNode catchBlock, BlockNode finalizerBlock) {
             this.block = block;
@@ -196,80 +206,94 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
         }
 
         @Override
-        void executeVoid(VirtualFrame frame) {
-            Throwable exception = null;
+        Object execute(VirtualFrame frame) {
+            Object truffleException = null;
+            ControlFlowException controlFlow = null;
+            Object returnValue = null;
             try {
                 try {
-                    block.executeVoid(frame);
+                    returnValue = block.execute(frame);
+                } catch (ControlFlowException ex) {
+                    controlFlow = ex;
                 } catch (Throwable ex) {
-                    exception = executeCatchBlock(frame, ex, catchBlock);
-                }
-                // Java finally blocks that execute nodes are not allowed for
-                // compilation as they might duplicate the finally block code
-                if (finallyBlock != null) {
-                    finallyBlock.executeVoid(frame);
-                }
-                if (exception != null) {
-                    if (exception instanceof ControlFlowException) {
-                        throw (ControlFlowException) exception;
+                    exception.enter();
+                    if (interop.isException(ex)) {
+                        if (interop.isExceptionUnwind(ex)) {
+                            assertCancel(ex);
+                            throw interop.throwException(ex);
+                        } else {
+                            truffleException = ex;
+                            assertTruffleExceptionProperties(ex);
+                        }
+                    } else {
+                        // do not run finally blocks for internal errors
+                        CompilerDirectives.transferToInterpreterAndInvalidate();
+                        throw ex;
                     }
-                    throw exceptions.throwException(exception);
+                }
+                if (truffleException != null && catchBlock != null) {
+                    try {
+                        returnValue = catchBlock.execute(frame);
+                        truffleException = null;
+                    } catch (ControlFlowException ex) {
+                        controlFlow = ex;
+                    } catch (Throwable ex) {
+                        if (interop.isException(ex)) {
+                            if (interop.isExceptionUnwind(ex)) {
+                                throw interop.throwException(ex);
+                            } else {
+                                truffleException = ex;
+                            }
+                        } else {
+                            CompilerDirectives.transferToInterpreterAndInvalidate();
+                            throw ex;
+                        }
+                    }
+                }
+                if (finallyBlock != null) {
+                    finallyBlock.execute(frame);
+                }
+                if (controlFlow != null) {
+                    throw controlFlow;
+                } else if (truffleException != null) {
+                    throw interop.throwException(truffleException);
+                } else {
+                    return returnValue;
                 }
             } catch (UnsupportedMessageException | InvalidArrayIndexException ie) {
                 throw CompilerDirectives.shouldNotReachHere(ie);
             }
         }
 
-        @SuppressWarnings("unchecked")
-        private <T extends Throwable> Throwable executeCatchBlock(VirtualFrame frame, Throwable ex, BlockNode catchBlk) throws T, UnsupportedMessageException, InvalidArrayIndexException {
-            if (ex instanceof ControlFlowException) {
-                // only needed if the language uses control flow exceptions
-                return ex;
-            }
-            exceptionProfile.enter();
-            if (exceptions.isException(ex)) {
-                assertTruffleExceptionProperties(ex);
-                if (catchBlk != null) {
-                    try {
-                        catchBlk.executeVoid(frame);
-                        return null;
-                    } catch (Throwable catchEx) {
-                        return executeCatchBlock(frame, catchEx, null);
-                    }
-                } else {
-                    // run finally block
-                    return ex;
-                }
-            } else {
-                // no finally blocks for internal errors or unwinds
-                throw (T) ex;
-            }
+        @TruffleBoundary
+        private void assertCancel(Throwable ex) throws UnsupportedMessageException {
+            Assert.assertEquals(ExceptionType.CANCEL, interop.getExceptionType(ex));
         }
 
         @TruffleBoundary
         private void assertTruffleExceptionProperties(Throwable ex) throws UnsupportedMessageException, InvalidArrayIndexException {
-            Assert.assertEquals(ExceptionType.RUNTIME_ERROR, exceptions.getExceptionType(ex));
+            Assert.assertEquals(ExceptionType.LANGUAGE_ERROR, interop.getExceptionType(ex));
             AbstractPolyglotTest.assertFails(() -> {
-                exceptions.getExceptionExitStatus(ex);
+                interop.getExceptionExitStatus(ex);
                 return null;
             }, UnsupportedMessageException.class);
             if (ex.getMessage() != null) {
-                Assert.assertTrue(exceptions.hasExceptionMessage(ex));
-                Assert.assertEquals(ex.getMessage(), exceptions.getExceptionMessage(ex));
+                Assert.assertTrue(interop.hasExceptionMessage(ex));
+                Assert.assertEquals(ex.getMessage(), interop.getExceptionMessage(ex));
             } else {
-                Assert.assertFalse(exceptions.hasExceptionMessage(ex));
+                Assert.assertFalse(interop.hasExceptionMessage(ex));
             }
             assertStackTrace(ex);
         }
 
         private void assertStackTrace(Throwable t) throws UnsupportedMessageException, InvalidArrayIndexException {
             List<TruffleStackTraceElement> stack = TruffleStackTrace.getStackTrace(t);
-            Object stackGuestObject = exceptions.getExceptionStackTrace(t);
-            Assert.assertEquals(stack.size(), exceptions.getArraySize(stackGuestObject));
+            Object stackGuestObject = interop.getExceptionStackTrace(t);
+            Assert.assertEquals(stack.size(), interop.getArraySize(stackGuestObject));
             for (int i = 0; i < stack.size(); i++) {
-                Object stackTraceElementObject = exceptions.readArrayElement(stackGuestObject, i);
-                Assert.assertTrue(exceptions.hasExecutableName(stackTraceElementObject));
-                Assert.assertEquals(stack.get(i).getTarget().getRootNode().getName(), exceptions.getExecutableName(stackTraceElementObject));
+                Object stackTraceElementObject = interop.readArrayElement(stackGuestObject, i);
+                Assert.assertTrue(interop.hasExecutableName(stackTraceElementObject));
+                Assert.assertEquals(stack.get(i).getTarget().getRootNode().getName(), interop.getExecutableName(stackTraceElementObject));
             }
         }
     }
@@ -285,7 +309,7 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
         }
 
         @Override
-        void executeVoid(VirtualFrame frame) {
+        Object execute(VirtualFrame frame) {
             try {
                 throw interop.throwException(exceptionObject);
             } catch (UnsupportedMessageException um) {
@@ -298,14 +322,21 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
     @ExportLibrary(InteropLibrary.class)
     static final class TruffleExceptionImpl extends AbstractTruffleException {
 
-        TruffleExceptionImpl(String message, Node location) {
+        private final boolean unwind;
+
+        TruffleExceptionImpl(String message, boolean unwind, Node location) {
             super(message, location);
+            this.unwind = unwind;
         }
 
-        @SuppressWarnings("static-method")
+        @ExportMessage
+        boolean isExceptionUnwind() {
+            return unwind;
+        }
+
         @ExportMessage
         ExceptionType getExceptionType() {
-            return ExceptionType.RUNTIME_ERROR;
+            return unwind ? ExceptionType.CANCEL : ExceptionType.LANGUAGE_ERROR;
         }
     }
 

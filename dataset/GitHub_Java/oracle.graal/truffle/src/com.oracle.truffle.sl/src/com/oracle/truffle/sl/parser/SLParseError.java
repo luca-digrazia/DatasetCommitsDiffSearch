@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,10 +41,9 @@
 
 package com.oracle.truffle.sl.parser;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.interop.AbstractTruffleException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
@@ -68,15 +67,9 @@ public class SLParseError extends AbstractTruffleException {
         this.length = length;
     }
 
-    /**
-     * Note that any subclass of {@link AbstractTruffleException} must always return
-     * <code>true</code> for {@link InteropLibrary#isException(Object)}. That is why it is correct
-     * to export {@link #getExceptionType()} without implementing
-     * {@link InteropLibrary#isException(Object)}.
-     */
     @ExportMessage
     ExceptionType getExceptionType() {
-        return ExceptionType.PARSE_ERROR;
+        return ExceptionType.SYNTAX_ERROR;
     }
 
     @ExportMessage
@@ -85,7 +78,6 @@ public class SLParseError extends AbstractTruffleException {
     }
 
     @ExportMessage(name = "getSourceLocation")
-    @TruffleBoundary
     SourceSection getSourceSection() throws UnsupportedMessageException {
         if (source == null) {
             throw UnsupportedMessageException.create();

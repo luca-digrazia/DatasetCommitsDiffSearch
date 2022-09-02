@@ -98,7 +98,7 @@ import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.NodeLibrary;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.interop.AbstractTruffleException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -161,7 +161,7 @@ import com.oracle.truffle.api.source.SourceSection;
  * </ul>
  * </p>
  */
-@Registration(id = InstrumentationTestLanguage.ID, name = InstrumentationTestLanguage.NAME, version = "2.0", services = {SpecialService.class}, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
+@Registration(id = InstrumentationTestLanguage.ID, name = InstrumentationTestLanguage.NAME, version = "2.0", services = {SpecialService.class})
 @ProvidedTags({StandardTags.ExpressionTag.class, DefineTag.class, LoopTag.class,
                 StandardTags.StatementTag.class, StandardTags.CallTag.class, StandardTags.RootTag.class, StandardTags.RootBodyTag.class,
                 StandardTags.TryBlockTag.class, BlockTag.class, ConstantTag.class})
@@ -1348,7 +1348,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
 
             @ExportMessage
             ExceptionType getExceptionType() {
-                return ExceptionType.RUNTIME_ERROR;
+                return ExceptionType.LANGUAGE_ERROR;
             }
 
             @ExportMessage
@@ -1494,7 +1494,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         public Object execute(VirtualFrame frame) {
             Object returnValue = Null.INSTANCE;
             TruffleContext inner = createInnerContext();
-            Object prev = inner.enter(this);
+            Object prev = inner.enter();
             try {
                 for (BaseNode child : children) {
                     if (child != null) {
@@ -1502,7 +1502,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
                     }
                 }
             } finally {
-                inner.leave(this, prev);
+                inner.leave(prev);
                 inner.close();
             }
             return returnValue;
