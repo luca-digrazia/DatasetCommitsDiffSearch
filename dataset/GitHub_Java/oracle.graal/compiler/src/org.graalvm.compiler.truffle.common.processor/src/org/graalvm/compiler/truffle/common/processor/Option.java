@@ -261,6 +261,12 @@ public class Option {
             .def("false")
             .help("Print the inlined call tree for each compiled method"),
 
+        option("TraceTruffleExpansionSource")
+            .type("Boolean")
+            .category("INTERNAL")
+            .def("false")
+            .help("Print source sections for printed expansion trees"),
+
         option("TruffleCompilationExceptionsAreFatal")
             .type("Boolean")
             .category("INTERNAL")
