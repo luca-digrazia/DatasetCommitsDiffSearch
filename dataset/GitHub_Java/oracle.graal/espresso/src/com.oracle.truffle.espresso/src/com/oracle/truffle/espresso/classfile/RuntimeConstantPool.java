@@ -150,15 +150,11 @@ public final class RuntimeConstantPool extends ConstantPool {
     }
 
     public InvokeDynamicConstant.Resolved resolvedInvokeDynamicAt(Klass accessingKlass, int index) {
-        InvokeDynamicConstant.Resolved invokeDynamic = (InvokeDynamicConstant.Resolved) outOfLockResolvedAt(accessingKlass, index, "invokedynamic");
-        invokeDynamic.checkFail();
-        return invokeDynamic;
+        return (InvokeDynamicConstant.Resolved) outOfLockResolvedAt(accessingKlass, index, "invokedynamic");
     }
 
     public DynamicConstant.Resolved resolvedDynamicConstantAt(Klass accessingKlass, int index) {
-        DynamicConstant.Resolved dynamicConstant = (DynamicConstant.Resolved) outOfLockResolvedAt(accessingKlass, index, "dynamic constant");
-        dynamicConstant.checkFail();
-        return dynamicConstant;
+        return (DynamicConstant.Resolved) outOfLockResolvedAt(accessingKlass, index, "dynamic constant");
     }
 
     public StaticObject getClassLoader() {
