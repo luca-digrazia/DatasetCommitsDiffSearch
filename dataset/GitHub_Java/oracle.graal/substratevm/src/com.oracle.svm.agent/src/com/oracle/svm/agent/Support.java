@@ -35,7 +35,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.WordPointer;
@@ -277,11 +276,11 @@ public final class Support {
         return handlePtr.read();
     }
 
-    public static String getClassNameOr(JNIEnvironment env, JNIObjectHandle clazz, String forNullHandle, String forNullNameOrException) {
+    public static Object getClassNameOr(JNIEnvironment env, JNIObjectHandle clazz, Object forNullHandle, Object forNullNameOrException) {
         if (clazz.notEqual(nullHandle())) {
             JNIObjectHandle clazzName = Support.jniFunctions().<JNIFunctionPointerTypes.CallObjectMethod0FunctionPointer> getCallObjectMethod()
                             .invoke(env, clazz, Support.handles().javaLangClassGetName);
-            String result = Support.fromJniString(env, clazzName);
+            Object result = Support.fromJniString(env, clazzName);
             if (result == null || clearException(env)) {
                 result = forNullNameOrException;
             }
@@ -290,11 +289,11 @@ public final class Support {
         return forNullHandle;
     }
 
-    public static String getClassNameOrNull(JNIEnvironment env, JNIObjectHandle clazz) {
+    public static Object getClassNameOrNull(JNIEnvironment env, JNIObjectHandle clazz) {
         return getClassNameOr(env, clazz, null, null);
     }
 
-    public static JNIObjectHandle getMethodDeclaringClass(JNIMethodId method) {
+    static JNIObjectHandle getMethodDeclaringClass(JNIMethodId method) {
         WordPointer declaringClass = StackValue.get(WordPointer.class);
         if (method.isNull() || jvmtiFunctions().GetMethodDeclaringClass().invoke(jvmtiEnv(), method, declaringClass) != JvmtiError.JVMTI_ERROR_NONE) {
             declaringClass.write(nullPointer());
@@ -302,22 +301,12 @@ public final class Support {
         return declaringClass.read();
     }
 
-    public static JNIObjectHandle getFieldDeclaringClass(JNIObjectHandle clazz, JNIFieldId method) {
+    static JNIObjectHandle getFieldDeclaringClass(JNIObjectHandle clazz, JNIFieldId method) {
         WordPointer declaringClass = StackValue.get(WordPointer.class);
         if (method.isNull() || jvmtiFunctions().GetFieldDeclaringClass().invoke(jvmtiEnv(), clazz, method, declaringClass) != JvmtiError.JVMTI_ERROR_NONE) {
             declaringClass.write(nullPointer());
         }
         return declaringClass.read();
-    }
-
-    public static String getFieldName(JNIObjectHandle clazz, JNIFieldId field) {
-        String name = null;
-        CCharPointerPointer namePtr = StackValue.get(CCharPointerPointer.class);
-        if (jvmtiFunctions().GetFieldName().invoke(jvmtiEnv(), clazz, field, namePtr, nullPointer(), nullPointer()) == JvmtiError.JVMTI_ERROR_NONE) {
-            name = fromCString(namePtr.read());
-            jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), namePtr.read());
-        }
-        return name;
     }
 
     public static boolean clearException(JNIEnvironment localEnv) {
