@@ -48,10 +48,7 @@ import org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64MIOp;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64RMOp;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.SSEOp;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRMOp;
 import org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.OperandSize;
-import org.graalvm.compiler.asm.amd64.AVXKind;
-import org.graalvm.compiler.asm.amd64.AVXKind.AVXSize;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
@@ -98,7 +95,6 @@ import org.graalvm.compiler.lir.amd64.AMD64StringUTF16CompressOp;
 import org.graalvm.compiler.lir.amd64.AMD64ZapRegistersOp;
 import org.graalvm.compiler.lir.amd64.AMD64ZapStackOp;
 import org.graalvm.compiler.lir.amd64.AMD64ZeroMemoryOp;
-import org.graalvm.compiler.lir.amd64.vector.AMD64VectorCompareOp;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGenerator;
 import org.graalvm.compiler.lir.hashing.Hasher;
@@ -409,30 +405,17 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return result;
     }
 
-    private static AVXSize getRegisterSize(Value a) {
-        AMD64Kind kind = (AMD64Kind) a.getPlatformKind();
-        if (kind.isXMM()) {
-            return AVXKind.getRegisterSize(kind);
-        } else {
-            return AVXSize.XMM;
-        }
-    }
-
     private void emitIntegerTest(Value a, Value b) {
-        if (a.getPlatformKind().getVectorLength() > 1) {
-            append(new AMD64VectorCompareOp(VexRMOp.VPTEST, getRegisterSize(a), asAllocatable(a), asAllocatable(b)));
+        assert ((AMD64Kind) a.getPlatformKind()).isInteger();
+        OperandSize size = a.getPlatformKind() == AMD64Kind.QWORD ? QWORD : DWORD;
+        if (isJavaConstant(b) && NumUtil.is32bit(asJavaConstant(b).asLong())) {
+            append(new AMD64BinaryConsumer.ConstOp(AMD64MIOp.TEST, size, asAllocatable(a), (int) asJavaConstant(b).asLong()));
+        } else if (isJavaConstant(a) && NumUtil.is32bit(asJavaConstant(a).asLong())) {
+            append(new AMD64BinaryConsumer.ConstOp(AMD64MIOp.TEST, size, asAllocatable(b), (int) asJavaConstant(a).asLong()));
+        } else if (isAllocatableValue(b)) {
+            append(new AMD64BinaryConsumer.Op(AMD64RMOp.TEST, size, asAllocatable(b), asAllocatable(a)));
         } else {
-            assert ((AMD64Kind) a.getPlatformKind()).isInteger();
-            OperandSize size = a.getPlatformKind() == AMD64Kind.QWORD ? QWORD : DWORD;
-            if (isJavaConstant(b) && NumUtil.is32bit(asJavaConstant(b).asLong())) {
-                append(new AMD64BinaryConsumer.ConstOp(AMD64MIOp.TEST, size, asAllocatable(a), (int) asJavaConstant(b).asLong()));
-            } else if (isJavaConstant(a) && NumUtil.is32bit(asJavaConstant(a).asLong())) {
-                append(new AMD64BinaryConsumer.ConstOp(AMD64MIOp.TEST, size, asAllocatable(b), (int) asJavaConstant(a).asLong()));
-            } else if (isAllocatableValue(b)) {
-                append(new AMD64BinaryConsumer.Op(AMD64RMOp.TEST, size, asAllocatable(b), asAllocatable(a)));
-            } else {
-                append(new AMD64BinaryConsumer.Op(AMD64RMOp.TEST, size, asAllocatable(a), asAllocatable(b)));
-            }
+            append(new AMD64BinaryConsumer.Op(AMD64RMOp.TEST, size, asAllocatable(a), asAllocatable(b)));
         }
     }
 
@@ -565,17 +548,24 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length, boolean directPointers) {
+    public Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length, int constantLength, boolean directPointers) {
         Variable result = newVariable(LIRKind.value(AMD64Kind.DWORD));
-        append(new AMD64ArrayEqualsOp(this, kind, kind, result, array1, array2, length, directPointers, getMaxVectorSize()));
+        append(new AMD64ArrayEqualsOp(this, kind, kind, result, array1, array2, asAllocatable(length), constantLength, directPointers, getMaxVectorSize()));
         return result;
     }
 
     @Override
-    public Variable emitArrayEquals(JavaKind kind1, JavaKind kind2, Value array1, Value array2, Value length, boolean directPointers) {
+    public Variable emitArrayEquals(JavaKind kind1, JavaKind kind2, Value array1, Value array2, Value length, int constantLength, boolean directPointers) {
         Variable result = newVariable(LIRKind.value(AMD64Kind.DWORD));
-        append(new AMD64ArrayEqualsOp(this, kind1, kind2, result, array1, array2, length, directPointers, getMaxVectorSize()));
+        append(new AMD64ArrayEqualsOp(this, kind1, kind2, result, array1, array2, asAllocatable(length), constantLength, directPointers, getMaxVectorSize()));
         return result;
+    }
+
+    /**
+     * Return a conservative estimate of the page size for use by the String.indexOf intrinsic.
+     */
+    protected int getVMPageSize() {
+        return 4096;
     }
 
     /**
@@ -687,7 +677,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public void emitZeroMemory(Value address, Value length, boolean isUnaligned) {
+    public void emitZeroMemory(Value address, Value length) {
         RegisterValue lengthReg = AMD64.rcx.asValue(length.getValueKind());
         emitMove(lengthReg, length);
         append(new AMD64ZeroMemoryOp(asAddressValue(address), lengthReg));

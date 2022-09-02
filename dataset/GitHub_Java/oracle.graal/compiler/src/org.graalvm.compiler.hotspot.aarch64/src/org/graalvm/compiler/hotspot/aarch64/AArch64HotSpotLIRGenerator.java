@@ -84,6 +84,7 @@ import org.graalvm.compiler.lir.aarch64.AArch64Move.StoreOp;
 import org.graalvm.compiler.lir.aarch64.AArch64PrefetchOp;
 import org.graalvm.compiler.lir.aarch64.AArch64RestoreRegistersOp;
 import org.graalvm.compiler.lir.aarch64.AArch64SaveRegistersOp;
+import org.graalvm.compiler.lir.aarch64.AArch64ZeroMemoryOp;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.options.OptionValues;
 
@@ -543,7 +544,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     }
 
     @Override
-    public void emitZeroMemory(Value address, Value length, boolean isUnaligned) {
+    public void emitZeroMemory(Value address, Value length) {
         int dczidValue = config.psrInfoDczidValue;
         EnumSet<AArch64.Flag> flags = ((AArch64) target().arch).getFlags();
 
@@ -562,6 +563,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
             useDcZva = false;
         }
 
-        emitZeroMemory(address, length, isUnaligned, useDcZva, zvaLength);
+        // Value address is 8-byte aligned; Value length is multiple of 8.
+        append(new AArch64ZeroMemoryOp(asAllocatable(address), asAllocatable(length), useDcZva, zvaLength));
     }
 }

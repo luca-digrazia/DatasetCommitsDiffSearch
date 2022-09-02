@@ -795,8 +795,7 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
          * registers.
          */
         AMD64Kind fromKind = (AMD64Kind) from.getPlatformKind();
-        AMD64Kind toKind = (AMD64Kind) to.getPlatformKind();
-        switch (toKind) {
+        switch ((AMD64Kind) to.getPlatformKind()) {
             case DWORD:
                 switch (fromKind) {
                     case SINGLE:
@@ -822,7 +821,7 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
                 }
                 break;
         }
-        throw GraalError.shouldNotReachHere(toKind + " " + fromKind);
+        throw GraalError.shouldNotReachHere();
     }
 
     @Override
@@ -1264,13 +1263,9 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
         }
     }
 
-    public boolean mustReplaceNullWithNullRegister(Constant nullConstant) {
+    private boolean mustReplaceNullWithNullRegister(Constant nullConstant) {
         /* Uncompressed null pointers only */
         return nullRegisterValue != null && JavaConstant.NULL_POINTER.equals(nullConstant);
-    }
-
-    public AllocatableValue getNullRegisterValue() {
-        return nullRegisterValue;
     }
 
     @Override
@@ -1310,7 +1305,7 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
                 return;
             } else if (c instanceof VMConstant) {
                 VMConstant vc = (VMConstant) c;
-                if (size == DWORD && !GeneratePIC.getValue(getOptions()) && getLIRGen().target().inlineObjects) {
+                if (size == DWORD && !GeneratePIC.getValue(getOptions())) {
                     getLIRGen().append(new AMD64BinaryConsumer.VMConstOp(CMP.getMIOpcode(DWORD, false), left, vc));
                 } else {
                     getLIRGen().append(new AMD64BinaryConsumer.DataOp(CMP.getRMOpcode(size), size, left, vc));

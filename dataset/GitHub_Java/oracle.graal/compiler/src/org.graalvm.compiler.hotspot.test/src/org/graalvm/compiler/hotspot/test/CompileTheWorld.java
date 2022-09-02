@@ -31,7 +31,6 @@ import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationFailureA
 import static org.graalvm.compiler.core.test.ReflectionOptionDescriptors.extractEntries;
 import static org.graalvm.compiler.debug.MemUseTrackerKey.getCurrentThreadAllocatedBytes;
 import static org.graalvm.compiler.hotspot.test.CompileTheWorld.Options.DESCRIPTORS;
-import static org.graalvm.compiler.hotspot.test.CompileTheWorld.Options.InvalidateInstalledCode;
 import static sun.misc.Unsafe.ARRAY_BYTE_BASE_OFFSET;
 
 import java.io.ByteArrayOutputStream;
@@ -96,7 +95,6 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.compiler.test.ModuleSupport;
 import org.graalvm.libgraal.LibGraal;
 import org.graalvm.libgraal.LibGraalScope;
 import org.graalvm.libgraal.OptionsEncoder;
@@ -117,10 +115,6 @@ import sun.misc.Unsafe;
  * This class implements compile-the-world functionality with JVMCI.
  */
 public final class CompileTheWorld {
-
-    static {
-        ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler");
-    }
 
     /**
      * Magic token to denote that JDK classes are to be compiled. For JDK 8, the classes in
@@ -389,7 +383,7 @@ public final class CompileTheWorld {
                         Options.MaxClasses.getValue(harnessOptions),
                         Options.MethodFilter.getValue(harnessOptions),
                         Options.ExcludeMethodFilter.getValue(harnessOptions),
-                        Options.Verbose.hasBeenSet(harnessOptions) ? Options.Verbose.getValue(harnessOptions) : !Options.MultiThreaded.getValue(harnessOptions),
+                        Options.Verbose.getValue(harnessOptions),
                         harnessOptions,
                         new OptionValues(compilerOptions, parseOptions(Options.Config.getValue(harnessOptions))));
     }
@@ -992,7 +986,7 @@ public final class CompileTheWorld {
             }
 
             // Invalidate the generated code so the code cache doesn't fill up
-            if (installedCode != null && InvalidateInstalledCode.getValue(compilerOptions)) {
+            if (installedCode != null) {
                 installedCode.invalidate();
             }
 
@@ -1054,13 +1048,12 @@ public final class CompileTheWorld {
         public static final OptionKey<String> Config = new OptionKey<>(null);
         public static final OptionKey<Boolean> MultiThreaded = new OptionKey<>(false);
         public static final OptionKey<Integer> Threads = new OptionKey<>(0);
-        public static final OptionKey<Boolean> InvalidateInstalledCode = new OptionKey<>(false);
 
         // @formatter:off
         static final ReflectionOptionDescriptors DESCRIPTORS = new ReflectionOptionDescriptors(Options.class,
                            "Help", "List options and their help messages and then exit.",
                       "Classpath", "Class path denoting methods to compile. Default is to compile boot classes.",
-                        "Verbose", "Verbose operation. Default is !MultiThreaded.",
+                        "Verbose", "Verbose operation.",
                    "LimitModules", "Comma separated list of module names to which compilation should be limited. " +
                                    "Module names can be prefixed with \"~\" to exclude the named module.",
                      "Iterations", "The number of iterations to perform.",
@@ -1105,11 +1098,6 @@ public final class CompileTheWorld {
 
             CompileTheWorld ctw = new CompileTheWorld(jvmciRuntime, compiler, harnessOptions, graalRuntime.getOptions());
             ctw.compile();
-            if (iterations > 1) {
-                // Force a GC to encourage reclamation of nmethods when their InstalledCode
-                // reference has been dropped.
-                System.gc();
-            }
         }
         // This is required as non-daemon threads can be started by class initializers
         System.exit(0);
