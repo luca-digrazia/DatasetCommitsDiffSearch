@@ -69,14 +69,13 @@ import com.oracle.truffle.espresso.jdwp.impl.JDWP;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.redefinition.ChangePacket;
-import com.oracle.truffle.espresso.redefinition.ClassRedefinition;
 import com.oracle.truffle.espresso.redefinition.DetectedChange;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.JavaType;
+import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.verifier.MethodVerifier;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
@@ -143,15 +142,13 @@ public final class ObjectKlass extends Klass {
     }
 
     public ObjectKlass(EspressoContext context, LinkedKlass linkedKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, StaticObject classLoader) {
-        this(context, linkedKlass, superKlass, superInterfaces, classLoader, ClassRegistry.ClassDefinitionInfo.EMPTY);
+        this(context, linkedKlass, superKlass, superInterfaces, classLoader, null);
     }
 
-    public ObjectKlass(EspressoContext context, LinkedKlass linkedKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, StaticObject classLoader, ClassRegistry.ClassDefinitionInfo info) {
+    public ObjectKlass(EspressoContext context, LinkedKlass linkedKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, StaticObject classLoader, Klass hostKlass) {
         super(context, linkedKlass.getName(), linkedKlass.getType(), superKlass, superInterfaces, linkedKlass.getFlags());
 
-        this.nest = info.dynamicNest;
-        this.hostKlass = info.hostKlass;
-
+        this.hostKlass = hostKlass;
         // TODO(peterssen): Make writable copy.
         RuntimeConstantPool pool = new RuntimeConstantPool(getContext(), linkedKlass.getConstantPool(), classLoader);
         definingClassLoader = pool.getClassLoader();
@@ -212,18 +209,6 @@ public final class ObjectKlass extends Klass {
             superInterface.addSubType(this);
         }
         this.klassVersion = new KlassVersion(pool, linkedKlass, methods, mirandaMethods, vtable, itable, iKlassTable);
-
-        // Only forcefully initialization of the mirror if necessary
-        if (info.protectionDomain != null) {
-            getMeta().HIDDEN_PROTECTION_DOMAIN.setHiddenObject(mirror(), info.protectionDomain);
-        }
-        if (info.classData != null) {
-            getMeta().java_lang_Class_classData.setHiddenObject(mirror(), info.classData);
-        }
-        if (!info.addedToRegistry()) {
-            initSelfReferenceInPool();
-        }
-
         this.initState = LINKED;
         assert verifyTables();
     }
@@ -459,7 +444,7 @@ public final class ObjectKlass extends Klass {
     }
 
     @Override
-    public @JavaType(ClassLoader.class) StaticObject getDefiningClassLoader() {
+    public @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
         return definingClassLoader;
     }
 
@@ -620,19 +605,12 @@ public final class ObjectKlass extends Klass {
             return EMPTY_ARRAY;
         }
         RuntimeConstantPool pool = getConstantPool();
-        ArrayList<Klass> klasses = new ArrayList<>();
-        for (int i = 0; i < nestMembers.getClasses().length; i++) {
+        Klass[] result = new Klass[nestMembers.getClasses().length];
+        for (int i = 0; i < result.length; i++) {
             int index = nestMembers.getClasses()[i];
-            try {
-                klasses.add(pool.resolvedKlassAt(this, index));
-            } catch (EspressoException e) {
-                /*
-                 * Don't allow badly constructed nest members to break execution here, only report
-                 * well-constructed entries.
-                 */
-            }
+            result[i] = pool.resolvedKlassAt(this, index);
         }
-        return klasses.toArray(Klass.EMPTY_ARRAY);
+        return result;
     }
 
     Field lookupFieldTableImpl(int slot) {
@@ -1026,7 +1004,7 @@ public final class ObjectKlass extends Klass {
         return result;
     }
 
-    private void initPackage(@JavaType(ClassLoader.class) StaticObject classLoader) {
+    private void initPackage(@Host(ClassLoader.class) StaticObject classLoader) {
         if (!Names.isUnnamedPackage(getRuntimePackage())) {
             ClassRegistry registry = getRegistries().getClassRegistry(classLoader);
             packageEntry = registry.packages().lookup(getRuntimePackage());
@@ -1097,16 +1075,6 @@ public final class ObjectKlass extends Klass {
         return hasDeclaredDefaultMethods;
     }
 
-    public void initSelfReferenceInPool() {
-        getConstantPool().setKlassAt(getLinkedKlass().getParserKlass().getThisKlassIndex(), this);
-    }
-
-    @SuppressWarnings("static-method")
-    public boolean isRecord() {
-        // TODO:
-        return false;
-    }
-
     @Override
     public String getGenericTypeAsString() {
         if (genericSignature == null) {
@@ -1137,9 +1105,6 @@ public final class ObjectKlass extends Klass {
     }
 
     public KlassVersion getKlassVersion() {
-        // block execution during class redefinition
-        ClassRedefinition.check();
-
         KlassVersion cache = klassVersion;
         if (!cache.assumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
