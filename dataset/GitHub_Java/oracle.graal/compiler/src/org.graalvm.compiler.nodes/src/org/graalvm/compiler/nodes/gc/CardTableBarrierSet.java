@@ -35,7 +35,8 @@ import org.graalvm.compiler.nodes.extended.RawLoadNode;
 import org.graalvm.compiler.nodes.java.AbstractCompareAndSwapNode;
 import org.graalvm.compiler.nodes.java.LoweredAtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.memory.FixedAccessNode;
-import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.HeapAccess;
+import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.WriteNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
@@ -138,7 +139,7 @@ public class CardTableBarrierSet implements BarrierSet {
 
     public boolean needsWriteBarrier(FixedAccessNode node, ValueNode writtenValue) {
         assert !(node instanceof ArrayRangeWrite);
-        BarrierType barrierType = node.getBarrierType();
+        HeapAccess.BarrierType barrierType = node.getBarrierType();
         switch (barrierType) {
             case NONE:
                 return false;
@@ -171,7 +172,7 @@ public class CardTableBarrierSet implements BarrierSet {
     }
 
     private static void addSerialPostWriteBarrier(FixedAccessNode node, AddressNode address, StructuredGraph graph) {
-        boolean precise = node.getBarrierType() != BarrierType.FIELD;
+        boolean precise = node.getBarrierType() != HeapAccess.BarrierType.FIELD;
         graph.addAfterFixed(node, graph.add(new SerialWriteBarrier(address, precise)));
     }
 
