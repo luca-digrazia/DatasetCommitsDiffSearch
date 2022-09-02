@@ -28,7 +28,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.espresso.classfile.Constants;
-import com.oracle.truffle.espresso.classfile.attributes.SignatureAttribute;
+import com.oracle.truffle.espresso.classfile.SignatureAttribute;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.ModifiedUTF8;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -140,6 +140,7 @@ public final class Field extends Member<Type> implements FieldRef {
     public Object get(StaticObject self) {
         assert getDeclaringKlass().isAssignableFrom(self.getKlass());
         // @formatter:off
+        // Checkstyle: stop
         switch (getKind()) {
             case Boolean : return InterpreterToVM.getFieldBoolean(self, this);
             case Byte    : return InterpreterToVM.getFieldByte(self, this);
@@ -153,12 +154,14 @@ public final class Field extends Member<Type> implements FieldRef {
             default      : throw EspressoError.shouldNotReachHere();
         }
         // @formatter:on
+        // Checkstyle: resume
     }
 
     public void set(StaticObject self, Object value) {
         assert value != null;
         assert getDeclaringKlass().isAssignableFrom(self.getKlass());
         // @formatter:off
+        // Checkstyle: stop
         switch (getKind()) {
             case Boolean : InterpreterToVM.setFieldBoolean((boolean) value, self, this); break;
             case Byte    : InterpreterToVM.setFieldByte((byte) value, self, this);       break;
@@ -172,6 +175,7 @@ public final class Field extends Member<Type> implements FieldRef {
             default      : throw EspressoError.shouldNotReachHere();
         }
         // @formatter:on
+        // Checkstyle: resume
     }
 
     public Klass resolveTypeKlass() {
@@ -310,7 +314,7 @@ public final class Field extends Member<Type> implements FieldRef {
      * Copied from DebuggerSession with modifications to the set method to make it thread safe (but
      * slower on the slow path).
      */
-    static final class StableBoolean {
+    private final class StableBoolean {
 
         @CompilerDirectives.CompilationFinal private volatile Assumption unchanged;
         @CompilerDirectives.CompilationFinal private volatile boolean value;
