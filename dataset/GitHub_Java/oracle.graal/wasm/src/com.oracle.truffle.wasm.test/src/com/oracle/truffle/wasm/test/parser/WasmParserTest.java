@@ -34,20 +34,12 @@ import java.io.IOException;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.io.ByteSequence;
-import org.junit.Test;
 
-import com.oracle.truffle.wasm.binary.Assert;
+import com.oracle.truffle.wasm.parser.binary.Assert;
 import com.oracle.truffle.wasm.test.WasmTest;
 import com.oracle.truffle.wasm.test.WasmTestToolkit;
 
 public class WasmParserTest extends WasmTest {
-
-    @Override
-    @Test
-    public void runTests() {
-        super.runTests();
-    }
-
     @Override
     protected void runTest(TestElement element) {
         try {
