@@ -36,12 +36,17 @@ import com.oracle.svm.configure.json.JsonWriter;
 import com.oracle.svm.core.util.UserError;
 
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaUtil;
 
 public class TypeConfiguration implements JsonPrintable {
     private final ConcurrentMap<String, ConfigurationType> types = new ConcurrentHashMap<>();
 
     public ConfigurationType get(String qualifiedJavaName) {
         return types.get(qualifiedJavaName);
+    }
+
+    public ConfigurationType getByInternalName(String internalName) {
+        return types.get(MetaUtil.internalNameToJava(internalName, true, false));
     }
 
     public void add(ConfigurationType type) {
@@ -66,7 +71,6 @@ public class TypeConfiguration implements JsonPrintable {
             } else {
                 throw new IllegalArgumentException();
             }
-
             for (int i = 0; i < n; i++) {
                 sb.append("[]");
             }

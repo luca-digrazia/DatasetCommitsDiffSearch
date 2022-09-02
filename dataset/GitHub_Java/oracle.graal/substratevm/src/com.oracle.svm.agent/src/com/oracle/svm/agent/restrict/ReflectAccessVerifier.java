@@ -68,14 +68,14 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
         this.agent = agent;
     }
 
-    public boolean verifyForName(JNIEnvironment env, JNIObjectHandle callerClass, String className, WordSupplier<JNIObjectHandle> loadClass) {
+    public boolean verifyForName(JNIEnvironment env, JNIObjectHandle callerClass, String className) {
         if (shouldApproveWithoutChecks(lazyValue(className), lazyClassNameOrNull(env, callerClass))) {
             return true;
         }
-        return className == null || typeAccessChecker.isClassAccessible(env, className, loadClass);
+        return className == null || typeAccessChecker.isClassAccessible(env, className);
     }
 
-    public boolean verifyLoadClass(JNIEnvironment env, JNIObjectHandle callerClass, String className, WordSupplier<JNIObjectHandle> loadClass) {
+    public boolean verifyLoadClass(JNIEnvironment env, JNIObjectHandle callerClass, String className) {
         LazyValue<String> lazyName = lazyValue(className);
         LazyValue<String> callerClassName = lazyClassNameOrNull(env, callerClass);
         if (shouldApproveWithoutChecks(lazyName, callerClassName)) {
@@ -84,7 +84,7 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
         if (accessAdvisor.shouldIgnoreLoadClass(lazyName, callerClassName)) {
             return true;
         }
-        return className == null || typeAccessChecker.isClassAccessible(env, className, loadClass);
+        return className == null || typeAccessChecker.isClassAccessible(env, className);
     }
 
     public boolean verifyGetField(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle name, JNIObjectHandle result, JNIObjectHandle declaring, JNIObjectHandle callerClass) {
