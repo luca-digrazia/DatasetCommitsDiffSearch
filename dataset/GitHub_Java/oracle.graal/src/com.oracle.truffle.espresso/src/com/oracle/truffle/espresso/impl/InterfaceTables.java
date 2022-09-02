@@ -31,7 +31,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 /**
  * 3 pass interface table constructor helper:
@@ -334,17 +333,15 @@ final class InterfaceTables {
     private Entry lookupLocation(Method im, Symbol<Name> mname, Symbol<Signature> sig) {
         Method m = null;
         int index = -1;
-        // Look at VTable first. Even if this klass declares the method, it will be put in the same
-        // place.
         if (superKlass != null) {
-            index = getMethodTableIndex(superKlass.getVTable(), im, mname, sig);
+            index = superKlass.lookupVirtualMethod(mname, sig, thisKlass);
         }
         if (index != -1) {
             m = superKlass.vtableLookup(index);
             assert index == m.getVTableIndex();
             return new Entry(Location.SUPERVTABLE, index);
         }
-        index = getMethodTableIndex(thisKlass.getDeclaredMethods(), im, mname, sig);
+        index = getDeclaredMethodIndex(thisKlass.getDeclaredMethods(), im, mname, sig);
         if (index != -1) {
             return new Entry(Location.DECLARED, index);
         }
@@ -359,10 +356,10 @@ final class InterfaceTables {
 
     }
 
-    private static int getMethodTableIndex(Method[] table, Method interfMethod, Symbol<Name> mname, Symbol<Signature> sig) {
-        for (int i = 0; i < table.length; i++) {
-            Method m = table[i];
-            if (canOverride(m, interfMethod, m.getContext()) && mname == m.getName() && sig == m.getRawSignature()) {
+    private static int getDeclaredMethodIndex(Method[] declaredMethod, Method interfMethod, Symbol<Name> mname, Symbol<Signature> sig) {
+        for (int i = 0; i < declaredMethod.length; i++) {
+            Method m = declaredMethod[i];
+            if (m.canOverride(interfMethod) && mname == m.getName() && sig == m.getRawSignature()) {
                 return i;
             }
         }
@@ -378,12 +375,6 @@ final class InterfaceTables {
             pos++;
         }
         return -1;
-    }
-
-    private static boolean canOverride(Method m, Method im, EspressoContext context) {
-        // Interface method selection in Java 8 can select private methods.
-        // In Java 11, the VM checks for actual overriding.
-        return !m.isStatic() && (context.getJavaVersion().java8OrEarlier() || m.canOverride(im));
     }
 
     // helper checks
