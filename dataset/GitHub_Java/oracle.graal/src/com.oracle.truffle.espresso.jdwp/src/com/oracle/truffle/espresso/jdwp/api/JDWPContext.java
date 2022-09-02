@@ -448,12 +448,4 @@ public interface JDWPContext {
      * @return the current contended monitor
      */
     Object getCurrentContendedMonitor(Object guestThread);
-
-    /**
-     * Forces an early return on the top-most frame with the given return value.
-     *
-     * @param returnValue the value to return
-     * @return {@code true} if the early return can be performed or {@code false} otherwise
-     */
-    boolean forceEarlyReturn(Object returnValue);
 }

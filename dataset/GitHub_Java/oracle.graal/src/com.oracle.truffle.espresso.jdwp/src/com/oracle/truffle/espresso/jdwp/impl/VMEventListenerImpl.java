@@ -834,6 +834,10 @@ public final class VMEventListenerImpl implements VMEventListener {
     public Object[] getOwnedMonitors(Object thread) {
         Set<Object> monitors = ownedMonitors.get(thread);
         if (monitors != null) {
+            System.out.println("owned monitors: " + monitors.size());
+            for (Object monitor : monitors) {
+                System.out.println("monitor: " + monitor);
+            }
             return monitors.toArray();
         }
         return new Object[0];
