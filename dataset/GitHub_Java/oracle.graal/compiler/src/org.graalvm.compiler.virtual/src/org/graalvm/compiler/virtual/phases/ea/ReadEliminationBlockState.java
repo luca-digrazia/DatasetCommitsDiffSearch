@@ -34,16 +34,16 @@ import org.graalvm.word.LocationIdentity;
 /**
  * This class maintains a set of known values, identified by base object, locations and offset.
  */
-public class ReadEliminationBlockState extends EffectsBlockState<ReadEliminationBlockState> {
+public final class ReadEliminationBlockState extends EffectsBlockState<ReadEliminationBlockState> {
 
     final EconomicMap<CacheEntry<?>, ValueNode> readCache;
 
-    public abstract static class CacheEntry<T> {
+    abstract static class CacheEntry<T> {
 
         public final ValueNode object;
         public final T identity;
 
-        protected CacheEntry(ValueNode object, T identity) {
+        CacheEntry(ValueNode object, T identity) {
             this.object = object;
             this.identity = identity;
         }
@@ -70,14 +70,14 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
             return object + ":" + identity;
         }
 
-        public abstract boolean conflicts(LocationIdentity other, ValueNode index, ValueNode array);
+        public abstract boolean conflicts(LocationIdentity other);
 
         public abstract LocationIdentity getIdentity();
     }
 
-    public static final class LoadCacheEntry extends CacheEntry<LocationIdentity> {
+    static final class LoadCacheEntry extends CacheEntry<LocationIdentity> {
 
-        public LoadCacheEntry(ValueNode object, LocationIdentity identity) {
+        LoadCacheEntry(ValueNode object, LocationIdentity identity) {
             super(object, identity);
         }
 
@@ -87,7 +87,7 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
         }
 
         @Override
-        public boolean conflicts(LocationIdentity other, ValueNode index, ValueNode array) {
+        public boolean conflicts(LocationIdentity other) {
             return identity.equals(other);
         }
 
@@ -102,11 +102,11 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
      * identity are separate so both must be considered when looking for optimizable memory
      * accesses.
      */
-    public static final class UnsafeLoadCacheEntry extends CacheEntry<ValueNode> {
+    static final class UnsafeLoadCacheEntry extends CacheEntry<ValueNode> {
 
         private final LocationIdentity locationIdentity;
 
-        public UnsafeLoadCacheEntry(ValueNode object, ValueNode location, LocationIdentity locationIdentity) {
+        UnsafeLoadCacheEntry(ValueNode object, ValueNode location, LocationIdentity locationIdentity) {
             super(object, location);
             assert locationIdentity != null;
             this.locationIdentity = locationIdentity;
@@ -118,7 +118,7 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
         }
 
         @Override
-        public boolean conflicts(LocationIdentity other, ValueNode index, ValueNode array) {
+        public boolean conflicts(LocationIdentity other) {
             return locationIdentity.equals(other);
         }
 
@@ -174,23 +174,15 @@ public class ReadEliminationBlockState extends EffectsBlockState<ReadElimination
         return readCache.get(identifier);
     }
 
-    public void killReadCache(LocationIdentity identity, ValueNode index, ValueNode array) {
-        if (identity.isAny()) {
-            // ANY aliases with every other location
-            readCache.clear();
-            return;
-        }
+    public void killReadCache() {
+        readCache.clear();
+    }
+
+    public void killReadCache(LocationIdentity identity) {
         Iterator<CacheEntry<?>> iterator = readCache.getKeys().iterator();
         while (iterator.hasNext()) {
             CacheEntry<?> entry = iterator.next();
-            /*
-             * We cover multiple cases here but in general index and array can only be !=null for
-             * indexed nodes thus the location identity of other accesses (field and object
-             * locations) will never be the same and will never alias with array accesses.
-             *
-             * Unsafe accesses will alias if they are writing to any location.
-             */
-            if (entry.conflicts(identity, index, array)) {
+            if (entry.conflicts(identity)) {
                 iterator.remove();
             }
         }
