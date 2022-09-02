@@ -29,16 +29,14 @@
  */
 package com.oracle.truffle.wasm.test.next;
 
+import com.oracle.truffle.wasm.test.next.arithmetic.Float32Suite;
+import com.oracle.truffle.wasm.test.next.arithmetic.Float64Suite;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
-import com.oracle.truffle.wasm.test.next.arithmetic.Float32Suite;
-import com.oracle.truffle.wasm.test.next.arithmetic.Float64Suite;
 import com.oracle.truffle.wasm.test.next.arithmetic.Integer32Suite;
 import com.oracle.truffle.wasm.test.next.arithmetic.Integer64Suite;
-import com.oracle.truffle.wasm.test.next.control.BlockWithLocalsSuite;
-import com.oracle.truffle.wasm.test.next.control.SimpleBlockSuite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
@@ -46,8 +44,6 @@ import com.oracle.truffle.wasm.test.next.control.SimpleBlockSuite;
         Integer64Suite.class,
         Float32Suite.class,
         Float64Suite.class,
-        SimpleBlockSuite.class,
-        BlockWithLocalsSuite.class,
 })
 public class WasmTestSuite {
     @Test
