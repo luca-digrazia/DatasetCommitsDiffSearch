@@ -476,7 +476,7 @@ public final class InspectorRuntime extends RuntimeDomain {
                         public Void executeCommand() throws CommandProcessException {
                             JSONObject result;
                             if (functionNoWS.startsWith(FUNCTION_COMPLETION)) {
-                                result = createCodecompletion(value, scope, generatePreview, context, true);
+                                result = createCodecompletion(value, scope, generatePreview);
                             } else if (functionNoWS.equals(FUNCTION_SET_PROPERTY)) {
                                 // Set of an array element, or object property
                                 if (arguments == null || arguments.length() < 2) {
@@ -733,7 +733,7 @@ public final class InspectorRuntime extends RuntimeDomain {
         }
     }
 
-    static JSONObject createCodecompletion(DebugValue value, DebugScope scope, boolean generatePreview, InspectorExecutionContext context, boolean resultItems) {
+    private JSONObject createCodecompletion(DebugValue value, DebugScope scope, boolean generatePreview) {
         JSONObject result = new JSONObject();
         Iterable<DebugValue> properties = null;
         try {
@@ -743,7 +743,7 @@ public final class InspectorRuntime extends RuntimeDomain {
                 properties = scope.getDeclaredValues();
             }
         } catch (DebugException ex) {
-            fillExceptionDetails(result, ex, context, generatePreview);
+            fillExceptionDetails(result, ex, generatePreview);
             if (ex.isInternalError()) {
                 PrintWriter err = context.getErr();
                 if (err != null) {
@@ -753,19 +753,15 @@ public final class InspectorRuntime extends RuntimeDomain {
             }
         }
         JSONArray valueArray = new JSONArray();
+        JSONObject itemsObj = new JSONObject();
         JSONArray items = new JSONArray();
         if (properties != null) {
             for (DebugValue property : properties) {
                 items.put(property.getName());
             }
         }
-        if (resultItems) {
-            JSONObject itemsObj = new JSONObject();
-            itemsObj.put("items", items);
-            valueArray.put(itemsObj);
-        } else {
-            valueArray.put(items);
-        }
+        itemsObj.put("items", items);
+        valueArray.put(itemsObj);
         result.put("type", "object");
         result.put("value", valueArray);
         return result;
@@ -875,7 +871,7 @@ public final class InspectorRuntime extends RuntimeDomain {
 
         @Override
         public void outputText(String str) {
-            notifyConsoleAPICalled(type, str.endsWith("\n") ? str.substring(0, str.length() - 1) : str);
+            notifyConsoleAPICalled(type, str);
         }
 
     }

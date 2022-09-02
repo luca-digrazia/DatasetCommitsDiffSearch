@@ -24,39 +24,31 @@
  */
 package com.oracle.truffle.tools.chromeinspector.domains;
 
-import com.oracle.truffle.tools.chromeinspector.events.EventHandler;
+import com.oracle.truffle.tools.chromeinspector.commands.Params;
 
-public abstract class Domain {
+public abstract class ProfilerDomain extends Domain {
 
-    protected EventHandler eventHandler;
-    private boolean enabled;
-
-    protected Domain() {
+    protected ProfilerDomain() {
     }
 
-    public final void setEventHandler(EventHandler eventHandler) {
-        this.eventHandler = eventHandler;
-    }
+    public abstract void setSamplingInterval(long interval);
 
-    protected abstract void doEnable();
+    public abstract void start();
 
-    protected abstract void doDisable();
+    public abstract Params stop();
 
-    public final void enable() {
-        if (!enabled) {
-            enabled = true;
-            doEnable();
-        }
-    }
+    public abstract void startPreciseCoverage(boolean callCount, boolean detailed);
 
-    public final void disable() {
-        if (enabled) {
-            enabled = false;
-            doDisable();
-        }
-    }
+    public abstract void stopPreciseCoverage();
 
-    public final boolean isEnabled() {
-        return enabled;
-    }
+    public abstract Params takePreciseCoverage();
+
+    public abstract Params getBestEffortCoverage();
+
+    public abstract void startTypeProfile();
+
+    public abstract void stopTypeProfile();
+
+    public abstract Params takeTypeProfile();
+
 }

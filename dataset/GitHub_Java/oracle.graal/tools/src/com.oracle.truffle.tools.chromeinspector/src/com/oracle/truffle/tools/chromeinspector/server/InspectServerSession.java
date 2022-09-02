@@ -63,7 +63,7 @@ public final class InspectServerSession implements MessageEndpoint {
     private final RuntimeDomain runtime;
     private final DebuggerDomain debugger;
     private final ProfilerDomain profiler;
-    private final ReadWriteLock domainLock;
+    private final ReadWriteLock domainLock = new ReentrantReadWriteLock();
     final InspectorExecutionContext context;
     private volatile MessageEndpoint messageEndpoint;
     private volatile JSONMessageListener jsonMessageListener;
@@ -71,20 +71,18 @@ public final class InspectServerSession implements MessageEndpoint {
     private Runnable onClose;
 
     private InspectServerSession(RuntimeDomain runtime, DebuggerDomain debugger, ProfilerDomain profiler,
-                    InspectorExecutionContext context, ReadWriteLock domainLock) {
+                    InspectorExecutionContext context) {
         this.runtime = runtime;
         this.debugger = debugger;
         this.profiler = profiler;
         this.context = context;
-        this.domainLock = domainLock;
     }
 
     public static InspectServerSession create(InspectorExecutionContext context, boolean debugBreak, ConnectionWatcher connectionWatcher) {
-        ReadWriteLock domainLock = new ReentrantReadWriteLock();
         RuntimeDomain runtime = new InspectorRuntime(context);
-        DebuggerDomain debugger = new InspectorDebugger(context, debugBreak, domainLock);
+        DebuggerDomain debugger = new InspectorDebugger(context, debugBreak);
         ProfilerDomain profiler = new InspectorProfiler(context, connectionWatcher);
-        return new InspectServerSession(runtime, debugger, profiler, context, domainLock);
+        return new InspectServerSession(runtime, debugger, profiler, context);
     }
 
     public void onClose(Runnable onCloseTask) {
