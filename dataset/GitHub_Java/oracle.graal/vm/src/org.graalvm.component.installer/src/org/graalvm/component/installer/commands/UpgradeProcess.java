@@ -362,10 +362,7 @@ public class UpgradeProcess {
      */
 
     public void migrateLicenses() {
-        if (!SystemUtils.isLicenseTrackingEnabled()) {
-            return;
-        }
-        feedback.output("UPGRADE_MigratingLicenses", input.getLocalRegistry().getGraalVersion().originalString(),
+        feedback.output("UPGRADE_MigratingLicenses", input.getLocalRegistry().getGraalVersion(),
                         targetInfo.getVersion().originalString());
         for (Map.Entry<String, Collection<String>> e : input.getLocalRegistry().getAcceptedLicenses().entrySet()) {
             String compId = e.getKey();

@@ -52,10 +52,10 @@ public final class Environment implements Feedback, CommandInput {
     private final Map<String, String> options;
     private final boolean verbose;
     private final ResourceBundle bundle;
-    private int parameterPos;
     private InputStream in = System.in;
     private PrintStream err = System.err;
     private PrintStream out = System.out;
+    private Supplier<ComponentCollection> registrySupplier;
     private ComponentRegistry localRegistry;
     private boolean stacktraces;
     private ComponentIterable fileIterable;
@@ -64,9 +64,6 @@ public final class Environment implements Feedback, CommandInput {
     private boolean autoYesEnabled;
     private boolean nonInteractive;
     private Path graalHome;
-    private FileOperations fileOperations;
-    private CatalogFactory catalogFactory;
-    private ComponentCatalog componentCatalog;
 
     Environment(String commandName, List<String> parameters, Map<String, String> options) {
         this(commandName, (String) null, parameters, options);
@@ -142,16 +139,9 @@ public final class Environment implements Feedback, CommandInput {
         this.fileIterable = fileIterable;
     }
 
-    public void setCatalogFactory(CatalogFactory catalogFactory) {
-        this.catalogFactory = catalogFactory;
-    }
-
     @Override
-    public ComponentCatalog getRegistry() {
-        if (componentCatalog == null) {
-            componentCatalog = catalogFactory.createComponentCatalog(this, getLocalRegistry());
-        }
-        return componentCatalog;
+    public ComponentCollection getRegistry() {
+        return registrySupplier.get();
     }
 
     @Override
@@ -161,6 +151,13 @@ public final class Environment implements Feedback, CommandInput {
 
     public void setLocalRegistry(ComponentRegistry r) {
         this.localRegistry = r;
+        if (this.registrySupplier == null) {
+            this.registrySupplier = () -> r;
+        }
+    }
+
+    public void setComponentRegistry(Supplier<ComponentCollection> registrySupplier) {
+        this.registrySupplier = registrySupplier;
     }
 
     public void setGraalHome(Path f) {
@@ -407,23 +404,17 @@ public final class Environment implements Feedback, CommandInput {
 
     @Override
     public String nextParameter() {
-        if (parameterPos >= parameters.size()) {
-            return null;
-        }
-        return parameters.get(parameterPos++);
+        return parameters.poll();
     }
 
     @Override
     public String peekParameter() {
-        if (parameterPos >= parameters.size()) {
-            return null;
-        }
-        return parameters.get(parameterPos);
+        return parameters.peek();
     }
 
     @Override
     public String requiredParameter() {
-        if (!hasParameter()) {
+        if (parameters.isEmpty()) {
             throw new FailedOperationException(
                             MessageFormat.format(BUNDLE.getString("ERROR_MissingParameter"), commandName));
         }
@@ -432,7 +423,7 @@ public final class Environment implements Feedback, CommandInput {
 
     @Override
     public boolean hasParameter() {
-        return parameters.size() > parameterPos;
+        return !parameters.isEmpty();
     }
 
     @Override
@@ -505,32 +496,5 @@ public final class Environment implements Feedback, CommandInput {
     @Override
     public Path getLocalCache(URL location) {
         return fileMap.get(location);
-    }
-
-    @Override
-    public FileOperations getFileOperations() {
-        return fileOperations;
-    }
-
-    public void setFileOperations(FileOperations fileOperations) {
-        this.fileOperations = fileOperations;
-    }
-
-    public void close() {
-        if (out != null) {
-            out.flush();
-        }
-        if (err != null) {
-            err.flush();
-        }
-    }
-
-    @Override
-    public CatalogFactory getCatalogFactory() {
-        return catalogFactory;
-    }
-
-    public void resetParameters() {
-        parameterPos = 0;
     }
 }
