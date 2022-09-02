@@ -52,63 +52,58 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 public abstract class ToEspressoNode extends Node {
     static final int LIMIT = 2;
 
-    public abstract Object execute(Object value, Klass targetType) throws UnsupportedTypeException;
+    public abstract Object execute(Object value, Klass targetType) throws UnsupportedMessageException, UnsupportedTypeException;
 
     @Specialization(guards = "cachedKlass == primitiveKlass", limit = "LIMIT")
     Object doPrimitive(Object value,
                     PrimitiveKlass primitiveKlass,
                     @CachedLibrary("value") InteropLibrary interop,
                     @Cached("primitiveKlass") PrimitiveKlass cachedKlass,
-                    @Cached BranchProfile exceptionProfile) throws UnsupportedTypeException {
-        try {
-            switch (cachedKlass.getJavaKind()) {
-                case Boolean:
-                    if (interop.isBoolean(value)) {
-                        return interop.asBoolean(value);
+                    @Cached BranchProfile exceptionProfile) throws UnsupportedMessageException, UnsupportedTypeException {
+        switch (cachedKlass.getJavaKind()) {
+            case Boolean:
+                if (interop.isBoolean(value)) {
+                    return interop.asBoolean(value);
+                }
+                break;
+            case Byte:
+                if (interop.fitsInByte(value)) {
+                    return interop.asByte(value);
+                }
+                break;
+            case Short:
+                if (interop.fitsInShort(value)) {
+                    return interop.asShort(value);
+                }
+                break;
+            case Char:
+                if (interop.isString(value)) {
+                    String str = interop.asString(value);
+                    if (str.length() == 1) {
+                        return str.charAt(0);
                     }
-                    break;
-                case Byte:
-                    if (interop.fitsInByte(value)) {
-                        return interop.asByte(value);
-                    }
-                    break;
-                case Short:
-                    if (interop.fitsInShort(value)) {
-                        return interop.asShort(value);
-                    }
-                    break;
-                case Char:
-                    if (interop.isString(value)) {
-                        String str = interop.asString(value);
-                        if (str.length() == 1) {
-                            return str.charAt(0);
-                        }
-                    }
-                    break;
-                case Int:
-                    if (interop.fitsInInt(value)) {
-                        return interop.asInt(value);
-                    }
-                    break;
-                case Float:
-                    if (interop.fitsInFloat(value)) {
-                        return interop.asFloat(value);
-                    }
-                    break;
-                case Long:
-                    if (interop.fitsInLong(value)) {
-                        return interop.asLong(value);
-                    }
-                    break;
-                case Double:
-                    if (interop.fitsInDouble(value)) {
-                        return interop.asDouble(value);
-                    }
-                    break;
-            }
-        } catch (UnsupportedMessageException e) {
-            exceptionProfile.enter();
-            throw EspressoError.shouldNotReachHere("Contract violation: if fitsIn{type} returns true, as{type} must succeed.");
+                }
+                break;
+            case Int:
+                if (interop.fitsInInt(value)) {
+                    return interop.asInt(value);
+                }
+                break;
+            case Float:
+                if (interop.fitsInFloat(value)) {
+                    return interop.asFloat(value);
+                }
+                break;
+            case Long:
+                if (interop.fitsInLong(value)) {
+                    return interop.asLong(value);
+                }
+                break;
+            case Double:
+                if (interop.fitsInDouble(value)) {
+                    return interop.asDouble(value);
+                }
+                break;
         }
         exceptionProfile.enter();
         throw UnsupportedTypeException.create(new Object[]{value}, primitiveKlass.getTypeAsString());
@@ -116,7 +111,7 @@ public abstract class ToEspressoNode extends Node {
 
     @TruffleBoundary
     @Specialization(replaces = "doPrimitive")
-    Object doPrimitiveUncached(Object value, PrimitiveKlass primitiveKlass) throws UnsupportedTypeException {
+    Object doPrimitiveUncached(Object value, PrimitiveKlass primitiveKlass) throws UnsupportedMessageException, UnsupportedTypeException {
         return doPrimitive(value, primitiveKlass, InteropLibrary.getFactory().getUncached(value), primitiveKlass, BranchProfile.getUncached());
     }
 
@@ -157,16 +152,9 @@ public abstract class ToEspressoNode extends Node {
     Object doArray(Object value,
                     ArrayKlass klass,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
-                    @Cached BranchProfile exceptionProfile)
-                    throws UnsupportedTypeException {
-        int length = 0;
-        try {
-            length = (int) interop.getArraySize(value);
-        } catch (UnsupportedMessageException e) {
-            exceptionProfile.enter();
-            throw UnsupportedTypeException.create(new Object[]{value}, "Casting a non-array foreign object to an array");
-        }
+                    @CachedLibrary(limit = "LIMIT") InteropLibrary interop)
+                    throws UnsupportedMessageException, UnsupportedTypeException {
+        int length = (int) interop.getArraySize(value);
         final Klass jlString = klass.getComponentType();
         return jlString.allocateReferenceArray(length, new IntFunction<StaticObject>() {
             @Override
@@ -192,14 +180,9 @@ public abstract class ToEspressoNode extends Node {
                     ObjectKlass klass,
                     @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @Cached BranchProfile exceptionProfile)
-                    throws UnsupportedTypeException {
+                    throws UnsupportedMessageException, UnsupportedTypeException {
         if (interop.isString(value)) {
-            try {
-                return klass.getMeta().toGuestString(interop.asString(value));
-            } catch (UnsupportedMessageException e) {
-                exceptionProfile.enter();
-                throw EspressoError.shouldNotReachHere("Contract violation: if isString returns true, asString must succeed.");
-            }
+            return klass.getMeta().toGuestString(interop.asString(value));
         }
         exceptionProfile.enter();
         throw UnsupportedTypeException.create(new Object[]{value}, klass.getTypeAsString());
