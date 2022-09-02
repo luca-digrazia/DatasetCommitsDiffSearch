@@ -1735,7 +1735,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 throw PolyglotImpl.guestToHostException(context.getHostContext(), t, true);
             } finally {
                 try {
-                    leave(prev, context);
+                    leave(prev, context, getUncachedLocation(), true);
                 } catch (Throwable t) {
                     throw PolyglotImpl.guestToHostException(context.getHostContext(), t, false);
                 }
@@ -1863,9 +1863,9 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         return NO_ENTER;
     }
 
-    void leaveIfNeeded(Object prev, PolyglotContextImpl context) {
+    void leaveIfNeeded(Object prev, PolyglotContextImpl context, boolean pollSafepoint) {
         if (prev != NO_ENTER) {
-            leave((PolyglotContextImpl) prev, context);
+            leave((PolyglotContextImpl) prev, context, getUncachedLocation(), pollSafepoint);
         }
     }
 
@@ -1910,7 +1910,8 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         return context == PolyglotContextImpl.currentNotEntered() || context.closed || context.invalid;
     }
 
-    void leave(PolyglotContextImpl prev, PolyglotContextImpl context) {
+    @SuppressWarnings("unused")
+    void leave(PolyglotContextImpl prev, PolyglotContextImpl context, Node safepointLocation, boolean pollSafepoint) {
         assert context.closed || context.closingThread == Thread.currentThread() ||
                         PolyglotContextImpl.currentNotEntered() == context : "Cannot leave context that is currently not entered. Forgot to enter or leave a context?";
 

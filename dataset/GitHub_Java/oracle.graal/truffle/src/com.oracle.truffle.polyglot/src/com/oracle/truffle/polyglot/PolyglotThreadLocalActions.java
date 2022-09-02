@@ -413,7 +413,7 @@ final class PolyglotThreadLocalActions {
                 throw t;
             } finally {
                 if (needsEnter) {
-                    context.engine.leaveIfNeeded(prev, context);
+                    context.engine.leaveIfNeeded(prev, context, false);
                 }
             }
         }
