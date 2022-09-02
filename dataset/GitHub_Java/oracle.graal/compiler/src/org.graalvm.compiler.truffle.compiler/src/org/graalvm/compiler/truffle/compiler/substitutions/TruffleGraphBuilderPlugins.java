@@ -27,6 +27,7 @@ package org.graalvm.compiler.truffle.compiler.substitutions;
 import static java.lang.Character.toUpperCase;
 import static org.graalvm.compiler.debug.DebugOptions.DumpOnError;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.getRuntime;
+import static org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -125,7 +126,13 @@ public class TruffleGraphBuilderPlugins {
         registerCompilerDirectivesPlugins(plugins, metaAccess, canDelayIntrinsification);
         registerCompilerAssertsPlugins(plugins, metaAccess, canDelayIntrinsification);
         registerOptimizedCallTargetPlugins(plugins, metaAccess, canDelayIntrinsification, types);
-        registerFrameWithoutBoxingPlugins(plugins, metaAccess, canDelayIntrinsification, constantReflection, types);
+
+        if (TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing)) {
+            registerFrameWithoutBoxingPlugins(plugins, metaAccess, canDelayIntrinsification, constantReflection, types);
+        } else {
+            registerFrameWithBoxingPlugins(plugins, metaAccess, canDelayIntrinsification);
+        }
+
     }
 
     public static void registerOptimizedAssumptionPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, KnownTruffleTypes types) {
@@ -449,6 +456,13 @@ public class TruffleGraphBuilderPlugins {
             registerFrameAccessors(r, JavaKind.Boolean, constantReflection, types);
             registerFrameAccessors(r, JavaKind.Byte, constantReflection, types);
         }
+    }
+
+    public static void registerFrameWithBoxingPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification) {
+        ResolvedJavaType frameWithBoxingType = TruffleCompilerRuntime.getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.FrameWithBoxing");
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(frameWithBoxingType));
+        registerFrameMethods(r);
+        registerUnsafeCast(r, canDelayIntrinsification);
     }
 
     /**
