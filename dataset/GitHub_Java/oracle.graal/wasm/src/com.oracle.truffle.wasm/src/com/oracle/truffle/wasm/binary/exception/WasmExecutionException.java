@@ -27,19 +27,28 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
 package com.oracle.truffle.wasm.binary.exception;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.nodes.Node;
 
 /**
- * Thrown on various errors that may occur in the WebAssembly engine.
+ * Thrown when a WebAssembly program ends up in an unexpected exceptional state.
+ * This error likely indicates an internal engine issue.
  */
-public class WasmException extends RuntimeException {
+public class WasmExecutionException extends RuntimeException implements TruffleException {
 
-    private static final long serialVersionUID = 8195809219857028793L;
+    private static final long serialVersionUID = 1787712823539392187L;
+    private Node location;
 
-    @TruffleBoundary
-    public WasmException(String message) {
+    public WasmExecutionException(Node location, String message) {
         super(message);
+        this.location = location;
+    }
+
+    @Override
+    public Node getLocation() {
+        return location;
     }
 }

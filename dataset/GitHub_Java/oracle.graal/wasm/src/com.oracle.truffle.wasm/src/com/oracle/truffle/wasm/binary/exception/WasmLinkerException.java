@@ -30,16 +30,18 @@
 package com.oracle.truffle.wasm.binary.exception;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.nodes.Node;
 
 /**
- * Thrown on various errors that may occur in the WebAssembly engine.
+ * Thrown when it is not possible to link a WebAssembly module.
  */
-public class WasmException extends RuntimeException {
+public class WasmLinkerException extends RuntimeException {
 
     private static final long serialVersionUID = 8195809219857028793L;
 
     @TruffleBoundary
-    public WasmException(String message) {
+    public WasmLinkerException(String message) {
         super(message);
     }
 }

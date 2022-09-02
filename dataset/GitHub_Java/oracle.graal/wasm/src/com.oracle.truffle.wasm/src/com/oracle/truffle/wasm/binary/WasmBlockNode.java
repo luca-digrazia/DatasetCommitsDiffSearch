@@ -747,15 +747,15 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                         }
                         case ValueTypes.F32_TYPE: {
                             stackPointer--;
-                            int value = popInt(frame, stackPointer);
-                            wasmModule().globals().setFloatWithInt(index, value);
+                            float value = popAsFloat(frame, stackPointer);
+                            wasmModule().globals().setFloat(index, value);
                             logger.finest(() -> String.format("global.set %d, value = %f [f32]", index, value));
                             break;
                         }
                         case ValueTypes.F64_TYPE: {
                             stackPointer--;
-                            long value = pop(frame, stackPointer);
-                            wasmModule().globals().setDoubleWithLong(index, value);
+                            double value = popAsDouble(frame, stackPointer);
+                            wasmModule().globals().setDouble(index, value);
                             logger.finest(() -> String.format("global.set %d, value = %f [f64]", index, value));
                             break;
                         }

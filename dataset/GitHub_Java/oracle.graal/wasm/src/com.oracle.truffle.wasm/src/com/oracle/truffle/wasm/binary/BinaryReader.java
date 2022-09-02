@@ -1158,8 +1158,7 @@ public class BinaryReader extends BinaryStreamReader {
         int numGlobals = readVectorLength();
         for (int i = 0; i != numGlobals; i++) {
             byte type = readValueType();
-            // 0x00 means const, 0x01 means var
-            byte mut = read1();
+            byte mut = read1();  // 0x00 means const, 0x01 means var
             long value = 0;
             byte instruction;
             do {

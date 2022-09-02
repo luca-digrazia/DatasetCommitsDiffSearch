@@ -48,7 +48,6 @@ public class WasmContext {
     private Env env;
     private WasmLanguage language;
     private WasmMemory memory;
-    private WasmGlobals globals;
     private Map<String, WasmModule> modules;
 
     public static WasmContext getCurrent() {
@@ -59,7 +58,6 @@ public class WasmContext {
         this.env = env;
         this.language = language;
         this.memory = new UnsafeWasmMemory(DEFAULT_MEMORY_SIZE);
-        this.globals = new WasmGlobals();
         this.modules = new HashMap<>();
         initializePredefinedModules(env);
     }
@@ -86,10 +84,6 @@ public class WasmContext {
         return scopes;
     }
 
-    /**
-     * Returns the map with all the modules that have been fully parsed, initialized and linked
-     * against other such modules.
-     */
     public Map<String, WasmModule> modules() {
         return modules;
     }
@@ -113,7 +107,4 @@ public class WasmContext {
         }
     }
 
-    public WasmGlobals globals() {
-        return globals;
-    }
 }

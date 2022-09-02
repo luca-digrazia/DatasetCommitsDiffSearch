@@ -43,7 +43,7 @@ public class WasmTrap extends RuntimeException implements TruffleException {
     private final Node location;
 
     @TruffleBoundary
-    public WasmTrap(Node location, String message) {
+    public WasmTrap(String message, Node location) {
         super(message);
         this.location = location;
     }
