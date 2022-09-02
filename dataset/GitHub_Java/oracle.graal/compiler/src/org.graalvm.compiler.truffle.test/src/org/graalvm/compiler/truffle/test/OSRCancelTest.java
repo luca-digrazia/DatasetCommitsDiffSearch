@@ -89,7 +89,6 @@ public class OSRCancelTest {
             future.get();
         } catch (ExecutionException e) {
             PolyglotException pe = (PolyglotException) e.getCause();
-            pe.printStackTrace();
             assertTrue(pe.isCancelled());
         }
     }
@@ -163,6 +162,15 @@ public class OSRCancelTest {
             }
             return true;
         }
+
+        @Override
+        public Object executeRepeatingWithValue(VirtualFrame frame) {
+            if (executeRepeating(frame)) {
+                return RepeatingNode.CONTINUE_LOOP_STATUS;
+            } else {
+                return RepeatingNode.BREAK_LOOP_STATUS;
+            }
+        }
     }
 
     static class TestMaterializedLoopNode extends TestInstrumentableNode {
@@ -175,7 +183,7 @@ public class OSRCancelTest {
 
         @Override
         void execute(VirtualFrame frame) {
-            loop.executeLoop(frame);
+            loop.execute(frame);
         }
 
     }
@@ -195,7 +203,7 @@ public class OSRCancelTest {
 
         @Override
         void execute(VirtualFrame frame) {
-            loop.executeLoop(frame);
+            loop.execute(frame);
         }
 
     }
