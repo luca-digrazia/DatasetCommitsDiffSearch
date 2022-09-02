@@ -148,11 +148,7 @@ public final class SulongLibrary implements TruffleObject {
     @ExportMessage(name = "isMemberInvocable")
     boolean memberExists(String member,
                     @Shared("lookup") @Cached LookupNode lookup) {
-        try {
-            return lookup.execute(this, member) != null;
-        } catch (IllegalStateException e) {
-            return false;
-        }
+        return lookup.execute(this, member) != null;
     }
 
     @ExportMessage

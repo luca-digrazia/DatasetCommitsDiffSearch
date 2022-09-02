@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.value;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
@@ -52,7 +51,6 @@ public final class LLVMDebugManagedType extends LLVMDebuggerValue {
 
     @ExportMessage(name = "getMetaSimpleName")
     @ExportMessage(name = "getMetaQualifiedName")
-    @TruffleBoundary
     Object getMetaSimpleName() {
         return String.valueOf(type);
     }

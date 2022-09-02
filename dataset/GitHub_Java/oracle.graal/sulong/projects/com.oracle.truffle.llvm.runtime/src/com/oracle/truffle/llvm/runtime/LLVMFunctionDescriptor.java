@@ -61,7 +61,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMNativeMemory;
 @SuppressWarnings("static-method")
 public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject implements Comparable<LLVMFunctionDescriptor> {
     private static final long SULONG_FUNCTION_POINTER_TAG = 0xBADE_FACE_0000_0000L;
-
     static {
         assert LLVMNativeMemory.isCommonHandleMemory(SULONG_FUNCTION_POINTER_TAG);
         assert !LLVMNativeMemory.isDerefHandleMemory(SULONG_FUNCTION_POINTER_TAG);
@@ -83,7 +82,7 @@ public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject impl
             CompilerDirectives.transferToInterpreter();
             LLVMSourceFunctionType sourceType = functionCode.getFunction().getSourceType();
             LLVMInteropType interopType = context.getInteropType(sourceType);
-            LLVMForeignCallNode foreignCall = new LLVMForeignCallNode(context.getLanguage(), this, interopType, sourceType);
+            LLVMForeignCallNode foreignCall = new LLVMForeignCallNode(context.getLanguage(), this, interopType);
             foreignCallTarget = Truffle.getRuntime().createCallTarget(foreignCall);
             assert foreignCallTarget != null;
         }
