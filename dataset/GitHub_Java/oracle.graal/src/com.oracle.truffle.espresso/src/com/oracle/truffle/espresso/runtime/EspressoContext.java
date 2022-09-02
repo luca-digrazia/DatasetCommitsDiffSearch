@@ -97,7 +97,7 @@ public final class EspressoContext {
     // endregion Debug
 
     // region Profiling
-    private final AllocationReporter allocationReporter;
+    private AllocationReporter allocationReporter;
     // endregion Profiling
 
     // region Runtime
