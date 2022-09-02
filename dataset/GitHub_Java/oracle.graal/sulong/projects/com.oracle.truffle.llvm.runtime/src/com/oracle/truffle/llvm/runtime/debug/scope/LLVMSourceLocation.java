@@ -81,7 +81,6 @@ public abstract class LLVMSourceLocation {
         GLOBAL("<global symbol>"),
         LOCAL("<local symbol>"),
         IR_MODULE("<module>", "module "),
-        LABEL("<label>"),
         UNKNOWN("<scope>");
 
         private final String anonymousDescription;
