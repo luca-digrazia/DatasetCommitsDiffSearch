@@ -56,13 +56,6 @@ public interface KlassRef {
     String getTypeAsString();
 
     /**
-     * Returns the String representation of the generic type of the class.
-     *
-     * @return the generic class type descriptor name
-     */
-    String getGenericTypeAsString();
-
-    /**
      * Returns all declared methods of the class.
      * 
      * @return array of MethodRef
