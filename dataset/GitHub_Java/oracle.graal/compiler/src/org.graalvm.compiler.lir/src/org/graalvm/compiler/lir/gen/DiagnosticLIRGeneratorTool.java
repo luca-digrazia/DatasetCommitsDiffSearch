@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,8 @@
 package org.graalvm.compiler.lir.gen;
 
 import org.graalvm.compiler.lir.LIRInstruction;
+import org.graalvm.compiler.lir.StandardOp.SaveRegistersOp;
+import org.graalvm.compiler.lir.StandardOp.ZapRegistersOp;
 
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterConfig;
@@ -38,32 +40,34 @@ public interface DiagnosticLIRGeneratorTool {
     LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments);
 
     /**
-     * Creates an instruction that fills a given set of registers with a known garbage value.
+     * Creates a {@link SaveRegistersOp} that fills a given set of registers with known garbage
+     * value.
      *
      * @param zappedRegisters registers to be zapped
      * @param zapValues values used for zapping
      *
      * @see DiagnosticLIRGeneratorTool#createZapRegisters()
      */
-    LIRInstruction createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues);
+    ZapRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues);
 
     /**
-     * Creates an instruction that fills a given set of registers with a
+     * Creates a {@link SaveRegistersOp} that fills a given set of registers with a
      * {@link LIRGenerator#zapValueForKind known garbage value}.
      *
      * @param zappedRegisters registers to be zapped
      *
      * @see DiagnosticLIRGeneratorTool#createZapRegisters()
      */
-    LIRInstruction createZapRegisters(Register[] zappedRegisters);
+    ZapRegistersOp createZapRegisters(Register[] zappedRegisters);
 
     /**
-     * Creates an instruction that fills all {@link RegisterConfig#getAllocatableRegisters()
-     * allocatable registers} with a {@link LIRGenerator#zapValueForKind known garbage value}.
+     * Creates a {@link ZapRegistersOp} that fills all
+     * {@link RegisterConfig#getAllocatableRegisters() allocatable registers} with a
+     * {@link LIRGenerator#zapValueForKind known garbage value}.
      *
      * @see DiagnosticLIRGeneratorTool#createZapRegisters(Register[], JavaConstant[])
      */
-    LIRInstruction createZapRegisters();
+    ZapRegistersOp createZapRegisters();
 
     /**
      * Marker interface for {@link LIRInstruction instructions} that should be succeeded with a

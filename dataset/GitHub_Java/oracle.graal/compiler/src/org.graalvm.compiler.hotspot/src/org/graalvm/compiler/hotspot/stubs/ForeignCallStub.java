@@ -129,6 +129,11 @@ public class ForeignCallStub extends Stub {
         return target;
     }
 
+    @Override
+    public boolean shouldSaveRegistersAroundCalls() {
+        return !linkage.destroysRegisters();
+    }
+
     private Class<?>[] createTargetParameters(ForeignCallDescriptor descriptor) {
         Class<?>[] parameters = descriptor.getArgumentTypes();
         if (prependThread) {

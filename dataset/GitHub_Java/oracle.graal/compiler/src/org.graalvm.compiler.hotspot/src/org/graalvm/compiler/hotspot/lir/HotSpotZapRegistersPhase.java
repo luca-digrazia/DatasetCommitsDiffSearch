@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,6 +38,7 @@ import org.graalvm.compiler.hotspot.stubs.Stub;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.LIRInsertionBuffer;
 import org.graalvm.compiler.lir.LIRInstruction;
+import org.graalvm.compiler.lir.StandardOp.ZapRegistersOp;
 import org.graalvm.compiler.lir.ValueConsumer;
 import org.graalvm.compiler.lir.gen.DiagnosticLIRGeneratorTool;
 import org.graalvm.compiler.lir.gen.DiagnosticLIRGeneratorTool.ZapRegistersAfterInstruction;
@@ -124,8 +125,8 @@ public final class HotSpotZapRegistersPhase extends PostAllocationOptimizationPh
                     inst.visitEachTemp(tempConsumer);
                     inst.visitEachOutput(defConsumer);
 
-                    LIRInstruction zap = diagnosticLirGenTool.createZapRegisters(destroyedRegisters.toArray(new Register[destroyedRegisters.size()]));
-                    buffer.append(index + 1, zap);
+                    ZapRegistersOp zap = diagnosticLirGenTool.createZapRegisters(destroyedRegisters.toArray(new Register[destroyedRegisters.size()]));
+                    buffer.append(index + 1, (LIRInstruction) zap);
                     debug.log("Insert ZapRegister after %s", inst);
                 }
             }

@@ -57,9 +57,10 @@ public class SPARCSaveRegistersOp extends SaveRegistersOp implements SPARCLIRIns
      * @param savedRegisters the registers saved by this operation which may be subject to
      *            {@linkplain #remove(EconomicSet) pruning}
      * @param savedRegisterLocations the slots to which the registers are saved
+     * @param supportsRemove determines if registers can be {@linkplain #remove(EconomicSet) pruned}
      */
-    public SPARCSaveRegistersOp(Register[] savedRegisters, AllocatableValue[] savedRegisterLocations) {
-        super(TYPE, savedRegisters, savedRegisterLocations);
+    public SPARCSaveRegistersOp(Register[] savedRegisters, AllocatableValue[] savedRegisterLocations, boolean supportsRemove) {
+        super(TYPE, savedRegisters, savedRegisterLocations, supportsRemove);
         this.store = new SPARCLIRInstructionMixinStore(SIZE);
     }
 

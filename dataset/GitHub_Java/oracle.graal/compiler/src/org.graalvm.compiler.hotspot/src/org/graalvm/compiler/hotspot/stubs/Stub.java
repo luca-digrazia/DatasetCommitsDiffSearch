@@ -122,7 +122,7 @@ public abstract class Stub {
     }
 
     public boolean shouldSaveRegistersAroundCalls() {
-        return linkage.getEffect() == HotSpotForeignCallLinkage.RegisterEffect.COMPUTES_REGISTERS_KILLED;
+        return false;
     }
 
     protected final OptionValues options;

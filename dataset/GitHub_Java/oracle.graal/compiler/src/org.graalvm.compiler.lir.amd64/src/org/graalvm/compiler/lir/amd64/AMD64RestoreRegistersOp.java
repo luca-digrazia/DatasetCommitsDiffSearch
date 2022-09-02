@@ -26,13 +26,15 @@ package org.graalvm.compiler.lir.amd64;
 
 import static jdk.vm.ci.code.ValueUtil.asStackSlot;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
+import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.STACK;
 
-import org.graalvm.collections.EconomicSet;
+import java.util.Arrays;
+
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
+import org.graalvm.compiler.lir.LIRValueUtil;
 import org.graalvm.compiler.lir.Opcode;
-import org.graalvm.compiler.lir.StandardOp.SaveRegistersOp;
-import org.graalvm.compiler.lir.amd64.vector.AMD64VectorMove;
+import org.graalvm.compiler.lir.StandardOp;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.amd64.AMD64Kind;
@@ -41,38 +43,48 @@ import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.meta.AllocatableValue;
 
 /**
- * Saves registers to stack slots.
+ * Restores registers from stack slots.
  */
-@Opcode("SAVE_REGISTER")
-public class AMD64SaveRegistersOp extends SaveRegistersOp {
-    public static final LIRInstructionClass<AMD64SaveRegistersOp> TYPE = LIRInstructionClass.create(AMD64SaveRegistersOp.class);
+@Opcode("RESTORE_REGISTER")
+public class AMD64RestoreRegistersOp extends AMD64LIRInstruction implements StandardOp.RestoreRegistersOp {
+    public static final LIRInstructionClass<AMD64RestoreRegistersOp> TYPE = LIRInstructionClass.create(AMD64RestoreRegistersOp.class);
 
     /**
-     *
-     * @param savedRegisters the registers saved by this operation which may be subject to
-     *            {@linkplain #remove(EconomicSet) pruning}
-     * @param savedRegisterLocations the slots to which the registers are saved
-     * @param supportsRemove determines if registers can be {@linkplain #remove(EconomicSet) pruned}
+     * The slots from which the registers are restored.
      */
-    public AMD64SaveRegistersOp(Register[] savedRegisters, AllocatableValue[] savedRegisterLocations, boolean supportsRemove) {
-        super(TYPE, savedRegisters, savedRegisterLocations, supportsRemove);
+    @Use(STACK) protected final AllocatableValue[] slots;
+
+    /**
+     * The operation that saved the registers restored by this operation.
+     */
+    private final AMD64SaveRegistersOp save;
+
+    public AMD64RestoreRegistersOp(AllocatableValue[] values, AMD64SaveRegistersOp save) {
+        this(TYPE, values, save);
     }
 
-    protected AMD64SaveRegistersOp(LIRInstructionClass<AMD64VectorMove.SaveRegistersOp> type, Register[] savedRegisters, AllocatableValue[] slots, boolean supportsRemove) {
-        super(type, savedRegisters, slots, supportsRemove);
+    protected AMD64RestoreRegistersOp(LIRInstructionClass<? extends AMD64RestoreRegistersOp> c, AllocatableValue[] values, AMD64SaveRegistersOp save) {
+        super(c);
+        assert Arrays.asList(values).stream().allMatch(LIRValueUtil::isVirtualStackSlot);
+        this.slots = values;
+        this.save = save;
     }
 
-    protected void saveRegister(CompilationResultBuilder crb, AMD64MacroAssembler masm, StackSlot result, Register input) {
-        AMD64Move.reg2stack((AMD64Kind) result.getPlatformKind(), crb, masm, result, input);
+    protected Register[] getSavedRegisters() {
+        return save.getSavedRegisters();
+    }
+
+    protected void restoreRegister(CompilationResultBuilder crb, AMD64MacroAssembler masm, Register result, StackSlot input) {
+        AMD64Move.stack2reg((AMD64Kind) input.getPlatformKind(), crb, masm, result, input);
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb) {
-        AMD64MacroAssembler masm = (AMD64MacroAssembler) crb.asm;
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
+        Register[] savedRegisters = getSavedRegisters();
         for (int i = 0; i < savedRegisters.length; i++) {
             if (savedRegisters[i] != null) {
                 assert isStackSlot(slots[i]) : "not a StackSlot: " + slots[i];
-                saveRegister(crb, masm, asStackSlot(slots[i]), savedRegisters[i]);
+                restoreRegister(crb, masm, savedRegisters[i], asStackSlot(slots[i]));
             }
         }
     }

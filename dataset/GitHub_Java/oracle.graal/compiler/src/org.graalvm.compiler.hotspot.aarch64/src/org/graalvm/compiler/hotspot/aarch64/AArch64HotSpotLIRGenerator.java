@@ -167,9 +167,10 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     /**
      * @param savedRegisters the registers saved by this operation which may be subject to pruning
      * @param savedRegisterLocations the slots to which the registers are saved
+     * @param supportsRemove determines if registers can be pruned
      */
-    protected AArch64SaveRegistersOp emitSaveRegisters(Register[] savedRegisters, AllocatableValue[] savedRegisterLocations) {
-        AArch64SaveRegistersOp save = new AArch64SaveRegistersOp(savedRegisters, savedRegisterLocations);
+    protected AArch64SaveRegistersOp emitSaveRegisters(Register[] savedRegisters, AllocatableValue[] savedRegisterLocations, boolean supportsRemove) {
+        AArch64SaveRegistersOp save = new AArch64SaveRegistersOp(savedRegisters, savedRegisterLocations, supportsRemove);
         append(save);
         return save;
     }
@@ -189,14 +190,15 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
     /**
      * Adds a node to the graph that saves all allocatable registers to the stack.
      *
+     * @param supportsRemove determines if registers can be pruned
      * @return the register save node
      */
-    private AArch64SaveRegistersOp emitSaveAllRegisters(Register[] savedRegisters) {
+    private AArch64SaveRegistersOp emitSaveAllRegisters(Register[] savedRegisters, boolean supportsRemove) {
         AllocatableValue[] savedRegisterLocations = new AllocatableValue[savedRegisters.length];
         for (int i = 0; i < savedRegisters.length; i++) {
             savedRegisterLocations[i] = allocateSaveRegisterLocation(savedRegisters[i]);
         }
-        return emitSaveRegisters(savedRegisters, savedRegisterLocations);
+        return emitSaveRegisters(savedRegisters, savedRegisterLocations, supportsRemove);
     }
 
     protected void emitRestoreRegisters(AArch64SaveRegistersOp save) {
@@ -347,7 +349,7 @@ public class AArch64HotSpotLIRGenerator extends AArch64LIRGenerator implements H
         Stub stub = getStub();
         if (destroysRegisters && stub != null && stub.shouldSaveRegistersAroundCalls()) {
             Register[] savedRegisters = getRegisterConfig().getAllocatableRegisters().toArray();
-            save = emitSaveAllRegisters(savedRegisters);
+            save = emitSaveAllRegisters(savedRegisters, true);
         }
 
         Variable result;

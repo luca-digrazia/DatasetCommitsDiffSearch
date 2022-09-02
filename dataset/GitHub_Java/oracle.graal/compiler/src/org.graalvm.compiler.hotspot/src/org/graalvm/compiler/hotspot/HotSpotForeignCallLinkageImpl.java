@@ -189,11 +189,6 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
     }
 
     @Override
-    public RegisterEffect getEffect() {
-        return effect;
-    }
-
-    @Override
     public LocationIdentity[] getKilledLocations() {
         return killedLocations;
     }
