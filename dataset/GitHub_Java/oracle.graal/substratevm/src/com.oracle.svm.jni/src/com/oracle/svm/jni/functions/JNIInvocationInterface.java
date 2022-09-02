@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,36 +32,50 @@ import static com.oracle.svm.jni.nativeapi.JNIVersion.JNI_VERSION_1_8;
 
 import java.util.ArrayList;
 
-import org.graalvm.compiler.word.Word;
+import org.graalvm.compiler.serviceprovider.IsolateUtil;
 import org.graalvm.nativeimage.Isolate;
+import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.function.CEntryPointContext;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.Pointer;
+import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.MonitorSupport;
+import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.function.CEntryPointActions;
+import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
+import com.oracle.svm.core.c.function.CEntryPointOptions.NoEpilogue;
+import com.oracle.svm.core.c.function.CEntryPointOptions.NoPrologue;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
-import com.oracle.svm.core.c.function.CEntryPointSetup.EnterCreateIsolatePrologue;
+import com.oracle.svm.core.c.function.CEntryPointSetup;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveDetachThreadEpilogue;
+import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveTearDownIsolateEpilogue;
+import com.oracle.svm.core.jdk.RuntimeSupport;
+import com.oracle.svm.core.log.FunctionPointerLogHandler;
+import com.oracle.svm.core.monitor.MonitorSupport;
 import com.oracle.svm.core.option.RuntimeOptionParser;
-import com.oracle.svm.core.properties.RuntimePropertyParser;
+import com.oracle.svm.core.thread.JavaThreads;
+import com.oracle.svm.core.util.Utf8;
+import com.oracle.svm.jni.JNIJavaVMList;
+import com.oracle.svm.jni.JNIObjectHandles;
 import com.oracle.svm.jni.JNIThreadLocalEnvironment;
 import com.oracle.svm.jni.JNIThreadOwnedMonitors;
-import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIJavaVMEnterAttachThreadPrologue;
+import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIJavaVMEnterAttachThreadEnsureJavaThreadPrologue;
+import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIJavaVMEnterAttachThreadManualJavaThreadPrologue;
 import com.oracle.svm.jni.functions.JNIInvocationInterface.Support.JNIGetEnvPrologue;
-import com.oracle.svm.jni.hosted.JNIFeature;
 import com.oracle.svm.jni.nativeapi.JNIEnvironmentPointer;
 import com.oracle.svm.jni.nativeapi.JNIErrors;
 import com.oracle.svm.jni.nativeapi.JNIJavaVM;
+import com.oracle.svm.jni.nativeapi.JNIJavaVMAttachArgs;
 import com.oracle.svm.jni.nativeapi.JNIJavaVMInitArgs;
 import com.oracle.svm.jni.nativeapi.JNIJavaVMOption;
 import com.oracle.svm.jni.nativeapi.JNIJavaVMPointer;
+import com.oracle.svm.jni.nativeapi.JNIVersion;
 
 /**
  * Implementation of the JNI invocation API for interacting with a Java VM without having an
@@ -68,53 +84,87 @@ import com.oracle.svm.jni.nativeapi.JNIJavaVMPointer;
  * @see <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/invocation.html">
  *      Java Native Interface Specification: The Invocation API</a>
  */
-@SuppressWarnings("unused")
 final class JNIInvocationInterface {
 
     // Checkstyle: stop
 
     static class Exports {
-        private static boolean explicitlyInitialized = false;
-
-        // TODO: refactor these for the changed CEntryPoint entry action CreateIsolate.
-
         /*
          * jint JNI_GetCreatedJavaVMs(JavaVM **vmBuf, jsize bufLen, jsize *nVMs);
          */
+
         @CEntryPoint(name = "JNI_GetCreatedJavaVMs")
-        @CEntryPointOptions(prologue = EnterCreateIsolatePrologue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
+        @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
+        @Uninterruptible(reason = "No Java context.")
         static int JNI_GetCreatedJavaVMs(JNIJavaVMPointer vmBuf, int bufLen, CIntPointer nVMs) {
-            /*
-             * NOTE: just by entering this method, we eagerly attach the calling thread. JNI does
-             * not intend for this to happen, but we currently need it to safely execute the
-             * following code. However, calling AttachCurrentThread() later is not an error.
-             */
-            int count = 0;
-            if (explicitlyInitialized || !JNIFeature.Options.JNICreateJavaVM.getValue()) {
-                count = 1;
-            }
-            if (count > 0 && bufLen > 0) {
-                vmBuf.write(JNIFunctionTables.singleton().getGlobalJavaVM());
-            }
-            if (nVMs.isNonNull()) {
-                nVMs.write(count);
-            }
+            JNIJavaVMList.gather(vmBuf, bufLen, nVMs);
             return JNIErrors.JNI_OK();
         }
 
         /*
          * jint JNI_CreateJavaVM(JavaVM **p_vm, void **p_env, void *vm_args);
          */
+
+        static class JNICreateJavaVMPrologue {
+            @SuppressWarnings("unused")
+            static void enter(JNIJavaVMPointer vmBuf, JNIEnvironmentPointer penv, JNIJavaVMInitArgs vmArgs) {
+                if (!SubstrateOptions.SpawnIsolates.getValue()) {
+                    int error = CEntryPointActions.enterIsolate((Isolate) CEntryPointSetup.SINGLE_ISOLATE_SENTINEL);
+                    if (error == CEntryPointErrors.NO_ERROR) {
+                        CEntryPointActions.leave();
+                        CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EEXIST());
+                    } else if (error != CEntryPointErrors.UNINITIALIZED_ISOLATE) {
+                        CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EEXIST());
+                    }
+                }
+                int error = CEntryPointActions.enterCreateIsolate(WordFactory.nullPointer());
+                if (error == CEntryPointErrors.NO_ERROR) {
+                    // success
+                } else if (error == CEntryPointErrors.UNSPECIFIED) {
+                    CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_ERR());
+                } else if (error == CEntryPointErrors.MAP_HEAP_FAILED || error == CEntryPointErrors.RESERVE_ADDRESS_SPACE_FAILED || error == CEntryPointErrors.INSUFFICIENT_ADDRESS_SPACE) {
+                    CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_ENOMEM());
+                } else { // return a (non-JNI) error that is more helpful for diagnosis
+                    error = -1000000000 - error;
+                    if (error == JNIErrors.JNI_OK() || error >= -100) {
+                        error = JNIErrors.JNI_ERR(); // non-negative or potential actual JNI error
+                    }
+                    CEntryPointActions.bailoutInPrologue(error);
+                }
+            }
+        }
+
+        /**
+         * This method supports the non-standard option strings detailed in the table below.
+         *
+         * <pre>
+         | optionString  |                         meaning                                                   |
+         |===============|===================================================================================|
+         | _log          | extraInfo is a pointer to a "void(const char *buf, size_t count)" function.       |
+         |               | Formatted low level log messages are sent to this function.                       |
+         |               | If present, then _flush_log is also required to be present.                       |
+         |---------------|-----------------------------------------------------------------------------------|
+         | _fatal_log    | extraInfo is a pointer to a "void(const char *buf, size_t count)" function.       |
+         |               | Formatted low level log messages are sent to this function.                       |
+         |               | This log function is used for logging fatal crash data.                           |
+         |---------------|-----------------------------------------------------------------------------------|
+         | _flush_log    | extraInfo is a pointer to a "void()" function.                                    |
+         |               | This function is called when the low level log stream should be flushed.          |
+         |               | If present, then _log is also required to be present.                             |
+         |---------------|-----------------------------------------------------------------------------------|
+         | _fatal        | extraInfo is a pointer to a "void()" function.                                    |
+         |               | This function is called when a non-recoverable, fatal error occurs.               |
+         |---------------|-----------------------------------------------------------------------------------|
+         * </pre>
+         *
+         * @see LogHandler
+         * @see "https://docs.oracle.com/en/java/javase/14/docs/specs/jni/invocation.html#jni_createjavavm"
+         */
         @CEntryPoint(name = "JNI_CreateJavaVM")
-        @CEntryPointOptions(prologue = EnterCreateIsolatePrologue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
+        @CEntryPointOptions(prologue = JNICreateJavaVMPrologue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
         static int JNI_CreateJavaVM(JNIJavaVMPointer vmBuf, JNIEnvironmentPointer penv, JNIJavaVMInitArgs vmArgs) {
-            if (explicitlyInitialized || !JNIFeature.Options.JNICreateJavaVM.getValue()) {
-                return JNIErrors.JNI_EEXIST();
-            }
-            if (vmBuf.isNull() || penv.isNull()) {
-                return JNIErrors.JNI_ERR();
-            }
             // NOTE: could check version, extra options (-verbose etc.), hooks etc.
+            WordPointer javavmIdPointer = WordFactory.nullPointer();
             if (vmArgs.isNonNull()) {
                 Pointer p = (Pointer) vmArgs.getOptions();
                 int count = vmArgs.getNOptions();
@@ -123,20 +173,51 @@ final class JNIInvocationInterface {
                     JNIJavaVMOption option = (JNIJavaVMOption) p.add(i * SizeOf.get(JNIJavaVMOption.class));
                     CCharPointer str = option.getOptionString();
                     if (str.isNonNull()) {
-                        options.add(CTypeConversion.toJavaString(option.getOptionString()));
+                        String optionString = CTypeConversion.toJavaString(option.getOptionString());
+                        if (!FunctionPointerLogHandler.parseVMOption(optionString, option.getExtraInfo())) {
+                            if (optionString.equals("_javavm_id")) {
+                                javavmIdPointer = option.getExtraInfo();
+                            } else {
+                                options.add(optionString);
+                            }
+                        }
                     }
                 }
-                String[] optionArray = options.toArray(new String[0]);
-                optionArray = RuntimeOptionParser.singleton().parse(optionArray, RuntimeOptionParser.DEFAULT_OPTION_PREFIX);
-                RuntimePropertyParser.parse(optionArray);
+                FunctionPointerLogHandler.afterParsingVMOptions();
+                RuntimeOptionParser.parseAndConsumeAllOptions(options.toArray(new String[0]));
             }
-            vmBuf.write(JNIFunctionTables.singleton().getGlobalJavaVM());
-            if (!JNIThreadLocalEnvironment.isInitialized()) {
-                JNIThreadLocalEnvironment.initialize();
+            JNIJavaVM javavm = JNIFunctionTables.singleton().getGlobalJavaVM();
+            JNIJavaVMList.addJavaVM(javavm);
+            if (javavmIdPointer.isNonNull()) {
+                long javavmId = IsolateUtil.getIsolateID();
+                javavmIdPointer.write(WordFactory.pointer(javavmId));
             }
+            RuntimeSupport.getRuntimeSupport().addTearDownHook(new Runnable() {
+                @Override
+                public void run() {
+                    JNIJavaVMList.removeJavaVM(javavm);
+                }
+            });
+            vmBuf.write(javavm);
             penv.write(JNIThreadLocalEnvironment.getAddress());
-            explicitlyInitialized = true;
             return JNIErrors.JNI_OK();
+        }
+
+        /*
+         * jint JNI_GetDefaultJavaVMInitArgs(void *vm_args);
+         */
+        @CEntryPoint(name = "JNI_GetDefaultJavaVMInitArgs")
+        @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
+        @Uninterruptible(reason = "No Java context")
+        static int JNI_GetDefaultJavaVMInitArgs(JNIJavaVMInitArgs vmArgs) {
+            int version = vmArgs.getVersion();
+            if (version == JNI_VERSION_1_8() || version == JNI_VERSION_1_6() || version == JNI_VERSION_1_4() || version == JNI_VERSION_1_2()) {
+                return JNIErrors.JNI_OK();
+            }
+            if (version == JNI_VERSION_1_1()) {
+                vmArgs.setVersion(JNI_VERSION_1_2());
+            }
+            return JNIErrors.JNI_ERR();
         }
     }
 
@@ -144,25 +225,25 @@ final class JNIInvocationInterface {
      * jint AttachCurrentThread(JavaVM *vm, void **p_env, void *thr_args);
      */
     @CEntryPoint
-    @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-    static int AttachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, WordPointer targs) {
-        return Support.attachCurrentThread(vm, penv, false);
+    @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadManualJavaThreadPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    static int AttachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, JNIJavaVMAttachArgs args) {
+        return Support.attachCurrentThread(vm, penv, args, false);
     }
 
     /*
      * jint AttachCurrentThreadAsDaemon(JavaVM *vm, void **p_env, void *thr_args);
      */
     @CEntryPoint
-    @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-    static int AttachCurrentThreadAsDaemon(JNIJavaVM vm, JNIEnvironmentPointer penv, WordPointer targs) {
-        return Support.attachCurrentThread(vm, penv, true);
+    @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadManualJavaThreadPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    static int AttachCurrentThreadAsDaemon(JNIJavaVM vm, JNIEnvironmentPointer penv, JNIJavaVMAttachArgs args) {
+        return Support.attachCurrentThread(vm, penv, args, true);
     }
 
     /*
      * jint DetachCurrentThread(JavaVM *vm);
      */
     @CEntryPoint
-    @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadPrologue.class, epilogue = LeaveDetachThreadEpilogue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadEnsureJavaThreadPrologue.class, epilogue = LeaveDetachThreadEpilogue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static int DetachCurrentThread(JNIJavaVM vm) {
         int result = JNIErrors.JNI_OK();
         if (!vm.equal(JNIFunctionTables.singleton().getGlobalJavaVM())) {
@@ -174,10 +255,22 @@ final class JNIInvocationInterface {
     }
 
     /*
+     * jint DestroyJavaVM(JavaVM *vm);
+     */
+    @CEntryPoint
+    @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadEnsureJavaThreadPrologue.class, epilogue = LeaveTearDownIsolateEpilogue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    @SuppressWarnings("unused")
+    static int DestroyJavaVM(JNIJavaVM vm) {
+        JavaThreads.singleton().joinAllNonDaemons();
+        return JNIErrors.JNI_OK();
+    }
+
+    /*
      * jint GetEnv(JavaVM *vm, void **env, jint version);
      */
     @CEntryPoint
     @CEntryPointOptions(prologue = JNIGetEnvPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    @SuppressWarnings("unused")
     static int GetEnv(JNIJavaVM vm, WordPointer env, int version) {
         env.write(JNIThreadLocalEnvironment.getAddress());
         return JNIErrors.JNI_OK();
@@ -198,27 +291,38 @@ final class JNIInvocationInterface {
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_ERR());
                 }
                 if (version != JNI_VERSION_1_8() && version != JNI_VERSION_1_6() && version != JNI_VERSION_1_4() && version != JNI_VERSION_1_2() && version != JNI_VERSION_1_1()) {
-                    env.write(Word.nullPointer());
+                    env.write(WordFactory.nullPointer());
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EVERSION());
                 }
-                if (!CEntryPointContext.isCurrentThreadAttachedTo((Isolate) vm)) {
-                    env.write(Word.nullPointer());
+                if (!CEntryPointActions.isCurrentThreadAttachedTo(vm.getFunctions().getIsolate())) {
+                    env.write(WordFactory.nullPointer());
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_EDETACHED());
                 }
-                if (CEntryPointActions.enterIsolate((Isolate) vm) != 0) {
+                if (CEntryPointActions.enterIsolate(vm.getFunctions().getIsolate()) != 0) {
                     CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_ERR());
                 }
             }
         }
 
-        static int attachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, boolean daemon) {
+        static int attachCurrentThread(JNIJavaVM vm, JNIEnvironmentPointer penv, JNIJavaVMAttachArgs args, boolean asDaemon) {
             if (vm.equal(JNIFunctionTables.singleton().getGlobalJavaVM())) {
-                if (!JNIThreadLocalEnvironment.isInitialized()) {
-                    JNIThreadLocalEnvironment.initialize();
-                }
                 penv.write(JNIThreadLocalEnvironment.getAddress());
-                // FIXME: setting daemon status after a thread has been attached is not supported
-                // right now.
+                ThreadGroup group = null;
+                String name = null;
+                if (args.isNonNull() && args.getVersion() != JNIVersion.JNI_VERSION_1_1()) {
+                    group = JNIObjectHandles.getObject(args.getGroup());
+                    name = Utf8.utf8ToString(args.getName());
+                }
+
+                /*
+                 * Ignore if a Thread object has already been assigned: "If the thread has already
+                 * been attached via either AttachCurrentThread or AttachCurrentThreadAsDaemon, this
+                 * routine simply sets the value pointed to by penv to the JNIEnv of the current
+                 * thread. In this case neither AttachCurrentThread nor this routine have any effect
+                 * on the daemon status of the thread."
+                 */
+                JavaThreads.ensureJavaThread(name, group, asDaemon);
+
                 return JNIErrors.JNI_OK();
             }
             return JNIErrors.JNI_ERR();
@@ -227,10 +331,14 @@ final class JNIInvocationInterface {
         static void releaseCurrentThreadOwnedMonitors() {
             JNIThreadOwnedMonitors.forEach((obj, depth) -> {
                 for (int i = 0; i < depth; i++) {
-                    MonitorSupport.monitorExit(obj);
+                    MonitorSupport.singleton().monitorExit(obj);
                 }
                 assert !Thread.holdsLock(obj);
             });
+        }
+
+        public static JNIJavaVM getGlobalJavaVM() {
+            return JNIFunctionTables.singleton().getGlobalJavaVM();
         }
     }
 }

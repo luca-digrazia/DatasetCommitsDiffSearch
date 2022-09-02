@@ -713,17 +713,14 @@ final class Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy {
 
 @TargetClass(className = "org.graalvm.compiler.hotspot.HotSpotGraalOptionValues", onlyWith = LibGraalFeature.IsEnabled.class)
 final class Target_org_graalvm_compiler_hotspot_HotSpotGraalOptionValues {
+
     @Substitute
     private static OptionValues initializeOptions() {
-        return HotSpotGraalOptionValuesUtil.initializeOptions();
-    }
-}
+        // Sanity check
+        if (!XOptions.getXmn().getPrefix().equals("-X")) {
+            throw new InternalError("Expected " + XOptions.getXmn().getPrefixAndName() + " to start with -X");
+        }
 
-final class HotSpotGraalOptionValuesUtil {
-    private static final String LIBGRAAL_PREFIX = "libgraal.";
-    private static final String LIBGRAAL_XOPTION_PREFIX = "libgraal.X";
-
-    static OptionValues initializeOptions() {
         // Parse "graal." options.
         RuntimeOptionValues options = RuntimeOptionValues.singleton();
         options.update(HotSpotGraalOptionValues.parseOptions());
@@ -741,16 +738,17 @@ final class HotSpotGraalOptionValuesUtil {
         EconomicMap<String, String> optionSettings = EconomicMap.create();
         for (Map.Entry<String, String> e : savedProps.entrySet()) {
             String name = e.getKey();
-            if (name.startsWith(LIBGRAAL_PREFIX)) {
-                if (name.startsWith(LIBGRAAL_XOPTION_PREFIX)) {
-                    String xarg = removePrefix(name, LIBGRAAL_XOPTION_PREFIX) + e.getValue();
-                    if (XOptions.setOption(xarg)) {
+            if (name.startsWith("libgraal.")) {
+                if (name.startsWith("libgraal.X")) {
+                    String[] xarg = {"-" + name.substring("libgraal.".length()) + e.getValue()};
+                    String[] unknown = XOptions.singleton().parse(xarg, false);
+                    if (unknown.length == 0) {
                         continue;
                     }
+                } else {
+                    String value = e.getValue();
+                    optionSettings.put(name.substring("libgraal.".length()), value);
                 }
-
-                String value = e.getValue();
-                optionSettings.put(removePrefix(name, LIBGRAAL_PREFIX), value);
             }
         }
         if (!optionSettings.isEmpty()) {
@@ -760,11 +758,6 @@ final class HotSpotGraalOptionValuesUtil {
             options.update(values);
         }
         return options;
-    }
-
-    private static String removePrefix(String value, String prefix) {
-        assert value.startsWith(prefix);
-        return value.substring(prefix.length());
     }
 }
 

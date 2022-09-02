@@ -401,14 +401,13 @@ public abstract class Log implements AutoCloseable {
      *         {@link LogHandler#fatalError()} once fatal error logging is complete.
      */
     public static Log enterFatalContext(LogHandler logHandler, CodePointer callerIP, String msg, Throwable ex) {
-        LogHandlerExtension ext = logHandler instanceof LogHandlerExtension ? (LogHandlerExtension) logHandler : null;
-        if (ext == null || ext.fatalContext(callerIP, msg, ex)) {
+        if (!(logHandler instanceof LogHandlerExtension) || ((LogHandlerExtension) logHandler).fatalContext(callerIP, msg, ex)) {
             IsolateThread currentThread = CurrentIsolate.getCurrentThread();
             while (!threadInFatalContext.compareAndSet(WordFactory.nullPointer(), currentThread) && threadInFatalContext.get().notEqual(currentThread)) {
                 // Some other thread is in the fatal error context - wait for it to finish
                 VMThreads.singleton().nativeSleep(100);
             }
-            return ext != null ? ext.getFatalLog() : Log.log();
+            return log().autoflush(true);
         }
         return null;
     }

@@ -156,6 +156,7 @@ public abstract class SubstrateSegfaultHandler {
 
             log.string("Segfault detected, aborting process. Use runtime option -R:-InstallSegfaultHandler if you don't want to use SubstrateSegfaultHandler.").newline();
             log.newline();
+            Log.exitFatalContext();
         }
         logHandler.fatalError();
     }
