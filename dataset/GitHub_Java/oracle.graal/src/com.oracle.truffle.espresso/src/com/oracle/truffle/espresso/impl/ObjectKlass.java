@@ -24,8 +24,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import static com.oracle.truffle.espresso.EspressoOptions.VerifyMode;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_SUPER;
-import static com.oracle.truffle.espresso.classfile.Constants.JVM_ACC_WRITTEN_FLAGS;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -109,8 +107,6 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal //
     boolean needsRecursiveInit = false;
 
-    @CompilationFinal private int computedModifiers = -1;
-
     private static final int LOADED = 0;
     private static final int LINKED = 1;
     private static final int PREPARED = 2;
@@ -175,6 +171,33 @@ public final class ObjectKlass extends Klass {
         }
         this.itableLength = iKlassTable.length;
         this.initState = LINKED;
+        assert verifyTables();
+    }
+
+    private boolean verifyTables() {
+        if (vtable != null) {
+            for (int i = 0; i < vtable.length; i++) {
+                if (isInterface()) {
+                    if (vtable[i].getITableIndex() != i) {
+                        return false;
+                    }
+                } else {
+                    if (vtable[i].getVTableIndex() != i) {
+                        return false;
+                    }
+                }
+            }
+        }
+        if (itable != null) {
+            for (Method[] table : itable) {
+                for (int i = 0; i < table.length; i++) {
+                    if (table[i].getITableIndex() != i) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     @Override
@@ -256,6 +279,7 @@ public final class ObjectKlass extends Klass {
                     }
                 } catch (Throwable e) {
                     System.err.println("Host exception happened during class initialization");
+                    e.printStackTrace();
                     setErroneous();
                     throw e;
                 }
@@ -528,17 +552,18 @@ public final class ObjectKlass extends Klass {
         return iKlassTable;
     }
 
-    final Method lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass) {
-        for (Method m : vtable) {
+    final int lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass) {
+        for (int i = 0; i < vtable.length; i++) {
+            Method m = vtable[i];
             if (!m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
                 if (m.isProtected() || m.isPublic()) {
-                    return m;
+                    return i;
                 } else if (sameRuntimePackage(subClass)) {
-                    return m;
+                    return i;
                 }
             }
         }
-        return null;
+        return -1;
     }
 
     final List<Method> lookupVirtualMethodOverrides(Symbol<Name> name, Symbol<Signature> signature, Klass subKlass, List<Method> result) {
@@ -803,29 +828,5 @@ public final class ObjectKlass extends Klass {
                 }
             }
         }
-    }
-
-    @Override
-    public final int getModifiers() {
-        int modifiers = computedModifiers;
-        if (modifiers == -1) {
-            modifiers = getFlags();
-            if (innerClasses != null) {
-                for (InnerClassesAttribute.Entry entry : innerClasses.entries()) {
-                    if (entry.innerClassIndex != 0) {
-                        Symbol<Name> innerClassName = pool.classAt(entry.innerClassIndex).getName(pool);
-                        if (innerClassName.equals(this.getName())) {
-                            modifiers = entry.innerClassAccessFlags;
-                            break;
-                        }
-                    }
-                }
-            }
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            computedModifiers = modifiers;
-        }
-
-        // Remember to strip ACC_SUPER bit
-        return modifiers & ~ACC_SUPER & JVM_ACC_WRITTEN_FLAGS;
     }
 }
