@@ -109,7 +109,7 @@ public class ValuePhiNode extends PhiNode {
     }
 
     @Override
-    public PhiNode duplicateOn(AbstractMergeNode newMerge) {
+    public PhiNode patchPhi(AbstractMergeNode newMerge) {
         return graph().addWithoutUnique(new ValuePhiNode(stamp(NodeView.DEFAULT), newMerge));
     }
 }
