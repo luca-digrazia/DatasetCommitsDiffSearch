@@ -24,13 +24,14 @@
  */
 package com.oracle.svm.core.windows;
 
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
@@ -38,7 +39,6 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.jdk.Jvm;
 import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
 import com.oracle.svm.core.windows.headers.WinBase;
-import com.oracle.svm.core.windows.headers.WinBase.HMODULE;
 
 @AutomaticFeature
 @Platforms(Platform.WINDOWS.class)
@@ -77,7 +77,7 @@ class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
     @Override
     public PointerBase findBuiltinSymbol(String name) {
         try (CCharPointerHolder symbol = CTypeConversion.toCString(name)) {
-            HMODULE builtinHandle = WinBase.GetModuleHandleA(WordFactory.nullPointer());
+            Pointer builtinHandle = WinBase.GetModuleHandleA(WordFactory.nullPointer());
             return WinBase.GetProcAddress(builtinHandle, symbol.get());
         }
     }
@@ -86,7 +86,7 @@ class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
 
         private final String canonicalIdentifier;
         private final boolean builtin;
-        private HMODULE dlhandle = WordFactory.nullPointer();
+        private Pointer dlhandle = WordFactory.nullPointer();
 
         WindowsNativeLibrary(String canonicalIdentifier, boolean builtin) {
             // Make sure the jvm.lib is available for linking
