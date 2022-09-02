@@ -1714,9 +1714,6 @@ public class StandardGraphBuilderPlugins {
 
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode result, ValueNode counters) {
-                if (b.needsExplicitException()) {
-                    return false;
-                }
                 if (result.isConstant()) {
                     b.push(JavaKind.Boolean, result);
                     return true;

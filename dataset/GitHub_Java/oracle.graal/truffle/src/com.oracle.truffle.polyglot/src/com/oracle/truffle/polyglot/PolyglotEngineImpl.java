@@ -428,8 +428,6 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                 instrumentsToCreate.add(instrument);
             }
         }
-        this.api = getAPIAccess().newEngine(impl.engineDispatch, this);
-
         ensureInstrumentsCreated(instrumentsToCreate);
         registerShutDownHook();
         notifyCreated();

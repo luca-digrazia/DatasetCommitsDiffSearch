@@ -1,77 +1,94 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.instrumentation.test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.HashMap;
 
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
+import org.graalvm.polyglot.Instrument;
+import org.graalvm.polyglot.Source;
+import org.graalvm.polyglot.SourceSection;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
-import com.oracle.truffle.api.vm.PolyglotRuntime;
+import com.oracle.truffle.api.impl.Accessor;
+import com.oracle.truffle.api.test.ReflectionUtils;
+import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 
 /**
  * Base class for instrumentation tests.
  */
-public abstract class AbstractInstrumentationTest {
-    private final Object[] context = {null};
-    protected PolyglotEngine engine;
+public abstract class AbstractInstrumentationTest extends AbstractPolyglotTest {
+
+    protected Engine engine;
 
     protected final ByteArrayOutputStream out = new ByteArrayOutputStream();
     protected final ByteArrayOutputStream err = new ByteArrayOutputStream();
-    final String langMimeType = InstrumentationTestLanguage.MIME_TYPE;
 
-    private final PolyglotRuntime runtime = PolyglotRuntime.newBuilder().setOut(out).setErr(err).build();
-
-    PolyglotEngine createEngine(String mimeType) {
-        PolyglotEngine.Builder builder = PolyglotEngine.newBuilder();
-        builder.runtime(runtime);
-        builder.config(mimeType, "context", context);
+    Context newContext() {
+        Context.Builder builder = Context.newBuilder().allowAllAccess(true);
+        builder.engine(getEngine());
         return builder.build();
     }
 
     @Before
     public void setup() {
-        engine = createEngine(langMimeType);
+        setupEnv(newContext());
     }
 
-    protected final PolyglotRuntime getRuntime() {
-        return runtime;
-    }
-
-    protected void assertEnabledInstrument(String id) {
-        Assert.assertTrue(engine.getRuntime().getInstruments().get(id).isEnabled());
+    protected final Engine getEngine() {
+        if (engine == null) {
+            engine = Engine.newBuilder().out(out).err(err).build();
+        }
+        return engine;
     }
 
     protected String run(Source source) throws IOException {
         this.out.reset();
         this.err.reset();
-        engine.eval(source);
+        context.eval(source);
         this.out.flush();
         this.err.flush();
         String outText = getOut();
@@ -114,19 +131,82 @@ public abstract class AbstractInstrumentationTest {
         return new String(err.toByteArray());
     }
 
+    protected static com.oracle.truffle.api.source.Source linesImpl(String... lines) {
+        StringBuilder b = new StringBuilder();
+        for (String line : lines) {
+            b.append(line);
+            b.append("\n");
+        }
+        return com.oracle.truffle.api.source.Source.newBuilder(InstrumentationTestLanguage.ID, b.toString(), null).name("unknown").build();
+    }
+
     protected static Source lines(String... lines) {
         StringBuilder b = new StringBuilder();
         for (String line : lines) {
             b.append(line);
             b.append("\n");
         }
-        return Source.newBuilder(b.toString()).name("unknown").mimeType(InstrumentationTestLanguage.MIME_TYPE).build();
+        return Source.create(InstrumentationTestLanguage.ID, b.toString());
+    }
+
+    @SuppressWarnings("static-method")
+    protected final boolean isInitialized(Instrument instrument) {
+        Object instrumentImpl = ReflectionUtils.getField(instrument, "receiver");
+        return (Boolean) ReflectionUtils.getField(instrumentImpl, "initialized");
+    }
+
+    @SuppressWarnings("static-method")
+    protected final boolean isCreated(Instrument instrument) {
+        Object instrumentImpl = ReflectionUtils.getField(instrument, "receiver");
+        return (Boolean) ReflectionUtils.getField(instrumentImpl, "created");
+    }
+
+    protected final void assureEnabled(Instrument instrument) {
+        instrument.lookup(Object.class);
+        Assert.assertTrue("Not enabled, instrument does not provide service Object.class", isCreated(instrument));
+    }
+
+    @SuppressWarnings("static-method")
+    protected final com.oracle.truffle.api.source.Source getSourceImpl(Source source) {
+        return sourceToImpl(source);
+    }
+
+    static final com.oracle.truffle.api.source.Source sourceToImpl(Source source) {
+        return (com.oracle.truffle.api.source.Source) ReflectionUtils.getField(source, "receiver");
+    }
+
+    @SuppressWarnings("static-method")
+    protected final com.oracle.truffle.api.source.SourceSection getSectionImpl(SourceSection sourceSection) {
+        return (com.oracle.truffle.api.source.SourceSection) ReflectionUtils.getField(sourceSection, "receiver");
+    }
+
+    protected final SourceSection createSection(Source source, int charIndex, int length) {
+        com.oracle.truffle.api.source.Source sourceImpl = getSourceImpl(source);
+        com.oracle.truffle.api.source.SourceSection sectionImpl = sourceImpl.createSection(charIndex, length);
+        return TestAccessor.ACCESSOR.engineAccess().createSourceSection(getPolyglotEngine(), source, sectionImpl);
+    }
+
+    private Object getPolyglotEngine() {
+        return ReflectionUtils.getField(engine, "receiver");
     }
 
     @After
     public void teardown() {
+        cleanup();
         if (engine != null) {
-            engine.dispose();
+            engine.close();
+            engine = null;
         }
+        InstrumentationTestLanguage.envConfig = new HashMap<>();
+    }
+
+    static final class TestAccessor extends Accessor {
+
+        EngineSupport engineAccess() {
+            return engineSupport();
+        }
+
+        static final TestAccessor ACCESSOR = new TestAccessor();
+
     }
 }

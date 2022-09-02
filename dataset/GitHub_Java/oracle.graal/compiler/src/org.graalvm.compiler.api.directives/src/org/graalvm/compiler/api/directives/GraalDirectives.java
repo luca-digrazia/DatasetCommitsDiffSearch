@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,6 +29,8 @@ package org.graalvm.compiler.api.directives;
 /**
  * Directives that influence the compilation of methods by Graal. They don't influence the semantics
  * of the code, but they are useful for unit testing and benchmarking.
+ *
+ * Any methods defined in this class should be intrinsified via invocation plugins.
  */
 public final class GraalDirectives {
 
@@ -50,6 +54,13 @@ public final class GraalDirectives {
     }
 
     /**
+     * Directive for the compiler to fall back to the bytecode interpreter at this point, invalidate
+     * the compiled code, record a speculation and reprofile the method.
+     */
+    public static void deoptimizeAndInvalidateWithSpeculation() {
+    }
+
+    /**
      * Returns a boolean value indicating whether the method is executed in Graal-compiled code.
      */
     public static boolean inCompiledCode() {
@@ -57,9 +68,54 @@ public final class GraalDirectives {
     }
 
     /**
+     * Determines if the method is called within the scope of a Graal intrinsic.
+     */
+    public static boolean inIntrinsic() {
+        return false;
+    }
+
+    /**
      * A call to this method will never be duplicated by control flow optimizations in the compiler.
      */
     public static void controlFlowAnchor() {
+    }
+
+    /**
+     * A call to this method will disable strip mining of the enclosing loop in the compiler.
+     */
+    public static void neverStripMine() {
+    }
+
+    /**
+     * A call to this method will assume a stable dimension array if {@code t} is a constant array
+     * and {@code i} a constant integer.
+     */
+    public static <T> T assumeStableDimension(T t, @SuppressWarnings("unused") int i) {
+        return t;
+    }
+
+    /**
+     * A call to this method will force the compiler to assume this instruction has a visible memory
+     * effect killing all memory locations.
+     */
+    public static void sideEffect() {
+
+    }
+
+    /**
+     * Inject information into the compiler to assume that the input is an object created via a
+     * primitive boxing operation.
+     */
+    public static <P> P trustedBox(P o) {
+        return o;
+    }
+
+    /**
+     * A call to this method will force the compiler to assume this instruction has a visible memory
+     * effect killing all memory locations.
+     */
+    public static int sideEffect(int a) {
+        return a;
     }
 
     /**
@@ -364,5 +420,20 @@ public final class GraalDirectives {
      * Ensures that the given object will be virtual at the current position.
      */
     public static void ensureVirtualizedHere(@SuppressWarnings("unused") Object object) {
+    }
+
+    /**
+     * Raise a SIGTRAP that can be used as a breakpoint for a native debugger such as gdb.
+     */
+    public static void breakpoint() {
+    }
+
+    /**
+     * Returns a boolean indicating whether or not a given value is seen as constant in optimized
+     * code.
+     */
+    @SuppressWarnings("unused")
+    public static boolean isCompilationConstant(Object value) {
+        return false;
     }
 }

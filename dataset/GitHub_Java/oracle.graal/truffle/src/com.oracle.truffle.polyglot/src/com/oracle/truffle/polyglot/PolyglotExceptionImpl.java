@@ -70,7 +70,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.polyglot.PolyglotEngineImpl.CancelExecution;
-import com.oracle.truffle.polyglot.host.HostException;
 
 final class PolyglotExceptionImpl {
 
@@ -149,7 +148,7 @@ final class PolyglotExceptionImpl {
                      */
                     Object receiver = exceptionObject;
                     if (receiver instanceof Proxy) {
-                        receiver = languageContext.context.getHostContextImpl().toGuestValue(null, receiver);
+                        receiver = languageContext.toGuestValue(null, receiver);
                     }
                     this.guestObject = languageContext.asValue(receiver);
                 } else {
@@ -276,7 +275,7 @@ final class PolyglotExceptionImpl {
             Object exceptionObject = ((com.oracle.truffle.api.TruffleException) e).getExceptionObject();
             if (exceptionObject != null) {
                 if (exceptionObject instanceof Proxy) {
-                    exceptionObject = languageContext.context.getHostContextImpl().toGuestValue(null, exceptionObject);
+                    exceptionObject = languageContext.toGuestValue(null, exceptionObject);
                 }
                 return languageContext.asValue(exceptionObject);
             }
@@ -629,8 +628,8 @@ final class PolyglotExceptionImpl {
                         HOST_INTEROP_PACKAGE + "PolyglotList",
                         HOST_INTEROP_PACKAGE + "PolyglotFunction",
                         HOST_INTEROP_PACKAGE + "PolyglotMapAndFunction",
-                        HOST_INTEROP_PACKAGE + "PolyglotFunctionProxyHandler",
-                        HOST_INTEROP_PACKAGE + "PolyglotObjectProxyHandler"
+                        HOST_INTEROP_PACKAGE + "FunctionProxyHandler",
+                        HOST_INTEROP_PACKAGE + "ObjectProxyHandler"
         };
 
         private final Iterator<G> guestFrames;
@@ -791,7 +790,7 @@ final class PolyglotExceptionImpl {
                 case "com.oracle.truffle.polyglot.HostObject$GuestToHostCalls":
                     return true;
                 default:
-                    return element.getClassName().startsWith("com.oracle.truffle.polyglot.GuestToHostCodeCache$") && element.getMethodName().equals("executeImpl");
+                    return element.getClassName().startsWith("com.oracle.truffle.polyglot.HostToGuestCodeCache$") && element.getMethodName().equals("executeImpl");
             }
         }
 
