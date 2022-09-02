@@ -1,11 +1,10 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
  * published by the Free Software Foundation.
- *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
@@ -37,7 +36,6 @@ public class StackMapTableAttribute extends Attribute {
     }
 
     private final StackMapFrame[] entries;
-    private boolean truncated = false;
 
     public StackMapTableAttribute(Symbol<Symbol.Name> name, StackMapFrame[] entries) {
         super(name, null);
@@ -50,13 +48,5 @@ public class StackMapTableAttribute extends Attribute {
             sme.print(klass);
         }
         System.err.println("    }");
-    }
-
-    public boolean isTruncated() {
-        return truncated;
-    }
-
-    void setTruncated() {
-        this.truncated = true;
     }
 }

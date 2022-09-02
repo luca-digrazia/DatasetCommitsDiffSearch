@@ -9,14 +9,11 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
  */
 final class ConstantPoolImpl extends ConstantPool {
 
-    private final int majorVersion;
-
     @CompilationFinal(dimensions = 1) //
     private final PoolConstant[] constants;
 
-    ConstantPoolImpl(PoolConstant[] constants, int majorVersion) {
+    ConstantPoolImpl(PoolConstant[] constants) {
         this.constants = Objects.requireNonNull(constants);
-        this.majorVersion = majorVersion;
     }
 
     @Override
@@ -31,10 +28,5 @@ final class ConstantPoolImpl extends ConstantPool {
         } catch (IndexOutOfBoundsException exception) {
             throw ConstantPool.classFormatError("Constant pool index (" + index + ")" + (description == null ? "" : " for " + description) + " is out of range");
         }
-    }
-
-    @Override
-    public int getMajorVersion() {
-        return majorVersion;
     }
 }

@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
@@ -91,10 +90,5 @@ public final class EspressoRootNode extends RootNode implements ContextAccess {
 
     public boolean isBytecodeNode() {
         return childNode instanceof BytecodeNode;
-    }
-
-    public int readBCI(FrameInstance frameInstance) {
-        assert childNode instanceof BytecodeNode;
-        return ((BytecodeNode) childNode).readBCI(frameInstance);
     }
 }
