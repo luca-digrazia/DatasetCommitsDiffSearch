@@ -269,16 +269,16 @@ public class DebuggerConnection implements JDWPCommands {
                         }
                         break;
                     }
-                    case JDWP.Methods.ID: {
+                    case JDWP.METHOD.ID: {
                         switch (packet.cmd) {
-                            case JDWP.Methods.LINE_TABLE.ID:
-                                reply = JDWP.Methods.LINE_TABLE.createReply(packet);
+                            case JDWP.METHOD.LINE_TABLE.ID:
+                                reply = JDWP.METHOD.LINE_TABLE.createReply(packet);
                                 break;
-                            case JDWP.Methods.BYTECODES.ID:
-                                reply = JDWP.Methods.BYTECODES.createReply(packet);
+                            case JDWP.METHOD.BYTECODES.ID:
+                                reply = JDWP.METHOD.BYTECODES.createReply(packet);
                                 break;
-                            case JDWP.Methods.VARIABLE_TABLE_WITH_GENERIC.ID:
-                                reply = JDWP.Methods.VARIABLE_TABLE_WITH_GENERIC.createReply(packet);
+                            case JDWP.METHOD.VARIABLE_TABLE_WITH_GENERIC.ID:
+                                reply = JDWP.METHOD.VARIABLE_TABLE_WITH_GENERIC.createReply(packet);
                                 break;
                         }
                         break;
@@ -303,43 +303,43 @@ public class DebuggerConnection implements JDWPCommands {
                         }
                         break;
                     }
-                    case JDWP.StringReference.ID: {
+                    case JDWP.STRING_REFERENCE.ID: {
                         switch (packet.cmd) {
-                            case JDWP.StringReference.VALUE.ID:
-                                reply = JDWP.StringReference.VALUE.createReply(packet);
+                            case JDWP.STRING_REFERENCE.VALUE.ID:
+                                reply = JDWP.STRING_REFERENCE.VALUE.createReply(packet);
                                 break;
                         }
                         break;
                     }
-                    case JDWP.ThreadReference.ID:
+                    case JDWP.THREAD_REFERENCE.ID:
                         switch (packet.cmd) {
-                            case JDWP.ThreadReference.NAME.ID:
-                                reply = JDWP.ThreadReference.NAME.createReply(packet, controller.getContext());
+                            case JDWP.THREAD_REFERENCE.NAME.ID:
+                                reply = JDWP.THREAD_REFERENCE.NAME.createReply(packet, controller.getContext());
                                 break;
-                            case JDWP.ThreadReference.RESUME.ID:
-                                reply = JDWP.ThreadReference.RESUME.createReply(packet, controller);
+                            case JDWP.THREAD_REFERENCE.RESUME.ID:
+                                reply = JDWP.THREAD_REFERENCE.RESUME.createReply(packet, controller);
                                 break;
-                            case JDWP.ThreadReference.STATUS.ID:
-                                reply = JDWP.ThreadReference.STATUS.createReply(packet, controller.getContext());
+                            case JDWP.THREAD_REFERENCE.STATUS.ID:
+                                reply = JDWP.THREAD_REFERENCE.STATUS.createReply(packet, controller.getContext());
                                 break;
-                            case JDWP.ThreadReference.THREAD_GROUP.ID:
-                                reply = JDWP.ThreadReference.THREAD_GROUP.createReply(packet, controller.getContext());
+                            case JDWP.THREAD_REFERENCE.THREAD_GROUP.ID:
+                                reply = JDWP.THREAD_REFERENCE.THREAD_GROUP.createReply(packet, controller.getContext());
                                 break;
-                            case JDWP.ThreadReference.FRAMES.ID:
-                                reply = JDWP.ThreadReference.FRAMES.createReply(packet, controller);
+                            case JDWP.THREAD_REFERENCE.FRAMES.ID:
+                                reply = JDWP.THREAD_REFERENCE.FRAMES.createReply(packet, controller);
                                 break;
-                            case JDWP.ThreadReference.FRAME_COUNT.ID:
-                                reply = JDWP.ThreadReference.FRAME_COUNT.createReply(packet, controller);
+                            case JDWP.THREAD_REFERENCE.FRAME_COUNT.ID:
+                                reply = JDWP.THREAD_REFERENCE.FRAME_COUNT.createReply(packet, controller);
                                 break;
-                            case JDWP.ThreadReference.SUSPEND_COUNT.ID:
-                                reply = JDWP.ThreadReference.SUSPEND_COUNT.createReply(packet);
+                            case JDWP.THREAD_REFERENCE.SUSPEND_COUNT.ID:
+                                reply = JDWP.THREAD_REFERENCE.SUSPEND_COUNT.createReply(packet);
                                 break;
                         }
                         break;
-                    case JDWP.ThreadGroupReference.ID:
+                    case JDWP.THREAD_GROUP_REFERENCE.ID:
                         switch (packet.cmd) {
-                            case JDWP.ThreadGroupReference.NAME.ID:
-                                reply = JDWP.ThreadGroupReference.NAME.createReply(packet, controller.getContext());
+                            case JDWP.THREAD_GROUP_REFERENCE.NAME.ID:
+                                reply = JDWP.THREAD_GROUP_REFERENCE.NAME.createReply(packet, controller.getContext());
                         }
                         break;
                     case JDWP.ArrayReference.ID: {

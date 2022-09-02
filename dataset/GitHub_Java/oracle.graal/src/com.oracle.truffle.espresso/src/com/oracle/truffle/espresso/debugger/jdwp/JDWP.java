@@ -355,7 +355,7 @@ class JDWP {
                     reply.writeLong(Ids.getIdAsLong(field));
                     reply.writeString(field.getName().toString());
                     reply.writeString(field.getType().toString());
-                    reply.writeString(field.getGenericSignature().toString());
+                    reply.writeString(field.getGenericSignature());
                     reply.writeInt(field.getModifiers());
                 }
                 return reply;
@@ -851,9 +851,6 @@ class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 JDWPCallFrame[] frames = controller.getSuspendedInfo().getStackFrames();
-                if (length == -1) {
-                    length = frames.length;
-                }
                 reply.writeInt(length);
 
                 for (int i = startFrame; i < startFrame + length; i++) {

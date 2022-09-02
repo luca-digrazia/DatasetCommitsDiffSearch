@@ -22,20 +22,26 @@
  */
 package com.oracle.truffle.espresso.debugger.jdwp;
 
+import com.oracle.truffle.espresso.runtime.StaticObject;
 import java.lang.ref.WeakReference;
 
 public class Ids {
 
-    private static volatile long uniqueID;
-    private static WeakReference[] objects = new WeakReference[0];
-    public static Object RECLAIMED = new Object();
+    private static volatile long uniqueID = 1;
+    private static WeakReference[] objects = new WeakReference[1];
+
+    static {
+        // initialize with StaticObject.NULL
+        getIdAsLong(StaticObject.NULL);
+    }
 
     public static long getIdAsLong(Object object) {
         // lookup in cache
-        for (int i = 0; i < objects.length; i++) {
+        for (int i = 1; i < objects.length; i++) {
             // really slow lookup path
             Object obj = objects[i].get();
             if (obj == object) {
+                //System.out.println("returning ID: " + i + " from cache for object: " + object);
                 return i;
             }
         }
@@ -43,16 +49,13 @@ public class Ids {
         return generateUniqueId(object);
     }
 
-    public static byte[] getId(Object object) {
-        return toByteArray(getIdAsLong(object));
-    }
-
     public static Object fromId(int id) {
         WeakReference ref = objects[id];
         Object o = ref.get();
         if (o == null) {
-            return RECLAIMED;
+            return StaticObject.NULL;
         } else {
+            //System.out.println("getting object: " + o + " from ID: " + id);
             return o;
         }
     }
@@ -62,31 +65,11 @@ public class Ids {
         assert objects.length == id - 1;
 
         WeakReference[] expandedArray = new WeakReference[objects.length + 1];
-        System.arraycopy(objects, 0, expandedArray, 0, objects.length);
+        System.arraycopy(objects, 1, expandedArray, 1, objects.length - 1);
         expandedArray[objects.length] = new WeakReference<>(object);
         objects = expandedArray;
-
+        //System.out.println("ID: " + id + " for object: " + object);
         return id;
-    }
-
-    public static byte[] toByteArray(long l) {
-        byte[] b = new byte[8];
-        b[7] = (byte) (l);
-        l >>>= 8;
-        b[6] = (byte) (l);
-        l >>>= 8;
-        b[5] = (byte) (l);
-        l >>>= 8;
-        b[4] = (byte) (l);
-        l >>>= 8;
-        b[3] = (byte) (l);
-        l >>>= 8;
-        b[2] = (byte) (l);
-        l >>>= 8;
-        b[1] = (byte) (l);
-        l >>>= 8;
-        b[0] = (byte) (l);
-        return b;
     }
 }
 
