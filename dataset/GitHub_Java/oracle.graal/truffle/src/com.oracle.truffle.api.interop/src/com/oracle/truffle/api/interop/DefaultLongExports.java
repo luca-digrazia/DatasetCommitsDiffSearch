@@ -72,13 +72,12 @@ final class DefaultLongExports {
     @ExportMessage
     static boolean fitsInFloat(Long receiver) {
         float f = receiver;
-        return (long) f == receiver;
+        return f == receiver;
     }
 
     @ExportMessage
     static boolean fitsInDouble(Long receiver) {
-        double d = receiver;
-        return (long) d == receiver;
+        return NumberUtils.inSafeDoubleRange(receiver);
     }
 
     @ExportMessage
