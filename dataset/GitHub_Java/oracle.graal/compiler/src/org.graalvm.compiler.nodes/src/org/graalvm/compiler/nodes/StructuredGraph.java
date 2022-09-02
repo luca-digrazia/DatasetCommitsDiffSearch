@@ -137,7 +137,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     public enum AllowAssumptions {
         YES,
         NO;
-
         public static AllowAssumptions ifTrue(boolean flag) {
             return flag ? YES : NO;
         }
