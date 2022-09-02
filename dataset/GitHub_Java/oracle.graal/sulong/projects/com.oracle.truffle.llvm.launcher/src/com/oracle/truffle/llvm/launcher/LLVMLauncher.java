@@ -56,8 +56,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
     String[] programArgs;
     File file;
     private VersionAction versionAction = VersionAction.None;
-    private String toolchainAPI = null;
-    private String toolchainAPIArg = null;
+    private boolean printToolchainPath = false;
 
     @Override
     protected void launch(Context.Builder contextBuilder) {
@@ -93,12 +92,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
                     versionAction = VersionAction.PrintAndExit;
                     break;
                 case "--print-toolchain-path":
-                    toolchainAPI = "paths";
-                    toolchainAPIArg = "PATH";
-                    break;
-                case "--toolchain-api":
-                    iterator.remove();
-                    parseToolchainAPICommandLine(option, iterator);
+                    printToolchainPath = true;
                     break;
                 default:
                     // options with argument
@@ -148,6 +142,9 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
             }
         }
 
+        if (printToolchainPath) {
+            polyglotOptions.put("llvm.printToolchainPath", "true");
+        }
         if (!path.isEmpty()) {
             polyglotOptions.put("llvm.libraryPath", path.stream().collect(Collectors.joining(":")));
         }
@@ -167,35 +164,9 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
         return unrecognizedOptions;
     }
 
-    private void parseToolchainAPICommandLine(String optionName, ListIterator<String> iterator) {
-        // get function
-        if (!iterator.hasNext()) {
-            throw abort("Missing argument for " + optionName);
-        }
-        String function = iterator.next();
-        // remove function
-        iterator.remove();
-        toolchainAPI = function;
-        switch (function) {
-            case "tool":
-            case "paths":
-                if (!iterator.hasNext()) {
-                    throw abort("Missing argument for " + optionName + " " + function);
-                }
-                toolchainAPIArg = iterator.next();
-                // remove arg
-                iterator.remove();
-                break;
-            case "identifier":
-                break;
-            default:
-                throw abort("Unknown function for " + optionName + ": " + function);
-        }
-    }
-
     @Override
     protected void validateArguments(Map<String, String> polyglotOptions) {
-        if (file == null && versionAction != VersionAction.PrintAndExit && toolchainAPI == null) {
+        if (file == null && versionAction != VersionAction.PrintAndExit && !printToolchainPath) {
             throw abort("No bitcode file provided.", 6);
         }
     }
@@ -212,7 +183,6 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
         printOption("--version", "print the version and exit");
         printOption("--show-version", "print the version and continue");
         printOption("--print-toolchain-path", "print the toolchain path and exit");
-        printOption("--toolchain-api identifier|tool <name>|paths <name>", "query the toolchain API and exit");
     }
 
     @Override
@@ -220,9 +190,7 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
         args.addAll(Arrays.asList(
                         "-L", "--lib",
                         "--version",
-                        "--show-version",
-                        "--print-toolchain-path",
-                        "--toolchain-api"));
+                        "--show-version"));
     }
 
     protected static void printOption(String option, String description) {
@@ -240,8 +208,8 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
         contextBuilder.arguments(getLanguageId(), programArgs);
         try (Context context = contextBuilder.build()) {
             runVersionAction(versionAction, context.getEngine());
-            if (toolchainAPI != null) {
-                printToolchainAPI(context);
+            if (printToolchainPath) {
+                context.getBindings(getLanguageId()).getMember("__sulong_print_toolchain_path").execute();
                 return 0;
             }
             Value library = context.eval(Source.newBuilder(getLanguageId(), file).build());
@@ -260,35 +228,6 @@ public class LLVMLauncher extends AbstractLanguageLauncher {
             }
         } catch (IOException e) {
             throw abort(String.format("Error loading file '%s' (%s)", file, e.getMessage()));
-        }
-    }
-
-    private void printToolchainAPI(Context context) {
-        Value bindings = context.getBindings(getLanguageId());
-        final Value result;
-        switch (toolchainAPI) {
-            case "tool":
-                result = bindings.getMember("toolchain_api_tool").execute(toolchainAPIArg);
-                break;
-            case "paths":
-                result = bindings.getMember("toolchain_api_paths").execute(toolchainAPIArg);
-                break;
-            case "identifier":
-                result = bindings.getMember("toolchain_api_identifier").execute();
-                break;
-            default:
-                // should not reach here. this should be caught by the option parser
-                throw abort("Unknown --toolchain-api function: " + toolchainAPI);
-        }
-        if (result.isNull()) {
-            throw abort("Unknown entry for --toolchain-api " + toolchainAPI + ": " + toolchainAPIArg);
-        }
-        if (result.hasArrayElements()) {
-            for (int i = 0; i < result.getArraySize(); i++) {
-                System.out.println(result.getArrayElement(i).asString());
-            }
-        } else {
-            System.out.println(result.asString());
         }
     }
 
