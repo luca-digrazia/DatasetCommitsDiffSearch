@@ -105,24 +105,143 @@ import com.oracle.svm.core.util.VMError;
 class PosixJavaNetSubstitutionsFeature implements Feature {
 
     @Override
+    public void duringSetup(DuringSetupAccess access) {
+        try {
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.InetAddress"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.Inet4AddressImpl"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.Inet6AddressImpl"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.SocketInputStream"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.SocketOutputStream"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.DatagramPacket"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.AbstractPlainSocketImpl"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.PlainSocketImpl"), "required for substitutions");
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.net.PlainDatagramSocketImpl"), "required for substitutions");
+            if (JavaVersionUtil.JAVA_SPEC <= 8) {
+                ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.net.ExtendedOptionsImpl"), "required for substitutions");
+            }
+        } catch (Exception e) {
+            VMError.shouldNotReachHere("PosixJavaNetSubstitutionsFeature: Error registering rerunClassInitialization: ", e);
+        }
+    }
+
+    @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
         try {
+            /* Common Networking Classes */
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("name"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("displayName"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("index"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("addrs"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("bindings"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("childs"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("virtual"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("parent"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredField("defaultIndex"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.NetworkInterface").getDeclaredConstructor());
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InterfaceAddress"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InterfaceAddress").getDeclaredConstructor());
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InterfaceAddress").getDeclaredField("address"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InterfaceAddress").getDeclaredField("broadcast"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InterfaceAddress").getDeclaredField("maskLength"));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress").getDeclaredField("holder"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress").getDeclaredField("preferIPv6Address"));
             JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress").getDeclaredMethod("anyLocalAddress"));
 
             JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddressContainer"));
             JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddressContainer").getDeclaredField("addr"));
 
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress$InetAddressHolder"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress$InetAddressHolder").getDeclaredField("address"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress$InetAddressHolder").getDeclaredField("family"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress$InetAddressHolder").getDeclaredField("hostName"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.InetAddress$InetAddressHolder").getDeclaredField("originalHostName"));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet4Address"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet4Address").getDeclaredConstructor());
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address").getDeclaredField("holder6"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address").getDeclaredField("cached_scope_id"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address").getDeclaredConstructor());
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address$Inet6AddressHolder"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address$Inet6AddressHolder").getDeclaredField("ipaddress"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address$Inet6AddressHolder").getDeclaredField("scope_id"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address$Inet6AddressHolder").getDeclaredField("scope_id_set"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.Inet6Address$Inet6AddressHolder").getDeclaredField("scope_ifname"));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramPacket"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramPacket").getDeclaredField("address"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramPacket").getDeclaredField("port"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramPacket").getDeclaredField("buf"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramPacket").getDeclaredField("offset"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramPacket").getDeclaredField("length"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramPacket").getDeclaredField("bufLength"));
+
             JNIRuntimeAccess.register(access.findClassByName("java.net.InetSocketAddress"));
             JNIRuntimeAccess.register(access.findClassByName("java.net.InetSocketAddress").getDeclaredConstructor(InetAddress.class, int.class));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.SocketException"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.SocketException").getDeclaredConstructor(String.class));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.ConnectException"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.ConnectException").getDeclaredConstructor(String.class));
 
             /* Linux/Darwin specific classes */
             JNIRuntimeAccess.register(access.findClassByName("java.net.SocketInputStream"));
             JNIRuntimeAccess.register(access.findClassByName("java.net.SocketOutputStream"));
 
             JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramSocketImpl"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramSocketImpl").getDeclaredField("fd"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.DatagramSocketImpl").getDeclaredField("localPort"));
 
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl").getDeclaredField("timeout"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl").getDeclaredField("trafficClass"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl").getDeclaredField("connected"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl").getDeclaredField("connectedAddress"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl").getDeclaredField("connectedPort"));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.PlainDatagramSocketImpl"));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.SocketImpl"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.SocketImpl").getDeclaredField("fd"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.SocketImpl").getDeclaredField("localport"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.SocketImpl").getDeclaredField("serverSocket"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.SocketImpl").getDeclaredField("address"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.SocketImpl").getDeclaredField("port"));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainSocketImpl"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainSocketImpl").getDeclaredField("timeout"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainSocketImpl").getDeclaredField("trafficClass"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainSocketImpl").getDeclaredField("fdLock"));
+            JNIRuntimeAccess.register(access.findClassByName("java.net.AbstractPlainSocketImpl").getDeclaredField("closePending"));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.net.PlainSocketImpl"));
+
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow").getDeclaredField("status"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow").getDeclaredField("priority"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow").getDeclaredField("bandwidth"));
+
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status").getDeclaredField("NO_STATUS"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status").getDeclaredField("OK"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status").getDeclaredField("NO_PERMISSION"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status").getDeclaredField("NOT_CONNECTED"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status").getDeclaredField("NOT_SUPPORTED"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status").getDeclaredField("ALREADY_CREATED"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status").getDeclaredField("IN_PROGRESS"));
+            JNIRuntimeAccess.register(access.findClassByName("jdk.net.SocketFlow$Status").getDeclaredField("OTHER"));
+
+            JNIRuntimeAccess.register(access.findClassByName("java.lang.Integer").getDeclaredConstructor(int.class));
             JNIRuntimeAccess.register(access.findClassByName("java.lang.Integer").getDeclaredField("value"));
 
+            JNIRuntimeAccess.register(access.findClassByName("java.lang.Boolean"));
+            JNIRuntimeAccess.register(access.findClassByName("java.lang.Boolean").getDeclaredConstructor(boolean.class));
             JNIRuntimeAccess.register(access.findClassByName("java.lang.Boolean").getDeclaredMethod("getBoolean", String.class));
 
             RuntimeReflection.register(access.findClassByName("java.net.InetAddressImpl"));
@@ -165,7 +284,7 @@ public final class PosixJavaNetSubstitutions {
 }
 
 /* { Allow names with non-standard names: Checkstyle: stop */
-@TargetClass(className = "java.net.PlainDatagramSocketImpl", onlyWith = JDK11OrEarlier.class)
+@TargetClass(className = "java.net.PlainDatagramSocketImpl")
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_net_PlainDatagramSocketImpl {
 
@@ -291,7 +410,6 @@ final class Target_java_net_PlainDatagramSocketImpl {
     //    360  Java_java_net_PlainDatagramSocketImpl_send(JNIEnv *env, jobject this,
     //    361                                             jobject packet)
     @Substitute
-    @TargetElement(onlyWith = JDK11OrEarlier.class) //
     @SuppressWarnings({"static-method", "unused"})
     protected void send(DatagramPacket packet) throws IOException {
         //   363      char BUF[MAX_BUFFER_LEN];
@@ -3898,7 +4016,6 @@ final class Target_java_net_Inet6Address {
 
     @Alias static int INADDRSZ;
 
-    @TargetElement(onlyWith = JDK11OrEarlier.class) //
     @Alias int cached_scope_id;
 
     @Alias Target_java_net_Inet6Address_Inet6AddressHolder holder6;
@@ -4774,37 +4891,6 @@ final class Target_java_net_NetworkInterface {
         //   406      freeif(ifs);
         //   407
         return obj;
-    }
-
-    //   477  /*
-    //   478   * Class:     java_net_NetworkInterface
-    //   479   * Method:    isLoopback0
-    //   480   * Signature: (Ljava/lang/String;I)Z
-    //   481   */
-    //   482  JNIEXPORT jboolean JNICALL Java_java_net_NetworkInterface_isLoopback0(JNIEnv *env, jclass cls, jstring name, jint index) {
-    //   483      int ret = getFlags0(env, name);
-    //   484      return (ret & IFF_LOOPBACK) ? JNI_TRUE :  JNI_FALSE;
-    //   485  }
-    @Substitute
-    @SuppressWarnings({"unused"})
-    private static boolean isLoopback0(String name, int index) {
-        int ret = JavaNetNetworkInterface.getFlags0(name);
-        return ((ret & NetIf.IFF_LOOPBACK()) != 0) ? true : false;
-    }
-
-
-    // 463   /*
-    // 464    * Class:     java_net_NetworkInterface
-    // 465    * Method:    isUp0
-    // 466    * Signature: (Ljava/lang/String;I)Z
-    // 467    */
-    @Substitute
-    @SuppressWarnings({"unused"})
-    private static boolean isUp0(String name, int ind) throws SocketException {
-        //    471    int ret = getFlags0(env, name);
-        int ret = JavaNetNetworkInterface.getFlags0(name);
-        //    472    return ((ret & IFF_UP) && (ret & IFF_RUNNING)) ? JNI_TRUE :  JNI_FALSE;
-        return (((ret & NetIf.IFF_UP()) != 0) && (ret & NetIf.IFF_RUNNING()) != 0);
     }
 
     /*
