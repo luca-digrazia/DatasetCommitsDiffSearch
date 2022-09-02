@@ -426,11 +426,6 @@ public class LanguageServer {
                 public void publishDiagnostics(PublishDiagnosticsParams params) {
                     sendNotification("textDocument/publishDiagnostics", params);
                 }
-
-                @Override
-                public void sendCustomNotification(String method, Object params) {
-                    sendNotification(method, params);
-                }
             });
         }
 
