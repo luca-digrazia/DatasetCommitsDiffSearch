@@ -1053,9 +1053,9 @@ public class BinaryReader extends BinaryStreamReader {
                         offset = readSignedInt32();
                         break;
                     case GLOBAL_GET:
-                        int index = readGlobalIndex();
-                        offset = wasmModule.globals().getAsInt(index);
-                        break;
+                        // The global.get instructions in constant expressions are only allowed to refer to
+                        // imported globals, which are not yet supported in our implementation.
+                        throw new NotImplementedException();
                     case END:
                         break;
                     default:
@@ -1113,7 +1113,8 @@ public class BinaryReader extends BinaryStreamReader {
 
     private void readGlobalSection() {
         int numGlobals = readVectorLength();
-        for (int i = 0; i != numGlobals; i++) {
+        wasmModule.globals().initialize(numGlobals);
+        for (int globalIndex = 0; globalIndex != numGlobals; globalIndex++) {
             byte type = readValueType();
             byte mut = read1();  // 0x00 means const, 0x01 means var
             long value = 0;
@@ -1136,9 +1137,9 @@ public class BinaryReader extends BinaryStreamReader {
                         value = readFloatAsInt64();
                         break;
                     case GLOBAL_GET:
-                        int index = readGlobalIndex();
-                        value = wasmModule.globals().getAsInt(index);
-                        break;
+                        // The global.get instructions in constant expressions are only allowed to refer to
+                        // imported globals, which are not yet supported in our implementation.
+                        throw new NotImplementedException();
                     case END:
                         break;
                     default:
@@ -1146,9 +1147,8 @@ public class BinaryReader extends BinaryStreamReader {
                         break;
                 }
             } while (instruction != END);
-            wasmModule.globals().register(value, type, mut != GlobalModifier.CONSTANT);
+            wasmModule.globals().register(globalIndex, value, type, mut != GlobalModifier.CONSTANT);
         }
-        wasmModule.globals().makeFinal();
     }
 
     private void readDataSection() {
@@ -1171,9 +1171,9 @@ public class BinaryReader extends BinaryStreamReader {
                         offset = readSignedInt32();
                         break;
                     case GLOBAL_GET:
-                        int index = readGlobalIndex();
-                        offset = wasmModule.globals().getAsInt(index);
-                        break;
+                        // The global.get instructions in constant expressions are only allowed to refer to
+                        // imported globals, which are not yet supported in our implementation.
+                        throw new NotImplementedException();
                     case END:
                         break;
                     default:
