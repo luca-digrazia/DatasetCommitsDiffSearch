@@ -70,18 +70,6 @@ public interface HostVM {
 
     boolean isInitialized(AnalysisType type);
 
-    /**
-     * Hook to change the {@link GraphBuilderConfiguration} used for parsing a method during
-     * analysis.
-     * 
-     * @param config The default configuration used by the static analysis.
-     * @param method The method that is going to be parsed with the returned configuration.
-     * @return The updated configuration for the method.
-     */
-    default GraphBuilderConfiguration updateGraphBuilderConfiguration(GraphBuilderConfiguration config, AnalysisMethod method) {
-        return config;
-    }
-
     Optional<AnalysisMethod> handleForeignCall(ForeignCallDescriptor foreignCallDescriptor, ForeignCallsProvider foreignCallsProvider);
 
     GraphBuilderPhase.Instance createGraphBuilderPhase(HostedProviders providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
