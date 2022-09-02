@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -34,11 +36,21 @@ import org.graalvm.compiler.options.OptionKey;
  */
 public class BytecodeParserOptions {
     // @formatter:off
-    @Option(help = "The trace level for the bytecode parser used when building a graph from bytecode", type = OptionType.Debug)
+    @Option(help = "The trace level for the bytecode parser. A value of 1 enables instruction tracing " +
+                   "and any greater value emits a frame state trace just prior to each instruction trace." +
+                   "Instruction tracing output from multiple compiler threads will be interleaved so " +
+                   "use of this option make most sense for single threaded compilation. " +
+                   "The MethodFilter option can be used to refine tracing to selected methods.", type = OptionType.Debug)
     public static final OptionKey<Integer> TraceBytecodeParserLevel = new OptionKey<>(0);
 
     @Option(help = "Inlines trivial methods during bytecode parsing.", type = OptionType.Expert)
     public static final OptionKey<Boolean> InlineDuringParsing = new OptionKey<>(true);
+
+    @Option(help = "Inlines partial intrinsic exits during bytecode parsing when possible. " +
+                   "A partial intrinsic exit is a call within an intrinsic to the method " +
+                   "being intrinsified and denotes semantics of the original method that " +
+                   "the intrinsic does not support.", type = OptionType.Expert)
+    public static final OptionKey<Boolean> InlinePartialIntrinsicExitDuringParsing = new OptionKey<>(true);
 
     @Option(help = "Inlines intrinsic methods during bytecode parsing.", type = OptionType.Expert)
     public static final OptionKey<Boolean> InlineIntrinsicsDuringParsing = new OptionKey<>(true);
@@ -52,10 +64,7 @@ public class BytecodeParserOptions {
     @Option(help = "Maximum depth when inlining during bytecode parsing.", type = OptionType.Debug)
     public static final OptionKey<Integer> InlineDuringParsingMaxDepth = new OptionKey<>(10);
 
-    @Option(help = "When creating info points hide the methods of the substitutions.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> HideSubstitutionStates = new OptionKey<>(false);
-
-    @Option(help = "Use intrinsics guarded by a virtual dispatch test at indirect call sites.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> UseGuardedIntrinsics = new OptionKey<>(true);
+    @Option(help = "Dump the current graph after every bci to IGV.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> DumpAfterEveryBCI = new OptionKey<>(false);
     // @formatter:on
 }

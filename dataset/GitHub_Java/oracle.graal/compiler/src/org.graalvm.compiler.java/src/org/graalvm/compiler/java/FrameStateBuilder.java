@@ -428,6 +428,10 @@ public final class FrameStateBuilder implements SideEffectsState {
         }
     }
 
+    private MonitorIdNode createMergedMonitorID(MonitorIdNode id1) {
+        return graph.addWithoutUnique(new MonitorIdNode(id1.getLockDepth(), id1.getBci(), true));
+    }
+
     public void merge(AbstractMergeNode block, FrameStateBuilder other) {
         checkCompatibleWith(other);
 
@@ -441,9 +445,7 @@ public final class FrameStateBuilder implements SideEffectsState {
             assert monitorIds[i] == other.monitorIds[i] || MonitorIdNode.monitorIdentityEquals(monitorIds[i], other.monitorIds[i]);
             lockedObjects[i] = merge(lockedObjects[i], other.lockedObjects[i], block);
             if (monitorIds[i] != other.monitorIds[i]) {
-                monitorIds[i].setMultipleEntry();
-                other.monitorIds[i].setMultipleEntry();
-                monitorIds[i] = graph.addWithoutUnique(new MonitorIdNode(monitorIds[i].getLockDepth(), monitorIds[i].getBci(), true));
+                monitorIds[i] = createMergedMonitorID(monitorIds[i]);
             }
         }
 
