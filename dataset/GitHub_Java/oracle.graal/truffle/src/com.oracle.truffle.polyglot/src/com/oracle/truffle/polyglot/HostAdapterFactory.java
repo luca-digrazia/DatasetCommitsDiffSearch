@@ -43,15 +43,15 @@ package com.oracle.truffle.polyglot;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
+import java.util.Objects;
 
 import org.graalvm.polyglot.Value;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.polyglot.HostLanguage.HostContext;
 
 /**
  * A factory class that generates host adapter classes.
@@ -59,16 +59,44 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 final class HostAdapterFactory {
 
     @TruffleBoundary
-    static Class<?> getAdapterClassFor(HostClassCache hostClassCache, Class<?>[] types, Value classOverrides) {
-        return getAdapterClassForCommon(hostClassCache, types, classOverrides, null);
+    static AdapterResult getAdapterClassFor(PolyglotEngineImpl engine, HostContext hostContext, Class<?>[] types, Object classOverrides) {
+        assert types.length > 0;
+        HostClassCache hostClassCache = engine.getHostClassCache();
+        HostClassLoader hostClassLoader = hostContext.getClassloader();
+        if (classOverrides == null) {
+            if (types.length == 1) {
+                HostClassDesc classDesc = HostClassDesc.forClass(engine, types[0]);
+                return classDesc.getAdapter(hostContext);
+            } else {
+                Map<List<Class<?>>, AdapterResult> map = hostContext.adapterCache.get(getTypeForCache(types));
+                List<Class<?>> cacheKey = Arrays.asList(types);
+                AdapterResult result = map.get(cacheKey);
+                if (result == null) {
+                    result = makeAdapterClassFor(hostClassCache, types, hostClassLoader, classOverrides);
+                    if (result.isSuccess()) {
+                        AdapterResult prev = map.putIfAbsent(cacheKey, result);
+                        if (prev != null) {
+                            result = prev;
+                        }
+                    }
+                }
+                return result;
+            }
+        }
+        return HostAdapterFactory.makeAdapterClassFor(hostClassCache, types, hostClassLoader, classOverrides);
     }
 
     @TruffleBoundary
-    static Class<?> getAdapterClassFor(HostClassCache hostClassCache, Class<?> type) {
-        return getAdapterClassForCommon(hostClassCache, new Class<?>[]{type}, null, null);
+    static AdapterResult makeAdapterClassFor(HostClassCache hostClassCache, Class<?>[] types, ClassLoader classLoader, Object classOverrides) {
+        return makeAdapterClassForCommon(hostClassCache, types, classLoader, classOverrides);
     }
 
-    static Class<?> getAdapterClassForCommon(HostClassCache hostClassCache, Class<?>[] types, Value classOverrides, ClassLoader classLoader) {
+    @TruffleBoundary
+    static AdapterResult makeAdapterClassFor(HostClassCache hostClassCache, Class<?> type, ClassLoader classLoader) {
+        return makeAdapterClassForCommon(hostClassCache, new Class<?>[]{type}, classLoader, null);
+    }
+
+    private static AdapterResult makeAdapterClassForCommon(HostClassCache hostClassCache, Class<?>[] types, ClassLoader classLoader, Object classOverrides) {
         assert types.length > 0;
         CompilerAsserts.neverPartOfCompilation();
 
@@ -101,17 +129,45 @@ final class HostAdapterFactory {
         }
         superClass = superClass != null ? superClass : Object.class;
 
-        ClassLoader commonLoader = classLoader != null ? classLoader : getCommonClassLoader(types);
-        return generateAdapterClassFor(superClass, interfaces, commonLoader, hostClassCache, classOverrides);
+        // If the superclass is an adapter class, we need to use its class loader as the parent.
+        ClassLoader commonLoader = getCommonClassLoader(classLoader, superClass);
+
+        // Fail early if the class loader cannot load all supertypes.
+        if (!classLoaderCanSee(commonLoader, types)) {
+            throw PolyglotEngineException.illegalArgument("Could not determine a class loader that can see all types: " + Arrays.toString(types));
+        }
+
+        Class<?> adapterClass;
+        try {
+            adapterClass = generateAdapterClassFor(superClass, interfaces, commonLoader, hostClassCache, classOverrides);
+        } catch (PolyglotEngineException ex) {
+            return new AdapterResult(ex);
+        } catch (IllegalArgumentException ex) {
+            return new AdapterResult(PolyglotEngineException.illegalArgument(ex));
+        }
+
+        HostClassDesc classDesc = hostClassCache.forClass(adapterClass);
+        HostMethodDesc constructor = classDesc.lookupConstructor();
+        HostMethodDesc.SingleMethod valueConstructor = null;
+        if (constructor != null) {
+            for (HostMethodDesc.SingleMethod overload : constructor.getOverloads()) {
+                if (overload.getParameterCount() == 1 && overload.getParameterTypes()[0] == Value.class) {
+                    valueConstructor = overload;
+                    break;
+                }
+            }
+            return new AdapterResult(adapterClass, constructor, valueConstructor);
+        } else {
+            return new AdapterResult(PolyglotEngineException.illegalArgument("No accessible constructor: " + superClass.getCanonicalName()));
+        }
     }
 
-    private static Class<?> generateAdapterClassFor(Class<?> superClass, List<Class<?>> interfaces, ClassLoader commonLoader, HostClassCache hostClassCache, Value classOverrides) {
-        boolean classOverride = classOverrides != null && classOverrides.hasMembers();
+    private static Class<?> generateAdapterClassFor(Class<?> superClass, List<Class<?>> interfaces, ClassLoader commonLoader, HostClassCache hostClassCache, Object classOverrides) {
+        boolean classOverride = classOverrides != null;
         HostAdapterBytecodeGenerator bytecodeGenerator = new HostAdapterBytecodeGenerator(superClass, interfaces, commonLoader, hostClassCache, classOverride);
         HostAdapterClassLoader generatedClassLoader = bytecodeGenerator.createAdapterClassLoader();
 
-        Value classOverridesValue = classOverride ? classOverrides : null;
-        return generatedClassLoader.generateClass(commonLoader, classOverridesValue);
+        return generatedClassLoader.generateClass(commonLoader, classOverrides);
     }
 
     @TruffleBoundary
@@ -128,7 +184,7 @@ final class HostAdapterFactory {
 
     @TruffleBoundary
     static boolean isAdapterInstance(Object adapter) {
-        return adapter.getClass().getClassLoader() instanceof HostAdapterClassLoader.CLImpl;
+        return HostAdapterClassLoader.isAdapterInstance(adapter);
     }
 
     private static boolean classLoaderCanSee(ClassLoader loader, Class<?> clazz) {
@@ -151,21 +207,62 @@ final class HostAdapterFactory {
         return true;
     }
 
-    private static ClassLoader getCommonClassLoader(Class<?>[] types) {
-        if (types.length == 1) {
-            return types[0].getClassLoader();
-        }
-        Map<ClassLoader, Boolean> distinctLoaders = new HashMap<>();
-        for (Class<?> type : types) {
-            ClassLoader loader = type.getClassLoader();
-            if (distinctLoaders.computeIfAbsent(loader, new Function<ClassLoader, Boolean>() {
-                public Boolean apply(ClassLoader cl) {
-                    return classLoaderCanSee(cl, types);
-                }
-            })) {
-                return loader;
+    private static ClassLoader getCommonClassLoader(ClassLoader classLoader, Class<?> superclass) {
+        if (superclass != Object.class) {
+            if (HostAdapterClassLoader.isGeneratedClass(superclass)) {
+                return superclass.getClassLoader();
             }
         }
-        throw PolyglotEngineException.illegalArgument("Could not determine a class loader that can see all types: " + Arrays.toString(types));
+        return classLoader;
     }
+
+    private static Class<?> getTypeForCache(Class<?>[] types) {
+        return types[0];
+    }
+
+    static final class AdapterResult {
+        private final Class<?> adapterClass;
+        private final HostMethodDesc constructor;
+        private final HostMethodDesc.SingleMethod valueConstructor;
+        private final PolyglotEngineException exception;
+
+        AdapterResult(Class<?> adapterClass, HostMethodDesc constructor, HostMethodDesc.SingleMethod valueConstructor) {
+            this.adapterClass = Objects.requireNonNull(adapterClass);
+            this.constructor = constructor;
+            this.valueConstructor = valueConstructor;
+            this.exception = null;
+        }
+
+        AdapterResult(PolyglotEngineException exception) {
+            this.adapterClass = null;
+            this.constructor = null;
+            this.valueConstructor = null;
+            this.exception = exception;
+        }
+
+        Class<?> getAdapterClass() {
+            return adapterClass;
+        }
+
+        HostMethodDesc getConstructor() {
+            return constructor;
+        }
+
+        HostMethodDesc.SingleMethod getValueConstructor() {
+            return valueConstructor;
+        }
+
+        boolean isSuccess() {
+            return constructor != null;
+        }
+
+        boolean isAutoConvertible() {
+            return valueConstructor != null;
+        }
+
+        PolyglotEngineException throwException() {
+            throw exception;
+        }
+    }
+
 }
