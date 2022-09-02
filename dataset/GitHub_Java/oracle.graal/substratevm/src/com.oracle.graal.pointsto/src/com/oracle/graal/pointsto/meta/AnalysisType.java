@@ -428,10 +428,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
                 }
             }
         }
-        if (!pass) {
-            throw new AssertionError("Verification of all-instantiated type flows failed");
-        }
-        return true;
+        return pass;
     }
 
     public static void updateAssignableTypes(BigBang bb) {
@@ -459,26 +456,20 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
             }
         }
         for (AnalysisType type : allTypes) {
-            if (type.assignableTypes == null) {
-                /*
-                 * Computing assignable types in bulk here is much cheaper than doing it
-                 * individually when needed in updateTypeFlows.
-                 */
-                type.assignableTypes = new AllInstantiatedTypeFlow(type, TypeState.forNull());
-                type.assignableTypesNonNull = new AllInstantiatedTypeFlow(type, TypeState.forEmpty());
-            }
-            TypeState assignableTypeState = TypeState.forNull();
-            if (newAssignableTypes.get(type.getId()) != null) {
-                BitSet assignableTypes = newAssignableTypes.get(type.getId());
-                if (type.assignableTypes.getState().hasExactTypes(assignableTypes)) {
-                    /* Avoid creation of the expensive type state. */
-                    continue;
+            if (type.assignableTypes != null) {
+                TypeState assignableTypeState = TypeState.forNull();
+                if (newAssignableTypes.get(type.getId()) != null) {
+                    BitSet assignableTypes = newAssignableTypes.get(type.getId());
+                    if (type.assignableTypes.getState().hasExactTypes(assignableTypes)) {
+                        /* Avoid creation of the expensive type state. */
+                        continue;
+                    }
+                    assignableTypeState = TypeState.forExactTypes(bb, newAssignableTypes.get(type.getId()), true);
                 }
-                assignableTypeState = TypeState.forExactTypes(bb, newAssignableTypes.get(type.getId()), true);
-            }
 
-            updateFlow(bb, type.assignableTypes, assignableTypeState, changedFlows);
-            updateFlow(bb, type.assignableTypesNonNull, assignableTypeState.forNonNull(bb), changedFlows);
+                updateFlow(bb, type.assignableTypes, assignableTypeState, changedFlows);
+                updateFlow(bb, type.assignableTypesNonNull, assignableTypeState.forNonNull(bb), changedFlows);
+            }
         }
 
         for (TypeFlow<?> changedFlow : changedFlows) {
@@ -925,16 +916,6 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     @Override
     public AnalysisMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
-        /*
-         * Not needed on Substrate VM for now. We also do not have the necessary information
-         * available to implement it for JIT compilation at image run time. So we want to make sure
-         * that Graal is not using this method, and only resolveConcreteMethod instead.
-         */
-        throw GraalError.unimplemented();
-    }
-
-    @Override
-    public AnalysisMethod resolveConcreteMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
         Object resolvedMethod = resolvedMethods.get(method);
         if (resolvedMethod == null) {
             ResolvedJavaMethod substMethod = universe.substitutions.resolve(((AnalysisMethod) method).wrapped);
@@ -944,7 +925,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
              */
             ResolvedJavaType substCallerType = substMethod.getDeclaringClass();
 
-            Object newResolvedMethod = universe.lookup(wrapped.resolveConcreteMethod(substMethod, substCallerType));
+            Object newResolvedMethod = universe.lookup(wrapped.resolveMethod(substMethod, substCallerType));
             if (newResolvedMethod == null) {
                 newResolvedMethod = NULL_METHOD;
             }
@@ -955,12 +936,18 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     }
 
     /**
-     * Wrapper for resolveConcreteMethod() without the callerType parameter. We ignore the
-     * callerType parameter and use substMethod.getDeclaringClass() instead since we don't want any
-     * access checks in the analysis.
+     * Wrapper for resolveConcreteMethod() that ignores the callerType parameter. The method that
+     * does the resolution, resolveMethod() above, ignores the callerType parameter and uses
+     * substMethod.getDeclaringClass() instead since we don't want any access checks in the
+     * analysis.
      */
     public AnalysisMethod resolveConcreteMethod(ResolvedJavaMethod method) {
-        return resolveConcreteMethod(method, null);
+        return (AnalysisMethod) WrappedJavaType.super.resolveConcreteMethod(method, null);
+    }
+
+    @Override
+    public AnalysisMethod resolveConcreteMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
+        return (AnalysisMethod) WrappedJavaType.super.resolveConcreteMethod(method, callerType);
     }
 
     @Override
