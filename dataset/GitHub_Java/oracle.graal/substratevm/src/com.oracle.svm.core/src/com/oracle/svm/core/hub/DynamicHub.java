@@ -32,6 +32,7 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Inherited;
+import java.lang.ref.Reference;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.Constructor;
@@ -48,8 +49,12 @@ import java.net.URL;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.security.cert.Certificate;
+import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 
@@ -111,6 +116,11 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      * Used to quickly determine in which category a certain hub falls (e.g., instance or array).
      */
     private int hubType;
+
+    /**
+     * Used to quickly determine if this class is a subclass of {@link Reference}.
+     */
+    private byte referenceType;
 
     /**
      * Encoding of the object or array size. Decode using {@link LayoutEncoding}.
@@ -319,10 +329,11 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private final LazyFinalReference<String> packageNameReference = new LazyFinalReference<>(this::computePackageName);
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public DynamicHub(String name, HubType hubType, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName,
+    public DynamicHub(String name, HubType hubType, ReferenceType referenceType, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName,
                     int modifiers, ClassLoader classLoader) {
         this.name = name;
         this.hubType = hubType.getValue();
+        this.referenceType = referenceType.getValue();
         this.isLocalClass = isLocalClass;
         this.isAnonymousClass = isAnonymousClass;
         this.superHub = superType;
@@ -865,9 +876,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute
     @Override
     public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
-        // Checkstyle: stop
-        return AnnotationsEncoding.getAnnotation(annotationsEncoding, annotationClass);
-        // Checkstyle: resume
+        return AnnotationsEncoding.decodeAnnotation(annotationsEncoding, annotationClass);
     }
 
     @Substitute
@@ -879,9 +888,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute
     @Override
     public Annotation[] getAnnotations() {
-        // Checkstyle: stop
-        return AnnotationsEncoding.getAnnotations(annotationsEncoding);
-        // Checkstyle: resume
+        return AnnotationsEncoding.decodeAnnotations(annotationsEncoding);
     }
 
     @Substitute
@@ -912,9 +919,21 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute
     @Override
     public Annotation[] getDeclaredAnnotations() {
-        // Checkstyle: stop
-        return AnnotationsEncoding.getDeclaredAnnotations(annotationsEncoding);
-        // Checkstyle: resume
+        Map<Annotation, Void> superAnnotations = new IdentityHashMap<>();
+        if (getSuperHub() != null) {
+            for (Annotation annotation : getSuperHub().getAnnotations()) {
+                superAnnotations.put(annotation, null);
+            }
+        }
+
+        ArrayList<Annotation> annotations = new ArrayList<>();
+        for (Annotation annotation : getAnnotations()) {
+            boolean isInherited = annotation.annotationType().getAnnotation(Inherited.class) != null;
+            if (!superAnnotations.containsKey(annotation) || isInherited) {
+                annotations.add(annotation);
+            }
+        }
+        return annotations.toArray(new Annotation[annotations.size()]);
     }
 
     /**
@@ -932,9 +951,18 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute
     @Override
     public <T extends Annotation> T getDeclaredAnnotation(Class<T> annotationClass) {
-        // Checkstyle: stop
-        return AnnotationsEncoding.getDeclaredAnnotation(annotationsEncoding, annotationClass);
-        // Checkstyle: resume
+        Objects.requireNonNull(annotationClass);
+
+        T annotation = AnnotationsEncoding.decodeAnnotation(annotationsEncoding, annotationClass);
+        /*
+         * superclass has the same annotation instance as the base class => annotation comes from
+         * the super class
+         */
+        if (annotation != null && getSuperHub() != null && getSuperHub().getAnnotation(annotationClass) == annotation) {
+            return null;
+        }
+
+        return annotation;
     }
 
     /**
