@@ -32,15 +32,14 @@ import org.graalvm.compiler.options.Option;
 import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.svm.core.annotate.AlwaysInline;
-import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.annotate.UnknownObjectField;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.ByteArrayReader;
 import com.oracle.svm.core.util.Counter;
-import com.oracle.svm.core.util.NonmovableByteArrayReader;
 
 /**
- * Decodes the metadata for compiled code. The data is an encoded byte stream to make it as compact
- * as possible, but still allow fast constant time access.
+ * Provides metadata for compile code. The data is an {@link #codeInfoEncodings encoded byte[]
+ * array} to make it as compact as possible, but still allow fast constant time access.
  *
  * The encoding consists of entries with the following structure:
  *
@@ -58,97 +57,92 @@ import com.oracle.svm.core.util.NonmovableByteArrayReader;
  * iteration of the table. The deltaIP is the difference of the IP for this entry and the next
  * entry. The first entry always corresponds to IP zero.
  *
- * This table structure allows linear search for the entry of a given IP. An
- * {@linkplain #loadEntryOffset index} is used to turn this into a constant time lookup. The index
- * stores the entry offset for every IP at the given {@linkplain Options#CodeInfoIndexGranularity
- * granularity}.
+ * This table structure allows linear search for the entry of a given IP. An {@link #codeInfoIndex
+ * index} is used to convert this to constant time lookup. The index stores the entry offset for
+ * every IP at the given {@link Options#CodeInfoIndexGranularity granularity}.
  */
-public final class CodeInfoDecoder {
+class CodeInfoDecoder {
+
     public static class Options {
         @Option(help = "The granularity of the index for looking up code metadata. Should be a power of 2. Larger values make the index smaller, but access slower.")//
         public static final HostedOptionKey<Integer> CodeInfoIndexGranularity = new HostedOptionKey<>(256);
     }
 
-    private CodeInfoDecoder() {
+    @UnknownObjectField(types = {byte[].class}) protected byte[] codeInfoIndex;
+    @UnknownObjectField(types = {byte[].class}) protected byte[] codeInfoEncodings;
+    @UnknownObjectField(types = {byte[].class}) protected byte[] referenceMapEncoding;
+    @UnknownObjectField(types = {byte[].class}) protected byte[] frameInfoEncodings;
+    @UnknownObjectField(types = {Object[].class}) protected Object[] frameInfoObjectConstants;
+    @UnknownObjectField(types = {Class[].class}) protected Class<?>[] frameInfoSourceClasses;
+    @UnknownObjectField(types = {String[].class}) protected String[] frameInfoSourceMethodNames;
+    @UnknownObjectField(types = {String[].class}) protected String[] frameInfoNames;
+
+    protected void setData(byte[] codeInfoIndex, byte[] codeInfoEncodings, byte[] referenceMapEncoding, byte[] frameInfoEncodings, Object[] frameInfoObjectConstants,
+                    Class<?>[] frameInfoSourceClasses, String[] frameInfoSourceMethodNames, String[] frameInfoNames) {
+        this.codeInfoIndex = codeInfoIndex;
+        this.codeInfoEncodings = codeInfoEncodings;
+        this.referenceMapEncoding = referenceMapEncoding;
+        this.frameInfoEncodings = frameInfoEncodings;
+        this.frameInfoObjectConstants = frameInfoObjectConstants;
+        this.frameInfoSourceClasses = frameInfoSourceClasses;
+        this.frameInfoSourceMethodNames = frameInfoSourceMethodNames;
+        this.frameInfoNames = frameInfoNames;
     }
 
-    static long lookupCodeInfoEntryOffset(CodeInfo info, long ip) {
+    protected long lookupCodeInfoEntryOffset(long ip) {
         long entryIP = lookupEntryIP(ip);
-        long entryOffset = loadEntryOffset(info, ip);
+        long entryOffset = loadEntryOffset(ip);
         do {
-            int entryFlags = loadEntryFlags(info, entryOffset);
+            int entryFlags = loadEntryFlags(entryOffset);
             if (entryIP == ip) {
                 return entryOffset;
             }
 
-            entryIP = advanceIP(info, entryOffset, entryIP);
+            entryIP = advanceIP(entryOffset, entryIP);
             entryOffset = advanceOffset(entryOffset, entryFlags);
         } while (entryIP <= ip);
 
         return -1;
     }
 
-    static void lookupCodeInfo(CodeInfo info, long ip, CodeInfoQueryResult codeInfoQueryResult) {
+    protected void lookupCodeInfo(long ip, CodeInfoQueryResult codeInfo) {
+        codeInfo.exceptionOffset = CodeInfoQueryResult.NO_EXCEPTION_OFFSET;
+        codeInfo.referenceMapIndex = CodeInfoQueryResult.NO_REFERENCE_MAP;
+        codeInfo.frameInfo = CodeInfoQueryResult.NO_FRAME_INFO;
+        codeInfo.referenceMapEncoding = referenceMapEncoding;
+
         long sizeEncoding = initialSizeEncoding();
         long entryIP = lookupEntryIP(ip);
-        long entryOffset = loadEntryOffset(info, ip);
+        long entryOffset = loadEntryOffset(ip);
         do {
-            int entryFlags = loadEntryFlags(info, entryOffset);
-            sizeEncoding = updateSizeEncoding(info, entryOffset, entryFlags, sizeEncoding);
+            int entryFlags = loadEntryFlags(entryOffset);
+            sizeEncoding = updateSizeEncoding(entryOffset, entryFlags, sizeEncoding);
             if (entryIP == ip) {
-                codeInfoQueryResult.encodedFrameSize = sizeEncoding;
-                codeInfoQueryResult.exceptionOffset = loadExceptionOffset(info, entryOffset, entryFlags);
-                codeInfoQueryResult.referenceMapIndex = loadReferenceMapIndex(info, entryOffset, entryFlags);
-                codeInfoQueryResult.frameInfo = loadFrameInfo(info, entryOffset, entryFlags);
-                return;
+                codeInfo.exceptionOffset = loadExceptionOffset(entryOffset, entryFlags);
+                codeInfo.referenceMapIndex = loadReferenceMapIndex(entryOffset, entryFlags);
+                codeInfo.frameInfo = loadFrameInfo(entryOffset, entryFlags);
+                break;
             }
 
-            entryIP = advanceIP(info, entryOffset, entryIP);
+            entryIP = advanceIP(entryOffset, entryIP);
             entryOffset = advanceOffset(entryOffset, entryFlags);
         } while (entryIP <= ip);
 
-        codeInfoQueryResult.encodedFrameSize = sizeEncoding;
-        codeInfoQueryResult.exceptionOffset = CodeInfoQueryResult.NO_EXCEPTION_OFFSET;
-        codeInfoQueryResult.referenceMapIndex = CodeInfoQueryResult.NO_REFERENCE_MAP;
-        codeInfoQueryResult.frameInfo = CodeInfoQueryResult.NO_FRAME_INFO;
+        codeInfo.totalFrameSize = decodeTotalFrameSize(sizeEncoding);
     }
 
-    static void lookupCodeInfo(CodeInfo info, long ip, SimpleCodeInfoQueryResult codeInfoQueryResult) {
-        long sizeEncoding = initialSizeEncoding();
-        long entryIP = lookupEntryIP(ip);
-        long entryOffset = loadEntryOffset(info, ip);
-        do {
-            int entryFlags = loadEntryFlags(info, entryOffset);
-            sizeEncoding = updateSizeEncoding(info, entryOffset, entryFlags, sizeEncoding);
-            if (entryIP == ip) {
-                codeInfoQueryResult.setEncodedFrameSize(sizeEncoding);
-                codeInfoQueryResult.setExceptionOffset(loadExceptionOffset(info, entryOffset, entryFlags));
-                codeInfoQueryResult.setReferenceMapIndex(loadReferenceMapIndex(info, entryOffset, entryFlags));
-                return;
-            }
-
-            entryIP = advanceIP(info, entryOffset, entryIP);
-            entryOffset = advanceOffset(entryOffset, entryFlags);
-        } while (entryIP <= ip);
-
-        codeInfoQueryResult.setEncodedFrameSize(sizeEncoding);
-        codeInfoQueryResult.setExceptionOffset(CodeInfoQueryResult.NO_EXCEPTION_OFFSET);
-        codeInfoQueryResult.setReferenceMapIndex(CodeInfoQueryResult.NO_REFERENCE_MAP);
-    }
-
-    static long lookupDeoptimizationEntrypoint(CodeInfo info, long method, long encodedBci, CodeInfoQueryResult codeInfo) {
-
+    public long lookupDeoptimizationEntrypoint(long method, long encodedBci, CodeInfoQueryResult codeInfo) {
         long sizeEncoding = initialSizeEncoding();
         long entryIP = lookupEntryIP(method);
-        long entryOffset = loadEntryOffset(info, method);
+        long entryOffset = loadEntryOffset(method);
         while (true) {
-            int entryFlags = loadEntryFlags(info, entryOffset);
-            sizeEncoding = updateSizeEncoding(info, entryOffset, entryFlags, sizeEncoding);
+            int entryFlags = loadEntryFlags(entryOffset);
+            sizeEncoding = updateSizeEncoding(entryOffset, entryFlags, sizeEncoding);
             if (entryIP == method) {
                 break;
             }
 
-            entryIP = advanceIP(info, entryOffset, entryIP);
+            entryIP = advanceIP(entryOffset, entryIP);
             entryOffset = advanceOffset(entryOffset, entryFlags);
             if (entryIP > method) {
                 return -1;
@@ -156,67 +150,103 @@ public final class CodeInfoDecoder {
         }
 
         assert entryIP == method;
-        assert decodeMethodStart(loadEntryFlags(info, entryOffset), sizeEncoding);
+        assert decodeMethodStart(loadEntryFlags(entryOffset), sizeEncoding);
 
         do {
-            int entryFlags = loadEntryFlags(info, entryOffset);
-            sizeEncoding = updateSizeEncoding(info, entryOffset, entryFlags, sizeEncoding);
+            int entryFlags = loadEntryFlags(entryOffset);
+            sizeEncoding = updateSizeEncoding(entryOffset, entryFlags, sizeEncoding);
 
             if (decodeMethodStart(entryFlags, sizeEncoding) && entryIP != method) {
                 /* Advanced to the next method, so we do not have a match. */
                 return -1;
             }
 
-            if (isDeoptEntryPoint(info, entryOffset, entryFlags, encodedBci)) {
-                codeInfo.encodedFrameSize = sizeEncoding;
-                codeInfo.exceptionOffset = loadExceptionOffset(info, entryOffset, entryFlags);
-                codeInfo.referenceMapIndex = loadReferenceMapIndex(info, entryOffset, entryFlags);
-                codeInfo.frameInfo = loadFrameInfo(info, entryOffset, entryFlags);
+            if (isDeoptEntryPoint(entryOffset, entryFlags, encodedBci)) {
+                codeInfo.totalFrameSize = decodeTotalFrameSize(sizeEncoding);
+                codeInfo.exceptionOffset = loadExceptionOffset(entryOffset, entryFlags);
+                codeInfo.referenceMapEncoding = referenceMapEncoding;
+                codeInfo.referenceMapIndex = loadReferenceMapIndex(entryOffset, entryFlags);
+                codeInfo.frameInfo = loadFrameInfo(entryOffset, entryFlags);
                 assert codeInfo.frameInfo.isDeoptEntry() && codeInfo.frameInfo.getCaller() == null : "Deoptimization entry must not have inlined frames";
                 return entryIP;
             }
 
-            entryIP = advanceIP(info, entryOffset, entryIP);
+            entryIP = advanceIP(entryOffset, entryIP);
             entryOffset = advanceOffset(entryOffset, entryFlags);
         } while (!endOfTable(entryIP));
 
         return -1;
     }
 
-    static long lookupReferenceMapIndex(CodeInfo info, long ip) {
+    public long lookupTotalFrameSize(long ip) {
+        long sizeEncoding = initialSizeEncoding();
         long entryIP = lookupEntryIP(ip);
-        long entryOffset = loadEntryOffset(info, ip);
+        long entryOffset = loadEntryOffset(ip);
         do {
-            int entryFlags = loadEntryFlags(info, entryOffset);
+            int entryFlags = loadEntryFlags(entryOffset);
+            sizeEncoding = updateSizeEncoding(entryOffset, entryFlags, sizeEncoding);
+
+            entryIP = advanceIP(entryOffset, entryIP);
+            entryOffset = advanceOffset(entryOffset, entryFlags);
+        } while (entryIP <= ip);
+
+        return decodeTotalFrameSize(sizeEncoding);
+    }
+
+    protected long lookupExceptionOffset(long ip) {
+        long entryIP = lookupEntryIP(ip);
+        long entryOffset = loadEntryOffset(ip);
+        do {
+            int entryFlags = loadEntryFlags(entryOffset);
             if (entryIP == ip) {
-                return loadReferenceMapIndex(info, entryOffset, entryFlags);
+                return loadExceptionOffset(entryOffset, entryFlags);
             }
 
-            entryIP = advanceIP(info, entryOffset, entryIP);
+            entryIP = advanceIP(entryOffset, entryIP);
+            entryOffset = advanceOffset(entryOffset, entryFlags);
+        } while (entryIP <= ip);
+
+        return CodeInfoQueryResult.NO_EXCEPTION_OFFSET;
+    }
+
+    protected byte[] getReferenceMapEncoding() {
+        return referenceMapEncoding;
+    }
+
+    protected long lookupReferenceMapIndex(long ip) {
+        long entryIP = lookupEntryIP(ip);
+        long entryOffset = loadEntryOffset(ip);
+        do {
+            int entryFlags = loadEntryFlags(entryOffset);
+            if (entryIP == ip) {
+                return loadReferenceMapIndex(entryOffset, entryFlags);
+            }
+
+            entryIP = advanceIP(entryOffset, entryIP);
             entryOffset = advanceOffset(entryOffset, entryFlags);
         } while (entryIP <= ip);
 
         return CodeInfoQueryResult.NO_REFERENCE_MAP;
     }
 
-    static long indexGranularity() {
+    protected static long indexGranularity() {
         return Options.CodeInfoIndexGranularity.getValue();
     }
 
-    static long lookupEntryIP(long ip) {
+    protected static long lookupEntryIP(long ip) {
         return Long.divideUnsigned(ip, indexGranularity()) * indexGranularity();
     }
 
-    private static long loadEntryOffset(CodeInfo info, long ip) {
+    private long loadEntryOffset(long ip) {
         counters().lookupEntryOffsetCount.inc();
         long index = Long.divideUnsigned(ip, indexGranularity());
-        return NonmovableByteArrayReader.getU4(CodeInfoAccess.getCodeInfoIndex(info), index * Integer.BYTES);
+        return ByteArrayReader.getU4(codeInfoIndex, index * Integer.BYTES);
     }
 
     @AlwaysInline("Make IP-lookup loop call free")
-    static int loadEntryFlags(CodeInfo info, long curOffset) {
+    protected final int loadEntryFlags(long curOffset) {
         counters().loadEntryFlagsCount.inc();
-        return NonmovableByteArrayReader.getU1(CodeInfoAccess.getCodeInfoEncodings(info), curOffset);
+        return ByteArrayReader.getU1(codeInfoEncodings, curOffset);
     }
 
     private static final int INVALID_SIZE_ENCODING = 0;
@@ -226,66 +256,24 @@ public final class CodeInfoDecoder {
     }
 
     @AlwaysInline("Make IP-lookup loop call free")
-    private static long updateSizeEncoding(CodeInfo info, long entryOffset, int entryFlags, long sizeEncoding) {
+    private long updateSizeEncoding(long entryOffset, int entryFlags, long sizeEncoding) {
         switch (extractFS(entryFlags)) {
             case FS_NO_CHANGE:
                 return sizeEncoding;
             case FS_SIZE_S1:
-                return NonmovableByteArrayReader.getS1(CodeInfoAccess.getCodeInfoEncodings(info), offsetFS(entryOffset, entryFlags));
+                return ByteArrayReader.getS1(codeInfoEncodings, offsetFS(entryOffset, entryFlags));
             case FS_SIZE_S2:
-                return NonmovableByteArrayReader.getS2(CodeInfoAccess.getCodeInfoEncodings(info), offsetFS(entryOffset, entryFlags));
+                return ByteArrayReader.getS2(codeInfoEncodings, offsetFS(entryOffset, entryFlags));
             case FS_SIZE_S4:
-                return NonmovableByteArrayReader.getS4(CodeInfoAccess.getCodeInfoEncodings(info), offsetFS(entryOffset, entryFlags));
+                return ByteArrayReader.getS4(codeInfoEncodings, offsetFS(entryOffset, entryFlags));
             default:
                 throw shouldNotReachHere();
         }
     }
 
-    private static long loadExceptionOffset(CodeInfo info, long entryOffset, int entryFlags) {
-        switch (extractEX(entryFlags)) {
-            case EX_NO_HANDLER:
-                return CodeInfoQueryResult.NO_EXCEPTION_OFFSET;
-            case EX_OFFSET_S1:
-                return NonmovableByteArrayReader.getS1(CodeInfoAccess.getCodeInfoEncodings(info), offsetEX(entryOffset, entryFlags));
-            case EX_OFFSET_S2:
-                return NonmovableByteArrayReader.getS2(CodeInfoAccess.getCodeInfoEncodings(info), offsetEX(entryOffset, entryFlags));
-            case EX_OFFSET_S4:
-                return NonmovableByteArrayReader.getS4(CodeInfoAccess.getCodeInfoEncodings(info), offsetEX(entryOffset, entryFlags));
-            default:
-                throw shouldNotReachHere();
-        }
-    }
-
-    private static long loadReferenceMapIndex(CodeInfo info, long entryOffset, int entryFlags) {
-        switch (extractRM(entryFlags)) {
-            case RM_NO_MAP:
-                return CodeInfoQueryResult.NO_REFERENCE_MAP;
-            case RM_EMPTY_MAP:
-                return CodeInfoQueryResult.EMPTY_REFERENCE_MAP;
-            case RM_INDEX_U2:
-                return NonmovableByteArrayReader.getU2(CodeInfoAccess.getCodeInfoEncodings(info), offsetRM(entryOffset, entryFlags));
-            case RM_INDEX_U4:
-                return NonmovableByteArrayReader.getU4(CodeInfoAccess.getCodeInfoEncodings(info), offsetRM(entryOffset, entryFlags));
-            default:
-                throw shouldNotReachHere();
-        }
-    }
-
-    static final int FRAME_SIZE_METHOD_START = 0b001;
-    static final int FRAME_SIZE_ENTRY_POINT = 0b010;
-
-    static final int FRAME_SIZE_STATUS_MASK = FRAME_SIZE_METHOD_START | FRAME_SIZE_ENTRY_POINT;
-
-    @Uninterruptible(reason = "called from uninterruptible code", mayBeInlined = true)
-    static boolean decodeIsEntryPoint(long sizeEncoding) {
-        assert sizeEncoding != INVALID_SIZE_ENCODING;
-        return (sizeEncoding & FRAME_SIZE_ENTRY_POINT) != 0;
-    }
-
-    @Uninterruptible(reason = "called from uninterruptible code", mayBeInlined = true)
-    static long decodeTotalFrameSize(long sizeEncoding) {
-        assert sizeEncoding != INVALID_SIZE_ENCODING;
-        return sizeEncoding & ~FRAME_SIZE_STATUS_MASK;
+    private static long decodeTotalFrameSize(long sizeEncoding) {
+        assert sizeEncoding != initialSizeEncoding();
+        return Math.abs(sizeEncoding);
     }
 
     private static boolean decodeMethodStart(int entryFlags, long sizeEncoding) {
@@ -298,19 +286,49 @@ public final class CodeInfoDecoder {
             case FS_SIZE_S1:
             case FS_SIZE_S2:
             case FS_SIZE_S4:
-                return (sizeEncoding & FRAME_SIZE_METHOD_START) != 0;
+                return sizeEncoding < 0;
             default:
                 throw shouldNotReachHere();
         }
     }
 
-    private static boolean isDeoptEntryPoint(CodeInfo info, long entryOffset, int entryFlags, long encodedBci) {
+    private long loadExceptionOffset(long entryOffset, int entryFlags) {
+        switch (extractEX(entryFlags)) {
+            case EX_NO_HANDLER:
+                return CodeInfoQueryResult.NO_EXCEPTION_OFFSET;
+            case EX_OFFSET_S1:
+                return ByteArrayReader.getS1(codeInfoEncodings, offsetEX(entryOffset, entryFlags));
+            case EX_OFFSET_S2:
+                return ByteArrayReader.getS2(codeInfoEncodings, offsetEX(entryOffset, entryFlags));
+            case EX_OFFSET_S4:
+                return ByteArrayReader.getS4(codeInfoEncodings, offsetEX(entryOffset, entryFlags));
+            default:
+                throw shouldNotReachHere();
+        }
+    }
+
+    private long loadReferenceMapIndex(long entryOffset, int entryFlags) {
+        switch (extractRM(entryFlags)) {
+            case RM_NO_MAP:
+                return CodeInfoQueryResult.NO_REFERENCE_MAP;
+            case RM_EMPTY_MAP:
+                return CodeInfoQueryResult.EMPTY_REFERENCE_MAP;
+            case RM_INDEX_U2:
+                return ByteArrayReader.getU2(codeInfoEncodings, offsetRM(entryOffset, entryFlags));
+            case RM_INDEX_U4:
+                return ByteArrayReader.getU4(codeInfoEncodings, offsetRM(entryOffset, entryFlags));
+            default:
+                throw shouldNotReachHere();
+        }
+    }
+
+    private boolean isDeoptEntryPoint(long entryOffset, int entryFlags, long encodedBci) {
         switch (extractFI(entryFlags)) {
             case FI_NO_DEOPT:
                 return false;
             case FI_DEOPT_ENTRY_INDEX_S4:
-                int frameInfoIndex = NonmovableByteArrayReader.getS4(CodeInfoAccess.getCodeInfoEncodings(info), offsetFI(entryOffset, entryFlags));
-                return FrameInfoDecoder.isFrameInfoMatch(frameInfoIndex, CodeInfoAccess.getFrameInfoEncodings(info), encodedBci);
+                int frameInfoIndex = ByteArrayReader.getS4(codeInfoEncodings, offsetFI(entryOffset, entryFlags));
+                return FrameInfoDecoder.isFrameInfoMatch(frameInfoIndex, frameInfoEncodings, encodedBci);
             case FI_INFO_ONLY_INDEX_S4:
                 /*
                  * We have frame information, but only for debugging purposes. This is not a
@@ -322,37 +340,37 @@ public final class CodeInfoDecoder {
         }
     }
 
-    static boolean initFrameInfoReader(CodeInfo info, long entryOffset, ReusableTypeReader frameInfoReader) {
-        int entryFlags = loadEntryFlags(info, entryOffset);
-        int frameInfoIndex = NonmovableByteArrayReader.getS4(CodeInfoAccess.getCodeInfoEncodings(info), offsetFI(entryOffset, entryFlags));
+    protected boolean initFrameInfoReader(long entryOffset, ReusableTypeReader frameInfoReader) {
+        int entryFlags = loadEntryFlags(entryOffset);
+        int frameInfoIndex = ByteArrayReader.getS4(codeInfoEncodings, offsetFI(entryOffset, entryFlags));
         frameInfoReader.setByteIndex(frameInfoIndex);
-        frameInfoReader.setData(CodeInfoAccess.getFrameInfoEncodings(info));
+        frameInfoReader.setData(frameInfoEncodings);
         return extractFI(entryFlags) != FI_NO_DEOPT;
     }
 
-    private static FrameInfoQueryResult loadFrameInfo(CodeInfo info, long entryOffset, int entryFlags) {
-
-        boolean isDeoptEntry;
+    private FrameInfoQueryResult loadFrameInfo(long entryOffset, int entryFlags) {
         switch (extractFI(entryFlags)) {
             case FI_NO_DEOPT:
                 return CodeInfoQueryResult.NO_FRAME_INFO;
             case FI_DEOPT_ENTRY_INDEX_S4:
-                isDeoptEntry = true;
-                break;
+                return loadFrameInfo(true, entryOffset, entryFlags);
             case FI_INFO_ONLY_INDEX_S4:
-                isDeoptEntry = false;
-                break;
+                return loadFrameInfo(false, entryOffset, entryFlags);
             default:
                 throw shouldNotReachHere();
         }
-        int frameInfoIndex = NonmovableByteArrayReader.getS4(CodeInfoAccess.getCodeInfoEncodings(info), offsetFI(entryOffset, entryFlags));
-        return FrameInfoDecoder.decodeFrameInfo(isDeoptEntry, new ReusableTypeReader(CodeInfoAccess.getFrameInfoEncodings(info), frameInfoIndex), info,
+    }
+
+    private FrameInfoQueryResult loadFrameInfo(boolean isDeoptEntry, long entryOffset, int entryFlags) {
+        int frameInfoIndex = ByteArrayReader.getS4(codeInfoEncodings, offsetFI(entryOffset, entryFlags));
+        return FrameInfoDecoder.decodeFrameInfo(isDeoptEntry, new ReusableTypeReader(frameInfoEncodings, frameInfoIndex), frameInfoObjectConstants,
+                        frameInfoSourceClasses, frameInfoSourceMethodNames, frameInfoNames,
                         FrameInfoDecoder.HeapBasedFrameInfoQueryResultAllocator, FrameInfoDecoder.HeapBasedValueInfoAllocator, true);
     }
 
     @AlwaysInline("Make IP-lookup loop call free")
-    private static long advanceIP(CodeInfo info, long entryOffset, long entryIP) {
-        int deltaIP = NonmovableByteArrayReader.getU1(CodeInfoAccess.getCodeInfoEncodings(info), offsetIP(entryOffset));
+    private long advanceIP(long entryOffset, long entryIP) {
+        int deltaIP = ByteArrayReader.getU1(codeInfoEncodings, offsetIP(entryOffset));
         if (deltaIP == DELTA_END_OF_TABLE) {
             return Long.MAX_VALUE;
         } else {
@@ -369,51 +387,51 @@ public final class CodeInfoDecoder {
      * Low-level structural definition of the entryFlags bit field.
      */
 
-    static final int DELTA_END_OF_TABLE = 0;
+    protected static final int DELTA_END_OF_TABLE = 0;
 
-    static final int FS_BITS = 2;
-    static final int FS_SHIFT = 0;
-    static final int FS_MASK_IN_PLACE = ((1 << FS_BITS) - 1) << FS_SHIFT;
-    static final int FS_NO_CHANGE = 0;
-    static final int FS_SIZE_S1 = 1;
-    static final int FS_SIZE_S2 = 2;
-    static final int FS_SIZE_S4 = 3;
-    static final int[] FS_MEM_SIZE = {0, Byte.BYTES, Short.BYTES, Integer.BYTES};
+    protected static final int FS_BITS = 2;
+    protected static final int FS_SHIFT = 0;
+    protected static final int FS_MASK_IN_PLACE = ((1 << FS_BITS) - 1) << FS_SHIFT;
+    protected static final int FS_NO_CHANGE = 0;
+    protected static final int FS_SIZE_S1 = 1;
+    protected static final int FS_SIZE_S2 = 2;
+    protected static final int FS_SIZE_S4 = 3;
+    protected static final int[] FS_MEM_SIZE = {0, Byte.BYTES, Short.BYTES, Integer.BYTES};
 
-    static final int EX_BITS = 2;
-    static final int EX_SHIFT = FS_SHIFT + FS_BITS;
-    static final int EX_MASK_IN_PLACE = ((1 << EX_BITS) - 1) << EX_SHIFT;
-    static final int EX_NO_HANDLER = 0;
-    static final int EX_OFFSET_S1 = 1;
-    static final int EX_OFFSET_S2 = 2;
-    static final int EX_OFFSET_S4 = 3;
-    static final int[] EX_MEM_SIZE = {0, Byte.BYTES, Short.BYTES, Integer.BYTES};
+    protected static final int EX_BITS = 2;
+    protected static final int EX_SHIFT = FS_SHIFT + FS_BITS;
+    protected static final int EX_MASK_IN_PLACE = ((1 << EX_BITS) - 1) << EX_SHIFT;
+    protected static final int EX_NO_HANDLER = 0;
+    protected static final int EX_OFFSET_S1 = 1;
+    protected static final int EX_OFFSET_S2 = 2;
+    protected static final int EX_OFFSET_S4 = 3;
+    protected static final int[] EX_MEM_SIZE = {0, Byte.BYTES, Short.BYTES, Integer.BYTES};
 
-    static final int RM_BITS = 2;
-    static final int RM_SHIFT = EX_SHIFT + EX_BITS;
-    static final int RM_MASK_IN_PLACE = ((1 << RM_BITS) - 1) << RM_SHIFT;
-    static final int RM_NO_MAP = 0;
-    static final int RM_EMPTY_MAP = 1;
-    static final int RM_INDEX_U2 = 2;
-    static final int RM_INDEX_U4 = 3;
-    static final int[] RM_MEM_SIZE = {0, 0, Character.BYTES, Integer.BYTES};
+    protected static final int RM_BITS = 2;
+    protected static final int RM_SHIFT = EX_SHIFT + EX_BITS;
+    protected static final int RM_MASK_IN_PLACE = ((1 << RM_BITS) - 1) << RM_SHIFT;
+    protected static final int RM_NO_MAP = 0;
+    protected static final int RM_EMPTY_MAP = 1;
+    protected static final int RM_INDEX_U2 = 2;
+    protected static final int RM_INDEX_U4 = 3;
+    protected static final int[] RM_MEM_SIZE = {0, 0, Character.BYTES, Integer.BYTES};
 
-    static final int FI_BITS = 2;
-    static final int FI_SHIFT = RM_SHIFT + RM_BITS;
-    static final int FI_MASK_IN_PLACE = ((1 << FI_BITS) - 1) << FI_SHIFT;
-    static final int FI_NO_DEOPT = 0;
-    static final int FI_DEOPT_ENTRY_INDEX_S4 = 1;
-    static final int FI_INFO_ONLY_INDEX_S4 = 2;
-    static final int[] FI_MEM_SIZE = {0, Integer.BYTES, Integer.BYTES, /* unused */ 0};
+    protected static final int FI_BITS = 2;
+    protected static final int FI_SHIFT = RM_SHIFT + RM_BITS;
+    protected static final int FI_MASK_IN_PLACE = ((1 << FI_BITS) - 1) << FI_SHIFT;
+    protected static final int FI_NO_DEOPT = 0;
+    protected static final int FI_DEOPT_ENTRY_INDEX_S4 = 1;
+    protected static final int FI_INFO_ONLY_INDEX_S4 = 2;
+    protected static final int[] FI_MEM_SIZE = {0, Integer.BYTES, Integer.BYTES, /* unused */ 0};
 
-    private static final int TOTAL_BITS = FI_SHIFT + FI_BITS;
+    protected static final int TOTAL_BITS = FI_SHIFT + FI_BITS;
 
-    private static final byte IP_OFFSET;
-    private static final byte FS_OFFSET;
-    private static final byte[] EX_OFFSET;
-    private static final byte[] RM_OFFSET;
-    private static final byte[] FI_OFFSET;
-    private static final byte[] MEM_SIZE;
+    protected static final byte IP_OFFSET;
+    protected static final byte FS_OFFSET;
+    protected static final byte[] EX_OFFSET;
+    protected static final byte[] RM_OFFSET;
+    protected static final byte[] FI_OFFSET;
+    protected static final byte[] MEM_SIZE;
 
     static {
         assert TOTAL_BITS <= Byte.SIZE;
@@ -433,19 +451,19 @@ public final class CodeInfoDecoder {
         }
     }
 
-    static int extractFS(int entryFlags) {
+    protected static int extractFS(int entryFlags) {
         return (entryFlags & FS_MASK_IN_PLACE) >> FS_SHIFT;
     }
 
-    static int extractEX(int entryFlags) {
+    protected static int extractEX(int entryFlags) {
         return (entryFlags & EX_MASK_IN_PLACE) >> EX_SHIFT;
     }
 
-    static int extractRM(int entryFlags) {
+    protected static int extractRM(int entryFlags) {
         return (entryFlags & RM_MASK_IN_PLACE) >> RM_SHIFT;
     }
 
-    static int extractFI(int entryFlags) {
+    protected static int extractFI(int entryFlags) {
         return (entryFlags & FI_MASK_IN_PLACE) >> FI_SHIFT;
     }
 

@@ -31,15 +31,15 @@ import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
 
-import com.oracle.svm.core.annotate.NeverInline;
+import com.oracle.svm.core.code.CodeInfoQueryResult;
 import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.code.DeoptimizationSourcePositionDecoder;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescriptor;
-import com.oracle.svm.core.snippets.SubstrateForeignCallTarget;
 import com.oracle.svm.core.stack.StackOverflowCheck;
+import com.oracle.svm.core.snippets.SubstrateForeignCallTarget;
 
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -51,7 +51,6 @@ public class DeoptimizationRuntime {
 
     /** Foreign call: {@link #DEOPTIMIZE}. */
     @SubstrateForeignCallTarget
-    @NeverInline("Access of caller frame")
     private static void deoptimize(long actionAndReason, SpeculationReason speculation) {
         /*
          * In cases where we doeptimize because of a StackOverflowError, we do not immediately want
@@ -63,10 +62,9 @@ public class DeoptimizationRuntime {
 
             Pointer sp = KnownIntrinsics.readCallerStackPointer();
             DeoptimizationAction action = Deoptimizer.decodeDeoptAction(actionAndReason);
-            boolean trace = Deoptimizer.isTraceDeoptimization();
-            if (trace) {
-                CodePointer ip = KnownIntrinsics.readReturnAddress();
-                traceDeoptimization(actionAndReason, speculation, action, sp, ip);
+
+            if (Deoptimizer.Options.TraceDeoptimization.getValue()) {
+                traceDeoptimization(actionAndReason, speculation, action, sp);
             }
 
             if (action.doesInvalidateCompilation()) {
@@ -75,7 +73,7 @@ public class DeoptimizationRuntime {
                 Deoptimizer.deoptimizeFrame(sp, false, speculation);
             }
 
-            if (trace) {
+            if (Deoptimizer.Options.TraceDeoptimization.getValue()) {
                 Log.log().string("]").newline();
             }
 
@@ -84,9 +82,10 @@ public class DeoptimizationRuntime {
         }
     }
 
-    private static void traceDeoptimization(long actionAndReason, SpeculationReason speculation, DeoptimizationAction action, Pointer sp, CodePointer ip) {
+    private static void traceDeoptimization(long actionAndReason, SpeculationReason speculation, DeoptimizationAction action, Pointer sp) {
         Log log = Log.log().string("[Deoptimization initiated").newline();
 
+        CodePointer ip = KnownIntrinsics.readReturnAddress();
         SubstrateInstalledCode installedCode = CodeInfoTable.lookupInstalledCode(ip);
         if (installedCode != null) {
             log.string("    name: ").string(installedCode.getName()).newline();
@@ -99,25 +98,28 @@ public class DeoptimizationRuntime {
         int debugId = Deoptimizer.decodeDebugId(actionAndReason);
         log.string("    debugId: ").signed(debugId).string("  speculation: ").string(Objects.toString(speculation)).newline();
 
-        NodeSourcePosition sourcePosition = DeoptimizationSourcePositionDecoder.decode(debugId, ip);
-        if (sourcePosition != null) {
-            log.string("    stack trace that triggered deoptimization:").newline();
-            NodeSourcePosition cur = sourcePosition;
-            while (cur != null) {
-                log.string("        at ");
-                if (cur.getMethod() != null) {
-                    StackTraceElement element = cur.getMethod().asStackTraceElement(cur.getBCI());
-                    if (element.getFileName() != null && element.getLineNumber() >= 0) {
-                        log.string(element.toString());
+        CodeInfoQueryResult info = CodeInfoTable.lookupCodeInfoQueryResult(ip);
+        if (info != null) {
+            NodeSourcePosition sourcePosition = DeoptimizationSourcePositionDecoder.decode(debugId, info);
+            if (sourcePosition != null) {
+                log.string("    stack trace that triggered deoptimization:").newline();
+                NodeSourcePosition cur = sourcePosition;
+                while (cur != null) {
+                    log.string("        at ");
+                    if (cur.getMethod() != null) {
+                        StackTraceElement element = cur.getMethod().asStackTraceElement(cur.getBCI());
+                        if (element.getFileName() != null && element.getLineNumber() >= 0) {
+                            log.string(element.toString());
+                        } else {
+                            log.string(cur.getMethod().format("%H.%n(%p)")).string(" bci ").signed(cur.getBCI());
+                        }
                     } else {
-                        log.string(cur.getMethod().format("%H.%n(%p)")).string(" bci ").signed(cur.getBCI());
+                        log.string("[unknown method]");
                     }
-                } else {
-                    log.string("[unknown method]");
-                }
-                log.newline();
+                    log.newline();
 
-                cur = cur.getCaller();
+                    cur = cur.getCaller();
+                }
             }
         }
     }
