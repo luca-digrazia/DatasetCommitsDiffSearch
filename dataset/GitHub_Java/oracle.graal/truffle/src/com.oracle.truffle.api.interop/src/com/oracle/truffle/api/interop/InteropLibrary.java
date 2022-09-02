@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,14 +40,11 @@
  */
 package com.oracle.truffle.api.interop;
 
-import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
-import static com.oracle.truffle.api.interop.AssertUtils.assertString;
 import static com.oracle.truffle.api.interop.AssertUtils.preCondition;
 import static com.oracle.truffle.api.interop.AssertUtils.validArgument;
 import static com.oracle.truffle.api.interop.AssertUtils.validArguments;
 import static com.oracle.truffle.api.interop.AssertUtils.validNonInteropArgument;
 import static com.oracle.truffle.api.interop.AssertUtils.validReturn;
-import static com.oracle.truffle.api.interop.AssertUtils.validScope;
 import static com.oracle.truffle.api.interop.AssertUtils.violationInvariant;
 import static com.oracle.truffle.api.interop.AssertUtils.violationPost;
 
@@ -61,6 +58,7 @@ import java.time.zone.ZoneRules;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
@@ -72,6 +70,7 @@ import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.LibraryFactory;
+import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.utilities.TriState;
 
@@ -165,8 +164,6 @@ import com.oracle.truffle.api.utilities.TriState;
 @DefaultExport(DefaultDoubleExports.class)
 @DefaultExport(DefaultCharacterExports.class)
 @DefaultExport(DefaultStringExports.class)
-@DefaultExport(DefaultAbstractTruffleExceptionExports.class)
-@DefaultExport(DefaultLegacyTruffleExceptionExports.class)
 @SuppressWarnings("unused")
 public abstract class InteropLibrary extends Library {
 
@@ -530,7 +527,7 @@ public abstract class InteropLibrary extends Library {
      * @since 19.0
      */
     @Abstract(ifExported = {"getMembers", "isMemberReadable", "readMember", "isMemberModifiable", "isMemberInsertable", "writeMember", "isMemberRemovable", "removeMember", "isMemberInvocable",
-                    "invokeMember", "isMemberInternal", "hasMemberReadSideEffects", "hasMemberWriteSideEffects", "isScope"})
+                    "invokeMember", "isMemberInternal", "hasMemberReadSideEffects", "hasMemberWriteSideEffects"})
     public boolean hasMembers(Object receiver) {
         return false;
     }
@@ -538,9 +535,7 @@ public abstract class InteropLibrary extends Library {
     /**
      * Returns an array of member name strings. The returned value must return <code>true</code> for
      * {@link #hasArrayElements(Object)} and every array element must be of type
-     * {@link #isString(Object) string}. The member elements may also provide additional information
-     * like {@link #getSourceLocation(Object) source location} in case of {@link #isScope(Object)
-     * scope} variables, etc.
+     * {@link #isString(Object) string}.
      * <p>
      * If the includeInternal argument is <code>true</code> then internal member names are returned
      * as well. Internal members are implementation specific and should not be exposed to guest
@@ -551,7 +546,7 @@ public abstract class InteropLibrary extends Library {
      * @see #hasMembers(Object)
      * @since 19.0
      */
-    @Abstract(ifExported = {"hasMembers", "isScope"})
+    @Abstract(ifExported = "hasMembers")
     public Object getMembers(Object receiver, boolean includeInternal) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();
     }
@@ -1197,84 +1192,19 @@ public abstract class InteropLibrary extends Library {
 
     /**
      * Returns <code>true</code> if the receiver value represents a throwable
-     * {@linkplain com.oracle.truffle.api.TruffleException#getExceptionObject() exception/error
-     * object}. Invoking this message does not cause any observable side-effects. Returns
-     * <code>false</code> by default.
+     * {@linkplain TruffleException#getExceptionObject() exception/error object}. Invoking this
+     * message does not cause any observable side-effects. Returns <code>false</code> by default.
      * <p>
      * Objects must only return <code>true</code> if they support {@link #throwException} as well.
      * If this method is implemented then also {@link #throwException(Object)} must be implemented.
      *
-     * The following simplified {@code TryCatchNode} shows how the exceptions should be handled by
-     * languages.
-     *
-     * <pre>
-     * class TryCatchNode extends StatementNode {
-     *     &#64;Child private BlockNode block;
-     *     &#64;Child private BlockNode catchBlock;
-     *     &#64;Child private BlockNode finallyBlock;
-     *     &#64;Child private InteropLibrary interop = InteropLibrary.getFactory().createDispatched(5);
-     *     private final BranchProfile exception = BranchProfile.create();
-     *
-     *     TryCatchNode(BlockNode block, BlockNode catchBlock, BlockNode finalizerBlock) {
-     *         this.block = block;
-     *         this.catchBlock = catchBlock;
-     *         this.finallyBlock = finalizerBlock;
-     *     }
-     *
-     *     &#64;Override
-     *     Object execute(VirtualFrame frame) {
-     *         Object truffleException = null;
-     *         ControlFlowException controlFlow = null;
-     *         Object returnValue = null;
-     *         try {
-     *             try {
-     *                 returnValue = block.execute(frame);
-     *             } catch (ControlFlowException ex) {
-     *                 controlFlow = ex;
-     *             } catch (Throwable ex) {
-     *                 exception.enter();
-     *                 if (interop.isException(ex)) {
-     *                     if (interop.isExceptionUnwind(ex)) {
-     *                         throw interop.throwException(ex);
-     *                     } else {
-     *                         truffleException = ex;
-     *                         assertTruffleExceptionProperties(ex);
-     *                     }
-     *                 } else {
-     *                     // do not run finally blocks for internal errors
-     *                     CompilerDirectives.transferToInterpreterAndInvalidate();
-     *                     throw ex;
-     *                 }
-     *             }
-     *             if (truffleException != null && catchBlock != null) {
-     *                 returnValue = catchBlock.execute(frame);
-     *                 truffleException = null;
-     *             }
-     *             if (finallyBlock != null) {
-     *                 finallyBlock.execute(frame);
-     *             }
-     *             if (controlFlow != null) {
-     *                 throw controlFlow;
-     *             } else if (truffleException != null) {
-     *                 throw interop.throwException(truffleException);
-     *             } else {
-     *                 return returnValue;
-     *             }
-     *         } catch (UnsupportedMessageException ie) {
-     *             throw CompilerDirectives.shouldNotReachHere(ie);
-     *         }
-     *     }
-     * }
-     * </pre>
-     *
      * @see #throwException(Object)
-     * @see com.oracle.truffle.api.TruffleException#getExceptionObject()
+     * @see TruffleException#getExceptionObject()
      * @since 19.3
      */
     @Abstract(ifExported = {"throwException"})
-    @SuppressWarnings("deprecation")
     public boolean isException(Object receiver) {
-        return receiver instanceof AbstractTruffleException;
+        return false;
     }
 
     /**
@@ -1290,135 +1220,6 @@ public abstract class InteropLibrary extends Library {
      */
     @Abstract(ifExported = {"isException"})
     public RuntimeException throwException(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            throw DefaultAbstractTruffleExceptionExports.throwException((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    public boolean isExceptionUnwind(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.isExceptionUnwind((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @Abstract(ifExported = {"isExceptionUnwind", "getExceptionExitStatus", "isExceptionIncompleteSource"})
-    public ExceptionType getExceptionType(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.getExceptionType((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    public boolean isExceptionIncompleteSource(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.isExceptionIncompleteSource((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    public int getExceptionExitStatus(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.getExceptionExitStatus((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @Abstract(ifExported = {"getExceptionCause"})
-    public boolean hasExceptionCause(Object receiver) {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.hasExceptionCause((AbstractTruffleException) receiver);
-        } else {
-            return false;
-        }
-    }
-
-    @Abstract(ifExported = {"hasExceptionCause"})
-    public Object getExceptionCause(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.getExceptionCause((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @Abstract(ifExported = {"getExceptionSuppressed"})
-    public boolean hasExceptionSuppressed(Object receiver) {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.hasExceptionSuppressed((AbstractTruffleException) receiver);
-        } else {
-            return false;
-        }
-    }
-
-    @Abstract(ifExported = {"hasExceptionSuppressed"})
-    public Object getExceptionSuppressed(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.getExceptionSuppressed((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @Abstract(ifExported = {"getExceptionMessage"})
-    public boolean hasExceptionMessage(Object receiver) {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.hasExceptionMessage((AbstractTruffleException) receiver);
-        } else {
-            return false;
-        }
-    }
-
-    @Abstract(ifExported = {"hasExceptionMessage"})
-    public Object getExceptionMessage(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.getExceptionMessage((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @Abstract(ifExported = {"getExceptionStackTrace"})
-    public boolean hasExceptionStackTrace(Object receiver) {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.hasExceptionStackTrace((AbstractTruffleException) receiver);
-        } else {
-            return false;
-        }
-    }
-
-    @Abstract(ifExported = {"hasExceptionStackTrace"})
-    public Object getExceptionStackTrace(Object receiver) throws UnsupportedMessageException {
-        if (receiver instanceof AbstractTruffleException) {
-            return DefaultAbstractTruffleExceptionExports.getExceptionStackTrace((AbstractTruffleException) receiver);
-        } else {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @Abstract(ifExported = {"getExecutableName"})
-    public boolean hasExecutableName(Object receiver) {
-        return false;
-    }
-
-    @Abstract(ifExported = {"hasExecutableName"})
-    public Object getExecutableName(Object receiver) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    @Abstract(ifExported = {"getDeclaringMetaObject"})
-    public boolean hasDeclaringMetaObject(Object receiver) {
-        return false;
-    }
-
-    @Abstract(ifExported = {"hasDeclaringMetaObject"})
-    public Object getDeclaringMetaObject(Object receiver) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();
     }
 
@@ -1503,7 +1304,7 @@ public abstract class InteropLibrary extends Library {
      * @see #toDisplayString(Object)
      * @since 20.1
      */
-    @Abstract(ifExported = {"getLanguage", "isScope"})
+    @Abstract(ifExported = {"getLanguage"})
     @TruffleBoundary
     public boolean hasLanguage(Object receiver) {
         return getLegacyEnv(receiver, false) != null;
@@ -1621,7 +1422,7 @@ public abstract class InteropLibrary extends Library {
      * @see TruffleLanguage#getLanguageView(Object, Object)
      * @since 20.1
      */
-    @Abstract(ifExported = {"hasLanguage", "getLanguage", "isScope"})
+    @Abstract(ifExported = {"hasLanguage", "getLanguage"})
     @TruffleBoundary
     public Object toDisplayString(Object receiver, boolean allowSideEffects) {
         Env env = getLegacyEnv(receiver, false);
@@ -1934,77 +1735,6 @@ public abstract class InteropLibrary extends Library {
      */
     @Abstract(ifExported = "isIdenticalOrUndefined")
     public int identityHashCode(Object receiver) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    /**
-     * Returns <code>true</code> if the value represents a scope object, else <code>false</code>.
-     * The scope object contains variables as {@link #getMembers(Object) members} and has a
-     * {@link InteropLibrary#toDisplayString(Object, boolean) scope display name}. It needs to be
-     * associated with a {@link #getLanguage(Object) language}. The scope may return a
-     * {@link InteropLibrary#getSourceLocation(Object) source location} that indicates the range of
-     * the scope in the source code. The scope may have {@link #hasScopeParent(Object) parent
-     * scopes}.
-     * <p>
-     * The {@link #getMembers(Object) members} of a scope represent all visible flattened variables,
-     * including all parent scopes, if any. The variables of the current scope must be listed first
-     * in {@link #getMembers(Object)}. Variables of the {@link InteropLibrary#getScopeParent(Object)
-     * parent scope} must be listed afterwards, even if they contain duplicates. This allows to
-     * resolve which variables are redeclared in sub scopes.
-     * <p>
-     * Every {@link #getMembers(Object) member} may not be just a String literal, but a
-     * {@link #isString(Object) string object} that provides also a
-     * {@link #getSourceLocation(Object) source location} of its declaration. When different
-     * variables of the same name are in different scopes, they will be represented by different
-     * member elements providing the same {@link #asString(Object) name}.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #hasMembers(Object)} and {@link #toDisplayString(Object, boolean)} must be
-     * implemented and {@link #hasSourceLocation(Object)} is recommended.
-     *
-     * @see #getLanguage(Object)
-     * @see #getMembers(Object)
-     * @see #hasScopeParent(Object)
-     * @since 20.3
-     */
-    @Abstract(ifExported = "hasScopeParent")
-    public boolean isScope(Object receiver) {
-        return false;
-    }
-
-    /**
-     * Returns <code>true</code> if this scope has an enclosing parent scope, else
-     * <code>false</code>.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #isScope(Object)} and {@link #getScopeParent(Object)} must be implemented.
-     *
-     * @see #isScope(Object)
-     * @see #getScopeParent(Object)
-     * @since 20.3
-     */
-    @Abstract(ifExported = "getScopeParent")
-    public boolean hasScopeParent(Object receiver) {
-        return false;
-    }
-
-    /**
-     * Returns the parent scope object if it {@link #hasScopeParent(Object) has the parent}. The
-     * returned object must be a {@link #isScope(Object) scope} and must provide a reduced list of
-     * {@link #getMembers(Object) member} variables, omitting all variables that are local to the
-     * current scope.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #isScope(Object)} and {@link #getScopeParent(Object)} must be implemented.
-     *
-     * @throws UnsupportedMessageException if and only if {@link #hasScopeParent(Object)} returns
-     *             <code>false</code> for the same receiver.
-     * @see #isScope(Object)
-     * @see #hasScopeParent(Object)
-     * @since 20.3
-     */
-    @Abstract(ifExported = "hasScopeParent")
-    public Object getScopeParent(Object receiver) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();
     }
 
@@ -2572,7 +2302,6 @@ public abstract class InteropLibrary extends Library {
                 Object result = delegate.getMembers(receiver, internal);
                 assert validReturn(receiver, result);
                 assert isMultiThreaded(receiver) || assertMemberKeys(receiver, result, internal);
-                assert !delegate.hasScopeParent(receiver) || assertScopeMembers(receiver, result, delegate.getMembers(delegate.getScopeParent(receiver), internal));
                 return result;
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException : violationPost(receiver, e);
@@ -2591,7 +2320,7 @@ public abstract class InteropLibrary extends Library {
                 assert false : violationPost(receiver, e);
                 return true;
             }
-            for (long i = 0; i < arraySize; i++) {
+            for (int i = 0; i < arraySize; i++) {
                 assert uncached.isArrayElementReadable(result, i) : violationPost(receiver, result);
                 Object element;
                 try {
@@ -2606,61 +2335,6 @@ public abstract class InteropLibrary extends Library {
                 } catch (UnsupportedMessageException e) {
                     assert false : violationInvariant(result, i);
                 }
-            }
-            return true;
-        }
-
-        private static boolean assertScopeMembers(Object receiver, Object allMembers, Object parentMembers) {
-            assert parentMembers != null : violationPost(receiver, parentMembers);
-            InteropLibrary allUncached = InteropLibrary.getUncached(allMembers);
-            InteropLibrary parentUncached = InteropLibrary.getUncached(parentMembers);
-            assert allUncached.hasArrayElements(allMembers) : violationPost(receiver, allMembers);
-            assert parentUncached.hasArrayElements(parentMembers) : violationPost(receiver, parentMembers);
-            long allSize;
-            long parentSize;
-            try {
-                allSize = allUncached.getArraySize(allMembers);
-                parentSize = parentUncached.getArraySize(parentMembers);
-            } catch (UnsupportedMessageException e) {
-                assert false : violationPost(receiver, e);
-                return true;
-            }
-            assert AssertUtils.validScopeMemberLengths(allSize, parentSize, allMembers, parentMembers);
-            long currentSize = allSize - parentSize;
-            for (long i = 0; i < parentSize; i++) {
-                assert allUncached.isArrayElementReadable(allMembers, i + currentSize) : violationPost(receiver, allMembers);
-                assert parentUncached.isArrayElementReadable(parentMembers, i) : violationPost(receiver, parentMembers);
-                Object allElement;
-                Object parentElement;
-                try {
-                    allElement = allUncached.readArrayElement(allMembers, i + currentSize);
-                } catch (UnsupportedMessageException | InvalidArrayIndexException e) {
-                    assert false : violationPost(receiver, allMembers);
-                    return true;
-                }
-                try {
-                    parentElement = parentUncached.readArrayElement(parentMembers, i);
-                } catch (UnsupportedMessageException | InvalidArrayIndexException e) {
-                    assert false : violationPost(receiver, parentMembers);
-                    return true;
-                }
-                assert InteropLibrary.getUncached().isString(allElement) : violationPost(receiver, allElement);
-                assert InteropLibrary.getUncached().isString(parentElement) : violationPost(receiver, parentElement);
-                String allElementName;
-                String parentElementName;
-                try {
-                    allElementName = InteropLibrary.getUncached().asString(allElement);
-                } catch (UnsupportedMessageException e) {
-                    assert false : violationInvariant(allElement);
-                    return true;
-                }
-                try {
-                    parentElementName = InteropLibrary.getUncached().asString(parentElement);
-                } catch (UnsupportedMessageException e) {
-                    assert false : violationInvariant(parentElement);
-                    return true;
-                }
-                assert AssertUtils.validScopeMemberNames(allElementName, parentElementName, allMembers, parentMembers, i + currentSize, i);
             }
             return true;
         }
@@ -2947,7 +2621,7 @@ public abstract class InteropLibrary extends Library {
             try {
                 return delegate.asTimeZone(receiver).getRules().isFixedOffset();
             } catch (InteropException e) {
-                throw shouldNotReachHere(violationInvariant(receiver));
+                throw new AssertionError(violationInvariant(receiver));
             }
         }
 
@@ -3036,34 +2710,6 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public boolean isExceptionUnwind(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            boolean result = delegate.isExceptionUnwind(receiver);
-            return result;
-        }
-
-        @Override
-        public ExceptionType getExceptionType(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            ExceptionType result = delegate.getExceptionType(receiver);
-            return result;
-        }
-
-        @Override
-        public boolean isExceptionIncompleteSource(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            boolean result = delegate.isExceptionIncompleteSource(receiver);
-            return result;
-        }
-
-        @Override
-        public int getExceptionExitStatus(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            int result = delegate.getExceptionExitStatus(receiver);
-            return result;
-        }
-
-        @Override
         public RuntimeException throwException(Object receiver) throws UnsupportedMessageException {
             if (CompilerDirectives.inCompiledCode()) {
                 return delegate.throwException(receiver);
@@ -3086,102 +2732,23 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public boolean hasExceptionCause(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.hasExceptionCause(receiver);
-            return result;
-        }
-
-        @Override
-        public Object getExceptionCause(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            Object result = delegate.getExceptionCause(receiver);
-            assert validReturn(receiver, result);
-            return result;
-        }
-
-        @Override
-        public boolean hasExceptionSuppressed(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.hasExceptionSuppressed(receiver);
-            return result;
-        }
-
-        @Override
-        public Object getExceptionSuppressed(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            Object result = delegate.getExceptionSuppressed(receiver);
-            assert validReturn(receiver, result);
-            return result;
-        }
-
-        @Override
-        public boolean hasExceptionMessage(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.hasExceptionMessage(receiver);
-            return result;
-        }
-
-        @Override
-        public Object getExceptionMessage(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            Object result = delegate.getExceptionMessage(receiver);
-            assert validReturn(receiver, result);
-            return result;
-        }
-
-        @Override
-        public boolean hasExceptionStackTrace(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.hasExceptionStackTrace(receiver);
-            return result;
-        }
-
-        @Override
-        public Object getExceptionStackTrace(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            Object result = delegate.getExceptionStackTrace(receiver);
-            assert validReturn(receiver, result);
-            return result;
-        }
-
-        @Override
-        public boolean hasExecutableName(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.hasExecutableName(receiver);
-            return result;
-        }
-
-        @Override
-        public Object getExecutableName(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            Object result = delegate.getExecutableName(receiver);
-            assert validReturn(receiver, result);
-            return result;
-        }
-
-        @Override
-        public boolean hasDeclaringMetaObject(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.hasDeclaringMetaObject(receiver);
-            return result;
-        }
-
-        @Override
-        public Object getDeclaringMetaObject(Object receiver) throws UnsupportedMessageException {
-            assert preCondition(receiver);
-            Object result = delegate.getDeclaringMetaObject(receiver);
-            assert validReturn(receiver, result);
-            return result;
-        }
-
-        @Override
         public Object toDisplayString(Object receiver, boolean allowSideEffects) {
             assert preCondition(receiver);
             assert validNonInteropArgument(receiver, allowSideEffects);
             Object result = delegate.toDisplayString(receiver, allowSideEffects);
             assert assertString(receiver, result);
             return result;
+        }
+
+        private static boolean assertString(Object receiver, Object string) {
+            InteropLibrary uncached = InteropLibrary.getFactory().getUncached(string);
+            assert uncached.isString(string) : violationPost(receiver, string);
+            try {
+                assert uncached.asString(string) != null : violationPost(receiver, string);
+            } catch (UnsupportedMessageException e) {
+                assert false; // should be handled by uncached assertions
+            }
+            return true;
         }
 
         @Override
@@ -3462,7 +3029,7 @@ public abstract class InteropLibrary extends Library {
                 try {
                     hashCode = library.identityHashCode(receiver);
                 } catch (Exception t) {
-                    throw shouldNotReachHere(t);
+                    throw new AssertionError(t);
                 }
             }
             return true;
@@ -3517,62 +3084,10 @@ public abstract class InteropLibrary extends Library {
                 verifyIsSameOrUndefined(delegate, state, receiver, other);
                 verifyIsSameOrUndefined(otherDelegate, otherDelegate.isIdenticalOrUndefined(other, receiver), other, receiver);
             } catch (UnsupportedMessageException e) {
-                throw shouldNotReachHere(e);
+                throw new AssertionError(e);
             }
             return true;
         }
 
-        @Override
-        public boolean isScope(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.isScope(receiver);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver);
-            assert !result || delegate.hasLanguage(receiver) : violationInvariant(receiver);
-            return result;
-        }
-
-        @Override
-        public boolean hasScopeParent(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.hasScopeParent(receiver);
-            }
-            assert preCondition(receiver);
-            boolean result = delegate.hasScopeParent(receiver);
-            if (result) {
-                assert delegate.isScope(receiver) : violationInvariant(receiver);
-                try {
-                    assert validScope(delegate.getScopeParent(receiver));
-                } catch (UnsupportedMessageException e) {
-                    assert false : violationInvariant(receiver);
-                }
-            } else {
-                try {
-                    delegate.getScopeParent(receiver);
-                    assert false : violationInvariant(receiver);
-                } catch (UnsupportedMessageException e) {
-                }
-            }
-            return result;
-        }
-
-        @Override
-        public Object getScopeParent(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getScopeParent(receiver);
-            }
-            assert preCondition(receiver);
-            boolean hadScopeParent = delegate.hasScopeParent(receiver);
-            try {
-                Object result = delegate.getScopeParent(receiver);
-                assert hadScopeParent : violationInvariant(receiver);
-                assert delegate.isScope(receiver) : violationInvariant(receiver);
-                assert validScope(result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !hadScopeParent : violationInvariant(receiver);
-                throw e;
-            }
-        }
     }
 }
