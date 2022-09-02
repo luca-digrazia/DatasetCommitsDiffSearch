@@ -31,22 +31,22 @@ import java.util.Map;
 
 import com.oracle.svm.configure.config.ProxyConfiguration;
 import com.oracle.svm.configure.config.ResourceConfiguration;
-import com.oracle.svm.configure.config.SerializationConfiguration;
 import com.oracle.svm.configure.config.TypeConfiguration;
 import com.oracle.svm.core.util.json.JSONParser;
 
 public class TraceProcessor extends AbstractProcessor {
-    private final AccessAdvisor advisor;
+    private final AccessAdvisor advisor = new AccessAdvisor();
     private final JniProcessor jniProcessor;
     private final ReflectionProcessor reflectionProcessor;
-    private final SerializationProcessor serializationProcessor;
 
-    public TraceProcessor(AccessAdvisor accessAdvisor, TypeConfiguration jniConfiguration, TypeConfiguration reflectionConfiguration,
-                    ProxyConfiguration proxyConfiguration, ResourceConfiguration resourceConfiguration, SerializationConfiguration serializationConfiguration) {
-        advisor = accessAdvisor;
-        jniProcessor = new JniProcessor(this.advisor, jniConfiguration, reflectionConfiguration);
-        reflectionProcessor = new ReflectionProcessor(this.advisor, reflectionConfiguration, proxyConfiguration, resourceConfiguration);
-        serializationProcessor = new SerializationProcessor(this.advisor, serializationConfiguration);
+    public TraceProcessor(TypeConfiguration jniConfiguration, TypeConfiguration reflectionConfiguration,
+                    ProxyConfiguration proxyConfiguration, ResourceConfiguration resourceConfiguration) {
+        jniProcessor = new JniProcessor(advisor, jniConfiguration, reflectionConfiguration);
+        reflectionProcessor = new ReflectionProcessor(advisor, reflectionConfiguration, proxyConfiguration, resourceConfiguration);
+    }
+
+    public void setFilterEnabled(boolean enabled) {
+        advisor.setIgnoreInternalAccesses(enabled);
     }
 
     public TypeConfiguration getJniConfiguration() {
@@ -63,10 +63,6 @@ public class TraceProcessor extends AbstractProcessor {
 
     public ResourceConfiguration getResourceConfiguration() {
         return reflectionProcessor.getResourceConfiguration();
-    }
-
-    public SerializationConfiguration getSerializationConfiguration() {
-        return serializationProcessor.getSerializationConfiguration();
     }
 
     @SuppressWarnings("unchecked")
@@ -105,17 +101,12 @@ public class TraceProcessor extends AbstractProcessor {
                 case "reflect":
                     reflectionProcessor.processEntry(entry);
                     break;
-                case "serialization":
-                    serializationProcessor.processEntry(entry);
-                    break;
                 default:
                     logWarning("Unknown tracer, ignoring: " + tracer);
                     break;
             }
         } catch (Exception e) {
-            StackTraceElement stackTraceElement = e.getStackTrace()[0];
-            logWarning("Error processing trace entry: " + e.toString() +
-                            " (at " + stackTraceElement.getClassName() + ":" + stackTraceElement.getLineNumber() + ") : " + entry.toString());
+            logWarning("Error processing trace entry: " + e.toString() + ": " + entry.toString());
         }
     }
 

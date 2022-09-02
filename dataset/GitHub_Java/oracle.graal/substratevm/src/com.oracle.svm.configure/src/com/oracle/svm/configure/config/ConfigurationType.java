@@ -37,7 +37,7 @@ import com.oracle.svm.configure.json.JsonWriter;
 public class ConfigurationType implements JsonPrintable {
     private final String qualifiedJavaName;
 
-    private Map<String, FieldInfo> fields;
+    private Map<String, ConfigurationMemberKind> fields;
     private Map<ConfigurationMethod, ConfigurationMemberKind> methods;
 
     private boolean allDeclaredClasses;
@@ -58,19 +58,15 @@ public class ConfigurationType implements JsonPrintable {
         return qualifiedJavaName;
     }
 
-    public void addField(String name, ConfigurationMemberKind memberKind, boolean allowUnsafeAccess) {
-        if (!allowUnsafeAccess) {
-            if ((memberKind.includes(ConfigurationMemberKind.DECLARED) && haveAllDeclaredFields()) || (memberKind.includes(ConfigurationMemberKind.PUBLIC) && haveAllPublicFields())) {
-                fields = maybeRemove(fields, map -> map.remove(name));
-                return;
-            }
+    public void addField(String name, ConfigurationMemberKind memberKind) {
+        if ((memberKind.includes(ConfigurationMemberKind.DECLARED) && haveAllDeclaredFields()) || (memberKind.includes(ConfigurationMemberKind.PUBLIC) && haveAllPublicFields())) {
+            fields = maybeRemove(fields, map -> map.remove(name));
+            return;
         }
         if (fields == null) {
             fields = new HashMap<>();
         }
-        fields.compute(name, (k, v) -> (v != null)
-                        ? FieldInfo.get(v.getKind().intersect(memberKind), v.isUnsafeAccessible() || allowUnsafeAccess)
-                        : FieldInfo.get(memberKind, allowUnsafeAccess));
+        fields.compute(name, (k, v) -> memberKind.intersect(v));
     }
 
     public void addMethodsWithName(String name, ConfigurationMemberKind memberKind) {
@@ -114,14 +110,6 @@ public class ConfigurationType implements JsonPrintable {
     public boolean hasIndividualField(String name) {
         if (fields != null) {
             return fields.containsKey(name);
-        }
-        return false;
-    }
-
-    public boolean hasIndividualUnsafeAccessField(String name) {
-        if (fields != null) {
-            FieldInfo fieldInfo = fields.get(name);
-            return fieldInfo != null && fieldInfo.isUnsafeAccessible();
         }
         return false;
     }
@@ -210,7 +198,7 @@ public class ConfigurationType implements JsonPrintable {
         optionallyPrintJsonBoolean(writer, haveAllPublicClasses(), "allPublicClasses");
         if (fields != null) {
             writer.append(',').newline().quote("fields").append(':');
-            JsonPrinter.printCollection(writer, fields.entrySet(), Map.Entry.comparingByKey(), ConfigurationType::printField);
+            JsonPrinter.printCollection(writer, fields.keySet(), Comparator.naturalOrder(), (String s, JsonWriter w) -> w.append('{').quote("name").append(':').quote(s).append('}'));
         }
         if (methods != null) {
             writer.append(',').newline().quote("methods").append(':');
@@ -223,14 +211,6 @@ public class ConfigurationType implements JsonPrintable {
         writer.append('}');
     }
 
-    private static void printField(Map.Entry<String, FieldInfo> entry, JsonWriter w) throws IOException {
-        w.append('{').quote("name").append(':').quote(entry.getKey());
-        if (entry.getValue().isUnsafeAccessible()) {
-            w.append(", ").quote("allowUnsafeAccess").append(':').append("true");
-        }
-        w.append('}');
-    }
-
     private static void optionallyPrintJsonBoolean(JsonWriter writer, boolean predicate, String attribute) throws IOException {
         if (predicate) {
             writer.append(',').newline().quote(attribute).append(":true");
@@ -238,15 +218,15 @@ public class ConfigurationType implements JsonPrintable {
     }
 
     private void removeFields(ConfigurationMemberKind memberKind) {
-        fields = maybeRemove(fields, map -> map.values().removeIf(v -> !v.isUnsafeAccessible() && memberKind.includes(v.getKind())));
+        fields = maybeRemove(fields, map -> map.values().removeIf(memberKind::includes));
     }
 
     private void removeMethods(ConfigurationMemberKind memberKind, boolean constructors) {
         methods = maybeRemove(methods, map -> map.entrySet().removeIf(entry -> entry.getKey().isConstructor() == constructors && memberKind.includes(entry.getValue())));
     }
 
-    private static <T, S> Map<T, S> maybeRemove(Map<T, S> fromMap, Consumer<Map<T, S>> action) {
-        Map<T, S> map = fromMap;
+    private static <T> Map<T, ConfigurationMemberKind> maybeRemove(Map<T, ConfigurationMemberKind> fromMap, Consumer<Map<T, ConfigurationMemberKind>> action) {
+        Map<T, ConfigurationMemberKind> map = fromMap;
         if (map != null) {
             action.accept(map);
             if (map.isEmpty()) {
