@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -195,7 +194,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                 if (target == null) {
                     return CONTINUE_LOOP_STATUS;
                 }
-                if (!target.isSubmittedForCompilation()) {
+                if (!target.isCompiling()) {
                     if (target.isValid()) {
                         return callOSR(target, frame);
                     }
@@ -289,7 +288,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
         // using static methods with LoopNode return type ensures
         // that only one loop node implementation gets loaded.
-        if (TruffleRuntimeOptions.getPolyglotOptionValue(engineOptions, PolyglotCompilerOptions.OSR)) {
+        if (PolyglotCompilerOptions.getValue(engineOptions, PolyglotCompilerOptions.OSR)) {
             return createDefault(repeat, engineOptions);
         } else {
             return OptimizedLoopNode.create(repeat);
@@ -298,8 +297,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
     private static LoopNode createDefault(RepeatingNode repeatableNode, OptionValues options) {
         return new OptimizedDefaultOSRLoopNode(repeatableNode,
-                        TruffleRuntimeOptions.getPolyglotOptionValue(options, PolyglotCompilerOptions.OSRCompilationThreshold),
-                        TruffleRuntimeOptions.getPolyglotOptionValue(options, PolyglotCompilerOptions.InvalidationReprofileCount));
+                        PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.OSRCompilationThreshold),
+                        PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.InvalidationReprofileCount));
     }
 
     /**
