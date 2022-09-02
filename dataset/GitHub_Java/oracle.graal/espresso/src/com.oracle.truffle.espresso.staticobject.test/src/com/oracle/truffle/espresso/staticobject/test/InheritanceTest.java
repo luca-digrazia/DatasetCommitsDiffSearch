@@ -22,7 +22,8 @@
  */
 package com.oracle.truffle.espresso.staticobject.test;
 
-import com.oracle.truffle.espresso.staticobject.DefaultStaticObject;
+import com.oracle.truffle.espresso.staticobject.DefaultStaticObjectFactory;
+import com.oracle.truffle.espresso.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.espresso.staticobject.StaticProperty;
 import com.oracle.truffle.espresso.staticobject.StaticPropertyKind;
 import com.oracle.truffle.espresso.staticobject.StaticShape;
@@ -30,7 +31,7 @@ import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
-public class InheritanceTest {
+public class InheritanceTest extends StaticObjectTest {
     public static class CustomStaticObject {
         public byte field1;
         public boolean field2;
@@ -42,9 +43,9 @@ public class InheritanceTest {
 
     @Test
     public void baseClassInheritance() throws NoSuchFieldException {
-        StaticShape.Builder builder = StaticShape.newBuilder();
-        StaticProperty property = new StaticProperty(StaticPropertyKind.Int);
-        builder.property(property, "field1", false);
+        StaticShape.Builder builder = StaticShape.newBuilder(this);
+        StaticProperty property = new DefaultStaticProperty("field1", StaticPropertyKind.Int, false);
+        builder.property(property);
         StaticShape<CustomStaticObjectFactory> shape = builder.build(CustomStaticObject.class, CustomStaticObjectFactory.class);
         CustomStaticObject object = shape.getFactory().create();
 
@@ -57,7 +58,7 @@ public class InheritanceTest {
         // Get the value of the field declared in the generated class
         Assert.assertEquals(24, property.getInt(object));
 
-        Assume.assumeFalse(StorageLayout.ARRAY_BASED);
+        Assume.assumeFalse(ARRAY_BASED_STORAGE);
         // `CustomStaticObject.field1` is shadowed
         Assert.assertEquals(int.class, object.getClass().getField("field1").getType());
         // `CustomStaticObject.field2` is visible
@@ -66,23 +67,23 @@ public class InheritanceTest {
 
     @Test
     public void baseShapeInheritance() throws NoSuchFieldException, IllegalAccessException {
-        StaticShape.Builder b1 = StaticShape.newBuilder();
-        StaticProperty s1p1 = new StaticProperty(StaticPropertyKind.Int);
-        StaticProperty s1p2 = new StaticProperty(StaticPropertyKind.Int);
-        b1.property(s1p1, "field1", false);
-        b1.property(s1p2, "field2", false);
+        StaticShape.Builder b1 = StaticShape.newBuilder(this);
+        StaticProperty s1p1 = new DefaultStaticProperty("field1", StaticPropertyKind.Int, false);
+        StaticProperty s1p2 = new DefaultStaticProperty("field2", StaticPropertyKind.Int, false);
+        b1.property(s1p1);
+        b1.property(s1p2);
         // StaticShape s1 declares 2 properties: s1p1 and s1p2
-        StaticShape<DefaultStaticObject.Factory> s1 = b1.build();
+        StaticShape<DefaultStaticObjectFactory> s1 = b1.build();
 
-        StaticShape.Builder b2 = StaticShape.newBuilder();
-        StaticProperty s2p1 = new StaticProperty(StaticPropertyKind.Int);
-        b2.property(s2p1, "field1", false);
+        StaticShape.Builder b2 = StaticShape.newBuilder(this);
+        StaticProperty s2p1 = new DefaultStaticProperty("field1", StaticPropertyKind.Int, false);
+        b2.property(s2p1);
         // StaticShape s2:
         // 1. extends s1
         // 2. declares one property: s2p1
         // 3. inherits one property from s1: s1p2
-        StaticShape<DefaultStaticObject.Factory> s2 = b2.build(s1);
-        DefaultStaticObject object = s2.getFactory().create();
+        StaticShape<DefaultStaticObjectFactory> s2 = b2.build(s1);
+        Object object = s2.getFactory().create();
 
         s1p1.setInt(object, 1);
         Assert.assertEquals(1, s1p1.getInt(object));
@@ -90,11 +91,11 @@ public class InheritanceTest {
         s1p2.setInt(object, 2);
         Assert.assertEquals(2, s1p2.getInt(object));
         s2p1.setInt(object, 3);
-        // s1p1 accesses the field declared in
+        // s1p1 accesses the field declared in s1
         Assert.assertEquals(1, s1p1.getInt(object));
         Assert.assertEquals(3, s2p1.getInt(object));
 
-        Assume.assumeFalse(StorageLayout.ARRAY_BASED);
+        Assume.assumeFalse(ARRAY_BASED_STORAGE);
         Assert.assertEquals(3, object.getClass().getField("field1").getInt(object));
     }
 }
