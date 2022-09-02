@@ -26,7 +26,6 @@ package com.oracle.svm.truffle.api;
 
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
-import java.io.OutputStream;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -39,7 +38,6 @@ import java.util.function.Consumer;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.UnmodifiableMapCursor;
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionKey;
@@ -404,15 +402,5 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Override
     public JavaConstant getCallTargetForCallNode(JavaConstant callNodeConstant) {
         return TruffleFeature.getSupport().getCallTargetForCallNode(callNodeConstant);
-    }
-
-    @Override
-    public CompilableTruffleAST asCompilableTruffleAST(JavaConstant constant) {
-        return TruffleFeature.getSupport().asCompilableTruffleAST(constant);
-    }
-
-    @Override
-    protected OutputStream getLogStream() {
-        return TTY.out;
     }
 }

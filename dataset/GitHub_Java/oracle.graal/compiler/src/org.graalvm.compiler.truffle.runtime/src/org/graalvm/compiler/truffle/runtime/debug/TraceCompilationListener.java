@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -153,7 +153,6 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
                         (timeCompilationFinished - compilation.timeCompilationStarted) / 1e6, //
                         (compilation.timePartialEvaluationFinished - compilation.timeCompilationStarted) / 1e6, //
                         (timeCompilationFinished - compilation.timePartialEvaluationFinished) / 1e6));
-        properties.put("LastTier", target.isValidLastTier());
         properties.put("DirectCallNodes", String.format("I %4d/D %4d", inlinedCalls, dispatchedCalls));
         properties.put("GraalNodes", String.format("%5d/%5d", compilation.nodeCountPartialEval, nodeCountLowered));
         properties.put("CodeSize", result.getTargetCodeSize());
