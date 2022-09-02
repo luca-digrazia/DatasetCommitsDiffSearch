@@ -1877,8 +1877,9 @@ public final class BytecodeNode extends EspressoMethodNode {
             // the instruction must occur in an instance initialization method (<init>) of the
             // current class. Otherwise, an IllegalAccessError is thrown.
             if (field.isFinalFlagSet()) {
+                // Enforced in class files >= v53 (9).
                 if (!(field.getDeclaringKlass() == getMethod().getDeclaringKlass()) ||
-                                (getJavaVersion().java9OrLater() && !getMethod().isConstructor())) {
+                                (getJavaVersion().java8OrEarlier() || !getMethod().isConstructor())) {
                     CompilerDirectives.transferToInterpreter();
                     throw Meta.throwException(getMeta().java_lang_IllegalAccessError);
                 }
@@ -1894,8 +1895,9 @@ public final class BytecodeNode extends EspressoMethodNode {
             // instruction must occur in the <clinit> method of the current class. Otherwise, an
             // IllegalAccessError is thrown.
             if (field.isFinalFlagSet()) {
+                // Enforced in class files >= v53 (9).
                 if (!(field.getDeclaringKlass() == getMethod().getDeclaringKlass()) ||
-                                (getJavaVersion().java9OrLater() && !getMethod().isClassInitializer())) {
+                                (getJavaVersion().java8OrEarlier() || !getMethod().isClassInitializer())) {
                     CompilerDirectives.transferToInterpreter();
                     throw Meta.throwException(getMeta().java_lang_IllegalAccessError);
                 }
