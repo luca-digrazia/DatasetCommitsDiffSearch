@@ -51,11 +51,10 @@ import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNode;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
 
 public final class LLVMParser {
     private final Source source;
@@ -172,9 +171,9 @@ public final class LLVMParser {
 
     private void defineExpressionSymbol(String aliasName, boolean isAliasExported, GetElementPointerConstant elementPointerConstant, DataLayout targetDataLayout) {
         LLVMSymbol baseSymbol = runtime.getFileScope().get(elementPointerConstant.getBasePointer().toString());
-        Supplier<LLVMExpressionNode> createElemPtrNode = () -> elementPointerConstant.createNode(runtime, targetDataLayout, GetStackSpaceFactory.createAllocaFactory());
+        LLVMGetElementPtrNode elementPtrNode = (LLVMGetElementPtrNode) elementPointerConstant.createNode(runtime, targetDataLayout, GetStackSpaceFactory.createAllocaFactory());
         LLVMElemPtrSymbol expressionSymbol = new LLVMElemPtrSymbol(aliasName, runtime.getBitcodeID(), -1, isAliasExported,
-                        elementPointerConstant.getType(), baseSymbol, createElemPtrNode);
+                        elementPointerConstant.getType(), baseSymbol, elementPtrNode);
         runtime.getFileScope().register(expressionSymbol);
     }
 
