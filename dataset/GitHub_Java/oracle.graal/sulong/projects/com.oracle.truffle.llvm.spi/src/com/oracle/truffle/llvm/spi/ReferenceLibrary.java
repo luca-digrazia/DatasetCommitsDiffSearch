@@ -52,9 +52,9 @@ public abstract class ReferenceLibrary extends Library {
         return receiver == other;
     }
 
-    private static final LibraryFactory<ReferenceLibrary> FACTORY = LibraryFactory.resolve(ReferenceLibrary.class);
+    static final LibraryFactory<ReferenceLibrary> FACTORY = LibraryFactory.resolve(ReferenceLibrary.class);
 
-    public static LibraryFactory<ReferenceLibrary> getFactory() {
+    static LibraryFactory<ReferenceLibrary> getFactory() {
         return FACTORY;
     }
 

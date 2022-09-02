@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -38,10 +38,8 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.op.LLVMPointerCompareNodeGen.LLVMNegateNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.op.ToComparableValue.ManagedToComparableValue;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.spi.ReferenceLibrary;
 
 @NodeChild(type = LLVMExpressionNode.class)
@@ -51,18 +49,6 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
 
     public LLVMPointerCompareNode(NativePointerCompare op) {
         this.op = op;
-    }
-
-    // the first two cases are redundant but much more efficient than the ones below
-
-    @Specialization
-    boolean doCompare(long a, long b) {
-        return op.compare(a, b);
-    }
-
-    @Specialization
-    boolean doCompare(LLVMNativePointer a, LLVMNativePointer b) {
-        return op.compare(a.asNative(), b.asNative());
     }
 
     @Specialization(guards = {"libA.isPointer(a)", "libB.isPointer(b)"}, limit = "3", rewriteOn = UnsupportedMessageException.class)
@@ -210,24 +196,29 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
         }
     }
 
-    public abstract static class LLVMNegateNode extends LLVMAbstractCompareNode {
+    public static final class LLVMNegateNode extends LLVMAbstractCompareNode {
         @Child private LLVMAbstractCompareNode booleanExpression;
 
-        LLVMNegateNode(LLVMAbstractCompareNode booleanExpression) {
+        private LLVMNegateNode(LLVMAbstractCompareNode booleanExpression) {
             this.booleanExpression = booleanExpression;
         }
 
         public static LLVMAbstractCompareNode create(LLVMAbstractCompareNode booleanExpression) {
-            return LLVMNegateNodeGen.create(booleanExpression);
+            return new LLVMNegateNode(booleanExpression);
         }
 
         @Override
-        public final boolean executeWithTarget(Object a, Object b) {
+        public boolean executeWithTarget(Object a, Object b) {
             return !booleanExpression.executeWithTarget(a, b);
         }
 
-        @Specialization
-        public boolean doNegate(VirtualFrame frame) {
+        @Override
+        public Object executeGeneric(VirtualFrame frame) {
+            return executeGenericBoolean(frame);
+        }
+
+        @Override
+        public boolean executeGenericBoolean(VirtualFrame frame) {
             return !booleanExpression.executeGenericBoolean(frame);
         }
     }
