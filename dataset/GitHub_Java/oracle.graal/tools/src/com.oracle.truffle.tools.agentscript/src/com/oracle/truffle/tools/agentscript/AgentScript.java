@@ -24,5 +24,31 @@
  */
 package com.oracle.truffle.tools.agentscript;
 
-public interface AgentScript  {
+import com.oracle.truffle.api.source.Source;
+import org.graalvm.tools.insight.Insight;
+
+/**
+ * @deprecated Use {@link Insight}.
+ */
+@Deprecated
+public interface AgentScript {
+    /**
+     * @deprecated Use {@link Insight}.
+     */
+    @Deprecated String ID = "agentscript";
+
+    /**
+     * @deprecated Same as {@link Insight#VERSION}.
+     * @Deprecated
+     */
+    @Deprecated String VERSION = Insight.VERSION;
+
+    /**
+     * @deprecated See {@link Insight} for usage details.
+     */
+    @Deprecated
+    @SuppressWarnings("unused")
+    default void registerAgentScript(Source file) {
+        throw new UnsupportedOperationException();
+    }
 }
