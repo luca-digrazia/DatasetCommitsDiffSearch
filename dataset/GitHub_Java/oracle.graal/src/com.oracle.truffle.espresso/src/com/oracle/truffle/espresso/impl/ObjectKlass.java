@@ -684,9 +684,7 @@ public final class ObjectKlass extends Klass {
             // Implicit interface methods.
             method = lookupMirandas(methodName, signature);
         }
-        if (method == null &&
-                        (getType() == Type.java_lang_invoke_MethodHandle ||
-                                        getType() == Type.java_lang_invoke_VarHandle)) {
+        if (method == null && getType() == Type.java_lang_invoke_MethodHandle) {
             method = lookupPolysigMethod(methodName, signature);
         }
         if (method == null && getSuperKlass() != null) {

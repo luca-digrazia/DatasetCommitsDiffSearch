@@ -24,11 +24,13 @@
 package com.oracle.truffle.espresso.meta;
 
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Target_jdk_internal_misc_Unsafe;
+import com.oracle.truffle.espresso.substitutions.Target_sun_misc_Unsafe;
 
 /**
- * Helper for converting Java 8 strings to and from Java 11 strings.
+ * Helper for converting Java 8 strings to and from Java 11 strings. Taken from the java 11 String
+ * implementation.
  */
+// TODO(garcia): Support more than UTF16
 public class StringUtil {
     static final byte LATIN1 = 0;
     static final byte UTF16 = 1;
@@ -45,7 +47,34 @@ public class StringUtil {
         return dst;
     }
 
-    private static byte[] toBytes(char[] value, int off, int len) {
+    public static byte[] compress(char[] val) {
+        int off = 0;
+        int len = val.length;
+        byte[] ret = new byte[len];
+        if (compress(val, off, ret, 0, len) == len) {
+            return ret;
+        }
+        return null;
+    }
+
+    // compressedCopy char[] -> byte[]
+    private static int compress(char[] src, int srcOffset, byte[] dst, int dstOffset, int len) {
+        int dstOff = dstOffset;
+        int srcOff = srcOffset;
+        for (int i = 0; i < len; i++) {
+            char c = src[srcOff];
+            if (c > 0xFF) {
+                return 0;
+            }
+            dst[dstOff] = (byte) c;
+            srcOff++;
+            dstOff++;
+        }
+        return len;
+    }
+
+    private static byte[] toBytes(char[] value, int offset, int len) {
+        int off = offset;
         byte[] val = newBytesFor(len);
         for (int i = 0; i < len; i++) {
             putChar(val, i, value[off]);
@@ -55,12 +84,13 @@ public class StringUtil {
     }
 
     private static void getChars(byte[] value, int srcBegin, int srcEnd, char[] dst, int dstBegin) {
+        int pos = dstBegin;
         // We need a range check here because 'getChar' has no checks
         if (srcBegin < srcEnd) {
             checkBoundsOffCount(srcBegin, srcEnd - srcBegin, value);
         }
         for (int i = srcBegin; i < srcEnd; i++) {
-            dst[dstBegin++] = getChar(value, i);
+            dst[pos++] = getChar(value, i);
         }
     }
 
@@ -76,10 +106,11 @@ public class StringUtil {
     }
 
     private static char getChar(byte[] val, int index) {
-        assert index >= 0 && index < length(val) : "Trusted caller missed bounds check";
-        index <<= 1;
-        return (char) (((val[index++] & 0xff) << HI_BYTE_SHIFT) |
-                        ((val[index] & 0xff) << LO_BYTE_SHIFT));
+        int pos = index;
+        assert pos >= 0 && pos < length(val) : "Trusted caller missed bounds check";
+        pos <<= 1;
+        return (char) (((val[pos++] & 0xff) << HI_BYTE_SHIFT) |
+                        ((val[pos] & 0xff) << LO_BYTE_SHIFT));
     }
 
     private static byte[] newBytesFor(int len) {
@@ -94,10 +125,11 @@ public class StringUtil {
     }
 
     private static void putChar(byte[] val, int index, int c) {
-        assert index >= 0 && index < length(val) : "Trusted caller missed bounds check";
-        index <<= 1;
-        val[index++] = (byte) (c >> HI_BYTE_SHIFT);
-        val[index] = (byte) (c >> LO_BYTE_SHIFT);
+        int pos = index;
+        assert pos >= 0 && pos < length(val) : "Trusted caller missed bounds check";
+        pos <<= 1;
+        val[pos++] = (byte) (c >> HI_BYTE_SHIFT);
+        val[pos] = (byte) (c >> LO_BYTE_SHIFT);
     }
 
     private static int length(byte[] value) {
@@ -105,7 +137,7 @@ public class StringUtil {
     }
 
     private static boolean isBigEndian() {
-        return Target_jdk_internal_misc_Unsafe.isBigEndian0(StaticObject.NULL);
+        return Target_sun_misc_Unsafe.isBigEndian0(StaticObject.NULL);
     }
 
     private static final int HI_BYTE_SHIFT;
