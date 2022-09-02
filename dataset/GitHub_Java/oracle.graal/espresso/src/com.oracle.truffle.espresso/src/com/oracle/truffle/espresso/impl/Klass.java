@@ -474,7 +474,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     // This field should be static final, but until we move the static object model we cannot have a
     // SubstrateVM feature which will allow us to set the right field offsets at image build time.
     @CompilationFinal //
-    private static StaticShape<StaticObjectFactory> foreignShape;
+    private static StaticShape<StaticObjectFactory> FOREIGN_SHAPE;
 
     protected Symbol<Name> name;
     protected Symbol<Type> type;
@@ -614,16 +614,16 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     public static StaticShape<StaticObjectFactory> getForeignShape() {
-        if (foreignShape == null) {
+        if (FOREIGN_SHAPE == null) {
             initializeForeignShape();
         }
-        return foreignShape;
+        return FOREIGN_SHAPE;
     }
 
     @TruffleBoundary
-    private static synchronized void initializeForeignShape() {
-        if (foreignShape == null) {
-            foreignShape = StaticShape.newBuilder().property(FOREIGN_PROPERTY, "foreignObject", true).build(StaticObject.class, StaticObjectFactory.class);
+    private synchronized static void initializeForeignShape() {
+        if (FOREIGN_SHAPE == null) {
+            FOREIGN_SHAPE = StaticShape.newBuilder().property(FOREIGN_PROPERTY, "foreignObject", true).build(StaticObject.class, StaticObjectFactory.class);
         }
     }
 
