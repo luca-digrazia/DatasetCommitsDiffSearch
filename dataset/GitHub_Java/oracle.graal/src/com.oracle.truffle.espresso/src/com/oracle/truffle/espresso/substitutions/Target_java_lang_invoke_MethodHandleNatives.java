@@ -62,6 +62,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
 
         Klass targetKlass = ref.getKlass();
 
+        // TODO(garcia) Add Type.Constructor case.
         if (targetKlass.getType() == Type.Method) {
             // Actual planting
             Method target = Method.getHostReflectiveMethodRoot(ref);

@@ -472,7 +472,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
         if (method != null) {
             return method;
         }
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         method = new Method(declaringKlass, linkedMethod, signature);
         EspressoRootNode rootNode = new EspressoRootNode(method, baseNodeFactory.apply(method));
         method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
@@ -486,7 +485,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
         if (method != null) {
             return method;
         }
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         method = new Method(declaringKlass, linkedMethod, signature);
         EspressoRootNode rootNode = new EspressoRootNode(method, baseNodeFactory.apply(method));
         method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
@@ -500,7 +498,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
         if (method != null) {
             return method;
         }
-        CompilerDirectives.transferToInterpreterAndInvalidate();
         method = new Method(declaringKlass, linkedMethod, signature);
         EspressoRootNode rootNode = new EspressoRootNode(method, baseNodeFactory.apply(method));
         method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
