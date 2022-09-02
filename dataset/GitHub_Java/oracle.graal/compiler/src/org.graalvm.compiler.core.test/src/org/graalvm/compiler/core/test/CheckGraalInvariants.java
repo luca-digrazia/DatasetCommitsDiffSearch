@@ -76,7 +76,6 @@ import org.graalvm.compiler.phases.contract.VerifyNodeCosts;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.runtime.RuntimeProvider;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.word.LocationIdentity;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -128,7 +127,7 @@ public class CheckGraalInvariants extends GraalCompilerTest {
 
         protected String getClassPath() {
             String bootclasspath;
-            if (JavaVersionUtil.JAVA_SPEC <= 8) {
+            if (Java8OrEarlier) {
                 bootclasspath = System.getProperty("sun.boot.class.path");
             } else {
                 bootclasspath = System.getProperty("jdk.module.path") + File.pathSeparatorChar + System.getProperty("jdk.module.upgrade.path");
@@ -140,7 +139,7 @@ public class CheckGraalInvariants extends GraalCompilerTest {
             if (className.equals("module-info") || className.startsWith("META-INF.versions.")) {
                 return false;
             }
-            if (JavaVersionUtil.JAVA_SPEC > 8) {
+            if (!Java8OrEarlier) {
                 // @formatter:off
                 /*
                  * Work around to prevent:
