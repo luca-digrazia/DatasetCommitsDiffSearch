@@ -152,7 +152,7 @@ public final class TruffleContext implements AutoCloseable {
     public Object enter() {
         Object prev = AccessAPI.engineAccess().enterInternalContext(impl);
         if (CONTEXT_ASSERT_STACK != null) {
-            verifyEnter(prev);
+            pushOnAssertStack(prev);
         }
         return prev;
     }
@@ -197,19 +197,24 @@ public final class TruffleContext implements AutoCloseable {
     }
 
     @TruffleBoundary
-    private static void verifyEnter(Object prev) {
+    private static void pushOnAssertStack(Object prev) {
         assert CONTEXT_ASSERT_STACK != null;
         CONTEXT_ASSERT_STACK.get().add(prev);
     }
 
     @TruffleBoundary
-    private static void verifyLeave(Object prev) {
+    private static boolean verifyLeave(Object prev) {
         assert CONTEXT_ASSERT_STACK != null;
         List<Object> list = CONTEXT_ASSERT_STACK.get();
-        assert !list.isEmpty() : "Assert stack is empty.";
+        if (list.isEmpty()) {
+            throw new AssertionError("Assert stack is empty.");
+        }
         Object expectedPrev = list.get(list.size() - 1);
-        assert prev == expectedPrev : "Invalid prev argument provided in TruffleContext.leave(Object).";
+        if (prev != expectedPrev) {
+            throw new AssertionError("Invalid prev argument provided in TruffleContext.leave(Object).");
+        }
         list.remove(list.size() - 1); // pop
+        return true;
     }
 
     /**
