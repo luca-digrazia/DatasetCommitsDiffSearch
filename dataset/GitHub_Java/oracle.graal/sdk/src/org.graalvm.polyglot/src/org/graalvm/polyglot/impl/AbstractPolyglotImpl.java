@@ -68,8 +68,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.UnmodifiableEconomicSet;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -179,10 +177,6 @@ public abstract class AbstractPolyglotImpl {
         public abstract Object getHostAccessImpl(HostAccess conf);
 
         public abstract void setHostAccessImpl(HostAccess conf, Object impl);
-
-        public abstract UnmodifiableEconomicSet<String> getAccessibleLanguages(PolyglotAccess access, String language);
-
-        public abstract void validatePolyglotAccess(PolyglotAccess access, EconomicSet<String> language);
 
     }
 
