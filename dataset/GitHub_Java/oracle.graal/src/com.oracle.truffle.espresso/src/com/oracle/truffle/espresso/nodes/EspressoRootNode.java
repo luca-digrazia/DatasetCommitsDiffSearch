@@ -23,37 +23,33 @@
 package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.frame.FrameDescriptor;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoException;
 
 /**
  * The root of all executable bits in Espresso, includes everything that can be called a "method" in
  * Java. Regular (concrete) Java methods, native methods and intrinsics/substitutions.
  */
-public final class EspressoRootNode extends RootNode implements ContextAccess {
+public abstract class EspressoRootNode extends RootNode implements ContextAccess {
+    // TODO(peterssen): This could be ObjectKlass bar array methods. But those methods could be
+    // redirected e.g. arrays .clone method to Object.clone.
+    // private final /* ObjectKlass */ Klass declaringKlass;
     private final Method method;
-
-    @Child EspressoBaseNode childNode;
 
     public final Method getMethod() {
         return method;
     }
 
-    public EspressoRootNode(Method method, EspressoBaseNode childNode) {
+    protected EspressoRootNode(Method method) {
         super(method.getEspressoLanguage());
         this.method = method;
-        this.childNode = childNode;
     }
 
-    public EspressoRootNode(Method method, FrameDescriptor frameDescriptor, EspressoBaseNode childNode) {
+    protected EspressoRootNode(Method method, FrameDescriptor frameDescriptor) {
         super(method.getEspressoLanguage(), frameDescriptor);
         this.method = method;
-        this.childNode = childNode;
     }
 
     @Override
@@ -62,33 +58,7 @@ public final class EspressoRootNode extends RootNode implements ContextAccess {
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
-        try {
-            return childNode.execute(frame);
-        } catch (EspressoException e) {
-            if (!(isBytecodeNode())) {
-                e.addStackFrame(method, -2, getMeta());
-            }
-            throw e;
-        }
-    }
-
-    @Override
     public String getName() {
         return getMethod().getDeclaringKlass().getType() + "." + getMethod().getName() + getMethod().getRawSignature();
-    }
-
-    @Override
-    public String toString() {
-        return getName();
-    }
-
-    @Override
-    public SourceSection getSourceSection() {
-        return childNode.getSourceSection();
-    }
-
-    public boolean isBytecodeNode() {
-        return childNode instanceof BytecodeNode;
     }
 }
