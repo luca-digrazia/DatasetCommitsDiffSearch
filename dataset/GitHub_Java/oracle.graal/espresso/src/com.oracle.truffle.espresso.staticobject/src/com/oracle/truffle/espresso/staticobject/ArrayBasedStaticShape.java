@@ -26,6 +26,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.staticobject.StaticShapeBuilder.ExtendedProperty;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,6 +36,7 @@ import sun.misc.Unsafe;
 import static com.oracle.truffle.espresso.staticobject.StaticPropertyKind.N_PRIMITIVES;
 
 final class ArrayBasedStaticShape<T> extends StaticShape<T> {
+    private static final Unsafe UNSAFE = getUnsafe();
     @CompilationFinal //
     private static Boolean disableShapeChecks;
     @CompilationFinal(dimensions = 1) //
@@ -103,6 +105,20 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
 
     private ArrayBasedPropertyLayout getPropertyLayout() {
         return propertyLayout;
+    }
+
+    private static Unsafe getUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException e) {
+        }
+        try {
+            Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
+            theUnsafeInstance.setAccessible(true);
+            return (Unsafe) theUnsafeInstance.get(Unsafe.class);
+        } catch (Exception e) {
+            throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
+        }
     }
 
     /**
