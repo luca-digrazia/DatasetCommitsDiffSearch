@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.nodes.spi;
 
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.ValueProxyNode;
@@ -43,7 +44,7 @@ public interface ArrayLengthProvider {
          *
          * Values that are defined inside a loop and flow out the loop need to be proxied by
          * {@link ValueProxyNode}. When this mode is used, new necessary proxy nodes are created
-         * base on the proxies that were found while traversing the path to the length node. In
+         * based on the proxies that were found while traversing the path to the length node. In
          * addition, new {@link ValuePhiNode phi nodes} can be created. The caller is responsible
          * for adding these nodes to the graph, i.e., the return value can be a node that is not yet
          * added to the graph.
@@ -65,5 +66,5 @@ public interface ArrayLengthProvider {
      *
      * This method should not be called directly. Use {@link GraphUtil#arrayLength} instead.
      */
-    ValueNode findLength(FindLengthMode mode);
+    ValueNode findLength(FindLengthMode mode, ConstantReflectionProvider constantReflection);
 }
