@@ -25,27 +25,124 @@
 package com.oracle.svm.hosted.dashboard;
 
 import com.oracle.graal.pointsto.reports.ReportUtils;
-import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.hosted.FeatureImpl.AfterCompilationAccessImpl;
-import com.oracle.svm.hosted.FeatureImpl.AfterHeapLayoutAccessImpl;
-import com.oracle.svm.hosted.FeatureImpl.OnAnalysisExitAccessImpl;
+import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.graphio.GraphOutput;
-import org.graalvm.graphio.GraphStructure;
+
+import com.oracle.svm.core.annotate.AutomaticFeature;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.file.Path;
-import java.util.Collection;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.nio.channels.Channels;
 
 @AutomaticFeature
 public class DashboardDumpFeature implements Feature {
+    static class Dict {
+        final LinkedHashMap<String, Object> sections;
+
+        Dict() {
+            this.sections = new LinkedHashMap<>();
+        }
+
+        void insert(String key, Object value) {
+            sections.put(key, value);
+        }
+
+        boolean hasKey(String key) {
+            return sections.containsKey(key);
+        }
+
+        Object get(String key) {
+            return sections.get(key);
+        }
+
+        Integer getInt(String key) {
+            return (Integer) get(key);
+        }
+
+        Number getNumber(String key) {
+            return (Number) get(key);
+        }
+
+        @SuppressWarnings("unchecked")
+        ArrayList<Object> getList(String key) {
+            return (ArrayList<Object>) get(key);
+        }
+
+        String getString(String key) {
+            return (String) get(key);
+        }
+
+        Dict getDict(String key) {
+            return (Dict) get(key);
+        }
+
+        public void dump(PrintWriter writer) {
+            writer.println();
+            writer.println("{");
+            int index = 0;
+            for (Map.Entry<String, Object> entry : sections.entrySet()) {
+                writer.print("\"");
+                writer.print(escape(entry.getKey()));
+                writer.print("\": ");
+                final Object value = entry.getValue();
+                dumpValue(writer, value);
+                index++;
+                if (index < sections.size()) {
+                    writer.print(",");
+                }
+                writer.println();
+            }
+            writer.println("}");
+            writer.println();
+        }
+
+        static String escape(String input) {
+            String escaped = input;
+            escaped = escaped.replace("\\", "\\\\");
+            escaped = escaped.replace("\"", "\\\"");
+            escaped = escaped.replace("\b", "\\b");
+            escaped = escaped.replace("\f", "\\f");
+            escaped = escaped.replace("\n", "\\n");
+            escaped = escaped.replace("\r", "\\r");
+            escaped = escaped.replace("\t", "\\t");
+            escaped = escaped.replace("/", "\\/");
+            return escaped;
+        }
+
+        @SuppressWarnings("unchecked")
+        private void dumpValue(PrintWriter writer, Object value) {
+            if (value instanceof Number) {
+                writer.print(value);
+            } else if (value instanceof String) {
+                writer.print("\"");
+                writer.print(escape((String) value));
+                writer.print("\"");
+            } else if (value instanceof ArrayList) {
+                dumpList(writer, (ArrayList<Object>) value);
+            } else if (value instanceof Dict) {
+                ((Dict) value).dump(writer);
+            } else if (value == null) {
+                writer.print("null");
+            } else {
+                throw GraalError.shouldNotReachHere("Unknown value: " + value + ", type: " + value.getClass());
+            }
+        }
+
+        private void dumpList(PrintWriter writer, ArrayList<Object> list) {
+            writer.print("[");
+            int index = 0;
+            for (Object value : list) {
+                dumpValue(writer, value);
+                index++;
+                if (index < list.size()) {
+                    writer.print(", ");
+                }
+            }
+            writer.print("]");
+        }
+    }
 
     private static boolean isHeapBreakdownDumped() {
         return DashboardOptions.DashboardAll.getValue() || DashboardOptions.DashboardHeap.getValue();
@@ -59,267 +156,53 @@ public class DashboardDumpFeature implements Feature {
         return DashboardOptions.DashboardAll.getValue() || DashboardOptions.DashboardCode.getValue();
     }
 
-    private static boolean isBgvFormat() {
-        return DashboardOptions.DashboardBgv.getValue();
+    private static void dumpToFile(Dict dumpContent, String dumpPath) {
+        final File file = new File(dumpPath).getAbsoluteFile();
+        ReportUtils.report("Dashboard dump output", file.toPath(), writer -> {
+            dumpContent.dump(writer);
+        });
     }
 
-    private static boolean isJsonFormat() {
-        return DashboardOptions.DashboardJson.getValue() || isPretty();
-    }
-
-    private static boolean isPretty() {
-        return DashboardOptions.DashboardPretty.getValue();
-    }
-
-    private final ToJson dumper;
-
-    private static Path getFile(String extension) {
-        return new File(DashboardOptions.DashboardDump.getValue() + "." + extension).getAbsoluteFile().toPath();
-    }
+    private final Dict dumpRoot;
 
     public DashboardDumpFeature() {
-        if (isSane()) {
-            if (isJsonFormat()) {
-                this.dumper = new ToJson(isPretty());
-                ReportUtils.report("Dashboard JSON dump header", getFile("dump"), false, os -> {
-                    try (PrintWriter pw = new PrintWriter(os)) {
-                        DashboardDumpFeature.this.dumper.printHeader(pw);
-                    }
-                });
-            } else {
-                this.dumper = null;
-            }
-            if (isBgvFormat()) {
-                ReportUtils.report("Dashboard BGV dump header", getFile("bgv"), false, os -> {
-                    try {
-                        GraphOutput.newBuilder(VoidGraphStructure.INSTANCE).build(Channels.newChannel(os)).close();
-                    } catch (IOException ex) {
-                        Logger.getLogger(DashboardDumpFeature.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                });
-            }
-        } else {
-            this.dumper = null;
-        }
+        dumpRoot = new Dict();
     }
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return isSane();
-    }
-
-    private static boolean isSane() {
-        return DashboardOptions.DashboardDump.getValue() != null && (isHeapBreakdownDumped() || isPointsToDumped() || isCodeBreakdownDumped());
+        return DashboardOptions.DashboardDump.getValue() != null;
     }
 
     @Override
     public void onAnalysisExit(OnAnalysisExitAccess access) {
         if (isPointsToDumped()) {
-            if (isJsonFormat()) {
-                ReportUtils.report(
-                                "Dashboard PointsTo analysis JSON dump",
-                                getFile("dump"),
-                                true,
-                                os -> {
-                                    try (PrintWriter pw = new PrintWriter(os)) {
-                                        dumper.put(pw, "points-to", new PointsToJsonObject(access));
-                                    }
-                                });
-            }
-            if (isBgvFormat()) {
-                ReportUtils.report(
-                                "Dashboard PointsTo analysis BGV dump",
-                                getFile("bgv"),
-                                true,
-                                os -> {
-                                    try (GraphOutput<?, ?> out = GraphOutput.newBuilder(VoidGraphStructure.INSTANCE).embedded(true).build(Channels.newChannel(os))) {
-                                        out.beginGroup(null, "points-to", null, null, 0, Collections.emptyMap());
-                                        new PointsToJsonObject(access).dump(out);
-                                        out.endGroup();
-                                    } catch (IOException ex) {
-                                        ((OnAnalysisExitAccessImpl) access).getDebugContext().log("Dump of PointsTo analysis failed with: %s", ex);
-                                    }
-                                });
-            }
+            final PointsToDumper pointsToDumper = new PointsToDumper();
+            final Dict pointsTo = pointsToDumper.dump(access);
+            dumpRoot.insert("points-to", pointsTo);
         }
     }
 
     @Override
     public void afterCompilation(AfterCompilationAccess access) {
         if (isCodeBreakdownDumped()) {
-            CodeBreakdownJsonObject dump = new CodeBreakdownJsonObject(access);
-            if (isJsonFormat()) {
-                ReportUtils.report(
-                                "Dashboard Code-Breakdown JSON dump",
-                                getFile("dump"),
-                                true,
-                                os -> {
-                                    try (PrintWriter pw = new PrintWriter(os)) {
-                                        dumper.put(pw, "code-breakdown", dump);
-                                    }
-                                });
-            }
-            if (isBgvFormat()) {
-                ReportUtils.report(
-                                "Dashboard Code-Breakdown BGV dump",
-                                getFile("bgv"),
-                                true,
-                                os -> {
-                                    try (GraphOutput<?, ?> out = GraphOutput.newBuilder(VoidGraphStructure.INSTANCE).embedded(true).build(Channels.newChannel(os))) {
-                                        dump.build();
-                                        out.beginGroup(null, "code-breakdown", null, null, 0, dump.getData());
-                                        out.endGroup();
-                                    } catch (IOException ex) {
-                                        ((AfterCompilationAccessImpl) access).getDebugContext().log("Dump of Code-Breakdown failed with: %s", ex);
-                                    }
-                                });
-            }
+            final CodeBreakdownDumper codeBreakdownDumper = new CodeBreakdownDumper();
+            final Dict breakdown = codeBreakdownDumper.dump(access);
+            dumpRoot.insert("code-breakdown", breakdown);
         }
     }
 
     @Override
     public void afterHeapLayout(AfterHeapLayoutAccess access) {
         if (isHeapBreakdownDumped()) {
-            HeapBreakdownJsonObject dump = new HeapBreakdownJsonObject(access);
-            if (isJsonFormat()) {
-                ReportUtils.report(
-                                "Dashboard Heap-Breakdown JSON dump",
-                                getFile("dump"),
-                                true,
-                                os -> {
-                                    try (PrintWriter pw = new PrintWriter(os)) {
-                                        dumper.put(pw, "heap-breakdown", dump);
-                                    }
-                                });
-            }
-            if (isBgvFormat()) {
-                ReportUtils.report(
-                                "Dashboard Heap-Breakdown BGV dump",
-                                getFile("bgv"),
-                                true,
-                                os -> {
-                                    try (GraphOutput<?, ?> out = GraphOutput.newBuilder(VoidGraphStructure.INSTANCE).embedded(true).build(Channels.newChannel(os))) {
-                                        dump.build();
-                                        out.beginGroup(null, "heap-breakdown", null, null, 0, dump.getData());
-                                        out.endGroup();
-                                    } catch (IOException ex) {
-                                        ((AfterHeapLayoutAccessImpl) access).getDebugContext().log("Dump of Heap-Breakdown failed with: %s", ex);
-                                    }
-                                });
-            }
+            final HeapBreakdownDumper heapBreakdownDumper = new HeapBreakdownDumper();
+            final Dict breakdown = heapBreakdownDumper.dump(access);
+            dumpRoot.insert("heap-breakdown", breakdown);
         }
     }
 
     @Override
     public void cleanup() {
-        if (isJsonFormat()) {
-            ReportUtils.report(
-                            "Dashboard JSON dump end",
-                            getFile("dump"),
-                            true,
-                            os -> {
-                                try (PrintWriter pw = new PrintWriter(os, true)) {
-                                    dumper.close(pw);
-                                }
-                            });
-        }
-        System.out.println("Print of Dashboard dump output ended.");
-    }
-
-    public static final class VoidGraphStructure implements GraphStructure<Void, Void, Void, Void> {
-
-        public static final GraphStructure<Void, Void, Void, Void> INSTANCE = new VoidGraphStructure();
-
-        private VoidGraphStructure() {
-        }
-
-        @Override
-        public Void graph(Void currentGraph, Object obj) {
-            return null;
-        }
-
-        @Override
-        public Iterable<? extends Void> nodes(Void graph) {
-            return Collections.emptyList();
-        }
-
-        @Override
-        public int nodesCount(Void graph) {
-            return 0;
-        }
-
-        @Override
-        public int nodeId(Void node) {
-            return 0;
-        }
-
-        @Override
-        public boolean nodeHasPredecessor(Void node) {
-            return false;
-        }
-
-        @Override
-        public void nodeProperties(Void graph, Void node, Map<String, ? super Object> properties) {
-        }
-
-        @Override
-        public Void node(Object obj) {
-            return null;
-        }
-
-        @Override
-        public Void nodeClass(Object obj) {
-            return null;
-        }
-
-        @Override
-        public Void classForNode(Void node) {
-            return null;
-        }
-
-        @Override
-        public String nameTemplate(Void nodeClass) {
-            return null;
-        }
-
-        @Override
-        public Object nodeClassType(Void nodeClass) {
-            return null;
-        }
-
-        @Override
-        public Void portInputs(Void nodeClass) {
-            return null;
-        }
-
-        @Override
-        public Void portOutputs(Void nodeClass) {
-            return null;
-        }
-
-        @Override
-        public int portSize(Void port) {
-            return 0;
-        }
-
-        @Override
-        public boolean edgeDirect(Void port, int index) {
-            return false;
-        }
-
-        @Override
-        public String edgeName(Void port, int index) {
-            return null;
-        }
-
-        @Override
-        public Object edgeType(Void port, int index) {
-            return null;
-        }
-
-        @Override
-        public Collection<? extends Void> edgeNodes(Void graph, Void node, Void port, int index) {
-            return null;
-        }
+        dumpToFile(dumpRoot, DashboardOptions.DashboardDump.getValue());
     }
 }
