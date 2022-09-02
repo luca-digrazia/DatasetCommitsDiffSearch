@@ -29,13 +29,11 @@ package com.oracle.svm.core.heap;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
 import java.lang.reflect.Field;
-import java.util.function.BooleanSupplier;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.ExcludeFromReferenceMap;
@@ -99,14 +97,13 @@ public final class Target_java_lang_ref_Reference<T> {
 
     @SuppressWarnings("unused") //
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    @ExcludeFromReferenceMap(value = "Some GCs process this field manually.", condition = NotCardRememberedSetHeap.class) //
-    transient Target_java_lang_ref_Reference<?> discovered;
+    Target_java_lang_ref_Reference<?> discovered;
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ComputeQueueValue.class) //
     volatile Target_java_lang_ref_ReferenceQueue<? super T> queue;
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    volatile Reference<?> next;
+    Reference<?> next;
 
     @Substitute
     Target_java_lang_ref_Reference(T referent) {
@@ -212,13 +209,5 @@ class ComputeTrue implements CustomFieldValueComputer {
     @Override
     public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
         return true;
-    }
-}
-
-@Platforms(Platform.HOSTED_ONLY.class)
-class NotCardRememberedSetHeap implements BooleanSupplier {
-    @Override
-    public boolean getAsBoolean() {
-        return !SubstrateOptions.UseCardRememberedSetHeap.getValue();
     }
 }

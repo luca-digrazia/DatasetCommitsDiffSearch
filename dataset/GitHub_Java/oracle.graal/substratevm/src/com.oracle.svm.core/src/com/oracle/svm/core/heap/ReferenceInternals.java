@@ -25,7 +25,6 @@
 package com.oracle.svm.core.heap;
 
 import java.lang.ref.Reference;
-import java.lang.ref.SoftReference;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.debug.GraalError;
@@ -75,10 +74,6 @@ public final class ReferenceInternals {
     /** Barrier-less write of {@link Target_java_lang_ref_Reference#referent} as pointer. */
     public static <T> void setReferentPointer(Reference<T> instance, Pointer value) {
         ObjectAccess.writeObject(instance, WordFactory.signed(Target_java_lang_ref_Reference.referentFieldOffset), value.toObject());
-    }
-
-    public static <T> Pointer getReferentFieldAddress(Reference<T> instance) {
-        return Word.objectToUntrackedPointer(instance).add(WordFactory.unsigned(Target_java_lang_ref_Reference.referentFieldOffset));
     }
 
     public static <T> boolean needsDiscovery(Reference<T> instance) {
@@ -181,19 +176,6 @@ public final class ReferenceInternals {
     }
 
     // Checkstyle: disallow synchronization
-
-    public static long getSoftReferenceClock() {
-        return Target_java_lang_ref_SoftReference.clock;
-    }
-
-    public static void updateSoftReferenceClock() {
-        SoftReferenceClockAccessor.update();
-    }
-
-    public static long getSoftReferenceTimestamp(SoftReference<?> instance) {
-        Target_java_lang_ref_SoftReference<?> ref = SubstrateUtil.cast(instance, Target_java_lang_ref_SoftReference.class);
-        return ref.timestamp;
-    }
 
     public static ResolvedJavaType getReferenceType(MetaAccessProvider metaAccess) {
         return metaAccess.lookupJavaType(Reference.class);
