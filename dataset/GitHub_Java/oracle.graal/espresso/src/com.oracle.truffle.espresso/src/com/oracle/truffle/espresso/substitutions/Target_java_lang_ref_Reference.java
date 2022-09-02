@@ -27,7 +27,7 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.InvocationTargetException;
 import java.security.ProtectionDomain;
 
-import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -76,8 +76,8 @@ public class Target_java_lang_ref_Reference {
      * Inject raw class in the host boot class loader.
      */
     private static Class<?> injectClassInBootClassLoader(String className, byte[] classBytes) {
-        EspressoError.guarantee(HostJavaVersionUtil.JAVA_SPEC == 8 || HostJavaVersionUtil.JAVA_SPEC == 11, "Unsupported host Java version: {}", HostJavaVersionUtil.JAVA_SPEC);
-        if (HostJavaVersionUtil.JAVA_SPEC == 8) {
+        EspressoError.guarantee(JavaVersionUtil.JAVA_SPEC == 8 || JavaVersionUtil.JAVA_SPEC == 11, "Unsupported host Java version: {}", JavaVersionUtil.JAVA_SPEC);
+        if (JavaVersionUtil.JAVA_SPEC == 8) {
             // Inject class via sun.misc.Unsafe#defineClass.
             // The use of reflection here is deliberate, so the code compiles with both Java 8/11.
             try {
@@ -88,7 +88,7 @@ public class Target_java_lang_ref_Reference {
             } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
-        } else if (HostJavaVersionUtil.JAVA_SPEC >= 11 /* removal of sun.misc.Unsafe#defineClass */) {
+        } else if (JavaVersionUtil.JAVA_SPEC == 11 /* removal of sun.misc.Unsafe#defineClass */) {
             // Inject class via j.l.ClassLoader#defineClass1.
             try {
                 java.lang.reflect.Method defineClass1 = ClassLoader.class.getDeclaredMethod("defineClass1",
@@ -99,7 +99,7 @@ public class Target_java_lang_ref_Reference {
                 throw EspressoError.shouldNotReachHere(e);
             }
         } else {
-            throw EspressoError.shouldNotReachHere("Java version not supported: " + HostJavaVersionUtil.JAVA_SPEC);
+            throw EspressoError.shouldNotReachHere("Java version not supported: " + JavaVersionUtil.JAVA_SPEC);
         }
     }
 
@@ -178,9 +178,6 @@ public class Target_java_lang_ref_Reference {
     @SuppressWarnings("rawtypes")
     @Substitution(hasReceiver = true)
     public static boolean enqueue(@Host(java.lang.ref.Reference.class) StaticObject self,
-                    // Checkstyle: stop
-                    @GuestCall(target = "java_lang_ref_Reference_enqueue", original = true) DirectCallNode enqueue,
-                    // Checkstyle: resume
                     @InjectMeta Meta meta) {
         if (meta.getJavaVersion().java9OrLater()) {
             /*
@@ -198,6 +195,15 @@ public class Target_java_lang_ref_Reference {
             }
         }
 
-        return (boolean) enqueue.call(self);
+        // TODO(garcia): Give substitutions the power of calling the original method they
+        // substitute.
+
+        // Replicates the behavior of guest Reference.enqueue()
+        if (meta.getJavaVersion().java9OrLater()) {
+            meta.java_lang_ref_Reference_referent.set(self, StaticObject.NULL);
+        }
+        StaticObject queue = meta.java_lang_ref_Reference_queue.getObject(self);
+        Method m = queue.getKlass().vtableLookup(meta.java_lang_ref_ReferenceQueue_enqueue.getVTableIndex());
+        return (boolean) m.invokeDirect(queue, self);
     }
 }

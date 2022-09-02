@@ -555,7 +555,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsByte(meta, holder, false);
+        return (byte) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -568,7 +568,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsObject(meta, holder);
+        return f.getObject(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -578,7 +578,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsBoolean(meta, holder, false);
+        return (boolean) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -588,7 +588,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsChar(meta, holder, false);
+        return (char) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -598,7 +598,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsShort(meta, holder, false);
+        return (short) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -608,7 +608,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsInt(meta, holder, false);
+        return (int) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -618,7 +618,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsFloat(meta, holder, false);
+        return (float) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -628,7 +628,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsDouble(meta, holder, false);
+        return (double) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -638,7 +638,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsLong(meta, holder, false);
+        return (long) f.get(holder);
     }
 
     // endregion get*(Object holder, long offset)
@@ -653,7 +653,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsBoolean(meta, holder, false, true);
+        return f.getBoolean(holder, true);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -664,7 +664,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsByte(meta, holder, false, true);
+        return f.getByte(holder, true);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -675,7 +675,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsShort(meta, holder, false, true);
+        return f.getShort(holder, true);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -686,7 +686,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsChar(meta, holder, false, true);
+        return f.getChar(holder, true);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -697,7 +697,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsFloat(meta, holder, false, true);
+        return f.getFloat(holder, true);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -708,7 +708,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsInt(meta, holder, false, true);
+        return f.getInt(holder, true);
     }
 
     @Substitution(hasReceiver = true)
@@ -718,7 +718,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsLong(meta, holder, false, true);
+        return f.getLong(holder, true);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -729,7 +729,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsDouble(meta, holder, false, true);
+        return f.getDouble(holder);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -741,7 +741,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getAsObject(meta, holder, true);
+        return f.getObject(holder, true);
     }
 
     // endregion get*Volatile(Object holder, long offset)
@@ -1010,7 +1010,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setObject(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1023,7 +1023,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setBoolean(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1036,7 +1036,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setByte(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1049,7 +1049,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setChar(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1062,7 +1062,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setShort(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1075,7 +1075,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setInt(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1088,7 +1088,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setFloat(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1101,7 +1101,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setDouble(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1114,7 +1114,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        f.setLong(holder, value);
+        f.set(holder, value);
     }
 
     @Substitution(hasReceiver = true)
