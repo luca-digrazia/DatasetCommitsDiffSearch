@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -783,7 +783,7 @@ public abstract class Source {
      * @since 19.0
      */
     public static LiteralBuilder newBuilder(String language, CharSequence characters, String name) {
-        return EMPTY.new LiteralBuilder(language, characters, false).name(name);
+        return EMPTY.new LiteralBuilder(language, characters).name(name);
     }
 
     /**
@@ -791,7 +791,7 @@ public abstract class Source {
      * after they were accessed for the first time.
      * <p>
      * Use this method for sources that do originate from a literal. For file or URL sources use the
-     * appropriate builder constructor and {@link SourceBuilder#content(ByteSequence)}.
+     * appropriate builder constructor and {@link SourceBuilder#content(CharSequence)}.
      * <p>
      * Example usage: {@link SourceSnippets#fromBytes}
      *
@@ -802,7 +802,7 @@ public abstract class Source {
      * @since 19.0
      */
     public static LiteralBuilder newBuilder(String language, ByteSequence bytes, String name) {
-        return EMPTY.new LiteralBuilder(language, bytes, false).name(name);
+        return EMPTY.new LiteralBuilder(language, bytes).name(name);
     }
 
     /**
@@ -820,14 +820,14 @@ public abstract class Source {
      * @since 19.0
      */
     public static SourceBuilder newBuilder(String language, TruffleFile file) {
-        return EMPTY.new LiteralBuilder(language, file, true);
+        return EMPTY.new LiteralBuilder(language, file);
     }
 
     /*
      * Internal constructor only for polyglot sources.
      */
     static SourceBuilder newBuilder(String language, File source) {
-        return EMPTY.new LiteralBuilder(language, source, true);
+        return EMPTY.new LiteralBuilder(language, source);
     }
 
     /**
@@ -845,7 +845,7 @@ public abstract class Source {
      * @since 19.0
      */
     public static SourceBuilder newBuilder(String language, URL url) {
-        return EMPTY.new LiteralBuilder(language, url, true);
+        return EMPTY.new LiteralBuilder(language, url);
     }
 
     /**
@@ -859,18 +859,7 @@ public abstract class Source {
      * @since 19.0
      */
     public static SourceBuilder newBuilder(String language, Reader source, String name) {
-        return EMPTY.new LiteralBuilder(language, source, true).name(name);
-    }
-
-    /**
-     * Creates a new source builder that inherits from the given Source. The Source properties can
-     * be modified using the builder methods.
-     *
-     * @param source the source to inherit the properties from
-     * @since 19.2.0
-     */
-    public static LiteralBuilder newBuilder(Source source) {
-        return EMPTY.new LiteralBuilder(source);
+        return EMPTY.new LiteralBuilder(language, source).name(name);
     }
 
     /**
@@ -1028,14 +1017,14 @@ public abstract class Source {
 
     private static final boolean ALLOW_IO = SourceAccessor.ACCESSOR.engineSupport().isIOAllowed();
 
-    static Source buildSource(String language, Object origin, String name, String path, String mimeType, Object content, URL url, URI uri, Charset encoding,
+    static Source buildSource(String language, Object origin, String name, String mimeType, Object content, URI uri, Charset encoding,
                     boolean internal, boolean interactive, boolean cached, boolean legacy, Supplier<Object> fileSystemContext) throws IOException {
         String useName = name;
         URI useUri = uri;
         Object useContent = content;
         String useMimeType = mimeType;
-        String usePath = path;
-        URL useUrl = url;
+        String usePath = null;
+        URL useUrl = null;
         Object useOrigin = origin;
         Charset useEncoding = encoding;
 
@@ -1045,9 +1034,7 @@ public abstract class Source {
             useOrigin = truffleFile;
         }
 
-        if (useOrigin == CONTENT_UNSET) {
-            useContent = useContent == CONTENT_UNSET ? null : useContent;
-        } else if (useOrigin instanceof TruffleFile) {
+        if (useOrigin instanceof TruffleFile) {
             TruffleFile file = (TruffleFile) useOrigin;
             if (!file.isAbsolute() && useContent == CONTENT_NONE) {
                 if (useUri == null) {
@@ -1471,9 +1458,7 @@ public abstract class Source {
         private final String language;
         private final Object origin;
         private URI uri;
-        URL url;
         private String name;
-        String path;
         private String mimeType;
         private Object content = CONTENT_UNSET;
         private boolean internal;
@@ -1664,8 +1649,8 @@ public abstract class Source {
          */
         public Source build() throws IOException {
             assert this.language != null;
-            Source source = buildSource(this.language, this.origin, this.name, this.path, this.mimeType, this.content, this.url, this.uri, this.fileEncoding, this.internal, this.interactive,
-                            this.cached, false, new FileSystemContextSupplier(embedderFileSystemContext));
+            Source source = buildSource(this.language, this.origin, this.name, this.mimeType, this.content, this.uri, this.fileEncoding, this.internal, this.interactive, this.cached, false,
+                            new FileSystemContextSupplier(embedderFileSystemContext));
 
             // make sure origin is not consumed again if builder is used twice
             if (source.hasBytes()) {
@@ -1684,15 +1669,6 @@ public abstract class Source {
 
     }
 
-    private static Object getSourceContent(Source source) {
-        Object content = ((SourceImpl) source).toKey().content;
-        if (content == CONTENT_NONE) {
-            return CONTENT_UNSET;
-        } else {
-            return content;
-        }
-    }
-
     /**
      * Allows one to specify additional attribute before {@link #build() creating} new
      * {@link Source} instance.
@@ -1702,44 +1678,8 @@ public abstract class Source {
      */
     public final class LiteralBuilder extends SourceBuilder {
 
-        private boolean buildThrowsIOException;
-
-        LiteralBuilder(String language, Object origin, boolean originReadingThrows) {
+        LiteralBuilder(String language, Object origin) {
             super(language, origin);
-            this.buildThrowsIOException = originReadingThrows;
-        }
-
-        LiteralBuilder(Source source) {
-            super(source.getLanguage(), getSourceContent(source));
-            cached(source.isCached());
-            interactive(source.isInteractive());
-            internal(source.isInternal());
-            mimeType(source.getMimeType());
-            name(source.getName());
-            uri(((SourceImpl) source).toKey().uri);
-            path = source.getPath();
-            url = source.getURL();
-            buildThrowsIOException = false;
-        }
-
-        /**
-         * {@inheritDoc}
-         *
-         * @since 19.3
-         */
-        public LiteralBuilder content(CharSequence characters) {
-            buildThrowsIOException = false;
-            return super.content(characters);
-        }
-
-        /**
-         * {@inheritDoc}
-         *
-         * @since 19.3
-         */
-        public LiteralBuilder content(ByteSequence bytes) {
-            buildThrowsIOException = false;
-            return super.content(bytes);
         }
 
         /**
@@ -1824,11 +1764,7 @@ public abstract class Source {
             try {
                 return super.build();
             } catch (IOException e) {
-                if (buildThrowsIOException) {
-                    throw silenceException(RuntimeException.class, e);
-                } else {
-                    throw new AssertionError("Unexpected IOException", e);
-                }
+                throw silenceException(RuntimeException.class, e);
             }
         }
     }
@@ -1965,7 +1901,7 @@ public abstract class Source {
         @Deprecated
         public Source build() throws E1, E2, E3 {
             try {
-                Source source = buildSource(this.language, this.origin, this.name, null, this.mime, this.characters, null, this.uri, null, this.internal, this.interactive, this.cached, true,
+                Source source = buildSource(this.language, this.origin, this.name, this.mime, this.characters, this.uri, null, this.internal, this.interactive, this.cached, true,
                                 new FileSystemContextSupplier(null));
 
                 // legacy sources must have character sources
