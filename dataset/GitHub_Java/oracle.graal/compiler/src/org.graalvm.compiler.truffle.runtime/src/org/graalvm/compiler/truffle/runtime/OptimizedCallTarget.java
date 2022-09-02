@@ -84,8 +84,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                     SpeculationLog.class, "speculationLog");
     private static final AtomicReferenceFieldUpdater<OptimizedCallTarget, Assumption> NODE_REWRITING_ASSUMPTION_UPDATER = AtomicReferenceFieldUpdater.newUpdater(OptimizedCallTarget.class,
                     Assumption.class, "nodeRewritingAssumption");
-    private static final WeakReference<OptimizedDirectCallNode> NO_CALL = new WeakReference<>(null);
-    private static final WeakReference<OptimizedDirectCallNode> MULTIPLE_CALLS = null;
+    private static final WeakReference<OptimizedDirectCallNode> UNINITIALIZED_SINGLE_CALL = new WeakReference<>(null);
     private static final String SPLIT_LOG_FORMAT = "[truffle] [poly-event] %-70s %s";
     private static final int MAX_PROFILED_ARGUMENTS = 256;
     private static final String ARGUMENT_TYPES_ASSUMPTION_NAME = "Profiled Argument Types";
@@ -203,7 +202,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     private volatile String nameCache;
     private final int uninitializedNodeCount;
 
-    private volatile WeakReference<OptimizedDirectCallNode> singleCallNode = NO_CALL;
+    private volatile WeakReference<OptimizedDirectCallNode> singleCallNode = UNINITIALIZED_SINGLE_CALL;
 
     protected OptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
         assert sourceCallTarget == null || sourceCallTarget.sourceCallTarget == null : "Cannot create a clone of a cloned CallTarget";
@@ -1136,15 +1135,15 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     final synchronized void addDirectCallNode(OptimizedDirectCallNode directCallNode) {
         Objects.requireNonNull(directCallNode);
         WeakReference<OptimizedDirectCallNode> nodeRef = singleCallNode;
-        if (nodeRef != MULTIPLE_CALLS) {
+        if (nodeRef != null) {
             // we only remember at most one call site
-            if (nodeRef == NO_CALL) {
+            if (nodeRef == UNINITIALIZED_SINGLE_CALL) {
                 singleCallNode = new WeakReference<>(directCallNode);
             } else if (nodeRef.get() == directCallNode) {
                 // nothing to do same call site
                 return;
             } else {
-                singleCallNode = MULTIPLE_CALLS;
+                singleCallNode = null;
             }
         }
         callSitesKnown++;
@@ -1154,16 +1153,16 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     final synchronized void removeDirectCallNode(OptimizedDirectCallNode directCallNode) {
         Objects.requireNonNull(directCallNode);
         WeakReference<OptimizedDirectCallNode> nodeRef = singleCallNode;
-        if (nodeRef != MULTIPLE_CALLS) {
+        if (nodeRef != null) {
             // we only remember at most one call site
-            if (nodeRef == NO_CALL) {
+            if (nodeRef == UNINITIALIZED_SINGLE_CALL) {
                 // nothing to do
                 return;
             } else if (nodeRef.get() == directCallNode) {
                 // reset if its the only call site
-                singleCallNode = NO_CALL;
+                singleCallNode = UNINITIALIZED_SINGLE_CALL;
             } else {
-                singleCallNode = MULTIPLE_CALLS;
+                singleCallNode = null;
             }
         }
         callSitesKnown--;
