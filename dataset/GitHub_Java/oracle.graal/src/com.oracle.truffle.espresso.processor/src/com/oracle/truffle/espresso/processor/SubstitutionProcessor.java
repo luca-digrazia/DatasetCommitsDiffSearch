@@ -104,7 +104,10 @@ public class SubstitutionProcessor extends EspressoProcessor {
             first = checkFirst(str, first);
             str.append(ARG_NAME).append(i);
         }
-        appendInvocationMetaInformation(str, guestCalls, hasMetaInjection, first);
+        str.append(getGuestCallsForInvoke(guestCalls, first));
+        if (hasMetaInjection) {
+            injectMeta(str, first);
+        }
         str.append(");\n");
         return str.toString();
     }

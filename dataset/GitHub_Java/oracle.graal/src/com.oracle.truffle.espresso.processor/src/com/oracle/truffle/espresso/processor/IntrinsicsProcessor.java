@@ -58,7 +58,12 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         }
         for (VariableElement param : method.getParameters()) {
             if (isActualParameter(param)) {
-                checkFirst(sb, first);
+                if (!first) {
+                    sb.append(", ");
+                } else {
+                    first = false;
+                }
+
                 // Override NFI type.
                 AnnotationMirror nfi = getAnnotation(param.asType(), nfiType);
                 if (nfi != null) {
@@ -105,8 +110,12 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
             first = checkFirst(str, first);
             str.append(ARG_NAME).append(i);
         }
-        appendInvocationMetaInformation(str, guestCalls, hasMetaInjection, first);
+        if (hasMetaInjection) {
+            injectMeta(str, first);
+        }
+        str.append(getGuestCallsForInvoke(guestCalls, first));
         str.append(");\n");
         return str.toString();
     }
+
 }

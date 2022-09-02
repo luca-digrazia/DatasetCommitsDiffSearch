@@ -24,7 +24,7 @@
 package com.oracle.truffle.espresso.substitutions;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -96,13 +96,15 @@ public final class Target_java_lang_Thread {
     // TODO(peterssen): Remove single thread shim, support real threads.
 
     @Substitution
-    public static @Host(Thread.class) StaticObject currentThread() {
-        return EspressoLanguage.getCurrentContext().getHost2Guest(Thread.currentThread());
+    public static @Host(Thread.class) StaticObject currentThread(@InjectMeta Meta meta) {
+        return meta.getContext().getHost2Guest(Thread.currentThread());
     }
 
     @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
-    public static void start0(@Host(Thread.class) StaticObject self) {
+    public static void start0(@Host(Thread.class) StaticObject self,
+                    @GuestCall DirectCallNode Thread_dispatchUncaughtException,
+                    @GuestCall DirectCallNode Thread_exit) {
         if (EspressoOptions.ENABLE_THREADS) {
             // Thread.start() is synchronized.
             EspressoContext context = self.getKlass().getContext();
@@ -114,10 +116,10 @@ public final class Target_java_lang_Thread {
                         // Execute the payload
                         self.getKlass().vtableLookup(meta.Thread_run.getVTableIndex()).invokeDirect(self);
                     } catch (EspressoException uncaught) {
-                        meta.Thread_dispatchUncaughtException.invokeDirect(self, uncaught.getException());
+                        Thread_dispatchUncaughtException.call(self, uncaught.getException());
                     } finally {
                         self.setIntField(meta.Thread_state, State.TERMINATED.value);
-                        meta.Thread_exit.invokeDirect(self);
+                        Thread_exit.call(self);
                         synchronized (self) {
                             // Notify waiting threads you are done working
                             self.notifyAll();
@@ -162,10 +164,11 @@ public final class Target_java_lang_Thread {
     }
 
     @Substitution(hasReceiver = true)
-    public static @Host(typeName = "Ljava/lang/Thread$State;") StaticObject getState(@Host(Thread.class) StaticObject self) {
+    public static @Host(typeName = "Ljava/lang/Thread$State;") StaticObject getState(@Host(Thread.class) StaticObject self,
+                    @GuestCall DirectCallNode toThreadState) {
         Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
         // If hostThread is null, start hasn't been called yet -> NEW state.
-        return (StaticObject) self.getKlass().getMeta().toThreadState.invokeDirect(null, hostThread == null ? State.NEW.value : stateToInt(hostThread.getState()));
+        return (StaticObject) toThreadState.call(hostThread == null ? State.NEW.value : stateToInt(hostThread.getState()));
     }
 
     @SuppressWarnings("unused")
@@ -189,9 +192,8 @@ public final class Target_java_lang_Thread {
     }
 
     @Substitution
-    public static boolean holdsLock(@Host(Object.class) StaticObject object) {
+    public static boolean holdsLock(@Host(Object.class) StaticObject object, @InjectMeta Meta meta) {
         if (StaticObject.isNull(object)) {
-            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
             throw meta.throwEx(meta.NullPointerException);
         }
         return Thread.holdsLock(object);
@@ -199,11 +201,10 @@ public final class Target_java_lang_Thread {
 
     @TruffleBoundary
     @Substitution
-    public static void sleep(long millis) {
+    public static void sleep(long millis, @InjectMeta Meta meta) {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException | IllegalArgumentException e) {
-            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
             throw meta.throwExWithMessage(e.getClass(), e.getMessage());
         }
     }
@@ -261,11 +262,5 @@ public final class Target_java_lang_Thread {
             }
             hostThread.stop();
         }
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void setNativeName(@Host(Object.class) StaticObject self, @Host(String.class) StaticObject name) {
-        Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        hostThread.setName(Meta.toHostString(name));
     }
 }
