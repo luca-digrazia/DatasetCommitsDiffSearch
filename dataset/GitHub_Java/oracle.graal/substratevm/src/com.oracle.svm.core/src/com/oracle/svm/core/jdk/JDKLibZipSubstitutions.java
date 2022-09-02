@@ -26,6 +26,7 @@
 package com.oracle.svm.core.jdk;
 
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -39,7 +40,7 @@ import com.oracle.svm.core.jni.JNIRuntimeAccess;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.util.VMError;
 
-@Platforms(InternalPlatform.PLATFORM_JNI.class)
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class, Platform.WINDOWS.class})
 @CLibrary(value = JDKLibZipSubstitutions.CLibraryName, requireStatic = true)
 public class JDKLibZipSubstitutions {
     static final String CLibraryName = "zip";
@@ -69,7 +70,7 @@ public class JDKLibZipSubstitutions {
     }
 }
 
-@Platforms(InternalPlatform.PLATFORM_JNI.class)
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class, Platform.WINDOWS.class})
 @AutomaticFeature
 class JDKLibZipFeature implements Feature {
     @Override
