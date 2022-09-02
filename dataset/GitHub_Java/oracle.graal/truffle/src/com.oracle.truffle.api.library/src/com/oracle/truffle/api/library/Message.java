@@ -75,7 +75,6 @@ public abstract class Message {
     private final Class<?> returnType;
     private final Class<? extends Library> libraryClass;
     private final List<Class<?>> parameterTypes;
-    private final int parameterCount;
     @CompilationFinal LibraryFactory<Library> library;
 
     /**
@@ -91,7 +90,6 @@ public abstract class Message {
         this.returnType = returnType;
         this.parameterTypes = Collections.unmodifiableList(Arrays.asList(parameterTypes));
         this.qualifiedName = (getLibraryName() + "." + simpleName).intern();
-        this.parameterCount = parameterTypes.length;
         this.hash = qualifiedName.hashCode();
     }
 
@@ -165,15 +163,6 @@ public abstract class Message {
      */
     public final List<Class<?>> getParameterTypes() {
         return parameterTypes;
-    }
-
-    /**
-     * Returns the number of parameters including the receiver type.
-     *
-     * @since 1.0
-     */
-    public final int getParameterCount() {
-        return parameterCount;
     }
 
     /**
