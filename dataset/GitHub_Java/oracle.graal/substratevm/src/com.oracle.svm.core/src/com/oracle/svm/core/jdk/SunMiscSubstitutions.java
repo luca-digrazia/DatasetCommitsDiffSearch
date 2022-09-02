@@ -66,6 +66,9 @@ final class Target_Unsafe_Core {
             throw new IllegalArgumentException();
         }
         Pointer result = UnmanagedMemory.malloc(WordFactory.unsigned(bytes));
+        if (result.equal(0)) {
+            throw new OutOfMemoryError();
+        }
         return result.rawValue();
     }
 
@@ -88,6 +91,9 @@ final class Target_Unsafe_Core {
             result = UnmanagedMemory.realloc(WordFactory.unsigned(address), WordFactory.unsigned(bytes));
         } else {
             result = UnmanagedMemory.malloc(WordFactory.unsigned(bytes));
+        }
+        if (result.equal(0)) {
+            throw new OutOfMemoryError();
         }
         return result.rawValue();
     }
