@@ -313,7 +313,12 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
     public void removeExits() {
         for (LoopExitNode loopexit : loopExits().snapshot()) {
             try (DebugCloseable position = graph().withNodeSourcePosition(loopexit)) {
-                loopexit.removeExit();
+                loopexit.removeProxies();
+                FrameState loopStateAfter = loopexit.stateAfter();
+                graph().replaceFixedWithFixed(loopexit, graph().add(new BeginNode()));
+                if (loopStateAfter != null) {
+                    GraphUtil.tryKillUnused(loopStateAfter);
+                }
             }
         }
     }
