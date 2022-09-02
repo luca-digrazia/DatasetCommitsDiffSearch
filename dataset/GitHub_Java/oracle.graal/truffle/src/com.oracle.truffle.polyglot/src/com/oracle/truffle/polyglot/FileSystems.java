@@ -116,17 +116,13 @@ final class FileSystems {
         return fileSystem instanceof InternalFileSystem && ((InternalFileSystem) fileSystem).hasAllAccess();
     }
 
-    static boolean hasNoAccess(FileSystem fileSystem) {
-        return fileSystem instanceof InternalFileSystem && ((InternalFileSystem) fileSystem).hasNoAccess();
-    }
-
     static boolean isInternal(FileSystem fileSystem) {
         return fileSystem instanceof InternalFileSystem;
     }
 
     static boolean hasNoIOFileSystem(TruffleFile file) {
         FileSystem fileSystem = EngineAccessor.LANGUAGE.getFileSystem(file);
-        if (hasNoAccess(fileSystem)) {
+        if (fileSystem.getClass() == DeniedIOFileSystem.class) {
             return true;
         }
         if (fileSystem.getClass() == LanguageHomeFileSystem.class) {
@@ -277,11 +273,6 @@ final class FileSystems {
         }
 
         @Override
-        public boolean hasNoAccess() {
-            return delegate instanceof InternalFileSystem && ((InternalFileSystem) delegate).hasNoAccess();
-        }
-
-        @Override
         public Path parsePath(URI path) {
             try {
                 return wrap(delegate.parsePath(path));
@@ -399,11 +390,6 @@ final class FileSystems {
         @Override
         public Path getTempDirectory() {
             return wrap(delegate.getTempDirectory());
-        }
-
-        @Override
-        public boolean isSameFile(Path path1, Path path2, LinkOption... options) throws IOException {
-            return delegate.isSameFile(unwrap(path1), unwrap(path2), options);
         }
 
         Path wrap(Path path) {
@@ -710,11 +696,6 @@ final class FileSystems {
         }
 
         @Override
-        public boolean hasNoAccess() {
-            return false;
-        }
-
-        @Override
         public Path parsePath(URI uri) {
             try {
                 return delegate.getPath(uri);
@@ -872,19 +853,6 @@ final class FileSystems {
             return result;
         }
 
-        @Override
-        public boolean isSameFile(Path path1, Path path2, LinkOption... options) throws IOException {
-            if (isFollowLinks(options)) {
-                Path absolutePath1 = resolveRelative(path1);
-                Path absolutePath2 = resolveRelative(path2);
-                return delegate.isSameFile(absolutePath1, absolutePath2);
-            } else {
-                // The FileSystemProvider.isSameFile always resolves symlinks
-                // we need to use the default implementation comparing the canonical paths
-                return InternalFileSystem.super.isSameFile(path1, path2, options);
-            }
-        }
-
         private Path resolveRelative(Path path) {
             return !path.isAbsolute() && userDir != null ? toAbsolutePath(path) : path;
         }
@@ -940,11 +908,6 @@ final class FileSystems {
         @Override
         public boolean hasAllAccess() {
             return false;
-        }
-
-        @Override
-        public boolean hasNoAccess() {
-            return true;
         }
 
         @Override
@@ -1039,11 +1002,6 @@ final class FileSystems {
         public Path readSymbolicLink(Path link) throws IOException {
             throw forbidden(link);
         }
-
-        @Override
-        public boolean isSameFile(Path path1, Path path2, LinkOption... options) throws IOException {
-            throw forbidden(path1);
-        }
     }
 
     private static class LanguageHomeFileSystem extends DeniedIOFileSystem {
@@ -1053,11 +1011,6 @@ final class FileSystems {
 
         LanguageHomeFileSystem() {
             this.fullIO = newDefaultFileSystem();
-        }
-
-        @Override
-        public boolean hasNoAccess() {
-            return false;
         }
 
         @Override
@@ -1139,11 +1092,6 @@ final class FileSystems {
             return fullIO.toRealPath(path, linkOptions);
         }
 
-        @Override
-        public boolean isSameFile(Path path1, Path path2, LinkOption... options) throws IOException {
-            return fullIO.isSameFile(path1, path2, options);
-        }
-
         private boolean inLanguageHome(final Path path) {
             for (Path home : getLanguageHomes()) {
                 if (path.startsWith(home)) {
@@ -1188,11 +1136,6 @@ final class FileSystems {
 
         @Override
         public boolean hasAllAccess() {
-            return false;
-        }
-
-        @Override
-        public boolean hasNoAccess() {
             return false;
         }
 
@@ -1314,8 +1257,6 @@ final class FileSystems {
 
     private interface InternalFileSystem extends FileSystem {
         boolean hasAllAccess();
-
-        boolean hasNoAccess();
     }
 
     private static SecurityException forbidden(final Path path) {
