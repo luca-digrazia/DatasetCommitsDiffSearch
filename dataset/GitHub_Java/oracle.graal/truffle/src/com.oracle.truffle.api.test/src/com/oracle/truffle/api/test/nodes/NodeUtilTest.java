@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,9 @@
  */
 package com.oracle.truffle.api.test.nodes;
 
-import static com.oracle.truffle.api.test.OSUtils.toUnixString;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 import java.util.Iterator;
 
@@ -55,6 +56,20 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 
 public class NodeUtilTest {
+
+    @Test
+    public void testRecursiveIterator1() {
+        TestRootNode root = new TestRootNode();
+        TestNode testNode = new TestNode();
+        root.child0 = testNode;
+        root.adoptChildren();
+
+        int count = iterate(NodeUtil.makeRecursiveIterator(root));
+
+        assertThat(count, is(2));
+        assertThat(root.visited, is(0));
+        assertThat(testNode.visited, is(1));
+    }
 
     @Test
     public void testReplaceReplaced() {
@@ -137,6 +152,33 @@ public class NodeUtilTest {
         });
 
         Assert.assertEquals(4, count[0]);
+        Assert.assertEquals(1, testForEachNode.visited);
+        Assert.assertEquals(1, testNode1.visited);
+        Assert.assertEquals(1, testNode2.visited);
+        Assert.assertEquals(1, testNode3.visited);
+    }
+
+    @Test
+    public void testRecursiveIterator() {
+        TestRootNode root = new TestRootNode();
+        TestForEachNode testForEachNode = new TestForEachNode(1);
+        root.child0 = testForEachNode;
+        TestNode testNode1 = new TestNode();
+        testForEachNode.firstChild = testNode1;
+        TestNode testNode2 = new TestNode();
+        testForEachNode.children[0] = testNode2;
+        TestNode testNode3 = new TestNode();
+        testForEachNode.lastChild = testNode3;
+        root.adoptChildren();
+
+        int count = 0;
+        Iterable<Node> iterable = () -> NodeUtil.makeRecursiveIterator(testForEachNode);
+        for (Node node : iterable) {
+            ((VisitableNode) node).visited++;
+            count++;
+        }
+
+        Assert.assertEquals(4, count);
         Assert.assertEquals(1, testForEachNode.visited);
         Assert.assertEquals(1, testNode1.visited);
         Assert.assertEquals(1, testNode2.visited);
@@ -237,7 +279,7 @@ public class NodeUtilTest {
         assertEquals("" +
                         "  " + testNodeSimpleName + "\n" +
                         "    child0 = " + testNodeSimpleName + "\n" +
-                        "    child1 = " + testNodeSimpleName + "\n", toUnixString(output));
+                        "    child1 = " + testNodeSimpleName + "\n", output);
 
         TestForEachNode test2 = new TestForEachNode(4);
         test2.firstChild = new TestNode();
@@ -252,7 +294,7 @@ public class NodeUtilTest {
                         "      child0 = " + testNodeSimpleName + "\n" +
                         "      child1 = " + testNodeSimpleName + "\n" +
                         "    children[3] = " + testNodeSimpleName + "\n" +
-                        "    lastChild = " + testNodeSimpleName + "\n", toUnixString(output));
+                        "    lastChild = " + testNodeSimpleName + "\n", output);
         TestBlockResNode block = new TestBlockResNode(new Node[]{new TestNode(), new TestNode()}, new TestNode());
         String testBlockResNodeSimpleName = getSimpleName(TestBlockResNode.class);
         output = NodeUtil.printCompactTreeToString(block);
@@ -260,12 +302,12 @@ public class NodeUtilTest {
                         "  " + testBlockResNodeSimpleName + "\n" +
                         "    children[0] = " + testNodeSimpleName + "\n" +
                         "    children[1] = " + testNodeSimpleName + "\n" +
-                        "    resultNode = " + testNodeSimpleName + "\n", toUnixString(output));
+                        "    resultNode = " + testNodeSimpleName + "\n", output);
         block = new TestBlockResNode(null, new TestNode());
         output = NodeUtil.printCompactTreeToString(block);
         assertEquals("" +
                         "  " + testBlockResNodeSimpleName + "\n" +
-                        "    resultNode = " + testNodeSimpleName + "\n", toUnixString(output));
+                        "    resultNode = " + testNodeSimpleName + "\n", output);
     }
 
     private static int iterate(Iterator<Node> iterator) {

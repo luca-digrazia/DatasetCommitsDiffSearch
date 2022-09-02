@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -54,8 +54,8 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
@@ -68,7 +68,7 @@ public final class NodeUtil {
     private NodeUtil() {
     }
 
-    static final ThreadLocal<Object> CURRENT_ENCAPSULATING_NODE = NodeAccessor.ACCESSOR.createFastThreadLocal();
+    static final ThreadLocal<Object> CURRENT_ENCAPSULATING_NODE = Node.ACCESSOR.createFastThreadLocal();
 
     static Iterator<Node> makeIterator(Node node) {
         return node.getNodeClass().makeIterator(node);
