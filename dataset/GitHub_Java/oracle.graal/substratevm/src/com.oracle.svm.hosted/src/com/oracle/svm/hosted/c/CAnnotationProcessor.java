@@ -156,11 +156,13 @@ public class CAnnotationProcessor {
         String fileName = fileNamePath.toString();
         Path binary = tempDirectory.resolve(compilerInvoker.asExecutableName(fileName.substring(0, fileName.lastIndexOf("."))));
         ArrayList<String> options = new ArrayList<>();
+        options.add("-Wall");
+        options.add("-Werror");
         options.addAll(codeCtx.getDirectives().getOptions());
         if (Platform.includedIn(Platform.LINUX.class)) {
             options.addAll(LibCBase.singleton().getAdditionalQueryCodeCompilerOptions());
         }
-        compilerInvoker.compileAndParseError(SubstrateUtil.assertionsEnabled() || true, options, queryFile, binary, this::reportCompilerError, nativeLibs.debug);
+        compilerInvoker.compileAndParseError(options, queryFile, binary, this::reportCompilerError, nativeLibs.debug);
         return binary;
     }
 
