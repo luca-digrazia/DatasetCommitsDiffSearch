@@ -356,7 +356,10 @@ public abstract class SymbolTable {
     }
 
     public void checkFunctionIndex(int funcIndex) {
-        assertUnsignedIntLess(funcIndex, numFunctions, Failure.UNKNOWN_FUNCTION);
+        if (funcIndex < 0 || funcIndex >= numFunctions) {
+            throw WasmException.create(Failure.UNKNOWN_FUNCTION, String.format("Function index out of bounds: %d should be < %d.", unsignedIntToLong(funcIndex), numFunctions));
+        }
+
     }
 
     private static int[] reallocate(int[] array, int currentSize, int newLength) {
