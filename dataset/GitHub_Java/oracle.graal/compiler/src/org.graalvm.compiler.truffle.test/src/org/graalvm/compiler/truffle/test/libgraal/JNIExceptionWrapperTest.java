@@ -57,11 +57,11 @@ public class JNIExceptionWrapperTest {
             } catch (Throwable t) {
                 String message = t.getMessage();
                 int runtimeIndex = findFrame(message, GraalTruffleRuntime.class.getName(), "doCompile");
-                assertNotEquals(message, -1, runtimeIndex);
+                assertNotEquals(-1, runtimeIndex);
                 int listenerIndex = findFrame(message, TestListener.class.getName(), "onCompilationTruffleTierFinished");
-                assertNotEquals(message, -1, listenerIndex);
+                assertNotEquals(-1, listenerIndex);
                 int compilerIndex = findFrame(message, TruffleCompilerImpl.class.getName(), "compileAST");
-                assertNotEquals(message, -1, compilerIndex);
+                assertNotEquals(-1, compilerIndex);
                 assertTrue(listenerIndex < compilerIndex);
                 assertTrue(compilerIndex < runtimeIndex);
             } finally {
@@ -72,7 +72,7 @@ public class JNIExceptionWrapperTest {
 
     private static int findFrame(String message, String className, String methodName) {
         String[] lines = message.split("\n");
-        Pattern pattern = Pattern.compile("\\s*at\\s+(.*/)?" + Pattern.quote(className + '.' + methodName), 0);
+        Pattern pattern = Pattern.compile("\\s*at\\s+" + Pattern.quote(className + '.' + methodName), 0);
         for (int i = 0; i < lines.length; i++) {
             if (pattern.matcher(lines[i]).find()) {
                 return i;
