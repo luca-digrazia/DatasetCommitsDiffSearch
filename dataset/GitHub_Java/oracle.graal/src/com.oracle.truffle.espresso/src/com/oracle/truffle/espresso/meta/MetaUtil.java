@@ -167,19 +167,12 @@ public class MetaUtil {
         return obj.getClass().getName() + "@" + System.identityHashCode(obj);
     }
 
-    public static Object unwrapArrayOrNull(StaticObject object) {
+    public static Object unwrap(StaticObject object) {
         if (StaticObject.isNull(object)) {
             return null;
         }
         if (object instanceof StaticObjectArray) {
             return ((StaticObjectArray) object).unwrap();
-        }
-        return object;
-    }
-
-    public static Object maybeUnwrapNull(StaticObject object) {
-        if (StaticObject.isNull(object)) {
-            return null;
         }
         return object;
     }
@@ -206,22 +199,6 @@ public class MetaUtil {
                 return false;
             case Illegal: // fall-though
             case Void:    // fall-though
-            default:
-                CompilerAsserts.neverPartOfCompilation();
-                throw EspressoError.shouldNotReachHere("Invalid field type " + kind);
-        }
-    }
-
-    public static int defaultWordFieldValue(JavaKind kind) {
-        switch (kind) {
-            case Char:
-                return (char) 0;
-            case Short:
-                return (short) 0;
-            case Int:
-                return 0;
-            case Byte:
-                return (byte) 0;
             default:
                 CompilerAsserts.neverPartOfCompilation();
                 throw EspressoError.shouldNotReachHere("Invalid field type " + kind);
