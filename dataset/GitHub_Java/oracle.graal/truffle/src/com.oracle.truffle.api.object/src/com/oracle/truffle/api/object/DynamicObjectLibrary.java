@@ -52,7 +52,6 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
  * This is the central interface for accessing and mutating properties and other state (flags,
  * dynamic type) of {@link DynamicObject}s.
  *
- ** <p>
  * It is recommended that you use the {@link CachedLibrary} annotation in Truffle DSL nodes. You can
  * also use the library either {@linkplain #getUncached() without caching} or create a
  * {@linkplain LibraryFactory#create(Object) manually} or
@@ -62,14 +61,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
  * The cached library instances dispatch by object {@linkplain Shape shape} and, if applicable,
  * automatically by property key.
  *
- * <p>
- * Property keys are compared using object identity ({@code ==}) first and then
- * {@link Object#equals(Object)}. It is therefore recommended to use the same string/key instances
- * for each access of the property in order to avoid pulling in {@code equals}. Keys must not be
- * {@code null}.
- *
- * <p>
- * Note: cached library nodes may not profile the class of the object parameter; it is therefore the
+ * Note: cached library nodes do not profile the class of the object parameter; it is therefore the
  * caller's responsibility to do any desired profiling and ensure accurate type information.
  *
  * <h3>Usage examples:</h3>
@@ -77,16 +69,16 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
  * <pre>
  * &#64;Specialization(limit = "3")
  * static Object read(DynamicObject receiver, Object key,
- *                 &#64;CachedLibrary("receiver") DynamicObjectLibrary objLib) {
- *     return objLib.getOrDefault(receiver, key, NULL_VALUE);
+ *                 &#64;CachedLibrary("receiver") DynamicObjectLibrary objects) {
+ *     return objects.getOrDefault(receiver, key, NULL_VALUE);
  * }
  * </pre>
  *
  * <pre>
  * &#64;ExportMessage
  * Object readMember(String name,
- *                 &#64;CachedLibrary("this") DynamicObjectLibrary objLib) throws UnknownIdentifierException {
- *     Object result = objLib.getOrDefault(this, name, null);
+ *                 &#64;CachedLibrary("this") DynamicObjectLibrary objects) throws UnknownIdentifierException {
+ *     Object result = objects.getOrDefault(this, name, null);
  *     if (result == null) {
  *         throw UnknownIdentifierException.create(name);
  *     }
@@ -141,17 +133,7 @@ public abstract class DynamicObjectLibrary extends Library {
      * Gets the value of an existing property or returns the provided default value if no such
      * property exists.
      *
-     * <h3>Usage example:</h3>
-     *
-     * <pre>
-     * &#64;Specialization(limit = "3")
-     * static Object read(DynamicObject receiver, Object key,
-     *                 &#64;CachedLibrary("receiver") DynamicObjectLibrary objLib) {
-     *     return objLib.getOrDefault(receiver, key, NULL_VALUE);
-     * }
-     * </pre>
-     *
-     * @param key the property key
+     * @param key property key
      * @param defaultValue value to be returned if the property does not exist
      * @return the property's value if it exists, else {@code defaultValue}.
      * @since 20.2.0
@@ -162,8 +144,8 @@ public abstract class DynamicObjectLibrary extends Library {
      * Gets the value of an existing property or returns the provided default value if no such
      * property exists.
      *
-     * @param key the property key
-     * @param defaultValue the value to be returned if the property does not exist
+     * @param key property key
+     * @param defaultValue value to be returned if the property does not exist
      * @return the property's value if it exists, else {@code defaultValue}.
      * @throws UnexpectedResultException if the (default) value is not an {@code int}
      * @see #getOrDefault(DynamicObject, Object, Object)
@@ -182,8 +164,8 @@ public abstract class DynamicObjectLibrary extends Library {
      * Gets the value of an existing property or returns the provided default value if no such
      * property exists.
      *
-     * @param key the property key
-     * @param defaultValue the value to be returned if the property does not exist
+     * @param key property key
+     * @param defaultValue value to be returned if the property does not exist
      * @return the property's value if it exists, else {@code defaultValue}.
      * @throws UnexpectedResultException if the (default) value is not a {@code double}
      * @see #getOrDefault(DynamicObject, Object, Object)
@@ -202,8 +184,8 @@ public abstract class DynamicObjectLibrary extends Library {
      * Gets the value of an existing property or returns the provided default value if no such
      * property exists.
      *
-     * @param key the property key
-     * @param defaultValue the value to be returned if the property does not exist
+     * @param key property key
+     * @param defaultValue value to be returned if the property does not exist
      * @return the property's value if it exists, else {@code defaultValue}.
      * @throws UnexpectedResultException if the (default) value is not a {@code long}
      * @see #getOrDefault(DynamicObject, Object, Object)
@@ -219,26 +201,36 @@ public abstract class DynamicObjectLibrary extends Library {
     }
 
     /**
+     * Gets the value of an existing property or returns the provided default value if no such
+     * property exists.
+     *
+     * @param key property key
+     * @param defaultValue value to be returned if the property does not exist
+     * @return the property's value if it exists, else {@code defaultValue}.
+     * @throws UnexpectedResultException if the (default) value is not a {@code boolean}
+     * @see #getOrDefault(DynamicObject, Object, Object)
+     * @since 20.2.0
+     */
+    public boolean getBooleanOrDefault(DynamicObject object, Object key, Object defaultValue) throws UnexpectedResultException {
+        Object value = getOrDefault(object, key, defaultValue);
+        if (value instanceof Boolean) {
+            return (boolean) value;
+        } else {
+            throw new UnexpectedResultException(value);
+        }
+    }
+
+    /**
      * Sets the value of an existing property or adds a new property if no such property exists.
      *
      * A newly added property will have flags 0; flags of existing properties will not be changed.
-     * Use {@link #putWithFlags} to set property flags as well.
      *
-     * <h3>Usage example:</h3>
-     *
-     * <pre>
-     * &#64;ExportMessage
-     * Object writeMember(String member, Object value,
-     *                 &#64;CachedLibrary("this") DynamicObjectLibrary objLib) {
-     *     objLib.put(this, member, value);
-     * }
-     * </pre>
-     *
-     * @param key the property key
-     * @param value the value to be set
+     * @param key property identifier
+     * @param value value to be set
      * @see #putInt(DynamicObject, Object, int)
      * @see #putDouble(DynamicObject, Object, double)
      * @see #putLong(DynamicObject, Object, long)
+     * @see #putBoolean(DynamicObject, Object, boolean)
      * @see #putIfPresent(DynamicObject, Object, Object)
      * @see #putWithFlags(DynamicObject, Object, Object, int)
      * @since 20.2.0
@@ -276,6 +268,16 @@ public abstract class DynamicObjectLibrary extends Library {
     }
 
     /**
+     * Boolean-typed variant of {@link #put}.
+     *
+     * @see #put(DynamicObject, Object, Object)
+     * @since 20.2.0
+     */
+    public void putBoolean(DynamicObject object, Object key, boolean value) {
+        put(object, key, value);
+    }
+
+    /**
      * Sets the value of the property if present, otherwise returns {@code false}.
      *
      * @param key property identifier
@@ -288,7 +290,7 @@ public abstract class DynamicObjectLibrary extends Library {
 
     /**
      * Like {@link #put}, but additionally assigns flags to the property. If the property already
-     * exists, its flags will be updated before the value is set.
+     * exists, its flags will be updated.
      *
      * @param key property identifier
      * @param value value to be set
@@ -300,34 +302,17 @@ public abstract class DynamicObjectLibrary extends Library {
     public abstract void putWithFlags(DynamicObject object, Object key, Object value, int flags);
 
     /**
-     * Adds a property with a constant value or replaces an existing one. If the property already
+     * Adds a property with constant value or replaces an existing one. If the property already
      * exists, its flags will be updated.
      *
      * The constant value is stored in the shape rather than the object instance and a new shape
      * will be allocated if it does not already exist.
      *
-     * A typical use case for this method is setting the initial default value of a declared, but
-     * yet uninitialized, property. This defers storage allocation and type speculation until the
-     * first actual value is set.
-     *
-     * <p>
      * Warning: this method will lead to a shape transition every time a new value is set and should
-     * be used sparingly (with at most one constant value per property) since it could cause an
-     * excessive amount of shapes to be created.
-     * <p>
+     * be used sparingly since it could cause an excessive amount of shapes to be created.
+     *
      * Note: the value will be strongly referenced from the shape and should be a value type or
-     * light-weight object without any references to guest language objects in order to prevent
-     * potential memory leaks.
-     *
-     * <h3>Usage example:</h3>
-     *
-     * <pre>
-     * // declare property
-     * objLib.putConstant(receiver, key, NULL_VALUE, 0);
-     *
-     * // initialize property
-     * objLib.put(receiver, key, value);
-     * </pre>
+     * light-weight object such as a singleton in order to prevent potential memory leaks.
      *
      * @param key property identifier
      * @param value the constant value to be set
@@ -340,26 +325,15 @@ public abstract class DynamicObjectLibrary extends Library {
     /**
      * Removes the property with the given key from the object.
      *
-     * @param key the property key
+     * @param key property key
      * @return {@code true} if the property was removed or {@code false} if property was not found
      * @since 20.2.0
      */
     public abstract boolean removeKey(DynamicObject object, Object key);
 
     /**
-     * Sets the object's dynamic type identifier. What this type represents is completely up to the
-     * language. For example, it could be a guest-language class.
-     *
-     * The type object is strongly referenced from the shape. It is important that this be a
-     * singleton or light-weight object without any references to guest language objects in order to
-     * keep the memory footprint low and prevent potential memory leaks.
-     *
-     * Type objects are always compared by object identity, never {@code equals}.
-     *
-     * <p>
-     * Note: For compatibility reasons, the type needs to be an instance of
-     * {@link com.oracle.truffle.api.object.ObjectType ObjectType}. This restriction will be lifted
-     * in a future version.
+     * Sets the dynamic type identifier. It is recommended that this be a singleton or light-weight
+     * object in order to keep memory footprint low and prevent potential memory leaks.
      *
      * @param type an instance of {@link com.oracle.truffle.api.object.ObjectType}.
      * @return {@code true} if the type (and the object's shape) changed
@@ -369,12 +343,10 @@ public abstract class DynamicObjectLibrary extends Library {
     public abstract boolean setDynamicType(DynamicObject object, Object type);
 
     /**
-     * Gets the dynamic type identifier currently associated with this object. What this type
-     * represents is completely up to the language. For example, it could be a guest-language class.
+     * Gets the dynamic type identifier associated with this object.
      *
      * @return the object type
      * @since 20.2.0
-     * @see #setDynamicType(DynamicObject, Object)
      * @see Shape#getDynamicType()
      */
     public abstract Object getDynamicType(DynamicObject object);
@@ -382,84 +354,33 @@ public abstract class DynamicObjectLibrary extends Library {
     /**
      * Returns {@code true} if this object contains a property with the given key.
      *
-     * <h3>Usage example:</h3>
-     *
-     * <pre>
-     * &#64;ExportMessage
-     * boolean isMemberReadable(String name,
-     *                 &#64;CachedLibrary("this") DynamicObjectLibrary objLib) {
-     *     return objLib.containsKey(this, name);
-     * }
-     * </pre>
-     *
-     * @param key the property key
-     * @return {@code true} if the object contains a property with this key, else {@code false}
+     * @param key property key
      * @since 20.2.0
      */
     public abstract boolean containsKey(DynamicObject object, Object key);
 
     /**
-     * Gets the language-specific object shape flags previously set using
-     * {@link DynamicObjectLibrary#setShapeFlags(DynamicObject, int)} or
-     * {@link Shape.Builder#shapeFlags(int)}. If no shape flags were explicitly set, the default of
-     * 0 is returned.
-     *
-     * These flags may be used to tag objects that possess characteristics that need to be queried
-     * efficiently on fast and slow paths. For example, they can be used to mark objects as frozen.
-     *
-     * <h3>Usage example:</h3>
-     *
-     * <pre>
-     * &#64;ExportMessage
-     * Object writeMember(String member, Object value,
-     *                 &#64;CachedLibrary("this") DynamicObjectLibrary objLib)
-     *                 throws UnsupportedMessageException {
-     *     if ((objLib.getShapeFlags(receiver) & FROZEN) != 0) {
-     *         throw UnsupportedMessageException.create();
-     *     }
-     *     objLib.put(this, member, value);
-     * }
-     * </pre>
+     * Gets the shape flags.
      *
      * @return shape flags
-     * @see #setShapeFlags(DynamicObject, int)
-     * @see Shape.Builder#shapeFlags(int)
      * @see Shape#getFlags()
+     * @see #setShapeFlags(DynamicObject, int)
      * @since 20.2.0
      */
     public abstract int getShapeFlags(DynamicObject object);
 
     /**
-     * Sets language-specific object shape flags, changing the object's shape if need be.
-     *
-     * These flags may be used to tag objects that possess characteristics that need to be queried
-     * efficiently on fast and slow paths. For example, they can be used to mark objects as frozen.
-     *
-     * Only the lowest 8 bits (i.e. values in the range 0 to 255) are allowed, the remaining bits
-     * are currently reserved.
-     *
-     * <h3>Usage example:</h3>
-     *
-     * <pre>
-     * &#64;Specialization(limit = "3")
-     * static void preventExtensions(DynamicObject receiver,
-     *                 &#64;CachedLibrary("receiver") DynamicObjectLibrary objLib) {
-     *     objLib.setShapeFlags(receiver, objLib.getShapeFlags(receiver) | FROZEN);
-     * }
-     * </pre>
+     * Sets the shape flags, changing the object's shape if need be.
      *
      * @param flags the flags to set; must be in the range from 0 to 255 (inclusive).
      * @return {@code true} if the object's shape changed, {@code false} if no change was made.
-     * @throws IllegalArgumentException if the flags are not in the allowed range.
      * @see #getShapeFlags(DynamicObject)
-     * @see Shape.Builder#shapeFlags(int)
      * @since 20.2.0
      */
     public abstract boolean setShapeFlags(DynamicObject object, int flags);
 
     /**
-     * Gets a {@linkplain Property property descriptor} for the requested property key. Returns
-     * {@code null} if the object contains no such property.
+     * Get property descriptor.
      *
      * @return {@link Property} if the property exists, else {@code null}
      * @since 20.2.0
@@ -467,21 +388,10 @@ public abstract class DynamicObjectLibrary extends Library {
     public abstract Property getProperty(DynamicObject object, Object key);
 
     /**
-     * Gets the property flags associated with the requested property key. Returns the
-     * {@code defaultValue} if the object contains no such property. If the property exists but no
-     * flags were explicitly set, returns the default of 0.
+     * Get property flags.
      *
-     * <p>
-     * Convenience method equivalent to:
-     *
-     * <pre>
-     * Property property = getProperty(object, key);
-     * return property != null ? property.getFlags() : defaultValue;
-     * </pre>
-     *
-     * @param key the property key
      * @param defaultValue value to return if no such property exists
-     * @return the property flags if the property exists, else {@code defaultValue}
+     * @return property flags if the property exists, else defaultValue
      * @see #getProperty(DynamicObject, Object)
      * @since 20.2.0
      */
@@ -491,56 +401,41 @@ public abstract class DynamicObjectLibrary extends Library {
     }
 
     /**
-     * Sets the property flags associated with the requested property.
+     * Sets property flags.
      *
-     * @param key the property key
+     * @param key property key
      * @return {@code true} if the property was found and its flags were changed, else {@code false}
      * @since 20.2.0
      */
     public abstract boolean setPropertyFlags(DynamicObject object, Object key, int propertyFlags);
 
     /**
-     * Marks this object as shared.
-     *
-     * Makes the object use a shared variant of the {@link Shape}, to allow safe usage of this
-     * object between threads. Objects with a shared {@link Shape} will not reuse storage locations
-     * for other fields. In combination with careful synchronization on writes, this can prevent
-     * reading out-of-thin-air values.
+     * Makes this object shared.
      *
      * @throws UnsupportedOperationException if the object is already {@linkplain #isShared shared}.
-     * @see #isShared(DynamicObject)
      * @since 20.2.0
      */
-    public abstract void markShared(DynamicObject object);
+    public abstract void makeShared(DynamicObject object);
 
     /**
-     * Checks whether this object is marked as shared.
+     * Checks whether this object is shared.
      *
      * @return {@code true} if the object is shared
-     * @see #markShared(DynamicObject)
-     * @see Shape#isShared()
      * @since 20.2.0
      */
     public abstract boolean isShared(DynamicObject object);
 
     /**
-     * Ensures the object's shape is up-to-date. If the object's shape has been marked as
-     * {@linkplain Shape#isValid() invalid}, this method will attempt to bring the object into a
-     * valid shape again. If the object's shape is already {@linkplain Shape#isValid() valid}, this
-     * method will have no effect.
+     * Ensure object shape is up-to-date.
      *
-     * This method does not need to be called normally; all the messages in this library will work
-     * on invalid shapes as well, but it can be useful in some cases to avoid such shapes being
-     * cached which can cause unnecessary cache polymorphism and invalidations.
-     *
-     * @return {@code true} if the object's shape was changed, otherwise {@code false}.
+     * @return {@code true} if the object's shape was changed
      * @since 20.2.0
      */
     public abstract boolean updateShape(DynamicObject object);
 
     /**
      * Empties and resets the object to the given root shape, which must not contain any instance
-     * properties (but may contain properties with a constant value).
+     * properties.
      *
      * @param otherShape the desired shape
      * @return {@code true} if the object's shape was changed
@@ -553,54 +448,6 @@ public abstract class DynamicObjectLibrary extends Library {
      * Gets a snapshot of the object's property keys, in insertion order. The returned array may
      * have been cached and must not be mutated.
      *
-     * Properties with a {@link HiddenKey} are not included.
-     *
-     * <h3>Usage example:</h3>
-     *
-     * The example below shows how the returned keys array could be translated to an interop array
-     * for use with InteropLibrary.
-     *
-     * <pre>
-     * &#64;ExportMessage
-     * Object getMembers(
-     *                 &#64;CachedLibrary("this") DynamicObjectLibrary objLib) {
-     *     return new Keys(objLib.getKeyArray(this));
-     * }
-     *
-     * &#64;ExportLibrary(InteropLibrary.class)
-     * static final class Keys implements TruffleObject {
-     *
-     *     &#64;CompilationFinal(dimensions = 1) final Object[] keys;
-     *
-     *     Keys(Object[] keys) {
-     *         this.keys = keys;
-     *     }
-     *
-     *     &#64;ExportMessage
-     *     boolean hasArrayElements() {
-     *         return true;
-     *     }
-     *
-     *     &#64;ExportMessage
-     *     Object readArrayElement(long index) throws InvalidArrayIndexException {
-     *         if (!isArrayElementReadable(index)) {
-     *             throw InvalidArrayIndexException.create(index);
-     *         }
-     *         return keys[(int) index];
-     *     }
-     *
-     *     &#64;ExportMessage
-     *     long getArraySize() {
-     *         return keys.length;
-     *     }
-     *
-     *     &#64;ExportMessage
-     *     boolean isArrayElementReadable(long index) {
-     *         return index >= 0 && index < keys.length;
-     *     }
-     * }
-     * </pre>
-     *
      * @return a read-only array of the object's property keys.
      * @since 20.2.0
      */
@@ -610,13 +457,7 @@ public abstract class DynamicObjectLibrary extends Library {
      * Gets an array snapshot of the object's properties, in insertion order. The returned array may
      * have been cached and must not be mutated.
      *
-     * Properties with a {@link HiddenKey} are not included.
-     *
-     * Similar to {@link #getKeyArray} but allows the properties' flags to be queried simultaneously
-     * which may be relevant for quick filtering.
-     *
      * @return a read-only array of the object's properties.
-     * @see #getKeyArray(DynamicObject)
      * @since 20.2.0
      */
     public abstract Property[] getPropertyArray(DynamicObject object);
