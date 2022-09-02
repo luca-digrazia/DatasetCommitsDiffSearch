@@ -48,10 +48,8 @@ import java.lang.reflect.Constructor;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.nio.file.Path;
 import java.time.ZoneId;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
@@ -66,7 +64,6 @@ import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
-import org.graalvm.polyglot.io.ProcessHandler;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.InstrumentInfo;
@@ -85,8 +82,6 @@ import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.io.TruffleProcessBuilder;
-import com.oracle.truffle.api.nodes.BlockNode;
-import com.oracle.truffle.api.nodes.BlockNode.NodeExecutor;
 import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -95,6 +90,9 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
 import com.oracle.truffle.api.source.SourceSection;
+import java.nio.file.Path;
+import java.util.List;
+import org.graalvm.polyglot.io.ProcessHandler;
 
 /**
  * Communication between TruffleLanguage API/SPI, and other services.
@@ -123,10 +121,6 @@ public abstract class Accessor {
 
     protected IndirectCallNode createUncachedIndirectCall() {
         return SUPPORT.createUncachedIndirectCall();
-    }
-
-    protected <T extends Node> BlockNode<T> createBlockNode(T[] elements, NodeExecutor<T> executor) {
-        return SUPPORT.createBlockNode(elements, executor);
     }
 
     public abstract static class NodeSupport {
@@ -651,7 +645,7 @@ public abstract class Accessor {
             case "com.oracle.truffle.api.debug.Debugger$AccessorDebug":
             case "com.oracle.truffle.tck.instrumentation.VerifierInstrument$TruffleTCKAccessor":
             case "com.oracle.truffle.api.instrumentation.test.AbstractInstrumentationTest$TestAccessor":
-            case "com.oracle.truffle.api.test.polyglot.FileSystemsTest$TestAPIAccessor":
+            case "com.oracle.truffle.api.test.polyglot.VirtualizedFileSystemTest$TestAPIAccessor":
             case "com.oracle.truffle.api.impl.TVMCIAccessor":
                 // OK, classes allowed to use accessors
                 break;

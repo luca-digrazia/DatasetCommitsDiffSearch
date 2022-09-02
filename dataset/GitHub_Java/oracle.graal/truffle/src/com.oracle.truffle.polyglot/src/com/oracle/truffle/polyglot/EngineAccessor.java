@@ -343,7 +343,7 @@ final class EngineAccessor extends Accessor {
 
         @Override
         public Object getCurrentVM() {
-            PolyglotContextImpl context = PolyglotContextImpl.currentNotEntered();
+            PolyglotContextImpl context = PolyglotContextImpl.current();
             if (context == null) {
                 return null;
             }
@@ -352,7 +352,7 @@ final class EngineAccessor extends Accessor {
 
         @Override
         public boolean isMultiThreaded(Object o) {
-            PolyglotContextImpl context = PolyglotContextImpl.currentNotEntered();
+            PolyglotContextImpl context = PolyglotContextImpl.current();
             if (context == null) {
                 return true;
             }
@@ -451,17 +451,17 @@ final class EngineAccessor extends Accessor {
             }
 
             if (value == null) {
-                context.context.getPolyglotGuestBindings().remove(symbolName);
+                context.context.polyglotBindings.remove(symbolName);
             } else {
-                context.context.getPolyglotGuestBindings().put(symbolName, context.asValue(value));
+                context.context.polyglotBindings.put(symbolName, context.asValue(value));
             }
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public Map<String, ? extends Object> getExportedSymbols(Object vmObject) {
-            PolyglotContextImpl currentContext = PolyglotContextImpl.currentNotEntered();
-            return currentContext.getPolyglotBindings().as(Map.class);
+            PolyglotContextImpl currentContext = PolyglotContextImpl.current();
+            return currentContext.polyglotHostBindings.as(Map.class);
         }
 
         @Override
@@ -519,14 +519,12 @@ final class EngineAccessor extends Accessor {
 
         @Override
         public Object enterInternalContext(Object impl) {
-            PolyglotContextImpl context = ((PolyglotContextImpl) impl);
-            return context.engine.enter(context);
+            return ((PolyglotContextImpl) impl).enter();
         }
 
         @Override
         public void leaveInternalContext(Object impl, Object prev) {
-            PolyglotContextImpl context = ((PolyglotContextImpl) impl);
-            context.engine.leave(prev, context);
+            ((PolyglotContextImpl) impl).leave(prev);
         }
 
         @Override
@@ -600,7 +598,7 @@ final class EngineAccessor extends Accessor {
 
         @Override
         public Object getCurrentHostContext() {
-            PolyglotContextImpl polyglotContext = PolyglotContextImpl.currentNotEntered();
+            PolyglotContextImpl polyglotContext = PolyglotContextImpl.current();
             return polyglotContext == null ? null : polyglotContext.getHostContext();
         }
 
@@ -642,7 +640,7 @@ final class EngineAccessor extends Accessor {
         @SuppressWarnings("cast")
         @Override
         public PolyglotException wrapGuestException(String languageId, Throwable e) {
-            PolyglotContextImpl pc = PolyglotContextImpl.currentNotEntered();
+            PolyglotContextImpl pc = PolyglotContextImpl.current();
             if (pc == null) {
                 return null;
             }
@@ -822,7 +820,7 @@ final class EngineAccessor extends Accessor {
         @Override
         public <T extends TruffleLanguage<C>, C> TruffleLanguage.ContextReference<C> getDirectContextReference(Object sourceVM, TruffleLanguage<?> sourceLanguageSPI, Class<T> targetLanguageClass) {
             assert sourceLanguageSPI == null || sourceLanguageSPI.getClass() == targetLanguageClass;
-            return (TruffleLanguage.ContextReference<C>) resolveLanguageInstance(sourceLanguageSPI).getDirectContextSupplier();
+            return (TruffleLanguage.ContextReference<C>) resolveLanguage(sourceLanguageSPI).getDirectContextSupplier();
         }
 
         @SuppressWarnings("unchecked")
@@ -830,7 +828,7 @@ final class EngineAccessor extends Accessor {
         public <T extends TruffleLanguage<?>> TruffleLanguage.LanguageReference<T> getDirectLanguageReference(Object polyglotEngineImpl, TruffleLanguage<?> sourceLanguageSPI,
                         Class<T> targetLanguageClass) {
             assert sourceLanguageSPI == null || sourceLanguageSPI.getClass() == targetLanguageClass;
-            return (TruffleLanguage.LanguageReference<T>) resolveLanguageInstance(sourceLanguageSPI).getDirectLanguageReference();
+            return (TruffleLanguage.LanguageReference<T>) resolveLanguage(sourceLanguageSPI).getDirectLanguageReference();
         }
 
         @SuppressWarnings("unchecked")
@@ -843,18 +841,8 @@ final class EngineAccessor extends Accessor {
             return (TruffleLanguage.LanguageReference<T>) instance.lookupLanguageSupplier(resolveLanguage(sourceLanguageSPI));
         }
 
-        private static PolyglotLanguageInstance resolveLanguageInstance(TruffleLanguage<?> sourceLanguageSPI) {
-            if (sourceLanguageSPI == null) {
-                return null;
-            }
-            return ((PolyglotLanguageInstance) EngineAccessor.LANGUAGE.getLanguageInstance(sourceLanguageSPI));
-        }
-
-        private static PolyglotLanguage resolveLanguage(TruffleLanguage<?> sourceLanguageSPI) {
-            if (sourceLanguageSPI == null) {
-                return null;
-            }
-            return ((PolyglotLanguageInstance) EngineAccessor.LANGUAGE.getLanguageInstance(sourceLanguageSPI)).language;
+        private static PolyglotLanguageInstance resolveLanguage(TruffleLanguage<?> sourceLanguageSPI) {
+            return (PolyglotLanguageInstance) EngineAccessor.LANGUAGE.getLanguageInstance(sourceLanguageSPI);
         }
 
         @Override

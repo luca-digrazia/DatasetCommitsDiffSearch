@@ -31,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -412,17 +411,13 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                     initialize();
                 }
                 if (!isCompiling()) {
-                    try {
-                        this.compilationTask = task = runtime().submitForCompilation(this, lastTierCompilation);
-                    } catch (RejectedExecutionException e) {
-                        return false;
-                    }
+                    this.compilationTask = task = runtime().submitForCompilation(this, lastTierCompilation);
                 }
             }
             if (task != null) {
                 boolean allowBackgroundCompilation = !TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TrufflePerformanceWarningsAreFatal) &&
                                 !TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompilationExceptionsAreThrown);
-                boolean mayBeAsynchronous = allowBackgroundCompilation && getOptionValue(PolyglotCompilerOptions.BackgroundCompilation);
+                boolean mayBeAsynchronous = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleBackgroundCompilation) && allowBackgroundCompilation;
                 runtime().finishCompilation(this, task, mayBeAsynchronous);
                 return !mayBeAsynchronous;
             }
