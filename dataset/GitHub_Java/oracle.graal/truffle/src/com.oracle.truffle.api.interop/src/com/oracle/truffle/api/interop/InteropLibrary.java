@@ -1275,13 +1275,9 @@ public abstract class InteropLibrary extends Library {
 
     /**
      * Throws the receiver object as an exception of the source language, as if it was thrown by the
-     * source language itself. Allows rethrowing exceptions caught by another language. If this
-     * method is implemented then also {@link #isException(Object)} must be implemented.
+     * source language itself. Allows rethrowing exceptions caught by another language.
      * <p>
-     * Any interop value can be an exception value and export {@link #throwException(Object)}. The
-     * exception thrown by this message must extend
-     * {@link com.oracle.truffle.api.exception.AbstractTruffleException}. In future versions this
-     * contract will be enforced using an assertion.
+     * If this method is implemented then also {@link #isException(Object)} must be implemented.
      * <p>
      * For a sample {@code TryCatchNode} implementation see {@link #isException(Object)
      * isException}.
@@ -3746,26 +3742,24 @@ class InteropLibrarySnippets {
         void executeVoid(VirtualFrame frame) {
             Throwable exception = null;
             try {
-                block.executeVoid(frame);
-            } catch (Throwable ex) {
-                exception = executeCatchBlock(frame, ex, catchBlock);
-            }
-            // Java finally blocks that execute nodes are not allowed for
-            // compilation as code in finally blocks is duplicated
-            // by the Java bytecode compiler. This can lead to
-            // exponential code growth in worst cases.
-            if (finallyBlock != null) {
-                finallyBlock.executeVoid(frame);
-            }
-            if (exception != null) {
-                if (exception instanceof ControlFlowException) {
-                    throw (ControlFlowException) exception;
-                }
                 try {
-                    throw exceptions.throwException(exception);
-                } catch (UnsupportedMessageException ie) {
-                    throw CompilerDirectives.shouldNotReachHere(ie);
+                    block.executeVoid(frame);
+                } catch (Throwable ex) {
+                    exception = executeCatchBlock(frame, ex, catchBlock);
                 }
+                // Java finally blocks that execute nodes are not allowed for
+                // compilation as they might duplicate the finally block code
+                if (finallyBlock != null) {
+                    finallyBlock.executeVoid(frame);
+                }
+                if (exception != null) {
+                    if (exception instanceof ControlFlowException) {
+                        throw (ControlFlowException) exception;
+                    }
+                    throw exceptions.throwException(exception);
+                }
+            } catch (UnsupportedMessageException ie) {
+                throw CompilerDirectives.shouldNotReachHere(ie);
             }
         }
 
@@ -3773,9 +3767,9 @@ class InteropLibrarySnippets {
         private <T extends Throwable> Throwable executeCatchBlock(
                         VirtualFrame frame,
                         Throwable ex,
-                        BlockNode catchBlk) throws T {
+                        BlockNode catchBlk) throws T, UnsupportedMessageException {
             if (ex instanceof ControlFlowException) {
-                // run finally blocks for control flow
+                // only needed if the language uses control flow exceptions
                 return ex;
             }
             exceptionProfile.enter();
@@ -3788,7 +3782,7 @@ class InteropLibrarySnippets {
                         return executeCatchBlock(frame, catchEx, null);
                     }
                 } else {
-                    // run finally blocks for any interop exception
+                    // run finally block
                     return ex;
                 }
             } else {
