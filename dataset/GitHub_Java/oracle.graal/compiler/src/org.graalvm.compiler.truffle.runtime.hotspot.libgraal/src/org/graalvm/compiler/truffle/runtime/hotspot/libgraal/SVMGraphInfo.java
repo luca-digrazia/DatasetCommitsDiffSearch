@@ -32,19 +32,33 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
 /**
  * Encapsulates a handle to a {@link GraphInfo} object in the SVM heap.
  */
-final class SVMGraphInfo extends SVMScopedHandle implements TruffleCompilerListener.GraphInfo {
+final class SVMGraphInfo implements TruffleCompilerListener.GraphInfo {
+
+    private volatile long handle;
 
     SVMGraphInfo(long handle) {
-        super(handle, SVMGraphInfo.class);
+        this.handle = handle;
     }
 
     @Override
     public int getNodeCount() {
-        return HotSpotToSVMCalls.getNodeCount(getIsolateThread(), getHandle());
+        checkValid();
+        return HotSpotToSVMCalls.getNodeCount(getIsolateThread(), handle);
     }
 
     @Override
     public String[] getNodeTypes(boolean simpleNames) {
-        return HotSpotToSVMCalls.getNodeTypes(getIsolateThread(), getHandle(), simpleNames);
+        checkValid();
+        return HotSpotToSVMCalls.getNodeTypes(getIsolateThread(), handle, simpleNames);
+    }
+
+    private void checkValid() {
+        if (handle == 0) {
+            throw new IllegalStateException("Using GraphInfo outside of the TruffleCompilerListener method.");
+        }
+    }
+
+    void invalidate() {
+        handle = 0;
     }
 }

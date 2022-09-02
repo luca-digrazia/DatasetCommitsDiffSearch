@@ -31,44 +31,63 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
 /**
  * Encapsulates a handle to a {@code CompilationResultInfo} object in the SVM heap.
  */
-final class SVMCompilationResultInfo extends SVMScopedHandle implements TruffleCompilerListener.CompilationResultInfo {
+final class SVMCompilationResultInfo implements TruffleCompilerListener.CompilationResultInfo {
+
+    private volatile long handle;
 
     SVMCompilationResultInfo(long handle) {
-        super(handle, SVMCompilationResultInfo.class);
+        this.handle = handle;
     }
 
     @Override
     public int getTargetCodeSize() {
-        return HotSpotToSVMCalls.getTargetCodeSize(getIsolateThread(), getHandle());
+        checkValid();
+        return HotSpotToSVMCalls.getTargetCodeSize(getIsolateThread(), handle);
     }
 
     @Override
     public int getTotalFrameSize() {
-        return HotSpotToSVMCalls.getTotalFrameSize(getIsolateThread(), getHandle());
+        checkValid();
+        return HotSpotToSVMCalls.getTotalFrameSize(getIsolateThread(), handle);
     }
 
     @Override
     public int getExceptionHandlersCount() {
-        return HotSpotToSVMCalls.getExceptionHandlersCount(getIsolateThread(), getHandle());
+        checkValid();
+        return HotSpotToSVMCalls.getExceptionHandlersCount(getIsolateThread(), handle);
     }
 
     @Override
     public int getInfopointsCount() {
-        return HotSpotToSVMCalls.getInfopointsCount(getIsolateThread(), getHandle());
+        checkValid();
+        return HotSpotToSVMCalls.getInfopointsCount(getIsolateThread(), handle);
     }
 
     @Override
     public String[] getInfopoints() {
-        return HotSpotToSVMCalls.getInfopoints(getIsolateThread(), getHandle());
+        checkValid();
+        return HotSpotToSVMCalls.getInfopoints(getIsolateThread(), handle);
     }
 
     @Override
     public int getMarksCount() {
-        return HotSpotToSVMCalls.getMarksCount(getIsolateThread(), getHandle());
+        checkValid();
+        return HotSpotToSVMCalls.getMarksCount(getIsolateThread(), handle);
     }
 
     @Override
     public int getDataPatchesCount() {
-        return HotSpotToSVMCalls.getDataPatchesCount(getIsolateThread(), getHandle());
+        checkValid();
+        return HotSpotToSVMCalls.getDataPatchesCount(getIsolateThread(), handle);
+    }
+
+    private void checkValid() {
+        if (handle == 0) {
+            throw new IllegalStateException("Using CompilationResultInfo outside of the TruffleCompilerListener method.");
+        }
+    }
+
+    void invalidate() {
+        handle = 0;
     }
 }

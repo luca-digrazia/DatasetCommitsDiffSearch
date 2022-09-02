@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.compiler.hotspot.libgraal;
 
-import org.graalvm.libgraal.jni.HSObject;
 import java.io.Closeable;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.OnFailure;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.OnGraalTierFinished;
@@ -34,24 +33,22 @@ import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCo
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCompilerListenerGen.callOnGraalTierFinished;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCompilerListenerGen.callOnSuccess;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleCompilerListenerGen.callOnTruffleTierFinished;
-import static org.graalvm.libgraal.jni.JNIUtil.createHSString;
+import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.createHSString;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
 import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
-import org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM;
 import org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot;
-import org.graalvm.libgraal.jni.HotSpotToSVMScope;
-import org.graalvm.libgraal.jni.JNI.JNIEnv;
-import org.graalvm.libgraal.jni.JNI.JObject;
-import org.graalvm.libgraal.jni.JNI.JString;
+import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JNIEnv;
+import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JObject;
+import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JString;
 
 /**
  * Proxy for a {@link TruffleCompilerListener} object in the HotSpot heap.
  */
 final class HSTruffleCompilerListener extends HSObject implements TruffleCompilerListener {
 
-    HSTruffleCompilerListener(HotSpotToSVMScope<HotSpotToSVM.Id> scope, JObject handle) {
+    HSTruffleCompilerListener(HotSpotToSVMScope scope, JObject handle) {
         super(scope, handle);
     }
 
@@ -90,10 +87,10 @@ final class HSTruffleCompilerListener extends HSObject implements TruffleCompile
 
     @SVMToHotSpot(OnFailure)
     @Override
-    public void onFailure(CompilableTruffleAST compilable, String serializedException, boolean bailout, boolean permanentBailout) {
+    public void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout) {
         JObject hsCompilable = ((HSCompilableTruffleAST) compilable).getHandle();
         JNIEnv env = HotSpotToSVMScope.env();
-        JString hsReason = createHSString(env, serializedException);
+        JString hsReason = createHSString(env, reason);
         callOnFailure(env, getHandle(), hsCompilable, hsReason, bailout, permanentBailout);
     }
 
