@@ -22,23 +22,34 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.graal.llvm;
+package com.oracle.svm.core.graal.nodes;
 
-import java.util.Collections;
-import java.util.List;
+import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.graph.NodeClass;
+import org.graalvm.compiler.graph.spi.Canonicalizable;
+import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodeinfo.NodeCycles;
+import org.graalvm.compiler.nodeinfo.NodeInfo;
+import org.graalvm.compiler.nodeinfo.NodeSize;
+import org.graalvm.compiler.nodes.AbstractStateSplit;
+import org.graalvm.compiler.nodes.FrameState;
 
-import org.graalvm.nativeimage.c.CContext;
+@NodeInfo(cycles = NodeCycles.CYCLES_0, size = NodeSize.SIZE_0)
+public final class ExceptionStateNode extends AbstractStateSplit implements Canonicalizable {
+    public static final NodeClass<ExceptionStateNode> TYPE = NodeClass.create(ExceptionStateNode.class);
 
-import com.oracle.svm.core.SubstrateOptions;
-
-public class LLVMDirectives implements CContext.Directives {
-    @Override
-    public boolean isInConfiguration() {
-        return SubstrateOptions.CompilerBackend.getValue().equals("llvm");
+    public ExceptionStateNode(FrameState stateAfter) {
+        super(TYPE, StampFactory.forVoid(), stateAfter);
+        assert stateAfter != null;
     }
 
     @Override
-    public List<String> getHeaderFiles() {
-        return Collections.singletonList("<unwind.h>");
+    public Node canonical(CanonicalizerTool tool) {
+        if (stateAfter == null) {
+            /* After the FrameStateAssignmentPhase, the node is unnecessary. */
+            return null;
+        }
+        return this;
     }
 }

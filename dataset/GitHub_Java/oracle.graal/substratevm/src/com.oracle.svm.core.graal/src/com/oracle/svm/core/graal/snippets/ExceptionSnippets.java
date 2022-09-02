@@ -27,6 +27,8 @@ package com.oracle.svm.core.graal.snippets;
 import static com.oracle.svm.core.graal.nodes.UnreachableNode.unreachable;
 import static com.oracle.svm.core.graal.snippets.SubstrateIntrinsics.runtimeCall;
 import static com.oracle.svm.core.snippets.KnownIntrinsics.readCallerStackPointer;
+import static com.oracle.svm.core.snippets.KnownIntrinsics.readReturnAddress;
+import static com.oracle.svm.core.snippets.SnippetRuntime.UNWIND_EXCEPTION;
 
 import java.util.Map;
 
@@ -47,12 +49,12 @@ import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.Snippets;
+import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.Pointer;
 
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.graal.nodes.ExceptionStateNode;
 import com.oracle.svm.core.graal.nodes.ReadExceptionObjectNode;
-import com.oracle.svm.core.snippets.ExceptionUnwind;
 
 public final class ExceptionSnippets extends SubstrateTemplates implements Snippets {
 
@@ -62,7 +64,8 @@ public final class ExceptionSnippets extends SubstrateTemplates implements Snipp
                     "so having the annotation is easier than coding an exception to the annotation checker.")
     protected static void unwindSnippet(Throwable exception) {
         Pointer callerSP = readCallerStackPointer();
-        runtimeCall(ExceptionUnwind.UNWIND_EXCEPTION, exception, callerSP);
+        CodePointer callerIP = readReturnAddress();
+        runtimeCall(UNWIND_EXCEPTION, exception, callerSP, callerIP);
         throw unreachable();
     }
 

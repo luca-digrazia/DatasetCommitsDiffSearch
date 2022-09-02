@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import org.bytedeco.javacpp.LLVM;
 import org.bytedeco.javacpp.LLVM.LLVMBasicBlockRef;
 import org.bytedeco.javacpp.LLVM.LLVMTypeRef;
 import org.bytedeco.javacpp.LLVM.LLVMValueRef;
@@ -96,13 +97,12 @@ import org.graalvm.compiler.nodes.spi.NodeValueMap;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.DebugInfo;
 import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Value;
 
-public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
+public class NodeLLVMBuilder implements NodeLIRBuilderTool {
     protected final LLVMGenerator gen;
     protected final LLVMIRBuilder builder;
     private final DebugInfoBuilder debugInfoBuilder;
@@ -144,11 +144,9 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
             builder.buildStackmap(builder.constantLong(startPatchpointID));
 
             for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
-                LLVMValueRef paramValue = builder.getParam(getParamIndex(param.index()));
+                LLVMValueRef paramValue = builder.getParam(param.index());
                 setResult(param, paramValue);
             }
-
-            gen.allocateRegisterSlots();
 
             if (gen.getDebugLevel() >= DebugLevel.FUNCTION) {
                 gen.indent();
@@ -242,8 +240,6 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
         gen.getLLVMResult().setProcessed(block);
     }
 
-    protected abstract int getParamIndex(int index);
-
     @Override
     public void matchBlock(Block b, StructuredGraph graph, StructuredGraph.ScheduleResult blockMap) {
 
@@ -289,7 +285,7 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
         return (int) (probability * Integer.MAX_VALUE);
     }
 
-    protected LLVMValueRef emitCondition(LogicNode condition) {
+    private LLVMValueRef emitCondition(LogicNode condition) {
         if (condition instanceof IsNullNode) {
             return builder.buildIsNull(llvmOperand(((IsNullNode) condition).getValue()));
         }
@@ -388,7 +384,7 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
 
         LLVMValueRef callee;
         LLVMValueRef[] args;
-        args = getCallArguments(arguments, callTarget.callType(), targetMethod);
+        args = arguments.stream().map(this::llvmOperand).toArray(LLVMValueRef[]::new);
 
         LIRFrameState state = state(i);
         state.initDebugInfo(null, false);
@@ -427,14 +423,6 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
             throw shouldNotReachHere();
         }
 
-        LLVMValueRef call = emitCall(i, callTarget, callee, patchpointId, args);
-
-        if (!isVoid) {
-            setResult(i.asNode(), call);
-        }
-    }
-
-    protected LLVMValueRef emitCall(Invoke i, LoweredCallTargetNode callTarget, LLVMValueRef callee, long patchpointId, LLVMValueRef... args) {
         LLVMValueRef call;
         if (i instanceof InvokeWithExceptionNode) {
             InvokeWithExceptionNode invokeWithExceptionNode = (InvokeWithExceptionNode) i;
@@ -446,11 +434,9 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
             call = builder.buildCall(callee, patchpointId, args);
         }
 
-        return call;
-    }
-
-    protected LLVMValueRef[] getCallArguments(NodeInputList<ValueNode> arguments, CallingConvention.Type callType, ResolvedJavaMethod targetMethod) {
-        return arguments.stream().map(this::llvmOperand).toArray(LLVMValueRef[]::new);
+        if (!isVoid) {
+            setResult(i.asNode(), call);
+        }
     }
 
     @Override
@@ -458,8 +444,13 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
         builder.buildLandingPad();
 
         Register exceptionRegister = gen.getRegisterConfig().getReturnRegister(JavaKind.Object);
-        LLVMValueRef exception = builder.buildInlineGetRegister(exceptionRegister.name);
-        setResult(node, builder.buildRegisterObject(exception));
+        LLVMTypeRef asmType = builder.functionType(builder.longType());
+        LLVMValueRef inlineAsm = builder.buildInlineAsm(asmType, "movq %" + exceptionRegister.name + ", $0", "={" + exceptionRegister.name + "}", false, false);
+
+        LLVMValueRef exception = builder.buildCall(inlineAsm);
+        builder.setCallSiteAttribute(exception, LLVM.LLVMAttributeFunctionIndex, "gc-leaf-function");
+
+        setResult(node, builder.buildRegisterObject(builder.buildIntToPtr(exception, builder.rawPointerType())));
     }
 
     @Override
@@ -547,7 +538,7 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
         return (Value) valueMap.get(node);
     }
 
-    protected LLVMValueRef llvmOperand(Node node) {
+    private LLVMValueRef llvmOperand(Node node) {
         assert valueMap.containsKey(node);
         return valueMap.get(node).get();
     }
@@ -592,9 +583,6 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
             }
 
             llvmOperand = new LLVMVariable(intermediate);
-        } else if (operand instanceof RegisterValue) {
-            RegisterValue registerValue = (RegisterValue) operand;
-            llvmOperand = (LLVMVariable) gen.emitReadRegister(registerValue.getRegister(), registerValue.getValueKind());
         } else {
             throw shouldNotReachHere("unknown operand: " + operand.toString());
         }

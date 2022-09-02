@@ -80,11 +80,11 @@ import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.phases.util.Providers;
 
 import jdk.vm.ci.aarch64.AArch64Kind;
-import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterAttributes;
 import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.AllocatableValue;
@@ -99,7 +99,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Value;
 import jdk.vm.ci.meta.ValueKind;
 
-public abstract class LLVMGenerator implements LIRGeneratorTool {
+public class LLVMGenerator implements LIRGeneratorTool {
     private final ArithmeticLLVMGenerator arithmetic;
     protected final LLVMIRBuilder builder;
     private final LIRKindTool lirKindTool;
@@ -159,7 +159,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
         return basicBlockMap.get(begin);
     }
 
-    public LLVMBasicBlockRef getBlockEnd(Block block) {
+    LLVMBasicBlockRef getBlockEnd(Block block) {
         return (splitBlockEndMap.containsKey(block)) ? splitBlockEndMap.get(block) : getBlock(block);
     }
 
@@ -184,8 +184,6 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
         return builder.getFunction(getFunctionName(method), functionType);
     }
 
-    public abstract void allocateRegisterSlots();
-
     public String getFunctionName(ResolvedJavaMethod method) {
         return method.getName();
     }
@@ -195,7 +193,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
         return builder.getLLVMStackType(getTypeKind(returnType));
     }
 
-    protected LLVMTypeRef[] getLLVMFunctionArgTypes(ResolvedJavaMethod method) {
+    private LLVMTypeRef[] getLLVMFunctionArgTypes(ResolvedJavaMethod method) {
         ResolvedJavaType receiver = method.hasReceiver() ? method.getDeclaringClass() : null;
         JavaType[] parameterTypes = method.getSignature().toParameterTypes(receiver);
         return Arrays.stream(parameterTypes).map(type -> builder.getLLVMStackType(getTypeKind(type.resolve(null)))).toArray(LLVMTypeRef[]::new);
@@ -340,16 +338,6 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
     }
 
     @Override
-    public boolean canInlineConstant(Constant constant) {
-        return false;
-    }
-
-    @Override
-    public boolean mayEmbedConstantLoad(Constant constant) {
-        return false;
-    }
-
-    @Override
     public Value emitConstant(LIRKind kind, Constant constant) {
         LLVMValueRef value = emitLLVMConstant(((LLVMKind) kind.getPlatformKind()).get(), (JavaConstant) constant);
         return new LLVMConstant(value, constant);
@@ -431,15 +419,20 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
 
     @Override
     public Variable emitLogicCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
-        LLVMValueRef success = builder.buildLogicCmpxchg(getVal(address), getVal(expectedValue), getVal(newValue));
+        builder.buildCmpxchg(getVal(address), getVal(expectedValue), getVal(newValue));
+        /* builder.buildExtractValue(cas, 1); */
+        /*
+         * Hack for singlethreaded programs, as structures containing tracked pointers cause
+         * statepoint generation to fail
+         */
+        LLVMValueRef success = builder.constantBoolean(true);
         LLVMValueRef result = builder.buildSelect(success, getVal(trueValue), getVal(falseValue));
         return new LLVMVariable(result);
     }
 
     @Override
     public Value emitValueCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue) {
-        LLVMValueRef result = builder.buildValueCmpxchg(getVal(address), getVal(expectedValue), getVal(newValue));
-        return new LLVMVariable(result);
+        throw unimplemented();
     }
 
     @Override
@@ -448,7 +441,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
     }
 
     @Override
-    public Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState state, Value... arguments) {
+    public Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState state, Value... args) {
         ResolvedJavaMethod targetMethod = findForeignCallTarget(linkage.getDescriptor());
 
         state.initDebugInfo(null, false);
@@ -456,18 +449,15 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
         generationResult.recordDirectCall(targetMethod, patchpointId, state.debugInfo());
 
         LLVMValueRef callee = getFunction(targetMethod);
-        LLVMValueRef[] args = Arrays.stream(arguments).map(LLVMUtils::getVal).toArray(LLVMValueRef[]::new);
-        LLVMValueRef[] callArguments = getCallArguments(args, getCallingConventionType(linkage.getOutgoingCallingConvention()), targetMethod);
+        LLVMValueRef[] arguments = Arrays.stream(args).map(LLVMUtils::getVal).toArray(LLVMValueRef[]::new);
 
-        LLVMValueRef call = builder.buildCall(callee, patchpointId, callArguments);
+        LLVMValueRef call = builder.buildCall(callee, patchpointId, arguments);
         return (isVoidType(getLLVMFunctionReturnType(targetMethod))) ? null : new LLVMVariable(call);
     }
 
-    protected abstract CallingConvention.Type getCallingConventionType(CallingConvention callingConvention);
-
-    public abstract LLVMValueRef[] getCallArguments(LLVMValueRef[] args, CallingConvention.Type callType, ResolvedJavaMethod targetMethod);
-
-    protected abstract ResolvedJavaMethod findForeignCallTarget(@SuppressWarnings("unused") ForeignCallDescriptor descriptor);
+    protected ResolvedJavaMethod findForeignCallTarget(@SuppressWarnings("unused") ForeignCallDescriptor descriptor) {
+        throw unimplemented();
+    }
 
     @Override
     public RegisterAttributes attributes(Register register) {
@@ -485,6 +475,11 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
             return (LLVMVariable) input;
         } else if (input instanceof LLVMValueWrapper) {
             return new LLVMVariable(getVal(input));
+        } else if (input instanceof RegisterValue) {
+            RegisterValue reg = (RegisterValue) input;
+            assert reg.getRegister().equals(getRegisterConfig().getFrameRegister());
+            LLVMValueRef stackPointer = builder.buildReadRegister(builder.register(getRegisterConfig().getFrameRegister().name));
+            return new LLVMVariable(stackPointer);
         }
         throw shouldNotReachHere("Unknown move input");
     }
