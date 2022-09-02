@@ -76,7 +76,4 @@ public final class EspressoStatementNode extends EspressoInstrumentableNode {
         return (BytecodesNode) parent;
     }
 
-    public int getBci() {
-        return startBci;
-    }
 }
