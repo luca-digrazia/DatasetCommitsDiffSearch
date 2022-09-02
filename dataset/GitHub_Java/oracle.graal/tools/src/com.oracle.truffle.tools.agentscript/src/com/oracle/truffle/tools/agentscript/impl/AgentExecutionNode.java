@@ -29,7 +29,6 @@ import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
@@ -46,11 +45,11 @@ final class AgentExecutionNode extends ExecutionEventNode {
         this.env = env;
         this.enter = enter;
         if (enter != null) {
-            this.enterDispatch = InteropLibrary.getFactory().create(enter);
+            this.enterDispatch = InteropLibrary.getFactory().createDispatched(3);
         }
         this.exit = exit;
         if (exit != null) {
-            this.exitDispatch = InteropLibrary.getFactory().create(exit);
+            this.exitDispatch = InteropLibrary.getFactory().createDispatched(3);
         }
         this.ctx = ctx;
     }
@@ -59,23 +58,19 @@ final class AgentExecutionNode extends ExecutionEventNode {
     protected void onEnter(VirtualFrame frame) {
         if (enter != null) {
             try {
-                enterDispatch.execute(enter, ctx, new VariablesObject(env, this, frame, null));
-            } catch (InteropException ex) {
-                throw ctx.wrap(enter, 2, ex);
-            } catch (RuntimeException ex) {
+                enterDispatch.execute(enter, ctx, new VariablesObject(env, this, frame));
+            } catch (InteropException | RuntimeException ex) {
                 throw ctx.rethrow(ex);
             }
         }
     }
 
     @Override
-    protected void onReturnValue(VirtualFrame frame, Object returnValue) {
+    protected void onReturnValue(VirtualFrame frame, Object result) {
         if (exit != null) {
             try {
-                exitDispatch.execute(exit, ctx, new VariablesObject(env, this, frame, returnValue));
-            } catch (InteropException ex) {
-                throw ctx.wrap(exit, 2, ex);
-            } catch (RuntimeException ex) {
+                exitDispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
+            } catch (InteropException | RuntimeException ex) {
                 throw ctx.rethrow(ex);
             }
         }
@@ -85,33 +80,11 @@ final class AgentExecutionNode extends ExecutionEventNode {
     protected void onReturnExceptional(VirtualFrame frame, Throwable exception) {
         if (exit != null) {
             try {
-                exitDispatch.execute(exit, ctx, new VariablesObject(env, this, frame, null));
-            } catch (InteropException ex) {
-                throw ctx.wrap(exit, 2, ex);
-            } catch (RuntimeException ex) {
+                exitDispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
+            } catch (InteropException | RuntimeException ex) {
                 throw ctx.rethrow(ex);
             }
         }
-    }
-
-    @Override
-    protected Object onUnwind(VirtualFrame frame, Object info) {
-        return info;
-    }
-
-    static ThreadDeath returnNow(EventContext context, Object[] args) throws ArityException, ThreadDeath {
-        Object returnValue;
-        switch (args.length) {
-            case 0:
-                returnValue = null;
-                break;
-            case 1:
-                returnValue = args[0];
-                break;
-            default:
-                throw ArityException.create(1, args.length);
-        }
-        return context.createUnwind(NullObject.nullCheck(returnValue));
     }
 
     static ExecutionEventNodeFactory factory(TruffleInstrument.Env env, final Object enter, final Object exit) {
