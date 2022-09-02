@@ -52,6 +52,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.GeneratedBy;
+import com.oracle.truffle.api.nodes.NodeUtil;
 
 /**
  * Represents a library factory that allows to create library instances to perform the Truffle
@@ -82,9 +83,6 @@ public abstract class LibraryFactory<T extends Library> {
 
     final DynamicDispatchLibrary dispatchLibrary;
 
-    /**
-     * @since 1.0
-     */
     @SuppressWarnings("unchecked")
     protected LibraryFactory(Class<T> libraryClass, List<Message> messages) {
         assert this.getClass().getName().endsWith(LibraryExport.GENERATED_CLASS_SUFFIX);
@@ -165,12 +163,9 @@ public abstract class LibraryFactory<T extends Library> {
         LibraryExport<T> export = lookupExport(receiver, dispatchClass);
         cached = export.createCached(receiver);
         assert (cached = createAssertionsImpl(export, cached)) != null;
-        if (!cached.isAdoptable()) {
+        if (!NodeUtil.isAdoptable(cached)) {
             assert cached.accepts(receiver) : String.format("Invalid accepts implementation detected in '%s'", dispatchClass.getName());
-            T otherCached = cachedCache.putIfAbsent(dispatchClass, cached);
-            if (otherCached != null) {
-                return otherCached;
-            }
+            cachedCache.putIfAbsent(dispatchClass, cached);
         }
         return cached;
     }
@@ -197,6 +192,7 @@ public abstract class LibraryFactory<T extends Library> {
      *
      * Returns an cached and manually dispatched version of this library.
      *
+     * @see Library#getUncached(Class, Object) for further details.
      * @since 1.0
      */
     @TruffleBoundary
@@ -212,10 +208,7 @@ public abstract class LibraryFactory<T extends Library> {
         assert validateExport(receiver, dispatchClass, uncached);
         assert uncached.accepts(receiver);
         assert (uncached = createAssertionsImpl(export, uncached)) != null;
-        T otherUncached = uncachedCache.putIfAbsent(dispatchClass, uncached);
-        if (otherUncached != null) {
-            return otherUncached;
-        }
+        uncachedCache.putIfAbsent(dispatchClass, uncached);
         return uncached;
     }
 
@@ -250,9 +243,6 @@ public abstract class LibraryFactory<T extends Library> {
      */
     protected abstract T createDispatchImpl(int limit);
 
-    /***
-     * @since 1.0
-     */
     protected abstract T createUncachedDispatch();
 
     /**
@@ -421,9 +411,6 @@ public abstract class LibraryFactory<T extends Library> {
         }
     }
 
-    /**
-     * @since 1.0
-     */
     protected static <T extends Library> void register(Class<T> libraryClass, LibraryFactory<T> library) {
         LibraryFactory<?> lib = LIBRARIES.putIfAbsent(libraryClass, library);
         if (lib != null) {
@@ -431,11 +418,6 @@ public abstract class LibraryFactory<T extends Library> {
         }
     }
 
-    /***
-     * {@inheritDoc}
-     *
-     * @since 1.0
-     */
     @Override
     public String toString() {
         return "LibraryFactory [library=" + libraryClass.getName() + "]";
