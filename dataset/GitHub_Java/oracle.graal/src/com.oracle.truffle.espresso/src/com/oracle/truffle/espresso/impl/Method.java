@@ -116,6 +116,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     @CompilationFinal(dimensions = 1) //
     private final Symbol<Type>[] parsedSignature;
+    private final boolean splitMethod;
 
     @CompilationFinal private int vtableIndex = -1;
     @CompilationFinal private int itableIndex = -1;
