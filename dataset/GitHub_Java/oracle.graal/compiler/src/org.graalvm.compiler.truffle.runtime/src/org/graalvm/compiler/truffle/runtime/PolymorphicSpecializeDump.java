@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,10 +40,10 @@ import org.graalvm.compiler.truffle.common.TruffleDebugContext;
 
 class PolymorphicSpecializeDump {
 
-    public static void dumpPolymorphicSpecialize(OptimizedCallTarget callTarget, List<Node> toDump, List<OptimizedDirectCallNode> knownCallNodes) {
+    public static void dumpPolymorphicSpecialize(List<Node> toDump, List<OptimizedDirectCallNode> knownCallNodes) {
         assert toDump.size() > 0;
         assert knownCallNodes.size() > 0;
-        try (TruffleDebugContext debugContext = openDebugContext(callTarget)) {
+        try (TruffleDebugContext debugContext = openDebugContext()) {
             Collections.reverse(toDump);
             PolymorphicSpecializeDump.PolymorphicSpecializeGraph graph = new PolymorphicSpecializeDump.PolymorphicSpecializeGraph(knownCallNodes, toDump);
             final GraphOutput<PolymorphicSpecializeGraph, ?> output = debugContext.buildOutput(
@@ -57,8 +57,8 @@ class PolymorphicSpecializeDump {
         }
     }
 
-    private static TruffleDebugContext openDebugContext(OptimizedCallTarget callTarget) {
-        return GraalTruffleRuntime.getRuntime().getTruffleCompiler().openDebugContext(TruffleRuntimeOptions.getOptionsForCompiler(callTarget), null);
+    private static TruffleDebugContext openDebugContext() {
+        return GraalTruffleRuntime.getRuntime().getTruffleCompiler().openDebugContext(TruffleRuntimeOptions.getOptionsForCompiler(), null);
     }
 
     static class PolymorphicSpecializeGraph {

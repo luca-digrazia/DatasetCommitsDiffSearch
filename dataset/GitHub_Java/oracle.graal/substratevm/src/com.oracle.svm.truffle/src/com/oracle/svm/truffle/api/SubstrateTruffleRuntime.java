@@ -33,10 +33,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.UnmodifiableMapCursor;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionKey;
@@ -61,10 +63,8 @@ import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.deopt.SubstrateSpeculationLog;
 import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.option.RuntimeOptionParser;
 import com.oracle.svm.core.option.RuntimeOptionValues;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.SubstrateStackIntrospection;
 import com.oracle.svm.graal.GraalSupport;
 import com.oracle.svm.graal.hosted.GraalFeature;
@@ -84,9 +84,10 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     private static final int DEBUG_TEAR_DOWN_TIMEOUT = 2_000;
     private static final int PRODUCTION_TEAR_DOWN_TIMEOUT = 10_000;
 
+    private BackgroundCompileQueue compileQueue;
     private CallMethods hostedCallMethods;
-    private volatile BackgroundCompileQueue compileQueue;
-    private volatile boolean initialized;
+    private boolean initialized;
+    private final Supplier<GraalRuntime> graalRuntimeProvider;
 
     @Override
     protected BackgroundCompileQueue getCompileQueue() {
@@ -97,6 +98,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Platforms(Platform.HOSTED_ONLY.class)
     public SubstrateTruffleRuntime() {
         super(Collections.emptyList());
+        this.graalRuntimeProvider = () -> ImageSingletons.lookup(GraalRuntime.class);
         /* Ensure the factory class gets initialized. */
         super.getLoopNodeFactory();
     }
@@ -106,7 +108,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
         truffleCompiler = null;
     }
 
-    private void initializeAtRuntime() {
+    public void initializeAtRuntime() {
         if (SubstrateOptions.MultiThreaded.getValue()) {
             compileQueue = new BackgroundCompileQueue();
             RuntimeSupport.getRuntimeSupport().addTearDownHook(this::tearDown);
@@ -117,6 +119,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
             }
             RuntimeOptionValues.singleton().update(Deoptimizer.Options.TraceDeoptimization, true);
         }
+
         updateGraalArchitectureWithHostCPUFeatures(getTruffleCompiler().getBackend());
         installDefaultListeners();
     }
@@ -215,21 +218,13 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Override
     public OptimizedCallTarget createOptimizedCallTarget(OptimizedCallTarget source, RootNode rootNode) {
         CompilerAsserts.neverPartOfCompilation();
-        ensureInitializedAtRuntime();
-        return TruffleFeature.getSupport().createOptimizedCallTarget(source, rootNode);
-    }
 
-    private void ensureInitializedAtRuntime() {
         if (!SubstrateUtil.HOSTED && !initialized) {
-            // Checkstyle: stop
-            synchronized (this) {
-                if (!initialized) {
-                    initializeAtRuntime();
-                    initialized = true;
-                }
-            }
-            // Checkstyle: resume
+            initializeAtRuntime();
+            initialized = true;
         }
+
+        return TruffleFeature.getSupport().createOptimizedCallTarget(source, rootNode);
     }
 
     @Override
@@ -258,12 +253,6 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
              */
             return null;
         }
-        /*
-         * Normally creating call targets schedules the initialization. However if call targets were
-         * already created in the boot image and they are directly compiled then the compile queue
-         * might not yet be initialized.
-         */
-        ensureInitializedAtRuntime();
 
         if (SubstrateOptions.MultiThreaded.getValue()) {
             return super.submitForCompilation(optimizedCallTarget, lastTierCompilation);
@@ -371,14 +360,17 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected <T> T asObject(Class<T> type, JavaConstant constant) {
-        return (T) KnownIntrinsics.convertUnknownValue(SubstrateObjectConstant.asObject(type, constant), Object.class);
+        final GraalRuntime graalRuntime = graalRuntimeProvider.get();
+        final SnippetReflectionProvider snippetReflection = graalRuntime.getRequiredCapability(SnippetReflectionProvider.class);
+        return snippetReflection.asObject(type, constant);
     }
 
     @Override
     protected JavaConstant forObject(Object object) {
-        return SubstrateObjectConstant.forObject(object);
+        final GraalRuntime graalRuntime = graalRuntimeProvider.get();
+        final SnippetReflectionProvider snippetReflection = graalRuntime.getRequiredCapability(SnippetReflectionProvider.class);
+        return snippetReflection.forObject(object);
     }
 
     @Override

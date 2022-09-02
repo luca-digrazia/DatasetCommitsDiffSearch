@@ -29,12 +29,14 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.graalvm.compiler.truffle.common.TruffleDebugContext;
-import org.graalvm.compiler.truffle.common.VoidGraphStructure;
+import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.runtime.GraalTestTVMCI.GraalTestContext;
 import org.graalvm.graphio.GraphOutput;
 
 import com.oracle.truffle.api.impl.TVMCI;
 import com.oracle.truffle.api.nodes.RootNode;
+import org.graalvm.compiler.truffle.common.TruffleCompilation;
+import org.graalvm.compiler.truffle.common.VoidGraphStructure;
 
 final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTarget> {
 
@@ -93,7 +95,7 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
 
     @Override
     protected GraalTestContext createTestContext(String testName) {
-        final Map<String, Object> optionsMap = TruffleRuntimeOptions.getOptionsForCompiler(null);
+        final Map<String, Object> optionsMap = TruffleRuntimeOptions.getOptionsForCompiler();
         TruffleDebugContext debugContext = truffleRuntime.getTruffleCompiler().openDebugContext(optionsMap, null);
         return new GraalTestContext(testName, debugContext);
     }
@@ -106,6 +108,13 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
     @SuppressWarnings("try")
     @Override
     public void finishWarmup(GraalTestContext testContext, OptimizedCallTarget callTarget) {
-        truffleRuntime.doCompile(callTarget, new CancellableCompileTask(true));
+        TruffleCompiler compiler = truffleRuntime.getTruffleCompiler();
+        try (TruffleCompilation compilation = compiler.openCompilation(callTarget)) {
+            try (AutoCloseable s = testContext.debug.scope("UnitTest")) {
+                truffleRuntime.doCompile(testContext.debug, compilation, TruffleRuntimeOptions.getOptionsForCompiler(), callTarget, new CancellableCompileTask(true));
+            } catch (Throwable e) {
+                throw new InternalError(e);
+            }
+        }
     }
 }
