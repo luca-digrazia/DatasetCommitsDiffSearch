@@ -56,24 +56,19 @@ import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractEngineImpl;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractEngineDispatch;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.ProcessHandler;
 
 import com.oracle.truffle.api.Truffle;
 
-final class PolyglotEngineDispatch extends AbstractEngineImpl {
+final class PolyglotEngineDispatch extends AbstractEngineDispatch {
 
     private final PolyglotImpl polyglot;
 
     protected PolyglotEngineDispatch(PolyglotImpl polyglot) {
         super(polyglot);
         this.polyglot = polyglot;
-    }
-
-    @Override
-    public Engine getAPI(Object receiver) {
-        return ((PolyglotEngineImpl) receiver).api;
     }
 
     @Override
@@ -146,13 +141,13 @@ final class PolyglotEngineDispatch extends AbstractEngineImpl {
                     boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter,
                     Map<String, String> options, Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream, boolean allowCreateProcess,
                     ProcessHandler processHandler, EnvironmentAccess environmentAccess, Map<String, String> environment, ZoneId zone, Object limitsImpl, String currentWorkingDirectory,
-                    ClassLoader hostClassLoader) {
+                    ClassLoader hostClassLoader, boolean allowValueSharing) {
         PolyglotEngineImpl receiver = (PolyglotEngineImpl) oreceiver;
         PolyglotContextImpl context = receiver.createContext(out, err, in, allowHostAccess, hostAccess, polyglotAccess, allowNativeAccess, allowCreateThread, allowHostIO, allowHostClassLoading,
                         allowExperimentalOptions,
                         classFilter, options, arguments, onlyLanguages, fileSystem, logHandlerOrStream, allowCreateProcess, processHandler, environmentAccess, environment, zone, limitsImpl,
-                        currentWorkingDirectory, hostClassLoader);
-        return polyglot.getAPIAccess().newContext(polyglot.getContextImpl(), context, receiver.api);
+                        currentWorkingDirectory, hostClassLoader, allowValueSharing);
+        return polyglot.getAPIAccess().newContext(polyglot.contextDispatch, context, context.engine.api);
     }
 
     @Override

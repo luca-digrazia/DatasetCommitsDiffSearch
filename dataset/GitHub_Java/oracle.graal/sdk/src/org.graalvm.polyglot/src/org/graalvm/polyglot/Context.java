@@ -790,19 +790,6 @@ public final class Context implements AutoCloseable {
      * {@link Builder#err(OutputStream) error output stream}. If a context was closed, then its
      * methods will throw an {@link IllegalStateException} when invoked. If an attempt to close a
      * context was successful, then consecutive calls to close have no effect.
-     * <p>
-     * In case <code>cancelIfExecuting</code> is <code>false</code>, for convenience, before the
-     * actual closing process begins, the close method leaves the context on the current thread, if
-     * it was entered {@link #enter() explicitly}.
-     * <p>
-     * In case <code>cancelIfExecuting</code> is <code>true</code>, the automatic leave is not
-     * performed. As a consequence, if <code>close(true)</code> is to be used instead of
-     * <code>close()</code> or <code>close(false)</code>, it is required that the context is not
-     * entered on the current thread when <code>close(true)</code> is called.
-     * <code>close(true)</code> can still be used to cancel a context even from a thread where the
-     * context is entered, but in that case <code>close(true)</code> may need to spawn a separate
-     * thread and close the context in that thread, so it is not guaranteed that the context is
-     * closed after <code>close(true)</code> returns.
      *
      * @param cancelIfExecuting if <code>true</code> then currently executing contexts will be
      *            {@link PolyglotException#isCancelled() cancelled}, else an
@@ -829,9 +816,6 @@ public final class Context implements AutoCloseable {
      * {@link Builder#err(OutputStream) error output stream}. If a context was closed, then its
      * methods will throw an {@link IllegalStateException}, when invoked. If an attempt to close a
      * context was successful, then consecutive calls to close have no effect.
-     * <p>
-     * For convenience, before the actual closing process begins, the close method leaves the
-     * context on the current thread, if it was entered {@link #enter() explicitly}.
      *
      * @throws PolyglotException in case the close failed due to a guest language error.
      * @throws IllegalStateException if the context is currently executing on another thread.
@@ -1323,31 +1307,31 @@ public final class Context implements AutoCloseable {
          * enabled by default and is not affected by {@link #allowAllAccess(boolean)}.
          * <p>
          * If this option is set to <code>true</code> (default) then any value that is associated
-         * with one context will be automatically migrated when passed to another context.
+         * with one context will be automatically be migrated when passed to another context.
          * Primitive, {@link Value#isHostObject() host} and {@link Value#isHostObject() proxy}
          * values can be migrated without limitation. When guest language values are migrated, they
          * capture and remember their original context. Guest language objects need to be accessed
          * when their respective context is {@link Context#enter() entered}, therefore before any
-         * access their original context is entered and subsequently left. Entering the original
+         * access their original context is entered and consequently left. Entering the original
          * context may fail, for example when the context of a original context value only allows
          * single threaded access to values or if it was {@link Context#close() closed} in the mean
          * time.
          * <p>
          * If this option is set to <code>false</code> then any value passed from one context to
          * another will fail with an error indicating that sharing is disallowed. Turning sharing
-         * off can be useful when strict safety is required and it would be considered an error if a
+         * off can be useful when strict safety is required and it woudl be considered an error if a
          * value of one context is passed to another.
          * <p>
          * Values of a guest language that are passed from one context to another are restricted to
          * using the interoperability protocol only. In practice this often leads to slight changes
          * and incompatibilities in behavior. For example, the prototype of a JavaScript object
-         * passed from one context to another is not writable, as the interoperability protocol does
-         * not allow such an operation (yet). A typical use-case is passing big immutable data
-         * structures that are infrequently accessed from one context to another, without copying
-         * them. In practice, passing values from one context to another should be avoided if
-         * possible, as their access is slower and their language compatibility reduced. This
-         * feature was introduced in 21.3. Older versions fail when guest values are passed from one
-         * context to another.
+         * passed from one context to another is therefore not writable, as the interoperability
+         * protocol does not allow such an operation (yet). A typical use-case is passing big
+         * immutable data structures that are infrequently accessed from one context to another,
+         * without copying them. In practice, passing values from one context to another should be
+         * avoided if possible, as their access is slower and their language compatibility reduced.
+         * This feature was introduced in 21.3. Older versions fail when guest values are passed
+         * from one context to another.
          *
          * @since 21.3
          */
