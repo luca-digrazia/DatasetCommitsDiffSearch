@@ -246,7 +246,6 @@ public final class StaticObject implements TruffleObject {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert !field.getKind().isSubWord();
         if (field.isVolatile()) {
-            CompilerDirectives.transferToInterpreter();
             setFieldVolatile(field, value);
         } else {
             setUnsafeField(field.getFieldIndex(), value);
@@ -327,7 +326,6 @@ public final class StaticObject implements TruffleObject {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Int || field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
-            CompilerDirectives.transferToInterpreter();
             return getIntFieldVolatile(field);
         } else {
             return U.getInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex());
@@ -550,7 +548,7 @@ public final class StaticObject implements TruffleObject {
     public void putObject(StaticObject value, int index, Meta meta) {
         assert isArray();
         if (index >= 0 && index < length()) {
-            U.putObject(fields, (long) Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * index, arrayStoreExCheck(value, ((ArrayKlass)klass).getComponentType(), meta));
+            U.putObject(fields, (long) Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * index, arrayStoreExCheck(value, klass.getComponentType(), meta));
         } else {
             CompilerDirectives.transferToInterpreter();
             throw meta.throwEx(ArrayIndexOutOfBoundsException.class);

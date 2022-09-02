@@ -500,6 +500,12 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         int top = 0;
 
         initArguments(frame);
+        //
+        // if (getMethod().getDeclaringKlass() == getMeta().Class &&
+        // getMethod().getName().toString().equals("getMethod") &&
+        // Meta.toHostString((StaticObject)frame.getArguments()[1]).contains("invoke")) {
+        // int dood = 1;
+        // }
 
         loop: while (true) {
             int curOpcode;

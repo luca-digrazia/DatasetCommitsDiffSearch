@@ -38,7 +38,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.MethodParametersAttribute;
-import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -371,15 +370,6 @@ public final class VM extends NativeEnv implements ContextAccess {
                     if (targetEx instanceof RuntimeException) {
                         throw (RuntimeException) targetEx;
                     }
-                    if (targetEx instanceof StackOverflowError) {
-                        throw getContext().getStackOverflow();
-                    }
-                    if (targetEx instanceof OutOfMemoryError) {
-                        throw getContext().getOutOfMemory();
-                    }
-                    if (targetEx instanceof ThreadDeath) {
-                        throw getMeta().throwEx(ThreadDeath.class);
-                    }
                     // FIXME(peterssen): Handle VME exceptions back to guest.
                     throw EspressoError.shouldNotReachHere(targetEx);
                 } catch (IllegalAccessException | IllegalArgumentException e) {
@@ -423,6 +413,11 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
+    public static void JVM_Halt(int code) {
+        throw new EspressoExitException(code);
+    }
+
+    @VmImpl
     public static boolean JVM_IsNaN(double d) {
         return Double.isNaN(d);
     }
@@ -449,6 +444,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     // endregion VM methods
 
     // region JNI Invocation Interface
+
     @VmImpl
     public static int DestroyJavaVM() {
         return JniEnv.JNI_OK;
@@ -496,6 +492,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     // endregion JNI Invocation Interface
+
     @VmImpl
     @JniImpl
     public @Host(Throwable.class) StaticObject JVM_FillInStackTrace(@Host(Throwable.class) StaticObject self, @SuppressWarnings("unused") int dummy) {
@@ -556,9 +553,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         StaticObject backtrace = (StaticObject) meta.Throwable_backtrace.get(self);
         FrameInstance[] frames = ((FrameInstance[]) backtrace.getHiddenField(meta.HIDDEN_FRAMES));
         FrameInstance frame = frames[index];
-        if (frame == null) {
-            return StaticObject.NULL;
-        }
 
         EspressoRootNode rootNode = (EspressoRootNode) ((RootCallTarget) frame.getCallTarget()).getRootNode();
 
@@ -576,30 +570,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     public static int JVM_ConstantPoolGetSize(@SuppressWarnings("unused") Object unused, StaticObject jcpool) {
         return jcpool.getMirrorKlass().getConstantPool().length();
-    }
-
-    @VmImpl
-    @JniImpl
-    public static @Host(Class.class) StaticObject JVM_ConstantPoolGetClassAt(@SuppressWarnings("unused") Object unused, @Host(Object.class) StaticObject jcpool, int index) {
-        return ((RuntimeConstantPool) jcpool.getMirrorKlass().getConstantPool()).resolvedKlassAt(null, index).mirror();
-    }
-
-    @VmImpl
-    @JniImpl
-    public static double JVM_ConstantPoolGetDoubleAt(@SuppressWarnings("unused") Object unused, @Host(Object.class) StaticObject jcpool, int index) {
-        return jcpool.getMirrorKlass().getConstantPool().doubleAt(index);
-    }
-
-    @VmImpl
-    @JniImpl
-    public static float JVM_ConstantPoolGetFloatAt(@SuppressWarnings("unused") Object unused, @Host(Object.class) StaticObject jcpool, int index) {
-        return jcpool.getMirrorKlass().getConstantPool().floatAt(index);
-    }
-
-    @VmImpl
-    @JniImpl
-    public static @Host(String.class) StaticObject JVM_ConstantPoolGetStringAt(@SuppressWarnings("unused") Object unused, @Host(Object.class) StaticObject jcpool, int index) {
-        return ((RuntimeConstantPool) jcpool.getMirrorKlass().getConstantPool()).resolvedStringAt(index);
     }
 
     @VmImpl
@@ -656,10 +626,10 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     private final ConcurrentHashMap<Long, TruffleObject> handle2Lib = new ConcurrentHashMap<>();
-
     private final ConcurrentHashMap<Long, TruffleObject> handle2Sym = new ConcurrentHashMap<>();
 
     // region Library support
+
     @VmImpl
     public long JVM_LoadLibrary(String name) {
         try {
@@ -699,6 +669,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     // endregion Library support
+
     @VmImpl
     public static boolean JVM_IsSupportedJNIVersion(int version) {
         return version == JNI_VERSION_1_1 ||
@@ -733,11 +704,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public static void JVM_GC() {
         System.gc();
-    }
-
-    @VmImpl
-    public static void JVM_Halt(int code) {
-        throw new EspressoExitException(code);
     }
 
     @VmImpl
@@ -834,23 +800,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
 
         throw EspressoError.shouldNotReachHere();
-    }
-
-    @VmImpl
-    @JniImpl
-    public static @Host(Object.class) StaticObject JVM_LatestUserDefinedLoader() {
-        return Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<StaticObject>() {
-            public StaticObject visitFrame(FrameInstance frameInstance) {
-                if (frameInstance.getCallTarget() instanceof RootCallTarget) {
-                    RootCallTarget callTarget = (RootCallTarget) frameInstance.getCallTarget();
-                    RootNode rootNode = callTarget.getRootNode();
-                    if (rootNode instanceof EspressoRootNode) {
-                        return ((EspressoRootNode) rootNode).getMethod().getDeclaringKlass().getDefiningClassLoader();
-                    }
-                }
-                return null;
-            }
-        });
     }
 
     @VmImpl
