@@ -309,7 +309,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
             this.conditions = new ArrayDeque<>();
             tool = GraphUtil.getDefaultSimplifier(context.getMetaAccess(), context.getConstantReflection(), context.getConstantFieldProvider(), false, graph.getAssumptions(), graph.getOptions(),
                             context.getLowerer());
-            mergeMaps = EconomicMap.create(Equivalence.IDENTITY);
+            mergeMaps = EconomicMap.create();
         }
 
         protected void processConditionAnchor(ConditionAnchorNode node) {
@@ -616,7 +616,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
                         Stamp newStamp = infoElement.getStamp();
                         if (phi.stamp(NodeView.DEFAULT).tryImproveWith(newStamp) != null) {
                             if (mergeMap == null) {
-                                mergeMap = EconomicMap.create(Equivalence.IDENTITY);
+                                mergeMap = EconomicMap.create();
                                 mergeMaps.put(merge, mergeMap);
                             }
 
