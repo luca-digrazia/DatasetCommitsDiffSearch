@@ -245,10 +245,9 @@ final class Runner {
                         InitializeGlobalNode[] initGlobals, InitializeModuleNode[] initModules, boolean lazyParsing, boolean isSulongLibrary) throws TypeOverflowException {
             for (int i = 0; i < parserResults.size(); i++) {
                 LLVMParserResult res = parserResults.get(i);
-                Object moduleName = res.getRuntime().getLibrary().toString();
-                initSymbols[offset + i] = new InitializeSymbolsNode(res, res.getRuntime().getNodeFactory(), lazyParsing, isSulongLibrary, moduleName);
-                initGlobals[offset + i] = new InitializeGlobalNode(rootFrame, res, moduleName);
-                initModules[offset + i] = new InitializeModuleNode(runner, res, moduleName);
+                initSymbols[offset + i] = new InitializeSymbolsNode(res, res.getRuntime().getNodeFactory(), lazyParsing, isSulongLibrary);
+                initGlobals[offset + i] = new InitializeGlobalNode(rootFrame, res);
+                initModules[offset + i] = new InitializeModuleNode(runner, res);
             }
         }
 
@@ -502,7 +501,6 @@ final class Runner {
         @Child LLVMWriteSymbolNode writeSymbols;
 
         @Children final AllocGlobalNode[] allocGlobals;
-        final Object moduleName;
 
         @Children final AllocFunctionNode[] allocFuncs;
 
@@ -512,7 +510,7 @@ final class Runner {
         private final int bitcodeID;
         private final int globalLength;
 
-        InitializeSymbolsNode(LLVMParserResult res, NodeFactory nodeFactory, boolean lazyParsing, boolean isSulongLibrary, Object moduleName) throws TypeOverflowException {
+        InitializeSymbolsNode(LLVMParserResult res, NodeFactory nodeFactory, boolean lazyParsing, boolean isSulongLibrary) throws TypeOverflowException {
             DataLayout dataLayout = res.getDataLayout();
             this.nodeFactory = nodeFactory;
             this.fileScope = res.getRuntime().getFileScope();
@@ -562,7 +560,6 @@ final class Runner {
             this.allocGlobals = allocGlobalsList.toArray(AllocGlobalNode.EMPTY);
             this.allocFuncs = allocFunctionsList.toArray(AllocFunctionNode.EMPTY);
             this.writeSymbols = LLVMWriteSymbolNodeGen.create();
-            this.moduleName = moduleName;
         }
 
         public boolean shouldInitialize(LLVMContext ctx) {
@@ -576,9 +573,6 @@ final class Runner {
         }
 
         public LLVMPointer execute(LLVMContext ctx) {
-            if (ctx.loaderTraceStream() != null) {
-                LibraryLocator.traceStaticInits(ctx, "symbol initializers", moduleName);
-            }
             LLVMPointer roBase = allocOrNull(allocRoSection);
             LLVMPointer rwBase = allocOrNull(allocRwSection);
 
@@ -752,12 +746,6 @@ final class Runner {
         return loader.getCachedSulongLibraries();
     }
 
-    /**
-     * Marker for renamed symbols. Keep in sync with `sulong-internal.h`.
-     */
-    private static final String SULONG_RENAME_MARKER = "___sulong_import_";
-    public static final int SULONG_RENAME_MARKER_LEN = SULONG_RENAME_MARKER.length();
-
     private static void resolveRenamedSymbols(LLVMParserResult[] sulongLibraryResults) {
         EconomicMap<String, LLVMScope> scopes = EconomicMap.create();
 
@@ -771,17 +759,16 @@ final class Runner {
                 FunctionSymbol external = it.next();
                 String name = external.getName();
                 /*
-                 * An unresolved name has the form defined by the {@code
-                 * _SULONG_IMPORT_SYMBOL(libName, symbolName)} macro defined in the {@code
-                 * sulong-internal.h} header file. Check whether we have a symbol named "symbolName"
-                 * in the library "libName". If it exists, introduce an alias. This can be used to
-                 * explicitly call symbols from a certain standard library, in case the symbol is
-                 * hidden (either using the "hidden" attribute, or because it is overridden).
+                 * An unresolved name has the form "__libName_symbolName". Check whether we have a
+                 * symbol named "symbolName" in the library "libName". If it exists, introduce an
+                 * alias. This can be used to explicitly call symbols from a certain standard
+                 * library, in case the symbol is hidden (either using the "hidden" attribute, or
+                 * because it is overridden).
                  */
-                if (name.startsWith(SULONG_RENAME_MARKER)) {
-                    int idx = name.indexOf('_', SULONG_RENAME_MARKER_LEN);
+                if (name.startsWith("__")) {
+                    int idx = name.indexOf('_', 2);
                     if (idx > 0) {
-                        String lib = name.substring(SULONG_RENAME_MARKER_LEN, idx);
+                        String lib = name.substring(2, idx);
                         LLVMScope scope = scopes.get(lib);
                         if (scope != null) {
                             String originalName = name.substring(idx + 1);
@@ -789,8 +776,6 @@ final class Runner {
                             LLVMAlias alias = new LLVMAlias(parserResult.getRuntime().getLibrary(), name, originalSymbol);
                             parserResult.getRuntime().getFileScope().register(alias);
                             it.remove();
-                        } else {
-                            throw new LLVMLinkerException(String.format("The %s could not be imported because library %s was not found.", external.getName(), lib));
                         }
                     }
                 }
@@ -1138,35 +1123,17 @@ final class Runner {
     private static final class StaticInitsNode extends LLVMStatementNode {
 
         @Children final LLVMStatementNode[] statements;
-        final Object moduleName;
-        final String prefix;
-        @CompilationFinal ContextReference<LLVMContext> ctxRef;
 
-        StaticInitsNode(LLVMStatementNode[] statements, String prefix, Object moduleName) {
+        StaticInitsNode(LLVMStatementNode[] statements) {
             this.statements = statements;
-            this.prefix = prefix;
-            this.moduleName = moduleName;
         }
 
         @ExplodeLoop
         @Override
         public void execute(VirtualFrame frame) {
-            if (ctxRef == null) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                this.ctxRef = lookupContextReference(LLVMLanguage.class);
-            }
-            LLVMContext ctx = ctxRef.get();
-            if (ctx.loaderTraceStream() != null) {
-                traceExecution(ctx);
-            }
             for (LLVMStatementNode stmt : statements) {
                 stmt.execute(frame);
             }
-        }
-
-        @TruffleBoundary
-        private void traceExecution(LLVMContext ctx) {
-            LibraryLocator.traceStaticInits(ctx, prefix, moduleName, String.format("[%d inst]", statements.length));
         }
     }
 
@@ -1184,10 +1151,10 @@ final class Runner {
         @Child StaticInitsNode globalVarInit;
         @Child LLVMMemoryOpNode protectRoData;
 
-        InitializeGlobalNode(FrameDescriptor rootFrame, LLVMParserResult parserResult, Object moduleName) {
+        InitializeGlobalNode(FrameDescriptor rootFrame, LLVMParserResult parserResult) {
             this.dataLayout = parserResult.getDataLayout();
 
-            this.globalVarInit = Runner.createGlobalVariableInitializer(rootFrame, parserResult, moduleName);
+            this.globalVarInit = Runner.createGlobalVariableInitializer(rootFrame, parserResult);
             this.protectRoData = parserResult.getRuntime().getNodeFactory().createProtectGlobalsBlock();
         }
 
@@ -1219,11 +1186,11 @@ final class Runner {
 
         @Child StaticInitsNode constructor;
 
-        InitializeModuleNode(Runner runner, LLVMParserResult parserResult, Object moduleName) {
-            this.destructor = runner.createDestructor(parserResult, moduleName);
+        InitializeModuleNode(Runner runner, LLVMParserResult parserResult) {
+            this.destructor = runner.createDestructor(parserResult);
             this.dataLayout = parserResult.getDataLayout();
 
-            this.constructor = Runner.createConstructor(parserResult, moduleName);
+            this.constructor = Runner.createConstructor(parserResult);
         }
 
         void execute(VirtualFrame frame, LLVMContext ctx) {
@@ -1239,7 +1206,7 @@ final class Runner {
         }
     }
 
-    private static StaticInitsNode createGlobalVariableInitializer(FrameDescriptor rootFrame, LLVMParserResult parserResult, Object moduleName) {
+    private static StaticInitsNode createGlobalVariableInitializer(FrameDescriptor rootFrame, LLVMParserResult parserResult) {
         LLVMParserRuntime runtime = parserResult.getRuntime();
         LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, rootFrame, GetStackSpaceFactory.createAllocaFactory(), parserResult.getDataLayout());
         final List<LLVMStatementNode> globalNodes = new ArrayList<>();
@@ -1250,7 +1217,7 @@ final class Runner {
             }
         }
         LLVMStatementNode[] initNodes = globalNodes.toArray(LLVMStatementNode.NO_STATEMENTS);
-        return new StaticInitsNode(initNodes, "global variable initializers", moduleName);
+        return new StaticInitsNode(initNodes);
     }
 
     private static LLVMStatementNode createGlobalInitialization(LLVMParserRuntime runtime, LLVMSymbolReadResolver symbolResolver, GlobalVariable global, DataLayout dataLayout) {
@@ -1286,14 +1253,14 @@ final class Runner {
         return null;
     }
 
-    private static StaticInitsNode createConstructor(LLVMParserResult parserResult, Object moduleName) {
-        return new StaticInitsNode(createStructor(CONSTRUCTORS_VARNAME, parserResult, ASCENDING_PRIORITY), "init", moduleName);
+    private static StaticInitsNode createConstructor(LLVMParserResult parserResult) {
+        return new StaticInitsNode(createStructor(CONSTRUCTORS_VARNAME, parserResult, ASCENDING_PRIORITY));
     }
 
-    private RootCallTarget createDestructor(LLVMParserResult parserResult, Object moduleName) {
+    private RootCallTarget createDestructor(LLVMParserResult parserResult) {
         LLVMStatementNode[] destructor = createStructor(DESTRUCTORS_VARNAME, parserResult, DESCENDING_PRIORITY);
         if (destructor.length > 0) {
-            LLVMStatementRootNode root = new LLVMStatementRootNode(language, new StaticInitsNode(destructor, "fini", moduleName), StackManager.createRootFrame());
+            LLVMStatementRootNode root = new LLVMStatementRootNode(language, new StaticInitsNode(destructor), StackManager.createRootFrame());
             return Truffle.getRuntime().createCallTarget(root);
         } else {
             return null;
