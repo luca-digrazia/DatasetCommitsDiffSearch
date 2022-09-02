@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.vm;
 
-import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_ABSTRACT;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_CALLER_SENSITIVE;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
@@ -372,7 +371,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
         return new Callback(m.parameterCount() + extraArg, new Callback.Function() {
             @Override
-            @TruffleBoundary
+            @CompilerDirectives.TruffleBoundary
             public Object call(Object... args) {
                 boolean isJni = m.isJni();
                 try {
@@ -733,17 +732,13 @@ public final class VM extends NativeEnv implements ContextAccess {
     private final ConcurrentHashMap<Long, TruffleObject> handle2Sym = new ConcurrentHashMap<>();
 
     // region Library support
-
-    @TruffleBoundary
     @VmImpl
     public @Word long JVM_LoadLibrary(String name) {
-        VMLogger.fine(String.format("JVM_LoadLibrary: '%s'", name));
         try {
             TruffleObject lib = NativeLibrary.loadLibrary(Paths.get(name));
             java.lang.reflect.Field f = lib.getClass().getDeclaredField("handle");
             f.setAccessible(true);
             long handle = (long) f.get(lib);
-            VMLogger.fine(String.format("JVM_LoadLibrary: Succesfuly loaded '%s' with handle %x", name, handle));
             handle2Lib.put(handle, lib);
             return handle;
         } catch (IllegalAccessException | NoSuchFieldException e) {
@@ -751,17 +746,16 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
     }
 
-    @TruffleBoundary
     @VmImpl
     public static void JVM_UnloadLibrary(@SuppressWarnings("unused") @Word long handle) {
         // TODO(peterssen): Do unload the library.
-        VMLogger.severe(String.format("JVM_UnloadLibrary: %x was not unloaded!", handle));
+        VMLogger.severe("JVM_UnloadLibrary called but library was not unloaded!");
     }
 
     @VmImpl
     public @Word long JVM_FindLibraryEntry(@Word long libHandle, String name) {
         if (libHandle == 0) {
-            VMLogger.warning(String.format("JVM_FindLibraryEntry from default/global namespace (0): %s", name));
+            VMLogger.warning("JVM_FindLibraryEntry from default/global namespace (0): " + name);
             return 0L;
         }
         // TODO(peterssen): Workaround for MacOS flags: RTLD_DEFAULT...
@@ -1205,7 +1199,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unused")
     public @Host(Object.class) StaticObject JVM_DoPrivileged(@Host(Class.class) StaticObject cls,
                     @Host(typeName = "PrivilegedAction OR PrivilegedActionException") StaticObject action,
@@ -1252,7 +1246,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     @SuppressWarnings("unused")
     public @Host(Object.class) StaticObject JVM_GetStackAccessControlContext(@Host(Class.class) StaticObject cls) {
         ArrayList<StaticObject> domains = new ArrayList<>();
@@ -1825,26 +1819,11 @@ public final class VM extends NativeEnv implements ContextAccess {
     public static final int JMM_THREAD_CPU_TIME = 24;
     public static final int JMM_THREAD_ALLOCATED_MEMORY = 25;
 
-    // enum
-    public static final int JMM_VERSION_1 = 0x20010000;
-    public static final int JMM_VERSION_1_0 = 0x20010000;
-    public static final int JMM_VERSION_1_1 = 0x20010100; // JDK 6
-    public static final int JMM_VERSION_1_2 = 0x20010200; // JDK 7
-    public static final int JMM_VERSION_1_2_1 = 0x20010201; // JDK 7 GA
-    public static final int JMM_VERSION_1_2_2 = 0x20010202;
-
-    public static final int JMM_VERSION = 0x20010203;
-
     @JniImpl
     @VmImpl
     public synchronized long JVM_GetManagement(int version) {
-        if (version != JMM_VERSION_1_0) {
-            return 0L /* NULL */;
-        }
         EspressoContext context = getContext();
         if (!context.EnableManagement) {
-            VMLogger.severe("JVM_GetManagement: Experimental support for java.lang.management native APIs is disabled.\n" +
-                            "Use '--java.EnableManagement=true' to enable experimental support for j.l.management native APIs.");
             return 0L /* NULL */;
         }
         if (managementPtr == 0) {
@@ -1857,6 +1836,8 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
         return managementPtr;
     }
+
+    private static final int JMM_VERSION = 0x20010203;
 
     @JniImpl
     @VmImpl
@@ -2145,8 +2126,8 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @JniImpl
     @VmImpl
-    public int GetVMGlobals(@Host(Object[].class) StaticObject names, /* jmmVMGlobal* */ @Word long globalsPtr, @SuppressWarnings("unused") int count) {
-        if (globalsPtr == 0L /* NULL */) {
+    public int GetVMGlobals(@Host(Object[].class) StaticObject names, /* jmmVMGlobal* */ @Word long globalsPtr, int count) {
+        if (globalsPtr == 0L) {
             throw getMeta().throwEx(NullPointerException.class);
         }
         if (StaticObject.notNull(names)) {
@@ -2159,7 +2140,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                 if (StaticObject.isNull(entry)) {
                     throw getMeta().throwEx(NullPointerException.class);
                 }
-                VMLogger.fine("GetVMGlobals: " + Meta.toHostString(entry));
+                System.err.println("GetVMGlobals: " + Meta.toHostString(entry));
             }
         }
         return 0;
