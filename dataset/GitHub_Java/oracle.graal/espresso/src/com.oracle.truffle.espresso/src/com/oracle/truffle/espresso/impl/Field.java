@@ -40,6 +40,8 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
+import com.oracle.truffle.espresso.vm.UnsafeAccess;
+import sun.misc.Unsafe;
 
 /**
  * Represents a resolved Espresso field.
@@ -47,6 +49,7 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 public final class Field extends Member<Type> implements FieldRef {
 
     public static final Field[] EMPTY_ARRAY = new Field[0];
+    private static final Unsafe UNSAFE = UnsafeAccess.get();
 
     private final LinkedField linkedField;
     private final ObjectKlass holder;
@@ -201,7 +204,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getObjectVolatileHelper(obj);
         } else {
-            return linkedField.getObject(obj);
+            return UNSAFE.getObject(obj.getObjectFieldStorage(), (long) getOffset());
         }
     }
 
@@ -209,7 +212,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert !getKind().isSubWord();
-        return linkedField.getObjectVolatile(obj);
+        return UNSAFE.getObjectVolatile(obj.getObjectFieldStorage(), getOffset());
     }
 
     private void setObjectHelper(StaticObject obj, Object value) {
@@ -219,7 +222,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setObjectVolatileHelper(obj, value);
         } else {
-            linkedField.setObject(obj, value);
+            UNSAFE.putObject(obj.getObjectFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -227,7 +230,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert !getKind().isSubWord();
-        linkedField.setObjectVolatile(obj, value);
+        UNSAFE.putObjectVolatile(obj.getObjectFieldStorage(), getOffset(), value);
     }
 
     public StaticObject getObject(StaticObject obj) {
@@ -266,14 +269,14 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert !isHidden();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        return (StaticObject) linkedField.getAndSetObject(obj, value);
+        return (StaticObject) UNSAFE.getAndSetObject(obj.getObjectFieldStorage(), getOffset(), value);
     }
 
     public boolean compareAndSwapObject(StaticObject obj, Object before, Object after) {
         obj.checkNotForeign();
         assert !isHidden();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        return linkedField.compareAndSwapObject(obj, before, after);
+        return UNSAFE.compareAndSwapObject(obj.getObjectFieldStorage(), getOffset(), before, after);
     }
 
     public Object getHiddenObject(StaticObject obj) {
@@ -315,7 +318,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getBooleanVolatile(obj);
         } else {
-            return linkedField.getBoolean(obj);
+            return UNSAFE.getBoolean(obj.getPrimitiveFieldStorage(), (long) getOffset());
         }
     }
 
@@ -324,7 +327,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Boolean;
-        return linkedField.getBooleanVolatile(obj);
+        return UNSAFE.getBooleanVolatile(obj.getPrimitiveFieldStorage(), getOffset());
     }
 
     public byte getByte(StaticObject obj) {
@@ -334,7 +337,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getByteVolatile(obj);
         } else {
-            return linkedField.getByte(obj);
+            return UNSAFE.getByte(obj.getPrimitiveFieldStorage(), (long) getOffset());
         }
     }
 
@@ -343,7 +346,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Byte;
-        return linkedField.getByteVolatile(obj);
+        return UNSAFE.getByteVolatile(obj.getPrimitiveFieldStorage(), getOffset());
     }
 
     public char getChar(StaticObject obj) {
@@ -353,7 +356,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getCharVolatile(obj);
         } else {
-            return linkedField.getChar(obj);
+            return UNSAFE.getChar(obj.getPrimitiveFieldStorage(), (long) getOffset());
         }
     }
 
@@ -362,7 +365,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Char;
-        return linkedField.getCharVolatile(obj);
+        return UNSAFE.getCharVolatile(obj.getPrimitiveFieldStorage(), getOffset());
     }
 
     public short getShort(StaticObject obj) {
@@ -372,7 +375,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getShortVolatile(obj);
         } else {
-            return linkedField.getShort(obj);
+            return UNSAFE.getShort(obj.getPrimitiveFieldStorage(), (long) getOffset());
         }
     }
 
@@ -381,7 +384,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Short;
-        return linkedField.getShortVolatile(obj);
+        return UNSAFE.getShortVolatile(obj.getPrimitiveFieldStorage(), getOffset());
     }
 
     public int getInt(StaticObject obj) {
@@ -391,7 +394,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getIntVolatile(obj);
         } else {
-            return linkedField.getInt(obj);
+            return UNSAFE.getInt(obj.getPrimitiveFieldStorage(), (long) getOffset());
         }
     }
 
@@ -400,7 +403,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Int;
-        return linkedField.getIntVolatile(obj);
+        return UNSAFE.getIntVolatile(obj.getPrimitiveFieldStorage(), getOffset());
     }
 
     public float getFloat(StaticObject obj) {
@@ -410,7 +413,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getFloatVolatile(obj);
         } else {
-            return linkedField.getFloat(obj);
+            return UNSAFE.getFloat(obj.getPrimitiveFieldStorage(), (long) getOffset());
         }
     }
 
@@ -419,7 +422,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Float;
-        return linkedField.getFloatVolatile(obj);
+        return UNSAFE.getFloatVolatile(obj.getPrimitiveFieldStorage(), getOffset());
     }
 
     public double getDouble(StaticObject obj) {
@@ -429,7 +432,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getDoubleVolatile(obj);
         } else {
-            return linkedField.getDouble(obj);
+            return UNSAFE.getDouble(obj.getPrimitiveFieldStorage(), (long) getOffset());
         }
     }
 
@@ -438,7 +441,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Double;
-        return linkedField.getDoubleVolatile(obj);
+        return UNSAFE.getDoubleVolatile(obj.getPrimitiveFieldStorage(), getOffset());
     }
 
     // Field setters
@@ -450,7 +453,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setBooleanVolatile(obj, value);
         } else {
-            linkedField.setBoolean(obj, value);
+            UNSAFE.putBoolean(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -459,7 +462,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Boolean;
-        linkedField.setBooleanVolatile(obj, value);
+        UNSAFE.putBooleanVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
     }
 
     public void setByte(StaticObject obj, byte value) {
@@ -469,7 +472,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setByteVolatile(obj, value);
         } else {
-            linkedField.setByte(obj, value);
+            UNSAFE.putByte(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -478,7 +481,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Byte;
-        linkedField.setByteVolatile(obj, value);
+        UNSAFE.putByteVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
     }
 
     public void setChar(StaticObject obj, char value) {
@@ -488,7 +491,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setCharVolatile(obj, value);
         } else {
-            linkedField.setChar(obj, value);
+            UNSAFE.putChar(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -497,7 +500,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Char;
-        linkedField.setCharVolatile(obj, value);
+        UNSAFE.putCharVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
     }
 
     public void setShort(StaticObject obj, short value) {
@@ -507,7 +510,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setShortVolatile(obj, value);
         } else {
-            linkedField.setShort(obj, value);
+            UNSAFE.putShort(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -516,7 +519,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Short;
-        linkedField.setShortVolatile(obj, value);
+        UNSAFE.putShortVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
     }
 
     public void setInt(StaticObject obj, int value) {
@@ -526,7 +529,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setIntVolatile(obj, value);
         } else {
-            linkedField.setInt(obj, value);
+            UNSAFE.putInt(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -535,14 +538,14 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Int || getKind() == JavaKind.Float;
-        linkedField.setIntVolatile(obj, value);
+        UNSAFE.putIntVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
     }
 
     public boolean compareAndSwapInt(StaticObject obj, int before, int after) {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Int || getKind() == JavaKind.Float;
-        return linkedField.compareAndSwapInt(obj, before, after);
+        return UNSAFE.compareAndSwapInt(obj.getPrimitiveFieldStorage(), getOffset(), before, after);
     }
 
     public void setFloat(StaticObject obj, float value) {
@@ -552,7 +555,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setFloatVolatile(obj, value);
         } else {
-            linkedField.setFloat(obj, value);
+            UNSAFE.putFloat(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -561,7 +564,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Float;
-        linkedField.setFloatVolatile(obj, value);
+        UNSAFE.putFloatVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
     }
 
     public void setDouble(StaticObject obj, double value) {
@@ -571,7 +574,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setDoubleVolatile(obj, value);
         } else {
-            linkedField.setDouble(obj, value);
+            UNSAFE.putDouble(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -580,7 +583,7 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Double;
-        linkedField.setDoubleVolatile(obj, value);
+        UNSAFE.putDoubleVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
     }
 
     // End subword field handling
@@ -594,7 +597,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getLongVolatile(obj);
         } else {
-            return linkedField.getLong(obj);
+            return UNSAFE.getLong(obj.getPrimitiveFieldStorage(), (long) getOffset());
         }
     }
 
@@ -604,7 +607,7 @@ public final class Field extends Member<Type> implements FieldRef {
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Long;
         assert getKind().needsTwoSlots();
-        return linkedField.getLongVolatile(obj);
+        return UNSAFE.getLongVolatile(obj.getPrimitiveFieldStorage(), getOffset());
     }
 
     public void setLong(StaticObject obj, long value) {
@@ -615,7 +618,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setLongVolatile(obj, value);
         } else {
-            linkedField.setLong(obj, value);
+            UNSAFE.putLong(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
         }
     }
 
@@ -625,7 +628,7 @@ public final class Field extends Member<Type> implements FieldRef {
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Long;
         assert getKind().needsTwoSlots();
-        linkedField.setLongVolatile(obj, value);
+        UNSAFE.putLongVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
     }
 
     public boolean compareAndSwapLong(StaticObject obj, long before, long after) {
@@ -633,7 +636,7 @@ public final class Field extends Member<Type> implements FieldRef {
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind() == JavaKind.Long;
         assert getKind().needsTwoSlots();
-        return linkedField.compareAndSwapLong(obj, before, after);
+        return UNSAFE.compareAndSwapLong(obj.getPrimitiveFieldStorage(), getOffset(), before, after);
     }
     // End big words field handling.
 
