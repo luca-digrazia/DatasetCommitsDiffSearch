@@ -26,10 +26,8 @@
 
 package org.graalvm.compiler.loop.phases;
 
-import static org.graalvm.compiler.core.common.GraalOptions.LoopPredicationMainPath;
-import static org.graalvm.compiler.core.common.calc.Condition.EQ;
-import static org.graalvm.compiler.core.common.calc.Condition.NE;
-
+import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.meta.SpeculationLog;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.cfg.AbstractControlFlowGraph;
@@ -38,6 +36,11 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
+import org.graalvm.compiler.loop.CountedLoopInfo;
+import org.graalvm.compiler.loop.InductionVariable;
+import org.graalvm.compiler.loop.LoopEx;
+import org.graalvm.compiler.loop.LoopsData;
+import org.graalvm.compiler.loop.MathUtil;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FrameState;
@@ -56,17 +59,13 @@ import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.extended.AnchoringNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.extended.MultiGuardNode;
-import org.graalvm.compiler.nodes.loop.CountedLoopInfo;
-import org.graalvm.compiler.nodes.loop.InductionVariable;
-import org.graalvm.compiler.nodes.loop.LoopEx;
-import org.graalvm.compiler.nodes.loop.LoopsData;
-import org.graalvm.compiler.nodes.loop.MathUtil;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.tiers.MidTierContext;
 import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup;
 
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.meta.SpeculationLog;
+import static org.graalvm.compiler.core.common.GraalOptions.LoopPredicationMainPath;
+import static org.graalvm.compiler.core.common.calc.Condition.EQ;
+import static org.graalvm.compiler.core.common.calc.Condition.NE;
 
 public class LoopPredicationPhase extends BasePhase<MidTierContext> {
     private static final SpeculationReasonGroup LOOP_PREDICATION = new SpeculationReasonGroup("Loop Predication", BytecodePosition.class);
@@ -80,7 +79,7 @@ public class LoopPredicationPhase extends BasePhase<MidTierContext> {
         DebugContext debug = graph.getDebug();
         final SpeculationLog speculationLog = graph.getSpeculationLog();
         if (graph.hasLoops() && graph.getGuardsStage().allowsFloatingGuards() && context.getOptimisticOptimizations().useLoopLimitChecks(graph.getOptions()) && speculationLog != null) {
-            LoopsData data = context.getLoopsDataProvider().getLoopsData(graph);
+            LoopsData data = new LoopsData(graph);
             final ControlFlowGraph cfg = data.getCFG();
             try (DebugContext.Scope s = debug.scope("predication", cfg)) {
                 for (LoopEx loop : data.loops()) {
@@ -98,7 +97,6 @@ public class LoopPredicationPhase extends BasePhase<MidTierContext> {
                         final CountedLoopInfo counted = loop.counted();
                         final InductionVariable counter = counted.getCounter();
                         final Condition condition = ((CompareNode) counted.getLimitTest().condition()).condition().asCondition();
-                        final boolean inverted = loop.counted().isInverted();
                         if ((((IntegerStamp) counter.valueNode().stamp(NodeView.DEFAULT)).getBits() == 32) &&
                                         !counted.isUnsignedCheck() &&
                                         ((condition != NE && condition != EQ) || (counter.isConstantStride() && Math.abs(counter.constantStride()) == 1)) &&
@@ -118,15 +116,11 @@ public class LoopPredicationPhase extends BasePhase<MidTierContext> {
                             }
                             final AbstractBeginNode body = loop.counted().getBody();
                             final Block bodyBlock = cfg.getNodeToBlock().get(body);
-
                             for (GuardNode guard : guards) {
                                 final AnchoringNode anchor = guard.getAnchor();
                                 final Block anchorBlock = cfg.getNodeToBlock().get(anchor.asNode());
-                                // for inverted loop the anchor can dominate the body
-                                if (!inverted) {
-                                    if (!AbstractControlFlowGraph.dominates(bodyBlock, anchorBlock)) {
-                                        continue;
-                                    }
+                                if (!AbstractControlFlowGraph.dominates(bodyBlock, anchorBlock)) {
+                                    continue;
                                 }
                                 processGuard(loop, guard);
                             }
