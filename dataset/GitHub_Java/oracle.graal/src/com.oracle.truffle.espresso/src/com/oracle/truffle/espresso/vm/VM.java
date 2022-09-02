@@ -992,7 +992,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         setProperty.invokeWithConversions(properties, "java.ext.dirs", Utils.stringify(props.extDirs()));
 
         // Modules properties.
-        setProperty.invokeWithConversions(properties, "jdk.module.main", getModuleMain(options));
         setProperty.invokeWithConversions(properties, "jdk.module.path", Utils.stringify(options.get(EspressoOptions.ModulePath)));
         setNumberedProperty(setProperty, properties, "jdk.module.addreads", options.get(EspressoOptions.AddReads));
         setNumberedProperty(setProperty, properties, "jdk.module.addexports", options.get(EspressoOptions.AddExports));
@@ -1009,17 +1008,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         setProperty.invokeWithConversions(properties, "java.vm.info", EspressoLanguage.VM_INFO);
 
         return properties;
-    }
-
-    private static String getModuleMain(OptionValues options) {
-        String module = options.get(EspressoOptions.Module);
-        if (module.length() > 0) {
-            int slash = module.indexOf('/');
-            if (slash != -1) {
-                module = module.substring(0, slash);
-            }
-        }
-        return module;
     }
 
     private static void setNumberedProperty(Method setProperty, StaticObject properties, String property, List<String> values) {
@@ -2479,7 +2467,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         PackageTable packageTable = registry.packages();
         ModuleTable moduleTable = registry.modules();
         assert moduleTable != null && packageTable != null;
-        boolean loaderIsBootOrPlatform = ClassRegistry.loaderIsBootOrPlatform(loader, getMeta());
+        boolean loaderIsBootOrPlatform = StaticObject.isNull(loader) || getMeta().jdk_internal_loader_ClassLoaders$PlatformClassLoader.isAssignableFrom(loader.getKlass());
 
         ArrayList<Symbol<Name>> pkgSymbols = new ArrayList<>();
         String[] packages = extractNativePackages(pkgs, num_package, profiler);

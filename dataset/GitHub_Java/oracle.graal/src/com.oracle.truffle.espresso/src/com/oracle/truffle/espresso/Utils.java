@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,19 +22,67 @@
  */
 package com.oracle.truffle.espresso;
 
-import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.bytecode.InterpreterToVM;
-import com.oracle.truffle.espresso.runtime.StaticObject;
-
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.StringJoiner;
 
-public class Utils {
+import com.oracle.truffle.espresso.jni.NativeEnv;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
-    public static InterpreterToVM getVm() {
-        return EspressoLanguage.getCurrentContext().getVm();
+public final class Utils {
+
+    public static NativeSimpleType kindToType(JavaKind kind) {
+        switch (kind) {
+            case Boolean:
+                return NativeSimpleType.SINT8; // ?
+            case Short:
+                return NativeSimpleType.SINT16;
+            case Char:
+                return NativeSimpleType.SINT16;
+            case Long:
+                return NativeSimpleType.SINT64;
+            case Float:
+                return NativeSimpleType.FLOAT;
+            case Double:
+                return NativeSimpleType.DOUBLE;
+            case Int:
+                return NativeSimpleType.SINT32;
+            case Byte:
+                return NativeSimpleType.SINT8;
+            case Void:
+                return NativeSimpleType.VOID;
+            case Object:
+                // TODO(peterssen): We don't want Interop null passed verbatim to native, but native
+                // NULL instead.
+                return NativeEnv.word();
+            default:
+                throw EspressoError.shouldNotReachHere();
+        }
     }
 
-    public static Object maybeNull(Object obj) {
-        return (obj == null) ? StaticObject.NULL : obj;
+    public static List<Path> parsePaths(String paths) {
+        List<Path> list = new ArrayList<>();
+        for (String p : paths.split(File.pathSeparator)) {
+            list.add(Paths.get(p));
+        }
+        return list;
+    }
+
+    public static List<String> parseStrings(String strings) {
+        return new ArrayList<>(Arrays.asList(strings.split(File.pathSeparator)));
+    }
+
+    public static String stringify(List<Path> paths) {
+        StringJoiner joiner = new StringJoiner(File.pathSeparator);
+        for (Path p : paths) {
+            joiner.add(p.toString());
+        }
+        return joiner.toString();
     }
 }
