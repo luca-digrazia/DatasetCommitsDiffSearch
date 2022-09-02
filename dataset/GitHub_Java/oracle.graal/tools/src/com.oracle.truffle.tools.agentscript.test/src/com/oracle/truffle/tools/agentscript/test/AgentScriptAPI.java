@@ -36,125 +36,50 @@ import java.util.function.Predicate;
  * {@link AgentScript#registerAgentScript registered scripts}.
  */
 public interface AgentScriptAPI {
-    /** ID of the instrument. Version {@code 0.3} has been released as
-     * part of GraalVM 20.0.0 release.
-     *
-     * @return same value of {@link AgentScript#ID} - e.g. {@code "agentscript"}
-     * @since 0.3
-     */
-    String id();
-
-    /** Version of the API. Version {@code 0.1} has been released as
-     * part of GraalVM 19.3.0 release.
+    /** Version of the API.
      *
      * @return same value of {@link AgentScript#VERSION}
-     * @since 0.1
      */
     String version();
 
-    /** Marker interface for any handler.
-     * @since 0.1
-     */
-    interface Handler {
-    }
-
-    interface SourceInfo {
-        /** Name of the {@link #sourceLoaded}.
-         * @return name of the loaded source
-         */
-        String name();
-        /** Character content of the {@link #sourceLoaded}.
-         * @return content of the loaded source
-         */
-        String characters();
-        /** Identification of this source's language.
-         * @return String representing the language ID
-         */
-        String language();
-        /** Mime type of this source.
-         * @return given mime type or {@code null}
-         */
-        String mimeType();
-        /** URI uniquely identifying the source.
-         * @return the URI
-         */
-        String uri();
-    }
-
     @FunctionalInterface
-    interface OnSourceLoadedHandler extends Handler {
-        void sourceLoaded(SourceInfo info);
+    interface OnSourceLoadedHandler {
+        interface Info {
+            /** Name of the {@link #sourceLoaded}.
+             * @return name of the loaded source
+             */
+            String name();
+            /** Character content of the {@link #sourceLoaded}.
+             * @return content of the loaded source
+             */
+            String characters();
+            /** Identification of this source's language.
+             * @return String representing the language ID
+             */
+            String language();
+            /** Mime type of this source.
+             * @return given mime type or {@code null}
+             */
+            String mimeType();
+            /** URI uniquely identifying the source.
+             * @return the URI
+             */
+            String uri();
+        }
+        void sourceLoaded(Info info);
     }
     /** Register a handler to be notified when a source is loaded.
      *
      * @param event has to be {@code "source"} string
      * @param handler a callback that takes
-     *      {@link SourceInfo one argument}
+     *      {@link OnSourceLoadedHandler.Info one argument}
      */
     void on(String event, OnSourceLoadedHandler handler);
 
     @FunctionalInterface
-    interface OnEventHandler extends Handler {
+    interface OnEventHandler {
         interface Context {
-            /** Name of the enclosing function.
-             * @return the name of the enclosing function
-             * @since 0.1
-             */
             String name();
-
-            /** Information about surrounding source.
-             * @return information about the surrounding source
-             * @since 0.4
-             */
-            SourceInfo source();
-
-            /** Characters of the location.
-             * @return the characters of this {@link Context}
-             * @since 0.4
-             */
-            String characters();
-
-            /** Line of this location. The same as {@link #startLine()}.
-             * 
-             * @return line number counting from one
-             * @since 0.4
-             */
-            int line();
-
-            /** Staring line of this location.
-             *
-             * @return line number counting from one
-             * @since 0.4
-             */
-            int startLine();
-
-            /** Final line of this location.
-             *
-             * @return line number counting from one
-             * @since 0.4
-             */
-            int endLine();
-
-            /** Column of this location. The same as {@link #startColumn()}.
-             *
-             * @return column number counting from one
-             * @since 0.4
-             */
-            int column();
-
-            /** Starting column of this location.
-             *
-             * @return column number counting from one
-             * @since 0.4
-             */
-            int startColumn();
-
-            /** Final column of this location.
-             *
-             * @return column number counting from one
-             * @since 0.4
-             */
-            int endColumn();
         }
         void event(Context ctx, Map<String, Object> frame);
     }
@@ -174,7 +99,7 @@ public interface AgentScriptAPI {
     void on(String event, OnEventHandler handler, OnConfig config);
 
     @FunctionalInterface
-    interface OnCloseHandler extends Handler {
+    interface OnCloseHandler {
         void closed();
     }
     /** Register on close handler.
@@ -187,10 +112,11 @@ public interface AgentScriptAPI {
     /** Unregisters a handler.
      * 
      * @param event the event type to unregister from
-     * @param handler the instance of handler registered 
+     * @param handler the instances of handler registered 
      *   by one of the {@code on} methods
-     * @since 0.2
      */
-    void off(String event, Handler handler);
+    void off(String event, OnSourceLoadedHandler handler);
+    void off(String event, OnEventHandler handler);
+    void off(String event, OnCloseHandler handler);
 }
 // END: AgentScriptAPI
