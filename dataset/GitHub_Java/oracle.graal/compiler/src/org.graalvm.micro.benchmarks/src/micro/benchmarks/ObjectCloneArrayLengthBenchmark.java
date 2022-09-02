@@ -24,43 +24,43 @@
  */
 package micro.benchmarks;
 
+import java.lang.reflect.Method;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 
+@State(Scope.Thread)
 public class ObjectCloneArrayLengthBenchmark extends BenchmarkBase {
 
-    static class A {
-        final int x;
+    private static final int length = 10;
+    private Method equals; // 1 param
+    private Method toString; // no params
 
-        A(int x) {
-            this.x = x;
-        }
-    }
-
-    @State(Scope.Benchmark)
-    public static class ThreadState {
-        int length = 10;
-        A[] array = new A[]{new A(1), new A(2), new A(3), new A(4), new A(5)};
+    @Setup
+    public void setUp() throws Exception {
+        equals = getClass().getMethod("equals", Object.class);
+        toString = getClass().getMethod("toString");
     }
 
     @Benchmark
-    public int arrayAllocLength(ThreadState t) {
-        return new int[t.length].length;
+    public int baseline() {
+        return new int[length].length;
     }
 
     @Benchmark
-    public int arrayAllocCloneLength(ThreadState t) {
-        return new int[t.length].clone().length;
+    public int baselineClone() {
+        return new int[length].clone().length;
     }
 
     @Benchmark
-    public int arrayLength(ThreadState t) {
-        return t.array.length;
+    public int cloneArrayFromEqualsMethod() {
+        return equals.getParameterTypes().length;
     }
 
     @Benchmark
-    public int arrayCloneLength(ThreadState t) {
-        return t.array.clone().length;
+    public int cloneArrayFromToStringMethod() {
+        return toString.getParameterTypes().length;
     }
 }

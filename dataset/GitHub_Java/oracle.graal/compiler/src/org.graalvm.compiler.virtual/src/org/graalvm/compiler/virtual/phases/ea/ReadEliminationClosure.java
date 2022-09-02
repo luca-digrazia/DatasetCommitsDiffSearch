@@ -136,9 +136,9 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
             }
         } else if (node instanceof WriteNode) {
             WriteNode write = (WriteNode) node;
-            if (write.getKilledLocationIdentity().isSingle()) {
+            if (write.getLocationIdentity().isSingle()) {
                 ValueNode object = GraphUtil.unproxify(write.getAddress());
-                LoadCacheEntry identifier = new LoadCacheEntry(object, write.getKilledLocationIdentity());
+                LoadCacheEntry identifier = new LoadCacheEntry(object, write.getLocationIdentity());
                 ValueNode cachedValue = state.getCacheEntry(identifier);
 
                 ValueNode value = getScalarAlias(write.value());
@@ -146,10 +146,10 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                     effects.deleteNode(write);
                     deleted = true;
                 }
-                killReadCacheByIdentity(state, write.getKilledLocationIdentity());
+                killReadCacheByIdentity(state, write.getLocationIdentity());
                 state.addCacheEntry(identifier, value);
             } else {
-                killReadCacheByIdentity(state, write.getKilledLocationIdentity());
+                killReadCacheByIdentity(state, write.getLocationIdentity());
             }
         } else if (node instanceof UnsafeAccessNode) {
             ResolvedJavaType type = StampTool.typeOrNull(((UnsafeAccessNode) node).object());
@@ -182,19 +182,19 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                     } else {
                         assert node instanceof RawStoreNode;
                         RawStoreNode write = (RawStoreNode) node;
-                        if (write.getKilledLocationIdentity().isSingle()) {
+                        if (write.getLocationIdentity().isSingle()) {
                             ValueNode object = GraphUtil.unproxify(write.object());
-                            UnsafeLoadCacheEntry identifier = new UnsafeLoadCacheEntry(object, write.offset(), write.getKilledLocationIdentity());
+                            UnsafeLoadCacheEntry identifier = new UnsafeLoadCacheEntry(object, write.offset(), write.getLocationIdentity());
                             ValueNode cachedValue = state.getCacheEntry(identifier);
                             ValueNode value = getScalarAlias(write.value());
                             if (GraphUtil.unproxify(value) == GraphUtil.unproxify(cachedValue)) {
                                 effects.deleteNode(write);
                                 deleted = true;
                             }
-                            killReadCacheByIdentity(state, write.getKilledLocationIdentity());
+                            killReadCacheByIdentity(state, write.getLocationIdentity());
                             state.addCacheEntry(identifier, value);
                         } else {
-                            killReadCacheByIdentity(state, write.getKilledLocationIdentity());
+                            killReadCacheByIdentity(state, write.getLocationIdentity());
                         }
                     }
                 }
