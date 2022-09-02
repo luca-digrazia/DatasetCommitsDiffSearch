@@ -27,7 +27,6 @@ package org.graalvm.compiler.hotspot.amd64;
 import static org.graalvm.compiler.hotspot.HotSpotBackend.Options.GraalArithmeticStubs;
 
 import org.graalvm.compiler.api.replacements.Snippet;
-import org.graalvm.compiler.core.amd64.AMD64LoweringProviderMixin;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
@@ -42,7 +41,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.calc.FloatConvertNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
-import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.amd64.AMD64ArrayIndexOfDispatchNode;
 import org.graalvm.compiler.replacements.amd64.AMD64ConvertSnippets;
@@ -55,15 +53,15 @@ import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider implements AMD64LoweringProviderMixin {
+public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider {
 
     private AMD64ConvertSnippets.Templates convertSnippets;
     private ProbabilisticProfileSnippets.Templates profileSnippets;
     private AMD64X87MathSnippets.Templates mathSnippets;
 
     public AMD64HotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
-                    HotSpotConstantReflectionProvider constantReflection, PlatformConfigurationProvider platformConfig, TargetDescription target) {
-        super(runtime, metaAccess, foreignCalls, registers, constantReflection, platformConfig, target);
+                    HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
+        super(runtime, metaAccess, foreignCalls, registers, constantReflection, target);
     }
 
     @Override
@@ -136,5 +134,15 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
         StructuredGraph graph = dispatchNode.graph();
         ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, dispatchNode.getStubCallDescriptor(), dispatchNode.getStubCallArgs()));
         graph.replaceFixed(dispatchNode, call);
+    }
+
+    @Override
+    public Integer smallestCompareWidth() {
+        return 8;
+    }
+
+    @Override
+    public boolean supportBulkZeroing() {
+        return true;
     }
 }
