@@ -42,7 +42,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -55,8 +54,6 @@ import com.oracle.truffle.espresso.verifier.MethodVerifier;
 public final class ObjectKlass extends Klass {
 
     public static final ObjectKlass[] EMPTY_ARRAY = new ObjectKlass[0];
-
-    public static final JavaKind FIELD_REPRESENTATION = JavaKind.Long;
 
     private final EnclosingMethodAttribute enclosingMethod;
 
@@ -72,11 +69,8 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal(dimensions = 1) private final Field[] fieldTable;
 
-    private final int primitiveFieldTotalByteCount;
-    private final int surplusPrimitiveField;
-    private final int primitiveStaticFieldTotalByteCount;
-    private final int surplusPrimitiveStaticField;
-
+    private final int wordFields;
+    private final int staticWordFields;
     private final int objectFields;
     private final int staticObjectFields;
 
@@ -137,10 +131,8 @@ public final class ObjectKlass extends Klass {
         this.staticFieldTable = fieldCR.staticFieldTable;
         this.declaredFields = fieldCR.declaredFields;
 
-        this.primitiveFieldTotalByteCount = fieldCR.primitiveFieldTotalByteCount;
-        this.surplusPrimitiveField = (this.primitiveFieldTotalByteCount % FIELD_REPRESENTATION.getByteCount() == 0) ? 0 : 1;
-        this.primitiveStaticFieldTotalByteCount = fieldCR.primitiveStaticFieldTotalByteCount;
-        this.surplusPrimitiveStaticField = (this.primitiveStaticFieldTotalByteCount % FIELD_REPRESENTATION.getByteCount() == 0) ? 0 : 1;
+        this.wordFields = fieldCR.wordFields;
+        this.staticWordFields = fieldCR.staticWordFields;
         this.objectFields = fieldCR.objectFields;
         this.staticObjectFields = fieldCR.staticObjectFields;
 
@@ -388,32 +380,16 @@ public final class ObjectKlass extends Klass {
         return objectFields;
     }
 
-    public int getPrimitiveFieldTotalByteCount() {
-        return primitiveFieldTotalByteCount;
-    }
-
-    public int getPrimitiveFieldSize() {
-        return primitiveFieldTotalByteCount / FIELD_REPRESENTATION.getByteCount() + surplusPrimitiveField;
+    public int getWordFieldsCount() {
+        return wordFields;
     }
 
     public int getStaticObjectFieldsCount() {
         return staticObjectFields;
     }
 
-    public int getPrimitiveStaticFieldTotalByteCount() {
-        return primitiveStaticFieldTotalByteCount;
-    }
-
-    public int getPrimitiveStaticFieldSize() {
-        return primitiveStaticFieldTotalByteCount / FIELD_REPRESENTATION.getByteCount() + surplusPrimitiveStaticField;
-    }
-
-    public int getSurplusPrimitiveField() {
-        return surplusPrimitiveField;
-    }
-
-    public int getSurplusPrimitiveStaticField() {
-        return surplusPrimitiveStaticField;
+    public int getStaticWordFieldsCount() {
+        return staticWordFields;
     }
 
     @Override
