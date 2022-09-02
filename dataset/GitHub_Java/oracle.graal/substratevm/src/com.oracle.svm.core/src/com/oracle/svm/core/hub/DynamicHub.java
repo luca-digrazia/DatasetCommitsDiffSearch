@@ -1138,9 +1138,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         return singleModulReference.get();
     }
 
-    @KeepOriginal //
+    @Substitute //
     @TargetElement(onlyWith = JDK9OrLater.class)
-    private native String methodToString(String nameArg, Class<?>[] argTypes);
+    @SuppressWarnings({"unused"})
+    private String methodToString(String nameArg, Class<?>[] argTypes) {
+        throw VMError.unsupportedFeature("JDK9OrLater: DynamicHub.methodToString(String nameArg, Class<?>[] argTypes)");
+    }
 
     @Substitute //
     private <T> Target_java_lang_Class_ReflectionData<T> reflectionData() {
