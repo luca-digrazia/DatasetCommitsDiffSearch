@@ -85,8 +85,6 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMCTypeIntrinsicsFac
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMCTypeIntrinsicsFactory.LLVMIsupperNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMCTypeIntrinsicsFactory.LLVMToUpperNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMCTypeIntrinsicsFactory.LLVMTolowerNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpenNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLSymNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMExitNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMMemIntrinsicFactory.LLVMLibcMemMoveNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMMemIntrinsicFactory.LLVMLibcMemsetNodeGen;
@@ -348,7 +346,6 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider {
         registerCTypeIntrinsics();
         registerManagedAllocationIntrinsics();
         registerPThreadIntrinsics();
-        registerDynamicLibraryIntrinsics();
     }
 
     protected static LLVMExpressionNode[] argumentsArray(List<LLVMExpressionNode> arguments, int startIndex, int arity) {
@@ -362,8 +359,6 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider {
     private static void registerPThreadIntrinsics() {
         add("__sulong_thread_create", (args, nodeFactory) -> LLVMPThreadThreadIntrinsicsFactory.LLVMPThreadCreateNodeGen.create(args.get(1), args.get(2), args.get(3)));
         add("pthread_exit", (args, nodeFactory) -> LLVMPThreadThreadIntrinsicsFactory.LLVMPThreadExitNodeGen.create(args.get(1)));
-        add("__sulong_thread_setname_np", (args, nodeFactory) -> LLVMPThreadThreadIntrinsicsFactory.LLVMPThreadSetNameNodeGen.create(args.get(1), args.get(2)));
-        add("__sulong_thread_getname_np", (args, nodeFactory) -> LLVMPThreadThreadIntrinsicsFactory.LLVMPThreadGetNameNodeGen.create(args.get(1), args.get(2), args.get(3)));
         add("__sulong_thread_join", (args, nodeFactory) -> LLVMPThreadThreadIntrinsicsFactory.LLVMPThreadJoinNodeGen.create(args.get(1)));
         add("__sulong_thread_self", (args, nodeFactory) -> LLVMPThreadThreadIntrinsicsFactory.LLVMPThreadSelfNodeGen.create());
         add("__sulong_thread_key_create", (args, nodeFactory) -> LLVMPThreadKeyIntrinsicsFactory.LLVMPThreadKeyCreateNodeGen.create(args.get(1)));
@@ -527,11 +522,6 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider {
         add("toupper", (args, nodeFactory) -> LLVMToUpperNodeGen.create(args.get(1)));
         add("isspace", (args, nodeFactory) -> LLVMIsspaceNodeGen.create(args.get(1)));
         add("isupper", (args, nodeFactory) -> LLVMIsupperNodeGen.create(args.get(1)));
-    }
-
-    private static void registerDynamicLibraryIntrinsics() {
-        add("dlopen", (args, nodeFactory) -> LLVMDLOpenNodeGen.create(args.get(1), args.get(2)));
-        add("dlsym", (args, nodeFactory) -> LLVMDLSymNodeGen.create(args.get(1), args.get(2)));
     }
 
     private static void registerMemoryFunctionIntrinsics() {
