@@ -103,8 +103,6 @@ public abstract class MHLinkToNode extends EspressoBaseNode {
         assert args.length >= 1;
         StaticObjectImpl memberName = (StaticObjectImpl) args[args.length - 1];
         assert (memberName.getKlass().getType() == Symbol.Type.MemberName);
-        Method target = (Method) memberName.getCommonHiddenField();
-        assert target == memberName.getHiddenField(VMTARGET);
-        return target;
+        return (Method) memberName.getHiddenField(VMTARGET);
     }
 }

@@ -60,14 +60,16 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal(dimensions = 1) //
     private Field[] declaredFields;
 
-    @CompilationFinal(dimensions = 1) private Field[] fieldTable;
+    @CompilationFinal(dimensions = 1)
+    private Field[] fieldTable;
 
     int wordFields;
     int staticWordFields;
     int objectFields;
     int staticObjectFields;
 
-    @CompilationFinal(dimensions = 1) private Field[] staticFieldTable;
+    @CompilationFinal(dimensions = 1)
+    private Field[] staticFieldTable;
 
     @CompilationFinal(dimensions = 1) //
     private Method[] declaredMethods;
@@ -124,6 +126,7 @@ public final class ObjectKlass extends Klass {
         this.staticWordFields = fieldCR.staticWordFields;
         this.objectFields = fieldCR.objectFields;
         this.staticObjectFields = fieldCR.staticObjectFields;
+
 
         LinkedMethod[] linkedMethods = linkedKlass.getLinkedMethods();
         Method[] methods = new Method[linkedMethods.length];
@@ -335,19 +338,19 @@ public final class ObjectKlass extends Klass {
         return linkedKlass.instanceFieldCount;
     }
 
-    public int getObjectFieldsCount() {
+    public int getObjectFieldsCount(){
         return objectFields;
     }
 
-    public int getWordFieldsCount() {
+    public int getWordFieldsCount(){
         return wordFields;
     }
 
-    public int getStaticObjectFieldsCount() {
+    public int getStaticObjectFieldsCount(){
         return staticObjectFields;
     }
 
-    public int getStaticWordFieldsCount() {
+    public int getStaticWordFieldsCount(){
         return staticWordFields;
     }
 
@@ -357,13 +360,13 @@ public final class ObjectKlass extends Klass {
     }
 
     @Override
-    public final Field lookupFieldTable(int slot) {
+    public final Field lookupField(int slot) {
         assert (slot >= 0 && slot < getInstanceFieldSlots());
         return fieldTable[slot];
     }
 
     @Override
-    public final Field lookupStaticFieldTable(int slot) {
+    public final Field lookupStaticField(int slot) {
         assert (slot >= 0 && slot < getStaticFieldSlots());
         return staticFieldTable[slot];
     }
@@ -373,7 +376,7 @@ public final class ObjectKlass extends Klass {
     }
 
     @Override
-    public final Method vtableLookup(int index) {
+    public final Method vtableLooup(int index) {
         return (index == -1) ? null : vtable[index];
     }
 
@@ -407,12 +410,8 @@ public final class ObjectKlass extends Klass {
         return null;
     }
 
-    public final Field[] getFieldTable() {
+    final Field[] getFieldTable() {
         return fieldTable;
-    }
-
-    public final Field[] getStaticFieldTable() {
-        return staticFieldTable;
     }
 
     final void setMirandas(ArrayList<InterfaceTables.Miranda> mirandas) {

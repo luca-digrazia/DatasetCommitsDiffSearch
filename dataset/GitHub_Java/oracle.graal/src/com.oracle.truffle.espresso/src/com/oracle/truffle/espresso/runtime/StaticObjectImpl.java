@@ -32,6 +32,7 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 
@@ -53,14 +54,6 @@ public class StaticObjectImpl extends StaticObject {
     }
 
     private Map<String, Object> hiddenFields;
-    /**
-     * Use this thing carefully. Represents a single hidden field that is known to be accessed quite
-     * often, and for which performance is critical.
-     *
-     * /ex: the target method of a member name is often called within an invokeBasic node, and going
-     * through a PE boundary here is not a good option.
-     */
-    private Object commonHiddenField;
 
     private final Object[] fields;
     private final int[] wordFields;
@@ -100,21 +93,30 @@ public class StaticObjectImpl extends StaticObject {
     private void initFields(ObjectKlass klass, boolean isStatic) {
         CompilerAsserts.partialEvaluationConstant(klass);
         if (isStatic) {
-            for (Field f : klass.getStaticFieldTable()) {
-                assert f.isStatic();
-                if (f.getKind().isSubWord()) {
-                    wordFields[f.getFieldIndex()] = MetaUtil.defaultWordFieldValue(f.getKind());
-                } else {
-                    fields[f.getFieldIndex()] = MetaUtil.defaultFieldValue(f.getKind());
+            for (Field f : klass.getDeclaredFields()) {
+                if (f.isStatic()) {
+                    if (f.getKind() == JavaKind.Boolean) {
+                        wordFields[f.getFieldIndex()] = ((boolean)MetaUtil.defaultFieldValue(f.getKind())) ? 1 : 0;
+                    } else if (f.getKind().isSubWord()) {
+                        wordFields[f.getFieldIndex()] = MetaUtil.defaultWordFieldValue(f.getKind());
+                    } else {
+                        fields[f.getFieldIndex()] = MetaUtil.defaultFieldValue(f.getKind());
+                    }
                 }
             }
         } else {
-            for (Field f : klass.getFieldTable()) {
-                assert !f.isStatic();
-                if (f.getKind().isSubWord()) {
-                    wordFields[f.getFieldIndex()] = MetaUtil.defaultWordFieldValue(f.getKind());
-                } else {
-                    fields[f.getFieldIndex()] = MetaUtil.defaultFieldValue(f.getKind());
+            // TODO(garcia) Go through fieldTable instead
+            for (ObjectKlass curKlass = klass; curKlass != null; curKlass = curKlass.getSuperKlass()) {
+                for (Field f : curKlass.getDeclaredFields()) {
+                    if (!f.isStatic()) {
+                        if (f.getKind() == JavaKind.Boolean) {
+                            wordFields[f.getFieldIndex()] = ((boolean)MetaUtil.defaultFieldValue(f.getKind())) ? 1 : 0;
+                        } else if (f.getKind().isSubWord()) {
+                            wordFields[f.getFieldIndex()] = MetaUtil.defaultWordFieldValue(f.getKind());
+                        } else {
+                            fields[f.getFieldIndex()] = MetaUtil.defaultFieldValue(f.getKind());
+                        }
+                    }
                 }
             }
         }
@@ -138,14 +140,6 @@ public class StaticObjectImpl extends StaticObject {
         return result;
     }
 
-    public final Object getUnsafeField(int fieldIndex) {
-        return fields[fieldIndex];
-    }
-
-    public final int getUnsafeWordField(int fieldIndex) {
-        return wordFields[fieldIndex];
-    }
-
     public final int getWordField(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind().isSubWord();
@@ -158,10 +152,9 @@ public class StaticObjectImpl extends StaticObject {
         return result;
     }
 
-    @TruffleBoundary
     public final int getWordFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return U.getIntVolatile(wordFields, Unsafe.ARRAY_INT_BASE_OFFSET + Unsafe.ARRAY_INT_INDEX_SCALE * field.getFieldIndex());
+        return U.getIntVolatile(wordFields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex());
     }
 
     public final void setFieldVolatile(Field field, Object value) {
@@ -181,7 +174,7 @@ public class StaticObjectImpl extends StaticObject {
 
     public final void setWordFieldVolatile(Field field, int value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        U.putIntVolatile(wordFields, Unsafe.ARRAY_INT_BASE_OFFSET + Unsafe.ARRAY_INT_INDEX_SCALE * field.getFieldIndex(), value);
+        U.putIntVolatile(wordFields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex(), value);
     }
 
     public final void setWordField(Field field, int value) {
@@ -217,16 +210,6 @@ public class StaticObjectImpl extends StaticObject {
             return null;
         }
         return hiddenFields.get(name);
-    }
-
-    // Hidden fields are accessed during invokeBasics. Use this to circumvent the Boundary + hashMap
-    // lookup.
-    public void setCommonHiddenField(Object value) {
-        commonHiddenField = value;
-    }
-
-    public Object getCommonHiddenField() {
-        return commonHiddenField;
     }
 
     @Override

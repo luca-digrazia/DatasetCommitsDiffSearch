@@ -61,17 +61,17 @@ public final class PrimitiveKlass extends Klass {
     }
 
     @Override
-    public Method vtableLookup(int vtableIndex) {
+    public Method vtableLooup(int vtableIndex) {
         return null;
     }
 
     @Override
-    public Field lookupFieldTable(int slot) {
+    public Field lookupField(int slot) {
         return null;
     }
 
     @Override
-    public Field lookupStaticFieldTable(int slot) {
+    public Field lookupStaticField(int slot) {
         return null;
     }
 

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 class FieldTable {
-    static class CreationResult {
+    public static class CreationResult {
         Field[] fieldTable;
         Field[] staticFieldTable;
         Field[] declaredFields;
@@ -14,7 +14,7 @@ class FieldTable {
         int objectFields;
         int staticObjectFields;
 
-        CreationResult(Field[] fieldTable, Field[] staticFieldTable, Field[] declaredFields, int wordFields, int staticWordFields, int objectFields, int staticObjectFields) {
+        public CreationResult(Field[] fieldTable, Field[] staticFieldTable, Field[] declaredFields, int wordFields, int staticWordFields, int objectFields, int staticObjectFields) {
             this.fieldTable = fieldTable;
             this.staticFieldTable = staticFieldTable;
             this.declaredFields = declaredFields;
@@ -50,7 +50,7 @@ class FieldTable {
             Field f = new Field(linkedFields[i], thisKlass);
             fields[i] = f;
             if (f.isStatic()) {
-                f.setSlot(tmpStatics.size());
+                assert (tmpStatics.size() == f.getSlot());
                 if (f.getKind().isSubWord()) {
                     f.setFieldIndex(staticWordFields++);
                 } else {
@@ -58,7 +58,7 @@ class FieldTable {
                 }
                 tmpStatics.add(f);
             } else {
-                f.setSlot(tmpFields.size());
+                assert (tmpFields.size() == f.getSlot());
                 if (f.getKind().isSubWord()) {
                     f.setFieldIndex(wordFields++);
                 } else {
@@ -67,10 +67,7 @@ class FieldTable {
                 tmpFields.add(f);
             }
         }
-
-        objectFields += HiddenFields.setHiddenFields(thisKlass.getType(), tmpFields, thisKlass, objectFields);
-
         return new CreationResult(tmpFields.toArray(Field.EMPTY_ARRAY), tmpStatics.toArray(Field.EMPTY_ARRAY), fields,
-                        wordFields, staticWordFields, objectFields, staticObjectFields);
+                wordFields, staticWordFields, objectFields, staticObjectFields);
     }
 }
