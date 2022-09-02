@@ -33,7 +33,7 @@ import org.graalvm.nativeimage.Platforms;
 
 class JfrRuntimeAccessImpl implements JfrRuntimeAccess {
 
-    @UnknownObjectField(types = {JfrTraceIdMap.class})
+    @UnknownObjectField
     private JfrTraceIdMap traceIdMap;
 
     @Platforms(Platform.HOSTED_ONLY.class)

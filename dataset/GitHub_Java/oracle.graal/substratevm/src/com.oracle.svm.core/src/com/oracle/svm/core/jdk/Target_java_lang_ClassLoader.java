@@ -231,17 +231,11 @@ public final class Target_java_lang_ClassLoader {
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    static class ClassLoaderJfrIDRecomputation implements RecomputeFieldValue.CustomFieldValueComputer {
+    class ClassLoaderJfrIDRecomputation implements RecomputeFieldValue.CustomFieldValueComputer {
         @Override
         public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
             ClassLoader cl = (ClassLoader) receiver;
-            Integer val = jfrIdsMap.get(cl);
-            if (val == null) {
-                // Why are some items not registered?
-                return Integer.valueOf(-1);
-            } else {
-                return val;
-            }
+            return jfrIdsMap.get(cl);
         }
     }
 

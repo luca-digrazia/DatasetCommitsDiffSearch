@@ -36,7 +36,7 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 public class JfrTraceIdMap {
-    @UnknownObjectField(types = {long[].class})
+    @UnknownObjectField
     private final long[] traceIDs;
 
     @Platforms(Platform.HOSTED_ONLY.class)
