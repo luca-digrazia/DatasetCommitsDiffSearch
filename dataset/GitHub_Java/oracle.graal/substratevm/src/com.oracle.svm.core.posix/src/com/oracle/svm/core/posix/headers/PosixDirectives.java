@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,6 +26,7 @@ package com.oracle.svm.core.posix.headers;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.graalvm.nativeimage.Platform;
@@ -33,62 +36,41 @@ import com.oracle.svm.core.util.VMError;
 
 public class PosixDirectives implements CContext.Directives {
     private static final String[] commonLibs = new String[]{
-                    "<stdlib.h>",
-                    "<dirent.h>",
                     "<dlfcn.h>",
                     "<fcntl.h>",
-                    "<grp.h>",
-                    "<ifaddrs.h>",
-                    "<langinfo.h>",
                     "<limits.h>",
                     "<locale.h>",
-                    "<net/if.h>",
-                    "<netdb.h>",
-                    "<netinet/in.h>",
-                    "<netinet/ip.h>",
-                    "<netinet/tcp.h>",
                     "<pthread.h>",
                     "<pwd.h>",
-                    "<sched.h>",
-                    "<semaphore.h>",
                     "<signal.h>",
-                    "<stdio.h>",
-                    "<spawn.h>",
-                    "<sys/errno.h>",
-                    "<sys/file.h>",
-                    "<sys/ioctl.h>",
+                    "<errno.h>",
                     "<sys/mman.h>",
-                    "<sys/poll.h>",
                     "<sys/resource.h>",
-                    "<sys/socket.h>",
                     "<sys/stat.h>",
-                    "<sys/statvfs.h>",
-                    "<sys/sysctl.h>",
                     "<sys/time.h>",
                     "<sys/times.h>",
-                    "<sys/uio.h>",
-                    "<sys/wait.h>",
-                    "<termios.h>",
+                    "<sys/utsname.h>",
                     "<time.h>",
                     "<unistd.h>",
-                    "<zlib.h>"
     };
 
     private static final String[] darwinLibs = new String[]{
-                    "<CoreFoundation/CoreFoundation.h>",
-                    "<sys/event.h>",
+                    "<Foundation/Foundation.h>",
+                    "<mach/mach.h>",
                     "<mach/mach_time.h>",
                     "<mach-o/dyld.h>",
-                    "<netinet6/in6_var.h>"
+                    "<sys/sysctl.h>",
+                    "<sys/syslimits.h>",
     };
 
     private static final String[] linuxLibs = new String[]{
-                    "<arpa/inet.h>",
-                    "<sys/epoll.h>",
-                    "<sys/sendfile.h>",
                     "<mntent.h>",
-                    "<link.h>",
     };
+
+    @Override
+    public boolean isInConfiguration() {
+        return Platform.includedIn(Platform.LINUX.class) || Platform.includedIn(Platform.DARWIN.class);
+    }
 
     @Override
     public List<String> getHeaderFiles() {
@@ -101,6 +83,14 @@ public class PosixDirectives implements CContext.Directives {
             throw VMError.shouldNotReachHere("Unsupported OS");
         }
         return result;
+    }
+
+    @Override
+    public List<String> getOptions() {
+        if (Platform.includedIn(Platform.DARWIN.class)) {
+            return Collections.singletonList("-ObjC");
+        }
+        return Collections.emptyList();
     }
 
     @Override
