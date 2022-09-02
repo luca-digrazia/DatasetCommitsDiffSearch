@@ -1631,13 +1631,11 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                             environmentAccess, environment, zone, polyglotLimits, hostClassLoader);
             context = loadPreinitializedContext(config, hostAccess);
             replayEvents = false;
-            boolean contextAddedToEngine = false;
             if (context == null) {
                 synchronized (this.lock) {
                     checkState();
                     context = new PolyglotContextImpl(this, config);
                     addContext(context);
-                    contextAddedToEngine = true;
                 }
             } else if (context.engine == this) {
                 replayEvents = true;
@@ -1653,10 +1651,8 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                         context.initializeContextLocals();
                     }
                 } catch (Throwable t) {
-                    if (contextAddedToEngine) {
-                        synchronized (this.lock) {
-                            removeContext(context);
-                        }
+                    synchronized (this.lock) {
+                        removeContext(context);
                     }
                     throw t;
                 }
