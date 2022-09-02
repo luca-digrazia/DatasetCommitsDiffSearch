@@ -1,15 +1,14 @@
 package com.oracle.truffle.tools.warmup.test;
 
-import java.io.ByteArrayOutputStream;
-
+import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
+import com.oracle.truffle.tools.warmup.impl.WarmupEstimatorInstrument;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
-import com.oracle.truffle.tools.warmup.impl.WarmupEstimatorInstrument;
+import java.io.ByteArrayOutputStream;
 
 public class WarmupEstimatorTest {
     private static final String defaultSourceString = "ROOT(\n" +
@@ -22,19 +21,19 @@ public class WarmupEstimatorTest {
     private ByteArrayOutputStream out;
     private ByteArrayOutputStream err;
 
-    private static Source makeSource(String s) {
-        return Source.newBuilder(InstrumentationTestLanguage.ID, s, "test").buildLiteral();
-    }
-
     @Before
     public void setUp() {
         out = new ByteArrayOutputStream();
         err = new ByteArrayOutputStream();
     }
 
+    private static Source makeSource(String s) {
+        return Source.newBuilder(InstrumentationTestLanguage.ID, s, "test").buildLiteral();
+    }
+
     @Test
     public void testBasic() {
-        try (Context context = defaultContext().option(WarmupEstimatorInstrument.ID + ".Locations", "foo").build()) {
+        try (Context context = defaultContext().option(WarmupEstimatorInstrument.ID + ".RootNames", "foo").build()) {
             context.eval(defaultSource);
         }
         final String output = out.toString();
@@ -50,7 +49,7 @@ public class WarmupEstimatorTest {
 
     @Test
     public void testMultiRoot() {
-        try (Context context = defaultContext().option(WarmupEstimatorInstrument.ID + ".Locations", "foo;bar").build()) {
+        try (Context context = defaultContext().option(WarmupEstimatorInstrument.ID + ".RootNames", "foo,bar").build()) {
             context.eval(defaultSource);
         }
         final String output = out.toString();
@@ -60,7 +59,7 @@ public class WarmupEstimatorTest {
 
     @Test
     public void testRawOutput() {
-        try (Context context = defaultContext().option(WarmupEstimatorInstrument.ID + ".Locations", "foo").option(WarmupEstimatorInstrument.ID + ".Output", "raw").build()) {
+        try (Context context = defaultContext().option(WarmupEstimatorInstrument.ID + ".RootNames", "foo").option(WarmupEstimatorInstrument.ID + ".Output", "raw").build()) {
             context.eval(defaultSource);
         }
         final String output = out.toString();
