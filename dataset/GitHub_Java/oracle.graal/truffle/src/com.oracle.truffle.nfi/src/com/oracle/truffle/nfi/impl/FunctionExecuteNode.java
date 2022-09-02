@@ -123,8 +123,7 @@ abstract class FunctionExecuteNode extends Node {
                 throw silenceException(RuntimeException.class, ex);
             }
 
-            // temporarily disabled until GR-14614 is fixed
-            // CompilerDirectives.ensureVirtualized(buffer);
+            CompilerDirectives.ensureVirtualized(buffer);
             return signature.execute(ctxRef.get(), address, buffer);
         }
 
