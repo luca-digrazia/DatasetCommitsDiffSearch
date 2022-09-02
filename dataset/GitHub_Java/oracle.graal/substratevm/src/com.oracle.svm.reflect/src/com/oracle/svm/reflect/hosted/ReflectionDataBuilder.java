@@ -35,7 +35,6 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -59,12 +58,6 @@ import com.oracle.svm.hosted.substitute.SubstitutionReflectivityFilter;
 import com.oracle.svm.util.ReflectionUtil;
 
 public class ReflectionDataBuilder implements RuntimeReflectionSupport {
-    private enum FieldFlag {
-        FINAL_BUT_WRITABLE,
-        UNSAFE_ACCESSIBLE,
-    }
-
-    private static final EnumSet<FieldFlag> NO_FIELD_FLAGS = EnumSet.noneOf(FieldFlag.class);
 
     private boolean modified;
     private boolean sealed;
@@ -72,11 +65,8 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
     private final DynamicHub.ReflectionData arrayReflectionData;
     private Set<Class<?>> reflectionClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private Set<Executable> reflectionMethods = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private Map<Field, EnumSet<FieldFlag>> reflectionFields = new ConcurrentHashMap<>();
+    private Map<Field, Boolean> reflectionFields = new ConcurrentHashMap<>();
     private Set<Field> analyzedFinalFields = Collections.newSetFromMap(new ConcurrentHashMap<>());
-
-    /* Keep track of classes already processed for reflection. */
-    private final Set<Class<?>> processedClasses = new HashSet<>();
 
     public ReflectionDataBuilder() {
         arrayReflectionData = getArrayReflectionData();
@@ -126,18 +116,15 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
     }
 
     @Override
-    public void register(boolean finalIsWritable, boolean allowUnsafeAccess, Field... fields) {
+    public void register(boolean finalIsWritable, Field... fields) {
         checkNotSealed();
         for (Field field : fields) {
             boolean writable = finalIsWritable || !Modifier.isFinal(field.getModifiers());
-            EnumSet<FieldFlag> flags = (writable && allowUnsafeAccess) ? EnumSet.of(FieldFlag.FINAL_BUT_WRITABLE, FieldFlag.UNSAFE_ACCESSIBLE) : //
-                            (writable ? EnumSet.of(FieldFlag.FINAL_BUT_WRITABLE) : (allowUnsafeAccess ? EnumSet.of(FieldFlag.UNSAFE_ACCESSIBLE) : NO_FIELD_FLAGS));
-            reflectionFields.compute(field, (key, existingFlags) -> {
-                if (writable && (existingFlags == null || !existingFlags.contains(FieldFlag.FINAL_BUT_WRITABLE))) {
-                    UserError.guarantee(!analyzedFinalFields.contains(field),
-                                    "A field that was already processed by the analysis cannot be re-registered as writable: " + field.toString());
+            reflectionFields.compute(field, (key, existingWritable) -> {
+                if (writable && (existingWritable == null || !existingWritable)) {
+                    UserError.guarantee(!analyzedFinalFields.contains(field), "A field that was already processed by the analysis cannot be re-registered as writable: " + field.toString());
                 }
-                return flags;
+                return writable;
             });
         }
     }
@@ -150,77 +137,14 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
 
     protected void duringAnalysis(DuringAnalysisAccess a) {
         DuringAnalysisAccessImpl access = (DuringAnalysisAccessImpl) a;
-        processReachableTypes(access);
-        processRegisteredElements(access);
-    }
 
-    /*
-     * Process all reachable types, looking for array types or types that have an enclosing method
-     * or constructor. Initialize the reflection metadata for those types.
-     */
-    private void processReachableTypes(DuringAnalysisAccessImpl access) {
-        /*
-         * We need to find all classes that have an enclosingMethod or enclosingConstructor.
-         * Unfortunately, there is no reverse lookup (ask a Method or Constructor about the classes
-         * they contain), so we need to iterate through all types that have been loaded so far.
-         * Accessing the original java.lang.Class for a ResolvedJavaType is not 100% reliable,
-         * especially in the case of class and method substitutions. But it is the best we can do
-         * here, and we assume that user code that requires reflection support is not using
-         * substitutions.
-         */
-        Set<Class<?>> allClasses = new HashSet<>();
-        for (AnalysisType aType : access.getUniverse().getTypes()) {
-            Class<?> originalClass = aType.getJavaClass();
-            if (originalClass != null) {
-                if (processedClasses.contains(originalClass)) {
-                    /* Class has already been processed. */
-                    continue;
-                }
-                if (enclosingMethodOrConstructor(originalClass) != null) {
-                    /*
-                     * We haven an enclosing method or constructor for this class, so we add the
-                     * class to the set of processed classes so that the ReflectionData is
-                     * initialized below.
-                     */
-                    allClasses.add(originalClass);
-                } else if (originalClass.isArray()) {
-                    // Always register reflection data for array classes
-                    allClasses.add(originalClass);
-                }
-            }
-        }
-        if (!allClasses.isEmpty()) {
-            /*
-             * If there are classes that haven't been seen before process them and request an
-             * analysis iteration.
-             */
-            processedClasses.addAll(allClasses);
-            registerClasses(access, allClasses);
-            access.requireAnalysisIteration();
-        }
-    }
-
-    private void processRegisteredElements(DuringAnalysisAccessImpl access) {
         if (!modified) {
             return;
         }
         modified = false;
         access.requireAnalysisIteration();
-
-        Set<Class<?>> allClasses = new HashSet<>(reflectionClasses);
-        reflectionMethods.stream().map(Executable::getDeclaringClass).forEach(allClasses::add);
-        reflectionFields.forEach((field, flags) -> {
-            if (flags.contains(FieldFlag.UNSAFE_ACCESSIBLE)) {
-                access.registerAsUnsafeAccessed(field);
-            }
-            allClasses.add(field.getDeclaringClass());
-        });
-
-        registerClasses(access, allClasses);
-    }
-
-    private void registerClasses(DuringAnalysisAccessImpl access, Set<Class<?>> allClasses) {
         Class<?>[] parameterTypes = {};
+
         Method reflectionDataMethod = ReflectionUtil.lookupMethod(Class.class, "reflectionData", parameterTypes);
         Class<?> originalReflectionDataClass = access.getImageClassLoader().findClassByName("java.lang.Class$ReflectionData");
         Field declaredFieldsField = ReflectionUtil.lookupField(originalReflectionDataClass, "declaredFields");
@@ -231,6 +155,33 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
         Field publicConstructorsField = ReflectionUtil.lookupField(originalReflectionDataClass, "publicConstructors");
         Field declaredPublicFieldsField = ReflectionUtil.lookupField(originalReflectionDataClass, "declaredPublicFields");
         Field declaredPublicMethodsField = ReflectionUtil.lookupField(originalReflectionDataClass, "declaredPublicMethods");
+
+        Set<Class<?>> allClasses = new HashSet<>(reflectionClasses);
+        reflectionMethods.stream().map(method -> method.getDeclaringClass()).forEach(clazz -> allClasses.add(clazz));
+        reflectionFields.keySet().stream().map(field -> field.getDeclaringClass()).forEach(clazz -> allClasses.add(clazz));
+
+        /*
+         * We need to find all classes that have an enclosingMethod or enclosingConstructor.
+         * Unfortunately, there is no reverse lookup (ask a Method or Constructor about the classes
+         * they contain), so we need to iterate through all types that have been loaded so far.
+         * Accessing the original java.lang.Class for a ResolvedJavaType is not 100% reliable,
+         * especially in the case of class and method substitutions. But it is the best we can do
+         * here, and we assume that user code that requires reflection support is not using
+         * substitutions.
+         */
+        for (AnalysisType aType : access.getUniverse().getTypes()) {
+            Class<?> originalClass = aType.getJavaClass();
+            if (originalClass != null && enclosingMethodOrConstructor(originalClass) != null) {
+                /*
+                 * We haven an enclosing method or constructor for this class, so we add the class
+                 * to the set of processed classes so that the ReflectionData is initialized below.
+                 */
+                allClasses.add(originalClass);
+            } else if (originalClass != null && originalClass.isArray()) {
+                // Always register reflection data for array classes
+                allClasses.add(originalClass);
+            }
+        }
 
         for (Class<?> clazz : allClasses) {
             AnalysisType type = access.getMetaAccess().lookupJavaType(clazz);
@@ -415,8 +366,8 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
 
     boolean inspectFinalFieldWritableForAnalysis(Field field) {
         assert Modifier.isFinal(field.getModifiers());
-        EnumSet<FieldFlag> flags = reflectionFields.getOrDefault(field, NO_FIELD_FLAGS);
+        boolean writable = reflectionFields.getOrDefault(field, false);
         analyzedFinalFields.add(field);
-        return flags.contains(FieldFlag.FINAL_BUT_WRITABLE);
+        return writable;
     }
 }

@@ -1148,9 +1148,8 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
     @SuppressWarnings({"unused"})
-    public static Class<?> forName(Target_java_lang_Module module, String className) {
-        /* The module system is not supported for now, therefore the module parameter is ignored. */
-        return ClassForNameSupport.forNameOrNull(className, false);
+    public static Class<?> forName(Target_java_lang_Module module, String name) {
+        throw VMError.unsupportedFeature("JDK11OrLater: DynamicHub.forName(Target_java_lang_Module module, String name)");
     }
 
     @Substitute
@@ -1159,7 +1158,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @KeepOriginal
-    private native Package getPackage();
+    @TargetElement(name = "getPackage", onlyWith = JDK8OrEarlier.class)
+    public native Package getPackageJDK8OrEarlier();
+
+    @KeepOriginal
+    @TargetElement(name = "getPackage", onlyWith = JDK11OrLater.class)
+    public native Package getPackageJDK11OrLater();
 
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class)
