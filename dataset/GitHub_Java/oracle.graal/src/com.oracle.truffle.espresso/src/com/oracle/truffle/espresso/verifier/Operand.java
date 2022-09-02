@@ -109,18 +109,15 @@ class PrimitiveOperand extends Operand {
 
 class ReturnAddressOperand extends PrimitiveOperand {
     ArrayList<Integer> targetBCIs = new ArrayList<>();
-    int subroutineBCI;
 
-    ReturnAddressOperand(int target, int subroutineBCI) {
+    ReturnAddressOperand(int target) {
         super(JavaKind.ReturnAddress);
         targetBCIs.add(target);
-        this.subroutineBCI = subroutineBCI;
     }
 
-    private ReturnAddressOperand(ArrayList<Integer> bcis, int subroutineBCI) {
+    private ReturnAddressOperand(ArrayList<Integer> bcis) {
         super(JavaKind.ReturnAddress);
         targetBCIs.addAll(bcis);
-        this.subroutineBCI = subroutineBCI;
     }
 
     @Override
@@ -135,9 +132,6 @@ class ReturnAddressOperand extends PrimitiveOperand {
         }
         if (other.isReturnAddress()) {
             ReturnAddressOperand ra = (ReturnAddressOperand) other;
-            if (ra.subroutineBCI != subroutineBCI) {
-                return false;
-            }
             for (Integer target : targetBCIs) {
                 if (!ra.targetBCIs.contains(target)) {
                     return false;
@@ -153,11 +147,7 @@ class ReturnAddressOperand extends PrimitiveOperand {
         if (!other.isReturnAddress()) {
             return null;
         }
-        ReturnAddressOperand otherRA = (ReturnAddressOperand) other;
-        if (otherRA.subroutineBCI != subroutineBCI) {
-            return null;
-        }
-        ReturnAddressOperand ra = new ReturnAddressOperand(otherRA.targetBCIs, subroutineBCI);
+        ReturnAddressOperand ra = new ReturnAddressOperand(((ReturnAddressOperand) other).targetBCIs);
         for (Integer target : targetBCIs) {
             if (!ra.targetBCIs.contains(target)) {
                 ra.targetBCIs.add(target);

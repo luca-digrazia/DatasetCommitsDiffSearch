@@ -46,9 +46,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Constant;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.object.DebugCounter;
 
 /**
@@ -125,22 +123,22 @@ public abstract class ConstantPool {
         return at(index, null);
     }
 
-    static @Host(ClassFormatError.class) EspressoException unexpectedEntry(int index, ConstantPool.Tag tag, String description, ConstantPool.Tag... expected) {
+    static ClassFormatError unexpectedEntry(int index, ConstantPool.Tag tag, String description, ConstantPool.Tag... expected) {
         CompilerDirectives.transferToInterpreter();
         throw classFormatError("Constant pool entry" + (description == null ? "" : " for " + description) + " at " + index + " is a " + tag + ", expected " + Arrays.toString(expected));
     }
 
-    public final @Host(ClassFormatError.class) EspressoException unexpectedEntry(int index, String description, ConstantPool.Tag... expected) {
+    public final ClassFormatError unexpectedEntry(int index, String description, ConstantPool.Tag... expected) {
         CompilerDirectives.transferToInterpreter();
         throw unexpectedEntry(index, tagAt(index), description, expected);
     }
 
-    static @Host(VerifyError.class) EspressoException verifyError(String message) {
+    static VerifyError verifyError(String message) {
         CompilerDirectives.transferToInterpreter();
         throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(VerifyError.class, message);
     }
 
-    static @Host(ClassFormatError.class) EspressoException classFormatError(String message) {
+    static ClassFormatError classFormatError(String message) {
         CompilerDirectives.transferToInterpreter();
         throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ClassFormatError.class, message);
     }
