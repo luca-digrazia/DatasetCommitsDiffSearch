@@ -102,6 +102,5 @@ public abstract class SubstrateBackend extends Backend {
 
     public abstract Phase newAddressLoweringPhase(CodeCacheProvider codeCache);
 
-    public abstract CompilationResult createJNITrampolineMethod(ResolvedJavaMethod method, CompilationIdentifier identifier,
-                    RegisterValue threadArg, int threadIsolateOffset, RegisterValue methodIdArg, int methodObjEntryPointOffset);
+    public abstract CompilationResult createJNITrampolineMethod(ResolvedJavaMethod method, CompilationIdentifier identifier, RegisterValue methodIdArg, int offset);
 }
