@@ -371,19 +371,26 @@ public final class VM extends NativeEnv implements ContextAccess {
                 boolean isJni = m.isJni();
                 try {
                     return m.invoke(VM.this, args);
-                } catch (EspressoException | StackOverflowError | OutOfMemoryError e) {
+                } catch (EspressoException e) {
+                    if (isJni) {
+                        jniEnv.getThreadLocalPendingException().set(e.getExceptionObject());
+                        return defaultValue(m.returnType());
+                    }
+                    throw EspressoError.shouldNotReachHere(e);
+                } catch (StackOverflowError | OutOfMemoryError e) {
                     if (isJni) {
                         // This will most likely SOE again. Nothing we can do about that
                         // unfortunately.
-                        EspressoException wrappedError = (e instanceof EspressoException)
-                                        ? (EspressoException) e
-                                        : (e instanceof StackOverflowError)
-                                                        ? getContext().getStackOverflow()
-                                                        : getContext().getOutOfMemory();
-                        jniEnv.getThreadLocalPendingException().set(wrappedError.getExceptionObject());
+                        jniEnv.getThreadLocalPendingException().set(getMeta().initEx(e.getClass()));
                         return defaultValue(m.returnType());
                     }
                     throw e;
+                } catch (RuntimeException | VirtualMachineError e) {
+                    throw e;
+                } catch (ThreadDeath e) {
+                    throw getMeta().throwEx(ThreadDeath.class);
+                } catch (Throwable e) {
+                    throw EspressoError.shouldNotReachHere(e);
                 }
             }
         });

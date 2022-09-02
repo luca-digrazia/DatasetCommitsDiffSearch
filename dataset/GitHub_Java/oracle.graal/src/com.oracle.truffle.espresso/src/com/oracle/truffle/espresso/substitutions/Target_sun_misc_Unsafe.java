@@ -43,11 +43,12 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread.State;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-import com.oracle.truffle.espresso.vm.UnsafeAccess;
 
+import com.oracle.truffle.espresso.vm.UnsafeAccess;
 import sun.misc.Unsafe;
 
 @EspressoSubstitutions
@@ -77,7 +78,7 @@ public final class Target_sun_misc_Unsafe {
         Meta meta = context.getMeta();
 
         if (StaticObject.isNull(hostClass) || StaticObject.isNull(data)) {
-            throw Meta.throwException(meta.java_lang_IllegalArgumentException);
+            throw meta.throwException(meta.java_lang_IllegalArgumentException);
         }
 
         byte[] bytes = data.unwrap();
@@ -1026,7 +1027,7 @@ public final class Target_sun_misc_Unsafe {
 
     @Substitution(hasReceiver = true)
     public static void throwException(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Throwable.class) StaticObject ee) {
-        throw Meta.throwException(ee);
+        throw new EspressoException(ee);
     }
 
     /**
