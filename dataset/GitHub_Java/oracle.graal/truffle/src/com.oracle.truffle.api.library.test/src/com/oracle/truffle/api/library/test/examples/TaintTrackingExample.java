@@ -107,7 +107,7 @@ public class TaintTrackingExample {
             return true;
         }
 
-        @ExportMessage
+        @ExportMessage(limit = "3")
         final Object send(Message message, Object[] args,
                         @CachedLibrary("this.delegate") ReflectionLibrary reflection,
                         @CachedLibrary(limit = "1") TaintLibrary results) throws Exception {
