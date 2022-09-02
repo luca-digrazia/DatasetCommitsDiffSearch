@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,9 @@ package org.graalvm.compiler.nodes.calc;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
+
+import java.io.Serializable;
+import java.util.function.Function;
 
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.BinaryOp;
@@ -55,20 +58,20 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
 
     @SuppressWarnings("rawtypes") public static final NodeClass<BinaryArithmeticNode> TYPE = NodeClass.create(BinaryArithmeticNode.class);
 
-    protected BinaryArithmeticNode(NodeClass<? extends BinaryArithmeticNode<OP>> c, BinaryOp<OP> opForStampComputation, ValueNode x, ValueNode y) {
-        super(c, opForStampComputation.foldStamp(x.stamp(NodeView.DEFAULT), y.stamp(NodeView.DEFAULT)), x, y);
+    protected interface SerializableBinaryFunction<T> extends Function<ArithmeticOpTable, BinaryOp<T>>, Serializable {
     }
 
-    public static ArithmeticOpTable getArithmeticOpTable(ValueNode forValue) {
-        return ArithmeticOpTable.forStamp(forValue.stamp(NodeView.DEFAULT));
-    }
+    protected final SerializableBinaryFunction<OP> getOp;
 
-    protected abstract BinaryOp<OP> getOp(ArithmeticOpTable table);
+    protected BinaryArithmeticNode(NodeClass<? extends BinaryArithmeticNode<OP>> c, SerializableBinaryFunction<OP> getOp, ValueNode x, ValueNode y) {
+        super(c, getOp.apply(ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT))).foldStamp(x.stamp(NodeView.DEFAULT), y.stamp(NodeView.DEFAULT)), x, y);
+        this.getOp = getOp;
+    }
 
     protected final BinaryOp<OP> getOp(ValueNode forX, ValueNode forY) {
-        ArithmeticOpTable table = getArithmeticOpTable(forX);
-        assert table.equals(getArithmeticOpTable(forY));
-        return getOp(table);
+        ArithmeticOpTable table = ArithmeticOpTable.forStamp(forX.stamp(NodeView.DEFAULT));
+        assert table.equals(ArithmeticOpTable.forStamp(forY.stamp(NodeView.DEFAULT)));
+        return getOp.apply(table);
     }
 
     @Override
