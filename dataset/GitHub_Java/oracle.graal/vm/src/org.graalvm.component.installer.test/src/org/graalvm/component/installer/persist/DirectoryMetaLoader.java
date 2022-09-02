@@ -47,7 +47,6 @@ import java.util.stream.Stream;
 import org.graalvm.component.installer.Archive;
 import static org.graalvm.component.installer.BundleConstants.META_INF_PATH;
 import static org.graalvm.component.installer.BundleConstants.META_INF_PERMISSIONS_PATH;
-import static org.graalvm.component.installer.BundleConstants.PATH_LICENSE;
 import org.graalvm.component.installer.CommandInput;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.SystemUtils;
@@ -106,21 +105,13 @@ public final class DirectoryMetaLoader extends ComponentPackageLoader {
 
         try {
             Files.walk(rootDir).forEachOrdered((Path en) -> {
-                String eName = en.toString();
+                String eName = SystemUtils.toCommonPath(en);
                 if (eName.startsWith(META_INF_PATH)) {
                     return;
                 }
                 int li = eName.lastIndexOf("/", Files.isDirectory(en) ? eName.length() - 2 : eName.length() - 1);
                 if (li > 0) {
                     emptyDirectories.remove(eName.substring(0, li + 1));
-                }
-                if (PATH_LICENSE.equals(eName)) {
-                    String lp = feedback.l10n("LICENSE_Path_translation",
-                                    cinfo.getId(),
-                                    cinfo.getVersionString());
-                    files.add(lp);
-                    super.setLicensePath(lp);
-                    return;
                 }
                 if (Files.isDirectory(en)) {
                     // directory names always come first
@@ -173,7 +164,7 @@ public final class DirectoryMetaLoader extends ComponentPackageLoader {
 
         @Override
         public String getName() {
-            return rootDir.relativize(path).toString();
+            return SystemUtils.toCommonPath(rootDir.relativize(path));
         }
 
         @Override
@@ -188,7 +179,7 @@ public final class DirectoryMetaLoader extends ComponentPackageLoader {
 
         @Override
         public String getLinkTarget() throws IOException {
-            return Files.readSymbolicLink(path).toString();
+            return SystemUtils.toCommonPath(Files.readSymbolicLink(path));
         }
 
         @Override
