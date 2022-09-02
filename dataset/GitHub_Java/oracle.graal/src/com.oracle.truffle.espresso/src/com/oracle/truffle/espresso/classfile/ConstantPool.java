@@ -461,7 +461,6 @@ public abstract class ConstantPool {
                 case LONG: {
                     if (existsAt(patches, i)) {
                         entries[i] = new LongConstant(context.getMeta().unboxLong(patches[i]));
-                        stream.readS8();
                     } else {
                         entries[i] = new LongConstant(stream.readS8());
                     }
@@ -476,7 +475,6 @@ public abstract class ConstantPool {
                 case DOUBLE: {
                     if (existsAt(patches, i)) {
                         entries[i] = new DoubleConstant(context.getMeta().unboxDouble(patches[i]));
-                        stream.readDouble();
                     } else {
                         entries[i] = new DoubleConstant(stream.readDouble());
                     }
