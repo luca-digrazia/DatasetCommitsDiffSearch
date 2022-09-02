@@ -65,9 +65,13 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.graalvm.options.OptionDescriptor;
+import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.io.MessageTransport;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
@@ -84,7 +88,6 @@ import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import java.util.function.Supplier;
 
 /**
  * Central coordinator class for the Truffle instrumentation framework. Allocated once per
@@ -142,7 +145,7 @@ final class InstrumentationHandler {
     /*
      * Fast lookup of instrumenter instances based on a key provided by the accessor.
      */
-    final ConcurrentHashMap<Object, AbstractInstrumenter> instrumenterMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Object, AbstractInstrumenter> instrumenterMap = new ConcurrentHashMap<>();
 
     private DispatchOutputStream out;   // effectively final
     private DispatchOutputStream err;   // effectively final
@@ -150,9 +153,9 @@ final class InstrumentationHandler {
     private MessageTransport messageInterceptor; // effectively final
     private final Map<Class<?>, Set<Class<?>>> cachedProvidedTags = new ConcurrentHashMap<>();
 
-    final EngineInstrumenter engineInstrumenter;
+    private final EngineInstrumenter engineInstrumenter;
 
-    InstrumentationHandler(Object sourceVM, DispatchOutputStream out, DispatchOutputStream err, InputStream in, MessageTransport messageInterceptor) {
+    private InstrumentationHandler(Object sourceVM, DispatchOutputStream out, DispatchOutputStream err, InputStream in, MessageTransport messageInterceptor) {
         this.sourceVM = sourceVM;
         this.out = out;
         this.err = err;
@@ -166,7 +169,7 @@ final class InstrumentationHandler {
     }
 
     void onLoad(RootNode root) {
-        if (!InstrumentAccessor.nodesAccess().isInstrumentable(root)) {
+        if (!AccessorInstrumentHandler.nodesAccess().isInstrumentable(root)) {
             return;
         }
         assert root.getLanguageInfo() != null;
@@ -287,7 +290,7 @@ final class InstrumentationHandler {
     }
 
     void onFirstExecution(RootNode root) {
-        if (!InstrumentAccessor.nodesAccess().isInstrumentable(root)) {
+        if (!AccessorInstrumentHandler.nodesAccess().isInstrumentable(root)) {
             return;
         }
         assert root.getLanguageInfo() != null;
@@ -355,23 +358,22 @@ final class InstrumentationHandler {
 
     }
 
-    void initializeInstrument(Object vmObject, String instrumentClassName, Supplier<? extends Object> instrumentSupplier) {
-        if (TRACE) {
-            trace("Initialize instrument class %s %n", instrumentClassName);
-        }
-
+    void initializeInstrument(Object vmObject, Class<?> instrumentClass) {
         Env env = new Env(vmObject, out, err, in, messageInterceptor);
+        env.instrumenter = new InstrumentClientInstrumenter(env, instrumentClass);
+
+        if (TRACE) {
+            trace("Initialize instrument class %s %n", instrumentClass);
+        }
         try {
-            TruffleInstrument instrument = (TruffleInstrument) instrumentSupplier.get();
-            env.instrumenter = new InstrumentClientInstrumenter(env, instrumentClassName);
-            env.instrumenter.instrument = instrument;
+            env.instrumenter.instrument = (TruffleInstrument) instrumentClass.getDeclaredConstructor().newInstance();
         } catch (Exception e) {
-            failInstrumentInitialization(env, String.format("Failed to create new instrumenter class %s", instrumentClassName), e);
+            failInstrumentInitialization(env, String.format("Failed to create new instrumenter class %s", instrumentClass.getName()), e);
             return;
         }
 
         if (TRACE) {
-            trace("Initialized instrument %s class %s %n", env.instrumenter.instrument, instrumentClassName);
+            trace("Initialized instrument %s class %s %n", env.instrumenter.instrument, instrumentClass);
         }
 
         addInstrumenter(vmObject, env.instrumenter);
@@ -425,7 +427,7 @@ final class InstrumentationHandler {
 
     private static void disposeOutputBindingsBulk(DispatchOutputStream dos, Collection<EventBinding<? extends OutputStream>> list) {
         for (EventBinding<? extends OutputStream> binding : list) {
-            InstrumentAccessor.engineAccess().detachOutputConsumer(dos, binding.getElement());
+            AccessorInstrumentHandler.engineAccess().detachOutputConsumer(dos, binding.getElement());
             binding.disposeBulk();
         }
     }
@@ -557,10 +559,10 @@ final class InstrumentationHandler {
 
         if (errorOutput) {
             this.outputErrBindings.add(binding);
-            InstrumentAccessor.engineAccess().attachOutputConsumer(this.err, binding.getElement());
+            AccessorInstrumentHandler.engineAccess().attachOutputConsumer(this.err, binding.getElement());
         } else {
             this.outputStdBindings.add(binding);
-            InstrumentAccessor.engineAccess().attachOutputConsumer(this.out, binding.getElement());
+            AccessorInstrumentHandler.engineAccess().attachOutputConsumer(this.out, binding.getElement());
         }
 
         if (TRACE) {
@@ -596,7 +598,7 @@ final class InstrumentationHandler {
 
         contextsBindings.add(binding);
         if (includeActiveContexts) {
-            Accessor.EngineSupport engineAccess = InstrumentAccessor.engineAccess();
+            Accessor.EngineSupport engineAccess = InstrumentationHandler.AccessorInstrumentHandler.engineAccess();
             engineAccess.reportAllLanguageContexts(sourceVM, binding.getElement());
         }
 
@@ -613,7 +615,7 @@ final class InstrumentationHandler {
 
         threadsBindings.add(binding);
         if (includeStartedThreads) {
-            Accessor.EngineSupport engineAccess = InstrumentAccessor.engineAccess();
+            Accessor.EngineSupport engineAccess = InstrumentationHandler.AccessorInstrumentHandler.engineAccess();
             engineAccess.reportAllContextThreads(sourceVM, binding.getElement());
         }
 
@@ -744,9 +746,9 @@ final class InstrumentationHandler {
             Object elm = binding.getElement();
             if (elm instanceof OutputStream) {
                 if (outputErrBindings.contains(binding)) {
-                    InstrumentAccessor.engineAccess().detachOutputConsumer(err, (OutputStream) elm);
+                    AccessorInstrumentHandler.engineAccess().detachOutputConsumer(err, (OutputStream) elm);
                 } else if (outputStdBindings.contains(binding)) {
-                    InstrumentAccessor.engineAccess().detachOutputConsumer(out, (OutputStream) elm);
+                    AccessorInstrumentHandler.engineAccess().detachOutputConsumer(out, (OutputStream) elm);
                 }
             } else if (elm instanceof ContextsListener) {
                 // binding disposed
@@ -938,7 +940,7 @@ final class InstrumentationHandler {
     }
 
     private void insertWrapper(Node instrumentableNode, SourceSection sourceSection) {
-        Lock lock = InstrumentAccessor.nodesAccess().getLock(instrumentableNode);
+        Lock lock = AccessorInstrumentHandler.nodesAccess().getLock(instrumentableNode);
         try {
             lock.lock();
             insertWrapperImpl(instrumentableNode, sourceSection);
@@ -1064,49 +1066,49 @@ final class InstrumentationHandler {
         return addThreadsBinding(new EventBinding<>(instrumenter, listener), includeStartedThreads);
     }
 
-    void notifyContextCreated(TruffleContext context) {
+    private void notifyContextCreated(TruffleContext context) {
         for (EventBinding<? extends ContextsListener> binding : contextsBindings) {
             binding.getElement().onContextCreated(context);
         }
     }
 
-    void notifyContextClosed(TruffleContext context) {
+    private void notifyContextClosed(TruffleContext context) {
         for (EventBinding<? extends ContextsListener> binding : contextsBindings) {
             binding.getElement().onContextClosed(context);
         }
     }
 
-    void notifyLanguageContextCreated(TruffleContext context, LanguageInfo language) {
+    private void notifyLanguageContextCreated(TruffleContext context, LanguageInfo language) {
         for (EventBinding<? extends ContextsListener> binding : contextsBindings) {
             binding.getElement().onLanguageContextCreated(context, language);
         }
     }
 
-    void notifyLanguageContextInitialized(TruffleContext context, LanguageInfo language) {
+    private void notifyLanguageContextInitialized(TruffleContext context, LanguageInfo language) {
         for (EventBinding<? extends ContextsListener> binding : contextsBindings) {
             binding.getElement().onLanguageContextInitialized(context, language);
         }
     }
 
-    void notifyLanguageContextFinalized(TruffleContext context, LanguageInfo language) {
+    private void notifyLanguageContextFinalized(TruffleContext context, LanguageInfo language) {
         for (EventBinding<? extends ContextsListener> binding : contextsBindings) {
             binding.getElement().onLanguageContextFinalized(context, language);
         }
     }
 
-    void notifyLanguageContextDisposed(TruffleContext context, LanguageInfo language) {
+    private void notifyLanguageContextDisposed(TruffleContext context, LanguageInfo language) {
         for (EventBinding<? extends ContextsListener> binding : contextsBindings) {
             binding.getElement().onLanguageContextDisposed(context, language);
         }
     }
 
-    void notifyThreadStarted(TruffleContext context, Thread thread) {
+    private void notifyThreadStarted(TruffleContext context, Thread thread) {
         for (EventBinding<? extends ThreadsListener> binding : threadsBindings) {
             binding.getElement().onThreadInitialized(context, thread);
         }
     }
 
-    void notifyThreadFinished(TruffleContext context, Thread thread) {
+    private void notifyThreadFinished(TruffleContext context, Thread thread) {
         for (EventBinding<? extends ThreadsListener> binding : threadsBindings) {
             binding.getElement().onThreadDisposed(context, thread);
         }
@@ -1128,7 +1130,7 @@ final class InstrumentationHandler {
     }
 
     Set<Class<?>> getProvidedTags(Node root) {
-        return getProvidedTags(InstrumentAccessor.nodesAccess().getLanguage(root.getRootNode()));
+        return getProvidedTags(AccessorInstrumentHandler.nodesAccess().getLanguage(root.getRootNode()));
     }
 
     @SuppressWarnings("deprecation")
@@ -1220,18 +1222,18 @@ final class InstrumentationHandler {
             if (node instanceof InstrumentableNode) {
                 return ((InstrumentableNode) node).hasTag((Class<? extends Tag>) tag);
             } else {
-                return InstrumentAccessor.nodesAccess().isTaggedWith(node, tag);
+                return AccessorInstrumentHandler.nodesAccess().isTaggedWith(node, tag);
             }
         }
         return false;
     }
 
-    <T> T lookup(Object key, Class<T> type) {
+    private <T> T lookup(Object key, Class<T> type) {
         AbstractInstrumenter value = instrumenterMap.get(key);
         return value == null ? null : value.lookup(this, type);
     }
 
-    AllocationReporter getAllocationReporter(LanguageInfo info) {
+    private AllocationReporter getAllocationReporter(LanguageInfo info) {
         AllocationReporter allocationReporter = new AllocationReporter(info);
         allocationReporters.add(allocationReporter);
         for (EventBinding.Allocation<? extends AllocationListener> binding : allocationBindings) {
@@ -1242,7 +1244,7 @@ final class InstrumentationHandler {
         return allocationReporter;
     }
 
-    void patch(DispatchOutputStream newOut, DispatchOutputStream newErr, InputStream newIn) {
+    private void patch(DispatchOutputStream newOut, DispatchOutputStream newErr, InputStream newIn) {
         this.out = newOut;
         this.err = newErr;
         this.in = newIn;
@@ -1576,13 +1578,13 @@ final class InstrumentationHandler {
      */
     final class InstrumentClientInstrumenter extends AbstractInstrumenter {
 
-        private final String instrumentClassName;
+        private final Class<?> instrumentClass;
         private Object[] services;
-        TruffleInstrument instrument;
+        private TruffleInstrument instrument;
         private final Env env;
 
-        InstrumentClientInstrumenter(Env env, String instrumentClassName) {
-            this.instrumentClassName = instrumentClassName;
+        InstrumentClientInstrumenter(Env env, Class<?> instrumentClass) {
+            this.instrumentClass = instrumentClass;
             this.env = env;
         }
 
@@ -1605,8 +1607,8 @@ final class InstrumentationHandler {
         void verifyFilter(SourceSectionFilter filter) {
         }
 
-        String getInstrumentClassName() {
-            return instrumentClassName;
+        Class<?> getInstrumentClass() {
+            return instrumentClass;
         }
 
         Env getEnv() {
@@ -1615,14 +1617,14 @@ final class InstrumentationHandler {
 
         void create(String[] expectedServices) {
             if (TRACE) {
-                trace("Create instrument %s class %s %n", instrument, instrumentClassName);
+                trace("Create instrument %s class %s %n", instrument, instrumentClass);
             }
             services = env.onCreate(instrument);
             if (expectedServices != null && !TruffleOptions.AOT) {
                 checkServices(expectedServices);
             }
             if (TRACE) {
-                trace("Created instrument %s class %s %n", instrument, instrumentClassName);
+                trace("Created instrument %s class %s %n", instrument, instrumentClass);
             }
         }
 
@@ -1633,7 +1635,7 @@ final class InstrumentationHandler {
                         continue LOOP;
                     }
                 }
-                failInstrumentInitialization(env, String.format("%s declares service %s but doesn't register it", instrumentClassName, name), null);
+                failInstrumentInitialization(env, String.format("%s declares service %s but doesn't register it", instrumentClass.getName(), name), null);
             }
             return true;
         }
@@ -1759,7 +1761,7 @@ final class InstrumentationHandler {
 
         LanguageClientInstrumenter(TruffleLanguage<?> language) {
             this.language = language;
-            this.languageInfo = InstrumentAccessor.langAccess().getLanguageInfo(language);
+            this.languageInfo = AccessorInstrumentHandler.langAccess().getLanguageInfo(language);
         }
 
         @Override
@@ -2213,4 +2215,212 @@ final class InstrumentationHandler {
             }
         }
     }
+
+    static final AccessorInstrumentHandler ACCESSOR = new AccessorInstrumentHandler();
+
+    static final class AccessorInstrumentHandler extends Accessor {
+
+        static Accessor.Nodes nodesAccess() {
+            return ACCESSOR.nodes();
+        }
+
+        static Accessor.LanguageSupport langAccess() {
+            return ACCESSOR.languageSupport();
+        }
+
+        static Accessor.EngineSupport engineAccess() {
+            return ACCESSOR.engineSupport();
+        }
+
+        static Accessor.InteropSupport interopAccess() {
+            return ACCESSOR.interopSupport();
+        }
+
+        @Override
+        protected InstrumentSupport instrumentSupport() {
+            return new InstrumentImpl();
+        }
+
+        protected boolean isTruffleObject(Object value) {
+            return interopSupport().isTruffleObject(value);
+        }
+
+        static final class InstrumentImpl extends InstrumentSupport {
+
+            @Override
+            public Object createInstrumentationHandler(Object vm, DispatchOutputStream out, DispatchOutputStream err, InputStream in, MessageTransport messageInterceptor) {
+                return new InstrumentationHandler(vm, out, err, in, messageInterceptor);
+            }
+
+            @Override
+            public void initializeInstrument(Object instrumentationHandler, Object key, Class<?> instrumentClass) {
+                ((InstrumentationHandler) instrumentationHandler).initializeInstrument(key, instrumentClass);
+            }
+
+            @Override
+            public void createInstrument(Object instrumentationHandler, Object key, String[] expectedServices, OptionValues options) {
+                ((InstrumentationHandler) instrumentationHandler).createInstrument(key, expectedServices, options);
+            }
+
+            @Override
+            public Object getEngineInstrumenter(Object instrumentationHandler) {
+                return ((InstrumentationHandler) instrumentationHandler).engineInstrumenter;
+            }
+
+            @Override
+            public void onNodeInserted(RootNode rootNode, Node tree) {
+                InstrumentationHandler handler = getHandler(rootNode);
+                if (handler != null) {
+                    handler.onNodeInserted(rootNode, tree);
+                }
+            }
+
+            @Override
+            public OptionDescriptors describeOptions(Object instrumentationHandler, Object key, String requiredGroup) {
+                InstrumentClientInstrumenter instrumenter = (InstrumentClientInstrumenter) ((InstrumentationHandler) instrumentationHandler).instrumenterMap.get(key);
+                OptionDescriptors descriptors = instrumenter.instrument.getOptionDescriptors();
+                if (descriptors == null) {
+                    descriptors = OptionDescriptors.EMPTY;
+                }
+                String groupPlusDot = requiredGroup + ".";
+                for (OptionDescriptor descriptor : descriptors) {
+                    if (!descriptor.getName().equals(requiredGroup) && !descriptor.getName().startsWith(groupPlusDot)) {
+                        throw new IllegalArgumentException(String.format("Illegal option prefix in name '%s' specified for option described by instrument '%s'. " +
+                                        "The option prefix must match the id of the instrument '%s'.",
+                                        descriptor.getName(), instrumenter.instrument.getClass().getName(), requiredGroup));
+                    }
+                }
+                return descriptors;
+            }
+
+            @Override
+            public void finalizeInstrument(Object instrumentationHandler, Object key) {
+                ((InstrumentationHandler) instrumentationHandler).finalizeInstrumenter(key);
+            }
+
+            @Override
+            public void disposeInstrument(Object instrumentationHandler, Object key, boolean cleanupRequired) {
+                ((InstrumentationHandler) instrumentationHandler).disposeInstrumenter(key, cleanupRequired);
+            }
+
+            @Override
+            public void collectEnvServices(Set<Object> collectTo, Object languageShared, TruffleLanguage<?> language) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(languageShared);
+                Instrumenter instrumenter = instrumentationHandler.forLanguage(language);
+                collectTo.add(instrumenter);
+                AllocationReporter allocationReporter = instrumentationHandler.getAllocationReporter(AccessorInstrumentHandler.langAccess().getLanguageInfo(language));
+                collectTo.add(allocationReporter);
+            }
+
+            @Override
+            public <T> T getInstrumentationHandlerService(Object vm, Object key, Class<T> type) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) vm;
+                return instrumentationHandler.lookup(key, type);
+            }
+
+            @Override
+            public void onFirstExecution(RootNode rootNode) {
+                InstrumentationHandler handler = getHandler(rootNode);
+                if (handler != null) {
+                    handler.onFirstExecution(rootNode);
+                }
+            }
+
+            @Override
+            public void onLoad(RootNode rootNode) {
+                InstrumentationHandler handler = getHandler(rootNode);
+                if (handler != null) {
+                    handler.onLoad(rootNode);
+                }
+            }
+
+            @Override
+            public Iterable<Scope> findTopScopes(TruffleLanguage.Env env) {
+                return TruffleInstrument.Env.findTopScopes(env);
+            }
+
+            @Override
+            @CompilerDirectives.TruffleBoundary
+            public void notifyContextCreated(Object engine, TruffleContext context) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+                instrumentationHandler.notifyContextCreated(context);
+            }
+
+            @Override
+            @CompilerDirectives.TruffleBoundary
+            public void notifyContextClosed(Object engine, TruffleContext context) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+                instrumentationHandler.notifyContextClosed(context);
+            }
+
+            @Override
+            public void notifyLanguageContextCreated(Object engine, TruffleContext context, LanguageInfo info) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+                instrumentationHandler.notifyLanguageContextCreated(context, info);
+            }
+
+            @Override
+            public void notifyLanguageContextInitialized(Object engine, TruffleContext context, LanguageInfo info) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+                instrumentationHandler.notifyLanguageContextInitialized(context, info);
+            }
+
+            @Override
+            public void notifyLanguageContextFinalized(Object engine, TruffleContext context, LanguageInfo info) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+                instrumentationHandler.notifyLanguageContextFinalized(context, info);
+            }
+
+            @Override
+            public void notifyLanguageContextDisposed(Object engine, TruffleContext context, LanguageInfo info) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+                instrumentationHandler.notifyLanguageContextDisposed(context, info);
+            }
+
+            @Override
+            @CompilerDirectives.TruffleBoundary
+            public void notifyThreadStarted(Object engine, TruffleContext context, Thread thread) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+                instrumentationHandler.notifyThreadStarted(context, thread);
+            }
+
+            @Override
+            @CompilerDirectives.TruffleBoundary
+            public void notifyThreadFinished(Object engine, TruffleContext context, Thread thread) {
+                InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
+                instrumentationHandler.notifyThreadFinished(context, thread);
+            }
+
+            @Override
+            public org.graalvm.polyglot.SourceSection createSourceSection(Object instrumentEnv, org.graalvm.polyglot.Source source, com.oracle.truffle.api.source.SourceSection ss) {
+                TruffleInstrument.Env env = (TruffleInstrument.Env) instrumentEnv;
+                return engineAccess().createSourceSection(env.getVMObject(), source, ss);
+            }
+
+            @Override
+            public void patchInstrumentationHandler(Object vm, DispatchOutputStream out, DispatchOutputStream err, InputStream in) {
+                final InstrumentationHandler instrumentationHandler = (InstrumentationHandler) vm;
+                instrumentationHandler.patch(out, err, in);
+            }
+
+            @Override
+            public boolean isInputValueSlotIdentifier(Object identifier) {
+                return identifier instanceof ProbeNode.EventProviderWithInputChainNode.SavedInputValueID;
+            }
+
+            private static InstrumentationHandler getHandler(RootNode rootNode) {
+                LanguageInfo info = rootNode.getLanguageInfo();
+                if (info == null) {
+                    return null;
+                }
+                Object languageShared = nodesAccess().getEngineObject(info);
+                if (languageShared == null) {
+                    return null;
+                }
+                return (InstrumentationHandler) engineAccess().getInstrumentationHandler(languageShared);
+            }
+
+        }
+    }
+
 }
