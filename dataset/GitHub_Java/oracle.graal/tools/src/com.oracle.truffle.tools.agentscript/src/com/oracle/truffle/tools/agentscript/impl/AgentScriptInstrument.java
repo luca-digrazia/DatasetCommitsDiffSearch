@@ -35,7 +35,6 @@ import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
-import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
@@ -122,8 +121,7 @@ public final class AgentScriptInstrument extends TruffleInstrument implements Ag
                 if (agentBinding != null || language.isInternal()) {
                     return;
                 }
-                final SourceSectionFilter anyRoot = SourceSectionFilter.newBuilder().tagIs(StandardTags.RootTag.class).build();
-                agentBinding = instrumenter.attachExecutionEventListener(anyRoot, new ExecutionEventListener() {
+                agentBinding = instrumenter.attachExecutionEventListener(SourceSectionFilter.ANY, new ExecutionEventListener() {
                     @Override
                     public void onEnter(EventContext ctx, VirtualFrame frame) {
                         agentBinding.dispose();
