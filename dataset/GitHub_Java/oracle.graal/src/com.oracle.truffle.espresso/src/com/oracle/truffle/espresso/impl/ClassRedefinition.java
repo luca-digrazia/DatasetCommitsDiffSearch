@@ -34,7 +34,6 @@ import com.oracle.truffle.espresso.classfile.attributes.LocalVariableTable;
 import com.oracle.truffle.espresso.classfile.constantpool.PoolConstant;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
-import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
@@ -63,7 +62,7 @@ public final class ClassRedefinition {
 
     private static final RedefinitionSupport REDEFINITION_SUPPORT = RedefinitionSupport.METHOD_BODY;
 
-    public static int redefineClass(Klass klass, byte[] bytes, EspressoContext context, Ids<Object> ids) {
+    public static int redefineClass(Klass klass, byte[] bytes, EspressoContext context) {
         try {
             ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), klass.getTypeAsString(), null, context);
             ClassChange classChange;
@@ -81,7 +80,7 @@ public final class ClassRedefinition {
 
             switch (classChange) {
                 case METHOD_BODY_CHANGE:
-                    return redefineChangedMethodBodies(parserKlass, (ObjectKlass) klass, detectedChange, ids);
+                    return redefineChangedMethodBodies(parserKlass, (ObjectKlass) klass, detectedChange);
                 case ADD_METHOD:
                     if (isAddMethodSupported()) {
                         return redefineAddMethod(parserKlass, klass, detectedChange);
@@ -207,9 +206,9 @@ public final class ClassRedefinition {
                                 // signal that the old method is now obsolete
                                 if (isObsolete(oldMethod, newMethod, oldParserKlass.getConstantPool(), newParserKlass.getConstantPool())) {
                                     newMethod.markChanged();
-                                    result = ClassChange.METHOD_BODY_CHANGE;
-                                    collectedChanges.addMethodBodyChange(newMethod);
                                 }
+                                result = ClassChange.METHOD_BODY_CHANGE;
+                                collectedChanges.addMethodBodyChange(newMethod);
                             }
                             break;
                         case METHOD_BODY_CHANGE:
@@ -390,13 +389,13 @@ public final class ClassRedefinition {
         return false;
     }
 
-    private static int redefineChangedMethodBodies(ParserKlass parserKlass, ObjectKlass oldKlass, DetectedChange change, Ids<Object> ids) {
+    private static int redefineChangedMethodBodies(ParserKlass parserKlass, ObjectKlass oldKlass, DetectedChange change) {
         ParserMethod[] changedMethodBodies = change.getChangedMethodBodies();
 
         for (ParserMethod changedMethod : changedMethodBodies) {
             // find the old real method
             Method method = getDeclaredMethod(oldKlass, changedMethod);
-            method.redefine(changedMethod, parserKlass, ids);
+            method.redefine(changedMethod, parserKlass);
         }
         oldKlass.redefineClass(parserKlass);
         return 0;
