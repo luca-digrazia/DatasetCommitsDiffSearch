@@ -1370,29 +1370,6 @@ public final class TruffleFile {
     }
 
     /**
-     * Reads the target of a symbolic link.
-     * 
-     * @return the {@link TruffleFile} representing the target of the symbolic link
-     * @throws NotLinkException if the {@link TruffleFile} is not a symbolic link
-     * @throws IOException in case of IO error
-     * @throws UnsupportedOperationException if the {@link FileSystem} implementation does not
-     *             support symbolic links
-     * @throws SecurityException if the {@link FileSystem} denied the operation
-     * @since 20.3
-     */
-    @TruffleBoundary
-    public TruffleFile readSymbolicLink() throws IOException {
-        try {
-            checkFileOperationPreconditions();
-            return new TruffleFile(fileSystemContext, fileSystemContext.fileSystem.readSymbolicLink(normalizedPath));
-        } catch (IOException | SecurityException | UnsupportedOperationException e) {
-            throw e;
-        } catch (Throwable t) {
-            throw wrapHostException(t);
-        }
-    }
-
-    /**
      * Returns the owner of the file.
      *
      * @param options the options determining how the symbolic links should be handled
@@ -1623,23 +1600,14 @@ public final class TruffleFile {
     }
 
     /**
-     * Tests if this and the given {@link TruffleFile} refer to the same physical file. If both
+     * Tests if this and the given {@link TruffleFile} locate the same file. If both
      * {@code TruffleFile} objects are {@link TruffleFile#equals(Object) equal} then this method
-     * returns {@code true} without any checks. If the {@link TruffleFile}s have different
-     * filesystems then this method returns {@code false}. Otherwise, this method checks if both
-     * {@link TruffleFile}s refer to the same physical file. Depending on the {@link FileSystem}
-     * implementation it may require to read the files attributes. This implies:
-     * <ul>
-     * <li>Public and Internal files with disabled IO are never the same.
-     * <li>Public and Internal files with allowed IO are potentially the same.
-     * <li>Files created by different languages are potentially the same.
-     * <li>Files created during the Context pre-initialization and files created during Context
-     * execution are potentially the same.
-     * </ul>
+     * returns {@code true} without any checks. Otherwise, this method checks if both
+     * {@link TruffleFile}s locate the same file. Depending on the {@link FileSystem} implementation
+     * it may require to access both files.
      *
      * @param other the other {@link TruffleFile}
-     * @return {@code true} if this and the given {@link TruffleFile} refer to the same physical
-     *         file
+     * @return {@code true} if this and the given {@link TruffleFile} locate the same file
      * @throws IOException in case of IO error
      * @throws SecurityException if the {@link FileSystem} denied the operation
      * @since 20.2.0
@@ -1652,10 +1620,18 @@ public final class TruffleFile {
             if (this.equals(other)) {
                 return true;
             }
-            if (!fileSystemContext.fileSystem.equals(other.fileSystemContext.fileSystem)) {
-                return false;
+            // When the IO is disabled one file can be public with no IO filesystem and
+            // the second internal with language home filesystem.
+            // The language home filesystem allows canonical path resolution and isSameFile.
+            // The no IO filesystem does not support canonical path resolution nor isSameFile.
+            // We should be symentric and fail independent of the file order.
+            FileSystem fs;
+            if (LanguageAccessor.engineAccess().hasNoAccess(other.fileSystemContext.fileSystem)) {
+                fs = other.fileSystemContext.fileSystem;
+            } else {
+                fs = fileSystemContext.fileSystem;
             }
-            return fileSystemContext.fileSystem.isSameFile(normalizedPath, other.normalizedPath, options);
+            return fs.isSameFile(normalizedPath, other.normalizedPath, options);
         } catch (IOException | SecurityException e) {
             throw e;
         } catch (Throwable t) {
@@ -1756,7 +1732,7 @@ public final class TruffleFile {
     }
 
     private static TruffleFile createUniquePath(TruffleFile targetDirectory, String prefix, String suffix) {
-        long n = TempFileRandomHolder.getRandom().nextLong();
+        long n = TempFileRandomHolder.RANDOM.nextLong();
         n = n == Long.MIN_VALUE ? Long.MAX_VALUE : Math.abs(n);
         String name = prefix + Long.toString(n) + suffix;
         TruffleFile result = targetDirectory.resolve(name);
@@ -1784,16 +1760,7 @@ public final class TruffleFile {
     }
 
     private static final class TempFileRandomHolder {
-        private static Random RANDOM;
-
-        static Random getRandom() {
-            if (RANDOM == null) {
-                /* We don't want RANDOM seeds in the image heap. */
-                RANDOM = new Random();
-            }
-            return RANDOM;
-        }
-
+        static final Random RANDOM = new Random();
     }
 
     private static final class AttributeGroup {

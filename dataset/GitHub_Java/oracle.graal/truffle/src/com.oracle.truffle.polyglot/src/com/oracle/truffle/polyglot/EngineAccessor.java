@@ -53,8 +53,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -80,7 +80,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
@@ -258,18 +257,7 @@ final class EngineAccessor extends Accessor {
 
         @Override
         public <T> Iterable<T> loadServices(Class<T> type) {
-            Map<Class<?>, T> found = new LinkedHashMap<>();
-            // Library providers exported by Truffle are not on the GuestLangToolsLoader path.
-            if (type.getClassLoader() == Truffle.class.getClassLoader()) {
-                for (T service : ServiceLoader.load(type, type.getClassLoader())) {
-                    found.putIfAbsent(service.getClass(), service);
-                }
-                // JDK 8: also search the JVMCIClassLoader path
-                for (T service : ServiceLoader.load(type, Truffle.getRuntime().getClass().getClassLoader())) {
-                    found.putIfAbsent(service.getClass(), service);
-                }
-            }
-            // Search guest languages and tools.
+            Map<Class<?>, T> found = new HashMap<>();
             for (AbstractClassLoaderSupplier loaderSupplier : EngineAccessor.locatorOrDefaultLoaders()) {
                 ClassLoader loader = loaderSupplier.get();
                 if (seesTheSameClass(loader, type)) {
@@ -851,6 +839,11 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
+        public boolean hasNoAccess(FileSystem fs) {
+            return FileSystems.hasNoAccess(fs);
+        }
+
+        @Override
         public void addToHostClassPath(Object polyglotLanguageContext, TruffleFile entry) {
             HostLanguage.HostContext hostContext = ((PolyglotLanguageContext) polyglotLanguageContext).context.getHostContextImpl();
             hostContext.addToHostClasspath(entry);
@@ -1094,7 +1087,7 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public String getRelativePathInLanguageHome(TruffleFile truffleFile) {
+        public String getPreinitializedRelativePathInLanguageHome(TruffleFile truffleFile) {
             return FileSystems.getRelativePathInLanguageHome(truffleFile);
         }
 
