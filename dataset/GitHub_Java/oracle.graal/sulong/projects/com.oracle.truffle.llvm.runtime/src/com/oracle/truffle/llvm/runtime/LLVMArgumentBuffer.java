@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
@@ -45,7 +44,7 @@ public final class LLVMArgumentBuffer implements TruffleObject {
     private final byte[] bytes;
 
     public LLVMArgumentBuffer(String str) {
-        this.bytes = encodeFromString(str);
+        this.bytes = str.getBytes();
     }
 
     public LLVMArgumentBuffer(byte[] bytes) {
@@ -77,28 +76,6 @@ public final class LLVMArgumentBuffer implements TruffleObject {
             oob.enter();
             return 0; // simulate zero-terminators
         }
-    }
-
-    @ExportMessage
-    @SuppressWarnings("static-method")
-    boolean isString() {
-        return true;
-    }
-
-    @ExportMessage
-    @SuppressWarnings("static-method")
-    String asString() {
-        return decodeToString(bytes);
-    }
-
-    @TruffleBoundary
-    private static String decodeToString(byte[] bytes) {
-        return new String(bytes);
-    }
-
-    @TruffleBoundary
-    protected static byte[] encodeFromString(String str) {
-        return str.getBytes();
     }
 
     @ExportLibrary(InteropLibrary.class)
