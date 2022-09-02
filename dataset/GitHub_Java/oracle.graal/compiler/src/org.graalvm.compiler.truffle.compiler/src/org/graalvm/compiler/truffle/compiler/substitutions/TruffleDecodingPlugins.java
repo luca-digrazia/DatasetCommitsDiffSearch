@@ -32,12 +32,13 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registratio
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.ResolvedJavaSymbol;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
-import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
+
+import static org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.getRuntime;
 
 /**
  * Provides {@link InvocationPlugin}s for decoding of Truffle methods during partial evaluation.
@@ -48,18 +49,19 @@ public class TruffleDecodingPlugins {
 
     public static void registerInvocationPlugins(InvocationPlugins plugins, Providers providers) {
         MetaAccessProvider metaAccess = providers.getMetaAccess();
-        registerCompilerDirectivesPlugins(plugins, metaAccess);
+        registerGraalCompilerDirectivesPlugins(plugins, metaAccess);
     }
 
-    private static void registerCompilerDirectivesPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
-        final ResolvedJavaType compilerDirectivesType = TruffleCompilerRuntime.getRuntime().resolveType(metaAccess, "com.oracle.truffle.api.CompilerDirectives");
-        Registration r = new Registration(plugins, new ResolvedJavaSymbol(compilerDirectivesType));
-        r.register0("inFirstTier", new InvocationPlugin() {
+    private static void registerGraalCompilerDirectivesPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
+        final ResolvedJavaType graalCompilerDirectivesType = getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives");
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(graalCompilerDirectivesType));
+        r.setAllowOverwrite(true);
+        r.register0("hasNextTier", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 if (b.getGraph().getCancellable() instanceof TruffleCompilationTask) {
-                    boolean isFirstTier = ((TruffleCompilationTask) b.getGraph().getCancellable()).isFirstTier();
-                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(isFirstTier));
+                    TruffleCompilationTask task = (TruffleCompilationTask) b.getGraph().getCancellable();
+                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(task.hasNextTier()));
                     return true;
                 }
                 return false;

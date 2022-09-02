@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,26 +25,32 @@
 package org.graalvm.compiler.truffle.compiler.substitutions;
 
 import static java.lang.Character.toUpperCase;
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.TruffleUseFrameWithoutBoxing;
 import static org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.getRuntime;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.function.Supplier;
 
-import org.graalvm.compiler.core.common.calc.Condition;
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool.RoundingMode;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConditionAnchorNode;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
+import org.graalvm.compiler.nodes.DynamicPiNode;
+import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.LogicConstantNode;
@@ -54,6 +62,10 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
+import org.graalvm.compiler.nodes.calc.ConditionalNode;
+import org.graalvm.compiler.nodes.calc.IntegerMulHighNode;
+import org.graalvm.compiler.nodes.calc.RoundNode;
+import org.graalvm.compiler.nodes.debug.BlackholeNode;
 import org.graalvm.compiler.nodes.extended.BoxNode;
 import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.GuardedUnsafeLoadNode;
@@ -66,18 +78,17 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.ResolvedJavaSymbol;
+import org.graalvm.compiler.nodes.java.InstanceOfDynamicNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
+import org.graalvm.compiler.nodes.spi.LoweringProvider;
+import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.virtual.EnsureVirtualizedNode;
-import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.replacements.nodes.arithmetic.IntegerMulHighNode;
+import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.nodes.arithmetic.UnsignedMulHighNode;
-import org.graalvm.compiler.truffle.common.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleDebugJavaMethod;
-import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
+import org.graalvm.compiler.truffle.compiler.PerformanceInformationHandler;
 import org.graalvm.compiler.truffle.compiler.nodes.IsCompilationConstantNode;
 import org.graalvm.compiler.truffle.compiler.nodes.ObjectLocationIdentity;
 import org.graalvm.compiler.truffle.compiler.nodes.TruffleAssumption;
@@ -85,11 +96,15 @@ import org.graalvm.compiler.truffle.compiler.nodes.asserts.NeverPartOfCompilatio
 import org.graalvm.compiler.truffle.compiler.nodes.frame.AllowMaterializeNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.ForceMaterializeNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.NewFrameNode;
+import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameClearNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameGetNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameIsNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.VirtualFrameSetNode;
+import org.graalvm.compiler.truffle.compiler.phases.TruffleSafepointInsertionPhase;
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.PerformanceWarningKind;
 import org.graalvm.word.LocationIdentity;
 
+import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -98,36 +113,75 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.SpeculationLog.Speculation;
 
 /**
  * Provides {@link InvocationPlugin}s for Truffle classes.
  */
 public class TruffleGraphBuilderPlugins {
 
-    public static class Options {
-        @Option(help = "Intrinsify get/set/is methods of FrameWithoutBoxing to improve Truffle compilation time", type = OptionType.Debug)//
-        public static final OptionKey<Boolean> TruffleIntrinsifyFrameAccess = new OptionKey<>(true);
-    }
-
-    public static void registerInvocationPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection,
-                    KnownTruffleTypes types) {
+    public static void registerInvocationPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification, Providers providers, KnownTruffleTypes types) {
+        MetaAccessProvider metaAccess = providers.getMetaAccess();
+        registerObjectsPlugins(plugins, metaAccess);
         registerOptimizedAssumptionPlugins(plugins, metaAccess, types);
-        registerExactMathPlugins(plugins, metaAccess);
+        registerExactMathPlugins(plugins, providers.getReplacements(), providers.getLowerer(), metaAccess);
+        registerGraalCompilerDirectivesPlugins(plugins, metaAccess);
         registerCompilerDirectivesPlugins(plugins, metaAccess, canDelayIntrinsification);
         registerCompilerAssertsPlugins(plugins, metaAccess, canDelayIntrinsification);
-        registerOptimizedCallTargetPlugins(plugins, metaAccess, canDelayIntrinsification, types);
-
-        if (TruffleCompilerOptions.getValue(TruffleUseFrameWithoutBoxing)) {
-            registerFrameWithoutBoxingPlugins(plugins, canDelayIntrinsification, constantReflection, types);
-        } else {
-            registerFrameWithBoxingPlugins(plugins, canDelayIntrinsification);
+        EconomicSet<ResolvedJavaType> primitiveBoxTypes = EconomicSet.create();
+        for (JavaKind kind : new JavaKind[]{JavaKind.Boolean, JavaKind.Byte, JavaKind.Char, JavaKind.Double, JavaKind.Float, JavaKind.Int, JavaKind.Long, JavaKind.Short}) {
+            ResolvedJavaType boxingType = metaAccess.lookupJavaType(kind.toBoxedJavaClass());
+            assert boxingType != null;
+            primitiveBoxTypes.add(boxingType);
         }
+        registerOptimizedCallTargetPlugins(plugins, metaAccess, canDelayIntrinsification, types, primitiveBoxTypes);
+        registerFrameWithoutBoxingPlugins(plugins, metaAccess, canDelayIntrinsification, providers.getConstantReflection(), types, primitiveBoxTypes);
+        registerTruffleSafepointPlugins(plugins, metaAccess, canDelayIntrinsification);
+    }
 
+    private static void registerTruffleSafepointPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification) {
+        final ResolvedJavaType truffleSafepoint = getRuntime().resolveType(metaAccess, "com.oracle.truffle.api.TruffleSafepoint");
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(truffleSafepoint));
+        r.register1("poll", com.oracle.truffle.api.nodes.Node.class, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
+                if (arg.isConstant()) {
+                    assert TruffleSafepointInsertionPhase.allowsSafepoints(b.getGraph()) : "TruffleSafepoint.poll only expected to be removed in Truffle compilations.";
+                    return true;
+                } else if (canDelayIntrinsification) {
+                    return false;
+                } else {
+                    throw failPEConstant(b, arg);
+                }
+            }
+        });
+    }
+
+    private static void registerObjectsPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
+        ResolvedJavaType objectsType = getRuntime().resolveType(metaAccess, "java.util.Objects");
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(objectsType));
+        InvocationPlugin requireNonNullPlugin = new InvocationPlugin() {
+
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode arg) {
+                ValueNode nullChecked = b.nullCheckedValue(arg);
+                b.addPush(JavaKind.Object, nullChecked);
+                return true;
+            }
+
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode obj, ValueNode msg) {
+                return apply(b, targetMethod, receiver, obj);
+            }
+        };
+        r.register1("requireNonNull", Object.class, requireNonNullPlugin);
+        r.register2("requireNonNull", Object.class, String.class, requireNonNullPlugin);
+        r.register2("requireNonNull", Object.class, Supplier.class, requireNonNullPlugin);
     }
 
     public static void registerOptimizedAssumptionPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, KnownTruffleTypes types) {
         ResolvedJavaType optimizedAssumptionType = getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.OptimizedAssumption");
-        Registration r = new Registration(plugins, new ResolvedJavaSymbol(optimizedAssumptionType), null);
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(optimizedAssumptionType));
         InvocationPlugin plugin = new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
@@ -158,9 +212,9 @@ public class TruffleGraphBuilderPlugins {
         r.register1("check", Receiver.class, plugin);
     }
 
-    public static void registerExactMathPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
+    public static void registerExactMathPlugins(InvocationPlugins plugins, Replacements replacements, LoweringProvider lowerer, MetaAccessProvider metaAccess) {
         final ResolvedJavaType exactMathType = getRuntime().resolveType(metaAccess, "com.oracle.truffle.api.ExactMath");
-        Registration r = new Registration(plugins, new ResolvedJavaSymbol(exactMathType));
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(exactMathType), replacements);
         for (JavaKind kind : new JavaKind[]{JavaKind.Int, JavaKind.Long}) {
             Class<?> type = kind.toJavaClass();
             r.register2("multiplyHigh", type, type, new InvocationPlugin() {
@@ -178,6 +232,34 @@ public class TruffleGraphBuilderPlugins {
                 }
             });
         }
+        for (JavaKind kind : new JavaKind[]{JavaKind.Float, JavaKind.Double}) {
+            r.registerConditional1(lowerer.supportsRounding(), "truncate", kind.toJavaClass(), new InvocationPlugin() {
+
+                @Override
+                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode x) {
+                    b.addPush(kind, new RoundNode(x, RoundingMode.TRUNCATE));
+                    return true;
+                }
+
+            });
+        }
+    }
+
+    public static void registerGraalCompilerDirectivesPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
+        final ResolvedJavaType graalCompilerDirectivesType = getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives");
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(graalCompilerDirectivesType));
+        r.register0("hasNextTier", new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                // This method must not be intrinsified until after graph decoding.
+                // We only know whether something is a first-tier compilation or not once we are
+                // inside a partial evaluation request.
+                // The graph builder output can be cached across compilations, so intrinsifying this
+                // in the first tier would make it invalid for second-tier
+                // compilations.
+                return false;
+            }
+        });
     }
 
     public static void registerCompilerDirectivesPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification) {
@@ -316,40 +398,66 @@ public class TruffleGraphBuilderPlugins {
                 return true;
             }
         });
+
+        for (JavaKind kind : JavaKind.values()) {
+            if ((kind.isPrimitive() && kind != JavaKind.Void) || kind == JavaKind.Object) {
+                Class<?> javaClass = getJavaClass(kind);
+                r.register1("blackhole", javaClass, new InvocationPlugin() {
+                    @Override
+                    public boolean inlineOnly() {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
+                        b.add(new BlackholeNode(value));
+                        return true;
+                    }
+                });
+            }
+        }
+
+        r.register2("castExact", Object.class, Class.class, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object, ValueNode javaClass) {
+                ValueNode nullCheckedClass = b.addNonNullCast(javaClass);
+                LogicNode condition = b.append(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), nullCheckedClass, object, true, true));
+                if (condition.isTautology()) {
+                    b.addPush(JavaKind.Object, object);
+                } else {
+                    FixedGuardNode fixedGuard = b.add(new FixedGuardNode(condition,
+                                    DeoptimizationReason.ClassCastException, DeoptimizationAction.InvalidateReprofile, false));
+                    b.addPush(JavaKind.Object, DynamicPiNode.create(b.getAssumptions(), b.getConstantReflection(), object, fixedGuard, nullCheckedClass, true, true));
+                }
+                return true;
+            }
+        });
+
+        r.register2("isExact", Object.class, Class.class, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object, ValueNode javaClass) {
+                ValueNode nullCheckedClass = b.addNonNullCast(javaClass);
+                LogicNode condition = b.append(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), nullCheckedClass, object, false, true));
+                b.addPush(JavaKind.Boolean, b.append(new ConditionalNode(condition)));
+                return true;
+            }
+        });
+    }
+
+    private static Class<?> getJavaClass(JavaKind kind) {
+        return kind == JavaKind.Object ? Object.class : kind.toJavaClass();
     }
 
     public static void registerCompilerAssertsPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification) {
         final ResolvedJavaType compilerAssertsType = getRuntime().resolveType(metaAccess, "com.oracle.truffle.api.CompilerAsserts");
         Registration r = new Registration(plugins, new ResolvedJavaSymbol(compilerAssertsType));
-        r.register1("partialEvaluationConstant", Object.class, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-                ValueNode curValue = value;
-                if (curValue instanceof BoxNode) {
-                    BoxNode boxNode = (BoxNode) curValue;
-                    curValue = boxNode.getValue();
-                }
-                if (curValue.isConstant()) {
-                    return true;
-                } else if (canDelayIntrinsification) {
-                    return false;
-                } else {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(curValue);
-                    if (curValue instanceof ValuePhiNode) {
-                        ValuePhiNode valuePhi = (ValuePhiNode) curValue;
-                        sb.append(" (");
-                        for (Node n : valuePhi.inputs()) {
-                            sb.append(n);
-                            sb.append("; ");
-                        }
-                        sb.append(")");
-                    }
-                    value.getDebug().dump(DebugContext.VERBOSE_LEVEL, value.graph(), "Graph before bailout at node %s", sb);
-                    throw b.bailout("Partial evaluation did not reduce value to a constant, is a regular compiler node: " + sb);
-                }
-            }
-        });
+        PEConstantPlugin peConstantPlugin = new PEConstantPlugin(canDelayIntrinsification);
+        r.register1("partialEvaluationConstant", Object.class, peConstantPlugin);
+        r.register1("partialEvaluationConstant", int.class, peConstantPlugin);
+        r.register1("partialEvaluationConstant", long.class, peConstantPlugin);
+        r.register1("partialEvaluationConstant", float.class, peConstantPlugin);
+        r.register1("partialEvaluationConstant", double.class, peConstantPlugin);
+        r.register1("partialEvaluationConstant", boolean.class, peConstantPlugin);
         r.register0("neverPartOfCompilation", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
@@ -371,7 +479,8 @@ public class TruffleGraphBuilderPlugins {
         });
     }
 
-    public static void registerOptimizedCallTargetPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification, KnownTruffleTypes types) {
+    public static void registerOptimizedCallTargetPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification, KnownTruffleTypes types,
+                    EconomicSet<ResolvedJavaType> primitiveBoxingTypes) {
         final ResolvedJavaType optimizedCallTargetType = getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.OptimizedCallTarget");
         Registration r = new Registration(plugins, new ResolvedJavaSymbol(optimizedCallTargetType));
         r.register2("createFrame", new ResolvedJavaSymbol(types.classFrameDescriptor), Object[].class, new InvocationPlugin() {
@@ -391,35 +500,37 @@ public class TruffleGraphBuilderPlugins {
         });
         r.register2("castArrayFixedLength", Object[].class, int.class, new InvocationPlugin() {
             @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode args, ValueNode length) {
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver,
+                            ValueNode args, ValueNode length) {
+                if (canDelayIntrinsification) {
+                    return false;
+                }
+                if (args.isConstant()) {
+                    b.addPush(JavaKind.Object, args);
+                    return true;
+                }
+
                 b.addPush(JavaKind.Object, new PiArrayNode(args, length, args.stamp(NodeView.DEFAULT)));
                 return true;
             }
         });
-        registerUnsafeCast(r, canDelayIntrinsification);
+        registerUnsafeCast(r, canDelayIntrinsification, primitiveBoxingTypes);
     }
 
-    public static void registerFrameWithoutBoxingPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification, ConstantReflectionProvider constantReflection, KnownTruffleTypes types) {
-        Registration r = new Registration(plugins, new ResolvedJavaSymbol(types.classFrameWithoutBoxing));
-        registerFrameMethods(r);
-        registerUnsafeCast(r, canDelayIntrinsification);
+    public static void registerFrameWithoutBoxingPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess, boolean canDelayIntrinsification, ConstantReflectionProvider constantReflection,
+                    KnownTruffleTypes types, EconomicSet<ResolvedJavaType> primitiveBoxingTypes) {
+        ResolvedJavaType frameWithoutBoxingType = getRuntime().resolveType(metaAccess, "org.graalvm.compiler.truffle.runtime.FrameWithoutBoxing");
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(frameWithoutBoxingType));
+        registerFrameMethods(r, constantReflection, types);
+        registerUnsafeCast(r, canDelayIntrinsification, primitiveBoxingTypes);
         registerUnsafeLoadStorePlugins(r, canDelayIntrinsification, null, JavaKind.Int, JavaKind.Long, JavaKind.Float, JavaKind.Double, JavaKind.Object);
-
-        if (TruffleCompilerOptions.getValue(Options.TruffleIntrinsifyFrameAccess)) {
-            registerFrameAccessors(r, JavaKind.Object, constantReflection, types);
-            registerFrameAccessors(r, JavaKind.Long, constantReflection, types);
-            registerFrameAccessors(r, JavaKind.Int, constantReflection, types);
-            registerFrameAccessors(r, JavaKind.Double, constantReflection, types);
-            registerFrameAccessors(r, JavaKind.Float, constantReflection, types);
-            registerFrameAccessors(r, JavaKind.Boolean, constantReflection, types);
-            registerFrameAccessors(r, JavaKind.Byte, constantReflection, types);
-        }
-    }
-
-    public static void registerFrameWithBoxingPlugins(InvocationPlugins plugins, boolean canDelayIntrinsification) {
-        Registration r = new Registration(plugins, "org.graalvm.compiler.truffle.runtime.FrameWithBoxing", null);
-        registerFrameMethods(r);
-        registerUnsafeCast(r, canDelayIntrinsification);
+        registerFrameAccessors(r, JavaKind.Object, constantReflection, types);
+        registerFrameAccessors(r, JavaKind.Long, constantReflection, types);
+        registerFrameAccessors(r, JavaKind.Int, constantReflection, types);
+        registerFrameAccessors(r, JavaKind.Double, constantReflection, types);
+        registerFrameAccessors(r, JavaKind.Float, constantReflection, types);
+        registerFrameAccessors(r, JavaKind.Boolean, constantReflection, types);
+        registerFrameAccessors(r, JavaKind.Byte, constantReflection, types);
     }
 
     /**
@@ -441,7 +552,7 @@ public class TruffleGraphBuilderPlugins {
      * complexity of an intrinsification.
      */
     private static void registerFrameAccessors(Registration r, JavaKind accessKind, ConstantReflectionProvider constantReflection, KnownTruffleTypes types) {
-        TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
+        TruffleCompilerRuntime runtime = getRuntime();
         int accessTag = runtime.getFrameSlotKindTagForJavaKind(accessKind);
         String nameSuffix = accessKind.name();
         ResolvedJavaSymbol frameSlotType = new ResolvedJavaSymbol(types.classFrameSlot);
@@ -457,7 +568,7 @@ public class TruffleGraphBuilderPlugins {
             }
         });
 
-        r.register3("set" + nameSuffix, Receiver.class, frameSlotType, accessKind == JavaKind.Object ? Object.class : accessKind.toJavaClass(), new InvocationPlugin() {
+        r.register3("set" + nameSuffix, Receiver.class, frameSlotType, getJavaClass(accessKind), new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver frameNode, ValueNode frameSlotNode, ValueNode value) {
                 int frameSlotIndex = maybeGetConstantFrameSlotIndex(frameNode, frameSlotNode, constantReflection, types);
@@ -482,13 +593,13 @@ public class TruffleGraphBuilderPlugins {
         });
     }
 
-    static int maybeGetConstantFrameSlotIndex(Receiver frameNode, ValueNode frameSlotNode, ConstantReflectionProvider constantReflection, KnownTruffleTypes knownFields) {
+    static int maybeGetConstantFrameSlotIndex(Receiver frameNode, ValueNode frameSlotNode, ConstantReflectionProvider constantReflection, KnownTruffleTypes types) {
         if (frameSlotNode.isConstant()) {
             ValueNode frameNodeValue = frameNode.get(false);
             if (frameNodeValue instanceof NewFrameNode) {
                 NewFrameNode newFrameNode = (NewFrameNode) frameNodeValue;
                 if (newFrameNode.getIntrinsifyAccessors()) {
-                    int index = constantReflection.readFieldValue(knownFields.fieldFrameSlotIndex, frameSlotNode.asJavaConstant()).asInt();
+                    int index = constantReflection.readFieldValue(types.fieldFrameSlotIndex, frameSlotNode.asJavaConstant()).asInt();
                     if (newFrameNode.isValidSlotIndex(index)) {
                         return index;
                     }
@@ -498,7 +609,7 @@ public class TruffleGraphBuilderPlugins {
         return -1;
     }
 
-    private static void registerFrameMethods(Registration r) {
+    private static void registerFrameMethods(Registration r, ConstantReflectionProvider constantReflection, KnownTruffleTypes types) {
         r.register1("getArguments", Receiver.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver frame) {
@@ -525,8 +636,8 @@ public class TruffleGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 ValueNode frame = receiver.get();
-                if (TruffleCompilerOptions.getValue(Options.TruffleIntrinsifyFrameAccess) && frame instanceof NewFrameNode && ((NewFrameNode) frame).getIntrinsifyAccessors()) {
-                    JavaConstant speculation = b.getGraph().getSpeculationLog().speculate(((NewFrameNode) frame).getIntrinsifyAccessorsSpeculation());
+                if (frame instanceof NewFrameNode && ((NewFrameNode) frame).getIntrinsifyAccessors()) {
+                    Speculation speculation = b.getGraph().getSpeculationLog().speculate(((NewFrameNode) frame).getIntrinsifyAccessorsSpeculation());
                     b.add(new DeoptimizeNode(DeoptimizationAction.InvalidateRecompile, DeoptimizationReason.RuntimeConstraint, speculation));
                     return true;
                 }
@@ -535,29 +646,48 @@ public class TruffleGraphBuilderPlugins {
                 return true;
             }
         });
+
+        r.register2("clear", Receiver.class, new ResolvedJavaSymbol(types.classFrameSlot), new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode frameSlot) {
+                int frameSlotIndex = maybeGetConstantFrameSlotIndex(receiver, frameSlot, constantReflection, types);
+                if (frameSlotIndex >= 0) {
+                    TruffleCompilerRuntime runtime = getRuntime();
+                    b.add(new VirtualFrameClearNode(receiver, frameSlotIndex, runtime.getFrameSlotKindTagForJavaKind(JavaKind.Illegal)));
+                    return true;
+                }
+                return false;
+            }
+        });
     }
 
-    public static void registerUnsafeCast(Registration r, boolean canDelayIntrinsification) {
-        r.register4("unsafeCast", Object.class, Class.class, boolean.class, boolean.class, new InvocationPlugin() {
+    public static void registerUnsafeCast(Registration r, boolean canDelayIntrinsification, EconomicSet<ResolvedJavaType> primitiveBoxTypes) {
+        r.register5("unsafeCast", Object.class, Class.class, boolean.class, boolean.class, boolean.class, new InvocationPlugin() {
             @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object, ValueNode clazz, ValueNode condition, ValueNode nonNull) {
-                if (clazz.isConstant() && nonNull.isConstant()) {
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object, ValueNode clazz, ValueNode condition, ValueNode nonNull,
+                            ValueNode isExactType) {
+                if (clazz.isConstant() && nonNull.isConstant() && isExactType.isConstant()) {
                     ConstantReflectionProvider constantReflection = b.getConstantReflection();
                     ResolvedJavaType javaType = constantReflection.asJavaType(clazz.asConstant());
                     if (javaType == null) {
                         b.push(JavaKind.Object, object);
                     } else {
-                        TypeReference type = TypeReference.createTrusted(b.getAssumptions(), javaType);
-                        if (javaType.isArray()) {
-                            type = type.asExactReference();
+                        TypeReference type;
+                        if (isExactType.asJavaConstant().asInt() != 0) {
+                            assert javaType.isConcrete() || javaType.isArray() : "exact type is not a concrete class: " + javaType;
+                            type = TypeReference.createExactTrusted(javaType);
+                        } else {
+                            type = TypeReference.createTrusted(b.getAssumptions(), javaType);
                         }
+
                         Stamp piStamp = StampFactory.object(type, nonNull.asJavaConstant().asInt() != 0);
+
                         ConditionAnchorNode valueAnchorNode = null;
                         if (condition.isConstant() && condition.asJavaConstant().asInt() == 1) {
                             // Nothing to do.
                         } else {
                             boolean skipAnchor = false;
-                            LogicNode compareNode = CompareNode.createCompareNode(object.graph(), Condition.EQ, condition, ConstantNode.forBoolean(true, object.graph()), constantReflection,
+                            LogicNode compareNode = CompareNode.createCompareNode(object.graph(), CanonicalCondition.EQ, condition, ConstantNode.forBoolean(true, object.graph()), constantReflection,
                                             NodeView.DEFAULT);
 
                             if (compareNode instanceof LogicConstantNode) {
@@ -571,21 +701,26 @@ public class TruffleGraphBuilderPlugins {
                                 valueAnchorNode = b.add(new ConditionAnchorNode(compareNode));
                             }
                         }
-                        b.addPush(JavaKind.Object, PiNode.create(object, piStamp, valueAnchorNode));
+
+                        b.addPush(JavaKind.Object, trustedBox(type, primitiveBoxTypes, PiNode.create(object, piStamp, valueAnchorNode)));
                     }
                     return true;
                 } else if (canDelayIntrinsification) {
                     return false;
                 } else {
-                    throw b.bailout("unsafeCast arguments could not reduce to a constant: " + clazz + ", " + nonNull);
+                    logPerformanceWarningUnsafeCastArgNotConst(targetMethod, clazz, nonNull, isExactType);
+                    b.push(JavaKind.Object, object);
+                    return true;
                 }
             }
         });
     }
 
-    @Deprecated
-    public static void registerUnsafeLoadStorePlugins(Registration r, JavaConstant anyConstant, JavaKind... kinds) {
-        registerUnsafeLoadStorePlugins(r, true, anyConstant, kinds);
+    private static ValueNode trustedBox(TypeReference type, EconomicSet<ResolvedJavaType> primitiveBoxTypes, ValueNode v) {
+        if (primitiveBoxTypes.contains(type.getType())) {
+            return new BoxNode.TrustedBoxedValue(v);
+        }
+        return v;
     }
 
     public static void registerUnsafeLoadStorePlugins(Registration r, boolean canDelayIntrinsification, JavaConstant anyConstant, JavaKind... kinds) {
@@ -595,7 +730,7 @@ public class TruffleGraphBuilderPlugins {
             String getName = "unsafeGet" + kindName;
             String putName = "unsafePut" + kindName;
             r.register4(getName, Object.class, long.class, boolean.class, Object.class, new CustomizedUnsafeLoadPlugin(kind, canDelayIntrinsification));
-            r.register4(putName, Object.class, long.class, kind == JavaKind.Object ? Object.class : kind.toJavaClass(), Object.class,
+            r.register4(putName, Object.class, long.class, getJavaClass(kind), Object.class,
                             new CustomizedUnsafeStorePlugin(kind, anyConstant, canDelayIntrinsification));
         }
     }
@@ -614,15 +749,18 @@ public class TruffleGraphBuilderPlugins {
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object, ValueNode offset, ValueNode condition, ValueNode location) {
             if (location.isConstant()) {
                 LocationIdentity locationIdentity;
+                boolean forceLocation;
                 if (location.isNullConstant()) {
                     locationIdentity = LocationIdentity.any();
+                    forceLocation = false;
                 } else {
                     locationIdentity = ObjectLocationIdentity.create(location.asJavaConstant());
+                    forceLocation = true;
                 }
-                LogicNode compare = b.addWithInputs(CompareNode.createCompareNode(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, Condition.EQ, condition,
+                LogicNode compare = b.add(CompareNode.createCompareNode(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, CanonicalCondition.EQ, condition,
                                 ConstantNode.forBoolean(true, object.graph()), NodeView.DEFAULT));
                 ConditionAnchorNode anchor = b.add(new ConditionAnchorNode(compare));
-                b.addPush(returnKind, b.add(new GuardedUnsafeLoadNode(b.addNonNullCast(object), offset, returnKind, locationIdentity, anchor)));
+                b.addPush(returnKind, b.add(new GuardedUnsafeLoadNode(b.addNonNullCast(object), offset, returnKind, locationIdentity, anchor, forceLocation)));
                 return true;
             } else if (canDelayIntrinsification) {
                 return false;
@@ -651,16 +789,18 @@ public class TruffleGraphBuilderPlugins {
             ValueNode locationArgument = location;
             if (locationArgument.isConstant()) {
                 LocationIdentity locationIdentity;
-                boolean forceAnyLocation = false;
+                boolean forceLocation;
                 if (locationArgument.isNullConstant()) {
                     locationIdentity = LocationIdentity.any();
+                    forceLocation = false;
                 } else if (locationArgument.asJavaConstant().equals(anyConstant)) {
                     locationIdentity = LocationIdentity.any();
-                    forceAnyLocation = true;
+                    forceLocation = true;
                 } else {
                     locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
+                    forceLocation = true;
                 }
-                b.add(new RawStoreNode(object, offset, value, kind, locationIdentity, true, null, forceAnyLocation));
+                b.add(new RawStoreNode(object, offset, value, kind, locationIdentity, true, null, forceLocation));
                 return true;
             } else if (canDelayIntrinsification) {
                 return false;
@@ -674,21 +814,99 @@ public class TruffleGraphBuilderPlugins {
 
     @SuppressWarnings("try")
     static void logPerformanceWarningLocationNotConstant(ValueNode location, ResolvedJavaMethod targetMethod, UnsafeAccessNode access) {
-        if (!PartialEvaluator.PerformanceInformationHandler.isEnabled()) {
-            return;
+        if (PerformanceInformationHandler.isWarningEnabled(PerformanceWarningKind.VIRTUAL_STORE)) {
+            StructuredGraph graph = location.graph();
+            DebugContext debug = access.getDebug();
+            try (DebugContext.Scope s = debug.scope("TrufflePerformanceWarnings", graph)) {
+                TruffleDebugJavaMethod truffleMethod = debug.contextLookup(TruffleDebugJavaMethod.class);
+                if (truffleMethod != null) {    // Never null in compilation but can be null in
+                                                // TruffleCompilerImplTest
+                    Map<String, Object> properties = new LinkedHashMap<>();
+                    properties.put("location", location);
+                    properties.put("method", targetMethod.format("%h.%n"));
+                    PerformanceInformationHandler.logPerformanceWarning(PerformanceWarningKind.VIRTUAL_STORE, truffleMethod.getCompilable(),
+                                    Collections.singletonList(access),
+                                    "location argument not PE-constant", properties);
+                    debug.dump(DebugContext.VERBOSE_LEVEL, graph, "perf warn: Location argument is not a partial evaluation constant: %s", location);
+                }
+            } catch (Throwable t) {
+                debug.handle(t);
+            }
         }
-        StructuredGraph graph = location.graph();
-        DebugContext debug = access.getDebug();
-        try (DebugContext.Scope s = debug.scope("TrufflePerformanceWarnings", graph)) {
-            TruffleDebugJavaMethod truffleMethod = debug.contextLookup(TruffleDebugJavaMethod.class);
-            String callTargetName = truffleMethod != null ? truffleMethod.getName() : "";
-            Map<String, Object> properties = new LinkedHashMap<>();
-            properties.put("location", location);
-            properties.put("method", targetMethod.format("%h.%n"));
-            PartialEvaluator.PerformanceInformationHandler.logPerformanceWarning(callTargetName, Collections.singletonList(access), "location argument not PE-constant", properties);
-            debug.dump(DebugContext.VERBOSE_LEVEL, graph, "perf warn: location argument not PE-constant: %s", location);
-        } catch (Throwable t) {
-            debug.handle(t);
+    }
+
+    @SuppressWarnings("try")
+    static void logPerformanceWarningUnsafeCastArgNotConst(ResolvedJavaMethod targetMethod, ValueNode type, ValueNode nonNull, ValueNode isExactType) {
+        if (PerformanceInformationHandler.isWarningEnabled(PerformanceWarningKind.VIRTUAL_STORE)) {
+            StructuredGraph graph = type.graph();
+            DebugContext debug = type.getDebug();
+            try (DebugContext.Scope s = debug.scope("TrufflePerformanceWarnings", graph)) {
+                TruffleDebugJavaMethod truffleMethod = debug.contextLookup(TruffleDebugJavaMethod.class);
+                if (truffleMethod != null) {    // Never null in compilation but can be null in
+                                                // TruffleCompilerImplTest
+                    Map<String, Object> properties = new LinkedHashMap<>();
+                    List<ValueNode> nonConstArgs = new ArrayList<>();
+                    properties.put("type", type);
+                    if (!type.isConstant()) {
+                        nonConstArgs.add(type);
+                    }
+                    properties.put("nonNull", nonNull);
+                    if (!nonNull.isConstant()) {
+                        nonConstArgs.add(nonNull);
+                    }
+                    properties.put("exactType", isExactType);
+                    if (!isExactType.isConstant()) {
+                        nonConstArgs.add(isExactType);
+                    }
+                    properties.put("method", targetMethod.format("%h.%n"));
+                    PerformanceInformationHandler.logPerformanceWarning(PerformanceWarningKind.VIRTUAL_STORE, truffleMethod.getCompilable(), nonConstArgs,
+                                    "unsafeCast arguments could not reduce to a constant", properties);
+                    debug.dump(DebugContext.VERBOSE_LEVEL, graph, "perf warn: unsafeCast arguments could not reduce to a constant: %s, %s, %s", type, nonNull, isExactType);
+                }
+            } catch (Throwable t) {
+                debug.handle(t);
+            }
         }
+    }
+
+    static BailoutException failPEConstant(GraphBuilderContext b, ValueNode value) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(value);
+        if (value instanceof ValuePhiNode) {
+            ValuePhiNode valuePhi = (ValuePhiNode) value;
+            sb.append(" (");
+            for (Node n : valuePhi.inputs()) {
+                sb.append(n);
+                sb.append("; ");
+            }
+            sb.append(")");
+        }
+        value.getDebug().dump(DebugContext.VERBOSE_LEVEL, value.graph(), "Graph before bailout at node %s", sb);
+        throw b.bailout("Partial evaluation did not reduce value to a constant, is a regular compiler node: " + sb);
+    }
+
+    private static final class PEConstantPlugin implements InvocationPlugin {
+        private final boolean canDelayIntrinsification;
+
+        private PEConstantPlugin(boolean canDelayIntrinsification) {
+            this.canDelayIntrinsification = canDelayIntrinsification;
+        }
+
+        @Override
+        public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
+            ValueNode curValue = value;
+            if (curValue instanceof BoxNode) {
+                BoxNode boxNode = (BoxNode) curValue;
+                curValue = boxNode.getValue();
+            }
+            if (curValue.isConstant()) {
+                return true;
+            } else if (canDelayIntrinsification) {
+                return false;
+            } else {
+                throw failPEConstant(b, value);
+            }
+        }
+
     }
 }
