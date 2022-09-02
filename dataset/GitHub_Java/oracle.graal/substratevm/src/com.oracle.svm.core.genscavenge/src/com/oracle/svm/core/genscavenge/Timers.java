@@ -1,3 +1,27 @@
+/*
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.svm.core.genscavenge;
 
 import com.oracle.svm.core.log.Log;
@@ -6,13 +30,13 @@ import com.oracle.svm.core.log.Log;
  * A single wall-clock stopwatch that can be repeatedly {@linkplain #open started} and
  * {@linkplain #close() stopped}.
  */
-class Timer implements AutoCloseable {
+final class Timer implements AutoCloseable {
     private final String name;
     private long openNanos;
     private long closeNanos;
     private long collectedNanos;
 
-    public Timer(final String name) {
+    Timer(String name) {
         this.name = name;
     }
 
@@ -30,7 +54,7 @@ class Timer implements AutoCloseable {
     public void close() {
         /* If a timer was not opened, pretend it was opened at the start of the VM. */
         if (openNanos == 0L) {
-            openNanos = HeapChunkProvider.getFirstAllocationTime();
+            openNanos = HeapImpl.getChunkProvider().getFirstAllocationTime();
         }
         closeNanos = System.nanoTime();
         collectedNanos += closeNanos - openNanos;
@@ -48,7 +72,7 @@ class Timer implements AutoCloseable {
     }
 
     /** Get all the nanoseconds collected between open/close pairs since the last reset. */
-    long getCollectedNanos() {
+    long getMeasuredNanos() {
         return collectedNanos;
     }
 
@@ -59,19 +83,20 @@ class Timer implements AutoCloseable {
         return closeNanos - openNanos;
     }
 
-    static long getTimeSinceFirstAllocation(final long nanos) {
-        return nanos - HeapChunkProvider.getFirstAllocationTime();
+    static long getTimeSinceFirstAllocation(long nanos) {
+        return nanos - HeapImpl.getChunkProvider().getFirstAllocationTime();
     }
 }
 
 /** Collection timers primarily for {@link GCImpl}. */
-public class Timers {
+final class Timers {
     final Timer blackenImageHeapRoots = new Timer("blackenImageHeapRoots");
     final Timer blackenDirtyCardRoots = new Timer("blackenDirtyCardRoots");
     final Timer blackenStackRoots = new Timer("blackenStackRoots");
     final Timer cheneyScanFromRoots = new Timer("cheneyScanFromRoots");
     final Timer cheneyScanFromDirtyRoots = new Timer("cheneyScanFromDirtyRoots");
     final Timer collection = new Timer("collection");
+    final Timer cleanCodeCache = new Timer("cleanCodeCache");
     final Timer referenceObjects = new Timer("referenceObjects");
     final Timer promotePinnedObjects = new Timer("promotePinnedObjects");
     final Timer rootScan = new Timer("rootScan");
@@ -84,11 +109,11 @@ public class Timers {
     final Timer cleanRuntimeCodeCache = new Timer("cleanRuntimeCodeCache");
     final Timer mutator = new Timer("mutator");
 
-    public Timers() {
+    Timers() {
     }
 
     void resetAllExceptMutator() {
-        final Log trace = Log.noopLog();
+        Log trace = Log.noopLog();
         trace.string("[Timers.resetAllExceptMutator:");
         verifyBefore.reset();
         collection.reset();
@@ -103,6 +128,7 @@ public class Timers {
         blackenImageHeapRoots.reset();
         blackenDirtyCardRoots.reset();
         scanGreyObjects.reset();
+        cleanCodeCache.reset();
         referenceObjects.reset();
         releaseSpaces.reset();
         verifyAfter.reset();
@@ -110,7 +136,7 @@ public class Timers {
         trace.string("]").newline();
     }
 
-    void logAfterCollection(final Log log) {
+    void logAfterCollection(Log log) {
         if (log.isEnabled()) {
             log.newline();
             log.string("  [GC nanoseconds:");
@@ -127,6 +153,7 @@ public class Timers {
             logOneTimer(log, "          ", blackenImageHeapRoots);
             logOneTimer(log, "          ", blackenDirtyCardRoots);
             logOneTimer(log, "          ", scanGreyObjects);
+            logOneTimer(log, "      ", cleanCodeCache);
             logOneTimer(log, "      ", referenceObjects);
             logOneTimer(log, "      ", releaseSpaces);
             logOneTimer(log, "    ", verifyAfter);
@@ -135,9 +162,9 @@ public class Timers {
         }
     }
 
-    static void logOneTimer(final Log log, final String prefix, final Timer timer) {
-        if (timer.getCollectedNanos() > 0) {
-            log.newline().string(prefix).string(timer.getName()).string(": ").signed(timer.getCollectedNanos());
+    static void logOneTimer(Log log, String prefix, Timer timer) {
+        if (timer.getMeasuredNanos() > 0) {
+            log.newline().string(prefix).string(timer.getName()).string(": ").signed(timer.getMeasuredNanos());
         }
     }
 
@@ -148,10 +175,10 @@ public class Timers {
      * multi-threaded.
      */
     private static void logGCLoad(Log log, String prefix, String label, Timer cTimer, Timer mTimer) {
-        final long collectionNanos = cTimer.getLastIntervalNanos();
-        final long mutatorNanos = mTimer.getLastIntervalNanos();
-        final long intervalNanos = mutatorNanos + collectionNanos;
-        final long intervalGCPercent = (((100 * collectionNanos) + (intervalNanos / 2)) / intervalNanos);
+        long collectionNanos = cTimer.getLastIntervalNanos();
+        long mutatorNanos = mTimer.getLastIntervalNanos();
+        long intervalNanos = mutatorNanos + collectionNanos;
+        long intervalGCPercent = (((100 * collectionNanos) + (intervalNanos / 2)) / intervalNanos);
         log.newline().string(prefix).string(label).string(": ").signed(intervalGCPercent).string("%");
     }
 }

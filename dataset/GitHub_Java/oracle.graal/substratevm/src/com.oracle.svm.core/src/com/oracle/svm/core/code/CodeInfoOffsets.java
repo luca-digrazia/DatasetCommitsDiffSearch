@@ -82,8 +82,4 @@ public final class CodeInfoOffsets {
     public static long codeConstantsReferenceMapIndex() {
         return OffsetOf.get(CodeInfoImpl.class, "CodeConstantsReferenceMapIndex");
     }
-
-    public static long areAllObjectsInImageHeap() {
-        return OffsetOf.get(CodeInfoImpl.class, "AllObjectsAreInImageHeap");
-    }
 }

@@ -66,7 +66,7 @@ public final class GraalDirectives {
     }
 
     /**
-     * Determines if the method is called within the scope of a Graal intrinsic.
+     * Returns true indicating whether the method is executed in a Graal intrinsic.
      */
     public static boolean inIntrinsic() {
         return false;

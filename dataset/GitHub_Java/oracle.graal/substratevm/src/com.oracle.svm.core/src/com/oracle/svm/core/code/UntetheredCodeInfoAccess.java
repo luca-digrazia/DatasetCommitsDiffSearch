@@ -48,7 +48,6 @@ public final class UntetheredCodeInfoAccess {
         return getObjectFieldUnsafe(info, CodeInfoImpl.TETHER_OBJFIELD);
     }
 
-    /** @see CodeInfoImpl#getCodeStart */
     @Uninterruptible(reason = "Must prevent the GC from freeing the CodeInfo object.", callerMustBe = true)
     public static CodePointer getCodeStart(UntetheredCodeInfo info) {
         return cast(info).getCodeStart();
@@ -60,7 +59,6 @@ public final class UntetheredCodeInfoAccess {
         return (CodePointer) ((UnsignedWord) codeInfo.getCodeStart()).add(codeInfo.getCodeSize());
     }
 
-    /** @see CodeInfoImpl#getCodeSize */
     @Uninterruptible(reason = "Must prevent the GC from freeing the CodeInfo object.", callerMustBe = true)
     public static UnsignedWord getCodeSize(UntetheredCodeInfo info) {
         return cast(info).getCodeSize();

@@ -301,9 +301,6 @@ public class SubstrateOptions {
     @Option(help = "Export Invocation API symbols.", type = OptionType.User)//
     public static final HostedOptionKey<Boolean> JNIExportSymbols = new HostedOptionKey<>(true);
 
-    @Option(help = "Alignment of AOT and JIT compiled code in bytes.")//
-    public static final HostedOptionKey<Integer> CodeAlignment = new HostedOptionKey<>(128);
-
     /*
      * Object and array allocation options.
      */
@@ -472,11 +469,11 @@ public class SubstrateOptions {
     /**
      * The alignment for AOT and JIT compiled methods. The value is constant folded during image
      * generation, i.e., cannot be changed at run time, so that it can be used in uninterruptible
-     * code. Intel advises to align code to at least 128 bytes for best cache performance.
+     * code.
      */
     @Fold
     public static int codeAlignment() {
-        return CodeAlignment.getValue();
+        return GraalOptions.LoopHeaderAlignment.getValue(HostedOptionValues.singleton());
     }
 
     @Option(help = "Populate reference queues in a separate thread rather than after a garbage collection.", type = OptionType.Expert) //

@@ -48,8 +48,6 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MemoryUtil;
 import com.oracle.svm.core.MemoryWalker;
-import com.oracle.svm.core.RuntimeAssertionsSupport;
-import com.oracle.svm.core.SubstrateGCOptions;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AlwaysInline;
 import com.oracle.svm.core.annotate.NeverInline;
@@ -240,8 +238,8 @@ public final class GCImpl implements GC {
     private void printGCBefore(String cause) {
         Log verboseGCLog = Log.log();
         HeapImpl heap = HeapImpl.getHeapImpl();
-        sizeBefore = ((SubstrateGCOptions.PrintGC.getValue() || HeapOptions.PrintHeapShape.getValue()) ? heap.getUsedChunkBytes() : WordFactory.zero());
-        if (SubstrateGCOptions.VerboseGC.getValue() && getCollectionEpoch().equal(1)) {
+        sizeBefore = ((SubstrateOptions.PrintGC.getValue() || HeapOptions.PrintHeapShape.getValue()) ? heap.getUsedChunkBytes() : WordFactory.zero());
+        if (SubstrateOptions.VerboseGC.getValue() && getCollectionEpoch().equal(1)) {
             verboseGCLog.string("[Heap policy parameters: ").newline();
             verboseGCLog.string("  YoungGenerationSize: ").unsigned(HeapPolicy.getMaximumYoungGenerationSize()).newline();
             verboseGCLog.string("      MaximumHeapSize: ").unsigned(HeapPolicy.getMaximumHeapSize()).newline();
@@ -252,7 +250,7 @@ public final class GCImpl implements GC {
                 HeapImpl.getHeapImpl().logImageHeapPartitionBoundaries(verboseGCLog).newline();
             }
         }
-        if (SubstrateGCOptions.VerboseGC.getValue()) {
+        if (SubstrateOptions.VerboseGC.getValue()) {
             verboseGCLog.string("[");
             verboseGCLog.string("[");
             long startTime = System.nanoTime();
@@ -272,8 +270,8 @@ public final class GCImpl implements GC {
     private void printGCAfter(String cause) {
         Log verboseGCLog = Log.log();
         HeapImpl heap = HeapImpl.getHeapImpl();
-        if (SubstrateGCOptions.PrintGC.getValue() || SubstrateGCOptions.VerboseGC.getValue()) {
-            if (SubstrateGCOptions.PrintGC.getValue()) {
+        if (SubstrateOptions.PrintGC.getValue() || SubstrateOptions.VerboseGC.getValue()) {
+            if (SubstrateOptions.PrintGC.getValue()) {
                 Log printGCLog = Log.log();
                 UnsignedWord sizeAfter = heap.getUsedChunkBytes();
                 printGCLog.string("[");
@@ -289,7 +287,7 @@ public final class GCImpl implements GC {
                 printGCLog.rational(timers.collection.getMeasuredNanos(), TimeUtils.nanosPerSecond, 7).string(" secs");
                 printGCLog.string("]").newline();
             }
-            if (SubstrateGCOptions.VerboseGC.getValue()) {
+            if (SubstrateOptions.VerboseGC.getValue()) {
                 verboseGCLog.string(" [");
                 long finishNanos = timers.collection.getFinish();
                 if (HeapOptions.PrintGCTimeStamps.getValue()) {
@@ -394,7 +392,7 @@ public final class GCImpl implements GC {
 
     @Fold
     static boolean runtimeAssertions() {
-        return RuntimeAssertionsSupport.singleton().desiredAssertionStatus(GCImpl.class);
+        return SubstrateOptions.getRuntimeAssertionsForClass(GCImpl.class.getName());
     }
 
     @Fold
@@ -930,7 +928,7 @@ public final class GCImpl implements GC {
         try (Timer timer = refsTimer.open()) {
             ReferenceHandler.maybeProcessCurrentlyPending();
         }
-        if (SubstrateGCOptions.VerboseGC.getValue() && HeapOptions.PrintGCTimes.getValue()) {
+        if (SubstrateOptions.VerboseGC.getValue() && HeapOptions.PrintGCTimes.getValue()) {
             Timers.logOneTimer(Log.log(), "[GC epilogue reference processing: ", refsTimer);
             Log.log().string("]");
         }

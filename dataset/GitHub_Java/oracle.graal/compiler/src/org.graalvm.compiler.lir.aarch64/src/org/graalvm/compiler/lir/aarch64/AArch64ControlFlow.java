@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -232,9 +232,9 @@ public class AArch64ControlFlow {
             AArch64Kind kind = (AArch64Kind) trueValue.getPlatformKind();
             int size = kind.getSizeInBytes() * Byte.SIZE;
             if (kind.isInteger()) {
-                masm.csel(size, asRegister(result), asRegister(trueValue), asRegister(falseValue), condition);
+                masm.cmov(size, asRegister(result), asRegister(trueValue), asRegister(falseValue), condition);
             } else {
-                masm.fcsel(size, asRegister(result), asRegister(trueValue), asRegister(falseValue), condition);
+                masm.fcmov(size, asRegister(result), asRegister(trueValue), asRegister(falseValue), condition);
             }
         }
     }

@@ -40,7 +40,6 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.CalleeSavedRegisters;
-import com.oracle.svm.core.ReservedRegisters;
 import com.oracle.svm.core.c.NonmovableArray;
 import com.oracle.svm.core.c.NonmovableArrays;
 import com.oracle.svm.core.code.FrameInfoQueryResult.ValueInfo;
@@ -492,12 +491,6 @@ class CodeInfoVerifier {
             long actualOffset = actualValue.getData();
             assert expectedOffset == actualOffset;
 
-        } else if (ReservedRegisters.singleton().isAllowedInFrameState(expectedValue)) {
-            assert actualValue.getType() == ValueType.ReservedRegister;
-            int expectedNumber = ValueUtil.asRegister((RegisterValue) expectedValue).number;
-            long actualNumber = actualValue.getData();
-            assert expectedNumber == actualNumber;
-
         } else if (CalleeSavedRegisters.supportedByPlatform() && expectedValue instanceof RegisterValue) {
             assert actualValue.getType() == ValueType.Register;
             int expectedOffset = CalleeSavedRegisters.singleton().getOffsetInFrame(ValueUtil.asRegister((RegisterValue) expectedValue));
@@ -602,21 +595,13 @@ class CodeInfoVerifier {
     private static ValueInfo findActualValue(ValueInfo[] actualObject, UnsignedWord expectedOffset, ObjectLayout objectLayout, UnsignedWord startOffset, int startIdx) {
         UnsignedWord curOffset = startOffset;
         int curIdx = startIdx;
-        while (curOffset.belowThan(expectedOffset)) {
+        while (curOffset.notEqual(expectedOffset)) {
             ValueInfo value = actualObject[curIdx];
             curOffset = curOffset.add(objectLayout.sizeInBytes(value.getKind()));
             curIdx++;
         }
-        if (curOffset.equal(expectedOffset)) {
-            return actualObject[curIdx];
-        }
-        /*
-         * If we go after the expected offset, return an illegal. Takes care of large byte array
-         * accesses, and should raise flags for other cases.
-         */
-        ValueInfo illegal = new ValueInfo();
-        illegal.type = ValueType.Illegal;
-        return illegal;
+        assert curOffset.equal(expectedOffset);
+        return actualObject[curIdx];
     }
 }
 

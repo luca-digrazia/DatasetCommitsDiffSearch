@@ -31,7 +31,7 @@ import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.RuntimeAssertionsSupport;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.Uninterruptible;
@@ -78,7 +78,7 @@ public final class CodeInfoAccess {
 
     @Fold
     static boolean haveAssertions() {
-        return RuntimeAssertionsSupport.singleton().desiredAssertionStatus(CodeInfoAccess.class);
+        return SubstrateOptions.getRuntimeAssertionsForClass(CodeInfoAccess.class.getName());
     }
 
     @Uninterruptible(reason = "The handle should only be accessed from uninterruptible code to prevent that the GC frees the CodeInfo.", callerMustBe = true)
@@ -152,7 +152,6 @@ public final class CodeInfoAccess {
         return cast(info).getCodeSize();
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static UnsignedWord getMetadataSize(CodeInfo info) {
         CodeInfoImpl impl = cast(info);
         return SizeOf.unsigned(CodeInfo.class)
