@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,23 +33,20 @@ public final class InvokeStaticNode extends QuickNode {
     protected final Method method;
     @Child private DirectCallNode directCallNode;
 
-    public InvokeStaticNode(Method method, int top, int curBCI) {
-        super(top, curBCI);
+    public InvokeStaticNode(Method method) {
         assert method.isStatic();
         this.method = method;
     }
 
     @Override
-    public int execute(final VirtualFrame frame) {
+    public int invoke(final VirtualFrame frame, int top) {
         // TODO(peterssen): Constant fold this check.
         if (directCallNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             // Obtaining call target initializes the declaring klass
-            // insert call node though insertion method so that
-            // stack frame iteration will see this node as parent
-            directCallNode = insert(DirectCallNode.create(method.getCallTarget()));
+            directCallNode = DirectCallNode.create(method.getCallTarget());
         }
-        BytecodeNode root = getBytecodesNode();
+        BytecodeNode root = (BytecodeNode) getParent();
         Object[] args = root.peekAndReleaseArguments(frame, top, false, method.getParsedSignature());
 
         Object result = directCallNode.call(args);

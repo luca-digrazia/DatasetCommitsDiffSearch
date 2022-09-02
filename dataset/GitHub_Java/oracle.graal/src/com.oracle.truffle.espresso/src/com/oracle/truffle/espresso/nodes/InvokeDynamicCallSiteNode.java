@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,22 +43,21 @@ final class InvokeDynamicCallSiteNode extends QuickNode {
 
     @CompilerDirectives.CompilationFinal(dimensions = 1) private Symbol<Type>[] parsedSignature;
 
-    InvokeDynamicCallSiteNode(StaticObject memberName, StaticObject appendix, Symbol<Type>[] parsedSignature, Meta meta, int top, int curBCI) {
-        super(top, curBCI);
+    InvokeDynamicCallSiteNode(StaticObject memberName, StaticObject appendix, Symbol<Type>[] parsedSignature, Meta meta) {
         Method target = (Method) memberName.getHiddenField(meta.HIDDEN_VMTARGET);
         this.appendix = appendix;
         this.parsedSignature = parsedSignature;
         this.returnType = Signatures.returnType(parsedSignature);
         this.returnKind = Signatures.returnKind(parsedSignature);
-        this.hasAppendix = !StaticObject.isNull(appendix);
+        this.hasAppendix = appendix != StaticObject.NULL;
         // target.getDeclaringKlass().safeInitialize();
         this.callNode = DirectCallNode.create(target.getCallTarget());
 
     }
 
     @Override
-    public int execute(final VirtualFrame frame) {
-        BytecodeNode root = getBytecodesNode();
+    public int invoke(final VirtualFrame frame, int top) {
+        BytecodeNode root = (BytecodeNode) getParent();
         int argCount = Signatures.parameterCount(parsedSignature, false);
         Object[] args = root.peekAndReleaseBasicArgumentsWithArray(frame, top, parsedSignature, new Object[argCount + (hasAppendix ? 1 : 0)], argCount, 0);
         if (hasAppendix) {

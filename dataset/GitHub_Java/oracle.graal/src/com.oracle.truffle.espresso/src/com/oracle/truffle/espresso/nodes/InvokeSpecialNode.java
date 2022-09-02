@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,15 +31,14 @@ public final class InvokeSpecialNode extends QuickNode {
     protected final Method method;
     @Child private DirectCallNode directCallNode;
 
-    public InvokeSpecialNode(Method method, int top, int callerBCI) {
-        super(top, callerBCI);
+    public InvokeSpecialNode(Method method) {
         this.method = method;
         this.directCallNode = DirectCallNode.create(method.getCallTarget());
     }
 
     @Override
-    public int execute(final VirtualFrame frame) {
-        BytecodeNode root = getBytecodesNode();
+    public int invoke(final VirtualFrame frame, int top) {
+        BytecodeNode root = (BytecodeNode) getParent();
         // TODO(peterssen): IsNull Node?
         Object receiver = nullCheck(root.peekReceiver(frame, top, method));
         Object[] args = root.peekAndReleaseArguments(frame, top, true, method.getParsedSignature());
