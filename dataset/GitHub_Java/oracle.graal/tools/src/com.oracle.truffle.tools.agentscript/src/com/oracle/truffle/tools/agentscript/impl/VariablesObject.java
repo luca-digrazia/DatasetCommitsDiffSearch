@@ -25,28 +25,32 @@
 package com.oracle.truffle.tools.agentscript.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.tools.agentscript.FrameLibrary;
+import java.util.Set;
+import java.util.TreeSet;
 
+@SuppressWarnings("unused")
 @ExportLibrary(InteropLibrary.class)
 final class VariablesObject implements TruffleObject {
 
     private final TruffleInstrument.Env env;
     private final Node where;
-    private final VirtualFrame frame;
+    private final Frame frame;
 
-    VariablesObject(TruffleInstrument.Env env, Node where, VirtualFrame frame) {
+    VariablesObject(TruffleInstrument.Env env, Node where, Frame frame) {
         this.env = env;
         this.where = where;
-        this.frame = frame;
+        this.frame = frame.materialize();
     }
 
     @ExportMessage
@@ -54,43 +58,21 @@ final class VariablesObject implements TruffleObject {
         return true;
     }
 
-    @ExportMessage
-    static Object getMembers(VariablesObject obj, boolean includeInternal) {
-        return new Object[0];
-    }
-
     @CompilerDirectives.TruffleBoundary
     @ExportMessage
-    Object readMember(String member) throws UnknownIdentifierException {
-        InteropLibrary iop = InteropLibrary.getFactory().getUncached();
-        for (Scope scope : env.findLocalScopes(where, frame)) {
-            if (scope == null) {
-                continue;
-            }
-            if (member.equals(scope.getReceiverName())) {
-                return scope.getReceiver();
-            }
-            Object variable = readMemberImpl(member, scope.getVariables(), iop);
-            if (variable != null) {
-                return variable;
-            }
-            Object argument = readMemberImpl(member, scope.getArguments(), iop);
-            if (argument != null) {
-                return argument;
-            }
+    Object getMembers(boolean includeInternal, @CachedLibrary(limit = "1") FrameLibrary frameLibrary) {
+        Set<String> names = new TreeSet<>();
+        try {
+            frameLibrary.collectNames(AccessorFrameLibrary.DEFAULT.create(where, frame, env), names);
+        } catch (InteropException ex) {
+            throw AgentException.raise(ex);
         }
-        throw UnknownIdentifierException.create(member);
+        return ArrayObject.wrap(names);
     }
 
-    static Object readMemberImpl(String name, Object map, InteropLibrary iop) {
-        if (map != null && iop.hasMembers(map)) {
-            try {
-                return iop.readMember(map, name);
-            } catch (InteropException e) {
-                return null;
-            }
-        }
-        return null;
+    @ExportMessage
+    Object readMember(String member, @CachedLibrary(limit = "1") FrameLibrary frameLibrary) throws UnknownIdentifierException {
+        return frameLibrary.readMember(AccessorFrameLibrary.DEFAULT.create(where, frame, env), member);
     }
 
     @ExportMessage
