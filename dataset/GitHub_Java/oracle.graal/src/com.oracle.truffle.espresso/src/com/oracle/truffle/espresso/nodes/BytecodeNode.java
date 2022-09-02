@@ -1455,7 +1455,9 @@ public final class BytecodeNode extends EspressoMethodNode {
             if (bs.currentBC(curBCI) == QUICK) {
                 quick = nodes[bs.readCPI(curBCI)];
             } else {
-                quick = injectQuick(curBCI, CheckCastNodeGen.create(bs.readCPI(curBCI), top, curBCI));
+                Klass typeToCheck;
+                typeToCheck = resolveType(opcode, bs.readCPI(curBCI));
+                quick = injectQuick(curBCI, CheckCastNodeGen.create(typeToCheck, top, curBCI));
             }
         }
         return quick.execute(frame) - Bytecodes.stackEffectOf(opcode);
@@ -1469,7 +1471,9 @@ public final class BytecodeNode extends EspressoMethodNode {
             if (bs.currentBC(curBCI) == QUICK) {
                 quick = nodes[bs.readCPI(curBCI)];
             } else {
-                quick = injectQuick(curBCI, InstanceOfNodeGen.create(bs.readCPI(curBCI), top, curBCI));
+                Klass typeToCheck;
+                typeToCheck = resolveType(opcode, bs.readCPI(curBCI));
+                quick = injectQuick(curBCI, InstanceOfNodeGen.create(typeToCheck, top, curBCI));
             }
         }
         return quick.execute(frame) - Bytecodes.stackEffectOf(opcode);
@@ -1657,8 +1661,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
     // region Class/Method/Field resolution
 
-    // Exposed to CheckCastNode and InstanceOfNode
-    public Klass resolveType(int opcode, char cpi) {
+    private Klass resolveType(int opcode, char cpi) {
         assert opcode == INSTANCEOF || opcode == CHECKCAST || opcode == NEW || opcode == ANEWARRAY || opcode == MULTIANEWARRAY;
         return getConstantPool().resolvedKlassAt(getMethod().getDeclaringKlass(), cpi);
     }
