@@ -27,7 +27,6 @@ import static com.oracle.truffle.espresso.classfile.Constants.FIELD_ID_TYPE;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.espresso.descriptors.ByteSequence;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
@@ -100,25 +99,18 @@ final class LinkedField extends StaticProperty {
         }
     }
 
-    static String idFromNameAndType(Symbol<Name> name, ByteSequence t) {
+    static String idFromNameAndType(Symbol<Name> name, Symbol<Type> type) {
+        String typeString = type.toString();
         // Strip 'L' and ';' from the type symbol.
-        int arrayDims = Types.getArrayDimensions(t);
-        if (arrayDims > 0) {
-            // Component string
-            StringBuilder typeString = new StringBuilder(idFromNameAndType(name, t.subSequence(arrayDims, t.length() - arrayDims)));
-            typeString.append('_');
-            // Append a number of ']'
+        if (Types.isReference(type)) {
+            int arrayDims = Types.getArrayDimensions(type);
+            typeString = typeString.substring(arrayDims + 1, typeString.length() - 1);
             while (arrayDims > 0) {
-                typeString.append(']');
+                typeString = typeString + "[]";
                 arrayDims--;
             }
-            return typeString.toString();
         }
-        String typeString = t.toString();
-        if (Types.isReference(t)) {
-            typeString = typeString.substring(1, typeString.length() - 1);
-            typeString = typeString.replace('/', '_');
-        }
+        typeString = typeString.replace('/', '_');
         return name.toString() + "_" + typeString;
     }
 
