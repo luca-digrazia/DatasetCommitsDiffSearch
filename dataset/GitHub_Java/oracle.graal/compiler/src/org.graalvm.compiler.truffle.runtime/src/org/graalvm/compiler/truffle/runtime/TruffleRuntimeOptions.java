@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -92,22 +93,18 @@ public final class TruffleRuntimeOptions {
         return scope != null ? scope.options : null;
     }
 
-    /**
-     * Get Truffle-related compilation options as a Map to be passed to the compiler. Some
-     * Truffle-like options are converted into Graal compiler options.
-     */
-    public static Map<String, Object> getOptionsForCompiler() {
-        final OptionValues values = getOptions();
-        final Map<String, Object> map = new HashMap<>();
-
+    public static Map<String, Object> asMap(OptionValues values) {
+        if (values == null) {
+            return Collections.emptyMap();
+        }
+        final Map<String, Object> m = new HashMap<>();
         for (OptionDescriptor desc : values.getDescriptors()) {
             final OptionKey<?> key = desc.getKey();
             if (values.hasBeenSet(key)) {
-                map.put(desc.getName(), values.get(key));
+                m.put(desc.getName(), values.get(key));
             }
         }
-
-        return map;
+        return m;
     }
 
     public static class TruffleRuntimeOptionsOverrideScope implements AutoCloseable {
