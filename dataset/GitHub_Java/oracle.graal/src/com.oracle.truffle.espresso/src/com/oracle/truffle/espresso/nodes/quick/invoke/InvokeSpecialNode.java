@@ -31,6 +31,7 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
+import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public final class InvokeSpecialNode extends QuickNode {
     @CompilationFinal protected MethodVersion method;
@@ -46,17 +47,30 @@ public final class InvokeSpecialNode extends QuickNode {
     public int execute(final VirtualFrame frame) {
         BytecodeNode root = getBytecodesNode();
         if (!method.getAssumption().isValid()) {
+            // update to the latest method version and grab a new direct call target
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            // update to the latest method verison and grab a new direct call target
             method = method.getMethod().getMethodVersion();
-            directCallNode = DirectCallNode.create(method.getMethod().getCallTarget());
+            directCallNode = DirectCallNode.create(method.getCallTarget());
+            adoptChildren();
         }
         // TODO(peterssen): IsNull Node?
-        Object receiver = nullCheck(root.peekReceiver(frame, top, method.getMethod()));
         Object[] args = root.peekAndReleaseArguments(frame, top, true, method.getMethod().getParsedSignature());
-        assert receiver == args[0] : "receiver must be the first argument";
+        nullCheck((StaticObject) args[0]); // nullcheck receiver
         Object result = directCallNode.call(args);
-        int resultAt = top - Signatures.slotsForParameters(method.getMethod().getParsedSignature()) - 1; // -receiver
-        return (resultAt - top) + root.putKind(frame, resultAt, result, method.getMethod().getReturnKind());
+        return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, method.getMethod().getReturnKind());
+    }
+
+    @Override
+    public boolean producedForeignObject(VirtualFrame frame) {
+        return method.getMethod().getReturnKind().isObject() && getBytecodesNode().peekObject(frame, getResultAt()).isForeignObject();
+    }
+
+    private int getResultAt() {
+        return top - Signatures.slotsForParameters(method.getMethod().getParsedSignature()) - 1; // -receiver
+    }
+
+    @Override
+    public boolean removedByRedefintion() {
+        return method.getMethod().isRemovedByRedefition();
     }
 }

@@ -31,7 +31,9 @@ import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -39,7 +41,6 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 public abstract class InvokeInterfaceNode extends QuickNode {
 
     final Method resolutionSeed;
-    final int itableIndex;
     final Klass declaringKlass;
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
@@ -47,11 +48,17 @@ public abstract class InvokeInterfaceNode extends QuickNode {
     protected abstract Object executeInterface(StaticObject receiver, Object[] args);
 
     @SuppressWarnings("unused")
-    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "receiver.getKlass() == cachedKlass")
+    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "receiver.getKlass() == cachedKlass", assumptions = "resolvedMethod.getAssumption()")
     Object callVirtualDirect(StaticObject receiver, Object[] args,
                     @Cached("receiver.getKlass()") Klass cachedKlass,
-                    @Cached("methodLookup(receiver, itableIndex, declaringKlass)") Method resolvedMethod,
-                    @Cached("create(resolvedMethod.getCallTarget())") DirectCallNode directCallNode) {
+                    @Cached("methodLookup(receiver, resolutionSeed, declaringKlass)") MethodVersion resolvedMethod,
+                    @Cached("create(resolvedMethod.getMethod().getCallTargetNoInit())") DirectCallNode directCallNode) {
+        // getCallTarget doesn't ensure declaring class is initialized
+        // so we need the below check prior to executing the method
+        if (!resolvedMethod.getMethod().getDeclaringKlass().isInitialized()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            resolvedMethod.getMethod().getDeclaringKlass().safeInitialize();
+        }
         return directCallNode.call(args);
     }
 
@@ -59,25 +66,26 @@ public abstract class InvokeInterfaceNode extends QuickNode {
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
         // itable Lookup
-        return indirectCallNode.call(methodLookup(receiver, itableIndex, declaringKlass).getCallTarget(), arguments);
+        return indirectCallNode.call(methodLookup(receiver, resolutionSeed, declaringKlass).getMethod().getCallTarget(), arguments);
     }
 
     InvokeInterfaceNode(Method resolutionSeed, int top, int curBCI) {
         super(top, curBCI);
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
-        this.itableIndex = resolutionSeed.getITableIndex();
         this.declaringKlass = resolutionSeed.getDeclaringKlass();
     }
 
-    static Method methodLookup(StaticObject receiver, int itableIndex, Klass declaringKlass) {
+    protected static MethodVersion methodLookup(StaticObject receiver, Method resolutionSeed, Klass declaringKlass) {
         assert !receiver.getKlass().isArray();
-        Method method = ((ObjectKlass) receiver.getKlass()).itableLookup(declaringKlass, itableIndex);
+        int iTableIndex = resolutionSeed.getITableIndex();
+        Method method = ((ObjectKlass) receiver.getKlass()).itableLookup(declaringKlass, iTableIndex);
         if (!method.isPublic()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw receiver.getKlass().getMeta().throwEx(IllegalAccessError.class);
+            Meta meta = receiver.getKlass().getMeta();
+            throw Meta.throwException(meta.java_lang_IllegalAccessError);
         }
-        return method;
+        return method.getMethodVersion();
     }
 
     @Override
@@ -88,12 +96,18 @@ public abstract class InvokeInterfaceNode extends QuickNode {
         // TODO(peterssen): Maybe refrain from exposing the whole root node?.
         BytecodeNode root = getBytecodesNode();
         // TODO(peterssen): IsNull Node?.
-        final StaticObject receiver = nullCheck(root.peekReceiver(frame, top, resolutionSeed));
-        assert receiver != null;
         final Object[] args = root.peekAndReleaseArguments(frame, top, true, resolutionSeed.getParsedSignature());
-        assert receiver == args[0] : "receiver must be the first argument";
+        final StaticObject receiver = nullCheck((StaticObject) args[0]);
         Object result = executeInterface(receiver, args);
-        int resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
-        return (resultAt - top) + root.putKind(frame, resultAt, result, Signatures.returnKind(resolutionSeed.getParsedSignature()));
+        return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, Signatures.returnKind(resolutionSeed.getParsedSignature()));
+    }
+
+    @Override
+    public boolean producedForeignObject(VirtualFrame frame) {
+        return resolutionSeed.getReturnKind().isObject() && getBytecodesNode().peekObject(frame, getResultAt()).isForeignObject();
+    }
+
+    private int getResultAt() {
+        return top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
     }
 }

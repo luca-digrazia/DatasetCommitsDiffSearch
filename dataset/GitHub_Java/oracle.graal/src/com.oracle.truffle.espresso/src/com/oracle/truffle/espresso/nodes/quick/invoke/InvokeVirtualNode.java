@@ -40,7 +40,6 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 public abstract class InvokeVirtualNode extends QuickNode {
 
     final Method resolutionSeed;
-    final int resultAt;
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
 
@@ -67,7 +66,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
         // vtable lookup.
         MethodVersion target = methodLookup(receiver, resolutionSeed);
         if (!target.getMethod().hasCode()) {
-            enterExceptionProfile();
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             Meta meta = receiver.getKlass().getMeta();
             throw Meta.throwException(meta.java_lang_AbstractMethodError);
         }
@@ -78,7 +77,6 @@ public abstract class InvokeVirtualNode extends QuickNode {
         super(top, curBCI);
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
-        this.resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver;
     }
 
     static MethodVersion methodLookup(StaticObject receiver, Method resolutionSeed) {
@@ -94,14 +92,17 @@ public abstract class InvokeVirtualNode extends QuickNode {
     }
 
     @Override
-    public final int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
+    public final int execute(final VirtualFrame frame) {
         // Method signature does not change across methods.
         // Can safely use the constant signature from `resolutionSeed` instead of the non-constant
         // signature from the lookup.
-        Object[] args = BytecodeNode.popArguments(primitives, refs, top, true, resolutionSeed.getParsedSignature());
+        // TODO(peterssen): Maybe refrain from exposing the whole root node?.
+        BytecodeNode root = getBytecodesNode();
+        // TODO(peterssen): IsNull Node?.
+        Object[] args = root.peekAndReleaseArguments(frame, top, true, resolutionSeed.getParsedSignature());
         StaticObject receiver = nullCheck((StaticObject) args[0]);
         Object result = executeVirtual(receiver, args);
-        return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), result, resolutionSeed.getReturnKind());
+        return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, resolutionSeed.getReturnKind());
     }
 
     @Override
@@ -110,11 +111,11 @@ public abstract class InvokeVirtualNode extends QuickNode {
     }
 
     @Override
-    public final boolean producedForeignObject(Object[] refs) {
-        return resolutionSeed.getReturnKind().isObject() && BytecodeNode.peekObject(refs, getResultAt()).isForeignObject();
+    public boolean producedForeignObject(VirtualFrame frame) {
+        return resolutionSeed.getReturnKind().isObject() && getBytecodesNode().peekObject(frame, getResultAt()).isForeignObject();
     }
 
     private int getResultAt() {
-        return resultAt;
+        return top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
     }
 }
