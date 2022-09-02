@@ -162,10 +162,10 @@ public final class TruffleLogger {
         return loggerCache.getOrCreateLogger(id, loggerName);
     }
 
-    static LoggerCache createLoggerCache(Object loggerCache, Map<String, Level> logLevels) {
-        LoggerCache cache = new LoggerCache(loggerCache);
+    static LoggerCache createLoggerCache(Object spi, Map<String, Level> logLevels) {
+        LoggerCache cache = new LoggerCache(spi);
         if (!logLevels.isEmpty()) {
-            Object vmObject = LanguageAccessor.engineAccess().getLoggerOwner(loggerCache);
+            Object vmObject = LanguageAccessor.engineAccess().getLoggerOwner(spi);
             assert vmObject != null;
             cache.addLogLevelsForContext(vmObject, logLevels);
         }
@@ -957,9 +957,8 @@ public final class TruffleLogger {
 
     static final class LoggerCache {
         private static final ReferenceQueue<Object> contextsRefQueue = new ReferenceQueue<>();
-        private static final LoggerCache INSTANCE = new LoggerCache(LanguageAccessor.engineAccess().createDefaultLoggerCache());
-        private final Object loggerCache;   // an instance of
-                                            // com.oracle.truffle.polyglot.PolyglotLoggers.LoggerCache
+        private static final LoggerCache INSTANCE = new LoggerCache(LanguageAccessor.engineAccess().createDefaultLoggerCacheSPI());
+        private final Object spi;
         private final TruffleLogger polyglotRootLogger;
         private final Map<String, NamedLoggerRef> loggers;
         private final LoggerNode root;
@@ -967,9 +966,9 @@ public final class TruffleLogger {
         private Map<String, Level> effectiveLevels;
         private volatile Set<String> knownIds;
 
-        private LoggerCache(Object loggerCacheSpi) {
-            Objects.requireNonNull(loggerCacheSpi);
-            this.loggerCache = loggerCacheSpi;
+        private LoggerCache(Object spi) {
+            Objects.requireNonNull(spi, "SPI must be non null.");
+            this.spi = spi;
             this.polyglotRootLogger = new TruffleLogger(this);
             this.loggers = new HashMap<>();
             this.loggers.put(ROOT_NAME, new NamedLoggerRef(this.polyglotRootLogger, ROOT_NAME));
@@ -990,7 +989,7 @@ public final class TruffleLogger {
         }
 
         synchronized void close() {
-            Object owner = LanguageAccessor.engineAccess().getLoggerOwner(loggerCache);
+            Object owner = LanguageAccessor.engineAccess().getLoggerOwner(spi);
             if (owner == null) {
                 return;
             }
@@ -1084,7 +1083,7 @@ public final class TruffleLogger {
         }
 
         private Object getSPI() {
-            return this.loggerCache;
+            return this.spi;
         }
 
         private synchronized TruffleLogger getLogger(final String loggerName) {
