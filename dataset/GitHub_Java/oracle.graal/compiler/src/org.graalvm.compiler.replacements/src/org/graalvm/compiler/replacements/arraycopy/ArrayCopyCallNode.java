@@ -29,8 +29,6 @@ import static org.graalvm.compiler.nodeinfo.InputType.Memory;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
 
-import java.util.Arrays;
-
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -132,8 +130,6 @@ public final class ArrayCopyCallNode extends FixedWithNextNode implements Lowera
         this.foreignCalls = foreignCalls;
         this.wordJavaKind = wordTypes.getWordKind();
         this.heapWordSize = heapWordSize;
-
-        assert !getKilledLocationIdentity().equals(LocationIdentity.any()) || this.elementKind.isObject();
     }
 
     public ValueNode getSource() {
@@ -175,9 +171,8 @@ public final class ArrayCopyCallNode extends FixedWithNextNode implements Lowera
     public void lower(LoweringTool tool) {
         if (graph().getGuardsStage().areFrameStatesAtDeopts()) {
             updateAlignedDisjoint(tool.getMetaAccess());
-            ForeignCallDescriptor desc = foreignCalls.lookupArraycopyDescriptor(elementKind, isAligned(), isDisjoint(), isUninitialized(), killedLocationIdentity);
-            assert desc != null : "no descriptor for arraycopy " + elementKind + ", aligned " + isAligned() + ", disjoint " + isDisjoint() + ", uninit " + isUninitialized() + ", killing " +
-                            killedLocationIdentity;
+            ForeignCallDescriptor desc = foreignCalls.lookupArraycopyDescriptor(elementKind, isAligned(), isDisjoint(), isUninitialized(),
+                            killedLocationIdentity.equals(LocationIdentity.any()));
             StructuredGraph graph = graph();
             ValueNode srcAddr = computeBase(tool, getSource(), getSourcePosition());
             ValueNode destAddr = computeBase(tool, getDestination(), getDestinationPosition());
@@ -186,9 +181,6 @@ public final class ArrayCopyCallNode extends FixedWithNextNode implements Lowera
                 len = IntegerConvertNode.convert(len, StampFactory.forKind(JavaKind.Long), graph(), NodeView.DEFAULT);
             }
             ForeignCallNode call = graph.add(new ForeignCallNode(desc, srcAddr, destAddr, len));
-            LocationIdentity[] callKills = call.getKilledLocationIdentities();
-            assert callKills.length == 1 && callKills[0].equals(getKilledLocationIdentity()) : String.format("%s: copy of %s from %s should kill %s, unexpected kills: %s", call, elementKind,
-                            getLocationIdentity(), getKilledLocationIdentity(), Arrays.toString(callKills));
             graph.replaceFixedWithFixed(this, call);
         }
     }
