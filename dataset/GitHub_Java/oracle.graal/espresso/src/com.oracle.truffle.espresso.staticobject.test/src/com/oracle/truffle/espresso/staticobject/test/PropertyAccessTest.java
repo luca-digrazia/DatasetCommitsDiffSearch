@@ -23,10 +23,10 @@
 package com.oracle.truffle.espresso.staticobject.test;
 
 import com.oracle.truffle.espresso.staticobject.DefaultStaticObject;
-import com.oracle.truffle.espresso.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.espresso.staticobject.StaticProperty;
 import com.oracle.truffle.espresso.staticobject.StaticPropertyKind;
 import com.oracle.truffle.espresso.staticobject.StaticShape;
+import com.oracle.truffle.espresso.staticobject.StaticShapeBuilder;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.BeforeClass;
@@ -37,7 +37,7 @@ import org.junit.experimental.theories.Theory;
 import org.junit.runner.RunWith;
 
 @RunWith(Theories.class)
-public class PropertyAccessTest extends StaticObjectTest {
+public class PropertyAccessTest {
     @DataPoints //
     public static TestDescriptor[] descriptors;
 
@@ -90,7 +90,7 @@ public class PropertyAccessTest extends StaticObjectTest {
                 case Byte:
                     descriptors[i] = new TestDescriptor(
                                     StaticPropertyKind.Byte,
-                                    (byte) 0x01,
+                                    (byte) 42,
                                     (byte) 0,
                                     (p, obj) -> p.getByte(obj),
                                     (p, obj, val) -> p.setByte(obj, (byte) val));
@@ -98,7 +98,7 @@ public class PropertyAccessTest extends StaticObjectTest {
                 case Char:
                     descriptors[i] = new TestDescriptor(
                                     StaticPropertyKind.Char,
-                                    (char) 0x0203,
+                                    (char) 42,
                                     (char) 0,
                                     (p, obj) -> p.getChar(obj),
                                     (p, obj, val) -> p.setChar(obj, (char) val));
@@ -106,7 +106,7 @@ public class PropertyAccessTest extends StaticObjectTest {
                 case Double:
                     descriptors[i] = new TestDescriptor(
                                     StaticPropertyKind.Double,
-                                    Double.longBitsToDouble(0x161718191a1b1c1dL),
+                                    42D,
                                     0D,
                                     (p, obj) -> p.getDouble(obj),
                                     (p, obj, val) -> p.setDouble(obj, (double) val));
@@ -114,7 +114,7 @@ public class PropertyAccessTest extends StaticObjectTest {
                 case Float:
                     descriptors[i] = new TestDescriptor(
                                     StaticPropertyKind.Float,
-                                    Float.intBitsToFloat(0x12131415),
+                                    42F,
                                     0F,
                                     (p, obj) -> p.getFloat(obj),
                                     (p, obj, val) -> p.setFloat(obj, (float) val));
@@ -122,7 +122,7 @@ public class PropertyAccessTest extends StaticObjectTest {
                 case Int:
                     descriptors[i] = new TestDescriptor(
                                     StaticPropertyKind.Int,
-                                    0x0607_0809,
+                                    42,
                                     0,
                                     (p, obj) -> p.getInt(obj),
                                     (p, obj, val) -> p.setInt(obj, (int) val));
@@ -130,7 +130,7 @@ public class PropertyAccessTest extends StaticObjectTest {
                 case Long:
                     descriptors[i] = new TestDescriptor(
                                     StaticPropertyKind.Long,
-                                    0x0a0b_0c0d_0e0f_10_11L,
+                                    42L,
                                     0L,
                                     (p, obj) -> p.getLong(obj),
                                     (p, obj, val) -> p.setLong(obj, (long) val));
@@ -138,7 +138,7 @@ public class PropertyAccessTest extends StaticObjectTest {
                 case Short:
                     descriptors[i] = new TestDescriptor(
                                     StaticPropertyKind.Short,
-                                    (short) 0x0405,
+                                    (short) 42,
                                     (short) 0,
                                     (p, obj) -> p.getShort(obj),
                                     (p, obj, val) -> p.setShort(obj, (short) val));
@@ -159,10 +159,10 @@ public class PropertyAccessTest extends StaticObjectTest {
 
     @Theory
     public void correctAccessors(TestDescriptor descriptor) {
-        StaticShape.Builder builder = StaticShape.newBuilder();
-        StaticProperty property = new DefaultStaticProperty("property", descriptor.kind, false);
-        builder.property(property);
-        StaticShape<DefaultStaticObject.Factory> shape = builder.build();
+        StaticShapeBuilder builder = StaticShape.newBuilder();
+        StaticProperty property = new StaticProperty(descriptor.kind);
+        builder.property(property, "property", false);
+        StaticShape<DefaultStaticObject.DefaultStaticObjectFactory> shape = builder.build();
         DefaultStaticObject object = shape.getFactory().create();
 
         // Check the default value
@@ -178,14 +178,14 @@ public class PropertyAccessTest extends StaticObjectTest {
     public void wrongAccessors(TestDescriptor expectedDescriptor, TestDescriptor actualDescriptor) {
         Assume.assumeFalse(expectedDescriptor.equals(actualDescriptor));
 
-        StaticShape.Builder builder = StaticShape.newBuilder();
-        StaticProperty property = new DefaultStaticProperty("property", expectedDescriptor.kind, false);
-        builder.property(property);
-        StaticShape<DefaultStaticObject.Factory> shape = builder.build();
+        StaticShapeBuilder builder = StaticShape.newBuilder();
+        StaticProperty property = new StaticProperty(expectedDescriptor.kind);
+        builder.property(property, "property", false);
+        StaticShape<DefaultStaticObject.DefaultStaticObjectFactory> shape = builder.build();
         DefaultStaticObject object = shape.getFactory().create();
 
         // Check that wrong getters throw exceptions
-        String expectedExceptionMessage = "Static property 'property' of kind '" + expectedDescriptor.kind.name() + "' cannot be accessed as '" + actualDescriptor.kind + "'";
+        String expectedExceptionMessage = "Static property of '" + expectedDescriptor.kind.name() + "' kind cannot be accessed as '" + actualDescriptor.kind + "'";
         try {
             actualDescriptor.getter.get(property, object);
             Assert.fail();
@@ -197,30 +197,6 @@ public class PropertyAccessTest extends StaticObjectTest {
             Assert.fail();
         } catch (RuntimeException e) {
             Assert.assertEquals(expectedExceptionMessage, e.getMessage());
-        }
-    }
-
-    @Theory
-    @SuppressWarnings("unused")
-    public void wrongShape(TestDescriptor descriptor) {
-        StaticShape.Builder b1 = StaticShape.newBuilder();
-        StaticProperty p1 = new DefaultStaticProperty("property", descriptor.kind, false);
-        b1.property(p1);
-        StaticShape<DefaultStaticObject.Factory> s1 = b1.build();
-
-        StaticShape.Builder b2 = StaticShape.newBuilder();
-        StaticProperty p2 = new DefaultStaticProperty("property", descriptor.kind, false);
-        b2.property(p2);
-        StaticShape<DefaultStaticObject.Factory> s2 = b2.build();
-        DefaultStaticObject o2 = s2.getFactory().create();
-
-        try {
-            descriptor.setter.set(p1, o2, descriptor.testValue);
-            Assert.fail();
-        } catch (ClassCastException e) {
-            Assert.assertTrue(!ARRAY_BASED);
-        } catch (RuntimeException e) {
-            Assert.assertTrue(e.getMessage().startsWith("Incompatible shape on property access."));
         }
     }
 
