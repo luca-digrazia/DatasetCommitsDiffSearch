@@ -156,15 +156,7 @@ public final class Symbol<T> extends ByteSequence {
         // Boxing and String
         public static final Symbol<Name> value = StaticSymbols.putName("value");
         public static final Symbol<Name> valueOf = StaticSymbols.putName("valueOf");
-        public static final Symbol<Name> booleanValue = StaticSymbols.putName("booleanValue");
-        public static final Symbol<Name> byteValue = StaticSymbols.putName("byteValue");
-        public static final Symbol<Name> shortValue = StaticSymbols.putName("shortValue");
-        public static final Symbol<Name> intValue = StaticSymbols.putName("intValue");
-        public static final Symbol<Name> longValue = StaticSymbols.putName("longValue");
-        public static final Symbol<Name> floatValue = StaticSymbols.putName("floatValue");
-        public static final Symbol<Name> doubleValue = StaticSymbols.putName("doubleValue");
-
-        // Field, Thread, Module and MemberName
+        // Field, Thread and MemberName
         public static final Symbol<Name> name = StaticSymbols.putName("name");
         // Thread and Runnable
         public static final Symbol<Name> run = StaticSymbols.putName("run");
@@ -207,17 +199,12 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> getSystemClassLoader = StaticSymbols.putName("getSystemClassLoader");
         public static final Symbol<Name> loadClass = StaticSymbols.putName("loadClass");
         public static final Symbol<Name> parent = StaticSymbols.putName("parent");
-        public static final Symbol<Name> unnamedModule = StaticSymbols.putName("unnamedModule");
         public static final Symbol<Name> HIDDEN_CLASS_LOADER_REGISTRY = StaticSymbols.putName("0HIDDEN_CLASS_LOADER_REGISTRY");
-
-        // j.l.Module
-        public static final Symbol<Name> loader = StaticSymbols.putName("loader");
 
         // j.l.String
         public static final Symbol<Name> hash = StaticSymbols.putName("hash");
         public static final Symbol<Name> hashCode = StaticSymbols.putName("hashCode");
         public static final Symbol<Name> length = StaticSymbols.putName("length");
-        public static final Symbol<Name> coder = StaticSymbols.putName("coder");
 
         // j.l.Throwable
         public static final Symbol<Name> backtrace = StaticSymbols.putName("backtrace");
@@ -393,9 +380,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> HIDDEN_MIRROR_KLASS = StaticSymbols.putName("0HIDDEN_MIRROR_KLASS");
         public static final Symbol<Name> HIDDEN_SIGNERS = StaticSymbols.putName("0HIDDEN_SIGNERS");
         public static final Symbol<Name> HIDDEN_PROTECTION_DOMAIN = StaticSymbols.putName("0HIDDEN_PROTECTION_DOMAIN");
-
-        // Module
-        public static final Symbol<Name> HIDDEN_MODULE_ENTRY = StaticSymbols.putName("0HIDDEN_MODULE_ENTRY");
 
         // Reference
         public static final Symbol<Name> HIDDEN_HOST_REFERENCE = StaticSymbols.putName("0HIDDEN_HOST_REFERENCE");
@@ -606,9 +590,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> java_lang_invoke_LambdaForm$Hidden = StaticSymbols.putType("Ljava/lang/invoke/LambdaForm$Hidden;");
         public static final Symbol<Type> sun_reflect_CallerSensitive = StaticSymbols.putType("Lsun/reflect/CallerSensitive;");
 
-        // Modules
-        public static final Symbol<Type> java_lang_Module = StaticSymbols.putType("Ljava/lang/Module;");
-
         // Special threads
         public static final Symbol<Type> java_lang_ref_Finalizer$FinalizerThread = StaticSymbols.putType("Ljava/lang/ref/Finalizer$FinalizerThread;");
         public static final Symbol<Type> java_lang_ref_Reference$ReferenceHandler = StaticSymbols.putType("Ljava/lang/ref/Reference$ReferenceHandler;");
@@ -638,12 +619,7 @@ public final class Symbol<T> extends ByteSequence {
             /* nop */
         }
 
-        public static final Symbol<Signature> _byte = StaticSymbols.putSignature(Type._byte);
-        public static final Symbol<Signature> _short = StaticSymbols.putSignature(Type._short);
         public static final Symbol<Signature> _int = StaticSymbols.putSignature(Type._int);
-        public static final Symbol<Signature> _long = StaticSymbols.putSignature(Type._long);
-        public static final Symbol<Signature> _float = StaticSymbols.putSignature(Type._float);
-        public static final Symbol<Signature> _double = StaticSymbols.putSignature(Type._double);
         public static final Symbol<Signature> _void = StaticSymbols.putSignature(Type._void);
         public static final Symbol<Signature> _boolean = StaticSymbols.putSignature(Type._boolean);
         public static final Symbol<Signature> Class = StaticSymbols.putSignature(Type.java_lang_Class);
@@ -675,8 +651,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> _void_int = StaticSymbols.putSignature(Type._void, Type._int);
         public static final Symbol<Signature> _void_long = StaticSymbols.putSignature(Type._void, Type._long);
         public static final Symbol<Signature> _void_long_int = StaticSymbols.putSignature(Type._void, Type._long, Type._int);
-        public static final Symbol<Signature> _void_char_array = StaticSymbols.putSignature(Type._void, Type._char_array);
-        public static final Symbol<Signature> _char_array = StaticSymbols.putSignature(Type._char_array);
         public static final Symbol<Signature> _int_boolean_boolean = StaticSymbols.putSignature(Type._int, Type._boolean, Type._boolean);
 
         public static final Symbol<Signature> Boolean_boolean = StaticSymbols.putSignature(Type.java_lang_Boolean, Type._boolean);
