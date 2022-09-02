@@ -90,20 +90,20 @@ import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.TypeSwitchNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.NodeWithState;
 import org.graalvm.compiler.nodes.spi.StampInverter;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase.SchedulingStrategy;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.SpeculationLog.Speculation;
 import jdk.vm.ci.meta.TriState;
 
-public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
+public class ConditionalEliminationPhase extends BasePhase<PhaseContext> {
 
     private static final CounterKey counterStampsRegistered = DebugContext.counter("StampsRegistered");
     private static final CounterKey counterStampsFound = DebugContext.counter("StampsFound");
@@ -123,7 +123,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
 
     @Override
     @SuppressWarnings("try")
-    protected void run(StructuredGraph graph, CoreProviders context) {
+    protected void run(StructuredGraph graph, PhaseContext context) {
         try (DebugContext.Scope s = graph.getDebug().scope("DominatorConditionalElimination")) {
             BlockMap<List<Node>> blockToNodes = null;
             NodeMap<Block> nodeToBlock = null;
@@ -154,7 +154,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
     }
 
     protected ControlFlowGraph.RecursiveVisitor<?> createVisitor(StructuredGraph graph, @SuppressWarnings("unused") ControlFlowGraph cfg, BlockMap<List<Node>> blockToNodes,
-                    NodeMap<Block> nodeToBlock, CoreProviders context) {
+                    NodeMap<Block> nodeToBlock, PhaseContext context) {
         return new Instance(graph, blockToNodes, nodeToBlock, context);
     }
 
@@ -302,7 +302,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
          */
         private Deque<DeoptimizingGuard> pendingTests;
 
-        public Instance(StructuredGraph graph, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, CoreProviders context) {
+        public Instance(StructuredGraph graph, BlockMap<List<Node>> blockToNodes, NodeMap<Block> nodeToBlock, PhaseContext context) {
             this.graph = graph;
             this.debug = graph.getDebug();
             this.blockToNodes = blockToNodes;
@@ -335,9 +335,6 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
             if (!tryProveGuardCondition(node, node.getCondition(), (guard, result, guardedValueStamp, newInput) -> {
                 if (result != node.isNegated()) {
                     node.replaceAndDelete(guard.asNode());
-                    if (guard instanceof DeoptimizingGuard && !((DeoptimizingGuard) guard).isNegated()) {
-                        rebuildPiNodes((DeoptimizingGuard) guard);
-                    }
                 } else {
                     /*
                      * Don't kill this branch immediately because `killCFG` can have complex
@@ -364,65 +361,45 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
                     node.replaceAtUsages(guard.asNode());
                     GraphUtil.unlinkFixedNode(node);
                     GraphUtil.killWithUnusedFloatingInputs(node);
-                    if (guard instanceof DeoptimizingGuard && !((DeoptimizingGuard) guard).isNegated()) {
-                        rebuildPiNodes((DeoptimizingGuard) guard);
-                    }
                 } else {
                     node.setCondition(LogicConstantNode.forBoolean(result, node.graph()), node.isNegated());
                     // Don't kill this branch immediately, see `processGuard`.
                 }
 
+                if (guard instanceof DeoptimizingGuard && !node.isNegated() && !((DeoptimizingGuard) guard).isNegated()) {
+                    LogicNode newCondition = ((DeoptimizingGuard) guard.asNode()).getCondition();
+                    if (newCondition instanceof InstanceOfNode) {
+                        InstanceOfNode inst = (InstanceOfNode) newCondition;
+                        ValueNode originalValue = GraphUtil.skipPi(inst.getValue());
+                        PiNode pi = null;
+                        // Ensure that any Pi that's weaker than what the instanceof proves is
+                        // replaced by one derived from the instanceof itself.
+                        for (PiNode existing : guard.asNode().usages().filter(PiNode.class).snapshot()) {
+                            if (!existing.isAlive()) {
+                                continue;
+                            }
+                            if (originalValue != GraphUtil.skipPi(existing.object())) {
+                                // Somehow these are unrelated values so leave it alone
+                                continue;
+                            }
+                            // If the pi has a weaker stamp or the same stamp but a different input
+                            // then replace it.
+                            boolean strongerStamp = !existing.piStamp().join(inst.getCheckedStamp()).equals(inst.getCheckedStamp());
+                            boolean differentStamp = !existing.piStamp().equals(inst.getCheckedStamp());
+                            boolean differentObject = existing.object() != inst.getValue();
+                            if (!strongerStamp && (differentStamp || differentObject)) {
+                                if (pi == null) {
+                                    pi = graph.unique(new PiNode(inst.getValue(), inst.getCheckedStamp(), (ValueNode) guard));
+                                }
+                                existing.replaceAndDelete(pi);
+                            }
+                        }
+                    }
+                }
                 debug.log("Kill fixed guard %s", node);
                 return true;
             })) {
                 registerNewCondition(node.condition(), node.isNegated(), node);
-            }
-        }
-
-        private void rebuildPiNodes(DeoptimizingGuard guard) {
-            LogicNode newCondition = guard.getCondition();
-            if (newCondition instanceof InstanceOfNode) {
-                InstanceOfNode inst = (InstanceOfNode) newCondition;
-                ValueNode originalValue = GraphUtil.skipPi(inst.getValue());
-                PiNode pi = null;
-                // Ensure that any Pi that's weaker than what the instanceof proves is
-                // replaced by one derived from the instanceof itself.
-                for (PiNode existing : guard.asNode().usages().filter(PiNode.class).snapshot()) {
-                    if (!existing.isAlive()) {
-                        continue;
-                    }
-                    if (originalValue != GraphUtil.skipPi(existing.object())) {
-                        // Somehow these are unrelated values so leave it alone
-                        continue;
-                    }
-                    // If the pi has a weaker stamp or the same stamp but a different input
-                    // then replace it.
-                    boolean strongerStamp = !existing.piStamp().join(inst.getCheckedStamp()).equals(inst.getCheckedStamp());
-                    boolean differentCheckedStamp = !existing.piStamp().equals(inst.getCheckedStamp());
-                    boolean differentObject = existing.object() != inst.getValue();
-                    if (!strongerStamp && (differentCheckedStamp || differentObject)) {
-                        if (pi == null) {
-                            pi = graph.unique(new PiNode(inst.getValue(), inst.getCheckedStamp(), (ValueNode) guard));
-                        }
-                        if (!pi.stamp(NodeView.DEFAULT).join(existing.stamp(NodeView.DEFAULT)).equals(pi.stamp(NodeView.DEFAULT))) {
-                            /*
-                             * With a code sequence like null check, type check, null check of type
-                             * checked value, CE will use the first null check to prove the second
-                             * null check so the graph ends up a Pi guarded by the first null check
-                             * but consuming the output Pi from the type check check. In this case
-                             * we should still canonicalize the checked stamp for consistency.
-                             */
-                            if (differentCheckedStamp) {
-                                assert differentObject;
-                                PiNode alternatePi = graph.unique(new PiNode(existing.object(), inst.getCheckedStamp(), (ValueNode) guard));
-                                assert alternatePi.stamp(NodeView.DEFAULT).join(existing.stamp(NodeView.DEFAULT)).equals(alternatePi.stamp(NodeView.DEFAULT));
-                                existing.replaceAndDelete(alternatePi);
-                            }
-                            continue;
-                        }
-                        existing.replaceAndDelete(pi);
-                    }
-                }
             }
         }
 
