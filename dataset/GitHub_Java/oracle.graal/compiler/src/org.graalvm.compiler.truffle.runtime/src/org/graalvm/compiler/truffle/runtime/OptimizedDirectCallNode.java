@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.compiler.truffle.common.TruffleCallNode;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -35,6 +33,7 @@ import com.oracle.truffle.api.impl.DefaultCompilerOptions;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.profiles.ValueProfile;
 
 /**
  * A call node with a constant {@link CallTarget} that can be optimized by Graal.
@@ -42,57 +41,35 @@ import com.oracle.truffle.api.nodes.RootNode;
  * Note: {@code PartialEvaluator} looks up this class and a number of its methods by name.
  */
 @NodeInfo
-public final class OptimizedDirectCallNode extends DirectCallNode implements TruffleCallNode {
+public final class OptimizedDirectCallNode extends DirectCallNode {
 
     private int callCount;
     private boolean inliningForced;
-    @CompilationFinal private Class<? extends Throwable> exceptionProfile;
-    @CompilationFinal private OptimizedCallTarget splitCallTarget;
-    private boolean splitDecided;
+    @CompilationFinal private ValueProfile exceptionProfile;
 
-    /*
-     * Should be instantiated with the runtime.
-     */
-    OptimizedDirectCallNode(OptimizedCallTarget target) {
+    @CompilationFinal private OptimizedCallTarget splitCallTarget;
+
+    public OptimizedDirectCallNode(OptimizedCallTarget target) {
         super(target);
         assert target.getSourceCallTarget() == null;
     }
 
     @Override
     public Object call(Object... arguments) {
-        OptimizedCallTarget target = getCurrentCallTarget();
         if (CompilerDirectives.inInterpreter()) {
-            onInterpreterCall(target);
+            onInterpreterCall();
         }
         try {
-            return target.callDirect(this, arguments);
+            return getCurrentCallTarget().callDirect(this, arguments);
         } catch (Throwable t) {
-            Throwable profiledT = profileExceptionType(t);
+            if (exceptionProfile == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                exceptionProfile = ValueProfile.createClassProfile();
+            }
+            Throwable profiledT = exceptionProfile.profile(t);
             OptimizedCallTarget.runtime().getTvmci().onThrowable(this, null, profiledT, null);
             throw OptimizedCallTarget.rethrow(profiledT);
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T extends Throwable> T profileExceptionType(T value) {
-        Class<? extends Throwable> clazz = exceptionProfile;
-        if (clazz != Throwable.class) {
-            if (clazz != null && value.getClass() == clazz) {
-                if (CompilerDirectives.inInterpreter()) {
-                    return value;
-                } else {
-                    return (T) CompilerDirectives.castExact(value, clazz);
-                }
-            } else {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                if (clazz == null) {
-                    exceptionProfile = value.getClass();
-                } else {
-                    exceptionProfile = Throwable.class;
-                }
-            }
-        }
-        return value;
     }
 
     @Override
@@ -123,7 +100,6 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Tru
         return (OptimizedCallTarget) super.getCallTarget();
     }
 
-    @Override
     public int getCallCount() {
         return callCount;
     }
@@ -147,12 +123,12 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Tru
         return splitCallTarget;
     }
 
-    private void onInterpreterCall(OptimizedCallTarget target) {
-        callCount++;
-        if (target.isNeedsSplit() && !splitDecided) {
-            TruffleSplittingStrategy.beforeCall(this, target);
-            splitDecided = true;
+    private void onInterpreterCall() {
+        int calls = ++callCount;
+        if (calls == 1) {
+            getCurrentCallTarget().incrementKnownCallSites();
         }
+        TruffleSplittingStrategy.beforeCall(this);
     }
 
     /** Used by the splitting strategy to install new targets. */
@@ -170,9 +146,18 @@ public final class OptimizedDirectCallNode extends DirectCallNode implements Tru
             OptimizedCallTarget currentTarget = getCallTarget();
 
             OptimizedCallTarget splitTarget = getCallTarget().cloneUninitialized();
-            currentTarget.removeDirectCallNode(this);
-            splitTarget.addDirectCallNode(this);
-            assert splitTarget.getCallSiteForSplit() == this;
+            splitTarget.setCallSiteForSplit(this);
+
+            if (callCount >= 1) {
+                currentTarget.decrementKnownCallSites();
+                if (!currentTarget.getOptionValue(PolyglotCompilerOptions.LegacySplitting)) {
+                    currentTarget.removeKnownCallSite(this);
+                }
+                splitTarget.incrementKnownCallSites();
+            }
+            if (!currentTarget.getOptionValue(PolyglotCompilerOptions.LegacySplitting)) {
+                splitTarget.addKnownCallNode(this);
+            }
 
             if (getParent() != null) {
                 // dummy replace to report the split, irrelevant if this node is not adopted
