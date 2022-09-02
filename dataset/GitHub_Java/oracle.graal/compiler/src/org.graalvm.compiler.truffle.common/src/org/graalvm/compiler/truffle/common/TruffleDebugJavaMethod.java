@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -97,6 +97,10 @@ public class TruffleDebugJavaMethod implements JavaMethod {
         this.compilable = compilable;
     }
 
+    public CompilableTruffleAST getCompilable() {
+        return compilable;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof TruffleDebugJavaMethod) {
@@ -118,7 +122,7 @@ public class TruffleDebugJavaMethod implements JavaMethod {
 
     @Override
     public String getName() {
-        return (compilable.toString() + "").replace('.', '_').replace(' ', '_');
+        return (compilable.getName() + "").replace('.', '_').replace(' ', '_');
     }
 
     @Override
