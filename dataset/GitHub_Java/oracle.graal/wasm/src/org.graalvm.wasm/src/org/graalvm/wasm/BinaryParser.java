@@ -1064,19 +1064,20 @@ public class BinaryParser extends BinaryStreamParser {
 
             // Read the offset expression.
             byte instruction = read1();
-
-            // Read the offset expression.
             int offsetAddress = -1;
             int offsetGlobalIndex = -1;
             switch (instruction) {
-                case Instructions.I32_CONST:
+                case Instructions.I32_CONST: {
                     offsetAddress = readSignedInt32();
                     break;
-                case Instructions.GLOBAL_GET:
+                }
+                case Instructions.GLOBAL_GET: {
                     offsetGlobalIndex = readGlobalIndex();
                     break;
-                default:
-                    throw WasmException.format(Failure.TYPE_MISMATCH, "Invalid instruction for table offset expression: 0x%02X", instruction);
+                }
+                default: {
+                    fail(Failure.MALFORMED_VALUE_TYPE, "Invalid instruction for table offset expression: 0x%02X", instruction);
+                }
             }
 
             readEnd();
@@ -1113,7 +1114,7 @@ public class BinaryParser extends BinaryStreamParser {
 
     private void readEnd() {
         final byte instruction = read1();
-        assertByteEqual(instruction, (byte) Instructions.END, Failure.TYPE_MISMATCH);
+        assertByteEqual(instruction, (byte) Instructions.END, Failure.INITIALIZER_NO_END);
     }
 
     private void readStartSection() {
@@ -1197,11 +1198,25 @@ public class BinaryParser extends BinaryStreamParser {
                     assertByteEqual(type, module.symbolTable().globalValueType(existingIndex), Failure.TYPE_MISMATCH);
                     isInitialized = false;
                     break;
-                default:
+                case Instructions.END:
                     throw WasmException.create(Failure.TYPE_MISMATCH);
+                default:
+                    throw WasmException.format(Failure.GLOBAL_INIT_NON_CONSTANT, "Invalid instruction for global initialization: 0x%02X", instruction);
             }
-            readEnd();
-
+            final byte endInstruction = read1();
+            switch (endInstruction) {
+                case Instructions.END:
+                    // This is what we want
+                    break;
+                case Instructions.I32_CONST:
+                case Instructions.I64_CONST:
+                case Instructions.F32_CONST:
+                case Instructions.F64_CONST:
+                case Instructions.GLOBAL_GET:
+                    throw WasmException.create(Failure.TYPE_MISMATCH);
+                default:
+                    throw WasmException.format(Failure.GLOBAL_INIT_NON_CONSTANT, "Invalid instruction for global initialization: 0x%02X", instruction);
+            }
             module.symbolTable().declareGlobal(globalIndex, type, mutability);
             final int currentGlobalIndex = globalIndex;
             final int currentExistingIndex = existingIndex;
@@ -1230,18 +1245,15 @@ public class BinaryParser extends BinaryStreamParser {
         module.limits().checkDataSegmentCount(numDataSegments);
         for (int dataSegmentId = 0; dataSegmentId != numDataSegments; ++dataSegmentId) {
             readMemoryIndex();
+            final byte instruction = read1();
 
             // Data dataOffset expression must be a constant expression with result type i32.
             // https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
             // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
 
             // Read the offset expression.
-            byte instruction = read1();
-
-            // Read the offset expression.
             int offsetAddress = -1;
             int offsetGlobalIndex = -1;
-
             switch (instruction) {
                 case Instructions.I32_CONST:
                     offsetAddress = readSignedInt32();
@@ -1250,7 +1262,7 @@ public class BinaryParser extends BinaryStreamParser {
                     offsetGlobalIndex = readGlobalIndex();
                     break;
                 default:
-                    throw WasmException.format(Failure.TYPE_MISMATCH, "Invalid instruction for table offset expression: 0x%02X", instruction);
+                    fail(Failure.MALFORMED_VALUE_TYPE, String.format("Invalid instruction for data offset expression: 0x%02X", instruction));
             }
 
             readEnd();
