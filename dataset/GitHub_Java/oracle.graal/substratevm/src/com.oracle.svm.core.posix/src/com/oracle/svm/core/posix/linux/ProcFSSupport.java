@@ -25,9 +25,8 @@
 package com.oracle.svm.core.posix.linux;
 
 import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.WordPointer;
-import org.graalvm.word.UnsignedWord;
-import org.graalvm.word.WordFactory;
+import org.graalvm.nativeimage.c.type.CLongPointer;
+import org.graalvm.word.WordBase;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.posix.PosixUtils;
@@ -63,17 +62,17 @@ class ProcFSSupport {
      */
     @Uninterruptible(reason = "Called during isolate initialization.")
     @SuppressWarnings("fallthrough")
-    static boolean findMapping(int fd, CCharPointer buffer, int bufferLen, UnsignedWord beginAddress, UnsignedWord endAddress,
-                    WordPointer startAddrPtr, WordPointer fileOffsetPtr, boolean needName) {
+    static boolean findMapping(int fd, CCharPointer buffer, int bufferLen, WordBase beginAddress, WordBase endAddress,
+                    CLongPointer startAddrPtr, CLongPointer fileOffsetPtr, boolean needName) {
         int readOffset = 0;
         int endOffset = 0;
         int position = 0;
         int state = ST_ADDR_START;
         int b;
 
-        UnsignedWord start = WordFactory.zero();
-        UnsignedWord end = WordFactory.zero();
-        UnsignedWord fileOffset = WordFactory.zero();
+        long start = 0;
+        long end = 0;
+        long fileOffset = 0;
         OUT: for (;;) {
             while (position == endOffset) { // fill buffer
                 int readBytes = PosixUtils.readBytes(fd, buffer, bufferLen, readOffset);
@@ -87,11 +86,11 @@ class ProcFSSupport {
             switch (state) {
                 case ST_ADDR_START: {
                     if (b == '-') {
-                        state = beginAddress.aboveOrEqual(start) ? ST_ADDR_END : ST_SKIP;
+                        state = (beginAddress.rawValue() >= start) ? ST_ADDR_END : ST_SKIP;
                     } else if ('0' <= b && b <= '9') {
-                        start = start.shiftLeft(4).add(b - '0');
+                        start = (start << 4) + (b - '0');
                     } else if ('a' <= b && b <= 'f') {
-                        start = start.shiftLeft(4).add(b - 'a' + 10);
+                        start = (start << 4) + (b - 'a' + 10);
                     } else {
                         return false; // garbage == not matched
                     }
@@ -99,11 +98,11 @@ class ProcFSSupport {
                 }
                 case ST_ADDR_END: {
                     if (b == ' ') {
-                        state = endAddress.belowOrEqual(end) ? ST_PERMS : ST_SKIP;
+                        state = (endAddress.rawValue() <= end) ? ST_PERMS : ST_SKIP;
                     } else if ('0' <= b && b <= '9') {
-                        end = end.shiftLeft(4).add(b - '0');
+                        end = (end << 4) + (b - '0');
                     } else if ('a' <= b && b <= 'f') {
-                        end = end.shiftLeft(4).add(b - 'a' + 10);
+                        end = (end << 4) + (b - 'a' + 10);
                     } else {
                         return false; // garbage == not matched
                     }
@@ -111,7 +110,7 @@ class ProcFSSupport {
                 }
                 case ST_PERMS: {
                     if (b == ' ') {
-                        fileOffset = WordFactory.zero();
+                        fileOffset = 0;
                         state = ST_OFFSET;
                     }
                     break; // ignore anything else
@@ -120,9 +119,9 @@ class ProcFSSupport {
                     if (b == ' ') {
                         state = ST_DEV;
                     } else if ('0' <= b && b <= '9') {
-                        fileOffset = fileOffset.shiftLeft(4).add(b - '0');
+                        fileOffset = (fileOffset << 4) + (b - '0');
                     } else if ('a' <= b && b <= 'f') {
-                        fileOffset = fileOffset.shiftLeft(4).add(b - 'a' + 10);
+                        fileOffset = (fileOffset << 4) + (b - 'a' + 10);
                     } else {
                         return false; // garbage == not matched
                     }
@@ -168,8 +167,8 @@ class ProcFSSupport {
                 }
                 case ST_SKIP: {
                     if (b == '\n') {
-                        start = WordFactory.zero();
-                        end = WordFactory.zero();
+                        start = 0;
+                        end = 0;
                         state = ST_ADDR_START;
                     }
                     break;
