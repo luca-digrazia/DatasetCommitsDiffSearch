@@ -321,16 +321,14 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigBase {
     public final int jvmAccWrittenFlags = getConstant("JVM_ACC_WRITTEN_FLAGS", Integer.class);
     public final int jvmAccSynthetic = getConstant("JVM_ACC_SYNTHETIC", Integer.class);
 
-    public final int jvmciCompileStateCanPostOnExceptionsOffset = getJvmciJvmtiCapabilityOffset("_jvmti_can_post_on_exceptions");
-    public final int jvmciCompileStateCanPopFrameOffset = getJvmciJvmtiCapabilityOffset("_jvmti_can_pop_frame");
-    public final int jvmciCompileStateCanAccessLocalVariablesOffset = getJvmciJvmtiCapabilityOffset("_jvmti_can_access_local_variables");
+    public final int jvmciCompileStateCanPostOnExceptionsOffset = getJvmciCompileStateCanPostOnExceptionsOffset();
 
     // Integer.MIN_VALUE if not available
-    private int getJvmciJvmtiCapabilityOffset(String name) {
-        int offset = getFieldOffset("JVMCICompileState::" + name, Integer.class, "jbyte", Integer.MIN_VALUE);
+    private int getJvmciCompileStateCanPostOnExceptionsOffset() {
+        int offset = getFieldOffset("JVMCICompileState::_jvmti_can_post_on_exceptions", Integer.class, "jbyte", Integer.MIN_VALUE);
         if (offset == Integer.MIN_VALUE) {
             // JDK 12
-            offset = getFieldOffset("JVMCIEnv::" + name, Integer.class, "jbyte", Integer.MIN_VALUE);
+            offset = getFieldOffset("JVMCIEnv::_jvmti_can_post_on_exceptions", Integer.class, "jbyte", Integer.MIN_VALUE);
         }
         return offset;
     }
@@ -460,7 +458,6 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigBase {
     public final int objectMonitorRecursions = getFieldOffset("ObjectMonitor::_recursions", Integer.class, "intptr_t", -1);
     public final int objectMonitorCxq = getFieldOffset("ObjectMonitor::_cxq", Integer.class, "ObjectWaiter*", -1);
     public final int objectMonitorEntryList = getFieldOffset("ObjectMonitor::_EntryList", Integer.class, "ObjectWaiter*", -1);
-    public final int objectMonitorSucc = getFieldOffset("ObjectMonitor::_succ", Integer.class, "Thread*", -1);
 
     public final int markWordNoHashInPlace = getConstant("markOopDesc::no_hash_in_place", Integer.class);
     public final int markWordNoLockInPlace = getConstant("markOopDesc::no_lock_in_place", Integer.class);
