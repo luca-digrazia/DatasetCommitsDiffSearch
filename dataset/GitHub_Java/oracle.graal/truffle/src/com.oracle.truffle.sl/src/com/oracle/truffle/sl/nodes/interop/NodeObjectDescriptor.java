@@ -51,99 +51,69 @@ import com.oracle.truffle.api.library.ExportMessage;
 /**
  * A container class used to store per-node attributes used by the instrumentation framework.
  */
-public abstract class NodeObjectDescriptor implements TruffleObject {
+@ExportLibrary(InteropLibrary.class)
+public final class NodeObjectDescriptor implements TruffleObject {
+
+    static final String NAME = "name";
+    static final String KIND = StandardTags.DeclarationTag.KIND;
+    private static final TruffleObject KEYS_NAME = new NodeObjectDescriptorKeys(false);
+    private static final TruffleObject KEYS_NAME_KIND = new NodeObjectDescriptorKeys(true);
 
     private final String name;
+    private final String kind;
 
-    private NodeObjectDescriptor(String name) {
+    public NodeObjectDescriptor(String name, String kind) {
         assert name != null;
         this.name = name;
+        this.kind = kind;
     }
 
-    public static NodeObjectDescriptor readVariable(String name) {
-        return new ReadDescriptor(name);
+    @ExportMessage
+    @SuppressWarnings("static-method")
+    boolean hasMembers() {
+        return true;
     }
 
-    public static NodeObjectDescriptor writeVariable(String name) {
-        return new WriteDescriptor(name);
-    }
-
+    @ExportMessage
     Object readMember(String member) throws UnknownIdentifierException {
-        if (isMemberReadable(member)) {
-            return name;
+        switch (member) {
+            case NAME:
+                return name;
+            case KIND:
+                if (kind != null) {
+                    return kind;
+                } else {
+                    CompilerDirectives.transferToInterpreter();
+                    throw UnknownIdentifierException.create(member);
+                }
+            default:
+                CompilerDirectives.transferToInterpreter();
+                throw UnknownIdentifierException.create(member);
+        }
+    }
+
+    @ExportMessage
+    boolean isMemberReadable(String member) {
+        switch (member) {
+            case NAME:
+                return true;
+            case KIND:
+                return kind != null;
+            default:
+                return false;
+        }
+    }
+
+    @ExportMessage
+    Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+        if (kind == null) {
+            return KEYS_NAME;
         } else {
-            CompilerDirectives.transferToInterpreter();
-            throw UnknownIdentifierException.create(member);
+            return KEYS_NAME_KIND;
         }
     }
 
-    abstract boolean isMemberReadable(String member);
-
-    @ExportLibrary(InteropLibrary.class)
-    static final class ReadDescriptor extends NodeObjectDescriptor {
-
-        private static final TruffleObject KEYS_READ = new NodeObjectDescriptorKeys(StandardTags.ReadVariableTag.NAME);
-
-        ReadDescriptor(String name) {
-            super(name);
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        boolean hasMembers() {
-            return true;
-        }
-
-        @Override
-        @ExportMessage
-        boolean isMemberReadable(String member) {
-            return StandardTags.ReadVariableTag.NAME.equals(member);
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-            return KEYS_READ;
-        }
-
-        @Override
-        @ExportMessage
-        Object readMember(String member) throws UnknownIdentifierException {
-            return super.readMember(member);
-        }
-    }
-
-    @ExportLibrary(InteropLibrary.class)
-    static final class WriteDescriptor extends NodeObjectDescriptor {
-
-        private static final TruffleObject KEYS_WRITE = new NodeObjectDescriptorKeys(StandardTags.WriteVariableTag.NAME);
-
-        WriteDescriptor(String name) {
-            super(name);
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        boolean hasMembers() {
-            return true;
-        }
-
-        @Override
-        @ExportMessage
-        boolean isMemberReadable(String member) {
-            return StandardTags.WriteVariableTag.NAME.equals(member);
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-            return KEYS_WRITE;
-        }
-
-        @Override
-        @ExportMessage
-        Object readMember(String member) throws UnknownIdentifierException {
-            return super.readMember(member);
-        }
+    static boolean isInstance(TruffleObject object) {
+        return object instanceof NodeObjectDescriptor;
     }
 }
