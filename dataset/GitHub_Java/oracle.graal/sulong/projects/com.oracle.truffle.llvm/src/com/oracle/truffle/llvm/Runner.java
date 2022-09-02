@@ -36,7 +36,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.BitSet;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -132,6 +131,7 @@ import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.nfi.types.NativeLibraryDescriptor;
 import com.oracle.truffle.nfi.types.Parser;
+import java.util.BitSet;
 
 public final class Runner {
 
@@ -532,10 +532,10 @@ public final class Runner {
             return ret;
         }
 
-        LLVMAllocateNode getAllocateNode(NodeFactory factory, String typeName, boolean readOnly) {
+        LLVMAllocateNode getAllocateNode(NodeFactory factory, String typeName) {
             if (offset > 0) {
                 StructureType structType = new StructureType(typeName, true, types.toArray(Type.EMPTY_ARRAY));
-                return factory.createAllocateGlobalsBlock(structType, readOnly);
+                return factory.createAllocateGlobalsBlock(structType);
             } else {
                 return null;
             }
@@ -572,8 +572,8 @@ public final class Runner {
                 }
             }
 
-            this.allocRoSection = roSection.getAllocateNode(context.getNodeFactory(), "roglobals_struct", true);
-            this.allocRwSection = rwSection.getAllocateNode(context.getNodeFactory(), "rwglobals_struct", false);
+            this.allocRoSection = roSection.getAllocateNode(context.getNodeFactory(), "roglobals_struct");
+            this.allocRwSection = rwSection.getAllocateNode(context.getNodeFactory(), "rwglobals_struct");
             this.allocGlobals = allocGlobalsList.toArray(AllocGlobalNode.EMPTY);
             this.fileScope = res.getRuntime().getFileScope();
         }
@@ -588,7 +588,7 @@ public final class Runner {
 
             allocGlobals(ctx, roBase, rwBase);
             if (allocRoSection != null) {
-                ctx.registerReadOnlyGlobals(roBase);
+                ctx.registerGlobals(roBase);
             }
             if (allocRwSection != null) {
                 ctx.registerGlobals(rwBase);
@@ -850,7 +850,7 @@ public final class Runner {
             parserResults.add(parserResult);
             return parserResult;
         } else if (!library.isNative()) {
-            throw new LLVMParserException("The file '" + source.getName() + "' is not a bitcode file nor an ELF or Mach-O object file with an embedded bitcode section.");
+            throw new LLVMParserException("The file '" + source.getName() + "' is not a bitcode file nor an ELF File with an .llvmbc section.");
         } else {
             return null;
         }
