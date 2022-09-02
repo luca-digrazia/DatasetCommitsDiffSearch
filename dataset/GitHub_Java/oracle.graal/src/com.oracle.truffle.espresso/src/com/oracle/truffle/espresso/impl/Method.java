@@ -175,7 +175,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw getMeta().throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
         }
 
         this.codeAttribute = method.codeAttribute;
@@ -203,7 +203,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw getMeta().throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
         }
 
         this.codeAttribute = split;
@@ -235,7 +235,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw getMeta().throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
         }
 
         this.codeAttribute = (CodeAttribute) getAttribute(CodeAttribute.NAME);
@@ -370,7 +370,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             CompilerDirectives.transferToInterpreterAndInvalidate();
             Meta meta = getMeta();
             if (poisonPill) {
-                throw meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Conflicting default methods: " + this.getName());
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Conflicting default methods: " + this.getName());
             }
             // Initializing a class costs a lock, do it outside of this method's lock to avoid
             // congestion.
@@ -440,12 +440,12 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                                 this.callTarget = declaringKlass.lookupPolysigMethod(getName(), getRawSignature()).getCallTarget();
                             } else {
                                 EspressoLanguage.EspressoLogger.warning(String.format("Failed to link native method: %s", this.toString()));
-                                throw meta.throwException(meta.java_lang_UnsatisfiedLinkError);
+                                throw Meta.throwException(meta.java_lang_UnsatisfiedLinkError);
                             }
                         }
                     } else {
                         if (codeAttribute == null) {
-                            throw meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError,
+                            throw Meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError,
                                             "Calling abstract method: " + getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                         }
 
@@ -468,6 +468,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     private boolean usesMonitors() {
+        if (isSynchronized()) {
+            return (usesMonitors = 1) != 0;
+        }
         if (codeAttribute != null) {
             if (usesMonitors != -1) {
                 return usesMonitors != 0;
@@ -978,6 +981,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     @Override
     public int getFirstLine() {
         return getLineNumberTable().getFirstLine();
+    }
+
+    @Override
+    public int getLastLine() {
+        return getLineNumberTable().getLastLine();
     }
 
     public String getGenericSignatureAsString() {
