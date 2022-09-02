@@ -260,7 +260,7 @@ public class AArch64AddressLoweringByUse extends AddressLoweringByUsePhase.Addre
         return 1;
     }
 
-    private static boolean isBaseOnlyMode(AddressingMode addressingMode) {
+    boolean isBaseOnlyMode(AddressingMode addressingMode) {
         return addressingMode == AddressingMode.BASE_REGISTER_ONLY;
     }
 

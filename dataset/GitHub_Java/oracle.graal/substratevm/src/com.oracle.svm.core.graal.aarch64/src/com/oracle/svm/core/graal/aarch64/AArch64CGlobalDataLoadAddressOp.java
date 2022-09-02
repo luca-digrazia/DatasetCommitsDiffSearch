@@ -59,15 +59,18 @@ public final class AArch64CGlobalDataLoadAddressOp extends AArch64LIRInstruction
         int bits = result.getPlatformKind().getSizeInBytes() * 8;
         if (SubstrateUtil.HOSTED) {
             // AOT compilation: record patch that is fixed up later
-            crb.compilationResult.recordDataPatch(masm.position(), new CGlobalDataReference(dataInfo));
+            int before = masm.position();
             Register resultRegister = asRegister(result);
             if (dataInfo.isSymbolReference()) {
                 // Pure symbol reference: the data contains the symbol's address, load it
-                masm.adrpLdr(64, resultRegister, resultRegister);
+                AArch64Address address = AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_UNSIGNED_SCALED, resultRegister, 0x0);
+                masm.adrpLdr(64, resultRegister, address);
             } else {
                 // Data: load its address
-                masm.adrpAdd(resultRegister);
+                AArch64Address address = masm.getPlaceholder(before);
+                masm.loadAddress(resultRegister, address, 1);
             }
+            crb.compilationResult.recordDataPatch(before, new CGlobalDataReference(dataInfo));
         } else {
             // Runtime compilation: compute the actual address
             Pointer globalsBase = CGlobalDataInfo.CGLOBALDATA_RUNTIME_BASE_ADDRESS.get();

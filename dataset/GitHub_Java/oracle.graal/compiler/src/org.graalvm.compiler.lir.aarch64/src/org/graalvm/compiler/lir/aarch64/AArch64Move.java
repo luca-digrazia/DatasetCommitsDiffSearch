@@ -173,8 +173,12 @@ public class AArch64Move {
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
             Register dst = asRegister(result);
-            crb.recordDataReferenceInCode(data);
-            masm.adrpAdd(dst);
+            if (crb.compilationResult.isImmutablePIC()) {
+                crb.recordDataReferenceInCode(data);
+                masm.addressOf(dst);
+            } else {
+                masm.loadAddress(dst, (AArch64Address) crb.recordDataReferenceInCode(data), data.getAlignment());
+            }
         }
     }
 
@@ -593,7 +597,7 @@ public class AArch64Move {
                     try (ScratchRegister scr = masm.getScratchRegister()) {
                         Register scratch = scr.getRegister();
                         crb.asFloatConstRef(input);
-                        masm.adrpAdd(scratch);
+                        masm.addressOf(scratch);
                         masm.fldr(32, dst, AArch64Address.createBaseRegisterOnlyAddress(scratch));
                     }
                 }
@@ -611,7 +615,7 @@ public class AArch64Move {
                     try (ScratchRegister scr = masm.getScratchRegister()) {
                         Register scratch = scr.getRegister();
                         crb.asDoubleConstRef(input);
-                        masm.adrpAdd(scratch);
+                        masm.addressOf(scratch);
                         masm.fldr(64, dst, AArch64Address.createBaseRegisterOnlyAddress(scratch));
                     }
                 }
@@ -628,7 +632,8 @@ public class AArch64Move {
                     masm.mov(dst, 0xDEADDEADDEADDEADL, true);
                 } else {
                     crb.recordDataReferenceInCode(input, 8);
-                    masm.adrpLdr(64, dst, dst);
+                    AArch64Address address = AArch64Address.createImmediateAddress(64, AArch64Address.AddressingMode.IMMEDIATE_UNSIGNED_SCALED, dst, 0x0);
+                    masm.adrpLdr(64, dst, address);
                 }
                 break;
             default:
