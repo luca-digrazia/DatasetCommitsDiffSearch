@@ -50,7 +50,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Object;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.options.OptionValues;
@@ -328,7 +327,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         // If the original object is finalizable, so is the copy.
         assert self.getKlass() instanceof ObjectKlass;
         if (((ObjectKlass) self.getKlass()).hasFinalizer()) {
-            Target_java_lang_Object.registerFinalizer(clone);
+            meta.Finalizer_register.invokeDirect(null, clone);
         }
 
         return clone;
