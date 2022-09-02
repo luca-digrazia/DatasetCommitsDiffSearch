@@ -34,12 +34,6 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_ABSTRACT;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_PRIVATE;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_PROTECTED;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_PUBLIC;
-
 public final class ArrayKlass extends Klass {
 
     private final Klass componentType;
@@ -64,19 +58,7 @@ public final class ArrayKlass extends Klass {
 
     @Override
     public final int getFlags() {
-        return (getElementalType().getModifiers() & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED /*
-                                                                                               * array
-                                                                                               * of
-                                                                                               * static
-                                                                                               * inner
-                                                                                               * class
-                                                                                               */)) | ACC_FINAL | ACC_ABSTRACT;
-    }
-
-    @Override
-    public final int getModifiers() {
-        // ACC_SUPER is kept for backward compatibility, should be ignored.
-        return getFlags();
+        return (getElementalType().getFlags() & (Modifier.PUBLIC | Modifier.PRIVATE | Modifier.PROTECTED)) | Modifier.FINAL | Modifier.ABSTRACT;
     }
 
     @Override
