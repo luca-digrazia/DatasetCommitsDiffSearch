@@ -67,14 +67,14 @@ public class UnsafeWasmMemory extends WasmMemory {
     }
 
     @Override
-    public void copy(long src, long dst, long n) {
-        logger.finest(() -> String.format("memcopy from = %d, to = %d, n = %d", src, dst, n));
-        unsafe.copyMemory(startAddress + src, startAddress + dst, n);
+    public long startAddress() {
+        return startAddress;
     }
 
     @Override
-    public void clear() {
-        unsafe.setMemory(startAddress, byteSize(), (byte) 0);
+    public void memcopy(long src, long dst, long n) {
+        logger.finest(() -> String.format("memcopy from = %d, to = %d, n = %d", src, dst, n));
+        unsafe.copyMemory(startAddress + src, startAddress + dst, n);
     }
 
     @Override

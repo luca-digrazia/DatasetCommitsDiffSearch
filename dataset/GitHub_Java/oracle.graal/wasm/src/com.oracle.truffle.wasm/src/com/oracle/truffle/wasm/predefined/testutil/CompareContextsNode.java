@@ -31,12 +31,12 @@ package com.oracle.truffle.wasm.predefined.testutil;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.Globals;
-import com.oracle.truffle.wasm.WasmCodeEntry;
-import com.oracle.truffle.wasm.WasmLanguage;
-import com.oracle.truffle.wasm.WasmVoidResult;
-import com.oracle.truffle.wasm.exception.WasmExecutionException;
-import com.oracle.truffle.wasm.memory.WasmMemory;
+import com.oracle.truffle.wasm.binary.Globals;
+import com.oracle.truffle.wasm.binary.WasmCodeEntry;
+import com.oracle.truffle.wasm.binary.WasmLanguage;
+import com.oracle.truffle.wasm.binary.WasmVoidResult;
+import com.oracle.truffle.wasm.binary.exception.WasmExecutionException;
+import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
 
 import static com.oracle.truffle.wasm.predefined.testutil.SaveContextNode.*;
@@ -64,32 +64,8 @@ public class CompareContextsNode extends WasmPredefinedRootNode {
 
     @CompilerDirectives.TruffleBoundary
     private void compareContexts(ContextState firstState, ContextState lastState) {
-        compareMemories(firstState, lastState);
-        compareGlobals(firstState, lastState);
-    }
-
-    private void compareGlobals(ContextState firstState, ContextState lastState) {
-        final Globals firstGlobals = firstState.globals();
-        final Globals lastGlobals = lastState.globals();
-        if (firstGlobals.count() != lastGlobals.count()) {
-            throw new WasmExecutionException(this, "Mismatch in memory lengths.");
-        }
-        for (int address = 0; address < firstGlobals.count(); address++) {
-            long first = firstGlobals.loadAsLong(address);
-            long last = lastGlobals.loadAsLong(address);
-            if (first != last) {
-                throw new WasmExecutionException(this, "Mismatch in global at " + address + ". " +
-                                "Reference " + first + ", actual " + last);
-            }
-        }
-    }
-
-    private void compareMemories(ContextState firstState, ContextState lastState) {
         final WasmMemory firstMemory = firstState.memory();
         final WasmMemory lastMemory = lastState.memory();
-        if (firstMemory == null && lastMemory == null) {
-            return;
-        }
         if (firstMemory.byteSize() != lastMemory.byteSize()) {
             throw new WasmExecutionException(this, "Mismatch in memory lengths: " + firstMemory.byteSize() + " vs " +
                             lastMemory.byteSize());
@@ -102,6 +78,19 @@ public class CompareContextsNode extends WasmPredefinedRootNode {
                 throw new WasmExecutionException(this, "Memory mismatch.\n" +
                                 "-- Reference --\n" + firstMemory.hexView(from, 200) + "\n" +
                                 "-- Actual --\n" + firstMemory.hexView(from, 200) + "\n");
+            }
+        }
+        final Globals firstGlobals = firstState.globals();
+        final Globals lastGlobals = lastState.globals();
+        if (firstGlobals.count() != lastGlobals.count()) {
+            throw new WasmExecutionException(this, "Mismatch in memory lengths.");
+        }
+        for (int address = 0; address < firstGlobals.count(); address++) {
+            long first = firstGlobals.loadAsLong(address);
+            long last = lastGlobals.loadAsLong(address);
+            if (first != last) {
+                throw new WasmExecutionException(this, "Mismatch in global at " + address +  ". " +
+                                "Reference " + first + ", actual " + last);
             }
         }
     }

@@ -38,12 +38,16 @@ public class Globals {
     // are compiled with assumptions on what this field points to.
     // Such an assumption can be invalidated if the late-linking causes this array
     // to be replaced with a larger array.
-    @CompilationFinal(dimensions = 1) private long[] globals;
+    @CompilationFinal(dimensions = 0) private long[] globals;
     private int numGlobals;
 
     public Globals() {
         this.globals = new long[INITIAL_GLOBALS_SIZE];
         this.numGlobals = 0;
+    }
+
+    public int count() {
+        return numGlobals;
     }
 
     private void ensureCapacity() {
@@ -100,5 +104,15 @@ public class Globals {
 
     public void storeDoubleWithLong(int address, long value) {
         globals[address] = value;
+    }
+
+    public Globals duplicate() {
+        final Globals other = new Globals();
+        for (int i = 0; i < numGlobals; i++) {
+            final int address = other.allocateGlobal();
+            final long value = this.loadAsLong(address);
+            other.storeLong(address, value);
+        }
+        return other;
     }
 }
