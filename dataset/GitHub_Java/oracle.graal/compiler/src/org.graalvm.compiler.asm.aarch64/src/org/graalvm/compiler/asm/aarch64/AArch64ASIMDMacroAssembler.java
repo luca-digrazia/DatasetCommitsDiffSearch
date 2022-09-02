@@ -223,28 +223,23 @@ public class AArch64ASIMDMacroAssembler extends AArch64ASIMDAssembler {
      *
      * <code>dst = src[index]</code>
      *
-     * @param dstESize width of destination element.
-     * @param srcESize width of source element.
+     * @param eSize width of element.
      * @param dst Either floating-point or general-purpose register. If general-purpose, register
      *            may not be stackpointer or zero register.
      * @param src SIMD register.
      * @param index lane position of element to copy.
      */
-    public void moveFromIndex(ElementSize dstESize, ElementSize srcESize, Register dst, Register src, int index) {
+    public void moveFromIndex(ElementSize eSize, Register dst, Register src, int index) {
         assert src.getRegisterCategory().equals(SIMD);
 
-        boolean sameWidth = dstESize == srcESize;
-        int dstBits = dstESize.bits();
-        if (index == 0 && sameWidth && (dstBits == 32 || dstBits == 64)) {
-            masm.fmov(dstBits, dst, src);
-        } else if (sameWidth && dst.getRegisterCategory().equals(CPU)) {
-            umovGX(srcESize, dst, src, index);
+        int nBits = eSize.bits();
+        if (index == 0 && (nBits == 32 || nBits == 64)) {
+            masm.fmov(nBits, dst, src);
         } else if (dst.getRegisterCategory().equals(CPU)) {
-            assert !sameWidth;
-            smovGX(dstESize, srcESize, dst, src, index);
+            umovGX(eSize, dst, src, index);
         } else {
             assert dst.getRegisterCategory().equals(SIMD);
-            dupSX(srcESize, dst, src, index);
+            dupSX(eSize, dst, src, index);
         }
     }
 
