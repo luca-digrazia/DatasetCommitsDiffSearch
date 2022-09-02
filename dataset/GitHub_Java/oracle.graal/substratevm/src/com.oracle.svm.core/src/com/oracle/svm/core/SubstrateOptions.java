@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.options.Option;
@@ -200,24 +199,16 @@ public class SubstrateOptions {
     @Option(help = "Use only a writable native image heap.")//
     public static final HostedOptionKey<Boolean> UseOnlyWritableBootImageHeap = new HostedOptionKey<>(false);
 
-    @Option(help = "Support multiple isolates.") //
+    @Option(help = "Support multiple isolates. ")//
     public static final HostedOptionKey<Boolean> SpawnIsolates = new HostedOptionKey<Boolean>(null) {
         @Override
-        public Boolean getValueOrDefault(UnmodifiableEconomicMap<OptionKey<?>, Object> values) {
-            if (!values.containsKey(this)) {
-                /*
-                 * With the LLVM backend, isolate support has a significant performance cost, so we
-                 * disable it unless it is explicitly enabled.
-                 */
-                return !useLLVMBackend();
-            }
-            return (Boolean) values.get(this);
-        }
-
-        @Override
         public Boolean getValue(OptionValues values) {
-            assert checkDescriptorExists();
-            return getValueOrDefault(values.getMap());
+            Boolean value = super.getValue(values);
+            /*
+             * Spawning isolates results in a significant performance hit, so we disable them on the
+             * LLVM backend unless they were explicitly requested.
+             */
+            return (value != null) ? value : !useLLVMBackend();
         }
     };
 
@@ -428,11 +419,6 @@ public class SubstrateOptions {
 
     @Option(help = "When set to true, the image generator verifies that the image heap does not contain a home directory as a substring", type = User)//
     public static final HostedOptionKey<Boolean> DetectUserDirectoriesInImageHeap = new HostedOptionKey<>(false);
-
-    @Option(help = "The interval in minutes between watchdog checks (0 disables the watchdog)", type = OptionType.Expert)//
-    public static final HostedOptionKey<Integer> DeadlockWatchdogInterval = new HostedOptionKey<>(10);
-    @Option(help = "Exit the image builder VM after printing call stacks", type = OptionType.Expert)//
-    public static final HostedOptionKey<Boolean> DeadlockWatchdogExitOnTimeout = new HostedOptionKey<>(true);
 
     /**
      * The alignment for AOT and JIT compiled methods. The value is constant folded during image

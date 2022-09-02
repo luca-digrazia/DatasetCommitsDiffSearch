@@ -149,7 +149,6 @@ public class NativeImage {
         }
     }
 
-    final DefaultOptionHandler defaultOptionHandler;
     final APIOptionHandler apiOptionHandler;
 
     public static final String oH = "-H:";
@@ -666,8 +665,7 @@ public class NativeImage {
         optionRegistry = new MacroOption.Registry();
 
         /* Default handler needs to be fist */
-        defaultOptionHandler = new DefaultOptionHandler(this);
-        registerOptionHandler(defaultOptionHandler);
+        registerOptionHandler(new DefaultOptionHandler(this));
         apiOptionHandler = new APIOptionHandler(this);
         registerOptionHandler(apiOptionHandler);
         registerOptionHandler(new MacroOptionHandler(this));
@@ -1466,10 +1464,6 @@ public class NativeImage {
 
     boolean isVerbose() {
         return verbose;
-    }
-
-    boolean useDebugAttach() {
-        return defaultOptionHandler.useDebugAttach;
     }
 
     protected void setDryRun(boolean val) {
