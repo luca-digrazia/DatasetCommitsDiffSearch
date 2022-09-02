@@ -294,7 +294,7 @@ public class ClassEntry extends StructureTypeEntry {
          * substitution
          */
         FileEntry methodFileEntry = debugInfoBase.ensureFileEntry(fileName, filePath, cachePath);
-        final MethodEntry methodEntry = new MethodEntry(methodFileEntry, methodName, this, resultType, paramTypeArray, paramNameArray, modifiers, debugMethodInfo.isDeoptTarget());
+        final MethodEntry methodEntry = new MethodEntry(methodFileEntry, methodName, this, resultType, paramTypeArray, paramNameArray, modifiers);
         methods.add(methodEntry);
         return methodEntry;
     }
@@ -338,7 +338,7 @@ public class ClassEntry extends StructureTypeEntry {
     }
 
     public Range makePrimaryRange(String methodName, String symbolName, String paramSignature, String returnTypeName, StringTable stringTable, MethodEntry method, int lo,
-                    int hi, int primaryLine) {
+                                  int hi, int primaryLine, boolean isDeoptTarget) {
         FileEntry fileEntryToUse = method.fileEntry;
         if (fileEntryToUse == null) {
             /*
@@ -357,7 +357,7 @@ public class ClassEntry extends StructureTypeEntry {
                 fileEntryToUse = this.fileEntry;
             }
         }
-        return new Range(symbolName, stringTable, method, fileEntryToUse, lo, hi, primaryLine);
+        return new Range(symbolName, stringTable, method, fileEntryToUse, lo, hi, primaryLine, isDeoptTarget);
     }
 
     public MethodEntry ensureMethodEntry(DebugInfoProvider.DebugMethodInfo debugMethodInfo, DebugInfoBase debugInfoBase, DebugContext debugContext) {

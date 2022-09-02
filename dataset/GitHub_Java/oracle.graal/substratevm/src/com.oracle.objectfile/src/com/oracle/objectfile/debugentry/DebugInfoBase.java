@@ -244,11 +244,12 @@ public abstract class DebugInfoBase {
             int lo = debugCodeInfo.addressLo();
             int hi = debugCodeInfo.addressHi();
             int primaryLine = debugCodeInfo.line();
+            boolean isDeoptTarget = debugCodeInfo.isDeoptTarget();
 
             /* Search for a method defining this primary range. */
             ClassEntry classEntry = ensureClassEntry(className);
             MethodEntry methodEntry = classEntry.ensureMethodEntry(debugCodeInfo, this, debugContext);
-            Range primaryRange = classEntry.makePrimaryRange(methodName, symbolName, paramSignature, returnTypeName, stringTable, methodEntry, lo, hi, primaryLine);
+            Range primaryRange = classEntry.makePrimaryRange(methodName, symbolName, paramSignature, returnTypeName, stringTable, methodEntry, lo, hi, primaryLine, isDeoptTarget);
             debugContext.log(DebugContext.INFO_LEVEL, "PrimaryRange %s.%s %s %s:%d [0x%x, 0x%x]", className, methodName, filePath, fileName, primaryLine, lo, hi);
             classEntry.indexPrimary(primaryRange, debugCodeInfo.getFrameSizeChanges(), debugCodeInfo.getFrameSize());
             debugCodeInfo.lineInfoProvider().forEach(debugLineInfo -> {
