@@ -191,7 +191,7 @@ public final class EspressoContext {
 
     public void initializeContext() {
         assert !this.initialized;
-        new JDWPContextImpl(this).jdwpInit(env);
+        new JDWPContextImpl(this).jdwpInit();
         spawnVM();
         this.initialized = true;
         VMInitializedListeners.getDefault().fire();
