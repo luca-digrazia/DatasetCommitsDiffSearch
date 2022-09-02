@@ -26,9 +26,11 @@ package com.oracle.svm.hosted.meta;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 import com.oracle.graal.pointsto.infrastructure.OriginalFieldProvider;
 import com.oracle.graal.pointsto.meta.AnalysisField;
+import com.oracle.svm.core.meta.ReadableJavaField;
 import com.oracle.svm.core.meta.SharedField;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 
@@ -39,7 +41,7 @@ import jdk.vm.ci.meta.JavaTypeProfile;
 /**
  * Store the compile-time information for a field in the Substrate VM, such as the field offset.
  */
-public class HostedField implements OriginalFieldProvider, SharedField, Comparable<HostedField> {
+public class HostedField implements ReadableJavaField, OriginalFieldProvider, SharedField, Comparable<HostedField> {
 
     private final HostedUniverse universe;
     private final HostedMetaAccess metaAccess;
@@ -52,7 +54,7 @@ public class HostedField implements OriginalFieldProvider, SharedField, Comparab
 
     private final JavaTypeProfile typeProfile;
 
-    static final int LOC_UNMATERIALIZED_STATIC_CONSTANT = -10;
+    private static final int LOC_UNMATERIALIZED_STATIC_CONSTANT = -10;
 
     public HostedField(HostedUniverse universe, HostedMetaAccess metaAccess, AnalysisField wrapped, HostedType holder, HostedType type, JavaTypeProfile typeProfile) {
         this.universe = universe;
@@ -77,6 +79,14 @@ public class HostedField implements OriginalFieldProvider, SharedField, Comparab
     protected void setUnmaterializedStaticConstant() {
         assert this.location == LOC_UNINITIALIZED && isStatic();
         this.location = LOC_UNMATERIALIZED_STATIC_CONSTANT;
+    }
+
+    public JavaConstant getConstantValue() {
+        if (isStatic() && allowConstantFolding()) {
+            return readValue(null);
+        } else {
+            return null;
+        }
     }
 
     public boolean hasLocation() {
@@ -138,6 +148,7 @@ public class HostedField implements OriginalFieldProvider, SharedField, Comparab
         return wrapped.hashCode();
     }
 
+    @Override
     public JavaConstant readValue(JavaConstant receiver) {
         JavaConstant wrappedReceiver;
         if (receiver != null && SubstrateObjectConstant.asObject(receiver) instanceof Class) {
@@ -147,6 +158,30 @@ public class HostedField implements OriginalFieldProvider, SharedField, Comparab
             wrappedReceiver = receiver;
         }
         return universe.lookup(universe.getConstantReflectionProvider().readFieldValue(wrapped, wrappedReceiver));
+    }
+
+    @Override
+    public boolean allowConstantFolding() {
+        if (location == LOC_UNMATERIALIZED_STATIC_CONSTANT) {
+            return true;
+        } else if (!wrapped.isWritten()) {
+            return true;
+        } else if (Modifier.isFinal(getModifiers()) && !Modifier.isStatic(getModifiers())) {
+            /*
+             * No check for value.isDefaultForKind() is needed here, since during native image
+             * generation we are sure that we are not in the middle of a constructor where the final
+             * field has not been written yet. Only for dynamic compilation at run time, the check
+             * is necessary, but we use a different field implementation class for that.
+             */
+            return true;
+        }
+
+        return false;
+    }
+
+    @Override
+    public boolean injectFinalForRuntimeCompilation() {
+        return ReadableJavaField.injectFinalForRuntimeCompilation(wrapped);
     }
 
     public JavaConstant readStorageValue(JavaConstant receiver) {
