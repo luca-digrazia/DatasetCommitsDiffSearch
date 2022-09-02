@@ -42,8 +42,6 @@ package com.oracle.truffle.api.test.builtin;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.library.CachedLibrary;
 
 public final class BuiltinTestObject extends BuiltinObject {
 
@@ -55,38 +53,11 @@ public final class BuiltinTestObject extends BuiltinObject {
     }
 
     @Builtin
-    abstract static class TestArg0 extends BuiltinNode {
+    abstract static class TestMethod extends BuiltinNode {
         @Specialization
         @TruffleBoundary
-        Object doDefault(@SuppressWarnings("unused") BuiltinTestObject receiver) {
-            return "test";
-        }
-    }
-
-    @Builtin
-    abstract static class TestArg1 extends BuiltinNode {
-        @Specialization
-        @TruffleBoundary
-        Object doDefault(@SuppressWarnings("unused") BuiltinTestObject receiver, String arg0) {
-            return "test" + arg0;
-        }
-    }
-
-    @Builtin
-    abstract static class TestArg2 extends BuiltinNode {
-        @Specialization
-        @TruffleBoundary
-        Object doDefault(@SuppressWarnings("unused") BuiltinTestObject receiver, Object arg0, String arg1) {
-            return "test" + arg0 + arg1;
-        }
-    }
-
-    @Builtin
-    abstract static class TestLibrary extends BuiltinNode {
-        @Specialization(limit = "3")
-        @TruffleBoundary
-        Object doDefault(@SuppressWarnings("unused") BuiltinTestObject receiver, Object arg0, @CachedLibrary("arg0") InteropLibrary interop) {
-            return "test" + interop.isString(arg0);
+        Object doDefault(@SuppressWarnings("unused") BuiltinTestObject receiver, String argument) {
+            return "test" + argument;
         }
     }
 
