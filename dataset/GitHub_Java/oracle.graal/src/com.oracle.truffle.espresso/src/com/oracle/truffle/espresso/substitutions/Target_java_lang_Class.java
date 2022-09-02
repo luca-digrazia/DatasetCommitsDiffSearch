@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntFunction;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
@@ -101,9 +100,7 @@ public final class Target_java_lang_Class {
         } catch (EspressoException e) {
             throw e;
         } catch (Throwable e) {
-            CompilerDirectives.transferToInterpreter();
-            System.err.println("Host exception happened in Class.forName: " + e);
-            throw e;
+            throw meta.throwExWithMessage(meta.ClassNotFoundException, name);
         }
     }
 
@@ -247,6 +244,13 @@ public final class Target_java_lang_Class {
                     }
                 });
 
+                SignatureAttribute signatureAttribute = (SignatureAttribute) m.getAttribute(Name.Signature);
+                StaticObject genericSignature = StaticObject.NULL;
+                if (signatureAttribute != null) {
+                    String sig = m.getConstantPool().utf8At(signatureAttribute.getSignatureIndex(), "signature").toString();
+                    genericSignature = meta.toGuestString(sig);
+                }
+
                 StaticObject instance = meta.Constructor.allocateInstance();
                 constructorInit.invokeDirect(
                                 /* this */ instance,
@@ -255,7 +259,7 @@ public final class Target_java_lang_Class {
                                 /* checkedExceptions */ checkedExceptions,
                                 /* modifiers */ m.getModifiers(),
                                 /* slot */ i, // TODO(peterssen): Fill method slot.
-                                /* signature */ meta.toGuestString(m.getRawSignature().toString()),
+                                /* signature */ genericSignature,
 
                                 // FIXME(peterssen): Fill annotations bytes.
                                 /* annotations */ runtimeVisibleAnnotations,
@@ -343,7 +347,15 @@ public final class Target_java_lang_Class {
                     }
                 });
 
+                SignatureAttribute signatureAttribute = (SignatureAttribute) m.getAttribute(Name.Signature);
+                StaticObject genericSignature = StaticObject.NULL;
+                if (signatureAttribute != null) {
+                    String sig = m.getConstantPool().utf8At(signatureAttribute.getSignatureIndex(), "signature").toString();
+                    genericSignature = meta.toGuestString(sig);
+                }
+
                 StaticObject instance = meta.Method.allocateInstance();
+
                 methodInit.invokeDirect(
                                 /* this */ instance,
                                 /* declaringClass */ m.getDeclaringKlass().mirror(),
@@ -353,7 +365,7 @@ public final class Target_java_lang_Class {
                                 /* checkedExceptions */ checkedExceptions,
                                 /* modifiers */ m.getModifiers(),
                                 /* slot */ i, // TODO(peterssen): Fill method slot.
-                                /* signature */ meta.toGuestString(m.getRawSignature().toString()),
+                                /* signature */ genericSignature,
 
                                 // FIXME(peterssen): Fill annotations bytes.
                                 /* annotations */ runtimeVisibleAnnotations,
