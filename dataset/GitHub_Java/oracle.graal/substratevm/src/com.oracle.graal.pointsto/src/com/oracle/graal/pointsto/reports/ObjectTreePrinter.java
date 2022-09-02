@@ -355,19 +355,19 @@ public final class ObjectTreePrinter extends ObjectScanner {
     }
 
     @Override
-    protected void forScannedConstant(JavaConstant scannedValue, ScanReason reason) {
+    protected void forScannedConstant(JavaConstant scannedValue, Object reason) {
         JVMCIError.guarantee(scannedValue != null, "scannedValue is null");
         constantToNode.computeIfAbsent(scannedValue, c -> {
             ObjectNodeBase node;
-            if (reason instanceof FieldScan) {
-                ResolvedJavaField field = ((FieldScan) reason).getField();
+            if (reason instanceof ResolvedJavaField) {
+                ResolvedJavaField field = (ResolvedJavaField) reason;
                 if (field.isStatic()) {
                     node = ObjectNodeBase.fromConstant(bb, scannedValue, new RootSource(field));
                 } else {
                     node = ObjectNodeBase.fromConstant(bb, scannedValue);
                 }
-            } else if (reason instanceof MethodScan) {
-                ResolvedJavaMethod method = ((MethodScan) reason).getMethod();
+            } else if (reason instanceof ResolvedJavaMethod) {
+                ResolvedJavaMethod method = (ResolvedJavaMethod) reason;
                 node = ObjectNodeBase.fromConstant(bb, scannedValue, new RootSource(method));
             } else {
                 node = ObjectNodeBase.fromConstant(bb, scannedValue);
