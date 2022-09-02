@@ -263,7 +263,6 @@ import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.StringConstant;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -1608,7 +1607,7 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
 
         // Preparing Bootstrap call.
         StaticObject name = meta.toGuestString(specifier.getName(pool));
-        Symbol<Signature> invokeSignature = Signatures.check(specifier.getDescriptor(pool));
+        Symbol<Symbol.Signature> invokeSignature = specifier.getSignature(pool);
         Symbol<Type>[] parsedInvokeSignature = getSignatures().parsed(invokeSignature);
         StaticObject methodType = signatureToMethodType(parsedInvokeSignature, declaringKlass, getMeta());
         StaticObject appendix = StaticObject.createArray(meta.Object_array, new StaticObject[1]);

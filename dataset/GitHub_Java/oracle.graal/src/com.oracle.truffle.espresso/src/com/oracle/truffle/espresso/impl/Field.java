@@ -23,11 +23,11 @@
 package com.oracle.truffle.espresso.impl;
 
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.classfile.SignatureAttribute;
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.ModifiedUTF8;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -49,20 +49,20 @@ public final class Field extends Member<Type> {
     private volatile Klass typeKlassCache;
 
     @CompilationFinal private int fieldIndex = -1;
-    @CompilationFinal private Symbol<ModifiedUTF8> genericSignature = null;
+    @CompilationFinal private String genericSignature = null;
     @CompilationFinal private int slot = -1;
 
     public Symbol<Type> getType() {
         return descriptor;
     }
 
-    public final Symbol<ModifiedUTF8> getGenericSignature() {
+    public final String getGenericSignature() {
         if (genericSignature == null) {
             SignatureAttribute attr = (SignatureAttribute) linkedField.getAttribute(SignatureAttribute.NAME);
             if (attr == null) {
-                genericSignature = ModifiedUTF8.fromSymbol(getType());
+                genericSignature = getType().toString();
             } else {
-                genericSignature = holder.getConstantPool().utf8At(attr.getSignatureIndex());
+                genericSignature = holder.getConstantPool().utf8At(attr.getSignatureIndex()).toString();
             }
         }
         return genericSignature;
@@ -74,20 +74,17 @@ public final class Field extends Member<Type> {
         this.holder = holder;
     }
 
-    public static Field createHidden(ObjectKlass holder, int hiddenSlot, int hiddenIndex, Symbol<Name> name) {
-        return new Field(holder, hiddenSlot, hiddenIndex, name);
-    }
-
-    private Field(ObjectKlass holder, int hiddenSlot, int hiddenIndex, Symbol<Name> name) {
+    // Hidden field. Placeholder in the fieldTable
+    public Field(ObjectKlass holder, int hiddenSlot, int hiddenIndex, Symbol<Name> name) {
         super(null, name);
         this.holder = holder;
-        this.linkedField = new LinkedField(new ParserField(0, name, Type.Object, null), holder.getLinkedKlass(), -1);
+        this.linkedField = new LinkedField(new ParserField(0, name, Type.Object, -1, null), holder.getLinkedKlass(), -1);
         this.slot = hiddenSlot;
         this.fieldIndex = hiddenIndex;
     }
 
     public boolean isHidden() {
-        return getDescriptor() == null;
+        return linkedField.getParserField().getTypeIndex() == -1;
     }
 
     public JavaKind getKind() {
