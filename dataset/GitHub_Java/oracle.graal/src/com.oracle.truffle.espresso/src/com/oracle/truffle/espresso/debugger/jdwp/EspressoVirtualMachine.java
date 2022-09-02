@@ -20,18 +20,15 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso.debugger;
+package com.oracle.truffle.espresso.debugger.jdwp;
 
-import com.oracle.truffle.espresso.impl.ObjectKlass;
-
-public interface VMEventListener {
-    void classPrepared(ObjectKlass klass);
-    void classUnloaded(ObjectKlass klass);
-    void threadStarted(Thread thread);
-    void threadDied(Thread thread);
-
-    void addClassPrepareRequestId(int id);
-    void addClassUnloadRequestId(int id);
-    void addThreadStartedRequestId(int id);
-    void addThreadDiedRequestId(int id);
+public class EspressoVirtualMachine {
+    public static final int sizeofFieldRef = 8;
+    public static final int sizeofMethodRef = 8;
+    public static final int sizeofObjectRef = 8;
+    public static final int sizeofClassRef = 8;
+    public static final int sizeofFrameRef = 8;
+    public static final String VM_Description = "Espresso 64-Bit VM";
+    public static final String vmVersion = System.getProperty("java.version");
+    public static final String vmName = "Espresso 64-Bit VM";
 }

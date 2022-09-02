@@ -35,19 +35,14 @@ import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.debug.SuspensionFilter;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.debugger.BreakpointInfo;
 import com.oracle.truffle.espresso.debugger.SourceLocation;
 import com.oracle.truffle.espresso.debugger.SuspendStrategy;
-import com.oracle.truffle.espresso.debugger.VMEventListeners;
 import com.oracle.truffle.espresso.debugger.exception.ClassNotLoadedException;
 import com.oracle.truffle.espresso.debugger.exception.NoSuchSourceLineException;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.GuestClassLoadingNotifier;
-import com.oracle.truffle.espresso.runtime.GuestClassLoadingSubscriber;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import com.oracle.truffle.espresso.runtime.GuestClassLoadingSubscriber;;import java.util.ArrayList;
 
 public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
 
@@ -60,9 +55,6 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
     private final JDWPInstrument instrument;
     private Object suspendLock = new Object();
     private SuspendedInfo suspendedInfo;
-
-    // justification for this being a map is that lookups only happen when at a breakpoint
-    private Map<Breakpoint, BreakpointInfo> breakpointInfos = new HashMap<>();
 
     public JDWPDebuggerController(JDWPInstrument instrument) {
         this.instrument = instrument;
@@ -99,17 +91,15 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
 
     /**
      * Installs a line breakpoint within a given method.
-     * @param command the command that represents the
-     * breakpoint
+     * @param location The source location which includes the
+     * declaring class name and the line number
      */
-    public void submitLineBreakpoint(DebuggerCommand command) {
-        SourceLocation location = command.getSourceLocation();
+    public void submitLineBreakpoint(SourceLocation location) {
         try {
             Breakpoint bp = Breakpoint.newBuilder(location.getSource()).lineIs(location.getLineNumber()).build();
             bp.setEnabled(true);
-            mapBrekpoint(bp, command.getInfo());
             debuggerSession.install(bp);
-            //System.out.println("Breakpoint submitted at " + bp.getLocationDescription());
+            System.out.println("Breakpoint submitted at " + bp.getLocationDescription());
         } catch (ClassNotLoadedException e) {
             installOnClassLoad(location);
             return;
@@ -118,11 +108,6 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
             // the bytecode and source does not match.
             // TODO(Gregersen) - do nothing for now, but probably should handle this nicely later
         }
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private void mapBrekpoint(Breakpoint bp, BreakpointInfo info) {
-        breakpointInfos.put(bp, info);
     }
 
     public void resume() {
@@ -189,7 +174,7 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
     public void notifyClassLoaded(Symbol<Symbol.Type> type) {
         for (SourceLocation location : notInstalled) {
             if (type.equals(location.getType())) {
-                //submitLineBreakpoint(location);
+                submitLineBreakpoint(location);
                 return;
             }
         }
@@ -207,16 +192,15 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
                 firstSuspensionCalled = true;
                 return;
             }
-            //System.out.println("Suspended at: " + event.getSourceSection().toString());
+            System.out.println("Suspended at: " + event.getSourceSection().toString());
 
-            byte strategy = SuspendStrategy.EVENT_THREAD;
+            int strategy = SuspendStrategy.EVENT_THREAD;
             for (Breakpoint bp : event.getBreakpoints()) {
                 // TODO(Gregersen) - look for the BP suspend strategy
                 // TODO(Gregersen) - if multiple BPs at this location we have to adhere to
                 // TODO(Gregersen) - the strongest suspension policy ALL -> THREAD -> NONE
                 if (!bp.isOneShot()) {
-                    //System.out.println("BP at suspension point: " + bp.getLocationDescription());
-                    VMEventListeners.getDefault().breakpointHit(breakpointInfos.get(bp));
+                    System.out.println("BP at suspension point: " + bp.getLocationDescription());
                 }
             }
 
@@ -226,7 +210,7 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
             suspend(strategy);
         }
 
-        private void suspend(byte strategy) {
+        private void suspend(int strategy) {
             switch(strategy) {
                 case SuspendStrategy.NONE:
                     // nothing to suspend

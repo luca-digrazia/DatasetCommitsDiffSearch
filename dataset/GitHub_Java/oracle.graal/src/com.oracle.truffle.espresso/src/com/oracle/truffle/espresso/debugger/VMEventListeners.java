@@ -22,17 +22,14 @@
  */
 package com.oracle.truffle.espresso.debugger;
 
-import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 
-import java.util.HashSet;
+import java.util.ArrayList;
 
 public class VMEventListeners {
 
     private static final VMEventListeners DEFAULT = new VMEventListeners();
-
-    // TODO(Gregersen) - change to array or even a single listener for now
-    private HashSet<VMEventListener> listeners = new HashSet<>();
+    private ArrayList<VMEventListener> listeners = new ArrayList<>();
 
     VMEventListeners() {
 
@@ -67,12 +64,6 @@ public class VMEventListeners {
     public void threadDied(Thread thread) {
         for (VMEventListener listener : listeners) {
             listener.threadDied(thread);
-        }
-    }
-
-    public void breakpointHit(BreakpointInfo info) {
-        for (VMEventListener listener : listeners) {
-            listener.breakpointHIt(info);
         }
     }
 }

@@ -20,18 +20,12 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso.debugger;
+package com.oracle.truffle.espresso.debugger.jdwp;
 
-import com.oracle.truffle.espresso.impl.ObjectKlass;
+public class ClassStatusConstants {
 
-public interface VMEventListener {
-    void classPrepared(ObjectKlass klass);
-    void classUnloaded(ObjectKlass klass);
-    void threadStarted(Thread thread);
-    void threadDied(Thread thread);
-
-    void addClassPrepareRequestId(int id);
-    void addClassUnloadRequestId(int id);
-    void addThreadStartedRequestId(int id);
-    void addThreadDiedRequestId(int id);
+    public static final int VERIFIED = 1;
+    public static final int PREPARED = 2;
+    public static final int INITIALIZED = 4;
+    public static final int ERROR = 8;
 }

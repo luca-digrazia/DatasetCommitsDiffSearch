@@ -29,23 +29,21 @@
  */
 package com.oracle.truffle.wasm.test;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.oracle.truffle.wasm.predefined.testutil.TestutilModule;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
@@ -54,7 +52,6 @@ import org.graalvm.polyglot.io.ByteSequence;
 import org.junit.Assert;
 
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.wasm.predefined.testutil.TestutilModule;
 import com.oracle.truffle.wasm.test.options.WasmTestOptions;
 
 public abstract class WasmSuiteBase extends WasmTestBase {
@@ -129,28 +126,9 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
             Context context;
 
-            // Create a /dev/null stream, as well as surrogate output streams for stdout.
-            // For all the runs except the first and the last ones, suppress the test output.
-            OutputStream devNull = new OutputStream() {
-                @Override
-                public void write(int b) throws IOException {
-                    // emulate write to /dev/null - i.e. do nothing
-                }
-            };
-            final ByteArrayOutputStream capturedStdout = new ByteArrayOutputStream();
-
-            // Capture output for the first run.
-            System.setOut(new PrintStream(capturedStdout));
-
             // Run in interpreted mode, with inlining turned off, to ensure profiles are populated.
             context = getInterpretedNoInline(contextBuilder);
-            final Value resultInterpreted = runInContext(context, source, 1);
-
-            validateResult(testCase.data.resultValidator, resultInterpreted, capturedStdout);
-            capturedStdout.reset();
-
-            // Do not capture the output for intermediate runs.
-            System.setOut(new PrintStream(devNull));
+            runInContext(context, source, 1);
 
             // Run in synchronous compiled mode, with inlining turned off.
             // We need to run the test at least twice like this, since the first run will lead to de-opts due to empty profiles.
@@ -166,15 +144,11 @@ public abstract class WasmSuiteBase extends WasmTestBase {
             context = getSyncCompiledWithInline(contextBuilder);
             runInContext(context, source, 2);
 
-            // Run with normal, asynchronous compilation.
-            // Run 1000 + 1 times - the last time run with a surrogate stream, to collect output.
+            // Run with normal, asynchronous compilation, 1000 times.
             context = getAsyncCompiled(contextBuilder);
-            runInContext(context, source, 1000);
+            final Value result = runInContext(context, source, 1000);
 
-            System.setOut(new PrintStream(capturedStdout));
-            final Value result = runInContext(context, source, 1);
-
-            validateResult(testCase.data.resultValidator, result, capturedStdout);
+            validateResult(testCase.data.resultValidator, result);
         } catch (InterruptedException | IOException e) {
             Assert.fail(String.format("Test %s failed: %s", testCase.name, e.getMessage()));
         } catch (PolyglotException e) {
@@ -187,9 +161,9 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return "testutil:testutil";
     }
 
-    private static void validateResult(BiConsumer<Value, String> validator, Value result, OutputStream capturedStdout) {
+    private static void validateResult(Consumer<Value> validator, Value result) {
         if (validator != null) {
-            validator.accept(result, capturedStdout.toString());
+            validator.accept(result);
         } else {
             Assert.fail("Test was not expected to return a value.");
         }
@@ -260,12 +234,12 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         System.out.println();
     }
 
-    protected String testResource() {
+    protected Path testDirectory() {
         return null;
     }
 
     protected Collection<? extends WasmTestCase> collectTestCases() throws IOException {
-        return Stream.concat(collectStringTestCases().stream(), collectFileTestCases(testResource()).stream()).collect(Collectors.toList());
+        return Stream.concat(collectStringTestCases().stream(), collectFileTestCases(testDirectory()).stream()).collect(Collectors.toList());
     }
 
     protected Collection<? extends WasmTestCase> collectStringTestCases() {
@@ -276,66 +250,42 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return testCases.stream().filter((WasmTestCase x) -> filterTestName().test(x.name)).collect(Collectors.toList());
     }
 
-    protected String getResourceContents(String resourceName) throws IOException {
-        InputStream stream = getClass().getResourceAsStream(resourceName);
-        if (stream == null) {
-            Assert.fail(String.format("Could not find resource: %s", resourceName));
-        }
-        byte[] contents = new byte[stream.available()];
-        new DataInputStream(stream).readFully(contents);
-        return new String(contents);
-    }
-
-    protected Collection<WasmTestCase> collectFileTestCases(String testBundle) throws IOException {
+    protected Collection<WasmTestCase> collectFileTestCases(Path path) throws IOException {
         Collection<WasmTestCase> collectedCases = new ArrayList<>();
-        if (testBundle == null) {
+        if (path == null) {
             return collectedCases;
         }
-
-        // Open the index file of the test bundle. The index file contains the available tests for that bundle.
-        InputStream index = getClass().getResourceAsStream(String.format("/tests/%s/index", testBundle));
-        BufferedReader indexReader = new BufferedReader(new InputStreamReader(index));
-
-        // Iterate through the available tests of the bundle.
-        while (indexReader.ready()) {
-            String testName = indexReader.readLine().trim();
-
-            if (testName.equals("") || testName.startsWith("#")) {
-                // Skip empty lines or lines starting with a hash (treat as a comment).
-                continue;
-            }
-
-            String mainWatContent = getResourceContents(String.format("/tests/%s/%s.wat", testBundle, testName));
-            String resultContent = getResourceContents(String.format("/tests/%s/%s.result", testBundle, testName));
-
-            String[] resultTypeValue = resultContent.split("\\s+", 2);
-            String resultType = resultTypeValue[0];
-            String resultValue = resultTypeValue[1];
-
-            switch (resultType) {
-                case "stdout":
-                    collectedCases.add(testCase(testName, expectedStdout(resultValue), mainWatContent));
-                    break;
-                case "int":
-                    collectedCases.add(testCase(testName, expected(Integer.parseInt(resultValue.trim())), mainWatContent));
-                    break;
-                case "long":
-                    collectedCases.add(testCase(testName, expected(Long.parseLong(resultValue.trim())), mainWatContent));
-                    break;
-                case "float":
-                    collectedCases.add(testCase(testName, expectedFloat(Float.parseFloat(resultValue.trim()), 0.001f), mainWatContent));
-                    break;
-                case "double":
-                    collectedCases.add(testCase(testName, expectedDouble(Double.parseDouble(resultValue.trim()), 0.001f), mainWatContent));
-                    break;
-                case "exception":
-                    collectedCases.add(testCase(testName, expectedThrows(resultValue.trim()), mainWatContent));
-                    break;
-                default:
-                    Assert.fail(String.format("Unknown type in result specification: %s", resultType));
+        try (Stream<Path> walk = Files.list(path)) {
+            List<Path> testFiles = walk.filter(isWatFile).collect(Collectors.toList());
+            for (Path f : testFiles) {
+                String baseFileName = f.toAbsolutePath().toString().split("\\.(?=[^.]+$)")[0];
+                String testName = Paths.get(baseFileName).getFileName().toString();
+                Path resultPath = Paths.get(baseFileName + ".result");
+                String resultSpec = Files.lines(resultPath).limit(1).collect(Collectors.joining());
+                String[] resultTypeValue = resultSpec.split("\\s+");
+                String resultType = resultTypeValue[0];
+                String resultValue = resultTypeValue[1];
+                switch (resultType) {
+                    case "int":
+                        collectedCases.add(testCase(testName, expected(Integer.parseInt(resultValue)), f.toFile()));
+                        break;
+                    case "long":
+                        collectedCases.add(testCase(testName, expected(Long.parseLong(resultValue)), f.toFile()));
+                        break;
+                    case "float":
+                        collectedCases.add(testCase(testName, expectedFloat(Float.parseFloat(resultValue), 0.0001f), f.toFile()));
+                        break;
+                    case "double":
+                        collectedCases.add(testCase(testName, expectedDouble(Double.parseDouble(resultValue), 0.0001f), f.toFile()));
+                        break;
+                    default:
+                        // TODO: We should throw an exception here if the result type is not known,
+                        //  and have an explicit type for exception throws.
+                        collectedCases.add(testCase(testName, expectedThrows(resultValue), f.toFile()));
+                        break;
+                }
             }
         }
-
         return collectedCases;
     }
 
@@ -351,20 +301,16 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return new WasmFileTestCase(name, data, program);
     }
 
-    protected static WasmTestCaseData expectedStdout(String expectedOutput) {
-        return new WasmTestCaseData((Value result, String output) -> Assert.assertEquals("Failure: stdout: ", expectedOutput, output));
-    }
-
     protected static WasmTestCaseData expected(Object expectedValue) {
-        return new WasmTestCaseData((Value result, String output) -> Assert.assertEquals("Failure: result: ", expectedValue, result.as(Object.class)));
+        return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Object.class)));
     }
 
     protected static WasmTestCaseData expectedFloat(float expectedValue, float delta) {
-        return new WasmTestCaseData((Value result, String output) -> Assert.assertEquals("Failure: result: ", expectedValue, result.as(Float.class), delta));
+        return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Float.class), delta));
     }
 
     protected static WasmTestCaseData expectedDouble(double expectedValue, float delta) {
-        return new WasmTestCaseData((Value result, String output) -> Assert.assertEquals("Failure: result: ", expectedValue, result.as(Double.class), delta));
+        return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Double.class), delta));
     }
 
     protected static WasmTestCaseData expectedThrows(String expectedErrorMessage) {

@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.debugger;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.debugger.exception.ClassNotLoadedException;
 import com.oracle.truffle.espresso.debugger.exception.NoSuchSourceLineException;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
@@ -44,7 +45,7 @@ public class SourceLocation {
         return lineNumber;
     }
 
-    public Source getSource() throws NoSuchSourceLineException {
+    public Source getSource() throws ClassNotLoadedException, NoSuchSourceLineException {
         return new SourceLocator(context).lookupSource(type, lineNumber);
     }
 
