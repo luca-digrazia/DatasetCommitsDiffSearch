@@ -130,6 +130,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
         truffleCompiler.initialize(TruffleRuntimeOptions.getOptionsForCompiler(callTarget), callTarget, true);
         if (SubstrateTruffleOptions.isMultiThreaded()) {
             compileQueue = TruffleFeature.getSupport().createBackgroundCompileQueue(this);
+            RuntimeSupport.getRuntimeSupport().addTearDownHook(this::tearDown);
         }
         if (callTarget.engine.traceTransferToInterpreter) {
             if (!SubstrateOptions.IncludeNodeSourcePositions.getValue()) {
@@ -138,14 +139,6 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
             RuntimeOptionValues.singleton().update(Deoptimizer.Options.TraceDeoptimization, true);
         }
         installDefaultListeners();
-    }
-
-    @Override
-    protected void addShutdownHook(Runnable hook) {
-        // Shutdown hooks run only in an application with a Java main method, but these do not tear
-        // down the isolate in the end, so we need a tear-down hook for explicitly created isolates.
-        super.addShutdownHook(hook);
-        RuntimeSupport.getRuntimeSupport().addTearDownHook(hook);
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -175,16 +168,13 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
         return TruffleFeature.getSupport().createTruffleCompiler(this);
     }
 
-    @Override
-    protected void shutdown() {
+    private void tearDown() {
         /*
          * Runaway compilations should fail during testing, but should not cause crashes in
          * production.
          */
         long timeout = SubstrateUtil.assertionsEnabled() ? DEBUG_TEAR_DOWN_TIMEOUT : PRODUCTION_TEAR_DOWN_TIMEOUT;
         getCompileQueue().shutdownAndAwaitTermination(timeout);
-
-        super.shutdown();
     }
 
     @Override
