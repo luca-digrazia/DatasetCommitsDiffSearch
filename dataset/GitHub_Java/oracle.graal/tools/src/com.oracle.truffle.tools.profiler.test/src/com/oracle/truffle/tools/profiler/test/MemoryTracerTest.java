@@ -334,17 +334,4 @@ public class MemoryTracerTest extends AbstractProfilerTest {
         tracer.setCollecting(true);
         c.eval(Source.newBuilder(AllocatesDuringReportingAllocation.ID, "", "").buildLiteral());
     }
-
-    @Test
-    public void testStackLimit() {
-        expectProfilerException(() -> tracer.setStackLimit(-1), () -> tracer.setCollecting(true));
-    }
-
-    @Test
-    public void testClosedConfig() {
-        expectProfilerException(() -> {
-            tracer.close();
-            tracer.setStackLimit(1);
-        }, () -> tracer.setCollecting(true));
-    }
 }
