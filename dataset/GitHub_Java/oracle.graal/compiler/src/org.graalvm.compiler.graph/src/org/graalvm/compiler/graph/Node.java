@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,10 +27,11 @@ package org.graalvm.compiler.graph;
 import static org.graalvm.compiler.graph.Edges.Type.Inputs;
 import static org.graalvm.compiler.graph.Edges.Type.Successors;
 import static org.graalvm.compiler.graph.Graph.isModificationCountsEnabled;
-import static org.graalvm.compiler.graph.UnsafeAccess.UNSAFE;
+import static org.graalvm.compiler.serviceprovider.GraalUnsafeAccess.getUnsafe;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Formattable;
@@ -38,19 +41,17 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.graalvm.compiler.core.common.Fields;
 import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.DebugCloseable;
-import org.graalvm.compiler.debug.Fingerprint;
-import org.graalvm.compiler.graph.Graph.NodeEvent;
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Graph.NodeEventListener;
 import org.graalvm.compiler.graph.Graph.Options;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.graph.iterators.NodePredicate;
-import org.graalvm.compiler.graph.spi.Simplifiable;
-import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
@@ -58,6 +59,7 @@ import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.options.OptionValues;
 
+import jdk.vm.ci.services.Services;
 import sun.misc.Unsafe;
 
 /**
@@ -83,8 +85,11 @@ import sun.misc.Unsafe;
 @NodeInfo
 public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
+    private static final Unsafe UNSAFE = getUnsafe();
+
     public static final NodeClass<?> TYPE = null;
-    public static final boolean USE_UNSAFE_TO_CLONE = true;
+
+    public static final boolean TRACK_CREATION_POSITION = Boolean.parseBoolean(Services.getSavedProperties().get("debug.graal.TrackNodeCreationPosition"));
 
     static final int DELETED_ID_START = -1000000000;
     static final int INITIAL_ID = -1;
@@ -147,14 +152,18 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     /**
      * Annotates a method that can be replaced by a compiler intrinsic. A (resolved) call to the
      * annotated method will be processed by a generated {@code InvocationPlugin} that calls either
-     * a factory method or a constructor corresponding with the annotated method.
+     * a factory method or a constructor corresponding with the annotated method. By default the
+     * intrinsics are implemented by invoking the constructor but a factory method may be used
+     * instead. To use a factory method the class implementing the intrinsic must be annotated with
+     * {@link NodeIntrinsicFactory}. To ease error checking of NodeIntrinsics all intrinsics are
+     * expected to be implemented in the same way, so it's not possible to mix constructor and
+     * factory intrinsification in the same class.
      * <p>
      * A factory method corresponding to an annotated method is a static method named
      * {@code intrinsify} defined in the class denoted by {@link #value()}. In order, its signature
      * is as follows:
      * <ol>
      * <li>A {@code GraphBuilderContext} parameter.</li>
-     * <li>A {@code ResolvedJavaMethod} parameter.</li>
      * <li>A sequence of zero or more {@linkplain InjectedNodeParameter injected} parameters.</li>
      * <li>Remaining parameters that match the declared parameters of the annotated method.</li>
      * </ol>
@@ -185,6 +194,20 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
          * {@code true}.
          */
         boolean injectedStampIsNonNull() default false;
+
+        /**
+         * If {@code true} then this is lowered into a node that has side effects.
+         */
+        boolean hasSideEffect() default false;
+    }
+
+    /**
+     * Marker annotation indicating that the class uses factory methods instead of constructors for
+     * intrinsification.
+     */
+    @java.lang.annotation.Retention(RetentionPolicy.RUNTIME)
+    @java.lang.annotation.Target(ElementType.TYPE)
+    public @interface NodeIntrinsicFactory {
     }
 
     /**
@@ -230,6 +253,40 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     public static final int NODE_LIST = -2;
     public static final int NOT_ITERABLE = -1;
 
+    static class NodeStackTrace {
+        final StackTraceElement[] stackTrace;
+
+        NodeStackTrace() {
+            this.stackTrace = new Throwable().getStackTrace();
+        }
+
+        private String getString(String label) {
+            StringBuilder sb = new StringBuilder();
+            if (label != null) {
+                sb.append(label).append(": ");
+            }
+            for (StackTraceElement ste : stackTrace) {
+                sb.append("at ").append(ste.toString()).append('\n');
+            }
+            return sb.toString();
+        }
+
+        String getStrackTraceString() {
+            return getString(null);
+        }
+
+        @Override
+        public String toString() {
+            return getString(getClass().getSimpleName());
+        }
+    }
+
+    static class NodeCreationStackTrace extends NodeStackTrace {
+    }
+
+    public static class NodeInsertionStackTrace extends NodeStackTrace {
+    }
+
     public Node(NodeClass<? extends Node> c) {
         init(c);
     }
@@ -239,6 +296,9 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         this.nodeClass = c;
         id = INITIAL_ID;
         extraUsages = NO_NODES;
+        if (TRACK_CREATION_POSITION) {
+            setCreationPosition(new NodeCreationStackTrace());
+        }
     }
 
     final int id() {
@@ -262,6 +322,13 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
      */
     public final OptionValues getOptions() {
         return graph == null ? null : graph.getOptions();
+    }
+
+    /**
+     * Gets the debug context associated with this node's graph.
+     */
+    public final DebugContext getDebug() {
+        return graph.getDebug();
     }
 
     /**
@@ -371,10 +438,28 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     /**
-     * Checks whether this node has exactly one usgae.
+     * Checks whether this node has exactly one usage.
      */
     public final boolean hasExactlyOneUsage() {
         return hasUsages() && !hasMoreThanOneUsage();
+    }
+
+    /**
+     * Checks whether this node has only usages of that type.
+     *
+     * @param type the type of usages to look for
+     */
+    public final boolean hasOnlyUsagesOfType(InputType type) {
+        for (Node usage : usages()) {
+            for (Position pos : usage.inputPositions()) {
+                if (pos.get(usage) == this) {
+                    if (pos.getInputType() != type) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     /**
@@ -557,6 +642,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
                 assert assertTrue(newSuccessor.predecessor == null, "unexpected non-null predecessor in new successor (%s): %s, this=%s", newSuccessor, newSuccessor.predecessor, this);
                 newSuccessor.predecessor = this;
             }
+            maybeNotifyInputChanged(this);
         }
     }
 
@@ -570,25 +656,96 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     }
 
     /**
-     * The position of the bytecode that generated this node.
+     * Information associated with this node. A single value is stored directly in the field.
+     * Multiple values are stored by creating an Object[].
      */
-    NodeSourcePosition sourcePosition;
+    private Object annotation;
+
+    private <T> T getNodeInfo(Class<T> clazz) {
+        assert clazz != Object[].class;
+        if (annotation == null) {
+            return null;
+        }
+        if (clazz.isInstance(annotation)) {
+            return clazz.cast(annotation);
+        }
+        if (annotation.getClass() == Object[].class) {
+            Object[] annotations = (Object[]) annotation;
+            for (Object ann : annotations) {
+                if (clazz.isInstance(ann)) {
+                    return clazz.cast(ann);
+                }
+            }
+        }
+        return null;
+    }
+
+    private <T> void setNodeInfo(Class<T> clazz, T value) {
+        assert clazz != Object[].class;
+        if (annotation == null || clazz.isInstance(annotation)) {
+            // Replace the current value
+            this.annotation = value;
+        } else if (annotation.getClass() == Object[].class) {
+            Object[] annotations = (Object[]) annotation;
+            for (int i = 0; i < annotations.length; i++) {
+                if (clazz.isInstance(annotations[i])) {
+                    annotations[i] = value;
+                    return;
+                }
+            }
+            Object[] newAnnotations = Arrays.copyOf(annotations, annotations.length + 1);
+            newAnnotations[annotations.length] = value;
+            this.annotation = newAnnotations;
+        } else {
+            this.annotation = new Object[]{this.annotation, value};
+        }
+    }
 
     /**
      * Gets the source position information for this node or null if it doesn't exist.
      */
 
     public NodeSourcePosition getNodeSourcePosition() {
-        return sourcePosition;
+        return getNodeInfo(NodeSourcePosition.class);
     }
 
     /**
-     * Set the source position to {@code sourcePosition}.
+     * Set the source position to {@code sourcePosition}. Setting it to null is ignored so that it's
+     * not accidentally cleared. Use {@link #clearNodeSourcePosition()} instead.
      */
     public void setNodeSourcePosition(NodeSourcePosition sourcePosition) {
-        this.sourcePosition = sourcePosition;
-        if (sourcePosition != null && graph != null && !graph.seenNodeSourcePosition) {
-            graph.seenNodeSourcePosition = true;
+        if (sourcePosition == null) {
+            return;
+        }
+        setNodeInfo(NodeSourcePosition.class, sourcePosition);
+    }
+
+    public void clearNodeSourcePosition() {
+        setNodeInfo(NodeSourcePosition.class, null);
+    }
+
+    public NodeCreationStackTrace getCreationPosition() {
+        return getNodeInfo(NodeCreationStackTrace.class);
+    }
+
+    public void setCreationPosition(NodeCreationStackTrace trace) {
+        setNodeInfo(NodeCreationStackTrace.class, trace);
+    }
+
+    public NodeInsertionStackTrace getInsertionPosition() {
+        return getNodeInfo(NodeInsertionStackTrace.class);
+    }
+
+    public void setInsertionPosition(NodeInsertionStackTrace trace) {
+        setNodeInfo(NodeInsertionStackTrace.class, trace);
+    }
+
+    /**
+     * Update the source position only if it is null.
+     */
+    public void updateNodeSourcePosition(Supplier<NodeSourcePosition> sourcePositionSupp) {
+        if (this.getNodeSourcePosition() == null) {
+            setNodeSourcePosition(sourcePositionSupp.get());
         }
     }
 
@@ -690,22 +847,24 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
     private void replaceAtMatchingUsages(Node other, Predicate<Node> filter, Node toBeDeleted) {
         if (filter == null) {
-            fail("filter cannot be null");
+            throw fail("filter cannot be null");
         }
         checkReplaceWith(other);
         int i = 0;
-        while (i < this.getUsageCount()) {
+        int usageCount = this.getUsageCount();
+        while (i < usageCount) {
             Node usage = this.getUsageAt(i);
             if (filter.test(usage)) {
                 replaceAtUsage(other, toBeDeleted, usage);
                 this.movUsageFromEndTo(i);
+                usageCount--;
             } else {
                 ++i;
             }
         }
     }
 
-    public Node getUsageAt(int index) {
+    private Node getUsageAt(int index) {
         if (index == 0) {
             return this.usage0;
         } else if (index == 1) {
@@ -715,19 +874,71 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         }
     }
 
+    public Node singleUsage() {
+        assert hasExactlyOneUsage();
+        return this.usage0;
+    }
+
     public void replaceAtMatchingUsages(Node other, NodePredicate usagePredicate) {
         checkReplaceWith(other);
         replaceAtMatchingUsages(other, usagePredicate, null);
     }
 
-    public void replaceAtUsages(InputType type, Node other) {
+    private void replaceAtUsagePos(Node other, Node usage, Position pos) {
+        pos.initialize(usage, other);
+        maybeNotifyInputChanged(usage);
+        if (other != null) {
+            other.addUsage(usage);
+        }
+    }
+
+    public void replaceAtUsages(Node other, InputType type) {
         checkReplaceWith(other);
-        for (Node usage : usages().snapshot()) {
+        int i = 0;
+        int usageCount = this.getUsageCount();
+        if (usageCount == 0) {
+            return;
+        }
+        usages: while (i < usageCount) {
+            Node usage = this.getUsageAt(i);
             for (Position pos : usage.inputPositions()) {
                 if (pos.getInputType() == type && pos.get(usage) == this) {
-                    pos.set(usage, other);
+                    replaceAtUsagePos(other, usage, pos);
+                    this.movUsageFromEndTo(i);
+                    usageCount--;
+                    continue usages;
                 }
             }
+            i++;
+        }
+        if (hasNoUsages()) {
+            maybeNotifyZeroUsages(this);
+        }
+    }
+
+    public void replaceAtUsages(Node other, InputType... inputTypes) {
+        checkReplaceWith(other);
+        int i = 0;
+        int usageCount = this.getUsageCount();
+        if (usageCount == 0) {
+            return;
+        }
+        usages: while (i < usageCount) {
+            Node usage = this.getUsageAt(i);
+            for (Position pos : usage.inputPositions()) {
+                for (InputType type : inputTypes) {
+                    if (pos.getInputType() == type && pos.get(usage) == this) {
+                        replaceAtUsagePos(other, usage, pos);
+                        this.movUsageFromEndTo(i);
+                        usageCount--;
+                        continue usages;
+                    }
+                }
+            }
+            i++;
+        }
+        if (hasNoUsages()) {
+            maybeNotifyZeroUsages(this);
         }
     }
 
@@ -736,10 +947,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
             assert !graph.isFrozen();
             NodeEventListener listener = graph.nodeEventListener;
             if (listener != null) {
-                listener.inputChanged(node);
-            }
-            if (Fingerprint.ENABLED) {
-                Fingerprint.submit("%s: %s", NodeEvent.INPUT_CHANGED, node);
+                listener.event(Graph.NodeEvent.INPUT_CHANGED, node);
             }
         }
     }
@@ -749,10 +957,7 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
             assert !graph.isFrozen();
             NodeEventListener listener = graph.nodeEventListener;
             if (listener != null && node.isAlive()) {
-                listener.usagesDroppedToZero(node);
-            }
-            if (Fingerprint.ENABLED) {
-                Fingerprint.submit("%s: %s", NodeEvent.ZERO_USAGES, node);
+                listener.event(Graph.NodeEvent.ZERO_USAGES, node);
             }
         }
     }
@@ -788,6 +993,20 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
     public void replaceFirstInput(Node oldInput, Node newInput) {
         if (nodeClass.replaceFirstInput(this, oldInput, newInput)) {
             updateUsages(oldInput, newInput);
+        }
+    }
+
+    public void replaceAllInputs(Node oldInput, Node newInput) {
+        while (nodeClass.replaceFirstInput(this, oldInput, newInput)) {
+            updateUsages(oldInput, newInput);
+        }
+    }
+
+    public void replaceFirstInput(Node oldInput, Node newInput, InputType type) {
+        for (Position pos : inputPositions()) {
+            if (pos.getInputType() == type && pos.get(this) == oldInput) {
+                pos.set(this, newInput);
+            }
         }
     }
 
@@ -841,17 +1060,6 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
             }
         }
         return newNode;
-    }
-
-    /**
-     * Must be overridden by subclasses that implement {@link Simplifiable}. The implementation in
-     * {@link Node} exists to obviate the need to cast a node before invoking
-     * {@link Simplifiable#simplify(SimplifierTool)}.
-     *
-     * @param tool
-     */
-    public void simplify(SimplifierTool tool) {
-        throw new UnsupportedOperationException();
     }
 
     /**
@@ -910,6 +1118,9 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         }
         newNode.graph = into;
         newNode.id = INITIAL_ID;
+        if (getNodeSourcePosition() != null && (into == null || into.trackNodeSourcePosition())) {
+            newNode.setNodeSourcePosition(getNodeSourcePosition());
+        }
         if (into != null) {
             into.register(newNode);
         }
@@ -917,9 +1128,6 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
 
         if (into != null && useIntoLeafNodeCache) {
             into.putNodeIntoCache(newNode);
-        }
-        if (graph != null && into != null && sourcePosition != null) {
-            newNode.setNodeSourcePosition(sourcePosition);
         }
         newNode.afterClone(this);
         return newNode;
@@ -936,7 +1144,10 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
             } else {
                 assertFalse(input.isDeleted(), "input was deleted %s", input);
                 assertTrue(input.isAlive(), "input is not alive yet, i.e., it was not yet added to the graph");
-                assertTrue(pos.getInputType() == InputType.Unchecked || input.isAllowedUsageType(pos.getInputType()), "invalid usage type %s %s", input, pos.getInputType());
+                assertTrue(pos.getInputType() == InputType.Unchecked || input.isAllowedUsageType(pos.getInputType()), "invalid usage type input:%s inputType:%s inputField:%s", input,
+                                pos.getInputType(), pos.getName());
+                Class<?> expectedType = pos.getType();
+                assertTrue(expectedType.isAssignableFrom(input.getClass()), "Invalid input type for %s: expected a %s but was a %s", pos, expectedType, input.getClass());
             }
         }
         return true;
@@ -949,6 +1160,10 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         if (Options.VerifyGraalGraphEdges.getValue(getOptions())) {
             verifyEdges();
         }
+        return true;
+    }
+
+    public boolean verifySourcePosition() {
         return true;
     }
 
@@ -1068,6 +1283,14 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
         if (pos != null) {
             map.put("nodeSourcePosition", pos);
         }
+        NodeCreationStackTrace creation = getCreationPosition();
+        if (creation != null) {
+            map.put("nodeCreationPosition", creation.getStrackTraceString());
+        }
+        NodeInsertionStackTrace insertion = getInsertionPosition();
+        if (insertion != null) {
+            map.put("nodeInsertionPosition", insertion.getStrackTraceString());
+        }
         return map;
     }
 
@@ -1181,8 +1404,17 @@ public abstract class Node implements Cloneable, Formattable, NodeInterface {
      * @param other a node of exactly the same type as this node
      * @return true if the data fields of this object and {@code other} are equal
      */
-    public boolean valueEquals(Node other) {
+    public final boolean valueEquals(Node other) {
         return getNodeClass().dataEquals(this, other);
+    }
+
+    /**
+     * Determines if this node is equal to the other node while ignoring differences in
+     * {@linkplain Successor control-flow} edges.
+     *
+     */
+    public final boolean dataFlowEquals(Node other) {
+        return this == other || nodeClass == other.getNodeClass() && this.valueEquals(other) && nodeClass.equalInputs(this, other);
     }
 
     public final void pushInputs(NodeStack stack) {
