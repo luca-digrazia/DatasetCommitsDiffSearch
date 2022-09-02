@@ -123,7 +123,7 @@ import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.services.Services;
 
 /**
- * Implementation of the Truffle runtime when running on top of Graal. There is only one per VM.
+ * Implementation of the Truffle runtime when running on top of Graal.
  */
 public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleCompilerRuntime {
 
