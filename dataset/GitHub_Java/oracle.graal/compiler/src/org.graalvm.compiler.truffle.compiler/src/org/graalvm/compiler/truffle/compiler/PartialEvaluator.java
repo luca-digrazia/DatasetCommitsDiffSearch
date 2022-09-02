@@ -210,10 +210,6 @@ public abstract class PartialEvaluator {
         return cache;
     }
 
-    public void purgeEncodedGraphCache() {
-        graphCacheRef.set(null);
-    }
-
     void initialize(OptionValues options) {
         instrumentationCfg = new InstrumentPhase.InstrumentationConfiguration(options);
         boolean needSourcePositions = TruffleCompilerOptions.getPolyglotOptionValue(options, NodeSourcePositions) ||
