@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,8 @@
  */
 package org.graalvm.compiler.truffle.compiler.debug;
 
-import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationBailoutAction;
+import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationBailoutAsFailure;
+import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationFailureAction;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -48,7 +49,7 @@ public final class TraceCompilationFailureListener implements TruffleCompilerLis
     /**
      * Determines if a failure is permanent.
      */
-    private static boolean isPermanentFailure(boolean bailout, boolean permanentBailout) {
+    public static boolean isPermanentFailure(boolean bailout, boolean permanentBailout) {
         return !bailout || permanentBailout;
     }
 
@@ -68,6 +69,7 @@ public final class TraceCompilationFailureListener implements TruffleCompilerLis
     public void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout) {
         if (isPermanentFailure(bailout, permanentBailout) || bailoutActionIsPrintOrGreater()) {
             Map<String, Object> properties = new LinkedHashMap<>();
+            properties.put("ASTSize", compilable.getNonTrivialNodeCount());
             properties.put("Reason", reason);
             TruffleCompilerRuntime.getRuntime().logEvent(0, "opt fail", compilable.toString(), properties);
         }
@@ -75,7 +77,7 @@ public final class TraceCompilationFailureListener implements TruffleCompilerLis
 
     private static boolean bailoutActionIsPrintOrGreater() {
         OptionValues options = TruffleCompilerOptions.getOptions();
-        return CompilationBailoutAction.getValue(options).ordinal() >= ExceptionAction.Print.ordinal();
+        return CompilationBailoutAsFailure.getValue(options) && CompilationFailureAction.getValue(options).ordinal() >= ExceptionAction.Print.ordinal();
     }
 
 }

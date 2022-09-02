@@ -254,7 +254,8 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
     private CompilationResultBuilderFactory getTruffleCallBoundaryInstrumentationFactory(String arch) {
         for (TruffleCallBoundaryInstrumentationFactory factory : GraalServices.load(TruffleCallBoundaryInstrumentationFactory.class)) {
             if (factory.getArchitecture().equals(arch)) {
-                return factory.create(lastTierProviders.getMetaAccess(), hotspotGraalRuntime.getVMConfig(), hotspotGraalRuntime.getHostProviders().getRegisters());
+                factory.init(lastTierProviders.getMetaAccess(), hotspotGraalRuntime.getVMConfig(), hotspotGraalRuntime.getHostProviders().getRegisters());
+                return factory;
             }
         }
         // No specialization of OptimizedCallTarget on this platform.
