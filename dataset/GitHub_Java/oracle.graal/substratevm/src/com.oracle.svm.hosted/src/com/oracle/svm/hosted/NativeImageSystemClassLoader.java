@@ -24,11 +24,9 @@
  */
 package com.oracle.svm.hosted;
 
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.security.SecureClassLoader;
-import java.util.Enumeration;
 import java.util.jar.JarFile;
 
 import com.oracle.svm.core.util.VMError;
@@ -47,15 +45,34 @@ import com.oracle.svm.util.ReflectionUtil;
  */
 public final class NativeImageSystemClassLoader extends SecureClassLoader {
 
-    private AbstractNativeImageClassLoader delegate = null;
+    private NativeImageClassLoader delegate = null;
     private final ClassLoader defaultSystemClassLoader;
+    /**
+     * {@link ClassLoader#loadClass(String, boolean)} is the terminal method that gets invoked when
+     * resolving a class, unfortunately it is protected method meant to be overridden. Since this
+     * class delegates to the appropriate ClassLoader, the method needs to be called via reflection
+     * to by pass the protected visibility
+     */
+    private static final Method loadClass = ReflectionUtil.lookupMethod(ClassLoader.class, "loadClass",
+                    String.class, boolean.class);
+    /**
+     * {@link ClassLoader#findResource(String)} is the terminal method that gets invoked when
+     * finding a resource, unfortunately it is protected method meant to be overridden. Since this
+     * class delegates to the appropriate ClassLoader, the method needs to be called via reflection
+     * to by pass the protected visibility
+     */
+    private static final Method findResource = ReflectionUtil.lookupMethod(ClassLoader.class, "findResource",
+                    String.class);
+
+    private static final Method getClassLoadingLock = ReflectionUtil.lookupMethod(ClassLoader.class, "getClassLoadingLock",
+                    String.class);
 
     public NativeImageSystemClassLoader(ClassLoader defaultSystemClassLoader) {
         super(defaultSystemClassLoader);
         this.defaultSystemClassLoader = defaultSystemClassLoader;
     }
 
-    public void setDelegate(AbstractNativeImageClassLoader delegateClassLoader) {
+    public void setDelegate(NativeImageClassLoader delegateClassLoader) {
         this.delegate = delegateClassLoader;
     }
 
@@ -65,17 +82,37 @@ public final class NativeImageSystemClassLoader extends SecureClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        return AbstractNativeImageClassLoader.Util.loadClass(getActiveClassLoader(), name, resolve);
+        ClassLoader classLoader = null;
+        Class<?> loadedClass = null;
+        try {
+            classLoader = getActiveClassLoader();
+            final Object lock = getClassLoadingLock.invoke(classLoader, name);
+            synchronized (lock) {
+                // invoke the "loadClass" method on the current class loader
+                loadedClass = ((Class<?>) loadClass.invoke(classLoader, name, resolve));
+            }
+        } catch (Exception e) {
+            if (e.getCause() instanceof ClassNotFoundException) {
+                throw ((ClassNotFoundException) e.getCause());
+            }
+            String message = String.format("Can not load class: %s, with class loader: %s", name, classLoader);
+            VMError.shouldNotReachHere(message, e);
+        }
+        return loadedClass;
     }
 
     @Override
     protected URL findResource(String name) {
-        return AbstractNativeImageClassLoader.Util.findResource(getActiveClassLoader(), name);
-    }
-
-    @Override
-    protected Enumeration<URL> findResources(String name) throws IOException {
-        return AbstractNativeImageClassLoader.Util.findResources(getActiveClassLoader(), name);
+        ClassLoader classLoader = null;
+        try {
+            classLoader = getActiveClassLoader();
+            // invoke the "findResourceMethod" method on the current class loader
+            return (URL) findResource.invoke(classLoader, name);
+        } catch (ReflectiveOperationException e) {
+            String message = String.format("Can not find resource: %s using class loader: %s", name, classLoader);
+            VMError.shouldNotReachHere(message, e);
+        }
+        return null;
     }
 
     @Override
@@ -110,4 +147,5 @@ public final class NativeImageSystemClassLoader extends SecureClassLoader {
             VMError.shouldNotReachHere(message, e);
         }
     }
+
 }
