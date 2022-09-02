@@ -191,7 +191,7 @@ class MultiLanguageShell implements Closeable {
             if (e.isHostException()) {
                 println(e.asHostException().toString());
             } else {
-                println(String.valueOf(e.getMessage()));
+                println(e.getMessage());
             }
             // no need to print stack traces with single entry
             if (trace.size() > 1) {
