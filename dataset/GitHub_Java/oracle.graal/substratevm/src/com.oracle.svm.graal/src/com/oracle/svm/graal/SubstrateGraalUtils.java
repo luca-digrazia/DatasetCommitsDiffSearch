@@ -157,9 +157,8 @@ public class SubstrateGraalUtils {
                 return methodString;
             }
 
-            @SuppressWarnings("hiding")
             @Override
-            protected DebugContext createRetryDebugContext(DebugContext initialDebug, OptionValues options, PrintStream logStream) {
+            protected DebugContext createRetryDebugContext(OptionValues options, PrintStream logStream) {
                 return GraalSupport.get().openDebugContext(options, compilationId, method, logStream);
             }
         }.run(initialDebug);
