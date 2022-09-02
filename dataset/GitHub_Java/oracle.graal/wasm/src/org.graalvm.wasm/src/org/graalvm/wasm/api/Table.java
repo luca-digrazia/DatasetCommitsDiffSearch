@@ -65,7 +65,7 @@ public class Table extends Dictionary {
     }
 
     @TruffleBoundary
-    private static WasmExecutionException rangeError() {
+    private WasmExecutionException rangeError() {
         return new WasmExecutionException(null, "Range error.");
     }
 

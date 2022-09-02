@@ -42,7 +42,7 @@ package org.graalvm.wasm.api;
 
 import org.graalvm.wasm.ImportDescriptor;
 import org.graalvm.wasm.WasmFunction;
-import org.graalvm.wasm.WasmInstance;
+import org.graalvm.wasm.WasmModule;
 
 import java.util.ArrayList;
 
@@ -52,7 +52,7 @@ import static org.graalvm.wasm.api.ImportExportKind.memory;
 import static org.graalvm.wasm.api.ImportExportKind.table;
 
 public class Module extends Dictionary {
-    private final WasmInstance module;
+    private final WasmModule module;
 
     public Module(byte[] source) {
         // TODO: Parse the source into the module.

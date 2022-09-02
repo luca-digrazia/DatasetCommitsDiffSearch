@@ -51,7 +51,6 @@ public class WebAssembly extends Dictionary {
         return instantiate(source, importObject);
     }
 
-    @SuppressWarnings("unused")
     public Module compile(byte[] source) {
         // TODO: Implement.
         return null;
