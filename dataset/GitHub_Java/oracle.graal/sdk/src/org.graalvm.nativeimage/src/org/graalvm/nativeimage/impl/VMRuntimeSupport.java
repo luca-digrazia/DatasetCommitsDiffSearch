@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,53 +38,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package org.graalvm.nativeimage;
+package org.graalvm.nativeimage.impl;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
 
-import org.graalvm.nativeimage.impl.VMRuntimeSupport;
+public interface VMRuntimeSupport {
 
-/**
- * Used for doing VM runtime operations.
- *
- * @since 19.0
- */
-public final class VMRuntime {
+    void executeStartupHooks();
 
-    /**
-     * Initializes the VM: Runs all startup hooks that were registered during image building.
-     * Startup hooks usually depend on option values, so it is recommended (but not required) that
-     * all option values are set before calling this method.
-     * <p>
-     * Invoking this method more than once has no effect, i.e., startup hooks are only executed at
-     * the first invocation.
-     *
-     * @since 19.0
-     */
-    public static void initialize() {
-        ImageSingletons.lookup(VMRuntimeSupport.class).executeStartupHooks();
-    }
+    void shutdown();
 
-    /**
-     * Shuts down the VM: Runs all shutdown hooks and waits for all finalization to complete.
-     *
-     * @since 19.0
-     */
-    public static void shutdown() {
-        ImageSingletons.lookup(VMRuntimeSupport.class).shutdown();
-    }
+    boolean dumpHeap(FileOutputStream fileOutputStream, boolean gcBefore) throws IOException;
 
-    /**
-     * If implemented, a heap dump is generated in hprof binary format. Otherwise
-     * UnsupportedOperationException gets thrown.
-     *
-     * @since 20.1
-     */
-    public static boolean dumpHeap(FileOutputStream fileOutputStream, boolean gcBefore) throws IOException {
-        return ImageSingletons.lookup(VMRuntimeSupport.class).dumpHeap(fileOutputStream, gcBefore);
-    }
-
-    private VMRuntime() {
-    }
 }
