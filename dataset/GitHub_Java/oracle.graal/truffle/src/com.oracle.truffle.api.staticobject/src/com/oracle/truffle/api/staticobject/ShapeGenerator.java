@@ -40,6 +40,7 @@
  */
 package com.oracle.truffle.api.staticobject;
 
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.asm.ClassVisitor;
 import com.oracle.truffle.api.impl.asm.FieldVisitor;
 import com.oracle.truffle.api.impl.asm.Type;
