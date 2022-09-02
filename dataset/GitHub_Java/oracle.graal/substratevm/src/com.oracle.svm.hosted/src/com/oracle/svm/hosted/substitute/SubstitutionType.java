@@ -305,7 +305,6 @@ public class SubstitutionType implements ResolvedJavaType, OriginalClassProvider
         throw JVMCIError.unimplemented();
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public ResolvedJavaType getHostClass() {
         return original.getHostClass();
