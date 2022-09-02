@@ -46,7 +46,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.BiConsumer;
 
-import com.oracle.svm.core.heap.StoredContinuation;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.graph.Node;
@@ -150,7 +149,7 @@ public final class SVMHost implements HostVM {
     }
 
     private static Map<String, EnumSet<AnalysisType.UsageKind>> setupForbiddenTypes(OptionValues options) {
-        List<String> forbiddenTypesOptionValues = SubstrateOptions.ReportAnalysisForbiddenType.getValue(options).values();
+        String[] forbiddenTypesOptionValues = SubstrateOptions.ReportAnalysisForbiddenType.getValue(options);
         Map<String, EnumSet<AnalysisType.UsageKind>> forbiddenTypes = new HashMap<>();
         for (String forbiddenTypesOptionValue : forbiddenTypesOptionValues) {
             String[] typeNameUsageKind = forbiddenTypesOptionValue.split(":", 2);
@@ -424,7 +423,7 @@ public final class SVMHost implements HostVM {
         classReachabilityListeners.add(listener);
     }
 
-    public void notifyClassReachabilityListener(AnalysisUniverse universe, DuringAnalysisAccess access) {
+    void notifyClassReachabilityListener(AnalysisUniverse universe, DuringAnalysisAccess access) {
         for (AnalysisType type : universe.getTypes()) {
             if (type.isReachable() && !type.getReachabilityListenerNotified()) {
                 type.setReachabilityListenerNotified(true);
@@ -454,8 +453,6 @@ public final class SVMHost implements HostVM {
         } else if (type.isInstanceClass()) {
             if (Reference.class.isAssignableFrom(type.getJavaClass())) {
                 return HubType.InstanceReference;
-            } else if (type.getJavaClass().equals(StoredContinuation.class)) {
-                return HubType.StoredContinuation;
             }
             assert !Target_java_lang_ref_Reference.class.isAssignableFrom(type.getJavaClass()) : "should not see substitution type here";
             return HubType.Instance;

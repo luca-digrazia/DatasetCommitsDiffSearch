@@ -35,7 +35,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import org.graalvm.compiler.core.common.type.ObjectStamp;
-import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.java.BytecodeParser.BytecodeParserError;
 import org.graalvm.compiler.nodes.NodeView;
@@ -47,6 +46,7 @@ import org.graalvm.compiler.options.OptionValues;
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
+import com.oracle.graal.pointsto.flow.OffsetLoadTypeFlow.LoadIndexedTypeFlow;
 import com.oracle.graal.pointsto.flow.context.AnalysisContext;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -165,20 +165,40 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
         originalMethodFlows.setInitialParameterFlow(initialParameterFlow, i);
     }
 
+    public void addAllocation(NewInstanceTypeFlow sourceFlow) {
+        originalMethodFlows.addAllocation(sourceFlow);
+    }
+
+    protected void addDynamicAllocation(DynamicNewInstanceTypeFlow sourceFlow) {
+        originalMethodFlows.addDynamicAllocation(sourceFlow);
+    }
+
+    protected void addClone(CloneTypeFlow sourceFlow) {
+        originalMethodFlows.addClone(sourceFlow);
+    }
+
+    public void addSource(SourceTypeFlow sourceFlow) {
+        originalMethodFlows.addSource(sourceFlow);
+    }
+
     protected void addInstanceOf(Object key, InstanceOfTypeFlow instanceOf) {
         originalMethodFlows.addInstanceOf(key, instanceOf);
     }
 
-    public void addNodeFlow(BigBang bb, Node node, TypeFlow<?> input) {
-        if (bb.strengthenGraalGraphs()) {
-            originalMethodFlows.addNodeFlow(node, input);
-        } else {
-            originalMethodFlows.addMiscEntryFlow(input);
-        }
-    }
-
     public void addMiscEntry(TypeFlow<?> input) {
         originalMethodFlows.addMiscEntryFlow(input);
+    }
+
+    protected void addMonitorEntryFlow(MonitorEnterTypeFlow monitorEntryFlow) {
+        originalMethodFlows.addMonitorEntry(monitorEntryFlow);
+    }
+
+    protected void addFieldLoad(LoadFieldTypeFlow sourceFlow) {
+        originalMethodFlows.addFieldLoad(sourceFlow);
+    }
+
+    protected void addIndexedLoad(LoadIndexedTypeFlow sourceFlow) {
+        originalMethodFlows.addIndexedLoad(sourceFlow);
     }
 
     protected void addInvoke(Object key, InvokeTypeFlow invokeTypeFlow) {
@@ -273,7 +293,7 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
      * If the method returns a parameter through all of the return nodes then that ParameterNode is
      * returned, otherwise null.
      */
-    public ParameterNode getReturnedParameter() {
+    protected ParameterNode getReturnedParameter() {
         return returnedParameter;
     }
 

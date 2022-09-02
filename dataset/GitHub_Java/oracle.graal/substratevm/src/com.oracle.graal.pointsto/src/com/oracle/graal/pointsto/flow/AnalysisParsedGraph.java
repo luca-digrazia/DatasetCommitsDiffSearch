@@ -99,14 +99,16 @@ public final class AnalysisParsedGraph {
                 // enable this logging to get log output in compilation passes
                 try (Indent indent2 = debug.logAndIndent("parse graph phases")) {
 
-                    GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(bb.getProviders().getGraphBuilderPlugins())
-                                    .withEagerResolving(true)
+                    GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(bb.getProviders().getGraphBuilderPlugins()).withEagerResolving(true)
                                     .withUnresolvedIsError(PointstoOptions.UnresolvedIsError.getValue(bb.getOptions()))
-                                    .withNodeSourcePosition(true)
-                                    .withBytecodeExceptionMode(BytecodeExceptionMode.CheckAll)
-                                    .withRetainLocalVariables(true);
+                                    .withNodeSourcePosition(true).withBytecodeExceptionMode(BytecodeExceptionMode.CheckAll);
 
-                    config = bb.getHostVM().updateGraphBuilderConfiguration(config, method);
+                    /*
+                     * We want to always disable the liveness analysis, since we want the points-to
+                     * analysis to be as conservative as possible. The analysis results can then be
+                     * used with the liveness analysis enabled or disabled.
+                     */
+                    config = config.withRetainLocalVariables(true);
 
                     bb.getHostVM().createGraphBuilderPhase(bb.getProviders(), config, OptimisticOptimizations.NONE, null).apply(graph);
                 } catch (PermanentBailoutException ex) {
