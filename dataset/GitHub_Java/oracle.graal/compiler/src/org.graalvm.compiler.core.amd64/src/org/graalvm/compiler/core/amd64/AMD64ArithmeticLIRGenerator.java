@@ -25,10 +25,6 @@
 
 package org.graalvm.compiler.core.amd64;
 
-import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_READ;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_POST_VOLATILE_WRITE;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_READ;
-import static jdk.vm.ci.code.MemoryBarriers.JMM_PRE_VOLATILE_WRITE;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.ADD;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.AND;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.CMP;
@@ -1189,17 +1185,12 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
 
     @Override
     public Variable emitVolatileLoad(LIRKind kind, Value address, LIRFrameState state) {
-        getLIRGen().emitMembar(JMM_PRE_VOLATILE_READ);
-        Variable var = emitLoad(kind, address, state);
-        getLIRGen().emitMembar(JMM_POST_VOLATILE_READ);
-        return var;
+        throw GraalError.shouldNotReachHere();
     }
 
     @Override
     public void emitVolatileStore(ValueKind<?> kind, Value address, Value input, LIRFrameState state) {
-        getLIRGen().emitMembar(JMM_PRE_VOLATILE_WRITE);
-        emitStore(kind, address, input, state);
-        getLIRGen().emitMembar(JMM_POST_VOLATILE_WRITE);
+        throw GraalError.shouldNotReachHere();
     }
 
     protected void emitStoreConst(AMD64Kind kind, AMD64AddressValue address, ConstantValue value, LIRFrameState state) {
