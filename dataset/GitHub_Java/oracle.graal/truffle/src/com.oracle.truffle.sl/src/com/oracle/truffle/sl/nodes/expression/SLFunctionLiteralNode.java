@@ -112,7 +112,7 @@ public final class SLFunctionLiteralNode extends SLExpressionNode {
                 /* We are about to change a @CompilationFinal field. */
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 /* First execution of the node: lookup the function in the function registry. */
-                this.cachedFunction = function = contextReference.get().getFunctionRegistry().lookup(functionName, true);
+                function = contextReference.get().getFunctionRegistry().lookup(functionName, true);
             }
         } else {
             /*

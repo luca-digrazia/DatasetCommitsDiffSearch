@@ -276,7 +276,7 @@ public final class SLLanguage extends TruffleLanguage<SLContext> {
         return newTarget;
     }
 
-    public static NodeInfo lookupNodeInfo(Class<?> clazz) {
+    static NodeInfo lookupNodeInfo(Class<?> clazz) {
         if (clazz == null) {
             return null;
         }

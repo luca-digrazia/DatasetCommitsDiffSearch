@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,11 +44,13 @@ import java.util.logging.Level;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -58,6 +60,7 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.utilities.CyclicAssumption;
+import com.oracle.truffle.api.utilities.TriState;
 import com.oracle.truffle.sl.SLLanguage;
 import com.oracle.truffle.sl.nodes.SLUndefinedFunctionRootNode;
 
@@ -100,9 +103,13 @@ public final class SLFunction implements TruffleObject {
     private final CyclicAssumption callTargetStable;
 
     protected SLFunction(SLLanguage language, String name) {
-        this.name = name;
-        this.callTarget = Truffle.getRuntime().createCallTarget(new SLUndefinedFunctionRootNode(language, name));
+        this(language.getOrCreateUndefinedFunction(name));
+    }
+
+    protected SLFunction(RootCallTarget callTarget) {
+        this.name = callTarget.getRootNode().getName();
         this.callTargetStable = new CyclicAssumption(name);
+        setCallTarget(callTarget);
     }
 
     public String getName() {
@@ -110,13 +117,16 @@ public final class SLFunction implements TruffleObject {
     }
 
     protected void setCallTarget(RootCallTarget callTarget) {
+        boolean wasNull = this.callTarget == null;
         this.callTarget = callTarget;
         /*
          * We have a new call target. Invalidate all code that speculated that the old call target
          * was stable.
          */
         LOG.log(Level.FINE, "Installed call target for: {0}", name);
-        callTargetStable.invalidate();
+        if (!wasNull) {
+            callTargetStable.invalidate();
+        }
     }
 
     public RootCallTarget getCallTarget() {
@@ -151,6 +161,7 @@ public final class SLFunction implements TruffleObject {
      */
     @SuppressWarnings("static-method")
     @ExportMessage
+    @TruffleBoundary
     SourceSection getSourceLocation() {
         return getCallTarget().getRootNode().getSourceSection();
     }
@@ -180,6 +191,29 @@ public final class SLFunction implements TruffleObject {
     }
 
     @ExportMessage
+    @SuppressWarnings("unused")
+    static final class IsIdenticalOrUndefined {
+        @Specialization
+        static TriState doSLFunction(SLFunction receiver, SLFunction other) {
+            /*
+             * SLFunctions are potentially identical to other SLFunctions.
+             */
+            return receiver == other ? TriState.TRUE : TriState.FALSE;
+        }
+
+        @Fallback
+        static TriState doOther(SLFunction receiver, Object other) {
+            return TriState.UNDEFINED;
+        }
+    }
+
+    @ExportMessage
+    @TruffleBoundary
+    static int identityHashCode(SLFunction receiver) {
+        return System.identityHashCode(receiver);
+    }
+
+    @ExportMessage
     Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
         return name;
     }
@@ -187,7 +221,16 @@ public final class SLFunction implements TruffleObject {
     /**
      * We allow languages to execute this function. We implement the interop execute message that
      * forwards to a function dispatch.
+     *
+     * Since invocations are potentially expensive (result in an indirect call, which is expensive
+     * by itself but also limits function inlining which can hinder other optimisations) if the node
+     * turns megamorphic (i.e. cache limit is exceeded) we annotate it with {@ReportPolymorphism}.
+     * This ensures that the runtime is notified when this node turns polymorphic. This, in turn,
+     * may, under certain conditions, cause the runtime to attempt to make node monomorphic again by
+     * duplicating the entire AST containing that node and specialising it for a particular call
+     * site.
      */
+    @ReportPolymorphism
     @ExportMessage
     abstract static class Execute {
 
@@ -225,7 +268,9 @@ public final class SLFunction implements TruffleObject {
          * @see Specialization
          *
          * @param function the dynamically provided function
-         * @param cachedFunction the cached function of the specialization instance
+         * @param arguments the arguments to the function
+         * @param callTargetStable The assumption object assuming the function was not redefined.
+         * @param cachedTarget The call target we aim to invoke
          * @param callNode the {@link DirectCallNode} specifically created for the
          *            {@link CallTarget} in cachedFunction.
          */
