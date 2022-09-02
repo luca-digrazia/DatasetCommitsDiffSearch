@@ -173,7 +173,7 @@ abstract class ToEspressoNode extends Node {
                     @Cached BranchProfile exceptionProfile)
                     throws UnsupportedMessageException, UnsupportedTypeException {
         if (interop.isNull(value)) {
-            return StaticObject.createForeignNull(value);
+            return StaticObject.NULL; // coercion to Espresso NULL.
         }
         if (interop.isString(value)) {
             return klass.getMeta().toGuestString(interop.asString(value));
@@ -189,7 +189,7 @@ abstract class ToEspressoNode extends Node {
                     @Cached BranchProfile exceptionProfile)
                     throws UnsupportedTypeException {
         if (interop.isNull(value)) {
-            return StaticObject.createForeignNull(value);
+            return StaticObject.NULL; // coercion to Espresso NULL.
         }
         exceptionProfile.enter();
         throw UnsupportedTypeException.create(new Object[]{value}, klass.getTypeAsString());
