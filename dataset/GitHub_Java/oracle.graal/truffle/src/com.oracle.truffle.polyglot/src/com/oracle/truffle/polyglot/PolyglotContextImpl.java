@@ -42,8 +42,6 @@ package com.oracle.truffle.polyglot;
 
 import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
 import static com.oracle.truffle.polyglot.EngineAccessor.LANGUAGE;
-import static com.oracle.truffle.polyglot.PolyglotValue.hostEnter;
-import static com.oracle.truffle.polyglot.PolyglotValue.hostLeave;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -751,17 +749,18 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     public Value getBindings(String languageId) {
         PolyglotLanguage language = requirePublicLanguage(languageId);
         PolyglotLanguageContext languageContext = getContext(language);
-        assert languageContext != null;
-        Object prev = hostEnter(languageContext);
         try {
-            if (!languageContext.isInitialized()) {
-                languageContext.ensureInitialized(null);
+            Object prev = engine.enterIfNeeded(this);
+            try {
+                if (!languageContext.isInitialized()) {
+                    languageContext.ensureInitialized(null);
+                }
+                return languageContext.getHostBindings();
+            } finally {
+                engine.leaveIfNeeded(prev, this);
             }
-            return languageContext.getHostBindings();
         } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
+            throw PolyglotImpl.guestToHostException(languageContext, e);
         }
     }
 
@@ -893,17 +892,18 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     public boolean initializeLanguage(String languageId) {
         PolyglotLanguage language = requirePublicLanguage(languageId);
         PolyglotLanguageContext languageContext = getContext(language);
-        assert languageContext != null;
-        Object prev = hostEnter(languageContext);
         try {
-            languageContext.checkAccess(null);
-            if (!languageContext.isInitialized()) {
-                return languageContext.ensureInitialized(null);
+            Object prev = engine.enterIfNeeded(this);
+            try {
+                languageContext.checkAccess(null);
+                if (!languageContext.isInitialized()) {
+                    return languageContext.ensureInitialized(null);
+                }
+            } finally {
+                engine.leaveIfNeeded(prev, this);
             }
         } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(languageContext, t, true);
-        } finally {
-            hostLeave(languageContext, prev);
+            throw PolyglotImpl.guestToHostException(languageContext, t);
         }
         return false;
     }
@@ -912,18 +912,19 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     public Value parse(String languageId, Object sourceImpl) {
         PolyglotLanguage language = requirePublicLanguage(languageId);
         PolyglotLanguageContext languageContext = getContext(language);
-        assert languageContext != null;
-        Object prev = hostEnter(languageContext);
         try {
-            Source source = (Source) sourceImpl;
-            languageContext.checkAccess(null);
-            languageContext.ensureInitialized(null);
-            CallTarget target = languageContext.parseCached(null, source, null);
-            return languageContext.asValue(new PolyglotParsedEval(languageContext, source, target));
+            Object prev = engine.enterIfNeeded(this);
+            try {
+                Source source = (Source) sourceImpl;
+                languageContext.checkAccess(null);
+                languageContext.ensureInitialized(null);
+                CallTarget target = languageContext.parseCached(null, source, null);
+                return languageContext.asValue(new PolyglotParsedEval(languageContext, source, target));
+            } finally {
+                engine.leaveIfNeeded(prev, this);
+            }
         } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
+            throw PolyglotImpl.guestToHostException(languageContext, e);
         }
     }
 
@@ -931,28 +932,29 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     public Value eval(String languageId, Object sourceImpl) {
         PolyglotLanguage language = requirePublicLanguage(languageId);
         PolyglotLanguageContext languageContext = getContext(language);
-        assert languageContext != null;
-        Object prev = hostEnter(languageContext);
         try {
-            Source source = (Source) sourceImpl;
-            languageContext.checkAccess(null);
-            languageContext.ensureInitialized(null);
-            CallTarget target = languageContext.parseCached(null, source, null);
-            Object result = target.call(PolyglotImpl.EMPTY_ARGS);
-            Value hostValue;
+            Object prev = engine.enterIfNeeded(this);
             try {
-                hostValue = languageContext.asValue(result);
-            } catch (NullPointerException | ClassCastException e) {
-                throw new AssertionError(String.format("Language %s returned an invalid return value %s. Must be an interop value.", languageId, result), e);
+                Source source = (Source) sourceImpl;
+                languageContext.checkAccess(null);
+                languageContext.ensureInitialized(null);
+                CallTarget target = languageContext.parseCached(null, source, null);
+                Object result = target.call(PolyglotImpl.EMPTY_ARGS);
+                Value hostValue;
+                try {
+                    hostValue = languageContext.asValue(result);
+                } catch (NullPointerException | ClassCastException e) {
+                    throw new AssertionError(String.format("Language %s returned an invalid return value %s. Must be an interop value.", languageId, result), e);
+                }
+                if (source.isInteractive()) {
+                    printResult(languageContext, result);
+                }
+                return hostValue;
+            } finally {
+                engine.leaveIfNeeded(prev, this);
             }
-            if (source.isInteractive()) {
-                printResult(languageContext, result);
-            }
-            return hostValue;
         } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(languageContext, e, true);
-        } finally {
-            hostLeave(languageContext, prev);
+            throw PolyglotImpl.guestToHostException(languageContext, e);
         }
     }
 
@@ -1134,9 +1136,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     @Override
     public Value asValue(Object hostValue) {
-        PolyglotLanguageContext languageContext = this.getHostContext();
-        assert languageContext != null;
-        Object prev = hostEnter(languageContext);
         try {
             checkClosed();
             PolyglotLanguageContext targetLanguageContext;
@@ -1160,9 +1159,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             }
             return targetLanguageContext.asValue(targetLanguageContext.toGuestValue(null, hostValue));
         } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(this.getHostContext(), e, true);
-        } finally {
-            hostLeave(languageContext, prev);
+            throw PolyglotImpl.guestToHostException(this.getHostContext(), e);
         }
     }
 
