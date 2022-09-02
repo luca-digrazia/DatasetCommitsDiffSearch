@@ -26,8 +26,12 @@ package org.graalvm.compiler.truffle.runtime.hotspot.libgraal;
 
 import static org.graalvm.libgraal.LibGraalScope.getIsolateThread;
 
+import java.lang.ref.Reference;
+import java.lang.ref.WeakReference;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilation;
@@ -75,7 +79,7 @@ final class SVMHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
         }
     };
 
-    private final ThreadLocal<SVMTruffleCompilation> activeCompilation = new ThreadLocal<>();
+    private final Map<CompilableTruffleAST, Reference<SVMTruffleCompilation>> activeCompilations = Collections.synchronizedMap(new WeakHashMap<>());
 
     private final LibGraalTruffleRuntime runtime;
 
@@ -98,9 +102,8 @@ final class SVMHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
     @Override
     public TruffleCompilation openCompilation(CompilableTruffleAST compilable) {
         LibGraalScope scope = new LibGraalScope(HotSpotJVMCIRuntime.runtime());
-        long compilationHandle = HotSpotToSVMCalls.openCompilation(getIsolateThread(), handle(), compilable);
-        SVMTruffleCompilation compilation = new SVMTruffleCompilation(this, compilationHandle, scope);
-        activeCompilation.set(compilation);
+        SVMTruffleCompilation compilation = new SVMTruffleCompilation(this, HotSpotToSVMCalls.openCompilation(getIsolateThread(), handle(), compilable), scope);
+        activeCompilations.put(compilable, new WeakReference<>(compilation));
         return compilation;
     }
 
@@ -158,11 +161,11 @@ final class SVMHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
     }
 
     void closeCompilation(SVMTruffleCompilation compilation) {
-        assert activeCompilation.get() == compilation;
-        activeCompilation.set(null);
+        activeCompilations.remove(compilation.getCompilable());
     }
 
-    SVMTruffleCompilation getActiveCompilation() {
-        return activeCompilation.get();
+    SVMTruffleCompilation findCompilation(CompilableTruffleAST compilable) {
+        Reference<SVMTruffleCompilation> compilationRef = activeCompilations.get(compilable);
+        return compilationRef == null ? null : compilationRef.get();
     }
 }

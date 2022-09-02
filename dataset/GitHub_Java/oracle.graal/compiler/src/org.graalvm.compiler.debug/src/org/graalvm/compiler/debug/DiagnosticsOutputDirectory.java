@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,7 +27,6 @@ package org.graalvm.compiler.debug;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.management.ManagementFactory;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,12 +41,14 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.serviceprovider.IsolateUtil;
 
 /**
  * Manages a directory into which diagnostics such crash reports and dumps should be written. The
  * directory is archived and deleted when {@link #close()} is called.
  */
-public class DiagnosticsOutputDirectory implements AutoCloseable {
+public class DiagnosticsOutputDirectory {
 
     /**
      * Use an illegal file name to denote that {@link #close()} has been called.
@@ -64,27 +67,10 @@ public class DiagnosticsOutputDirectory implements AutoCloseable {
      * Gets the path to the output directory managed by this object, creating if it doesn't exist
      * and has not been deleted.
      *
-     * @returns the directory or {@code null} if the directory does not exist and could not be
-     *          created or has already been deleted
+     * @returns the directory or {@code null} if the could not be created or has been deleted
      */
     public String getPath() {
         return getPath(true);
-    }
-
-    /**
-     * Gets a unique identifier for this execution such as a process ID.
-     */
-    protected String getExecutionID() {
-        String runtimeName = ManagementFactory.getRuntimeMXBean().getName();
-        try {
-            int index = runtimeName.indexOf('@');
-            if (index != -1) {
-                long pid = Long.parseLong(runtimeName.substring(0, index));
-                return Long.toString(pid);
-            }
-        } catch (NumberFormatException e) {
-        }
-        return runtimeName;
     }
 
     private synchronized String getPath(boolean createIfNull) {
@@ -99,7 +85,11 @@ public class DiagnosticsOutputDirectory implements AutoCloseable {
                 }
             }
         }
-        return CLOSED.equals(path) ? null : path;
+        if (CLOSED.equals(path)) {
+            TTY.println("Warning: Graal diagnostic directory already closed");
+            return null;
+        }
+        return path;
     }
 
     /**
@@ -118,13 +108,12 @@ public class DiagnosticsOutputDirectory implements AutoCloseable {
             // directory specified by the DumpPath option.
             baseDir = Paths.get(".");
         }
-        return baseDir.resolve("graal_diagnostics_" + getExecutionID()).toAbsolutePath().toString();
+        return baseDir.resolve("graal_diagnostics_" + GraalServices.getExecutionID() + '@' + IsolateUtil.getIsolateID()).toAbsolutePath().toString();
     }
 
     /**
      * Archives and deletes this directory if it exists.
      */
-    @Override
     public void close() {
         archiveAndDelete();
     }
@@ -132,16 +121,17 @@ public class DiagnosticsOutputDirectory implements AutoCloseable {
     /**
      * Archives and deletes the {@linkplain #getPath() output directory} if it exists.
      */
-    private void archiveAndDelete() {
+    private synchronized void archiveAndDelete() {
         String outDir = getPath(false);
         if (outDir != null) {
+            // Notify other threads calling getPath() that the directory is deleted.
+            // This attempts to mitigate other threads writing to the directory
+            // while it is being archived and deleted.
+            path = CLOSED;
+
             Path dir = Paths.get(outDir);
             if (dir.toFile().exists()) {
-                try {
-                    // Give threads a chance to finishing dumping
-                    Thread.sleep(1000);
-                } catch (InterruptedException e1) {
-                }
+                String prefix = new File(outDir).getName() + "/";
                 File zip = new File(outDir + ".zip").getAbsoluteFile();
                 List<Path> toDelete = new ArrayList<>();
                 try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zip))) {
@@ -150,9 +140,10 @@ public class DiagnosticsOutputDirectory implements AutoCloseable {
                         @Override
                         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                             if (attrs.isRegularFile()) {
-                                ZipEntry ze = new ZipEntry(file.toString());
+                                String name = prefix + dir.relativize(file).toString();
+                                ZipEntry ze = new ZipEntry(name);
                                 zos.putNextEntry(ze);
-                                zos.write(Files.readAllBytes(file));
+                                Files.copy(file, zos);
                                 zos.closeEntry();
                             }
                             toDelete.add(file);
@@ -168,17 +159,26 @@ public class DiagnosticsOutputDirectory implements AutoCloseable {
                     // Keep this in sync with the catch_files in common.hocon
                     TTY.println("Graal diagnostic output saved in %s", zip);
                 } catch (IOException e) {
-                    TTY.printf("IO error archiving %s:%n%s%n", dir, e);
+                    TTY.printf("IO error archiving %s:%n%s. The directory will not be deleted and must be " +
+                                    "manually removed once the VM exits.%n", dir, e);
+                    toDelete.clear();
                 }
-                for (Path p : toDelete) {
-                    try {
-                        Files.delete(p);
-                    } catch (IOException e) {
-                        TTY.printf("IO error deleting %s:%n%s%n", p, e);
+                if (!toDelete.isEmpty()) {
+                    IOException lastDeletionError = null;
+                    for (Path p : toDelete) {
+                        try {
+                            Files.delete(p);
+                        } catch (IOException e) {
+                            lastDeletionError = e;
+                        }
+                    }
+                    if (lastDeletionError != null) {
+                        TTY.printf("IO error deleting %s:%n%s. This is most likely due to a compilation on " +
+                                        "another thread holding a handle to a file within this directory. " +
+                                        "Please delete the directory manually once the VM exits.%n", dir, lastDeletionError);
                     }
                 }
             }
-            path = CLOSED;
         }
     }
 }
