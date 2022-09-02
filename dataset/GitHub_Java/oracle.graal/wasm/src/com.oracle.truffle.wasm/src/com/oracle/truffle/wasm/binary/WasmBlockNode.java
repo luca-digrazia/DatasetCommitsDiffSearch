@@ -216,8 +216,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private final int initialByteConstantOffset;
     @CompilationFinal private final int initialIntConstantOffset;
     @CompilationFinal private final int initialNumericLiteralOffset;
-    @Children WasmNode[] nestedControlTable;
-    @Children DirectCallNode[] callNodeTable;
+    @CompilationFinal(dimensions = 1) WasmNode[] nestedControlTable;
+    @CompilationFinal(dimensions = 1) DirectCallNode[] callNodeTable;
 
     public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int initialIntConstantOffset, int initialNumericLiteralOffset) {
         super(wasmModule, codeEntry, -1, -1, -1);
@@ -786,7 +786,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 8);
-                                context.memory().store_i32_8(address, value);
+                                context.memory().store_i32_8(address, (byte) value);
                                 break;
                             }
                             case I32_STORE_16: {
@@ -796,7 +796,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 16);
-                                context.memory().store_i32_16(address, value);
+                                context.memory().store_i32_16(address, (short) value);
                                 break;
                             }
                             case I64_STORE_8: {
@@ -806,7 +806,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 8);
-                                context.memory().store_i64_8(address, value);
+                                context.memory().store_i64_8(address, (byte) value);
                                 break;
                             }
                             case I64_STORE_16: {
@@ -816,7 +816,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 16);
-                                context.memory().store_i64_16(address, value);
+                                context.memory().store_i64_16(address, (short) value);
                                 break;
                             }
                             case I64_STORE_32: {
@@ -826,7 +826,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 32);
-                                context.memory().store_i64_32(address, value);
+                                context.memory().store_i64_32(address, (int) value);
                                 break;
                             }
                         }
@@ -1859,7 +1859,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     @Override
     public int executeRepeatingWithStatus(VirtualFrame frame) {
         // TODO: Accessing the context like this seems to be quite slow.
-        return execute(lookupContextReference(WasmLanguage.class).get(), frame);
+        return execute(WasmContext.getCurrent(), frame);
     }
 
     @Override
