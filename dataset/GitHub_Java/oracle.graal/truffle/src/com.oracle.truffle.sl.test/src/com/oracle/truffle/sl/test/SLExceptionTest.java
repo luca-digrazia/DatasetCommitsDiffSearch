@@ -305,6 +305,10 @@ public class SLExceptionTest {
     }
 
     @Export
+    public void methodThatTakesInt(@SuppressWarnings("unused") int s) {
+    }
+
+    @Export
     public String methodThatTakesFunction(Function<String, String> s) {
         return s.apply("t");
     }
@@ -324,7 +328,6 @@ public class SLExceptionTest {
         context.eval("sl", code);
         try {
             context.getBindings("sl").getMember("f").execute(this);
-            fail();
         } catch (PolyglotException e) {
             assertFalse(e.isHostException());
             assertTrue(e.isGuestException());
