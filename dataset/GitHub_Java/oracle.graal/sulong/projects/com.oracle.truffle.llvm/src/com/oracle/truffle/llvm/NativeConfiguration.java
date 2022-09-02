@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,59 +29,60 @@
  */
 package com.oracle.truffle.llvm;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.graalvm.options.OptionDescriptor;
-
+import com.oracle.truffle.llvm.NativeConfigurationFactory.Key;
 import com.oracle.truffle.llvm.parser.factories.BasicIntrinsicsProvider;
 import com.oracle.truffle.llvm.parser.factories.BasicNodeFactory;
-import com.oracle.truffle.llvm.parser.factories.BasicSystemContextExtension;
-import com.oracle.truffle.llvm.runtime.Configuration;
+import com.oracle.truffle.llvm.parser.factories.BasicPlatformCapability;
 import com.oracle.truffle.llvm.runtime.ContextExtension;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMIntrinsicProvider;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage.Loader;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
+import com.oracle.truffle.llvm.runtime.PlatformCapability;
+import com.oracle.truffle.llvm.runtime.ToolchainConfig;
+import com.oracle.truffle.llvm.runtime.config.Configuration;
+import com.oracle.truffle.llvm.runtime.config.LLVMCapability;
+import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMNativeMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
-import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 public final class NativeConfiguration implements Configuration {
 
-    @Override
-    public String getConfigurationName() {
-        return "native";
-    }
+    private final Loader loader;
+    private final LLVMIntrinsicProvider intrinsicProvider;
+    private final PlatformCapability<?> platformCapability;
 
-    @Override
-    public List<OptionDescriptor> getOptionDescriptors() {
-        return SulongEngineOption.describeOptions();
-    }
-
-    @Override
-    public NodeFactory createNodeFactory(LLVMContext context) {
-        return new BasicNodeFactory(context);
-    }
-
-    @Override
-    public List<ContextExtension> createContextExtensions(LLVMContext context) {
-        List<ContextExtension> result = new ArrayList<>();
-        result.add(new BasicIntrinsicsProvider(context).collectIntrinsics());
-        result.add(new BasicSystemContextExtension());
-        if (context.getEnv().getOptions().get(SulongEngineOption.ENABLE_NFI)) {
-            result.add(new NFIContextExtension(context.getEnv()));
+    NativeConfiguration(LLVMLanguage language, ContextExtension.Registry ctxExtRegistry, Key key) {
+        loader = new DefaultLoader();
+        intrinsicProvider = new BasicIntrinsicsProvider(language);
+        platformCapability = BasicPlatformCapability.create(key.loadCxxLibraries);
+        if (key.enableNFI) {
+            ctxExtRegistry.register(NFIContextExtension.class, NFIContextExtension::new);
         }
-        return result;
+    }
+
+    @Override
+    public NodeFactory createNodeFactory(LLVMLanguage language, DataLayout dataLayout) {
+        return new BasicNodeFactory(language, dataLayout);
     }
 
     @Override
     @SuppressWarnings("deprecation")
-    public <E> E getCapability(Class<E> type) {
-        if (type.equals(LLVMMemory.class)) {
+    public <C extends LLVMCapability> C getCapability(Class<C> type) {
+        if (type == LLVMMemory.class) {
             return type.cast(LLVMNativeMemory.getInstance());
-        } else if (type.equals(UnsafeArrayAccess.class)) {
+        } else if (type == UnsafeArrayAccess.class) {
             return type.cast(UnsafeArrayAccess.getInstance());
+        } else if (type == ToolchainConfig.class) {
+            return type.cast(NativeToolchainConfig.getInstance());
+        } else if (type == Loader.class) {
+            return type.cast(loader);
+        } else if (type == LLVMIntrinsicProvider.class) {
+            return type.cast(intrinsicProvider);
+        } else if (type == PlatformCapability.class) {
+            return type.cast(platformCapability);
         }
         return null;
     }

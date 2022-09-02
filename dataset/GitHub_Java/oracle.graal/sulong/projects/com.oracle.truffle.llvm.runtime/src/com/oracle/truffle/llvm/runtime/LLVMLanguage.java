@@ -96,8 +96,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     static final String NAME = "LLVM";
     private final AtomicInteger nextID = new AtomicInteger(0);
 
-    public final Assumption singleContextAssumption = Truffle.getRuntime().createAssumption("Only a single context is active");
-
     @CompilationFinal private Configuration activeConfiguration = null;
 
     private static final class ContextExtensionKey<C extends ContextExtension> extends ContextExtension.Key<C> {
@@ -145,7 +143,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     private final LLVMInteropType.InteropTypeRegistry interopTypeRegistry = new LLVMInteropType.InteropTypeRegistry();
 
     @CompilationFinal private LLVMFunctionCode sulongInitContextCode;
-    @CompilationFinal private LLVMFunction sulongDisposeContext;
 
     {
         /*
@@ -335,10 +332,7 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     @Override
     protected void finalizeContext(LLVMContext context) {
-        if (sulongDisposeContext == null) {
-            throw new IllegalStateException("Context cannot be disposed: __sulong_dispose_context was not found");
-        }
-        context.finalizeContext(sulongDisposeContext);
+        context.finalizeContext();
     }
 
     @Override
@@ -416,10 +410,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     public void setSulongInitContext(LLVMFunction function) {
         this.sulongInitContextCode = new LLVMFunctionCode(function);
-    }
-
-    public void setSulongDisposeContext(LLVMFunction function) {
-        this.sulongDisposeContext = function;
     }
 
     private CallTarget freeGlobalBlocks;
@@ -527,11 +517,5 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
         } else {
             return LLVMDebuggerScopeFactory.createSourceLevelScope(node, frame, context);
         }
-    }
-
-    @Override
-    protected void initializeMultipleContexts() {
-        super.initializeMultipleContexts();
-        singleContextAssumption.invalidate();
     }
 }
