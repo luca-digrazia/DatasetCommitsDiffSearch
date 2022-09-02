@@ -45,7 +45,6 @@ import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleDebugJavaMethod;
-import org.graalvm.compiler.truffle.common.TruffleInliningData;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
@@ -141,7 +140,6 @@ public abstract class PartialEvaluationTest extends TruffleCompilerImplTest {
 
     private static TruffleCompilationTask newTask() {
         return new TruffleCompilationTask() {
-            TruffleInlining inlining = new TruffleInlining();
             @Override
             public boolean isCancelled() {
                 return false;
@@ -150,11 +148,6 @@ public abstract class PartialEvaluationTest extends TruffleCompilerImplTest {
             @Override
             public boolean isLastTier() {
                 return true;
-            }
-
-            @Override
-            public TruffleInliningData inliningData() {
-                return inlining;
             }
         };
     }
@@ -220,6 +213,7 @@ public abstract class PartialEvaluationTest extends TruffleCompilerImplTest {
             }
             final PartialEvaluator partialEvaluator = getTruffleCompiler(compilable).getPartialEvaluator();
             final PartialEvaluator.Request request = partialEvaluator.new Request(compilable.getOptionValues(), debug, compilable, partialEvaluator.rootForCallTarget(compilable),
+                            new TruffleInlining(),
                             compilationId, speculationLog,
                             new TruffleCompilerImpl.CancellableTruffleCompilationTask(newTask()));
             return partialEvaluator.evaluate(request);
