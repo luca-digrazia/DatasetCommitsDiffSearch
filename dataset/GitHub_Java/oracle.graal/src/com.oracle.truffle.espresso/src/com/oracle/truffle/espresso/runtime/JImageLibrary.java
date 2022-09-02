@@ -206,12 +206,11 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
                 if (pkgEntry == null) {
                     return 0;
                 }
-                Symbol<Name> moduleName = pkgEntry.module().getName();
-                if (moduleName == Name.java_base) {
+                String moduleName = pkgEntry.module().getName().toString();
+                if (JAVA_BASE.equals(moduleName)) {
                     return (long) execute(findResource, jimage, javaBaseBuffer.pointer(), versionBuffer.pointer(), namePtr, sizePtr);
                 } else {
-                    String nameAsString = moduleName == null ? "" : moduleName.toString();
-                    try (RawBuffer moduleNameBuffer = getNativeString(nameAsString)) {
+                    try (RawBuffer moduleNameBuffer = getNativeString(moduleName)) {
                         return (long) execute(findResource, jimage, moduleNameBuffer.pointer(), versionBuffer.pointer(), namePtr, sizePtr);
                     }
                 }
