@@ -47,23 +47,23 @@ import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.polyglot.Context;
 import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.Closeable;
 
-@RunWith(Parameterized.class)
+@RunWith(Theories.class)
 public class StaticObjectCompilationTest extends PartialEvaluationTest {
-    static final StaticObjectTestEnvironment[] environments = StaticObjectTestEnvironment.getEnvironments();
-
-    @Parameterized.Parameters(name = "{0}")
-    public static StaticObjectTestEnvironment[] data() {
-        return environments;
+    static class FieldBasedStorage {
+        final int finalProperty = 42;
+        int property;
     }
 
-    @Parameterized.Parameter public StaticObjectTestEnvironment te;
+    @DataPoints //
+    public static final StaticObjectTestEnvironment[] environments = StaticObjectTestEnvironment.getEnvironments();
 
     @AfterClass
     public static void teardown() {
@@ -72,68 +72,64 @@ public class StaticObjectCompilationTest extends PartialEvaluationTest {
         }
     }
 
-    static class FieldBasedStorage {
-        final int finalProperty = 42;
-        int property;
-    }
-
     @Test
     public void simplePropertyAccesses() {
         // Field-based storage
-        Assume.assumeTrue(te.isFieldBased());
+        try (StaticObjectTestEnvironment te = new StaticObjectTestEnvironment(false)) {
+            StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
+            StaticProperty finalProperty = new DefaultStaticProperty("finalProperty", StaticPropertyKind.Int, true);
+            StaticProperty property = new DefaultStaticProperty("property", StaticPropertyKind.Int, false);
+            builder.property(finalProperty).property(property);
+            Object staticObject = builder.build().getFactory().create();
 
-        StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
-        StaticProperty finalProperty = new DefaultStaticProperty("finalProperty", StaticPropertyKind.Int, true);
-        StaticProperty property = new DefaultStaticProperty("property", StaticPropertyKind.Int, false);
-        builder.property(finalProperty).property(property);
-        Object staticObject = builder.build().getFactory().create();
+            FieldBasedStorage fbs = new FieldBasedStorage();
 
-        FieldBasedStorage fbs = new FieldBasedStorage();
+            // Property set
+            assertPartialEvalEquals(toRootNode((f) -> fbs.property = 42), toRootNode((f) -> {
+                finalProperty.setInt(staticObject, 42);
+                return null;
+            }), new Object[0]);
+            assertPartialEvalEquals(toRootNode((f) -> fbs.property = 42), toRootNode((f) -> {
+                property.setInt(staticObject, 42);
+                return null;
+            }), new Object[0]);
 
-        // Property set
-        assertPartialEvalEquals(toRootNode((f) -> fbs.property = 42), toRootNode((f) -> {
             finalProperty.setInt(staticObject, 42);
-            return null;
-        }), new Object[0]);
-        assertPartialEvalEquals(toRootNode((f) -> fbs.property = 42), toRootNode((f) -> {
-            property.setInt(staticObject, 42);
-            return null;
-        }), new Object[0]);
-
-        finalProperty.setInt(staticObject, 42);
-        // Property get
-        assertPartialEvalEquals(toRootNode((f) -> 42), toRootNode((f) -> finalProperty.getInt(staticObject)), new Object[0]);
-        assertPartialEvalEquals(toRootNode((f) -> fbs.finalProperty), toRootNode((f) -> finalProperty.getInt(staticObject)), new Object[0]);
-        assertPartialEvalEquals(toRootNode((f) -> fbs.property), toRootNode((f) -> property.getInt(staticObject)), new Object[0]);
+            // Property get
+            assertPartialEvalEquals(toRootNode((f) -> 42), toRootNode((f) -> finalProperty.getInt(staticObject)), new Object[0]);
+            assertPartialEvalEquals(toRootNode((f) -> fbs.finalProperty), toRootNode((f) -> finalProperty.getInt(staticObject)), new Object[0]);
+            assertPartialEvalEquals(toRootNode((f) -> fbs.property), toRootNode((f) -> property.getInt(staticObject)), new Object[0]);
+        }
     }
 
     @Test
     public void propertyAccessesInHierarchy() {
         // Field-based storage
-        Assume.assumeTrue(te.isFieldBased());
-        StaticShape.Builder b1 = StaticShape.newBuilder(te.testLanguage);
-        StaticProperty s1p1 = new DefaultStaticProperty("property", StaticPropertyKind.Int, true);
-        b1.property(s1p1);
-        StaticShape<DefaultStaticObjectFactory> s1 = b1.build();
+        try (StaticObjectTestEnvironment te = new StaticObjectTestEnvironment(false)) {
+            StaticShape.Builder b1 = StaticShape.newBuilder(te.testLanguage);
+            StaticProperty s1p1 = new DefaultStaticProperty("property", StaticPropertyKind.Int, true);
+            b1.property(s1p1);
+            StaticShape<DefaultStaticObjectFactory> s1 = b1.build();
 
-        StaticShape.Builder b2 = StaticShape.newBuilder(te.testLanguage);
-        StaticProperty s2p1 = new DefaultStaticProperty("property", StaticPropertyKind.Int, true);
-        b2.property(s2p1);
-        StaticShape<DefaultStaticObjectFactory> s2 = b2.build(s1);
-        Object o2 = s2.getFactory().create();
+            StaticShape.Builder b2 = StaticShape.newBuilder(te.testLanguage);
+            StaticProperty s2p1 = new DefaultStaticProperty("property", StaticPropertyKind.Int, true);
+            b2.property(s2p1);
+            StaticShape<DefaultStaticObjectFactory> s2 = b2.build(s1);
+            Object o2 = s2.getFactory().create();
 
-        s1p1.setInt(o2, 24);
-        s2p1.setInt(o2, 42);
+            s1p1.setInt(o2, 24);
+            s2p1.setInt(o2, 42);
 
-        assertPartialEvalEquals(toRootNode((f) -> 24), toRootNode((f) -> s1p1.getInt(o2)), new Object[0]);
-        assertPartialEvalEquals(toRootNode((f) -> 42), toRootNode((f) -> s2p1.getInt(o2)), new Object[0]);
+            assertPartialEvalEquals(toRootNode((f) -> 24), toRootNode((f) -> s1p1.getInt(o2)), new Object[0]);
+            assertPartialEvalEquals(toRootNode((f) -> 42), toRootNode((f) -> s2p1.getInt(o2)), new Object[0]);
+        }
     }
 
-    @Test
-    public void allocation() {
+    @Theory
+    public void allocation(StaticObjectTestEnvironment te) {
         te.context.enter();
         try {
-            StructuredGraph graph = partialEval(new AllocationNode(te));
+            StructuredGraph graph = partialEval(te, new AllocationNode(te));
             assertNoInvokes(graph);
             if (te.isArrayBased()) {
                 // The array that stores primitive fields
@@ -145,11 +141,11 @@ public class StaticObjectCompilationTest extends PartialEvaluationTest {
         }
     }
 
-    @Test
-    public void readOnce() {
+    @Theory
+    public void readOnce(StaticObjectTestEnvironment te) {
         te.context.enter();
         try {
-            StructuredGraph graph = partialEval(new ReadOnceNode(te));
+            StructuredGraph graph = partialEval(te, new ReadOnceNode(te));
             assertNoInvokes(graph);
 
             if (te.isArrayBased()) {
@@ -162,11 +158,11 @@ public class StaticObjectCompilationTest extends PartialEvaluationTest {
         }
     }
 
-    @Test
-    public void readMultipleAndAdd() {
+    @Theory
+    public void readMultipleAndAdd(StaticObjectTestEnvironment te) {
         te.context.enter();
         try {
-            StructuredGraph graph = partialEval(new ReadMultipleAndSumNode(te));
+            StructuredGraph graph = partialEval(te, new ReadMultipleAndSumNode(te));
             assertNoInvokes(graph);
 
             if (te.isArrayBased()) {
@@ -180,11 +176,11 @@ public class StaticObjectCompilationTest extends PartialEvaluationTest {
         }
     }
 
-    @Test
-    public void writeOnce() {
+    @Theory
+    public void writeOnce(StaticObjectTestEnvironment te) {
         te.context.enter();
         try {
-            StructuredGraph graph = partialEval(new WriteOnceNode(te));
+            StructuredGraph graph = partialEval(te, new WriteOnceNode(te));
             assertNoInvokes(graph);
 
             if (te.isArrayBased()) {
@@ -197,11 +193,11 @@ public class StaticObjectCompilationTest extends PartialEvaluationTest {
         }
     }
 
-    @Test
-    public void writeMultiple() {
+    @Theory
+    public void writeMultiple(StaticObjectTestEnvironment te) {
         te.context.enter();
         try {
-            StructuredGraph graph = partialEval(new WriteMultipleNode(te));
+            StructuredGraph graph = partialEval(te, new WriteMultipleNode(te));
             assertNoInvokes(graph);
 
             if (te.isArrayBased()) {
@@ -214,11 +210,11 @@ public class StaticObjectCompilationTest extends PartialEvaluationTest {
         }
     }
 
-    @Test
-    public void allocateSetAndGet() {
+    @Theory
+    public void allocateSetAndGet(StaticObjectTestEnvironment te) {
         te.context.enter();
         try {
-            StructuredGraph graph = partialEval(new AllocateSetAndGetNode(te));
+            StructuredGraph graph = partialEval(te, new AllocateSetAndGetNode(te));
             assertNoInvokes(graph);
             assertCount(graph, VirtualInstanceNode.class, 0);
             assertCount(graph, RawLoadNode.class, 0);
@@ -230,7 +226,7 @@ public class StaticObjectCompilationTest extends PartialEvaluationTest {
         }
     }
 
-    private StructuredGraph partialEval(StaticObjectAbstractNode node) {
+    private StructuredGraph partialEval(StaticObjectTestEnvironment te, StaticObjectAbstractNode node) {
         RootNode rootNode = new StaticObjectRootNode(te.testLanguage, new FrameDescriptor(), node);
         StructuredGraph graph = partialEval(rootNode);
         return graph;

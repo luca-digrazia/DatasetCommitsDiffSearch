@@ -78,15 +78,15 @@ class StaticObjectModelTest {
         }
     }
 
-    static class TestEnvironment implements AutoCloseable {
+    static class TestEnvironment {
         private final boolean arrayBased;
         final boolean relaxChecks;
         final TruffleLanguage<?> testLanguage;
         final Context context;
 
-        TestEnvironment(TestConfiguration config) {
-            this.arrayBased = config.arrayBased;
-            this.relaxChecks = config.relaxChecks;
+        TestEnvironment(boolean arrayBased, boolean relaxChecks) {
+            this.arrayBased = arrayBased;
+            this.relaxChecks = relaxChecks;
             context = Context.newBuilder(TestLanguage.TEST_LANGUAGE_ID).//
                             allowExperimentalOptions(true).//
                             option("engine.StaticObjectStorageStrategy", this.arrayBased ? "array-based" : "field-based").//
@@ -106,19 +106,8 @@ class StaticObjectModelTest {
             return !arrayBased;
         }
 
-        @Override
         public void close() {
             context.close();
-        }
-    }
-
-    static class TestConfiguration {
-        private final boolean arrayBased;
-        private final boolean relaxChecks;
-
-        TestConfiguration(boolean arrayBased, boolean relaxChecks) {
-            this.arrayBased = arrayBased;
-            this.relaxChecks = relaxChecks;
         }
 
         @Override
@@ -127,17 +116,17 @@ class StaticObjectModelTest {
         }
     }
 
-    static TestConfiguration[] getTestConfigurations() {
-        ArrayList<TestConfiguration> tests = new ArrayList<>();
+    static TestEnvironment[] getTestEnvironments() {
+        ArrayList<TestEnvironment> tests = new ArrayList<>();
         // AOT mode does not yet support field-based storage
         boolean[] arrayBased = TruffleOptions.AOT ? new boolean[]{true} : new boolean[]{true, false};
         boolean[] relaxChecks = new boolean[]{true, false};
         for (boolean ab : arrayBased) {
             for (boolean rc : relaxChecks) {
-                tests.add(new TestConfiguration(ab, rc));
+                tests.add(new TestEnvironment(ab, rc));
             }
         }
-        return tests.toArray(new TestConfiguration[tests.size()]);
+        return tests.toArray(new TestEnvironment[tests.size()]);
     }
 
     static String guessGeneratedFieldName(StaticProperty property) {
