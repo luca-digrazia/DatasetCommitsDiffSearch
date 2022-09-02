@@ -79,11 +79,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         return getMethodNode().getSourceSection();
     }
 
-    @Override
-    public SourceSection getEncapsulatingSourceSection() {
-        return getMethodNode().getEncapsulatingSourceSection();
-    }
-
     public final boolean isBytecodeNode() {
         return getMethodNode() instanceof BytecodeNode;
     }
