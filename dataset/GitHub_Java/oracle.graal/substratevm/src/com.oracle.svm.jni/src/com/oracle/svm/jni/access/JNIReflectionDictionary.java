@@ -169,8 +169,7 @@ public final class JNIReflectionDictionary {
             if (method == null) {
                 method = findSuperinterfaceMethod(parent, descriptor);
             }
-            if (method != null && method.isPublic() && !method.isStatic()) {
-                // non-public or static interface methods are not externally visible
+            if (method != null) {
                 return method;
             }
         }
@@ -179,8 +178,7 @@ public final class JNIReflectionDictionary {
 
     public JNIMethodId getDeclaredMethodID(Class<?> classObject, JNIAccessibleMethodDescriptor descriptor, boolean isStatic) {
         JNIAccessibleMethod method = getDeclaredMethod(classObject, descriptor, "getDeclaredMethodID");
-        boolean match = (method != null && method.isStatic() == isStatic);
-        return toMethodID(match ? method : null);
+        return toMethodID(method, isStatic);
     }
 
     private JNIAccessibleMethod getDeclaredMethod(Class<?> classObject, JNIAccessibleMethodDescriptor descriptor, String dumpLabel) {
@@ -195,13 +193,15 @@ public final class JNIReflectionDictionary {
 
     public JNIMethodId getMethodID(Class<?> classObject, String name, String signature, boolean isStatic) {
         JNIAccessibleMethod method = findMethod(classObject, new JNIAccessibleMethodDescriptor(name, signature), "getMethodID");
-        boolean match = (method != null && method.isStatic() == isStatic && method.isDiscoverableIn(classObject));
-        return toMethodID(match ? method : null);
+        return toMethodID(method, isStatic);
     }
 
-    private static JNIMethodId toMethodID(JNIAccessibleMethod method) {
+    private static JNIMethodId toMethodID(JNIAccessibleMethod method, boolean requireStatic) {
         // Using the address is safe because JNIAccessibleMethod is immutable (non-movable)
-        return (method != null) ? (JNIMethodId) Word.objectToUntrackedPointer(method) : WordFactory.nullPointer();
+        if (method != null && method.isStatic() == requireStatic) {
+            return (JNIMethodId) Word.objectToUntrackedPointer(method);
+        }
+        return WordFactory.nullPointer();
     }
 
     public static JNIAccessibleMethod getMethodByID(JNIMethodId method) {
@@ -253,7 +253,7 @@ public final class JNIReflectionDictionary {
 
     public JNIFieldId getFieldID(Class<?> clazz, String name, boolean isStatic) {
         JNIAccessibleField field = findField(clazz, name, isStatic, "getFieldID");
-        return (field != null && field.isDiscoverableIn(clazz)) ? field.getId() : WordFactory.nullPointer();
+        return (field != null) ? field.getId() : WordFactory.nullPointer();
     }
 
     public String getFieldNameByID(Class<?> classObject, JNIFieldId id) {

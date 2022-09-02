@@ -37,7 +37,6 @@ import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.LogHandler;
@@ -56,6 +55,7 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.SubstrateUtil;
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.c.function.CEntryPointActions;
@@ -97,7 +97,6 @@ import com.oracle.svm.jni.nativeapi.JNIObjectRefType;
 import com.oracle.svm.jni.nativeapi.JNIVersion;
 
 import jdk.vm.ci.meta.MetaUtil;
-import sun.misc.Unsafe;
 
 /**
  * Implementations of the functions defined by the Java Native Interface. Not all functions are
@@ -114,8 +113,6 @@ final class JNIFunctions {
     /*
      * jint GetVersion(JNIEnv *env);
      */
-
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
 
     @CEntryPoint
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
@@ -416,7 +413,7 @@ final class JNIFunctions {
         Class<?> clazz = JNIObjectHandles.getObject(classHandle);
         Object instance;
         try {
-            instance = UNSAFE.allocateInstance(clazz);
+            instance = UnsafeAccess.UNSAFE.allocateInstance(clazz);
         } catch (InstantiationException e) {
             instance = null;
         }
@@ -489,7 +486,7 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerReturnNullWord.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static CShortPointer GetStringChars(JNIEnvironment env, JNIObjectHandle hstr, CCharPointer isCopy) {
-        return Support.getNulTerminatedStringCharsAndPin(hstr, isCopy);
+        return Support.pinStringAndGetChars(hstr, isCopy);
     }
 
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerVoid.class)
@@ -533,7 +530,7 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerReturnNullWord.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static CShortPointer GetStringCritical(JNIEnvironment env, JNIObjectHandle hstr, CCharPointer isCopy) {
-        return Support.getNulTerminatedStringCharsAndPin(hstr, isCopy);
+        return Support.pinStringAndGetChars(hstr, isCopy);
     }
 
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerVoid.class)
@@ -1032,7 +1029,7 @@ final class JNIFunctions {
             return fieldID;
         }
 
-        static CShortPointer getNulTerminatedStringCharsAndPin(JNIObjectHandle hstr, CCharPointer isCopy) {
+        static CShortPointer pinStringAndGetChars(JNIObjectHandle hstr, CCharPointer isCopy) {
             String str = JNIObjectHandles.getObject(hstr);
             if (str == null) {
                 return WordFactory.nullPointer();
@@ -1046,8 +1043,7 @@ final class JNIFunctions {
              * a JDK 9 UTF16 encoded String, we could avoid the copying. But it would require us to
              * know internals of the String implementation, so we do not do it for now.
              */
-            char[] chars = new char[str.length() + 1];
-            str.getChars(0, str.length(), chars, 0);
+            char[] chars = str.toCharArray();
             return JNIThreadLocalPinnedObjects.pinArrayAndGetAddress(chars);
         }
 
