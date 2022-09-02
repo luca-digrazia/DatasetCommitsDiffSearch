@@ -32,7 +32,6 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 
@@ -56,13 +55,11 @@ public class StaticObjectImpl extends StaticObject {
     private Map<String, Object> hiddenFields;
 
     private final Object[] fields;
-    private final int[] wordFields;
 
-    public StaticObjectImpl(ObjectKlass klass, Map<String, Object> hiddenFields, Object[] fields, int[] wordFields) {
+    public StaticObjectImpl(ObjectKlass klass, Map<String, Object> hiddenFields, Object[] fields) {
         super(klass);
         this.hiddenFields = hiddenFields;
         this.fields = fields;
-        this.wordFields = wordFields;
     }
 
     // FIXME(peterssen): Klass does not need to be initialized, just prepared?.
@@ -70,10 +67,15 @@ public class StaticObjectImpl extends StaticObject {
         return this == getKlass().getStatics();
     }
 
+    @Override
+    public boolean isCallSite() {
+        return false;
+    }
+
     // Shallow copy.
     public StaticObject copy() {
         HashMap<String, Object> hiddenFieldsCopy = hiddenFields != null ? new HashMap<>(hiddenFields) : null;
-        return new StaticObjectImpl((ObjectKlass) getKlass(), hiddenFieldsCopy, fields.clone(), wordFields.clone());
+        return new StaticObjectImpl((ObjectKlass) getKlass(), hiddenFieldsCopy, fields.clone());
     }
 
     public StaticObjectImpl(ObjectKlass klass) {
@@ -84,8 +86,7 @@ public class StaticObjectImpl extends StaticObject {
         super(klass);
         // assert !isStatic || klass.isInitialized();
         this.hiddenFields = null;
-        this.fields = isStatic ? new Object[klass.getStaticObjectFieldsCount()] : new Object[klass.getObjectFieldsCount()];
-        this.wordFields = isStatic ? new int[klass.getStaticWordFieldsCount()] : new int[klass.getWordFieldsCount()];
+        this.fields = isStatic ? new Object[klass.getStaticFieldSlots()] : new Object[klass.getInstanceFieldSlots()];
         initFields(klass, isStatic);
     }
 
@@ -95,27 +96,14 @@ public class StaticObjectImpl extends StaticObject {
         if (isStatic) {
             for (Field f : klass.getDeclaredFields()) {
                 if (f.isStatic()) {
-                    if (f.getKind() == JavaKind.Boolean) {
-                        wordFields[f.getFieldIndex()] = ((boolean)MetaUtil.defaultFieldValue(f.getKind())) ? 1 : 0;
-                    } else if (f.getKind().isSubWord()) {
-                        wordFields[f.getFieldIndex()] = MetaUtil.defaultWordFieldValue(f.getKind());
-                    } else {
-                        fields[f.getFieldIndex()] = MetaUtil.defaultFieldValue(f.getKind());
-                    }
+                    fields[f.getSlot()] = MetaUtil.defaultFieldValue(f.getKind());
                 }
             }
         } else {
-            // TODO(garcia) Go through fieldTable instead
             for (ObjectKlass curKlass = klass; curKlass != null; curKlass = curKlass.getSuperKlass()) {
                 for (Field f : curKlass.getDeclaredFields()) {
                     if (!f.isStatic()) {
-                        if (f.getKind() == JavaKind.Boolean) {
-                            wordFields[f.getFieldIndex()] = ((boolean)MetaUtil.defaultFieldValue(f.getKind())) ? 1 : 0;
-                        } else if (f.getKind().isSubWord()) {
-                            wordFields[f.getFieldIndex()] = MetaUtil.defaultWordFieldValue(f.getKind());
-                        } else {
-                            fields[f.getFieldIndex()] = MetaUtil.defaultFieldValue(f.getKind());
-                        }
+                        fields[f.getSlot()] = MetaUtil.defaultFieldValue(f.getKind());
                     }
                 }
             }
@@ -124,66 +112,32 @@ public class StaticObjectImpl extends StaticObject {
 
     public final Object getFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return U.getObjectVolatile(fields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex());
+        return U.getObjectVolatile(fields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getSlot());
     }
 
     public final Object getField(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert !field.getKind().isSubWord();
         Object result;
         if (field.isVolatile()) {
             result = getFieldVolatile(field);
         } else {
-            result = fields[field.getFieldIndex()];
+            result = fields[field.getSlot()];
         }
         assert result != null;
         return result;
     }
 
-    public final int getWordField(Field field) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert field.getKind().isSubWord();
-        int result;
-        if (field.isVolatile()) {
-            result = getWordFieldVolatile(field);
-        } else {
-            result = wordFields[field.getFieldIndex()];
-        }
-        return result;
-    }
-
-    public final int getWordFieldVolatile(Field field) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return U.getIntVolatile(wordFields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex());
-    }
-
     public final void setFieldVolatile(Field field, Object value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        U.putObjectVolatile(fields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex(), value);
+        U.putObjectVolatile(fields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getSlot(), value);
     }
 
     public final void setField(Field field, Object value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert !field.getKind().isSubWord();
         if (field.isVolatile()) {
             setFieldVolatile(field, value);
         } else {
-            fields[field.getFieldIndex()] = value;
-        }
-    }
-
-    public final void setWordFieldVolatile(Field field, int value) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        U.putIntVolatile(wordFields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex(), value);
-    }
-
-    public final void setWordField(Field field, int value) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert field.getKind().isSubWord();
-        if (field.isVolatile()) {
-            setWordFieldVolatile(field, value);
-        } else {
-            wordFields[field.getFieldIndex()] = value;
+            fields[field.getSlot()] = value;
         }
     }
 

@@ -161,12 +161,12 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
          * the invoked object has a concrete implementation of the method.
          */
         private static Method lookupMethod(Klass klass, Symbol<Name> name, Symbol<Signature> signature) {
+            if (name.toString().contains("linkTo")) {
+                int i = 1;
+            }
             Method method = lookupClassMethod(klass, name, signature);
             if (method != null) {
                 return method;
-            }
-            if (klass.getType() == Symbol.Type.MethodHandle) {
-                return lookupPolysigMethod(klass, name, signature);
             }
             // FIXME(peterssen): Not implemented: If the maximally-specific superinterface methods
             // of C for the name and descriptor specified by the method reference include exactly
@@ -180,11 +180,20 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
                     }
                 }
             }
+            if (klass.getType() == Symbol.Type.MethodHandle) {
+                return lookupPolysigMethod(klass, name, signature);
+            }
             return null;
         }
 
         private static Method lookupPolysigMethod(Klass klass, Symbol<Name> name, Symbol<Signature> signature) {
-            return klass.lookupPolysigMethod(name, signature);
+            assert(klass.getType() == Symbol.Type.MethodHandle);
+            for (Method m: klass.getDeclaredMethods()) {
+                if ((m.isNative()) && m.getName() == name) {
+                    return m;
+                }
+            }
+            return null;
         }
 
         private static Method lookupInterfaceMethod(ObjectKlass interf, Symbol<Name> name, Symbol<Signature> signature) {

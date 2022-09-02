@@ -63,37 +63,29 @@ public final class Target_sun_misc_Unsafe {
             @Host(Unsafe.class) StaticObject self,
             @Host(Class.class) StaticObjectClass hostClass,
             @Host(typeName = "[B") StaticObjectArray data,
-            @Host(typeName = "[Ljava/lang/Object;") StaticObject constantPoolPatches) {
+            @Host(typeName = "[Ljava/lang/Object;") StaticObjectArray constantPoolPatches) {
 
         EspressoContext context = self.getKlass().getContext();
-        Meta meta = context.getMeta();
-
-        if (hostClass == StaticObject.NULL || data == StaticObject.NULL) {
-            throw meta.throwEx(meta.IllegalArgumentException);
-        }
-
+        //Meta meta = context.getMeta();
         byte[] bytes = data.unwrap();
-        StaticObject[] patches = constantPoolPatches == StaticObject.NULL ? null : ((StaticObjectArray)constantPoolPatches).unwrap();
+        StaticObject[] patches = constantPoolPatches.unwrap();
         Klass hostKlass = hostClass.getMirrorKlass();
-        if (hostKlass.getName().toString().contains("BC")) {
-            int i =1 ;
-        }
         ClassfileStream cfs = new ClassfileStream(bytes, null);
 
-        ClassfileParser parser = new ClassfileParser(cfs, null, hostKlass, context, patches);
-        ParserKlass parserKlass = parser.parseClass();
+        ParserKlass parserKlass = new ClassfileParser(cfs, null, hostKlass, context, patches).parseClass();
         StaticObject classLoader = hostKlass.getDefiningClassLoader();
-        return defineAnonymousKlass(parserKlass, context, classLoader, parser.getThisKlassIndex(), hostKlass).mirror();
+        return defineAnonymousKlass(parserKlass, context, classLoader).mirror();
     }
 
-    private static ObjectKlass defineAnonymousKlass(ParserKlass parserKlass, EspressoContext context, StaticObject classLoader, int thisKlassIndex, Klass hostKlass) {
+    private static ObjectKlass defineAnonymousKlass (ParserKlass parserKlass, EspressoContext context, StaticObject classLoader) {
 
         Symbol<Symbol.Type> superKlassType = parserKlass.getSuperKlass();
         ClassRegistries classRegistry = context.getRegistries();
 
-        // TODO(garcia): Superclass must be a class, and non-final.
+        // TODO(peterssen): Superclass must be a class, and non-final.
         ObjectKlass superKlass = superKlassType != null
-                ? (ObjectKlass) classRegistry.loadKlass(superKlassType, classLoader)
+                ? (ObjectKlass) classRegistry.loadKlass(superKlassType, classLoader) // Should only be an ObjectKlass,
+                // not primitives nor arrays.
                 : null;
 
         assert superKlass == null || !superKlass.isInterface();
@@ -108,17 +100,17 @@ public final class Target_sun_misc_Unsafe {
                 ? ObjectKlass.EMPTY_ARRAY
                 : new ObjectKlass[superInterfacesTypes.length];
 
-        // TODO(garcia): Superinterfaces must be interfaces.
+        // TODO(peterssen): Superinterfaces must be interfaces.
         for (int i = 0; i < superInterfacesTypes.length; ++i) {
             ObjectKlass interf = (ObjectKlass) classRegistry.loadKlass(superInterfacesTypes[i], classLoader);
             superInterfaces[i] = interf;
             linkedInterfaces[i] = interf.getLinkedKlass();
         }
 
+        // FIXME(peterssen): Do NOT create a LinkedKlass every time, use a global cache.
         LinkedKlass linkedKlass = new LinkedKlass(parserKlass, superKlass == null ? null : superKlass.getLinkedKlass(), linkedInterfaces);
 
-        ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, classLoader, hostKlass);
-        klass.getConstantPool().setKlassAt(thisKlassIndex, klass);
+        ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, classLoader);
 
         return klass;
     }

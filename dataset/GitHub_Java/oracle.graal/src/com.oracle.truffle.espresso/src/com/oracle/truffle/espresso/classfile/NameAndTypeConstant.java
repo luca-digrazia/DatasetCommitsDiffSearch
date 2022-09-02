@@ -91,7 +91,6 @@ public interface NameAndTypeConstant extends PoolConstant {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
         public Symbol<Symbol.Signature> getSignature(ConstantPool pool) {
             return (Symbol<Symbol.Signature>) getDescriptor(pool);
         }

@@ -128,14 +128,20 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
 
         private static Method lookupPolysigMethod(Klass klass, Symbol<Name> name, Symbol<Signature> signature) {
             assert(klass.getType() == Symbol.Type.MethodHandle);
-            return klass.lookupPolysigMethod(name, signature);
+            for (Method m: klass.getDeclaredMethods()) {
+                if ((m.isNative()) && m.getName() == name) {
+                    return m;
+                }
+            }
+            return null;
         }
 
         @Override
         public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
             resolveMethodCount.inc();
             EspressoContext context = pool.getContext();
-            Klass holderInterface = getResolvedHolderKlass(accessingKlass, pool);
+            Symbol<Name> holderKlassName = getHolderKlassName(pool);
+            Klass holderInterface = context.getRegistries().loadKlass(context.getTypes().fromName(holderKlassName), accessingKlass.getDefiningClassLoader());
 
             Symbol<Name> name = getName(pool);
 

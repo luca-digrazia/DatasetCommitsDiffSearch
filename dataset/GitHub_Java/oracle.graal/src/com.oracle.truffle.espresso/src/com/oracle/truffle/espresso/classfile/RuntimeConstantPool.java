@@ -27,7 +27,6 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -117,9 +116,5 @@ public final class RuntimeConstantPool extends ConstantPool {
 
     public EspressoContext getContext() {
         return context;
-    }
-
-    public void setKlassAt(int index, ObjectKlass klass) {
-        constants[index] = new ClassConstant.Resolved(klass);
     }
 }
