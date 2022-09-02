@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,7 +37,6 @@ import com.oracle.truffle.api.debug.SuspendAnchor;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.debug.SuspensionFilter;
-import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -49,7 +48,6 @@ import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -269,16 +267,21 @@ public final class DebuggerController implements ContextsListener {
     private void doStepOut(SuspendedInfo susp) {
         // There are two different cases for step out, 1) step out and land
         // on the same line, enabling step into next method on line, and 2)
-        // step over the callee line when there are no bytecode instructions
+        // step over the callee line when there are no further method calls
         // on the line. Ask the guest language which one to use
-        boolean hasMoreMethodCallsOnLine = context.moreMethodCallsOnLine(susp.getCallerRootNode(), susp.getCallerFrameInstance());
-        if (hasMoreMethodCallsOnLine) {
-            long stepOutBCI = context.readBCIFromFrame(susp.getCallerRootNode(), susp.getCallerFrameInstance());
-            SteppingInfo steppingInfo = commandRequestIds.get(susp.getThread());
-            if (steppingInfo != null) {
-                // record the bci that we'll land on after the step out completes
-                steppingInfo.setStepOutBCI(stepOutBCI);
+        RootNode callerRoot = susp.getCallerRootNode();
+
+        // since the below method uses stack frame iteration it must be called
+        // on the correct thread
+        ThreadJob job = new ThreadJob(susp.getThread(), new Callable<Object>() {
+            @Override
+            public Object call() {
+                return context.moreMethodCallsOnLine(callerRoot);
             }
+        });
+        postJobForThread(job);
+        boolean hasMoreMethodCallsOnLine = (boolean) job.getResult().getResult();
+        if (hasMoreMethodCallsOnLine) {
             susp.getEvent().prepareStepOut(STEP_CONFIG);
         } else {
             susp.getEvent().prepareStepOut(STEP_CONFIG).prepareStepOver(STEP_CONFIG);
@@ -548,7 +551,7 @@ public final class DebuggerController implements ContextsListener {
 
         // if during stepping, send a step completed event back to the debugger
         if (info != null && !breakpointHit) {
-            eventListener.stepCompleted(info, currentFrame);
+            eventListener.stepCompleted(info.getRequestId(), info.getSuspendPolicy(), thread, currentFrame);
         }
 
         // no reason to hold a hard suspension status, since now
@@ -654,6 +657,7 @@ public final class DebuggerController implements ContextsListener {
                 }
                 i++;
             }
+
             SuspendedInfo suspendedInfo = new SuspendedInfo(event, callFrames, currentThread, callerRootNode);
             suspendedInfos.put(currentThread, suspendedInfo);
 
@@ -849,7 +853,6 @@ public final class DebuggerController implements ContextsListener {
                 byte typeTag;
                 long codeIndex;
 
-                FrameInstance frameInstance = getFrameInstance(frame);
                 RootNode root = findCurrentRoot(frame);
                 if (root == null) {
                     // since we can't lookup the root node, we have to
@@ -863,14 +866,13 @@ public final class DebuggerController implements ContextsListener {
                     klassId = ids.getIdAsLong(klass);
                     methodId = ids.getIdAsLong(method);
                     typeTag = TypeTag.getKind(klass);
-
-                    // for bytecode-based languages (Espresso) we can read the precise bci from the
-                    // frame instance
-                    codeIndex = context.readBCIFromFrame(root, frameInstance);
+                    // try to get the precise code index directly
+                    codeIndex = context.getCurrentBCI(root);
 
                     if (codeIndex == -1) {
-                        // fall back to line precision through the source section
-                        SourceSection sourceSection = frame.getSourceSection();
+                        // could not obtain precise bci from the root node
+                        // try to get an encapsulated source section from the frame
+                        SourceSection sourceSection = root.getEncapsulatingSourceSection();
                         if (sourceSection.hasLines()) {
                             if (sourceSection.getStartLine() != sourceSection.getEndLine()) {
                                 JDWPLogger.log("Not able to get a precise encapsulated source section", JDWPLogger.LogLevel.ALL);
@@ -902,23 +904,13 @@ public final class DebuggerController implements ContextsListener {
                         }
                     }
                 }
-                list.addLast(new CallFrame(threadId, typeTag, klassId, methodId, codeIndex, frameInstance, thisValue, realVariables.toArray(new Object[realVariables.size()])));
+                list.addLast(new CallFrame(threadId, typeTag, klassId, methodId, codeIndex, thisValue, realVariables.toArray(new Object[realVariables.size()])));
                 frameCount++;
                 if (frameLimit != -1 && frameCount >= frameLimit) {
                     return list.toArray(new CallFrame[list.size()]);
                 }
             }
             return list.toArray(new CallFrame[list.size()]);
-        }
-
-        private FrameInstance getFrameInstance(DebugStackFrame frame) {
-            try {
-                Field field = DebugStackFrame.class.getDeclaredField("currentFrame");
-                field.setAccessible(true);
-                return (FrameInstance) field.get(frame);
-            } catch (NoSuchFieldException | IllegalAccessException e) {
-                return null;
-            }
         }
 
         private Object getRealValue(DebugValue value) {
