@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,6 +28,7 @@ import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.DWORD;
 import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.QWORD;
 import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.XMM;
 import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.YMM;
+import static org.graalvm.compiler.asm.amd64.AVXKind.AVXSize.ZMM;
 
 import jdk.vm.ci.meta.Value;
 import org.graalvm.compiler.debug.GraalError;
@@ -43,7 +44,8 @@ public final class AVXKind {
         DWORD,
         QWORD,
         XMM,
-        YMM;
+        YMM,
+        ZMM;
 
         public int getBytes() {
             switch (this) {
@@ -55,6 +57,8 @@ public final class AVXKind {
                     return 16;
                 case YMM:
                     return 32;
+                case ZMM:
+                    return 64;
                 default:
                     return 0;
             }
@@ -84,6 +88,8 @@ public final class AVXKind {
                 return XMM;
             case 32:
                 return YMM;
+            case 64:
+                return ZMM;
             default:
                 throw GraalError.shouldNotReachHere("unsupported kind: " + kind);
         }
@@ -91,7 +97,10 @@ public final class AVXKind {
 
     public static AVXSize getRegisterSize(AMD64Kind kind) {
         assert kind.isXMM() : "unexpected kind " + kind;
-        if (kind.getSizeInBytes() > 16) {
+        int size = kind.getSizeInBytes();
+        if (size > 32) {
+            return ZMM;
+        } else if (size > 16) {
             return YMM;
         } else {
             return XMM;
@@ -100,6 +109,17 @@ public final class AVXKind {
 
     public static AMD64Kind changeSize(AMD64Kind kind, AVXSize newSize) {
         return getAVXKind(kind.getScalar(), newSize);
+    }
+
+    public static AMD64Kind getMaskKind(AMD64Kind kind) {
+        switch (kind.getScalar()) {
+            case SINGLE:
+                return getAVXKind(AMD64Kind.DWORD, kind.getVectorLength());
+            case DOUBLE:
+                return getAVXKind(AMD64Kind.QWORD, kind.getVectorLength());
+            default:
+                return kind;
+        }
     }
 
     public static AMD64Kind getAVXKind(AMD64Kind base, AVXSize size) {
@@ -111,12 +131,32 @@ public final class AVXKind {
         throw GraalError.shouldNotReachHere(String.format("unsupported vector kind: %s x %s", size, base));
     }
 
+    /**
+     * Returns the smallest kind that is able to hold a value of the specified base and vector
+     * length.
+     *
+     * When a length is specified that results a total data size that is not an exact match for a
+     * kind, the smallest kind that can hold the specified value will be returned. As an example, if
+     * a base kind of {@code DWORD} and a length of 3 is specified the function will return
+     * {@code V128_DWORD} since it is the smallest kind (4 x {@code DWORD}) that can hold the
+     * requested data.
+     *
+     * Calling this function with a length that exceeds the largest supported register is an error.
+     *
+     * @param base the kind of each element of the vector
+     * @param length the length of the vector
+     * @return the kind representing the smallest vector register that can hold the requested data
+     */
     public static AMD64Kind getAVXKind(AMD64Kind base, int length) {
+        AMD64Kind toReturn = null;
         for (AMD64Kind ret : AMD64Kind.values()) {
-            if (ret.getScalar() == base && ret.getVectorLength() == length) {
-                return ret;
+            if (ret.getScalar() == base && ret.getVectorLength() >= length && (toReturn == null || ret.getVectorLength() < toReturn.getVectorLength())) {
+                toReturn = ret;
             }
         }
-        throw GraalError.shouldNotReachHere(String.format("unsupported vector kind: %d x %s", length, base));
+        if (toReturn == null) {
+            throw GraalError.shouldNotReachHere(String.format("unsupported vector kind: %d x %s", length, base));
+        }
+        return toReturn;
     }
 }
