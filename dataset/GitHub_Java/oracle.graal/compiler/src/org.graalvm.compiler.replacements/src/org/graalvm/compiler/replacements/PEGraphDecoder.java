@@ -64,7 +64,6 @@ import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ControlSinkNode;
-import org.graalvm.compiler.nodes.DeoptBciSupplier;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.EncodedGraph;
 import org.graalvm.compiler.nodes.FixedNode;
@@ -83,6 +82,7 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
+import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.IntegerSwitchNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GeneratedInvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -819,10 +819,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             if (graphBuilderContext.invokeConsumed) {
                 /* Nothing to do. */
             } else if (graphBuilderContext.lastInstr != null) {
-                if (graphBuilderContext.lastInstr instanceof DeoptBciSupplier && !BytecodeFrame.isPlaceholderBci(invokeData.invoke.bci()) &&
-                                BytecodeFrame.isPlaceholderBci(((DeoptBciSupplier) graphBuilderContext.lastInstr).bci())) {
-                    ((DeoptBciSupplier) graphBuilderContext.lastInstr).setBci(invokeData.invoke.bci());
-                }
                 registerNode(loopScope, invokeData.invokeOrderId, graphBuilderContext.pushedNode, true, true);
                 invoke.asNode().replaceAtUsages(graphBuilderContext.pushedNode);
                 graphBuilderContext.lastInstr.setNext(nodeAfterInvoke(methodScope, loopScope, invokeData, AbstractBeginNode.prevBegin(graphBuilderContext.lastInstr)));
@@ -1156,6 +1152,20 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
     protected abstract EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, MethodSubstitutionPlugin plugin, BytecodeProvider intrinsicBytecodeProvider, boolean isSubstitution,
                     boolean trackNodeSourcePosition);
+
+    @Override
+    protected void handleFixedNode(MethodScope s, LoopScope loopScope, int nodeOrderId, FixedNode node) {
+        PEMethodScope methodScope = (PEMethodScope) s;
+
+        if (node instanceof ForeignCallNode) {
+            ForeignCallNode foreignCall = (ForeignCallNode) node;
+            if (foreignCall.getBci() == BytecodeFrame.UNKNOWN_BCI && methodScope.invokeData != null) {
+                foreignCall.setBci(methodScope.invokeData.invoke.bci());
+            }
+        }
+
+        super.handleFixedNode(methodScope, loopScope, nodeOrderId, node);
+    }
 
     @SuppressWarnings("try")
     @Override
