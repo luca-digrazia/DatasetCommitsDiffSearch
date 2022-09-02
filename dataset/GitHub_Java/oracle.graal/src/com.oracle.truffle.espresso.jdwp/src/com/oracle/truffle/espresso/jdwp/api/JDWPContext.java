@@ -39,14 +39,14 @@ public interface JDWPContext {
      * @param hostThread
      * @return guest language thread
      */
-    Object asGuestThread(Thread hostThread);
+    Object getHost2GuestThread(Thread hostThread);
 
     /**
      * Returns the host thread corresponding to the guest language thread
      * @param thread guest language thread
      * @return host language thread
      */
-    Thread asHostThread(Object thread);
+    Thread getGuest2HostThread(Object thread);
 
     /**
      * Finds a klasses loaded under the given name.
