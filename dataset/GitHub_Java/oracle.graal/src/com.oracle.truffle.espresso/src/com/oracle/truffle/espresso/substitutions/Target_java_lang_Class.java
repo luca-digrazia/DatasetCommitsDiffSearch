@@ -248,9 +248,7 @@ public final class Target_java_lang_Class {
         final Method[] methods = Arrays.stream(self.getMirrorKlass().getDeclaredMethods()).filter(new Predicate<Method>() {
             @Override
             public boolean test(Method m) {
-                return (!publicOnly || m.isPublic()) &&
-                        // Filter out <init> and <clinit> from reflection.
-                        !Name.INIT.equals(m.getName()) && !Name.CLINIT.equals(m.getName());
+                return !publicOnly || m.isPublic();
             }
         }).toArray(
                         new IntFunction<Method[]>() {

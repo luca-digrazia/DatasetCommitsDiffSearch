@@ -136,12 +136,14 @@ public final class Target_sun_misc_Unsafe {
 
     @Substitution(hasReceiver = true)
     public static int getIntVolatile(@SuppressWarnings("unused") Object unsafe, @Host(Object.class) StaticObject holder, long offset) {
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         return (int) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
     public static long getLongVolatile(@SuppressWarnings("unused") Object unsafe, @Host(Object.class) StaticObject holder, long offset) {
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         return (long) f.get(holder);
     }
@@ -158,6 +160,7 @@ public final class Target_sun_misc_Unsafe {
 
     @Substitution(hasReceiver = true)
     public static boolean compareAndSwapInt(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, int before, int after) {
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         int inTheField = (int) f.get(holder);
         if (inTheField == before) {
@@ -170,6 +173,7 @@ public final class Target_sun_misc_Unsafe {
 
     @Substitution(hasReceiver = true)
     public static boolean compareAndSwapLong(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, long before, long after) {
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         long inTheField = (long) f.get(holder);
         if (inTheField == before) {
@@ -197,6 +201,7 @@ public final class Target_sun_misc_Unsafe {
 
     @Substitution(hasReceiver = true)
     public static void putLong(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, long x) {
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         f.set(holder, x);
     }
@@ -208,49 +213,14 @@ public final class Target_sun_misc_Unsafe {
 
     @Substitution(hasReceiver = true)
     public static byte getByte(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         return (byte) f.get(holder);
     }
-
-    @Substitution(hasReceiver = true)
-    public static byte getByteVolatile(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (byte) f.get(holder);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static short getShortVolatile(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (short) f.get(holder);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static char getCharVolatile(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (char) f.get(holder);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static float getFloatVolatile(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (float) f.get(holder);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static double getDoubleVolatile(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (double) f.get(holder);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static boolean getBooleanVolatile(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (boolean) f.get(holder);
-    }
-
 
     @Substitution(hasReceiver = true)
     public static int getInt(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         return (int) f.get(holder);
     }
@@ -272,17 +242,7 @@ public final class Target_sun_misc_Unsafe {
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
         // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return f.get(holder);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static Object getObject(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset) {
-        if (holder instanceof StaticObjectArray) {
-            return U.getObjectVolatile(((StaticObjectArray) holder).unwrap(), offset);
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         return f.get(holder);
     }
@@ -295,18 +255,7 @@ public final class Target_sun_misc_Unsafe {
         }
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
         // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        f.set(holder, value);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void putObject(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, Object value) {
-        if (holder instanceof StaticObjectArray) {
-            U.putObject(((StaticObjectArray) holder).unwrap(), offset, value);
-            return;
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
+        // TODO(peterssen): Use holder.getKlass().findInstanceFieldWithOffset
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         f.set(holder, value);
     }
@@ -331,87 +280,8 @@ public final class Target_sun_misc_Unsafe {
     }
 
     @Substitution(hasReceiver = true)
-    public static void putByte(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, byte value) {
-        if (holder instanceof StaticObjectArray) {
-            U.putByte(((StaticObjectArray) holder).unwrap(), offset, value);
-            return;
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        f.set(holder, value);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void putShort(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, short value) {
-        if (holder instanceof StaticObjectArray) {
-            U.putShort(((StaticObjectArray) holder).unwrap(), offset, value);
-            return;
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        f.set(holder, value);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void putInt(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, int value) {
-        if (holder instanceof StaticObjectArray) {
-            U.putInt(((StaticObjectArray) holder).unwrap(), offset, value);
-            return;
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        f.set(holder, value);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void putFloat(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, float value) {
-        if (holder instanceof StaticObjectArray) {
-            U.putFloat(((StaticObjectArray) holder).unwrap(), offset, value);
-            return;
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        f.set(holder, value);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void putBoolean(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, boolean value) {
-        if (holder instanceof StaticObjectArray) {
-            U.putBoolean(((StaticObjectArray) holder).unwrap(), offset, value);
-            return;
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        f.set(holder, value);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void putDouble(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, double value) {
-        if (holder instanceof StaticObjectArray) {
-            U.putDouble(((StaticObjectArray) holder).unwrap(), offset, value);
-            return;
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        f.set(holder, value);
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void putChar(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject holder, long offset, char value) {
-        if (holder instanceof StaticObjectArray) {
-            U.putChar(((StaticObjectArray) holder).unwrap(), offset, value);
-            return;
-        }
-        // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
-        // field index.
-        Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        f.set(holder, value);
+    public static void putByte(@SuppressWarnings("unused") Object self, @Host(Object.class) StaticObject object, long offset, byte value) {
+        U.putByte(MetaUtil.unwrap(object), offset, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -445,7 +315,7 @@ public final class Target_sun_misc_Unsafe {
     }
 
     @Substitution(hasReceiver = true)
-    public static long staticFieldOffset(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(java.lang.reflect.Field.class) StaticObject field) {
+    public static long staticFieldOffset(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Field.class) StaticObject field) {
         return getReflectiveFieldRoot(field).getSlot() + SAFETY_FIELD_OFFSET;
     }
 
