@@ -161,21 +161,18 @@ public final class Target_java_lang_Thread {
 
     @Substitution
     public static @Host(Thread.class) StaticObject currentThread() {
-        // TODO(tg): inject meta
         return EspressoLanguage.getCurrentContext().getCurrentThread();
     }
 
     @TruffleBoundary
     @Substitution
     public static @Host(Thread[].class) StaticObject getThreads() {
-        // TODO(tg): inject meta
         EspressoContext context = EspressoLanguage.getCurrentContext();
         return StaticObject.createArray(context.getMeta().java_lang_Thread.array(), context.getActiveThreads());
     }
 
     @Substitution
     public static @Host(StackTraceElement[][].class) StaticObject dumpThreads(@Host(Thread[].class) StaticObject threads) {
-        // TODO(tg): inject meta
         if (StaticObject.isNull(threads)) {
             throw EspressoLanguage.getCurrentContext().getMeta().throwNullPointerException();
         }
@@ -193,7 +190,6 @@ public final class Target_java_lang_Thread {
     @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
     public static void start0(@Host(Thread.class) StaticObject self) {
-        // TODO(tg): inject meta
         if (EspressoOptions.ENABLE_THREADS) {
             // Thread.start() is synchronized.
             EspressoContext context = self.getKlass().getContext();
@@ -414,7 +410,6 @@ public final class Target_java_lang_Thread {
 
     @Substitution(hasReceiver = true)
     public static void setNativeName(@Host(Object.class) StaticObject self, @Host(String.class) StaticObject name) {
-        // TODO(tg): inject meta
         Thread hostThread = getHostFromGuestThread(self);
         hostThread.setName(Meta.toHostString(name));
     }

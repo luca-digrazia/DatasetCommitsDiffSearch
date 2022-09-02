@@ -65,7 +65,6 @@ public final class Target_java_lang_Class {
 
         String hostName = Meta.toHostString(name);
 
-        // TODO(tg): inject meta
         Meta meta = name.getKlass().getMeta();
         switch (hostName) {
             case "boolean":
@@ -110,7 +109,6 @@ public final class Target_java_lang_Class {
                     @SuppressWarnings("unused") @Host(Class.class) StaticObject caller) {
 
         assert loader != null;
-        // TODO(tg): inject meta
         EspressoContext context = EspressoLanguage.getCurrentContext();
         Meta meta = context.getMeta();
         if (StaticObject.isNull(name)) {
@@ -175,7 +173,6 @@ public final class Target_java_lang_Class {
         }
 
         // Class names must be interned.
-        // TODO(tg): inject meta
         Meta meta = klass.getMeta();
         StaticObject guestString = meta.toGuestString(externalName);
         return internString(meta, guestString);
@@ -212,7 +209,6 @@ public final class Target_java_lang_Class {
         }
         final Field[] fields = collectedMethods.toArray(Field.EMPTY_ARRAY);
 
-        // TODO(tg): inject meta
         EspressoContext context = self.getKlass().getContext();
         Meta meta = context.getMeta();
 
@@ -280,7 +276,6 @@ public final class Target_java_lang_Class {
         }
         final Method[] constructors = collectedMethods.toArray(Method.EMPTY_ARRAY);
 
-        // TODO(tg): inject meta, inject constructor calltarget.
         EspressoContext context = self.getKlass().getContext();
         Meta meta = context.getMeta();
 
@@ -385,7 +380,6 @@ public final class Target_java_lang_Class {
         }
         final Method[] methods = collectedMethods.toArray(Method.EMPTY_ARRAY);
 
-        // TODO(tg): inject meta, inject constructor calltarget.
         EspressoContext context = self.getKlass().getContext();
         Meta meta = context.getMeta();
 
@@ -485,7 +479,6 @@ public final class Target_java_lang_Class {
     public static @Host(Class[].class) StaticObject getInterfaces0(@Host(Class.class) StaticObject self) {
         final Klass[] superInterfaces = self.getMirrorKlass().getInterfaces();
 
-        // TODO(tg): inject meta
         Meta meta = self.getKlass().getMeta();
         StaticObject instance = meta.java_lang_Class.allocateArray(superInterfaces.length, new IntFunction<StaticObject>() {
             @Override
@@ -541,7 +534,6 @@ public final class Target_java_lang_Class {
     @Substitution(hasReceiver = true)
     public static @Host(Object[].class) StaticObject getEnclosingMethod0(@Host(Class.class) StaticObject self) {
 
-        // TODO(tg): inject meta
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         InterpreterToVM vm = meta.getInterpreterToVM();
         if (self.getMirrorKlass() instanceof ObjectKlass) {
@@ -662,7 +654,6 @@ public final class Target_java_lang_Class {
 
     @Substitution(hasReceiver = true)
     public static @Host(ProtectionDomain.class) StaticObject getProtectionDomain0(@Host(Class.class) StaticObject self) {
-        // TODO(tg): inject meta
         StaticObject pd = (StaticObject) self.getHiddenField(self.getKlass().getMeta().HIDDEN_PROTECTION_DOMAIN);
         // The protection domain is not always set e.g. bootstrap (classloader) classes.
         return pd == null ? StaticObject.NULL : pd;
@@ -700,7 +691,6 @@ public final class Target_java_lang_Class {
             // No constant pool for arrays and primitives.
             return StaticObject.NULL;
         }
-        // TODO(tg): inject meta
         Meta meta = self.getKlass().getMeta();
         StaticObject cp = new StaticObject(meta.sun_reflect_ConstantPool);
         cp.setField(meta.sun_reflect_ConstantPool_constantPoolOop, self);
@@ -714,7 +704,6 @@ public final class Target_java_lang_Class {
             SignatureAttribute signature = (SignatureAttribute) klass.getAttribute(Name.Signature);
             if (signature != null) {
                 String sig = klass.getConstantPool().symbolAt(signature.getSignatureIndex(), "signature").toString();
-                // TODO(tg): inject meta
                 return klass.getMeta().toGuestString(sig);
             }
         }
@@ -724,7 +713,6 @@ public final class Target_java_lang_Class {
     @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static @Host(Class[].class) StaticObject getDeclaredClasses0(@Host(Class.class) StaticObject self) {
-        // TODO(tg): inject meta
         Meta meta = self.getKlass().getMeta();
         Klass klass = self.getMirrorKlass();
         if (klass.isPrimitive() || klass.isArray()) {
@@ -776,7 +764,6 @@ public final class Target_java_lang_Class {
         if (klass.isPrimitive()) {
             return StaticObject.NULL;
         }
-        // TODO(tg): inject meta
         Meta meta = self.getKlass().getMeta();
         StaticObject signersArray = (StaticObject) self.getHiddenField(meta.HIDDEN_SIGNERS);
         if (signersArray == null || StaticObject.isNull(signersArray)) {
@@ -789,7 +776,6 @@ public final class Target_java_lang_Class {
     public static void setSigners(@Host(Class.class) StaticObject self, @Host(Object[].class) StaticObject signers) {
         Klass klass = self.getMirrorKlass();
         if (!klass.isPrimitive() && !klass.isArray()) {
-            // TODO(tg): inject meta
             Meta meta = self.getKlass().getMeta();
             self.setHiddenField(meta.HIDDEN_SIGNERS, signers);
         }

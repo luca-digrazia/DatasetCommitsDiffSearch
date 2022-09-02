@@ -666,8 +666,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return Signatures.parameterCount(getParsedSignature(), false);
     }
 
-    public static Method getHostReflectiveMethodRoot(StaticObject seed, Meta meta) {
+    public static Method getHostReflectiveMethodRoot(StaticObject seed) {
         assert seed.getKlass().getMeta().java_lang_reflect_Method.isAssignableFrom(seed.getKlass());
+        Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
@@ -679,8 +680,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return target;
     }
 
-    public static Method getHostReflectiveConstructorRoot(StaticObject seed, Meta meta) {
+    public static Method getHostReflectiveConstructorRoot(StaticObject seed) {
         assert seed.getKlass().getMeta().java_lang_reflect_Constructor.isAssignableFrom(seed.getKlass());
+        Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {

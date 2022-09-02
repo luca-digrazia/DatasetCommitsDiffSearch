@@ -602,12 +602,6 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 if (instrument != null) {
                     instrument.notifyStatement(frame, statementIndex, nextStatementIndex);
                     statementIndex = nextStatementIndex;
-
-                    // check for early return
-                    Object earlyReturnValue = getContext().getJDWPListener().getAndRemoveEarlyReturnValue();
-                    if (earlyReturnValue != null) {
-                        return notifyReturn(frame, statementIndex, exitMethodEarlyAndReturn(earlyReturnValue));
-                    }
                 }
 
                 // @formatter:off
@@ -1009,26 +1003,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                     case CHECKCAST: top += quickenCheckCast(frame, top, curBCI, curOpcode); break;
                     case INSTANCEOF: top += quickenInstanceOf(frame, top, curBCI, curOpcode); break;
 
-                    case MONITORENTER:
-                        final StaticObject monitor = nullCheck(peekAndReleaseObject(frame, top - 1));
-                        if (instrument != null) {
-                            final int index = statementIndex;
-
-                            monitorEnter(frame, monitor, new Runnable() {
-                                @Override
-                                public void run() {
-                                    instrument.notifyMonitorContended(frame, index, monitor);
-                                }
-                            }, new Runnable() {
-                                @Override
-                                public void run() {
-                                    instrument.notifyMonitorContendedEntered(frame, index, monitor);
-                                }
-                            });
-                        } else {
-                            monitorEnter(frame, monitor);
-                        }
-                        break;
+                    case MONITORENTER: monitorEnter(frame, nullCheck(peekAndReleaseObject(frame, top - 1))); break;
                     case MONITOREXIT:  monitorExit(frame, nullCheck(peekAndReleaseObject(frame, top - 1))); break;
 
                     case WIDE:
@@ -1163,29 +1138,9 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         getMonitorStack(frame).exit(monitor, this);
     }
 
-    void synchronizedMethodMonitorEnter(VirtualFrame frame, StaticObject monitor) {
-        Runnable monitorContendedEnterCallback = instrumentation == null ? null : new Runnable() {
-            @Override
-            public void run() {
-                instrumentation.notifyMonitorContended(frame, 0, monitor);
-            }
-        };
-        Runnable monitorContendedEnteredCallback = instrumentation == null ? null : new Runnable() {
-            @Override
-            public void run() {
-                instrumentation.notifyMonitorContendedEntered(frame, 0, monitor);
-            }
-        };
-        InterpreterToVM.monitorEnter(monitor, monitorContendedEnterCallback, monitorContendedEnteredCallback);
-    }
-
-    private void monitorEnter(VirtualFrame frame, StaticObject monitor, Runnable monitorContendedEnterCallback, Runnable monitorContendedEnteredCallback) {
-        registerMonitor(frame, monitor);
-        InterpreterToVM.monitorEnter(monitor, monitorContendedEnterCallback, monitorContendedEnteredCallback);
-    }
-
     private void monitorEnter(VirtualFrame frame, StaticObject monitor) {
-        monitorEnter(frame, monitor, null, null);
+        registerMonitor(frame, monitor);
+        InterpreterToVM.monitorEnter(monitor);
     }
 
     private void registerMonitor(VirtualFrame frame, StaticObject monitor) {
@@ -1883,14 +1838,6 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         return exitMethodAndReturnObject(StaticObject.NULL);
     }
 
-    private Object exitMethodEarlyAndReturn(Object result) {
-        if (Signatures.returnKind(getMethod().getParsedSignature()) == JavaKind.Void) {
-            return exitMethodAndReturn();
-        } else {
-            return result;
-        }
-    }
-
     // endregion Method return
 
     // region Arithmetic/binary operations
@@ -2398,18 +2345,6 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
         public void notifyFieldAccess(VirtualFrame frame, int index, Field field, StaticObject receiver) {
             if (context.getJDWPListener().hasFieldAccessBreakpoint(field, receiver)) {
-                enterAt(frame, index);
-            }
-        }
-
-        public void notifyMonitorContended(VirtualFrame frame, int index, Object monitor) {
-            if (context.getJDWPListener().prepareMonitorContended(monitor)) {
-                enterAt(frame, index);
-            }
-        }
-
-        public void notifyMonitorContendedEntered(VirtualFrame frame, int index, Object monitor) {
-            if (context.getJDWPListener().prepareMonitorContendedEntered(monitor)) {
                 enterAt(frame, index);
             }
         }
