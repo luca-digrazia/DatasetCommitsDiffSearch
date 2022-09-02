@@ -43,6 +43,7 @@ package com.oracle.truffle.api.test.host;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
@@ -68,17 +69,17 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.MessageResolution;
+import com.oracle.truffle.api.interop.Resolve;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -290,11 +291,18 @@ public class HostExceptionTest {
             shouldHaveThrown(PolyglotException.class);
         } catch (PolyglotException polyglotException) {
             assertNull("cause must be null", polyglotException.getCause());
-            assertTrue(polyglotException.isHostException());
-            assertTrue(polyglotException.asHostException() instanceof BadException);
+            assertFalse(polyglotException.isHostException());
+            assertTrue(polyglotException.isInternalError());
         }
-        // should be caught
-        catcher.execute(throwerOuter);
+
+        try {
+            catcher.execute(throwerOuter);
+            shouldHaveThrown(PolyglotException.class);
+        } catch (PolyglotException polyglotException) {
+            assertNull("cause must be null", polyglotException.getCause());
+            assertFalse(polyglotException.isHostException());
+            assertTrue(polyglotException.isInternalError());
+        }
     }
 
     @SuppressWarnings("serial")
@@ -396,7 +404,7 @@ public class HostExceptionTest {
         fail("Expected a " + expected + " but caught " + unexpected);
     }
 
-    @ExportLibrary(InteropLibrary.class)
+    @MessageResolution(receiverType = CatcherObject.class)
     static final class CatcherObject implements TruffleObject {
         final CallTarget callTarget;
 
@@ -408,24 +416,23 @@ public class HostExceptionTest {
             return obj instanceof CatcherObject;
         }
 
-        @SuppressWarnings("static-method")
-        @ExportMessage
-        boolean isExecutable() {
-            return true;
+        @Override
+        public ForeignAccess getForeignAccess() {
+            return CatcherObjectForeign.ACCESS;
         }
 
-        @ExportMessage
-        abstract static class Execute {
-            @Specialization
-            static Object access(CatcherObject catcher, Object[] args,
-                            @Cached IndirectCallNode callNode) {
+        @Resolve(message = "EXECUTE")
+        abstract static class Execute extends Node {
+            @Child IndirectCallNode callNode = IndirectCallNode.create();
+
+            Object access(CatcherObject catcher, Object[] args) {
                 return callNode.call(catcher.callTarget, args);
             }
         }
     }
 
     class CatcherRootNode extends RootNode {
-        @Child InteropLibrary interop = InteropLibrary.getFactory().createDispatched(5);
+        @Child Node executeNode = Message.EXECUTE.createNode();
 
         CatcherRootNode() {
             super(ProxyLanguage.getCurrentLanguage());
@@ -447,7 +454,7 @@ public class HostExceptionTest {
             TruffleObject thrower = (TruffleObject) frame.getArguments()[0];
             Object[] args = Arrays.copyOfRange(frame.getArguments(), 1, frame.getArguments().length);
             try {
-                return interop.execute(thrower, args);
+                return ForeignAccess.sendExecute(executeNode, thrower, args);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(e);
@@ -472,7 +479,7 @@ public class HostExceptionTest {
     }
 
     class RunnerRootNode extends RootNode {
-        @Child InteropLibrary interop = InteropLibrary.getFactory().createDispatched(5);
+        @Child Node executeNode = Message.EXECUTE.createNode();
 
         RunnerRootNode() {
             super(ProxyLanguage.getCurrentLanguage());
@@ -494,7 +501,7 @@ public class HostExceptionTest {
             TruffleObject thrower = (TruffleObject) frame.getArguments()[0];
             Object[] args = Arrays.copyOfRange(frame.getArguments(), 1, frame.getArguments().length);
             try {
-                return interop.execute(thrower, args);
+                return ForeignAccess.sendExecute(executeNode, thrower, args);
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(e);
