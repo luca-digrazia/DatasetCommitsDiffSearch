@@ -27,7 +27,6 @@ package org.graalvm.compiler.core.test;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.extended.IntegerSwitchNode;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class SwitchCanonicalizerTest extends GraalCompilerTest {
@@ -70,7 +69,6 @@ public class SwitchCanonicalizerTest extends GraalCompilerTest {
     }
 
     @Test
-    @Ignore("rem by power of 2 does not preserve the stamp information.")
     public void testRemByPowerOf2() {
         shouldFoldSwitch("remByPowerOf2");
     }
