@@ -57,15 +57,12 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Trace
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceSplitting;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceSplittingSummary;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceTransferToInterpreter;
-import static org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime.getRuntime;
+import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.getPolyglotOptionValue;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.logging.Level;
 
@@ -82,16 +79,23 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 /**
  * Class used to store data used by the compiler in the Engine. Enables "global" compiler state per
- * engine. One-to-one relationship with a polyglot Engine instance.
+ * engine.
  */
 public final class EngineData {
+
+    static final BiFunction<OptionValues, Function<String, TruffleLogger>, EngineData> ENGINE_DATA_SUPPLIER = new BiFunction<OptionValues, Function<String, TruffleLogger>, EngineData>() {
+        @Override
+        public EngineData apply(OptionValues engineOptions, Function<String, TruffleLogger> loggerFactory) {
+            return new EngineData(engineOptions, loggerFactory);
+        }
+    };
 
     private static final AtomicLong engineCounter = new AtomicLong();
 
     int splitLimit;
     int splitCount;
     public final long id;
-    private Function<String, TruffleLogger> loggerFactory;
+    private final Function<String, TruffleLogger> loggerFactory;
     @CompilationFinal OptionValues engineOptions;
     final TruffleSplittingStrategy.SplitStatisticsData splittingStatistics;
     @CompilationFinal public StatisticsListener statisticsListener;
@@ -138,127 +142,58 @@ public final class EngineData {
     // Cached parsed CompileOnly includes and excludes
     private volatile Pair<List<String>, List<String>> parsedCompileOnly;
 
-    private Object polyglotEngine;
-
-    /*
-     * Extension data for dynamically bound engine extensions.
-     */
-    private volatile Map<Class<?>, Object> engineLocals;
-
     EngineData(OptionValues options, Function<String, TruffleLogger> loggerFactory) {
-        Objects.requireNonNull(options);
         this.id = engineCounter.incrementAndGet();
         this.loggerFactory = loggerFactory;
-        this.loadOptions(options);
+        loadOptions(options);
 
         // the splittingStatistics requires options to be initialized
         this.splittingStatistics = new TruffleSplittingStrategy.SplitStatisticsData();
     }
 
-    public void preinitializeContext() {
-        GraalRuntimeAccessor.ENGINE.preinitializeContext(this.polyglotEngine);
+    public OptionValues getEngineOptions() {
+        return engineOptions;
     }
 
-    public Object getEngineLock() {
-        return GraalRuntimeAccessor.ENGINE.getEngineLock(this.polyglotEngine);
-    }
-
-    @SuppressWarnings("unchecked")
-    public <T> T getEngineLocal(Class<T> symbol) {
-        Map<Class<?>, Object> data = this.engineLocals;
-        if (data == null) {
-            return null;
-        }
-        return (T) data.get(symbol);
-    }
-
-    public void clearEngineLocal(Class<?> symbol) {
-        Map<Class<?>, Object> data = this.engineLocals;
-        if (data == null) {
-            return;
-        }
-        data.remove(symbol);
-    }
-
-    public <T> void putEngineLocal(Class<T> symbol, T value) {
-        Map<Class<?>, Object> data = this.engineLocals;
-        if (data == null) {
-            synchronized (this) {
-                data = this.engineLocals;
-                if (data == null) {
-                    this.engineLocals = data = new ConcurrentHashMap<>();
-                }
-            }
-        }
-        Object prev = data.putIfAbsent(symbol, symbol.cast(value));
-        if (prev != null) {
-            throw new IllegalArgumentException("Cannot set engine local. Key " + symbol + " is already defined.");
-        }
-    }
-
-    void onEngineCreated(Object engine) {
-        assert this.polyglotEngine == null;
-        this.polyglotEngine = engine;
-        getRuntime().getEngineCacheSupport().onEngineCreated(this);
-    }
-
-    void onEnginePatch(OptionValues newOptions, Function<String, TruffleLogger> newLoggerFactory) {
-        this.loggerFactory = newLoggerFactory;
-        loadOptions(newOptions);
-        getRuntime().getEngineCacheSupport().onEnginePatch(this);
-    }
-
-    public Object getPolyglotEngine() {
-        return polyglotEngine;
-    }
-
-    boolean onEngineClosing() {
-        return getRuntime().getEngineCacheSupport().onEngineClosing(this);
-    }
-
-    void onEngineClosed() {
-        getRuntime().getListener().onEngineClosed(this);
-        getRuntime().getEngineCacheSupport().onEngineClosed(this);
-        this.polyglotEngine = null;
-    }
-
-    private void loadOptions(OptionValues options) {
+    void loadOptions(OptionValues options) {
         this.engineOptions = options;
 
         // splitting options
-        this.splitting = options.get(Splitting) && options.get(Mode) != EngineModeEnum.LATENCY;
-        this.splittingAllowForcedSplits = options.get(SplittingAllowForcedSplits);
-        this.splittingDumpDecisions = options.get(SplittingDumpDecisions);
-        this.splittingMaxCalleeSize = options.get(SplittingMaxCalleeSize);
-        this.splittingMaxPropagationDepth = options.get(SplittingMaxPropagationDepth);
-        this.splittingTraceEvents = options.get(SplittingTraceEvents);
-        this.traceSplittingSummary = options.get(TraceSplittingSummary);
-        this.traceSplits = options.get(TraceSplitting);
-        this.splittingGrowthLimit = options.get(SplittingGrowthLimit);
+        this.splitting = getPolyglotOptionValue(options, Splitting) &&
+                        getPolyglotOptionValue(options, Mode) != EngineModeEnum.LATENCY;
+        this.splittingAllowForcedSplits = getPolyglotOptionValue(options, SplittingAllowForcedSplits);
+        this.splittingDumpDecisions = getPolyglotOptionValue(options, SplittingDumpDecisions);
+        this.splittingMaxCalleeSize = getPolyglotOptionValue(options, SplittingMaxCalleeSize);
+        this.splittingMaxPropagationDepth = getPolyglotOptionValue(options, SplittingMaxPropagationDepth);
+        this.splittingTraceEvents = getPolyglotOptionValue(options, SplittingTraceEvents);
+        this.traceSplittingSummary = getPolyglotOptionValue(options, TraceSplittingSummary);
+        this.traceSplits = getPolyglotOptionValue(options, TraceSplitting);
+        this.splittingGrowthLimit = getPolyglotOptionValue(options, SplittingGrowthLimit);
 
         // inlining options
-        this.inlining = options.get(Inlining) && options.get(Mode) != EngineModeEnum.LATENCY;
+        this.inlining = getPolyglotOptionValue(options, Inlining) &&
+                        getPolyglotOptionValue(options, Mode) != EngineModeEnum.LATENCY;
 
         // compilation options
-        this.compilation = options.get(Compilation);
-        this.compileOnly = options.get(CompileOnly);
-        this.compileImmediately = options.get(CompileImmediately);
-        this.multiTier = !compileImmediately && options.get(MultiTier);
+        this.compilation = getPolyglotOptionValue(options, Compilation);
+        this.compileOnly = getPolyglotOptionValue(options, CompileOnly);
+        this.compileImmediately = getPolyglotOptionValue(options, CompileImmediately);
+        this.multiTier = getPolyglotOptionValue(options, MultiTier);
 
-        this.returnTypeSpeculation = options.get(ReturnTypeSpeculation);
-        this.argumentTypeSpeculation = options.get(ArgumentTypeSpeculation);
-        this.traceCompilation = options.get(TraceCompilation);
-        this.traceCompilationDetails = options.get(TraceCompilationDetails);
-        this.backgroundCompilation = options.get(BackgroundCompilation);
+        this.returnTypeSpeculation = getPolyglotOptionValue(options, ReturnTypeSpeculation);
+        this.argumentTypeSpeculation = getPolyglotOptionValue(options, ArgumentTypeSpeculation);
+        this.traceCompilation = getPolyglotOptionValue(options, TraceCompilation);
+        this.traceCompilationDetails = getPolyglotOptionValue(options, TraceCompilationDetails);
+        this.backgroundCompilation = getPolyglotOptionValue(options, BackgroundCompilation);
         this.callThresholdInInterpreter = computeCallThresholdInInterpreter(options);
         this.callAndLoopThresholdInInterpreter = computeCallAndLoopThresholdInInterpreter(options);
         this.callThresholdInFirstTier = computeCallThresholdInFirstTier(options);
         this.callAndLoopThresholdInFirstTier = computeCallAndLoopThresholdInFirstTier(options);
-        this.callTargetStatisticDetails = options.get(CompilationStatisticDetails);
-        this.callTargetStatistics = options.get(CompilationStatistics) || this.callTargetStatisticDetails;
+        this.callTargetStatisticDetails = getPolyglotOptionValue(options, CompilationStatisticDetails);
+        this.callTargetStatistics = getPolyglotOptionValue(options, CompilationStatistics) || this.callTargetStatisticDetails;
         this.statisticsListener = this.callTargetStatistics ? StatisticsListener.createEngineListener(GraalTruffleRuntime.getRuntime()) : null;
-        this.profilingEnabled = options.get(Profiling);
-        this.traceTransferToInterpreter = options.get(TraceTransferToInterpreter);
+        this.profilingEnabled = getPolyglotOptionValue(options, Profiling);
+        this.traceTransferToInterpreter = getPolyglotOptionValue(options, TraceTransferToInterpreter);
         this.compilationFailureAction = computeCompilationFailureAction(options);
         validateOptions();
         parsedCompileOnly = null;
@@ -328,30 +263,18 @@ public final class EngineData {
         return result;
     }
 
-    public OptionValues getEngineOptions() {
-        return engineOptions;
-    }
-
-    @SuppressWarnings({"static-method", "unchecked"})
-    public Collection<OptimizedCallTarget> getCallTargets() {
-        if (polyglotEngine == null) {
-            throw new IllegalStateException("No polyglot engine initialized.");
-        }
-        return (Collection<OptimizedCallTarget>) GraalRuntimeAccessor.ENGINE.findCallTargets(polyglotEngine);
-    }
-
     private static ExceptionAction computeCompilationFailureAction(OptionValues options) {
-        ExceptionAction action = options.get(CompilationFailureAction);
-        if (action.ordinal() < ExceptionAction.Print.ordinal() && options.get(CompilationExceptionsArePrinted)) {
+        ExceptionAction action = getPolyglotOptionValue(options, CompilationFailureAction);
+        if (action.ordinal() < ExceptionAction.Print.ordinal() && getPolyglotOptionValue(options, CompilationExceptionsArePrinted)) {
             action = ExceptionAction.Print;
         }
-        if (action.ordinal() < ExceptionAction.Throw.ordinal() && options.get(CompilationExceptionsAreThrown)) {
+        if (action.ordinal() < ExceptionAction.Throw.ordinal() && getPolyglotOptionValue(options, CompilationExceptionsAreThrown)) {
             action = ExceptionAction.Throw;
         }
-        if (action.ordinal() < ExceptionAction.ExitVM.ordinal() && options.get(CompilationExceptionsAreFatal)) {
+        if (action.ordinal() < ExceptionAction.ExitVM.ordinal() && getPolyglotOptionValue(options, CompilationExceptionsAreFatal)) {
             action = ExceptionAction.ExitVM;
         }
-        if (action.ordinal() < ExceptionAction.ExitVM.ordinal() && !options.get(PerformanceWarningsAreFatal).isEmpty()) {
+        if (action.ordinal() < ExceptionAction.ExitVM.ordinal() && !getPolyglotOptionValue(options, PerformanceWarningsAreFatal).isEmpty()) {
             action = ExceptionAction.ExitVM;
         }
         return action;
@@ -368,9 +291,9 @@ public final class EngineData {
             return 0;
         }
         if (multiTier) {
-            return Math.min(options.get(FirstTierMinInvokeThreshold), options.get(FirstTierCompilationThreshold));
+            return Math.min(getPolyglotOptionValue(options, FirstTierMinInvokeThreshold), getPolyglotOptionValue(options, FirstTierCompilationThreshold));
         } else {
-            return Math.min(options.get(MinInvokeThreshold), options.get(CompilationThreshold));
+            return Math.min(getPolyglotOptionValue(options, MinInvokeThreshold), getPolyglotOptionValue(options, CompilationThreshold));
         }
     }
 
@@ -379,9 +302,9 @@ public final class EngineData {
             return 0;
         }
         if (multiTier) {
-            return options.get(FirstTierCompilationThreshold);
+            return getPolyglotOptionValue(options, FirstTierCompilationThreshold);
         } else {
-            return options.get(CompilationThreshold);
+            return getPolyglotOptionValue(options, CompilationThreshold);
         }
     }
 
@@ -389,14 +312,14 @@ public final class EngineData {
         if (compileImmediately) {
             return 0;
         }
-        return Math.min(options.get(MinInvokeThreshold), options.get(CompilationThreshold));
+        return Math.min(getPolyglotOptionValue(options, MinInvokeThreshold), getPolyglotOptionValue(options, CompilationThreshold));
     }
 
     private int computeCallAndLoopThresholdInFirstTier(OptionValues options) {
         if (compileImmediately) {
             return 0;
         }
-        return options.get(CompilationThreshold);
+        return getPolyglotOptionValue(options, CompilationThreshold);
     }
 
     public TruffleLogger getEngineLogger() {
