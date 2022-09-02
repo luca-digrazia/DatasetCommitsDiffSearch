@@ -25,12 +25,15 @@
 package com.oracle.truffle.regex;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.regex.result.RegexResult;
 import com.oracle.truffle.regex.tregex.nodes.input.InputCharAtNode;
 import com.oracle.truffle.regex.tregex.nodes.input.InputLengthNode;
 
 public abstract class RegexExecRootNode extends RegexBodyNode {
+
+    private static final FrameDescriptor SHARED_EMPTY_FRAMEDESCRIPTOR = new FrameDescriptor();
 
     private final boolean mustCheckUnicodeSurrogates;
     private @Child InputLengthNode lengthNode;
@@ -47,7 +50,7 @@ public abstract class RegexExecRootNode extends RegexBodyNode {
         assert args.length == 2;
         Object input = args[0];
         int fromIndex = (int) args[1];
-        return execute(input, adjustFromIndex(fromIndex, input));
+        return execute(frame, input, adjustFromIndex(fromIndex, input));
     }
 
     private int adjustFromIndex(int fromIndex, Object input) {
@@ -59,7 +62,7 @@ public abstract class RegexExecRootNode extends RegexBodyNode {
         return fromIndex;
     }
 
-    public int inputLength(Object input) {
+    protected int inputLength(Object input) {
         if (lengthNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             lengthNode = insert(InputLengthNode.create());
@@ -67,7 +70,7 @@ public abstract class RegexExecRootNode extends RegexBodyNode {
         return lengthNode.execute(input);
     }
 
-    public char inputCharAt(Object input, int i) {
+    protected char inputCharAt(Object input, int i) {
         if (charAtNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             charAtNode = insert(InputCharAtNode.create());
@@ -75,5 +78,9 @@ public abstract class RegexExecRootNode extends RegexBodyNode {
         return charAtNode.execute(input, i);
     }
 
-    protected abstract RegexResult execute(Object input, int fromIndex);
+    public FrameDescriptor getFrameDescriptor() {
+        return SHARED_EMPTY_FRAMEDESCRIPTOR;
+    }
+
+    protected abstract RegexResult execute(VirtualFrame frame, Object input, int fromIndex);
 }
