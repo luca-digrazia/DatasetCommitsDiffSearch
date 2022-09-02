@@ -31,7 +31,6 @@ import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.Cancellable;
-import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.graphbuilderconf.GeneratedPluginInjectionProvider;
@@ -130,16 +129,16 @@ public interface Replacements extends GeneratedPluginInjectionProvider {
     /**
      * Gets a graph that is a substitution for a given method.
      *
-     * @param invokeBci the call site BCI for the substitution
-     * @param inlineControl
+     * @param invokeBci the call site BCI if this request is made for inlining a substitute
+     *            otherwise {@code -1}
      * @param trackNodeSourcePosition
      * @param replaceePosition
      * @param allowAssumptions
      * @param options
      * @return the graph, if any, that is a substitution for {@code method}
      */
-    StructuredGraph getInlineSubstitution(ResolvedJavaMethod method, int invokeBci, Invoke.InlineControl inlineControl, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition,
-                    AllowAssumptions allowAssumptions, OptionValues options);
+    StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition, AllowAssumptions allowAssumptions,
+                    OptionValues options);
 
     /**
      * Gets a graph produced from the intrinsic for a given method that can be compiled and
@@ -156,16 +155,19 @@ public interface Replacements extends GeneratedPluginInjectionProvider {
 
     /**
      * Determines if there may be a
-     * {@linkplain #getInlineSubstitution(ResolvedJavaMethod, int, Invoke.InlineControl, boolean, NodeSourcePosition, AllowAssumptions, OptionValues)
+     * {@linkplain #getSubstitution(ResolvedJavaMethod, int, boolean, NodeSourcePosition, AllowAssumptions, OptionValues)
      * substitution graph} for a given method.
      *
-     * A call to {@link #getInlineSubstitution} may still return {@code null} for {@code method} and
-     * substitution may be based on an {@link InvocationPlugin} that returns {@code false} for
-     * {@link InvocationPlugin#execute} making it impossible to create a substitute graph.
+     * A call to {@link #getSubstitution} may still return {@code null} for {@code method} and
+     * {@code invokeBci}. A substitution may be based on an {@link InvocationPlugin} that returns
+     * {@code false} for {@link InvocationPlugin#execute} making it impossible to create a
+     * substitute graph.
      *
+     * @param invokeBci the call site BCI if this request is made for inlining a substitute
+     *            otherwise {@code -1}
      * @return true iff there may be a substitution graph available for {@code method}
      */
-    boolean hasSubstitution(ResolvedJavaMethod method);
+    boolean hasSubstitution(ResolvedJavaMethod method, int invokeBci);
 
     /**
      * Gets the provider for accessing the bytecode of a substitution method if no other provider is

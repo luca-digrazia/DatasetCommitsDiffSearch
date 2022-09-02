@@ -31,7 +31,6 @@ import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.Cancellable;
-import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
@@ -121,10 +120,9 @@ public class DelegatingReplacements implements Replacements {
     }
 
     @Override
-    public StructuredGraph getInlineSubstitution(ResolvedJavaMethod method, int invokeBci, Invoke.InlineControl inlineControl, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition,
-                    AllowAssumptions allowAssumptions,
+    public StructuredGraph getSubstitution(ResolvedJavaMethod method, int invokeBci, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition, AllowAssumptions allowAssumptions,
                     OptionValues options) {
-        return delegate.getInlineSubstitution(method, invokeBci, inlineControl, trackNodeSourcePosition, replaceePosition, allowAssumptions, options);
+        return delegate.getSubstitution(method, invokeBci, trackNodeSourcePosition, replaceePosition, allowAssumptions, options);
     }
 
     @Override
@@ -133,8 +131,8 @@ public class DelegatingReplacements implements Replacements {
     }
 
     @Override
-    public boolean hasSubstitution(ResolvedJavaMethod method) {
-        return delegate.hasSubstitution(method);
+    public boolean hasSubstitution(ResolvedJavaMethod method, int invokeBci) {
+        return delegate.hasSubstitution(method, invokeBci);
     }
 
     @Override
