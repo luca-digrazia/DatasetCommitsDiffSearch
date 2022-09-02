@@ -347,7 +347,7 @@ public class NativeImageMojo extends AbstractMojo {
 
         List<String> list = new ArrayList<>();
         if (buildArgs != null && !buildArgs.isEmpty()) {
-            list.addAll(Arrays.asList(buildArgs.split("\\s+")));
+            list.addAll(Arrays.asList(buildArgs.split(" ")));
         }
         if (mainClass != null && !mainClass.equals(".")) {
             list.add("-H:Class=" + mainClass);
