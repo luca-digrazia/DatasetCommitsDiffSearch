@@ -124,7 +124,7 @@ final class HostClassDesc {
                         }
                     } else {
                         // do not inherit static fields
-                        if (f.getDeclaringClass() == type && hostAccess.allowsAccess(f)) {
+                        if (f.getDeclaringClass() == type) {
                             staticFieldMap.put(f.getName(), HostFieldDesc.unreflect(f));
                         }
                     }

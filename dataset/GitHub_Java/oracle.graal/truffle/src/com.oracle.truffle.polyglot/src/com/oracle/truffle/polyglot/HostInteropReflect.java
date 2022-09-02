@@ -154,7 +154,7 @@ final class HostInteropReflect {
     static boolean isModifiable(HostObject object, Class<?> clazz, String name, boolean onlyStatic) {
         HostClassDesc classDesc = HostClassDesc.forClass(object.getEngine(), clazz);
         HostFieldDesc foundField = classDesc.lookupField(name, onlyStatic);
-        if (foundField != null && !foundField.isFinal()) {
+        if (foundField != null) {
             return true;
         }
         return false;
@@ -590,7 +590,7 @@ abstract class ProxyInvokeNode extends Node {
                     @Cached("createBinaryProfile()") ConditionProfile branchProfile,
                     @Cached("create()") ToHostNode toHost) {
         Object result = invokeOrExecute(languageContext, receiver, arguments, name, receivers, members, branchProfile);
-        return toHost.execute(result, returnClass, returnType, languageContext, true);
+        return toHost.execute(result, returnClass, returnType, languageContext);
     }
 
     @TruffleBoundary
@@ -677,12 +677,7 @@ final class ObjectProxyHandler implements InvocationHandler, HostWrapper {
         try {
             return invoke.call(languageContext, obj, method, resolvedArguments);
         } catch (UnsupportedOperationException e) {
-            try {
-                return FunctionProxyHandler.invokeDefault(this, proxy, method, resolvedArguments);
-            } catch (Exception innerE) {
-                e.addSuppressed(innerE);
-                throw e;
-            }
+            return FunctionProxyHandler.invokeDefault(this, proxy, method, resolvedArguments);
         }
     }
 

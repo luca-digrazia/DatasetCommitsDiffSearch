@@ -81,7 +81,6 @@ import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
-import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.Assert;
@@ -584,7 +583,7 @@ public class LanguageSPITest {
 
     @Test
     public void testParseOtherLanguage() {
-        Context context = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build();
+        Context context = Context.newBuilder().build();
         eval(context, new Function<Env, Object>() {
             @SuppressWarnings("deprecation")
             public Object apply(Env t) {
@@ -1226,7 +1225,7 @@ public class LanguageSPITest {
             }
 
         });
-        Context c = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build();
+        Context c = Context.create();
         c.initialize(ProxyLanguage.ID);
         assertTrue(c.getPolyglotBindings().getMember("symbol").isHostObject());
         c.close();
@@ -1824,14 +1823,14 @@ public class LanguageSPITest {
     @Test
     public void testLookup() {
         // Not loaded language
-        try (Context context = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build()) {
+        try (Context context = Context.create()) {
             context.initialize(ProxyLanguage.ID);
             context.enter();
             assertFalse(lookupLanguage(LanguageSPITestLanguageService.class));
             context.leave();
         }
         // Loaded language
-        try (Context context = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build()) {
+        try (Context context = Context.create()) {
             context.initialize(ProxyLanguage.ID);
             context.initialize(SERVICE_LANGUAGE);
             context.enter();
@@ -1842,7 +1841,7 @@ public class LanguageSPITest {
             }
         }
         // Registered service
-        try (Context context = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build()) {
+        try (Context context = Context.create()) {
             context.initialize(ProxyLanguage.ID);
             context.enter();
             try {
@@ -1854,7 +1853,7 @@ public class LanguageSPITest {
         }
         // Non registered service
         resetLoadedLanguage(SERVICE_LANGUAGE);
-        try (Context context = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build()) {
+        try (Context context = Context.create()) {
             context.initialize(ProxyLanguage.ID);
             context.enter();
             try {

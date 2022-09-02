@@ -44,10 +44,12 @@ import java.lang.reflect.Array;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.GenerateUncached;
+import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -370,17 +372,15 @@ final class HostObject implements TruffleObject {
             return index >= 0 && index < size;
         }
 
-        @Specialization(guards = {"!isList.execute(receiver)", "!isArray.execute(receiver)"}, limit = "1")
-        static boolean doNotArrayOrList(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList,
-                        @Shared("isArray") @Cached IsArrayNode isArray) {
+        @Specialization(guards = "!receiver.hasArrayElements()")
+        static boolean doOther(HostObject receiver, long index) {
             return false;
         }
     }
 
     @ExportMessage
-    boolean isArrayElementInsertable(long index, @Shared("isList") @Cached IsListNode isList) {
-        return isList.execute(this) && getListSize() == index;
+    boolean isArrayElementInsertable(long index) {
+        return isList() && getListSize() == index;
     }
 
     @ExportMessage
@@ -443,10 +443,8 @@ final class HostObject implements TruffleObject {
         }
 
         @SuppressWarnings("unused")
-        @Specialization(guards = {"!isList.execute(receiver)", "!isArray.execute(receiver)"}, limit = "1")
-        static void doNotArrayOrList(HostObject receiver, long index, Object value,
-                        @Shared("isList") @Cached IsListNode isList,
-                        @Shared("isArray") @Cached IsArrayNode isArray) throws UnsupportedMessageException {
+        @Specialization(guards = {"!receiver.hasArrayElements()"})
+        static void doNotArrayOrList(HostObject receiver, long index, Object value) throws UnsupportedMessageException {
             throw UnsupportedMessageException.create();
         }
 
@@ -503,9 +501,8 @@ final class HostObject implements TruffleObject {
     }
 
     @ExportMessage
-    boolean hasArrayElements(@Shared("isList") @Cached IsListNode isList,
-                    @Shared("isArray") @Cached IsArrayNode isArray) {
-        return isList.execute(this) || isArray.execute(this);
+    boolean hasArrayElements() {
+        return isArray() || obj instanceof List<?>;
     }
 
     @ExportMessage
@@ -556,11 +553,10 @@ final class HostObject implements TruffleObject {
     }
 
     @ExportMessage
-    long getArraySize(@Shared("isArray") @Cached IsArrayNode isArray,
-                    @Shared("isList") @Cached IsListNode isList) throws UnsupportedMessageException {
-        if (isArray.execute(this)) {
+    long getArraySize() throws UnsupportedMessageException {
+        if (isArray()) {
             return Array.getLength(obj);
-        } else if (isList.execute(this)) {
+        } else if (isList()) {
             return getListSize();
         }
         throw UnsupportedMessageException.create();
