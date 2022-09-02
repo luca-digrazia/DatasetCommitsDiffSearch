@@ -97,14 +97,13 @@ public final class NativeLibrarySupport {
         return knownLibraries.stream().anyMatch(l -> l.isBuiltin() && l.getCanonicalIdentifier().equals(name));
     }
 
-    public void loadLibraryAbsolute(File file) {
-        if (loadLibrary0(file, false)) {
-            return;
+    public void loadLibrary(String name, boolean isAbsolute) {
+        if (isAbsolute) {
+            if (loadLibrary0(new File(name), false)) {
+                return;
+            }
+            throw new UnsatisfiedLinkError("Can't load library: " + name);
         }
-        throw new UnsatisfiedLinkError("Can't load library: " + file);
-    }
-
-    public void loadLibraryRelative(String name) {
         // Test if this is a built-in library
         if (loadLibrary0(new File(name), true)) {
             return;
