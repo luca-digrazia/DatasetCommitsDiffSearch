@@ -41,6 +41,7 @@
 package com.oracle.truffle.api.test.polyglot;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -49,6 +50,8 @@ import static org.junit.Assert.assertTrue;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -77,7 +80,7 @@ import com.oracle.truffle.api.nodes.LanguageInfo;
 public class ContextLocalTest extends AbstractPolyglotTest {
 
     private static final int PARALLELISM = 32;
-    private static final int ITERATIONS = 5000;
+    private static final int ITERATIONS = 50;
     static final String VALID_EXCLUSIVE_LANGUAGE = "ContextLocalTest_ValidExclusiveLanguage";
     static final String VALID_SHARED_LANGUAGE = "ContextLocalTest_ValidSharedLanguage";
     static final String VALID_INSTRUMENT = "ContextLocalTest_ValidInstrument";
@@ -173,8 +176,8 @@ public class ContextLocalTest extends AbstractPolyglotTest {
                 }
             });
 
+            c1.initialize(VALID_EXCLUSIVE_LANGUAGE);
             runInParallel(() -> {
-                c1.initialize(VALID_EXCLUSIVE_LANGUAGE);
                 c1.enter();
                 try {
                     Env env1 = ValidExclusiveLanguage.getCurrentContext();
@@ -325,9 +328,9 @@ public class ContextLocalTest extends AbstractPolyglotTest {
                     } finally {
                         c0.leave();
                     }
-                    c1.initialize(VALID_SHARED_LANGUAGE);
                 });
 
+                c1.initialize(VALID_SHARED_LANGUAGE);
                 runInParallel(() -> {
                     c1.enter();
                     try {
@@ -393,7 +396,7 @@ public class ContextLocalTest extends AbstractPolyglotTest {
                 c0.initialize(VALID_SHARED_LANGUAGE);
                 c0.enter();
                 try {
-                    assertSame(tc0, ValidSharedLanguage.getCurrentLanguage().local0.get().getContext());
+                    assertEquals(tc0, ValidSharedLanguage.getCurrentLanguage().local0.get().getContext());
                 } finally {
                     c0.leave();
                 }
@@ -401,7 +404,7 @@ public class ContextLocalTest extends AbstractPolyglotTest {
                 c1.initialize(VALID_SHARED_LANGUAGE);
                 c1.enter();
                 try {
-                    assertSame(tc1, ValidSharedLanguage.getCurrentLanguage().local1.get().getContext());
+                    assertEquals(tc1, ValidSharedLanguage.getCurrentLanguage().local1.get().getContext());
                 } finally {
                     c1.leave();
                 }
@@ -417,13 +420,8 @@ public class ContextLocalTest extends AbstractPolyglotTest {
             try (Context c0 = Context.newBuilder().engine(engine).build();
                             Context c1 = Context.newBuilder().engine(engine).build()) {
 
+                ValidInstrument instrument = engine.getInstruments().get(VALID_INSTRUMENT).lookup(ValidInstrument.class);
                 runInParallel(() -> {
-                    ValidInstrument instrument = engine.getInstruments().get(VALID_INSTRUMENT).lookup(ValidInstrument.class);
-
-                    // no context entered
-                    assertFails(() -> instrument.threadLocal0.get(), IllegalStateException.class);
-                    assertFails(() -> instrument.threadLocal0.get(Thread.currentThread()), IllegalStateException.class);
-                    assertFails(() -> instrument.threadLocal0.get(Thread.currentThread()), IllegalStateException.class);
 
                     c0.enter();
                     InstrumentThreadLocalValue tc0;
@@ -443,13 +441,13 @@ public class ContextLocalTest extends AbstractPolyglotTest {
 
                     assertNotSame(tc0, tc1);
 
-                    assertSame(tc0, instrument.threadLocal0.get(tc0.context, Thread.currentThread()));
-                    assertSame(tc1, instrument.threadLocal0.get(tc1.context, Thread.currentThread()));
+                    assertEquals(tc0, instrument.threadLocal0.get(tc0.context, Thread.currentThread()));
+                    assertEquals(tc1, instrument.threadLocal0.get(tc1.context, Thread.currentThread()));
 
                     c0.initialize(VALID_SHARED_LANGUAGE);
                     c0.enter();
                     try {
-                        assertSame(tc0.context, ValidSharedLanguage.getCurrentLanguage().contextThreadLocal0.get().env.getContext());
+                        assertEquals(tc0.context, ValidSharedLanguage.getCurrentLanguage().contextThreadLocal0.get().env.getContext());
                     } finally {
                         c0.leave();
                     }
@@ -457,10 +455,15 @@ public class ContextLocalTest extends AbstractPolyglotTest {
                     c1.initialize(VALID_SHARED_LANGUAGE);
                     c1.enter();
                     try {
-                        assertSame(tc1.context, ValidSharedLanguage.getCurrentLanguage().contextThreadLocal1.get().env.getContext());
+                        assertEquals(tc1.context, ValidSharedLanguage.getCurrentLanguage().contextThreadLocal1.get().env.getContext());
                     } finally {
                         c1.leave();
                     }
+
+                    // no context entered
+                    assertFails(() -> instrument.threadLocal0.get(), IllegalStateException.class);
+                    assertFails(() -> instrument.threadLocal0.get(Thread.currentThread()), IllegalStateException.class);
+                    assertFails(() -> instrument.threadLocal0.get(Thread.currentThread()), IllegalStateException.class);
                 });
             }
         }
@@ -685,6 +688,10 @@ public class ContextLocalTest extends AbstractPolyglotTest {
         }
     }
 
+    public void testInstrumentCreatedBeforeContextsInitialized() {
+
+    }
+
     @TruffleLanguage.Registration(id = VALID_EXCLUSIVE_LANGUAGE, name = VALID_EXCLUSIVE_LANGUAGE)
     public static class ValidExclusiveLanguage extends TruffleLanguage<TruffleLanguage.Env> {
 
@@ -736,6 +743,20 @@ public class ContextLocalTest extends AbstractPolyglotTest {
             this.thread = t;
         }
 
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof InstrumentThreadLocalValue)) {
+                return false;
+            }
+            InstrumentThreadLocalValue key = (InstrumentThreadLocalValue) obj;
+            return this.context == key.context && this.thread == key.thread;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(context, thread);
+        }
+
     }
 
     @TruffleLanguage.Registration(id = VALID_SHARED_LANGUAGE, name = VALID_SHARED_LANGUAGE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
@@ -780,15 +801,39 @@ public class ContextLocalTest extends AbstractPolyglotTest {
     @TruffleInstrument.Registration(id = VALID_INSTRUMENT, name = VALID_INSTRUMENT, services = ValidInstrument.class)
     public static class ValidInstrument extends TruffleInstrument {
 
-        final ContextLocal<TruffleContext> local0 = createContextLocal((e) -> e);
+        final ContextLocal<TruffleContext> local0 = createContextLocal(this::createInstrumentContextLocal);
         final ContextLocal<Object> localDynamic = createContextLocal((e) -> contextLocalDynamicValue);
 
-        final ContextThreadLocal<InstrumentThreadLocalValue> threadLocal0 = createContextThreadLocal(InstrumentThreadLocalValue::new);
+        final ContextThreadLocal<InstrumentThreadLocalValue> threadLocal0 = createContextThreadLocal(this::newInstrumentThreadLocal);
         final ContextThreadLocal<Object> threadLocalDynamic = createContextThreadLocal((c, t) -> threadLocalDynamicValue);
+
+        private Env environment;
+
+        private final ConcurrentHashMap<InstrumentThreadLocalValue, String> seenValues = new ConcurrentHashMap<>();
 
         @Override
         protected void onCreate(Env env) {
+            this.environment = env;
             env.registerService(this);
+        }
+
+        InstrumentThreadLocalValue newInstrumentThreadLocal(TruffleContext context, Thread t) {
+            // must be guaranteed that onCreate is called before any context thread local inits
+            assertNotNull(environment);
+
+            InstrumentThreadLocalValue local = new InstrumentThreadLocalValue(context, t);
+
+            if (seenValues.containsKey(local)) {
+                throw new AssertionError("duplicate thread local factory invocation");
+            }
+            seenValues.put(local, "");
+            return local;
+        }
+
+        TruffleContext createInstrumentContextLocal(TruffleContext context) {
+            // must be guaranteed that onCreate is called before any context local inits
+            assertNotNull(environment);
+            return context;
         }
 
         public ContextLocal<String> createContextLocal0() {
