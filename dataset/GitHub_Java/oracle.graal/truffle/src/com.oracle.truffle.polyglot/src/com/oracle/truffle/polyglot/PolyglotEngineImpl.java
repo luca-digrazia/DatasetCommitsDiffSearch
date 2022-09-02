@@ -87,7 +87,6 @@ import org.graalvm.polyglot.io.ProcessHandler;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.Truffle;
@@ -182,7 +181,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     final boolean conservativeContextReferences;
     private final MessageTransport messageInterceptor;
     private volatile int asynchronousStackDepth = 0;
-    @CompilationFinal private HostToGuestCodeCache hostToGuestCodeCache;
 
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options,
                     boolean allowExperimentalOptions, boolean useSystemProperties, ClassLoader contextClassLoader, boolean boundEngine,
@@ -355,15 +353,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         registerShutDownHook();
     }
 
-    HostToGuestCodeCache getHostToGuestCodeCache() {
-        HostToGuestCodeCache cache = this.hostToGuestCodeCache;
-        if (cache == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            hostToGuestCodeCache = cache = new HostToGuestCodeCache();
-        }
-        return cache;
-    }
-
     private static OptionDescriptors createEngineOptionDescriptors() {
         OptionDescriptors engineOptionDescriptors = new PolyglotEngineOptionsOptionDescriptors();
         OptionDescriptors compilerOptionDescriptors = EngineAccessor.RUNTIME.getCompilerOptionDescriptors();
@@ -401,21 +390,21 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
         assert this.logLevels.isEmpty();
         parseOptions(newOptions, newUseSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logLevels);
-        boolean useAllowExperimentalOptions = newAllowExperimentalOptions || Boolean.parseBoolean(EngineAccessor.RUNTIME.getSavedProperty(PROP_ALLOW_EXPERIMENTAL_OPTIONS));
-        this.engineOptionValues.putAll(originalEngineOptions, useAllowExperimentalOptions);
+
+        this.engineOptionValues.putAll(originalEngineOptions, newAllowExperimentalOptions);
 
         if (this.runtimeData != null) {
             EngineAccessor.RUNTIME.reloadEngineOptions(this.runtimeData, this.engineOptionValues);
         }
 
         for (PolyglotLanguage language : languagesOptions.keySet()) {
-            language.getOptionValues().putAll(languagesOptions.get(language), useAllowExperimentalOptions);
+            language.getOptionValues().putAll(languagesOptions.get(language), newAllowExperimentalOptions);
         }
 
         // Set instruments options but do not call onCreate. OnCreate is called only in case of
         // successful context patch.
         for (PolyglotInstrument instrument : instrumentsOptions.keySet()) {
-            instrument.getOptionValues().putAll(instrumentsOptions.get(instrument), useAllowExperimentalOptions);
+            instrument.getOptionValues().putAll(instrumentsOptions.get(instrument), newAllowExperimentalOptions);
         }
         registerShutDownHook();
         return true;

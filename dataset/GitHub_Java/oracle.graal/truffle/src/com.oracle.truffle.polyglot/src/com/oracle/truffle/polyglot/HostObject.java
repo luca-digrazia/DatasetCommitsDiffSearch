@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -450,7 +450,7 @@ final class HostObject implements TruffleObject {
                         @Shared("isArray") @Cached IsArrayNode isArray,
                         @Cached ArraySet arraySet,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || Integer.MAX_VALUE < index) {
+            if (index > Integer.MAX_VALUE) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
             }
@@ -481,7 +481,7 @@ final class HostObject implements TruffleObject {
                         @Shared("isList") @Cached IsListNode isList,
                         @Shared("toHost") @Cached ToHostNode toHostNode,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || Integer.MAX_VALUE < index) {
+            if (index > Integer.MAX_VALUE) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
             }
@@ -548,7 +548,7 @@ final class HostObject implements TruffleObject {
         static void doList(HostObject receiver, long index,
                         @Shared("isList") @Cached IsListNode isList,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || Integer.MAX_VALUE < index) {
+            if (index > Integer.MAX_VALUE) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
             }
@@ -588,7 +588,7 @@ final class HostObject implements TruffleObject {
                         @Shared("isArray") @Cached IsArrayNode isArray,
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || Integer.MAX_VALUE < index) {
+            if (index > Integer.MAX_VALUE) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
             }
@@ -610,7 +610,7 @@ final class HostObject implements TruffleObject {
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             try {
-                if (index < 0 || Integer.MAX_VALUE < index) {
+                if (index > Integer.MAX_VALUE) {
                     error.enter();
                     throw InvalidArrayIndexException.create(index);
                 }
