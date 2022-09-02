@@ -44,11 +44,8 @@ import static java.lang.Math.toIntExact;
 
 import java.nio.ByteOrder;
 
-import org.graalvm.wasm.memory.ByteArrayWasmMemory;
-import org.graalvm.wasm.memory.UnsafeWasmMemory;
 import org.graalvm.wasm.memory.WasmMemory;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -62,19 +59,11 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.profiles.BranchProfile;
 
 @ExportLibrary(InteropLibrary.class)
-public abstract class MemoryArrayBuffer implements TruffleObject {
+public class MemoryArrayBuffer implements TruffleObject {
+    private final WasmMemory memory;
 
-    protected MemoryArrayBuffer() {
-    }
-
-    public static MemoryArrayBuffer create(WasmMemory memory) {
-        if (memory instanceof ByteArrayWasmMemory) {
-            return new ByteArrayBased((ByteArrayWasmMemory) memory);
-        } else if (memory instanceof UnsafeWasmMemory) {
-            return new UnsafeBased((UnsafeWasmMemory) memory);
-        } else {
-            throw CompilerDirectives.shouldNotReachHere();
-        }
+    public MemoryArrayBuffer(WasmMemory memory) {
+        this.memory = memory;
     }
 
     @SuppressWarnings("static-method")
@@ -85,7 +74,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
 
     @ExportMessage
     final long getBufferSize() {
-        return getMemory().byteSize();
+        return memory.byteSize();
     }
 
     private void checkOffset(long byteOffset, int opLength, BranchProfile errorBranch) throws InvalidBufferOffsetException {
@@ -99,14 +88,14 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
     final byte readBufferByte(long byteOffset,
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Byte.BYTES, errorBranch);
-        return (byte) getMemory().load_i32_8s(null, (int) byteOffset);
+        return (byte) memory.load_i32_8s(null, (int) byteOffset);
     }
 
     @ExportMessage
     final short readBufferShort(ByteOrder order, long byteOffset,
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Short.BYTES, errorBranch);
-        short result = (short) getMemory().load_i32_16s(null, (int) byteOffset);
+        short result = (short) memory.load_i32_16s(null, (int) byteOffset);
         if (order == ByteOrder.BIG_ENDIAN) {
             result = Short.reverseBytes(result);
         }
@@ -117,7 +106,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
     final int readBufferInt(ByteOrder order, long byteOffset,
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Integer.BYTES, errorBranch);
-        int result = getMemory().load_i32(null, (int) byteOffset);
+        int result = memory.load_i32(null, (int) byteOffset);
         if (order == ByteOrder.BIG_ENDIAN) {
             result = Integer.reverseBytes(result);
         }
@@ -128,7 +117,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
     final long readBufferLong(ByteOrder order, long byteOffset,
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Long.BYTES, errorBranch);
-        long result = getMemory().load_i64(null, (int) byteOffset);
+        long result = memory.load_i64(null, (int) byteOffset);
         if (order == ByteOrder.BIG_ENDIAN) {
             result = Long.reverseBytes(result);
         }
@@ -139,7 +128,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
     final float readBufferFloat(ByteOrder order, long byteOffset,
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Float.BYTES, errorBranch);
-        float result = getMemory().load_f32(null, (int) byteOffset);
+        float result = memory.load_f32(null, (int) byteOffset);
         if (order == ByteOrder.BIG_ENDIAN) {
             result = Float.intBitsToFloat(Integer.reverseBytes(Float.floatToRawIntBits(result)));
         }
@@ -150,7 +139,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
     final double readBufferDouble(ByteOrder order, long byteOffset,
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Double.BYTES, errorBranch);
-        double result = getMemory().load_f64(null, (int) byteOffset);
+        double result = memory.load_f64(null, (int) byteOffset);
         if (order == ByteOrder.BIG_ENDIAN) {
             result = Double.longBitsToDouble(Long.reverseBytes(Double.doubleToRawLongBits(result)));
         }
@@ -167,7 +156,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
     final void writeBufferByte(long byteOffset, byte value,
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Byte.BYTES, errorBranch);
-        getMemory().store_i32_8(null, (int) byteOffset, value);
+        memory.store_i32_8(null, (int) byteOffset, value);
     }
 
     @ExportMessage
@@ -175,7 +164,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Short.BYTES, errorBranch);
         short actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Short.reverseBytes(value);
-        getMemory().store_i32_16(null, (int) byteOffset, actualValue);
+        memory.store_i32_16(null, (int) byteOffset, actualValue);
     }
 
     @ExportMessage
@@ -183,7 +172,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Integer.BYTES, errorBranch);
         int actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Integer.reverseBytes(value);
-        getMemory().store_i32(null, (int) byteOffset, actualValue);
+        memory.store_i32(null, (int) byteOffset, actualValue);
     }
 
     @ExportMessage
@@ -191,7 +180,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Long.BYTES, errorBranch);
         long actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Long.reverseBytes(value);
-        getMemory().store_i64(null, (int) byteOffset, actualValue);
+        memory.store_i64(null, (int) byteOffset, actualValue);
     }
 
     @ExportMessage
@@ -199,7 +188,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Float.BYTES, errorBranch);
         float actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Float.intBitsToFloat(Integer.reverseBytes(Float.floatToRawIntBits(value)));
-        getMemory().store_f32(null, (int) byteOffset, actualValue);
+        memory.store_f32(null, (int) byteOffset, actualValue);
     }
 
     @ExportMessage
@@ -207,7 +196,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidBufferOffsetException {
         checkOffset(byteOffset, Double.BYTES, errorBranch);
         double actualValue = (order == ByteOrder.LITTLE_ENDIAN) ? value : Double.longBitsToDouble(Long.reverseBytes(Double.doubleToRawLongBits(value)));
-        getMemory().store_f64(null, (int) byteOffset, actualValue);
+        memory.store_f64(null, (int) byteOffset, actualValue);
     }
 
     @SuppressWarnings({"unused"})
@@ -219,7 +208,7 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
     @SuppressWarnings({"unused"})
     @ExportMessage
     long getArraySize() {
-        return getMemory().byteSize();
+        return memory.byteSize();
     }
 
     @SuppressWarnings({"unused"})
@@ -242,13 +231,13 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
 
     @SuppressWarnings({"unused"})
     @ExportMessage
-    final Object readArrayElement(long index,
+    public Object readArrayElement(long index,
                     @Shared("error") @Cached("create()") BranchProfile errorBranch) throws InvalidArrayIndexException {
         if (!isArrayElementReadable(index)) {
             errorBranch.enter();
             throw InvalidArrayIndexException.create(index);
         }
-        return getMemory().load_i32_8u(null, toIntExact(index));
+        return memory.load_i32_8u(null, toIntExact(index));
     }
 
     @SuppressWarnings({"unused", "static-method"})
@@ -260,38 +249,10 @@ public abstract class MemoryArrayBuffer implements TruffleObject {
             throw InvalidArrayIndexException.create(index);
         }
         try {
-            getMemory().store_i32_8(null, toIntExact(index), InteropLibrary.getFactory().getUncached().asByte(value));
+            memory.store_i32_8(null, toIntExact(index), InteropLibrary.getFactory().getUncached().asByte(value));
         } catch (UnsupportedMessageException e) {
             errorBranch.enter();
             throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-        }
-    }
-
-    public abstract WasmMemory getMemory();
-
-    static final class ByteArrayBased extends MemoryArrayBuffer {
-        private final ByteArrayWasmMemory memory;
-
-        protected ByteArrayBased(ByteArrayWasmMemory memory) {
-            this.memory = memory;
-        }
-
-        @Override
-        public WasmMemory getMemory() {
-            return memory;
-        }
-    }
-
-    static final class UnsafeBased extends MemoryArrayBuffer {
-        private final UnsafeWasmMemory memory;
-
-        protected UnsafeBased(UnsafeWasmMemory memory) {
-            this.memory = memory;
-        }
-
-        @Override
-        public WasmMemory getMemory() {
-            return memory;
         }
     }
 }
