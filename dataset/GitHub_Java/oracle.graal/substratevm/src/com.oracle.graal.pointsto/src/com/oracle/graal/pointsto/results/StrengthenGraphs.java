@@ -114,7 +114,7 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
     @Override
     @SuppressWarnings("try")
     public StaticAnalysisResults makeOrApplyResults(AnalysisMethod method) {
-        StructuredGraph graph = method.getAnalyzedGraph();
+        StructuredGraph graph = method.parsedGraph();
         if (graph != null) {
             DebugContext debug = new DebugContext.Builder(bb.getOptions(), new GraalDebugHandlersFactory(bb.getProviders().getSnippetReflection())).build();
             graph.resetDebug(debug);
