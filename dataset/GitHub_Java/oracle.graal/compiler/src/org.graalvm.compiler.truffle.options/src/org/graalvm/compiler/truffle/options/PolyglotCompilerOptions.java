@@ -240,9 +240,6 @@ public final class PolyglotCompilerOptions {
     @Option(help = "Compile immediately to test Truffle compilation", category = OptionCategory.INTERNAL)
     public static final OptionKey<Boolean> CompileImmediately = new OptionKey<>(false);
 
-    @Option(help = "Compiles created call targets immediately with last tier. Disables background compilation if enabled.", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Boolean> CompileAOTOnCreate = new OptionKey<>(false);
-
     @Option(help = "Enable asynchronous truffle compilation in background threads", category = OptionCategory.EXPERT)
     public static final OptionKey<Boolean> BackgroundCompilation = new OptionKey<>(true);
 
@@ -385,9 +382,6 @@ public final class PolyglotCompilerOptions {
 
     @Option(help = "Maximum depth for recursive inlining.", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> InliningRecursionDepth = new OptionKey<>(2);
-
-    @Option(help = "TODO", category = OptionCategory.EXPERT)
-    public static final OptionKey<Boolean> InliningOptimizeOnExpand = new OptionKey<>(false);
 
     // Splitting
 
