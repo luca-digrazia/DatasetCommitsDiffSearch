@@ -308,7 +308,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             } else {
                 write(tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
             }
-            if (NativeImageOptions.ExitAfterRelocatableImageWrite.getValue()) {
+            if (NativeImageOptions.ExitAfterWrite.getValue()) {
                 return null;
             }
             // 2. run a command to make an executable of it

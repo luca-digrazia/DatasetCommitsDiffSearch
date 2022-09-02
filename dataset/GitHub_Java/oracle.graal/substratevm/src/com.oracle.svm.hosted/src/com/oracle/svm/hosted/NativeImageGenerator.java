@@ -659,7 +659,7 @@ public class NativeImageGenerator {
                  */
                 Path tmpDir = tempDirectory();
                 LinkerInvocation inv = image.write(debug, generatedFiles(HostedOptionValues.singleton()), tmpDir, imageName, beforeConfig);
-                if (NativeImageOptions.ExitAfterRelocatableImageWrite.getValue()) {
+                if (NativeImageOptions.ExitAfterWrite.getValue()) {
                     return;
                 }
                 Path imagePath = inv.getOutputFile();
