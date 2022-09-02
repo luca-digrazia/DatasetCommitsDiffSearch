@@ -276,6 +276,4 @@ public interface JDWPContext {
     Object[] getTopLevelThreadGroups();
 
     KlassRef getReflectedType(Object classObject);
-
-    Object newArray(KlassRef klass, int length);
 }
