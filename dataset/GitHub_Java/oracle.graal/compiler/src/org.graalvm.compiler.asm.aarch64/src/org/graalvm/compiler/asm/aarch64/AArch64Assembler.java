@@ -82,7 +82,6 @@ import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FSQR
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.FSUB;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.HINT;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.HLT;
-import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.ISB;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.LDADD;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.LDAR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.LDAXR;
@@ -677,7 +676,6 @@ public abstract class AArch64Assembler extends Assembler {
         MRS(0xD5300000),
         MSR(0xD5100000),
         DC(0xD5087000),
-        ISB(0x000000C0),
 
         BLR_NATIVE(0xc0000000),
 
@@ -1850,7 +1848,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param r must be in the range 0 to size - 1
      * @param s must be in the range 0 to size - 1
      */
-    public void sbfm(int size, Register dst, Register src, int r, int s) {
+    protected void sbfm(int size, Register dst, Register src, int r, int s) {
         bitfieldInstruction(SBFM, dst, src, r, s, generalFromSize(size));
     }
 
@@ -2180,14 +2178,14 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     /**
-     * dst = rotateRight(src1, (src2 & (size - 1))).
+     * dst = rotateRight(src1, (src2 & log2(size))).
      *
      * @param size register size. Has to be 32 or 64.
      * @param dst general purpose register. May not be null or stackpointer.
      * @param src1 general purpose register. May not be null or stackpointer.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
-    protected void rorv(int size, Register dst, Register src1, Register src2) {
+    protected void ror(int size, Register dst, Register src1, Register src2) {
         dataProcessing2SourceOp(RORV, dst, src1, src2, generalFromSize(size));
     }
 
@@ -2991,8 +2989,7 @@ public abstract class AArch64Assembler extends Assembler {
         LOAD_LOAD(0x9, "ISHLD"),
         LOAD_STORE(0x9, "ISHLD"),
         STORE_STORE(0xA, "ISHST"),
-        ANY_ANY(0xB, "ISH"),
-        SYSTEM(0xF, "SYS");
+        ANY_ANY(0xB, "ISH");
 
         public final int encoding;
         public final String optionName;
@@ -3010,13 +3007,6 @@ public abstract class AArch64Assembler extends Assembler {
      */
     public void dmb(BarrierKind barrierKind) {
         emitInt(DMB.encoding | BarrierOp | barrierKind.encoding << BarrierKindOffset);
-    }
-
-    /**
-     * Instruction Synchronization Barrier.
-     */
-    public void isb() {
-        emitInt(ISB.encoding | BarrierOp | BarrierKind.SYSTEM.encoding << BarrierKindOffset);
     }
 
     public void mrs(Register dst, SystemRegister systemRegister) {
