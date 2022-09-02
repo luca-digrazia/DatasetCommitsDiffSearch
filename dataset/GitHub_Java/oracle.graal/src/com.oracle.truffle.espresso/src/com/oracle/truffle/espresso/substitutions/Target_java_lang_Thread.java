@@ -78,7 +78,7 @@ public final class Target_java_lang_Thread {
         }
     }
 
-    public enum State {
+    enum State {
         NEW(0),
         RUNNABLE(4),
         BLOCKED(1024),
@@ -86,7 +86,7 @@ public final class Target_java_lang_Thread {
         TIMED_WAITING(32),
         TERMINATED(2);
 
-        public final int value;
+        final int value;
 
         State(int value) {
             this.value = value;
@@ -127,11 +127,12 @@ public final class Target_java_lang_Thread {
                     }
                 }
             });
+
             self.setHiddenField(meta.HIDDEN_HOST_THREAD, hostThread);
+            context.putHost2Guest(hostThread, self);
             context.registerThread(hostThread);
             hostThread.setDaemon(self.getBooleanField(meta.Thread_daemon));
             self.setIntField(meta.Thread_state, State.RUNNABLE.value);
-            context.putHost2Guest(hostThread, self);
             hostThread.start();
         } else {
             System.err.println(
