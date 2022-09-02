@@ -23,33 +23,19 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.InvokeBasic;
-import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.InvokeGeneric;
-import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.LinkToInterface;
-import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.LinkToSpecial;
-import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.LinkToStatic;
-import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.LinkToVirtual;
+import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.*;
 import static com.oracle.truffle.espresso.substitutions.Target_java_lang_invoke_MethodHandleNatives.toBasic;
 
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.function.IntFunction;
 
+import com.oracle.truffle.espresso.nodes.interop.LookupDeclaredMethod;
 import org.graalvm.collections.EconomicSet;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Exclusive;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -65,7 +51,6 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.ModifiersProvider;
 import com.oracle.truffle.espresso.nodes.interop.InvokeEspressoNode;
-import com.oracle.truffle.espresso.nodes.interop.LookupDeclaredMethod;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
@@ -82,7 +67,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     private static final String STATIC_TO_CLASS = "class";
     private static final String ARRAY = "array";
     private static final String COMPONENT = "component";
-    private static final String SUPER = "super";
 
     @ExportMessage
     boolean isMemberReadable(String member) {
@@ -95,8 +79,10 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         if (isArray() && COMPONENT.equals(member)) {
             return true;
         }
-        if (getSuperKlass() != null && SUPER.equals(member)) {
-            return true;
+        for (Field f : getDeclaredFields()) {
+            if (f.isStatic() && f.isPublic() && member.equals(f.getName().toString())) {
+                return true;
+            }
         }
         return false;
     }
@@ -110,10 +96,12 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
             return array();
         }
         if (isArray() && COMPONENT.equals(member)) {
-            return ((ArrayKlass) this).getComponentType();
+            return getComponentType();
         }
-        if (getSuperKlass() != null && SUPER.equals(member)) {
-            return getSuperKlass();
+        for (Field f : getDeclaredFields()) {
+            if (f.isStatic() && f.isPublic() && member.equals(f.getName().toString())) {
+                return f.get(tryInitializeAndGetStatics());
+            }
         }
         throw UnknownIdentifierException.create(member);
     }
@@ -134,10 +122,10 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
                     @Cached LookupDeclaredMethod lookupMethod,
                     @Exclusive @Cached InvokeEspressoNode invoke)
                     throws UnsupportedMessageException, ArityException, UnknownIdentifierException, UnsupportedTypeException {
-        Method method = lookupMethod.execute(this, member, true, true, arguments.length);
-        if (method != null) {
-            assert method.isStatic() && method.isPublic() && member.equals(method.getName().toString()) && method.getParameterCount() == arguments.length;
-            return invoke.execute(method, null, arguments);
+        Method m = lookupMethod.execute(this, member, true, true, arguments.length);
+        assert m.isStatic() && m.isPublic() && member.equals(m.getName().toString()) && m.getParameterCount() == arguments.length;
+        if (m != null) {
+            return invoke.execute(m, null, arguments);
         }
         throw UnknownIdentifierException.create(member);
     }
@@ -151,19 +139,15 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
         EconomicSet<String> members = EconomicSet.create();
         members.add(STATIC_TO_CLASS);
+        for (Field f : getDeclaredFields()) {
+            if (f.isStatic() && f.isPublic()) {
+                members.add(f.getName().toString());
+            }
+        }
         for (Method m : getDeclaredMethods()) {
             if (m.isStatic() && m.isPublic()) {
                 members.add(m.getName().toString());
             }
-        }
-        if (getMeta()._void != this) {
-            members.add(ARRAY);
-        }
-        if (isArray()) {
-            members.add(COMPONENT);
-        }
-        if (getSuperKlass() != null) {
-            members.add(SUPER);
         }
         return new KeysArray(members.toArray(new String[members.size()]));
     }
