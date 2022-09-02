@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -91,7 +91,6 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -102,7 +101,6 @@ import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.AbstractAssumption;
 import com.oracle.truffle.api.impl.TVMCI;
-import com.oracle.truffle.api.impl.ThreadLocalHandshake;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
@@ -187,8 +185,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return new TruffleInlining();
     }
 
-    public abstract ThreadLocalHandshake getThreadLocalHandshake();
-
     @Override
     public String getName() {
         String compilerConfigurationName = getCompilerConfigurationName();
@@ -205,13 +201,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             suffix = compilerConfigurationName;
         }
         return "GraalVM " + suffix;
-    }
-
-    /**
-     * Returns a set of classes that need to be initialized before compilations can be performed.
-     */
-    public final Iterable<Class<?>> getLookupTypes() {
-        return lookupTypes.getValues();
     }
 
     /**
@@ -374,7 +363,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         EconomicMap<String, Class<?>> m = EconomicMap.create();
         for (Class<?> c : new Class<?>[]{
                         Node.class,
-                        RootNode.class,
                         UnexpectedResultException.class,
                         SlowPathException.class,
                         OptimizedCallTarget.class,
@@ -398,7 +386,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                         BranchProfile.class,
                         ConditionProfile.class,
                         Objects.class,
-                        TruffleSafepoint.class
         }) {
             m.put(c.getName(), c);
         }
@@ -530,16 +517,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     @Override
     public <T> T iterateFrames(final FrameInstanceVisitor<T> visitor) {
         return iterateImpl(visitor, 0);
-    }
-
-    private volatile double compilationThresholdScale = 1.0;
-
-    public double compilationThresholdScale() {
-        return compilationThresholdScale;
-    }
-
-    void setCompilationThresholdScale(double scale) {
-        this.compilationThresholdScale = scale;
     }
 
     private static final class FrameVisitor<T> implements InspectedFrameVisitor<T> {
@@ -1123,9 +1100,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
      * Returns OptimizedCallTarget's {@link PolyglotCompilerOptions} as a {@link Map}. The returned
      * map can be passed as a {@code options} to the {@link TruffleCompiler} methods.
      */
-    public static Map<String, Object> getOptionsForCompiler(OptimizedCallTarget target) {
+    public static Map<String, Object> getOptionsForCompiler(OptimizedCallTarget callTarget) {
         Map<String, Object> map = new HashMap<>();
-        OptionValues values = target.engine.getEngineOptions();
+        OptionValues values = callTarget == null ? null : callTarget.getOptionValues();
 
         for (OptionDescriptor desc : PolyglotCompilerOptions.getDescriptors()) {
             final OptionKey<?> key = desc.getKey();
