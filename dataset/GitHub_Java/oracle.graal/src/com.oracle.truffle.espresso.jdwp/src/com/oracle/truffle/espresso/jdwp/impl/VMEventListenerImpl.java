@@ -38,7 +38,6 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,13 +51,11 @@ public final class VMEventListenerImpl implements VMEventListener {
     private final HashMap<Integer, BreakpointInfo> breakpointRequests = new HashMap<>();
     private final StableBoolean fieldBreakpointsActive = new StableBoolean(false);
     private SocketConnection connection;
-    private volatile boolean holdEvents;
 
     private int threadStartedRequestId;
     private int threadDeathRequestId;
     private int vmDeathRequestId;
     private int vmStartRequestId;
-    private List<PacketStream> heldEvents = new ArrayList<>();
 
     public VMEventListenerImpl(DebuggerController controller) {
         this.debuggerController = controller;
@@ -277,20 +274,12 @@ public final class VMEventListenerImpl implements VMEventListener {
                 debuggerController.immediateSuspend(prepareThread, suspendPolicy, new Callable<Void>() {
                     @Override
                     public Void call() {
-                        if (holdEvents) {
-                            heldEvents.add(stream);
-                        } else {
-                            connection.queuePacket(stream);
-                        }
+                        connection.queuePacket(stream);
                         return null;
                     }
                 });
             } else {
-                if (holdEvents) {
-                    heldEvents.add(stream);
-                } else {
-                    connection.queuePacket(stream);
-                }
+                connection.queuePacket(stream);
             }
         }
     }
@@ -318,21 +307,13 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeLong(info.getMethodId());
         stream.writeLong(info.getBci());
         JDWPLogger.log("Sending breakpoint hit event in thread: %s with suspension policy: %d", JDWPLogger.LogLevel.STEPPING, context.getThreadName(currentThread), info.getSuspendPolicy());
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     @Override
     public void fieldAccessBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame) {
         PacketStream stream = writeSharedFieldInformation(event, currentThread, callFrame, RequestedJDWPEvents.FIELD_ACCESS);
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     @Override
@@ -343,11 +324,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         Object value = event.getValue();
         byte tag = context.getTag(value);
         JDWP.writeValue(tag, value, stream, true, context);
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     private PacketStream writeSharedFieldInformation(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame, byte eventType) {
@@ -414,11 +391,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeLong(0);
         stream.writeLong(0);
         stream.writeLong(0);
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     @Override
@@ -439,11 +412,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeLong(currentFrame.getClassId());
         stream.writeLong(currentFrame.getMethodId());
         stream.writeLong(currentFrame.getCodeIndex());
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     @Override
@@ -463,11 +432,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeInt(threadStartedRequestId);
         stream.writeLong(ids.getIdAsLong(thread));
         JDWPLogger.log("sending thread started event for thread: %s", JDWPLogger.LogLevel.THREAD, context.getThreadName(thread));
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     @Override
@@ -481,11 +446,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeByte(RequestedJDWPEvents.THREAD_DEATH);
         stream.writeInt(threadDeathRequestId);
         stream.writeLong(ids.getIdAsLong(thread));
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     @Override
@@ -496,11 +457,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeByte(RequestedJDWPEvents.VM_START);
         stream.writeInt(vmStartRequestId != -1 ? vmStartRequestId : 0);
         stream.writeLong(context.getIds().getIdAsLong(mainThread));
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     @Override
@@ -513,11 +470,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         stream.writeInt(1);
         stream.writeByte(RequestedJDWPEvents.VM_DEATH);
         stream.writeInt(vmDeathRequestId != -1 ? vmDeathRequestId : 0);
-        if (holdEvents) {
-            heldEvents.add(stream);
-        } else {
-            connection.queuePacket(stream);
-        }
+        connection.queuePacket(stream);
     }
 
     @Override
@@ -546,19 +499,5 @@ public final class VMEventListenerImpl implements VMEventListener {
     @Override
     public void addVMStartRequest(int id) {
         this.vmDeathRequestId = id;
-    }
-
-    @Override
-    public void holdEvents() {
-        holdEvents = true;
-    }
-
-    @Override
-    public void releaseEvents() {
-        holdEvents = false;
-        // queue all held events for sending
-        for (PacketStream heldEvent : heldEvents) {
-            connection.queuePacket(heldEvent);
-        }
     }
 }
