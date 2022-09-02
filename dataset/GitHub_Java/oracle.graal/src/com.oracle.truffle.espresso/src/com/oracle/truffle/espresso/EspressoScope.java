@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,81 +22,76 @@
  */
 package com.oracle.truffle.espresso;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.espresso.meta.Local;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameUtil;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.espresso.classfile.attributes.Local;
+import com.oracle.truffle.espresso.descriptors.Types;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.nodes.BytecodeNode;
+import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public class EspressoScope {
 
     public static Object createVariables(Local[] liveLocals, Frame frame) {
-        List<? extends FrameSlot> slots;
-
-        slots = frame.getFrameDescriptor().getSlots();
-        slots.size();
-
-        Map<String, FrameSlot> slotsMap;
-        if (slots.isEmpty()) {
+        int slotCount = liveLocals.length;
+        Map<String, FrameSlotInfo> slotsMap;
+        Map<String, FrameSlotInfo> identifiersMap;
+        if (liveLocals.length == 0) {
             slotsMap = Collections.emptyMap();
-        } else if (slots.size() == 1) {
-            FrameSlot slot = slots.get(0);
-            String identifier = getIdentifier(liveLocals, slot);
-            getIdentifier(liveLocals, slot);
-            slotsMap = Collections.singletonMap(Objects.toString(identifier), slot);
+            identifiersMap = Collections.emptyMap();
+        } else if (liveLocals.length == 1) {
+            int slot = 0;
+            String identifier = "0";
+            Local local = liveLocals[0];
+            FrameSlotInfo frameSlotInfo = new FrameSlotInfo(slot, Types.getJavaKind(local.getType().value()));
+            slotsMap = Collections.singletonMap(identifier, frameSlotInfo);
+            identifiersMap = Collections.singletonMap(local.getNameAsString(), frameSlotInfo);
         } else {
-            slotsMap = new LinkedHashMap<>(slots.size());
-            for (FrameSlot slot : slots) {
-                String identifier = getIdentifier(liveLocals, slot);
-                if (identifier != null) {
-                    slotsMap.put(identifier, slot);
-                }
+            slotsMap = new LinkedHashMap<>(slotCount);
+            identifiersMap = new LinkedHashMap<>(slotCount);
+            for (Local local : liveLocals) {
+                String slotNumber = String.valueOf(local.getSlot());
+                String localName = local.getNameAsString();
+                FrameSlotInfo frameSlotInfo = new FrameSlotInfo(local.getSlot(), Types.getJavaKind(local.getType().value()));
+                slotsMap.put(slotNumber, frameSlotInfo);
+                identifiersMap.put(localName, frameSlotInfo);
             }
         }
-        return new VariablesMapObject(slotsMap, frame);
+        return new VariablesMapObject(slotsMap, identifiersMap, frame);
     }
 
-    private static String getIdentifier(Local[] liveLocals, FrameSlot slot) {
-        String identifier = slot.getIdentifier().toString();
-        for (Local local : liveLocals) {
-            try {
-                if (local.getSlot() == Integer.parseInt(identifier)) {
-                    return local.getName().toString();
-                }
-            } catch (NumberFormatException nf) {
-                // ignore
-            }
-        }
-        return null;
-    }
-
+    // We map both variable names and their slot number to members. However we only expose the
+    // variable names through the Interop API. Clients which are bytecode based, e.g. JDWP that use
+    // slot numbers as identifiers must operate directly by using read/write member methods.
     @ExportLibrary(InteropLibrary.class)
     static final class VariablesMapObject implements TruffleObject {
 
-        final Map<String, ? extends FrameSlot> slots;
+        final Map<String, FrameSlotInfo> slots;
+        final Map<String, FrameSlotInfo> identifiers;
         final Frame frame;
 
-        private VariablesMapObject(Map<String, ? extends FrameSlot> slots, Frame frame) {
+        private VariablesMapObject(Map<String, FrameSlotInfo> slots, Map<String, FrameSlotInfo> identifiers, Frame frame) {
             this.slots = slots;
+            this.identifiers = identifiers;
             this.frame = frame;
-        }
-
-        public static boolean isInstance(TruffleObject obj) {
-            return obj instanceof EspressoScope.VariablesMapObject;
         }
 
         @SuppressWarnings("static-method")
@@ -106,49 +101,95 @@ public class EspressoScope {
         }
 
         @ExportMessage
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         Object readMember(String member) throws UnknownIdentifierException {
             if (frame == null) {
                 return EspressoScope.NullValue.INSTANCE;
             }
-            FrameSlot slot = slots.get(member);
-            if (slot == null) {
-                throw UnknownIdentifierException.create(member);
-            } else {
-                return frame.getValue(slot);
+            FrameSlotInfo slotInfo = slots.get(member);
+            if (slotInfo == null) {
+                // also try identifiers map
+                slotInfo = identifiers.get(member);
             }
+
+            if (slotInfo == null) {
+                throw UnknownIdentifierException.create(member);
+            }
+            FrameSlot refsSlot = frame.getFrameDescriptor().findFrameSlot("refs");
+            FrameSlot primitivesSlot = frame.getFrameDescriptor().findFrameSlot("primitives");
+            final Object[] refs = (Object[]) FrameUtil.getObjectSafe(frame, refsSlot);
+            final long[] primitives = (long[]) FrameUtil.getObjectSafe(frame, primitivesSlot);
+
+            // @formatter:off
+            switch (slotInfo.getKind()) {
+                case Boolean: return BytecodeNode.getLocalInt(primitives, slotInfo.getSlot()) != 0;
+                case Byte:    return (byte) BytecodeNode.getLocalInt(primitives, slotInfo.getSlot());
+                case Short:   return (short) BytecodeNode.getLocalInt(primitives, slotInfo.getSlot());
+                case Char:    return (char) BytecodeNode.getLocalInt(primitives, slotInfo.getSlot());
+                case Int:     return BytecodeNode.getLocalInt(primitives, slotInfo.getSlot());
+                case Float:   return BytecodeNode.getLocalFloat(primitives, slotInfo.getSlot());
+                case Long:    return BytecodeNode.getLocalLong(primitives, slotInfo.getSlot());
+                case Double:  return BytecodeNode.getLocalDouble(primitives, slotInfo.getSlot());
+                case Object:  return BytecodeNode.getLocalObject(refs, slotInfo.getSlot());
+                default:
+                    throw EspressoError.shouldNotReachHere();
+            }
+            // @formatter:on
         }
 
         @ExportMessage
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-            return new EspressoScope.VariableNamesObject(slots.keySet());
+            return new EspressoScope.VariableNamesObject(identifiers.keySet());
         }
 
         @ExportMessage
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         boolean isMemberReadable(String member) {
-            return slots.containsKey(member);
+            return slots.containsKey(member) || identifiers.containsKey(member);
         }
 
         @ExportMessage
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         boolean isMemberModifiable(String member) {
-            return slots.containsKey(member) && frame != null;
+            return (slots.containsKey(member) || identifiers.containsKey(member)) && frame != null;
         }
 
-        @ExportMessage
-        @CompilerDirectives.TruffleBoundary
-        void writeMember(String member, Object value) throws UnknownIdentifierException, UnsupportedMessageException {
+        @ExportMessage(limit = "9")
+        @TruffleBoundary
+        void writeMember(String member, Object value, @CachedLibrary("value") InteropLibrary interop) throws UnknownIdentifierException, UnsupportedMessageException {
             if (frame == null) {
                 throw UnsupportedMessageException.create();
             }
-            FrameSlot slot = slots.get(member);
-            if (slot == null) {
-                throw UnknownIdentifierException.create(member);
-            } else {
-                frame.setObject(slot, value);
+            FrameSlotInfo slotInfo = slots.get(member);
+            if (slotInfo == null) {
+                // try identifiers map also
+                slotInfo = identifiers.get(member);
             }
+            if (slotInfo == null) {
+                throw UnknownIdentifierException.create(member);
+            }
+
+            FrameSlot refsSlot = frame.getFrameDescriptor().findFrameSlot("refs");
+            FrameSlot primitivesSlot = frame.getFrameDescriptor().findFrameSlot("primitives");
+            final Object[] refs = (Object[]) FrameUtil.getObjectSafe(frame, refsSlot);
+            final long[] primitives = (long[]) FrameUtil.getObjectSafe(frame, primitivesSlot);
+
+            // @formatter:off
+            switch (slotInfo.getKind()) {
+                case Boolean: BytecodeNode.setLocalInt(primitives, slotInfo.getSlot(), interop.asBoolean(value) ? 1 : 0);  break;
+                case Byte:    BytecodeNode.setLocalInt(primitives, slotInfo.getSlot(), interop.asByte(value));             break;
+                case Short:   BytecodeNode.setLocalInt(primitives, slotInfo.getSlot(), interop.asShort(value));            break;
+                case Char:    BytecodeNode.setLocalInt(primitives, slotInfo.getSlot(), interop.asString(value).charAt(0)); break;
+                case Int:     BytecodeNode.setLocalInt(primitives, slotInfo.getSlot(), interop.asInt(value));              break;
+                case Float:   BytecodeNode.setLocalFloat(primitives, slotInfo.getSlot(), interop.asFloat(value));          break;
+                case Long:    BytecodeNode.setLocalLong(primitives, slotInfo.getSlot(), interop.asLong(value));            break;
+                case Double:  BytecodeNode.setLocalDouble(primitives, slotInfo.getSlot(), interop.asDouble(value));        break;
+                case Object:  BytecodeNode.setLocalObject(refs, slotInfo.getSlot(), (StaticObject) value);                 break;
+                default:
+                    throw EspressoError.shouldNotReachHere();
+            }
+            // @formatter:on
         }
 
         @SuppressWarnings("static-method")
@@ -177,8 +218,6 @@ public class EspressoScope {
     @ExportLibrary(InteropLibrary.class)
     static final class VariableNamesObject implements TruffleObject {
 
-        static final EspressoScope.VariableNamesObject EMPTY = new EspressoScope.VariableNamesObject(Collections.emptySet());
-
         final List<String> names;
 
         VariableNamesObject(Set<String> names) {
@@ -192,13 +231,13 @@ public class EspressoScope {
         }
 
         @ExportMessage
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         long getArraySize() {
             return names.size();
         }
 
         @ExportMessage
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         Object readArrayElement(long index) throws InvalidArrayIndexException {
             if (!isArrayElementReadable(index)) {
                 throw InvalidArrayIndexException.create(index);
@@ -207,10 +246,28 @@ public class EspressoScope {
         }
 
         @ExportMessage
-        @CompilerDirectives.TruffleBoundary
+        @TruffleBoundary
         boolean isArrayElementReadable(long index) {
             return index >= 0 && index < names.size();
         }
     }
-}
 
+    private static class FrameSlotInfo {
+
+        private final int slot;
+        private final JavaKind kind;
+
+        FrameSlotInfo(int slot, JavaKind kind) {
+            this.slot = slot;
+            this.kind = kind;
+        }
+
+        public int getSlot() {
+            return slot;
+        }
+
+        public JavaKind getKind() {
+            return kind;
+        }
+    }
+}
