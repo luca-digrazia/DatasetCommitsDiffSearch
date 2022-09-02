@@ -246,13 +246,19 @@ public abstract class PartialEvaluator {
     }
 
     /**
-     * @return OptimizedCallTarget#callDirectOrInlined
+     * The {@link PartialEvaluator} is the place where {@link ResolvedJavaMethod}s can be looked up
+     * on SVM.
+     *
+     * @return OptimizedCallTarget#callDirect
      */
     public ResolvedJavaMethod getCallDirectMethod() {
         return callDirectMethod;
     }
 
     /**
+     * {@link PartialEvaluator} is the place where {@link ResolvedJavaMethod}s can be looked up on
+     * SVM.
+     *
      * @return OptimizedCallTarget#callIndirect
      */
     public ResolvedJavaMethod getCallIndirectMethod() {
@@ -260,6 +266,9 @@ public abstract class PartialEvaluator {
     }
 
     /**
+     * {@link PartialEvaluator} is the place where {@link ResolvedJavaMethod}s can be looked up on
+     * SVM.
+     *
      * @return OptimizedCallTarget#callBoundary
      */
     public ResolvedJavaMethod getCallBoundary() {
@@ -306,7 +315,7 @@ public abstract class PartialEvaluator {
         return new ResolvedJavaMethod[]{callDirectMethod, callIndirectMethod, inlinedPERoot};
     }
 
-    public final class Request {
+    public class Request {
         public final OptionValues options;
         public final DebugContext debug;
         public final CompilableTruffleAST compilable;
