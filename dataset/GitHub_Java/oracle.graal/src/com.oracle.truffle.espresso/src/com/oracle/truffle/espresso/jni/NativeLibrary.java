@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.jni;
 
-import java.nio.file.Path;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -38,7 +36,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 
 public class NativeLibrary {
 
-    public static TruffleObject loadLibrary(Path lib) {
+    public static TruffleObject loadLibrary(String lib) {
         // On SVM no need to use dlmopen backend.
         // Prepend "with dlmopen " in HotSpot.
         StringBuilder sb = new StringBuilder();
