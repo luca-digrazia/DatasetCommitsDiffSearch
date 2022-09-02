@@ -86,11 +86,11 @@ public class LibGraal {
         return runtime.isCurrentThreadAttached();
     }
 
-    public static boolean attachCurrentThread(HotSpotJVMCIRuntime runtime, boolean isDaemon) {
-        return runtime.attachCurrentThread(isDaemon);
+    static boolean attachCurrentThread(HotSpotJVMCIRuntime runtime) {
+        return runtime.attachCurrentThread(false);
     }
 
-    public static void detachCurrentThread(HotSpotJVMCIRuntime runtime) {
+    static void detachCurrentThread(HotSpotJVMCIRuntime runtime) {
         runtime.detachCurrentThread();
     }
 
