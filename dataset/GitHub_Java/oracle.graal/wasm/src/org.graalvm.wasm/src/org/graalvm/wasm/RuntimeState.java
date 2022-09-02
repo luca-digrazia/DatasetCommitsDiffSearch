@@ -136,10 +136,6 @@ public class RuntimeState {
         return module;
     }
 
-    public int targetCount() {
-        return symbolTable().numFunctions();
-    }
-
     public CallTarget target(int index) {
         return targets[index];
     }

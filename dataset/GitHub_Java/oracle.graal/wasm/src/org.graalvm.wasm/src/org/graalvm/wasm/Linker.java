@@ -314,12 +314,10 @@ public class Linker {
         resolutionDag.resolveLater(new ImportMemorySym(instance.name(), importDescriptor), new Sym[]{new ExportMemorySym(importedModuleName, importedMemoryName)}, resolveAction);
     }
 
-    void resolveMemoryExport(WasmInstance instance, String exportedMemoryName) {
-        WasmModule module = instance.module();
+    void resolveMemoryExport(WasmModule module, String exportedMemoryName) {
         final ImportDescriptor importDescriptor = module.symbolTable().importedMemory();
         final Sym[] dependencies = importDescriptor != null ? new Sym[]{new ImportMemorySym(module.name(), importDescriptor)} : ResolutionDag.NO_DEPENDENCIES;
-        resolutionDag.resolveLater(new ExportMemorySym(module.name(), exportedMemoryName), dependencies, () -> {
-        });
+        resolutionDag.resolveLater(new ExportMemorySym(module.name(), exportedMemoryName), dependencies, NO_RESOLVE_ACTION);
     }
 
     void resolveDataSegment(WasmContext context, WasmInstance instance, int dataSegmentId, int offsetAddress, int offsetGlobalIndex, int byteLength, byte[] data) {
@@ -328,7 +326,7 @@ public class Linker {
             assert (offsetAddress != -1) ^ (offsetGlobalIndex != -1) : "Both an offset address and a offset global are specified for the data segment.";
             WasmMemory memory = instance.memory();
             Assert.assertNotNull(memory, String.format("No memory declared or imported in the module '%s'", instance.name()));
-            int baseAddress;
+            long baseAddress;
             if (offsetGlobalIndex != -1) {
                 final int offsetGlobalAddress = instance.globalAddress(offsetGlobalIndex);
                 Assert.assertTrue(offsetGlobalAddress != -1, "The global variable '" + offsetGlobalIndex + "' for the offset of the data segment " +
@@ -337,6 +335,7 @@ public class Linker {
             } else {
                 baseAddress = offsetAddress;
             }
+            memory.validateAddress(null, baseAddress, byteLength);
             for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
                 byte b = data[writeOffset];
                 memory.store_i32_8(null, baseAddress + writeOffset, b);
