@@ -41,7 +41,6 @@
 package com.oracle.truffle.regex.result;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ImportStatic;
@@ -117,7 +116,7 @@ public abstract class RegexResult extends AbstractConstantKeysObject {
 
         private final RegexResult result;
 
-        RegexResultGetStartMethod(RegexResult result) {
+        public RegexResultGetStartMethod(RegexResult result) {
             this.result = result;
         }
 
@@ -138,12 +137,6 @@ public abstract class RegexResult extends AbstractConstantKeysObject {
             }
             return getStartNode.execute(result, toIntNode.execute(args[0]));
         }
-
-        @TruffleBoundary
-        @Override
-        public String toString() {
-            return "TRegexResultGetStartMethod{" + "result=" + result + '}';
-        }
     }
 
     @ExportLibrary(InteropLibrary.class)
@@ -151,7 +144,7 @@ public abstract class RegexResult extends AbstractConstantKeysObject {
 
         private final RegexResult result;
 
-        RegexResultGetEndMethod(RegexResult result) {
+        public RegexResultGetEndMethod(RegexResult result) {
             this.result = result;
         }
 
@@ -171,12 +164,6 @@ public abstract class RegexResult extends AbstractConstantKeysObject {
                 throw ArityException.create(1, args.length);
             }
             return getEndNode.execute(result, toIntNode.execute(args[1]));
-        }
-
-        @TruffleBoundary
-        @Override
-        public String toString() {
-            return "TRegexResultGetEndMethod{" + "result=" + result + '}';
         }
     }
 
