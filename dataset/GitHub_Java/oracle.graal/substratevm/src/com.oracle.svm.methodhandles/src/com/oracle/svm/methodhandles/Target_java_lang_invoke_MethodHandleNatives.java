@@ -48,8 +48,6 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.jdk.JDK11OrLater;
-import com.oracle.svm.core.jdk.JDK15OrEarlier;
-import com.oracle.svm.core.jdk.JDK16OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.reflect.target.Target_java_lang_reflect_Field;
 
@@ -182,7 +180,7 @@ final class Target_java_lang_invoke_MethodHandleNatives {
 
     // JDK 11
 
-    @TargetElement(onlyWith = {JDK11OrLater.class, JDK15OrEarlier.class})
+    @TargetElement(onlyWith = JDK11OrLater.class)
     @Substitute
     static Target_java_lang_invoke_MemberName resolve(Target_java_lang_invoke_MemberName self, Class<?> caller, boolean speculativeResolve) throws LinkageError, ClassNotFoundException {
         if (self.reflectAccess != null) {
@@ -249,13 +247,6 @@ final class Target_java_lang_invoke_MethodHandleNatives {
     private static void clearCallSiteContext(Target_java_lang_invoke_MethodHandleNatives_CallSiteContext context) {
         throw unimplemented("CallSiteContext not supported");
     }
-
-    // JDK 16
-
-    @Delete
-    @TargetElement(onlyWith = JDK16OrLater.class)
-    private static native Target_java_lang_invoke_MemberName resolve(Target_java_lang_invoke_MemberName self, Class<?> caller, int lookupMode, boolean speculativeResolve)
-                    throws LinkageError, ClassNotFoundException;
 
     @AnnotateOriginal
     static native boolean refKindIsMethod(byte refKind);
