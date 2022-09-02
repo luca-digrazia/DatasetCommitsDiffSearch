@@ -42,6 +42,7 @@ import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.SourceFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 
+import com.oracle.truffle.tools.chromeinspector.instrument.InspectorInstrument;
 import com.oracle.truffle.tools.chromeinspector.server.CommandProcessException;
 import com.oracle.truffle.tools.chromeinspector.types.CallArgument;
 import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
@@ -51,6 +52,7 @@ import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
  */
 public final class InspectorExecutionContext {
 
+    public static final TruffleLogger LOG = TruffleLogger.getLogger(InspectorInstrument.INSTRUMENT_ID);
     private static final AtomicLong LAST_ID = new AtomicLong(0);
 
     private final String name;
@@ -62,8 +64,6 @@ public final class InspectorExecutionContext {
     private final boolean inspectInternal;
     private final boolean inspectInitialization;
     private final List<URI> sourceRoots;
-    private final TruffleLogger log;
-    private final ThreadLocal<Boolean> logging = new ThreadLocal<>();
 
     private volatile DebuggerSuspendedInfo suspendedInfo;
     private volatile SuspendedThreadExecutor suspendThreadExecutor;
@@ -82,7 +82,6 @@ public final class InspectorExecutionContext {
         this.env = env;
         this.sourceRoots = sourceRoots;
         this.err = err;
-        this.log = env.getLogger("");
     }
 
     public boolean isInspectInternal() {
@@ -105,45 +104,22 @@ public final class InspectorExecutionContext {
         return err;
     }
 
-    public void logMessage(String prefix, Object message) {
-        if (log.isLoggable(Level.FINE)) {
-            setLogging(true);
-            try {
-                log.fine("CONTEXT " + id + " " + prefix + message);
-            } finally {
-                setLogging(false);
-            }
+    public void logMessage(String prefix, String message) {
+        if (LOG.isLoggable(Level.FINE)) {
+            LOG.fine("CONTEXT " + id + " " + prefix + message);
         }
     }
 
     public void logException(Throwable ex) {
-        if (log.isLoggable(Level.FINE)) {
-            doLogException("CONTEXT " + id, ex);
+        if (LOG.isLoggable(Level.FINE)) {
+            LOG.log(Level.FINE, "CONTEXT " + id, ex);
         }
     }
 
     public void logException(String prefix, Throwable ex) {
-        if (log.isLoggable(Level.FINE)) {
-            doLogException("CONTEXT " + id + " " + prefix, ex);
+        if (LOG.isLoggable(Level.FINE)) {
+            LOG.log(Level.FINE, "CONTEXT " + id + " " + prefix, ex);
         }
-    }
-
-    private void doLogException(String message, Throwable ex) {
-        setLogging(true);
-        try {
-            log.log(Level.FINE, message, ex);
-        } finally {
-            setLogging(false);
-        }
-    }
-
-    boolean isLogging() {
-        Boolean is = logging.get();
-        return is != null && is;
-    }
-
-    private void setLogging(boolean is) {
-        logging.set(is);
     }
 
     Iterable<URI> getSourcePath() {

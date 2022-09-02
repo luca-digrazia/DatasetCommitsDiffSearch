@@ -481,8 +481,7 @@ public final class InspectorRuntime extends RuntimeDomain {
                         private JSONObject asResult(DebugValue v) {
                             JSONObject result;
                             if (v == null) {
-                                LanguageInfo language = suspendedInfo.getSuspendedEvent().getTopStackFrame().getLanguage();
-                                result = RemoteObject.createNullObject(context.getEnv(), language).toJSON();
+                                result = RemoteObject.createNullObject().toJSON();
                             } else {
                                 if (!returnByValue) {
                                     RemoteObject ro = new RemoteObject(v, true, context.getErr());

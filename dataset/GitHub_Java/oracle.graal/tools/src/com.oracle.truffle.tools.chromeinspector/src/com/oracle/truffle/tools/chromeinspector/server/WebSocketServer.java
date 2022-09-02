@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLServerSocketFactory;
 
@@ -79,6 +80,9 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
     private WebSocketServer(InetSocketAddress isa) {
         super(isa.getHostName(), isa.getPort());
         this.port = isa.getPort();
+        if (InspectorExecutionContext.LOG.isLoggable(Level.FINE)) {
+            InspectorExecutionContext.LOG.fine("New WebSocketServer at " + isa);
+        }
     }
 
     public static WebSocketServer get(InetSocketAddress isa, String path, InspectorExecutionContext context, boolean debugBrk,
@@ -90,7 +94,6 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
             wss = SERVERS.get(isa);
             if (wss == null) {
                 wss = new WebSocketServer(isa);
-                context.logMessage("", "New WebSocketServer at " + isa);
                 if (secure) {
                     if (TruffleOptions.AOT) {
                         throw new IOException("Secure connection is not available in the native-image yet.");
@@ -165,13 +168,14 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
                 }
                 responseJson = json.toString();
             }
+            if (InspectorExecutionContext.LOG.isLoggable(Level.FINE)) {
+                InspectorExecutionContext.LOG.fine("serverHttp(" + uri + "): response = '" + responseJson + "'");
+            }
             if (responseJson != null) {
                 Response response = NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK,
                                 "application/json; charset=UTF-8",
                                 responseJson);
-                response.addHeader("Cache-Control", "no-cache,no-store,must-revalidate");
-                response.addHeader("Pragma", "no-cache");
-                response.addHeader("X-Content-Type-Options", "nosniff");
+                response.addHeader("Cache-Control", "no-cache");
                 return response;
             }
         }
@@ -195,6 +199,9 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
             iss.context.logMessage("CLIENT ws connection opened, descriptor = ", descriptor);
             return iws;
         } else {
+            if (InspectorExecutionContext.LOG.isLoggable(Level.FINE)) {
+                InspectorExecutionContext.LOG.fine("No session for descriptor " + descriptor);
+            }
             return new ClosedWebSocket(handshake);
         }
     }
@@ -382,7 +389,7 @@ public final class WebSocketServer extends NanoWSD implements InspectorWSConnect
 
         @Override
         protected void onPong(NanoWSD.WebSocketFrame pong) {
-            iss.context.logMessage("CLIENT PONG: ", pong);
+            iss.context.logMessage("CLIENT PONG: ", pong.toString());
         }
 
         @Override

@@ -157,7 +157,7 @@ public final class InspectorInstrument extends TruffleInstrument {
     @com.oracle.truffle.api.Option(name = "", help = "Start the Chrome inspector on [[host:]port]. (default: <loopback address>:" + DEFAULT_PORT + ")", category = OptionCategory.USER) //
     static final OptionKey<HostAndPort> Inspect = new OptionKey<>(DEFAULT_ADDRESS, ADDRESS_OR_BOOLEAN);
 
-    @com.oracle.truffle.api.Option(help = "Attach to an existing endpoint instead of creating a new one. (default:false)", category = OptionCategory.INTERNAL) //
+    @com.oracle.truffle.api.Option(help = "Attach to an existing endpoint instead of creating a new one. (default:false)", category = OptionCategory.DEBUG) //
     static final OptionKey<Boolean> Attach = new OptionKey<>(false);
 
     @com.oracle.truffle.api.Option(help = "Suspend the execution at first executed source line. (default:true)", category = OptionCategory.USER) //
@@ -175,10 +175,13 @@ public final class InspectorInstrument extends TruffleInstrument {
     @com.oracle.truffle.api.Option(help = "Path to the chrome inspect. (default: randomly generated)", category = OptionCategory.EXPERT) //
     static final OptionKey<String> Path = new OptionKey<>("");
 
-    @com.oracle.truffle.api.Option(help = "Inspect internal sources. (default:false)", category = OptionCategory.INTERNAL) //
+    @com.oracle.truffle.api.Option(help = "Don't use loopback address. (default:false)", category = OptionCategory.EXPERT, deprecated = true) //
+    static final OptionKey<Boolean> Remote = new OptionKey<>(false);
+
+    @com.oracle.truffle.api.Option(help = "Inspect internal sources. (default:false)", category = OptionCategory.DEBUG) //
     static final OptionKey<Boolean> Internal = new OptionKey<>(false);
 
-    @com.oracle.truffle.api.Option(help = "Inspect language initialization. (default:false)", category = OptionCategory.INTERNAL) //
+    @com.oracle.truffle.api.Option(help = "Inspect language initialization. (default:false)", category = OptionCategory.DEBUG) //
     static final OptionKey<Boolean> Initialization = new OptionKey<>(false);
 
     @com.oracle.truffle.api.Option(help = "Use TLS/SSL. (default:false)", category = OptionCategory.EXPERT) //
@@ -206,11 +209,11 @@ public final class InspectorInstrument extends TruffleInstrument {
             HostAndPort hostAndPort = options.get(Inspect);
             connectionWatcher = new ConnectionWatcher();
             try {
-                InetSocketAddress socketAddress = hostAndPort.createSocket();
+                InetSocketAddress socketAddress = hostAndPort.createSocket(options.get(Remote));
                 server = new Server(env, "Main Context", socketAddress, options.get(Attach), options.get(Suspend), options.get(WaitAttached), options.get(HideErrors), options.get(Internal),
                                 options.get(Initialization), options.get(Path), options.get(Secure), new KeyStoreOptions(options), options.get(SourcePath), connectionWatcher);
             } catch (IOException e) {
-                throw new InspectorIOException(hostAndPort.getHostPort(), e);
+                throw new InspectorIOException(hostAndPort.getHostPort(options.get(Remote)), e);
             }
         }
 
@@ -231,12 +234,12 @@ public final class InspectorInstrument extends TruffleInstrument {
                 connectionWatcher = new ConnectionWatcher();
                 hostAndPort = new HostAndPort(host, port);
                 try {
-                    InetSocketAddress socketAddress = hostAndPort.createSocket();
+                    InetSocketAddress socketAddress = hostAndPort.createSocket(options.get(Remote));
                     server = new Server(env, "Main Context", socketAddress, false, false, wait, options.get(HideErrors), options.get(Internal),
                                     options.get(Initialization), null, options.get(Secure), new KeyStoreOptions(options), options.get(SourcePath), connectionWatcher);
                 } catch (IOException e) {
                     PrintWriter info = new PrintWriter(env.err());
-                    info.println(new InspectorIOException(hostAndPort.getHostPort(), e).getLocalizedMessage());
+                    info.println(new InspectorIOException(hostAndPort.getHostPort(false), e).getLocalizedMessage());
                     info.flush();
                 }
                 return server != null ? server.getConnection() : null;
@@ -247,8 +250,7 @@ public final class InspectorInstrument extends TruffleInstrument {
                 if (server != null) {
                     return server.getConnection().getExecutionContext();
                 } else {
-                    PrintWriter err = (options.get(HideErrors)) ? null : new PrintWriter(env.err(), true);
-                    return new InspectorExecutionContext("Main Context", options.get(Internal), options.get(Initialization), env, Collections.emptyList(), err);
+                    return new InspectorExecutionContext("Main Context", options.get(Internal), options.get(Initialization), env, Collections.emptyList(), new PrintWriter(env.err()));
                 }
             }
         }));
@@ -344,11 +346,13 @@ public final class InspectorInstrument extends TruffleInstrument {
             }
         }
 
-        String getHostPort() {
+        String getHostPort(boolean remote) {
             String hostName = host;
             if (hostName == null || hostName.isEmpty()) {
                 if (inetAddress != null) {
                     hostName = inetAddress.toString();
+                } else if (remote) {
+                    hostName = "localhost";
                 } else {
                     hostName = InetAddress.getLoopbackAddress().toString();
                 }
@@ -356,10 +360,14 @@ public final class InspectorInstrument extends TruffleInstrument {
             return hostName + ":" + port;
         }
 
-        InetSocketAddress createSocket() {
+        InetSocketAddress createSocket(boolean remote) throws UnknownHostException {
             InetAddress ia;
             if (inetAddress == null) {
-                ia = InetAddress.getLoopbackAddress();
+                if (remote) {
+                    ia = InetAddress.getLocalHost();
+                } else {
+                    ia = InetAddress.getLoopbackAddress();
+                }
             } else {
                 ia = inetAddress;
             }
@@ -377,7 +385,7 @@ public final class InspectorInstrument extends TruffleInstrument {
         Server(final Env env, final String contextName, final InetSocketAddress socketAdress, final boolean attach, final boolean debugBreak, final boolean waitAttached, final boolean hideErrors,
                         final boolean inspectInternal, final boolean inspectInitialization, final String pathOrNull, final boolean secure, final KeyStoreOptions keyStoreOptions,
                         final List<URI> sourcePath, final ConnectionWatcher connectionWatcher) throws IOException {
-            PrintWriter info = new PrintWriter(env.err(), true);
+            PrintWriter info = new PrintWriter(env.err());
             if (pathOrNull == null || pathOrNull.isEmpty()) {
                 wsspath = "/" + Long.toHexString(System.identityHashCode(env)) + "-" + Long.toHexString(System.nanoTime() ^ System.identityHashCode(env));
             } else {

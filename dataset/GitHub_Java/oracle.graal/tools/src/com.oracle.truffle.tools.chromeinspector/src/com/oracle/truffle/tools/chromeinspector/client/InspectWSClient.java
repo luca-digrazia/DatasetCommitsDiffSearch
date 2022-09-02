@@ -142,7 +142,7 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
 
     @Override
     public void onOpen(ServerHandshake sh) {
-        executionContext.logMessage("CLIENT ws connection opened at ", getURI());
+        executionContext.logMessage("CLIENT ws connection opened at ", getURI().toString());
         iss = InspectServerSession.create(executionContext, debugBreak, connectionWatcher);
         connectionWatcher.notifyOpen();
         iss.setMessageListener(new MessageEndpoint() {

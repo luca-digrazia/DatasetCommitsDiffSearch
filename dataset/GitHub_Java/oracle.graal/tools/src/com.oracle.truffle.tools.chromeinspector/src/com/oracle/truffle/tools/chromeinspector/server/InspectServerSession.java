@@ -35,9 +35,7 @@ import org.graalvm.polyglot.io.MessageEndpoint;
 import com.oracle.truffle.tools.utils.json.JSONArray;
 import com.oracle.truffle.tools.utils.json.JSONException;
 import com.oracle.truffle.tools.utils.json.JSONObject;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
+
 import com.oracle.truffle.tools.chromeinspector.InspectorDebugger;
 import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext;
 import com.oracle.truffle.tools.chromeinspector.InspectorProfiler;
@@ -165,11 +163,7 @@ public final class InspectServerSession implements MessageEndpoint {
         if (result != null) {
             JSONMessageListener jsonListener = jsonMessageListener;
             if (jsonListener != null) {
-                try {
-                    jsonListener.onMessage(result);
-                } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-                    context.logException(e);
-                }
+                jsonListener.onMessage(result);
             }
         }
         postProcessor.run();
@@ -417,11 +411,7 @@ public final class InspectServerSession implements MessageEndpoint {
             }
             JSONMessageListener jsonListener = jsonMessageListener;
             if (jsonListener != null) {
-                try {
-                    jsonListener.onMessage(event.toJSON());
-                } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-                    context.logException(e);
-                }
+                jsonListener.onMessage(event.toJSON());
             }
         }
 
@@ -518,11 +508,7 @@ public final class InspectServerSession implements MessageEndpoint {
                     }
                     JSONMessageListener jsonListener = jsonMessageListener;
                     if (jsonListener != null) {
-                        try {
-                            jsonListener.onMessage(result);
-                        } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-                            context.logException(e);
-                        }
+                        jsonListener.onMessage(result);
                     }
                 }
                 postProcessor.run();
