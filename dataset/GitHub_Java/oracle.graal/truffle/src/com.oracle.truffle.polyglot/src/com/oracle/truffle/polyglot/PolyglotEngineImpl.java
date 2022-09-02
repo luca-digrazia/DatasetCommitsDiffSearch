@@ -480,7 +480,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         Map<String, PolyglotLanguage> polyglotLanguages = new LinkedHashMap<>();
         Map<String, LanguageCache> cachedLanguages = new HashMap<>();
         List<LanguageCache> sortedLanguages = new ArrayList<>();
-        for (LanguageCache lang : languages().values()) {
+        for (LanguageCache lang : LanguageCache.languages(contextClassLoader).values()) {
             String id = lang.getId();
             if (!cachedLanguages.containsKey(id)) {
                 sortedLanguages.add(lang);
@@ -528,12 +528,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         }
 
         return polyglotLanguages;
-    }
-
-    private Map<String, LanguageCache> languages() {
-        ClassLoader loader = getAPIAccess().useContextClassLoader() ? Thread.currentThread().getContextClassLoader() : null;
-        final Map<String, LanguageCache> languages = LanguageCache.languages(true, loader);
-        return languages;
     }
 
     private void visitLanguage(Map<String, RuntimeException> initErrors, Map<String, LanguageCache> cachedLanguages, LinkedHashSet<LanguageCache> serializedLanguages,
