@@ -40,7 +40,7 @@ public class SymbolTable {
     private static final int INITIAL_OFFSET_SIZE = 128;
     private static final int INITIAL_FUNCTION_TYPES_SIZE = 128;
 
-    @CompilationFinal private WasmModule module;
+    private WasmModule module;
 
     /**
      * Encodes the arguments and return types of each function type.
@@ -72,8 +72,8 @@ public class SymbolTable {
      */
     @CompilationFinal(dimensions = 1) private int[] offsets;
 
-    @CompilationFinal private int typeDataSize;
-    @CompilationFinal private int offsetsSize;
+    private int typeDataSize;
+    private int offsetsSize;
 
     /**
      * Stores the function objects for a WebAssembly module.
@@ -82,10 +82,10 @@ public class SymbolTable {
      * this array should only access the locations in the array that have already been populated.
      */
     @CompilationFinal(dimensions = 1) private WasmFunction[] functionTypes;
-    @CompilationFinal private int numFunctions;
+    private int numFunctions;
 
-    @CompilationFinal private Map<String, WasmFunction> exportedFunctions;
-    @CompilationFinal private int startFunctionIndex;
+    private Map<String, WasmFunction> exportedFunctions;
+    private int startFunctionIndex;
 
     public SymbolTable(WasmModule module) {
         this.module = module;
@@ -144,7 +144,7 @@ public class SymbolTable {
         int typeIdx = offsetsSize++;
         offsets[typeIdx] = typeDataSize;
 
-        assert 0 <= numReturnTypes && numReturnTypes <= 1;
+        Assert.assertInRange(numReturnTypes, 0, 1, "Invalid return value size");
         int size = 2 + numArgTypes + numReturnTypes;
         ensureTypeDataCapacity(typeDataSize + size);
         typeData[typeDataSize + 0] = numArgTypes;
@@ -189,13 +189,13 @@ public class SymbolTable {
     }
 
     public WasmFunction function(int funcIndex) {
-        assert 0 <= funcIndex && funcIndex <= numFunctions() - 1;
+        Assert.assertInRange(funcIndex, 0, numFunctions() - 1, "Index out of bounds");
         return functionTypes[funcIndex];
     }
 
     public WasmFunction function(String exportName) {
         WasmFunction function = exportedFunctions.get(exportName);
-        assert function != null;
+        Assert.assertNotNull(function, Assert.format("lookup for exported function \"%s\"", exportName));
         return function;
     }
 
