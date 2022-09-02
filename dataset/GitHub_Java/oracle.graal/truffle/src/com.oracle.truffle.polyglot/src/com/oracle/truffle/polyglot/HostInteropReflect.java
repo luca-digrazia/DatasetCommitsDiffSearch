@@ -75,8 +75,6 @@ import com.oracle.truffle.polyglot.PolyglotLanguageContext.ToGuestValuesNode;
 
 final class HostInteropReflect {
     static final Object[] EMPTY = {};
-    static final String STATIC_TO_CLASS = "class";
-    static final String CLASS_TO_STATIC = "static";
 
     private HostInteropReflect() {
     }
@@ -117,19 +115,19 @@ final class HostInteropReflect {
     }
 
     @CompilerDirectives.TruffleBoundary
-    static int findKeyInfo(Class<?> clazz, String name, boolean isStatic, boolean isClass) {
+    static int findKeyInfo(Class<?> clazz, String name, boolean onlyStatic) {
         boolean readable = false;
         boolean writable = false;
         boolean invocable = false;
         boolean internal = false;
 
         HostClassDesc classDesc = HostClassDesc.forClass(clazz);
-        HostMethodDesc foundMethod = classDesc.lookupMethod(name, isStatic);
+        HostMethodDesc foundMethod = classDesc.lookupMethod(name, onlyStatic);
         if (foundMethod != null) {
             readable = true;
             invocable = true;
         } else if (isJNIName(name)) {
-            foundMethod = classDesc.lookupMethodByJNIName(name, isStatic);
+            foundMethod = classDesc.lookupMethodByJNIName(name, onlyStatic);
             if (foundMethod != null) {
                 readable = true;
                 invocable = true;
@@ -138,28 +136,22 @@ final class HostInteropReflect {
         }
 
         if (!readable) {
-            HostFieldDesc foundField = classDesc.lookupField(name, isStatic);
+            HostFieldDesc foundField = classDesc.lookupField(name, onlyStatic);
             if (foundField != null) {
                 readable = true;
                 writable = true;
             }
         }
 
-        if (isStatic) {
+        if (onlyStatic) {
             if (!readable) {
-                if (STATIC_TO_CLASS.equals(name)) {
+                if ("class".equals(name)) {
                     readable = true;
                 }
             }
             if (!readable) {
                 Class<?> innerClass = findInnerClass(clazz, name);
                 if (innerClass != null) {
-                    readable = true;
-                }
-            }
-        } else if (isClass) {
-            if (!readable) {
-                if (CLASS_TO_STATIC.equals(name)) {
                     readable = true;
                 }
             }
@@ -239,13 +231,13 @@ final class HostInteropReflect {
     }
 
     @CompilerDirectives.TruffleBoundary
-    static String[] findUniquePublicMemberNames(Class<?> clazz, boolean isStatic, boolean isClass, boolean includeInternal) throws SecurityException {
+    static String[] findUniquePublicMemberNames(Class<?> clazz, boolean onlyStatic, boolean includeInternal) throws SecurityException {
         HostClassDesc classDesc = HostClassDesc.forClass(clazz);
         EconomicSet<String> names = EconomicSet.create();
-        names.addAll(classDesc.getFieldNames(isStatic));
-        names.addAll(classDesc.getMethodNames(isStatic, includeInternal));
-        if (isStatic) {
-            names.add(STATIC_TO_CLASS);
+        names.addAll(classDesc.getFieldNames(onlyStatic));
+        names.addAll(classDesc.getMethodNames(onlyStatic, includeInternal));
+        if (onlyStatic) {
+            names.add("class");
             if (!TruffleOptions.AOT) { // GR-13208: SVM does not support Class.getClasses() yet
                 if (Modifier.isPublic(clazz.getModifiers())) {
                     // no support for non-static member types now
@@ -257,8 +249,6 @@ final class HostInteropReflect {
                     }
                 }
             }
-        } else if (isClass) {
-            names.add(CLASS_TO_STATIC);
         }
         return names.toArray(new String[names.size()]);
     }
