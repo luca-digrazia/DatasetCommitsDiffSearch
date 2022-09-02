@@ -213,13 +213,7 @@ public final class Target_java_lang_ClassLoader {
     }
 
     @Alias
-    @TargetElement(onlyWith = JDK16OrEarlier.class)
     private native boolean checkName(String name);
-
-    // JDK-8265605
-    @Alias
-    @TargetElement(onlyWith = JDK17OrLater.class, name = "checkName")
-    private static native boolean checkNameJDK17OrLater(String name);
 
     @Substitute
     @SuppressWarnings("unused")
@@ -228,13 +222,7 @@ public final class Target_java_lang_ClassLoader {
     }
 
     @Delete
-    @TargetElement(onlyWith = JDK16OrEarlier.class)
     native Class<?> findBootstrapClassOrNull(String name);
-
-    // JDK-8265605
-    @Delete
-    @TargetElement(onlyWith = JDK17OrLater.class, name = "findBootstrapClassOrNull")
-    static native Class<?> findBootstrapClassOrNullJDK17OrLater(String name);
 
     @Substitute
     @SuppressWarnings("unused")
@@ -389,13 +377,7 @@ public final class Target_java_lang_ClassLoader {
     private static native Class<?> defineClass2(ClassLoader loader, String name, java.nio.ByteBuffer b, int off, int len, ProtectionDomain pd, String source);
 
     @Delete
-    @TargetElement(onlyWith = JDK16OrEarlier.class)
     private native Class<?> findBootstrapClass(String name);
-
-    // JDK-8265605
-    @Delete
-    @TargetElement(onlyWith = JDK17OrLater.class, name = "findBootstrapClass")
-    private static native Class<?> findBootstrapClassJDK17OrLater(String name);
 
     @Delete
     @TargetElement(onlyWith = JDK14OrEarlier.class)

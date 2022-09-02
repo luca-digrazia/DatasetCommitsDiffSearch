@@ -560,7 +560,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         return layoutEncoding;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public int getTypeID() {
         return typeID;
     }
@@ -601,7 +600,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         return isFlagSet(IS_INSTANTIATED_FLAG_BIT);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static DynamicHub fromClass(Class<?> clazz) {
         return SubstrateUtil.cast(clazz, DynamicHub.class);
     }
@@ -747,10 +745,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         return (ClassLoader) classLoader;
     }
 
-    boolean hasClassLoader() {
-        return classLoader != FROM_COMPANION || (companion.isPresent() && companion.get().hasClassLoader());
-    }
-
     void setClassLoaderAtRuntime(ClassLoader loader) {
         companion.get().setClassLoader(loader);
     }
@@ -843,7 +837,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private Object getEnclosingClass() {
-        PredefinedClassesSupport.throwIfUnresolvable(toClass(enclosingClass), getClassLoader0());
         return enclosingClass;
     }
 
@@ -867,7 +860,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         if (isLocalOrAnonymousClass()) {
             return null;
         } else {
-            return getEnclosingClass();
+            return enclosingClass;
         }
     }
 
@@ -1127,17 +1120,11 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private Class<?>[] getDeclaredClasses() {
-        for (Class<?> clazz : rd.declaredClasses) {
-            PredefinedClassesSupport.throwIfUnresolvable(clazz, getClassLoader0());
-        }
         return rd.declaredClasses;
     }
 
     @Substitute
     private Class<?>[] getClasses() {
-        for (Class<?> clazz : rd.publicClasses) {
-            PredefinedClassesSupport.throwIfUnresolvable(clazz, getClassLoader0());
-        }
         return rd.publicClasses;
     }
 
@@ -1282,7 +1269,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute
     private Method getEnclosingMethod() {
         if (rd.enclosingMethodOrConstructor instanceof Method) {
-            PredefinedClassesSupport.throwIfUnresolvable(rd.enclosingMethodOrConstructor.getDeclaringClass(), getClassLoader0());
             return (Method) rd.enclosingMethodOrConstructor;
         }
         return null;
@@ -1291,7 +1277,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute
     private Constructor<?> getEnclosingConstructor() {
         if (rd.enclosingMethodOrConstructor instanceof Constructor) {
-            PredefinedClassesSupport.throwIfUnresolvable(rd.enclosingMethodOrConstructor.getDeclaringClass(), getClassLoader0());
             return (Constructor<?>) rd.enclosingMethodOrConstructor;
         }
         return null;
