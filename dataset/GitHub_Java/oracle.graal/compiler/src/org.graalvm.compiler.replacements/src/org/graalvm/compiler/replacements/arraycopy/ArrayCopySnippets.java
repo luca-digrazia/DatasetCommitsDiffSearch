@@ -25,7 +25,6 @@
 package org.graalvm.compiler.replacements.arraycopy;
 
 import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
-import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.FREQUENT_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.LIKELY_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
@@ -211,7 +210,7 @@ public abstract class ArrayCopySnippets implements Snippets {
             Object nonNullDest = PiNode.asNonNullObject(dest);
             Pointer srcKlass = loadHub(nonNullSrc);
             Pointer destKlass = loadHub(nonNullDest);
-            if (probability(LIKELY_PROBABILITY, srcKlass == destKlass) || probability(LIKELY_PROBABILITY, nonNullDest.getClass() == Object[].class)) {
+            if (probability(LIKELY_PROBABILITY, srcKlass == destKlass)) {
                 // no storecheck required.
                 counters.objectCheckcastSameTypeCounter.inc();
                 counters.objectCheckcastSameTypeCopiedCounter.add(length);
@@ -405,10 +404,6 @@ public abstract class ArrayCopySnippets implements Snippets {
                     // we don't know anything about the types - use the generic copying
                     snippetInfo = arraycopyGenericSnippet;
                     // no need for additional type check to avoid duplicated work
-                    arrayTypeCheck = ArrayCopyTypeCheck.NO_ARRAY_TYPE_CHECK;
-                } else if (GeneratePIC.getValue(options)) {
-                    // use generic copying for AOT compilation
-                    snippetInfo = arraycopyGenericSnippet;
                     arrayTypeCheck = ArrayCopyTypeCheck.NO_ARRAY_TYPE_CHECK;
                 } else if (srcComponentType != null && destComponentType != null) {
                     if (!srcComponentType.isPrimitive() && !destComponentType.isPrimitive()) {
