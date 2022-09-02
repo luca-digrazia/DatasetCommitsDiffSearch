@@ -41,7 +41,6 @@ import org.graalvm.compiler.asm.Assembler;
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.code.CompilationResult.CodeAnnotation;
-import org.graalvm.compiler.code.CompilationResult.JumpTable;
 import org.graalvm.compiler.code.DataSection.Data;
 import org.graalvm.compiler.code.DataSection.RawData;
 import org.graalvm.compiler.core.common.NumUtil;
@@ -54,7 +53,6 @@ import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstruction;
-import org.graalvm.compiler.lir.LIRInstructionVerifier;
 import org.graalvm.compiler.lir.LabelRef;
 import org.graalvm.compiler.lir.StandardOp.LabelHoldingOp;
 import org.graalvm.compiler.lir.framemap.FrameMap;
@@ -62,7 +60,6 @@ import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.CodeCacheProvider;
@@ -87,14 +84,6 @@ import jdk.vm.ci.meta.Value;
  * @see CompilationResultBuilderFactory
  */
 public class CompilationResultBuilder {
-
-    private final static List<LIRInstructionVerifier> LIR_INSTRUCTION_VERIFIERS = new ArrayList<>();
-
-    static {
-        for (LIRInstructionVerifier verifier : GraalServices.load(LIRInstructionVerifier.class)) {
-            LIR_INSTRUCTION_VERIFIERS.add(verifier);
-        }
-    }
 
     public static class Options {
         @Option(help = "Include the LIR as comments with the final assembly.", type = OptionType.Debug) //
@@ -572,7 +561,7 @@ public class CompilationResultBuilder {
                 if (beforeOp != null) {
                     beforeOp.accept(op);
                 }
-                emitOp(op);
+                emitOp(this, op);
                 if (afterOp != null) {
                     afterOp.accept(op);
                 }
@@ -582,31 +571,12 @@ public class CompilationResultBuilder {
         }
     }
 
-    private void emitOp(LIRInstruction op) {
+    private static void emitOp(CompilationResultBuilder crb, LIRInstruction op) {
         try {
-            int start = asm.position();
-            op.emitCode(this);
+            int start = crb.asm.position();
+            op.emitCode(crb);
             if (op.getPosition() != null) {
-                recordSourceMapping(start, asm.position(), op.getPosition());
-            }
-            if (LIR_INSTRUCTION_VERIFIERS.size() > 0 && start < asm.position()) {
-                int end = asm.position();
-                for (CodeAnnotation codeAnnotation : compilationResult.getCodeAnnotations()) {
-                    if (codeAnnotation instanceof JumpTable) {
-                        // Skip jump table. Here we assume the jump table is at the tail of the
-                        // emitted code.
-                        int jumpTableStart = codeAnnotation.position;
-                        if (jumpTableStart >= start && jumpTableStart < end) {
-                            end = jumpTableStart;
-                        }
-                    }
-                }
-                byte[] emittedCode = asm.copy(start, end);
-                for (LIRInstructionVerifier verifier : LIR_INSTRUCTION_VERIFIERS) {
-                    if (verifier.isEnabled()) {
-                        verifier.verify(op, emittedCode);
-                    }
-                }
+                crb.recordSourceMapping(start, crb.asm.position(), op.getPosition());
             }
         } catch (BailoutException e) {
             throw e;
