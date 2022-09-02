@@ -48,11 +48,8 @@ public class Process {
 
     public static final int TOKEN_QUERY = 0x08;
 
-    @CConstant
-    public static native int _P_WAIT();
-
     @CFunction
-    public static native int _spawnv(int mode, CCharPointer cmdname, CCharPointerPointer argv);
+    public static native int _execv(CCharPointer path, CCharPointerPointer argv);
 
     @CFunction(transition = Transition.NO_TRANSITION)
     public static native WinBase.HANDLE GetCurrentProcess();
