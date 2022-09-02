@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,13 +40,7 @@
  */
 package com.oracle.truffle.api.interop;
 
-import java.util.Arrays;
-import java.util.concurrent.Callable;
-import java.util.stream.Collectors;
-
 final class AssertUtils {
-
-    static final boolean ASSERTIONS_ENABLED = initAssertionsEnabled();
 
     private AssertUtils() {
     }
@@ -55,7 +49,15 @@ final class AssertUtils {
         if (args == null) {
             return "null";
         }
-        return Arrays.asList(args).stream().map(AssertUtils::formatValue).collect(Collectors.toList()).toString();
+        StringBuilder b = new StringBuilder("[");
+        String sep = "";
+        for (Object arg : args) {
+            b.append(sep);
+            b.append(formatValue(arg));
+            sep = ", ";
+        }
+        b.append("]");
+        return b.toString();
     }
 
     private static String formatValue(Object arg) {
@@ -97,16 +99,16 @@ final class AssertUtils {
         return String.format("Invariant contract violation for receiver %s and arguments %s.", formatValue(receiver), formatArgs(args));
     }
 
-    static String violationInvariant(Object receiver, Object arg) {
-        return String.format("Invariant contract violation for receiver %s and argument %s.", formatValue(receiver), formatValue(arg));
-    }
-
     static String violationInvariant(Object receiver, String arg) {
         return String.format("Invariant contract violation for receiver %s and identifier %s.", formatValue(receiver), arg);
     }
 
     static String violationInvariant(Object receiver, long arg) {
         return String.format("Invariant contract violation for receiver %s and index %s.", formatValue(receiver), arg);
+    }
+
+    static String violationInvariant(Object receiver, Object arg) {
+        return String.format("Invariant contract violation for receiver %s and key %s.", formatValue(receiver), formatValue(arg));
     }
 
     private static String violationReturn(Object receiver, Object returnValue) {
@@ -116,60 +118,108 @@ final class AssertUtils {
 
     private static String violationArgument(Object receiver, Object arg) {
         return String.format("Pre-condition contract violation for receiver %s and argument %s. " +
-                        "Valid arguments must be of type Boolean, Byte, Short, Integer, Long,  Float, Double, Character, String or implement TruffleObject.",
+                        "Valid arguments must be of type Boolean, Byte, Short, Integer, Long, Float, Double, Character, String or implement TruffleObject.",
                         formatValue(receiver), formatValue(arg));
     }
 
-    static boolean validReturn(Object receiver, Object arg) {
+    static boolean validInteropReturn(Object receiver, Object arg) {
         assert isInteropValue(arg) : violationReturn(receiver, arg);
         return true;
     }
 
-    static boolean validArgument(Object receiver, Object arg) {
+    static boolean validProtocolReturn(Object receiver, Object arg) {
+        assert InteropLibrary.isValidProtocolValue(arg) : violationReturn(receiver, arg);
+        return true;
+    }
+
+    static boolean validInteropArgument(Object receiver, Object arg) {
         if (arg == null) {
             throw new NullPointerException(violationArgument(receiver, arg));
         }
-        if (!isInteropValue(arg)) {
+        if (!InteropLibrary.isValidValue(arg)) {
             throw new ClassCastException(violationArgument(receiver, arg));
         }
         return true;
     }
 
-    static boolean isInteropValue(Object o) {
-        return o instanceof TruffleObject || o instanceof Boolean || o instanceof Byte || o instanceof Short || o instanceof Integer || o instanceof Long || o instanceof Float ||
-                        o instanceof Double || o instanceof Character || o instanceof String;
+    static boolean validProtocolArgument(Object receiver, Object arg) {
+        if (arg == null) {
+            throw new NullPointerException(violationArgument(receiver, arg));
+        }
+        if (!InteropLibrary.isValidProtocolValue(arg)) {
+            throw new ClassCastException(violationArgument(receiver, arg));
+        }
+        return true;
     }
 
-    @SuppressWarnings("all")
-    private static boolean initAssertionsEnabled() {
-        boolean enabled = false;
-        assert enabled = true;
-        return enabled;
+    static boolean assertString(Object receiver, Object string) {
+        InteropLibrary uncached = InteropLibrary.getUncached(string);
+        assert uncached.isString(string) : violationPost(receiver, string);
+        try {
+            assert uncached.asString(string) != null : violationPost(receiver, string);
+        } catch (UnsupportedMessageException e) {
+            assert false; // should be handled by uncached assertions
+        }
+        return true;
+    }
+
+    static boolean validNonInteropArgument(Object receiver, Object arg) {
+        if (arg == null) {
+            throw new NullPointerException(violationNonInteropArgument(receiver, arg));
+        }
+        return true;
+    }
+
+    private static String violationNonInteropArgument(Object receiver, Object arg) {
+        return String.format("Pre-condition contract violation for receiver %s and argument %s. " +
+                        "Argument must not be null.",
+                        formatValue(receiver), formatValue(arg));
+    }
+
+    @SuppressWarnings("deprecation")
+    static boolean isInteropValue(Object o) {
+        return InteropLibrary.isValidValue(o);
     }
 
     static boolean validArguments(Object receiver, Object[] args) {
         assert args != null : violationPre(receiver);
         for (Object arg : args) {
-            assert validArgument(receiver, arg);
+            assert validInteropArgument(receiver, arg);
         }
         return true;
+    }
+
+    static boolean validScope(Object o) {
+        if (!(o instanceof TruffleObject)) {
+            return false;
+        }
+        InteropLibrary uncached = InteropLibrary.getUncached(o);
+        assert uncached.isScope(o) : String.format("Invariant contract violation for receiver %s: is not a scope.", formatValue(o));
+        assert uncached.hasMembers(o) : String.format("Invariant contract violation for receiver %s: does not have members.", formatValue(o));
+        return true;
+    }
+
+    static String violationScopeMemberLengths(Object allMembers, Object parentMembers) {
+        return String.format("Scope members of %s do not contain all scope parent members of %s", allMembers, parentMembers);
+    }
+
+    static boolean validScopeMemberLengths(long allSize, long parentSize, Object allMembers, Object parentMembers) {
+        assert allSize >= parentSize : String.format("Scope members of %s (count = %d) do not contain all scope parent members of %s (count = %d)", allMembers, allSize, parentMembers, parentSize);
+        return allSize >= parentSize;
+    }
+
+    static boolean validScopeMemberNames(String allElementName, String parentElementName, Object allMembers, Object parentMembers, long allIndex, long parentIndex) {
+        assert allElementName.equals(parentElementName) : String.format(
+                        "Member %s of scope %s at [%d] does not equal to member %s of parent scope %s at [%d]. Scope must contain all members from parent scopes.",
+                        allElementName, allMembers, allIndex, parentElementName, parentMembers, parentIndex);
+        return allElementName.equals(parentElementName);
     }
 
     static boolean preCondition(Object receiver) {
-        assert receiver != null : violationPre(receiver);
-        assert validArgument(receiver, receiver);
-        return true;
-    }
-
-    static boolean notThrows(Callable<?> r) {
-        try {
-            r.call();
-            return true;
-        } catch (InteropException e) {
-            return false;
-        } catch (Exception e) {
-            return true;
+        if (receiver == null) {
+            throw new NullPointerException(violationPre(receiver));
         }
+        return true;
     }
 
 }

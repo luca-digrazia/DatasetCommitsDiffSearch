@@ -2892,15 +2892,10 @@ public abstract class InteropLibrary extends Library {
      */
     @TruffleBoundary
     public static boolean isValidValue(Object receiver) {
-        return receiver instanceof TruffleObject //
-                        || receiver instanceof Boolean //
-                        || receiver instanceof Byte  //
-                        || receiver instanceof Short //
-                        || receiver instanceof Character //
-                        || receiver instanceof Integer //
-                        || receiver instanceof Long //
-                        || receiver instanceof Float //
-                        || receiver instanceof Double //
+        return receiver instanceof TruffleObject || receiver instanceof Integer || receiver instanceof Double //
+                        || receiver instanceof Long || receiver instanceof Float //
+                        || receiver instanceof Boolean || receiver instanceof Character //
+                        || receiver instanceof Byte || receiver instanceof Short //
                         || receiver instanceof String;
     }
 
