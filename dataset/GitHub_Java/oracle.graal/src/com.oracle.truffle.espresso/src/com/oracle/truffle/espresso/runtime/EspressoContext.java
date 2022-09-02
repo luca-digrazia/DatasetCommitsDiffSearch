@@ -358,9 +358,14 @@ public final class EspressoContext {
             // Don't attempt guest thread creation
             return;
         }
-        if (getGuestThreadFromHost(hostThread) != null) {
-            // already a live guest thread for this host thread
-            return;
+        try {
+            if (getGuestThreadFromHost(hostThread) != null) {
+                // already a live guest thread for this host thread
+                return;
+            }
+        } catch (Exception e) {
+            // this will always happen if there are no live guest thread.
+            // Simply continue the creation of the new guest thread then.
         }
         StaticObject guestThread = meta.Thread.allocateInstance();
         // Allow guest Thread.currentThread() to work.
