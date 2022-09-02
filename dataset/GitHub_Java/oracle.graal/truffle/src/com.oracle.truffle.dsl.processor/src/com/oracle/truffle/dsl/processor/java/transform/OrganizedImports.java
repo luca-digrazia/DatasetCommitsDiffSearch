@@ -214,7 +214,7 @@ public final class OrganizedImports {
                         (anyEqualEnclosingTypes(enclosed, ElementUtils.castTypeElement(importType)) ||
                                         importFromEnclosingScope(enclosedType, ElementUtils.castTypeElement(importType)))) {
             return false; // same enclosing element -> no import
-        } else if (importType instanceof GeneratedTypeMirror && importPackagName.isEmpty()) {
+        } else if (importType instanceof GeneratedTypeMirror && ElementUtils.getPackageName(importType).isEmpty()) {
             return false;
         } else if (ElementUtils.isDeprecated(importType)) {
             return false;
@@ -283,12 +283,7 @@ public final class OrganizedImports {
             String importQualifiedName = symbols.get(symbol);
             Boolean needsImport = this.noImportSymbols.get(symbol);
             if (importQualifiedName != null && needsImport) {
-                String useSymbol = symbol;
-                int firstClassIndex = useSymbol.indexOf('.');
-                if (firstClassIndex != -1) {
-                    useSymbol = useSymbol.substring(0, firstClassIndex);
-                }
-                importObjects.add(new CodeImport(importQualifiedName, useSymbol, false));
+                importObjects.add(new CodeImport(importQualifiedName, symbol, false));
             }
         }
         return importObjects;
