@@ -24,8 +24,11 @@
  */
 package com.oracle.svm.truffle.api;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.graph.SourceLanguagePositionProvider;
+import org.graalvm.compiler.nodes.EncodedGraph;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
@@ -34,53 +37,72 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
-import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.PEGraphDecoder;
-import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
-import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
+import org.graalvm.compiler.replacements.PEGraphDecoder.SpecialCallTargetCacheKey;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
-import org.graalvm.compiler.truffle.compiler.TruffleConstantFieldProvider;
-import org.graalvm.compiler.truffle.compiler.phases.InstrumentPhase;
-import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
+import org.graalvm.compiler.truffle.compiler.PartialEvaluatorConfiguration;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerConfiguration;
+import org.graalvm.compiler.truffle.compiler.substitutions.TruffleDecodingPlugins;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.graal.phases.DeadStoreRemovalPhase;
 
-import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class SubstratePartialEvaluator extends PartialEvaluator {
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public SubstratePartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, SnippetReflectionProvider snippetReflection, Architecture architecture,
-                    InstrumentPhase.Instrumentation instrumentation) {
-        super(providers, configForRoot, snippetReflection, architecture, instrumentation, new KnownTruffleTypes(providers.getMetaAccess()));
-    }
-
-    @Override
-    protected PEGraphDecoder createGraphDecoder(StructuredGraph graph, final HighTierContext tierContext, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins,
-                    InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePlugins, ResolvedJavaMethod callInlined,
-                    SourceLanguagePositionProvider sourceLanguagePositionProvider) {
-        TruffleConstantFieldProvider compilationLocalConstantProvider = new TruffleConstantFieldProvider(providers.getConstantFieldProvider(), providers.getMetaAccess());
-        return new SubstratePEGraphDecoder(architecture, graph, providers.getMetaAccess(), providers.getConstantReflection(), compilationLocalConstantProvider, providers.getStampProvider(),
-                        loopExplosionPlugin, invocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, callInlined, sourceLanguagePositionProvider);
-    }
-
-    @Override
-    protected void doGraphPE(CompilableTruffleAST callTarget, StructuredGraph graph, HighTierContext tierContext, TruffleInliningPlan inliningDecision) {
-        super.doGraphPE(callTarget, graph, tierContext, inliningDecision);
-
-        new DeadStoreRemovalPhase().apply(graph);
-        new TruffleBoundaryPhase().apply(graph);
-    }
+    private final ConcurrentHashMap<ResolvedJavaMethod, Object> invocationPluginsCache;
+    private final ConcurrentHashMap<SpecialCallTargetCacheKey, Object> specialCallTargetCache;
 
     @Platforms(Platform.HOSTED_ONLY.class)
+    public SubstratePartialEvaluator(TruffleCompilerConfiguration config, GraphBuilderConfiguration graphBuilderConfigForRoot) {
+        super(config, graphBuilderConfigForRoot, new SubstrateKnownTruffleTypes(config.lastTier().providers().getMetaAccess()));
+        this.invocationPluginsCache = new ConcurrentHashMap<>();
+        this.specialCallTargetCache = new ConcurrentHashMap<>();
+    }
+
     @Override
-    protected InvocationPlugins createDecodingInvocationPlugins(Plugins parent) {
+    protected PEGraphDecoder createGraphDecoder(Request request, LoopExplosionPlugin loopExplosionPlugin,
+                    InvocationPlugins invocationPlugins,
+                    InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePlugins, SourceLanguagePositionProvider sourceLanguagePositionProvider,
+                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
+        return new SubstratePEGraphDecoder(architecture, request.graph, providers.copyWith(compilationLocalConstantProvider), loopExplosionPlugin, invocationPlugins, inlineInvokePlugins,
+                        parameterPlugin, nodePlugins, callInlined, sourceLanguagePositionProvider,
+                        specialCallTargetCache, invocationPluginsCache);
+    }
+
+    @Override
+    protected StructuredGraph.Builder customizeStructuredGraphBuilder(StructuredGraph.Builder builder) {
+        /*
+         * Substrate VM does not need a complete list of methods that were inlined during
+         * compilation. Therefore, we do not even store this information in encoded graphs that are
+         * part of the image heap.
+         */
+        return super.customizeStructuredGraphBuilder(builder).recordInlinedMethods(false);
+    }
+
+    @Override
+    public void truffleTier(Request request) {
+        super.truffleTier(request);
+        new DeadStoreRemovalPhase().apply(request.graph);
+        new TruffleBoundaryPhase().apply(request.graph);
+    }
+
+    @Override
+    protected void registerGraphBuilderInvocationPlugins(InvocationPlugins invocationPlugins, boolean canDelayIntrinsification) {
+        super.registerGraphBuilderInvocationPlugins(invocationPlugins, canDelayIntrinsification);
+        SubstrateTruffleGraphBuilderPlugins.registerInvocationPlugins(invocationPlugins, canDelayIntrinsification, (SubstrateKnownTruffleTypes) getKnownTruffleTypes());
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    @Override
+    protected InvocationPlugins createDecodingInvocationPlugins(PartialEvaluatorConfiguration peConfig, Plugins parent, Providers tierProviders) {
         InvocationPlugins decodingInvocationPlugins = new InvocationPlugins();
-        registerTruffleInvocationPlugins(decodingInvocationPlugins, false);
+        registerGraphBuilderInvocationPlugins(decodingInvocationPlugins, false);
+        TruffleDecodingPlugins.registerInvocationPlugins(decodingInvocationPlugins, tierProviders);
+        peConfig.registerDecodingInvocationPlugins(decodingInvocationPlugins, false, providers, config.architecture());
         decodingInvocationPlugins.closeRegistration();
         return decodingInvocationPlugins;
     }
