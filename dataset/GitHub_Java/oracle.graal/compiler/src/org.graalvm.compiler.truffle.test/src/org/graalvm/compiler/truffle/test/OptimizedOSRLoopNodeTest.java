@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -406,13 +406,9 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         TwoSilblingLoopNodesTest rootNode = new TwoSilblingLoopNodesTest(factory, new TestRepeatingNode(), new TestRepeatingNode());
         CallTarget target = runtime.createCallTarget(rootNode);
         target.call(OSR_THRESHOLD + 1, 1);
-        waitForCompiled(rootNode.getOSRTarget());
-        waitForCompiled(rootNode.getOSRTarget2());
         assertCompiled(rootNode.getOSRTarget());
         assertNotCompiled(rootNode.getOSRTarget2());
         target.call(1, OSR_THRESHOLD + 1);
-        waitForCompiled(rootNode.getOSRTarget());
-        waitForCompiled(rootNode.getOSRTarget2());
         assertCompiled(rootNode.getOSRTarget());
         assertCompiled(rootNode.getOSRTarget2());
         Assert.assertTrue(rootNode.getOSRTarget() != rootNode.getOSRTarget2());
