@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -165,7 +165,7 @@ public final class ArrayCopyCallNode extends FixedWithNextNode implements Lowera
             if (len.stamp(NodeView.DEFAULT).getStackKind() != JavaKind.Long) {
                 len = IntegerConvertNode.convert(len, StampFactory.forKind(JavaKind.Long), graph(), NodeView.DEFAULT);
             }
-            ForeignCallNode call = graph.add(new ForeignCallNode(desc, srcAddr, destAddr, len));
+            ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, desc, srcAddr, destAddr, len));
             graph.replaceFixedWithFixed(this, call);
         }
     }
