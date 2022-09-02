@@ -180,16 +180,23 @@ public class FlatNodeGenFactory {
     private final Map<String, CodeVariableElement> libraryConstants;
 
     private final boolean needsLocking;
+    private final GeneratorMode generatorMode;
 
-    public FlatNodeGenFactory(ProcessorContext context, NodeData node, Map<String, CodeVariableElement> libraryConstants) {
-        this(context, node, Arrays.asList(node), node.getSharedCaches(), libraryConstants);
+    public enum GeneratorMode {
+        DEFAULT,
+        EXPORTED_MESSAGE
     }
 
-    public FlatNodeGenFactory(ProcessorContext context, NodeData node,
+    public FlatNodeGenFactory(ProcessorContext context, GeneratorMode mode, NodeData node, Map<String, CodeVariableElement> libraryConstants) {
+        this(context, mode, node, Arrays.asList(node), node.getSharedCaches(), libraryConstants);
+    }
+
+    public FlatNodeGenFactory(ProcessorContext context, GeneratorMode mode, NodeData node,
                     Collection<NodeData> stateSharingNodes,
                     Map<CacheExpression, String> sharedCaches,
                     Map<String, CodeVariableElement> libraryConstants) {
         Objects.requireNonNull(node);
+        this.generatorMode = mode;
         this.context = context;
         this.sharingNodes = stateSharingNodes;
         this.node = node;
@@ -231,13 +238,12 @@ public class FlatNodeGenFactory {
             stateObjects.addAll(implicitCasts);
             excludeObjects.addAll(specializations);
         }
-
         this.state = new StateBitSet(stateObjects.toArray(new Object[0]));
         this.exclude = new ExcludeBitSet(excludeObjects.toArray(new SpecializationData[0]));
         this.executeAndSpecializeType = createExecuteAndSpecializeType();
         this.needsLocking = exclude.computeStateLength() != 0 || reachableSpecializations.stream().anyMatch((s) -> !s.getCaches().isEmpty());
         this.libraryConstants = libraryConstants;
-        substitutions.put(ElementUtils.findExecutableElement(types.LibraryFactory, "resolve"),
+        this.substitutions.put(ElementUtils.findExecutableElement(types.LibraryFactory, "resolve"),
                         (binary) -> substituteLibraryCall(binary));
     }
 
@@ -1364,7 +1370,6 @@ public class FlatNodeGenFactory {
 
         CodeTreeBuilder builder = method.createBuilder();
         if (isExecutableInUncached) {
-            builder.tree(GeneratorUtils.createTransferToInterpreter());
             builder.startThrow().startNew(context.getType(AssertionError.class));
             builder.doubleQuote("This execute method cannot be used for uncached node versions as it requires child nodes to be present. " +
                             "Use an execute method that takes all arguments as parameters.");
@@ -4853,30 +4858,28 @@ public class FlatNodeGenFactory {
         }
 
         public void addThrownExceptions(ExecutableElement calledMethod) {
-            if (!calledMethod.getThrownTypes().isEmpty()) {
-                CodeExecutableElement target = getMethod();
-                if (!calledMethod.getThrownTypes().isEmpty()) {
-                    outer: for (TypeMirror thrownType : calledMethod.getThrownTypes()) {
-                        if (!ElementUtils.isAssignable(thrownType, ProcessorContext.getInstance().getType(RuntimeException.class)) &&
-                                        !ElementUtils.isAssignable(thrownType, ProcessorContext.getInstance().getTypes().UnexpectedResultException)) {
+            TruffleTypes types = ProcessorContext.getInstance().getTypes();
+            outer: for (TypeMirror thrownType : calledMethod.getThrownTypes()) {
+                if (!ElementUtils.isAssignable(thrownType, ProcessorContext.getInstance().getType(RuntimeException.class))) {
+                    if (factory.generatorMode != GeneratorMode.EXPORTED_MESSAGE && ElementUtils.isAssignable(thrownType, types.UnexpectedResultException)) {
+                        continue outer;
+                    }
 
-                            for (TypeMirror caughtType : caughtTypes) {
-                                if (ElementUtils.typeEquals(caughtType, thrownType)) {
-                                    continue outer;
-                                }
-                            }
-
-                            boolean found = false;
-                            for (TypeMirror foundType : target.getThrownTypes()) {
-                                if (ElementUtils.typeEquals(thrownType, foundType)) {
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (!found) {
-                                target.getThrownTypes().add(thrownType);
-                            }
+                    for (TypeMirror caughtType : caughtTypes) {
+                        if (ElementUtils.typeEquals(caughtType, thrownType)) {
+                            continue outer;
                         }
+                    }
+
+                    boolean found = false;
+                    for (TypeMirror foundType : method.getThrownTypes()) {
+                        if (ElementUtils.typeEquals(thrownType, foundType)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        method.getThrownTypes().add(thrownType);
                     }
                 }
             }
@@ -4897,10 +4900,6 @@ public class FlatNodeGenFactory {
             } else {
                 return bool;
             }
-        }
-
-        public CodeExecutableElement getMethod() {
-            return method;
         }
 
         public static FrameState load(FlatNodeGenFactory factory, ExecutableTypeData type, int varargsThreshold, NodeExecutionMode mode, CodeExecutableElement method) {

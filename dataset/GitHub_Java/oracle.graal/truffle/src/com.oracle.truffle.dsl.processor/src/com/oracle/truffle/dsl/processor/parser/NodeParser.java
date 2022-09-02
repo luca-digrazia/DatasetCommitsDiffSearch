@@ -176,8 +176,12 @@ public final class NodeParser extends AbstractParser<NodeData> {
     }
 
     public static List<TypeMirror> getCachedAnnotations() {
-        TruffleTypes types = ProcessorContext.getInstance().getTypes();
-        return Arrays.asList(types.Cached, types.CachedLibrary, types.CachedContext, types.CachedLanguage, types.Extract);
+        ProcessorContext localContext = ProcessorContext.getInstance();
+        TypeMirror cacheAnnotation = localContext.getTypes().Cached;
+        TypeMirror cachedLibraryAnnotation = localContext.getTypes().CachedLibrary;
+        TypeMirror cachedContextAnnotation = localContext.getTypes().CachedContext;
+        TypeMirror cachedLanguageAnnotation = localContext.getTypes().CachedLanguage;
+        return Arrays.asList(cacheAnnotation, cachedLibraryAnnotation, cachedContextAnnotation, cachedLanguageAnnotation);
     }
 
     public static NodeParser createExportParser(TypeMirror exportLibraryType, TypeElement exportDeclarationType, boolean substituteThisToParent) {
@@ -1956,9 +1960,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
     private SpecializationData initializeCaches(SpecializationData specialization, DSLExpressionResolver resolver) {
         List<CacheExpression> caches = new ArrayList<>();
         List<CacheExpression> cachedLibraries = new ArrayList<>();
-
-        Parameter[] parameters = specialization.getParameters().toArray(new Parameter[0]);
-        parameters: for (Parameter parameter : parameters) {
+        parameters: for (Parameter parameter : specialization.getParameters()) {
             if (!parameter.getSpecification().isCached()) {
                 continue;
             }
@@ -1991,48 +1993,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
             caches.add(cache);
 
             if (cache.isCached()) {
-                boolean weakReference = getAnnotationValue(Boolean.class, foundCached, "weak");
-                if (weakReference) {
-                    if (ElementUtils.isPrimitive(cache.getParameter().getType())) {
-                        cache.addError("Cached parameters with primitive types cannot be weak. Set weak to false to resolve this.");
-                    }
-
-                    parseCached(cache, specialization, resolver, parameter);
-                    if (cache.hasErrors()) {
-                        continue;
-                    }
-
-                    DSLExpression sourceExpression = cache.getDefaultExpression();
-
-                    String weakName = "weak" + ElementUtils.firstLetterUpperCase(parameter.getLocalName()) + "Gen_";
-                    TypeMirror weakType = new CodeTypeMirror.DeclaredCodeTypeMirror(context.getTypeElement(types.TruffleWeakReference), Arrays.asList(cache.getParameter().getType()));
-                    CodeVariableElement weakVariable = new CodeVariableElement(weakType, weakName);
-                    Parameter weakParameter = new Parameter(parameter, weakVariable);
-
-                    DSLExpression newWeakReference = new DSLExpression.Call(null, "createNonNull", Arrays.asList(sourceExpression));
-                    newWeakReference.setResolvedTargetType(weakType);
-                    resolveCachedExpression(resolver, cache, weakType, newWeakReference, null);
-
-                    CacheExpression weakCache = new CacheExpression(weakParameter, foundCached);
-                    weakCache.setDefaultExpression(newWeakReference);
-                    weakCache.setUncachedExpression(newWeakReference);
-                    weakCache.setIgnoreInUncached(true);
-
-                    caches.add(0, weakCache);
-
-                    DSLExpressionResolver weakResolver = resolver.copy(Arrays.asList());
-                    weakResolver.addVariable(weakName, weakVariable);
-                    specialization.addParameter(specialization.getParameters().size(), weakParameter);
-
-                    DSLExpression parsedDefaultExpression = parseCachedExpression(weakResolver, cache, parameter.getType(), weakName + ".get()");
-                    cache.setDefaultExpression(parsedDefaultExpression);
-                    cache.setUncachedExpression(sourceExpression);
-                    cache.setAlwaysInitialized(true);
-                    cache.setRemoveIfNull(true);
-                } else {
-                    parseCached(cache, specialization, resolver, parameter);
-                }
-
+                parseCached(cache, specialization, resolver, parameter);
             } else if (cache.isCachedLibrary()) {
                 AnnotationMirror cachedLibrary = cache.getMessageAnnotation();
                 String expression = getCachedLibraryExpressions(cachedLibrary);
@@ -2168,14 +2129,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 cache.setLanguageType(languageType);
                 cache.setDefaultExpression(resolveCachedExpression(resolver, cache, null, accessReference, null));
                 cache.setUncachedExpression(resolveCachedExpression(resolver, cache, null, accessReference, null));
-                cache.setAlwaysInitialized(true);
-            } else if (cache.isExtract()) {
-                AnnotationMirror dynamic = cache.getMessageAnnotation();
-                String expression = ElementUtils.getAnnotationValue(String.class, dynamic, "value", false);
-
-                DSLExpression parsedExpression = parseCachedExpression(resolver, cache, parameter.getType(), expression);
-                cache.setDefaultExpression(parsedExpression);
-                cache.setUncachedExpression(parsedExpression);
                 cache.setAlwaysInitialized(true);
             }
         }
@@ -2421,7 +2374,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
         }
 
         List<String> expressionParameters = getAnnotationValueList(String.class, cachedAnnotation, "parameters");
-
         String initializer = getAnnotationValue(String.class, cachedAnnotation, "value");
         String uncached = getAnnotationValue(String.class, cachedAnnotation, "uncached");
 
@@ -2489,7 +2441,9 @@ public final class NodeParser extends AbstractParser<NodeData> {
                         cache.getMessages().clear();
                     }
                 }
+
             }
+
         }
 
         if (requireUncached && cache.getUncachedExpression() == null && cache.getDefaultExpression() != null) {
@@ -2497,6 +2451,8 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 cache.setUncachedExpression(cache.getDefaultExpression());
             }
         }
+
+        return;
     }
 
     private DSLExpression resolveCachedExpression(DSLExpressionResolver resolver, CacheExpression cache, TypeMirror targetType, DSLExpression expression, String originalString) {
