@@ -34,10 +34,10 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMNegateNodeGen;
 import com.oracle.truffle.llvm.nodes.op.LLVMPointerCompareNodeGen.LLVMPointToSameObjectNodeGen;
 import com.oracle.truffle.llvm.nodes.op.ToComparableValue.ManagedToComparableValue;
 import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
@@ -122,7 +122,7 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
             case EQ:
                 return LLVMAddressEqualsNodeGen.create(l, r);
             case NEQ:
-                return LLVMNegateNode.create(LLVMAddressEqualsNodeGen.create(l, r));
+                return LLVMNegateNodeGen.create(LLVMAddressEqualsNodeGen.create(null, null), l, r);
             default:
                 throw new AssertionError();
 
@@ -286,30 +286,18 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
         }
     }
 
-    public static final class LLVMNegateNode extends LLVMAbstractCompareNode {
+    @NodeChild(type = LLVMExpressionNode.class)
+    @NodeChild(type = LLVMExpressionNode.class)
+    public abstract static class LLVMNegateNode extends LLVMAbstractCompareNode {
         @Child private LLVMAbstractCompareNode booleanExpression;
 
-        private LLVMNegateNode(LLVMAbstractCompareNode booleanExpression) {
+        LLVMNegateNode(LLVMAbstractCompareNode booleanExpression) {
             this.booleanExpression = booleanExpression;
         }
 
-        public static LLVMAbstractCompareNode create(LLVMAbstractCompareNode booleanExpression) {
-            return new LLVMNegateNode(booleanExpression);
-        }
-
-        @Override
-        public boolean executeWithTarget(Object a, Object b) {
+        @Specialization
+        protected boolean doCompare(Object a, Object b) {
             return !booleanExpression.executeWithTarget(a, b);
-        }
-
-        @Override
-        public Object executeGeneric(VirtualFrame frame) {
-            return executeGenericBoolean(frame);
-        }
-
-        @Override
-        public boolean executeGenericBoolean(VirtualFrame frame) {
-            return !booleanExpression.executeGenericBoolean(frame);
         }
     }
 }

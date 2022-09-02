@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,6 +34,7 @@ import java.util.Objects;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.DynamicDispatchLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
@@ -43,35 +44,24 @@ import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 @ExportLibrary(DynamicDispatchLibrary.class)
 class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer {
 
-    static final LLVMPointerImpl NULL = new LLVMPointerImpl(null, 0, null);
-
-    final Object object;
+    final TruffleObject object;
     private final long offset;
 
     private final LLVMInteropType exportType;
 
-    LLVMPointerImpl(Object object, long offset, LLVMInteropType exportType) {
+    LLVMPointerImpl(TruffleObject object, long offset, LLVMInteropType exportType) {
         this.object = object;
         this.offset = offset;
         this.exportType = exportType;
     }
 
     @Override
-    @Deprecated
-    @SuppressWarnings("deprecation")
     public boolean equals(Object obj) {
-        CompilerAsserts.neverPartOfCompilation();
         if (!(obj instanceof LLVMPointerImpl)) {
             return false;
         }
         LLVMPointerImpl other = (LLVMPointerImpl) obj;
         return Objects.equals(this.object, other.object) && this.offset == other.offset;
-    }
-
-    @Override
-    public boolean isSame(LLVMPointer o) {
-        LLVMPointerImpl other = (LLVMPointerImpl) o; // can not fail, there is only one subclass
-        return this.object == other.object && this.offset == other.offset;
     }
 
     @Override
@@ -97,7 +87,7 @@ class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer {
     }
 
     @Override
-    public Object getObject() {
+    public TruffleObject getObject() {
         assert isManaged();
         return object;
     }

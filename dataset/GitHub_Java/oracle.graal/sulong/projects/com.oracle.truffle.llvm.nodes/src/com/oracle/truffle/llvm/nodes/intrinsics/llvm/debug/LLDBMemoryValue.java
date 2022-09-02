@@ -374,10 +374,6 @@ final class LLDBMemoryValue implements LLVMDebugValue {
 
     @Override
     public boolean isAlwaysSafeToDereference(long bitOffset) {
-        if (bitOffset == 0L && LLDBSupport.isNestedManagedPointer(pointer)) {
-            return true;
-        }
-
         final Object pointerRead = readAddress(bitOffset);
         if (LLVMManagedPointer.isInstance(pointerRead)) {
             return LLDBSupport.pointsToObjectAccess(LLVMManagedPointer.cast(pointerRead));
@@ -387,10 +383,6 @@ final class LLDBMemoryValue implements LLVMDebugValue {
 
     @Override
     public LLVMDebugValue dereferencePointer(long bitOffset) {
-        if (bitOffset == 0L && LLDBSupport.isNestedManagedPointer(pointer)) {
-            return new LLDBConstant.Pointer(LLVMPointer.cast(LLVMManagedPointer.cast(pointer).getObject()));
-        }
-
         if (!canRead(bitOffset, LLVMDebugTypeConstants.ADDRESS_SIZE) || !isByteAligned(bitOffset)) {
             return null;
         }
