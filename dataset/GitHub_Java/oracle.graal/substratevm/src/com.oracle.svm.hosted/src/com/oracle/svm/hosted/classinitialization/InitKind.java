@@ -46,7 +46,7 @@ public enum InitKind {
         return this.ordinal() > other.ordinal() ? this : other;
     }
 
-    boolean isRunTime() {
+    boolean isDelayed() {
         return this.equals(RUN_TIME);
     }
 

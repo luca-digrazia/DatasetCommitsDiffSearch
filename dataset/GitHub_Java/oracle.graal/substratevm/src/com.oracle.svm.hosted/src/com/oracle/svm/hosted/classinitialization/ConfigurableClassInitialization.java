@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,17 +25,17 @@
 package com.oracle.svm.hosted.classinitialization;
 
 import static com.oracle.svm.core.SubstrateOptions.TraceClassInitialization;
-import static com.oracle.svm.core.SubstrateOptions.TraceObjectInstantiation;
 
 import java.lang.reflect.Proxy;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -45,6 +45,7 @@ import com.oracle.graal.pointsto.constraints.UnsupportedFeatures;
 import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
 import com.oracle.graal.pointsto.reports.ReportUtils;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.WeakIdentityHashMap;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.ImageClassLoader;
@@ -77,12 +78,14 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
      */
     private final Map<Class<?>, InitKind> classInitKinds = new ConcurrentHashMap<>();
 
+    private static final int START_OF_THE_TRACE = 4;
+
     /*
-     * These two are intentionally static to keep the reference to objects and classes that were
+     * These two are intentionally static to keep the reference to object and classes that were
      * initialized in the JDK.
      */
-    private static final Map<Class<?>, StackTraceElement[]> initializedClasses = new ConcurrentHashMap<>();
-    private static final Map<Object, StackTraceElement[]> instantiatedObjects = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, StackTraceElement[]> initializedClasses = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<Object, StackTraceElement[]> instantiatedObjects = Collections.synchronizedMap(new WeakIdentityHashMap<>());
 
     private boolean configurationSealed;
 
@@ -135,7 +138,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     @Override
     public boolean canBeProvenSafe(Class<?> clazz) {
         InitKind initKind = specifiedInitKindFor(clazz);
-        return initKind == null || (initKind.isRunTime() && !isStrictlyDefined(clazz));
+        return initKind == null || (initKind.isDelayed() && !isStrictlyDefined(clazz));
     }
 
     private Boolean isStrictlyDefined(Class<?> clazz) {
@@ -284,21 +287,9 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         }
     }
 
-    private static boolean isClassListedInStringOption(String option, Class<?> clazz) {
-        return Arrays.asList(option.split(",")).contains(clazz.getName());
-    }
-
-    private static boolean isClassInitializationTracked(Class<?> clazz) {
-        return TraceClassInitialization.hasBeenSet() && isClassListedInStringOption(TraceClassInitialization.getValue(), clazz);
-    }
-
-    private static boolean isObjectInstantiationForClassTracked(Class<?> clazz) {
-        return TraceObjectInstantiation.hasBeenSet() && isClassListedInStringOption(TraceObjectInstantiation.getValue(), clazz);
-    }
-
     private static String classInitializationErrorMessage(Class<?> clazz, String action) {
-        if (!isClassInitializationTracked(clazz)) {
-            return "To see why " + clazz.getName() + " got initialized use " + SubstrateOptionsParser.commandArgument(TraceClassInitialization, clazz.getName());
+        if (!TraceClassInitialization.getValue()) {
+            return "To see why " + clazz.getTypeName() + " got initialized use " + SubstrateOptionsParser.commandArgument(SubstrateOptions.TraceClassInitialization, "+");
         } else if (initializedClasses.containsKey(clazz)) {
 
             StackTraceElement[] trace = initializedClasses.get(clazz);
@@ -329,8 +320,8 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
 
     @Override
     public String objectInstantiationTraceMessage(Object obj, String action) {
-        if (!isObjectInstantiationForClassTracked(obj.getClass())) {
-            return " To see how this object got instantiated use " + SubstrateOptionsParser.commandArgument(TraceObjectInstantiation, obj.getClass().getName()) + ".";
+        if (!TraceClassInitialization.getValue()) {
+            return " To see how this object got instantiated use " + SubstrateOptionsParser.commandArgument(SubstrateOptions.TraceClassInitialization, "+") + ".";
         } else if (instantiatedObjects.containsKey(obj)) {
             String culprit = null;
             StackTraceElement[] trace = instantiatedObjects.get(obj);
@@ -396,7 +387,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
             if (previousKind == InitKind.BUILD_TIME) {
                 throw UserError.abort("The information that the class should be initialized during image building has already been used, " +
                                 "so it is too late to register the class initializer of" + clazz.getTypeName() + " for re-running. The reason for re-run request is " + reason);
-            } else if (previousKind.isRunTime()) {
+            } else if (previousKind.isDelayed()) {
                 throw UserError.abort("Class or a superclass is already registered for delaying the class initializer, " +
                                 "so it is too late to register the class initializer of" + clazz.getTypeName() + " for re-running. The reason for re-run request is " + reason);
             }
@@ -426,9 +417,9 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     }
 
     @Override
-    public void reportClassInitialized(Class<?> clazz, StackTraceElement[] stackTrace) {
-        assert TraceClassInitialization.hasBeenSet();
-        initializedClasses.put(clazz, relevantStackTrace(stackTrace));
+    public void reportClassInitialized(Class<?> clazz) {
+        assert TraceClassInitialization.getValue();
+        initializedClasses.put(clazz, relevantStackTrace());
         /*
          * We don't do early failing here. Lambdas tend to initialize many classes that should not
          * be initialized, but effectively they do not change the behavior of the final image.
@@ -438,9 +429,9 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     }
 
     @Override
-    public void reportObjectInstantiated(Object o, StackTraceElement[] stackTrace) {
-        assert TraceObjectInstantiation.hasBeenSet();
-        instantiatedObjects.putIfAbsent(o, relevantStackTrace(stackTrace));
+    public void reportObjectInstantiated(Object o) {
+        assert TraceClassInitialization.getValue();
+        instantiatedObjects.putIfAbsent(o, relevantStackTrace());
     }
 
     /**
@@ -452,11 +443,13 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
      *
      * @return a stack trace that led to erroneous situation
      */
-    private static StackTraceElement[] relevantStackTrace(StackTraceElement[] stack) {
+    private static StackTraceElement[] relevantStackTrace() {
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
         ArrayList<StackTraceElement> filteredStack = new ArrayList<>();
-        int lastClinit = 0;
+        assert stack[START_OF_THE_TRACE - 1].getClassName().equals("org.graalvm.nativeimage.impl.clinit.ClassInitializationTracking");
+        int lastClinit = START_OF_THE_TRACE;
         boolean containsLambdaMetaFactory = false;
-        for (int i = 0; i < stack.length; i++) {
+        for (int i = START_OF_THE_TRACE; i < stack.length; i++) {
             StackTraceElement stackTraceElement = stack[i];
             if ("<clinit>".equals(stackTraceElement.getMethodName())) {
                 lastClinit = i;
@@ -466,7 +459,8 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
             }
             filteredStack.add(stackTraceElement);
         }
-        List<StackTraceElement> finalStack = lastClinit != 0 && !containsLambdaMetaFactory ? filteredStack.subList(0, lastClinit + 1) : filteredStack;
+        int lastClinitIndex = lastClinit - START_OF_THE_TRACE + 1;
+        List<StackTraceElement> finalStack = lastClinit != START_OF_THE_TRACE & !containsLambdaMetaFactory ? filteredStack.subList(0, lastClinitIndex) : filteredStack;
         return finalStack.toArray(new StackTraceElement[0]);
     }
 
@@ -504,7 +498,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
          */
         Set<Class<?>> illegalyInitialized = new HashSet<>();
         for (Map.Entry<Class<?>, InitKind> entry : classInitKinds.entrySet()) {
-            if (entry.getValue().isRunTime() && !UNSAFE.shouldBeInitialized(entry.getKey())) {
+            if (entry.getValue().isDelayed() && !UNSAFE.shouldBeInitialized(entry.getKey())) {
                 illegalyInitialized.add(entry.getKey());
             }
         }
@@ -521,18 +515,13 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
                                                     c.getTypeName(), "initialize-at-build-time")))
                                     .append("\n");
                 } else {
-                    assert specifiedKind.isRunTime() : "Specified kind must be the same as actual kind for type " + c.getTypeName();
+                    assert specifiedKind.isDelayed() : "Specified kind must be the same as actual kind for type " + c.getTypeName();
                     String reason = classInitializationConfiguration.lookupReason(c.getTypeName());
                     detailedMessage.append(c.getTypeName()).append(" the class was requested to be initialized at run time (").append(reason).append("). ")
                                     .append(classInitializationErrorMessage(c, "Try avoiding to initialize the class that caused initialization of " + c.getTypeName()))
                                     .append("\n");
                 }
             });
-
-            if (!TraceClassInitialization.hasBeenSet()) {
-                String traceClassInitArguments = illegalyInitialized.stream().map(Class::getName).collect(Collectors.joining(","));
-                System.out.println("To see how the classes got initialized, use " + SubstrateOptionsParser.commandArgument(TraceClassInitialization, traceClassInitArguments));
-            }
 
             throw UserError.abort(detailedMessage.toString());
         }
@@ -601,7 +590,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         InitKind result = superResult.max(clazzResult);
 
         if (memoize) {
-            if (!result.isRunTime()) {
+            if (!result.isDelayed()) {
                 result = result.max(ensureClassInitialized(clazz, false));
             }
             InitKind previous = classInitKinds.put(clazz, result);
