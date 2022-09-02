@@ -660,10 +660,7 @@ public abstract class SymbolTable {
         checkNotParsed();
         validateSingleTable();
         table = new TableInfo(initSize, maxSize);
-        module().addLinkAction((context, instance) -> {
-            final WasmTable wasmTable = context.tables().allocateTable(initSize, maxSize);
-            instance.setTable(wasmTable);
-        });
+        module().addLinkAction((context, instance) -> context.tables().allocateTable(initSize, maxSize));
     }
 
     void importTable(String moduleName, String tableName, int initSize, int maxSize) {
