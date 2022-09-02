@@ -169,7 +169,7 @@ public class Linker {
      */
     public void resetModuleState(WasmContext context, WasmModule module, byte[] data, boolean zeroMemory) {
         final BinaryParser reader = new BinaryParser(language, module, data);
-        reader.resetGlobalState(context);
+        reader.resetGlobalState();
         reader.resetMemoryState(context, zeroMemory);
     }
 

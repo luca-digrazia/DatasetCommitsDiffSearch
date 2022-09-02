@@ -104,10 +104,7 @@ public final class WasmInitialization implements Consumer<WasmContext>, TruffleO
                 final long address = getValue(addressGlobal);
                 final String valueGlobal = entry.getValue();
                 final long value = getValue(valueGlobal);
-                // TODO: This should most likely be a 32-bit store.
-                // I think that the only reason why it works right now is little-endianess.
-                // This will be checked in a separate PR.
-                memory.growToAddress(address);
+                // The memory array writes are indexed with 64-bit words.
                 memory.store_i64(null, address, value);
             }
         } catch (UnknownIdentifierException | UnsupportedMessageException e) {
