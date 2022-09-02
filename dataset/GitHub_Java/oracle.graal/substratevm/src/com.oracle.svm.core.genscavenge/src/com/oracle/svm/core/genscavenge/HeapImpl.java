@@ -59,7 +59,6 @@ import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.heap.ObjectVisitor;
 import com.oracle.svm.core.heap.PhysicalMemory;
 import com.oracle.svm.core.heap.ReferenceInternals;
-import com.oracle.svm.core.heap.RuntimeCodeInfoGCSupport;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicReference;
 import com.oracle.svm.core.locks.VMCondition;
 import com.oracle.svm.core.locks.VMMutex;
@@ -91,7 +90,6 @@ public final class HeapImpl extends Heap {
     private final HeapChunkProvider chunkProvider = new HeapChunkProvider();
     private final ObjectHeaderImpl objectHeaderImpl = new ObjectHeaderImpl();
     private final GCImpl gcImpl;
-    private final RuntimeCodeInfoGCSupportImpl runtimeCodeInfoGcSupport;
     private final HeapPolicy heapPolicy;
     private final ImageHeapInfo imageHeapInfo = new ImageHeapInfo();
     private HeapVerifier heapVerifier;
@@ -113,7 +111,6 @@ public final class HeapImpl extends Heap {
     @Platforms(Platform.HOSTED_ONLY.class)
     public HeapImpl(FeatureAccess access) {
         this.gcImpl = new GCImpl(access);
-        this.runtimeCodeInfoGcSupport = new RuntimeCodeInfoGCSupportImpl();
         this.heapPolicy = new HeapPolicy(access);
         if (getVerifyHeapBeforeGC() || getVerifyHeapAfterGC() || getVerifyStackBeforeGC() || getVerifyStackAfterGC() || getVerifyDirtyCardBeforeGC() || getVerifyDirtyCardAfterGC()) {
             this.heapVerifier = new HeapVerifier();
@@ -214,16 +211,9 @@ public final class HeapImpl extends Heap {
         return objectHeaderImpl;
     }
 
-    @Fold
     @Override
     public GC getGC() {
         return getGCImpl();
-    }
-
-    @Fold
-    @Override
-    public RuntimeCodeInfoGCSupport getRuntimeCodeInfoGCSupport() {
-        return runtimeCodeInfoGcSupport;
     }
 
     GCImpl getGCImpl() {
