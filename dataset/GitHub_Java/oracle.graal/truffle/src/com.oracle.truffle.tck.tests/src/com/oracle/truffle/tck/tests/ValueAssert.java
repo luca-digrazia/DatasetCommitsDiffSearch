@@ -508,9 +508,7 @@ public class ValueAssert {
                     if (value.isHostObject() && value.asHostObject() instanceof Map) {
                         expectedValues = value.asHostObject();
                     } else {
-                        if (value.isNull()) {
-                            assertNull(value.as(STRING_OBJECT_MAP));
-                        } else {
+                        if (!value.isNull()) {
                             Map<String, Object> stringMap = value.as(STRING_OBJECT_MAP);
                             assertTrue(expectedValues.equals(expectedValues));
                             assertTrue(stringMap.equals(stringMap));
@@ -521,11 +519,13 @@ public class ValueAssert {
                             for (String key : keySet) {
                                 assertTrue(value.hasMember(key));
                             }
-                            assertNotNull(value.as(STRING_OBJECT_MAP).hashCode());
-                            assertNotNull(value.as(STRING_OBJECT_MAP).toString());
-                            assertEquals(value.toString(), value.as(Map.class).toString());
                         }
+                        assertNotNull(value.as(STRING_OBJECT_MAP).hashCode());
+                        assertNotNull(value.as(STRING_OBJECT_MAP).toString());
+
                     }
+                    assertEquals(value.toString(), value.as(Map.class).toString());
+
                     break;
                 case NATIVE:
                     assertTrue(msg, value.isNativePointer());
