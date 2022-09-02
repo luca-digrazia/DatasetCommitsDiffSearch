@@ -45,7 +45,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.ExactMath;
 import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitch;
 import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitchBoundary;
 import com.oracle.truffle.api.Truffle;
@@ -75,6 +74,8 @@ import org.graalvm.wasm.memory.WasmMemory;
 import static org.graalvm.wasm.BinaryStreamParser.length;
 import static org.graalvm.wasm.BinaryStreamParser.value;
 import static org.graalvm.wasm.WasmMath.addExactUnsigned;
+import static org.graalvm.wasm.WasmMath.truncDouble;
+import static org.graalvm.wasm.WasmMath.truncFloat;
 import static org.graalvm.wasm.constants.Instructions.BLOCK;
 import static org.graalvm.wasm.constants.Instructions.BR;
 import static org.graalvm.wasm.constants.Instructions.BR_IF;
@@ -1600,13 +1601,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             }
             case WasmType.F32_TYPE: {
                 int address = instance().globalAddress(index);
-                int value = context.globals().loadFloatAsInt(address);
+                int value = context.globals().loadAsInt(address);
                 pushInt(stack, stackPointer, value);
                 break;
             }
             case WasmType.F64_TYPE: {
                 int address = instance().globalAddress(index);
-                long value = context.globals().loadDoubleAsLong(address);
+                long value = context.globals().loadAsLong(address);
                 push(stack, stackPointer, value);
                 break;
             }
@@ -2489,7 +2490,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     private void f32_trunc(long[] stack, int stackPointer) {
         float x = popAsFloat(stack, stackPointer - 1);
-        float result = ExactMath.truncate(x);
+        float result = truncFloat(x);
         pushFloat(stack, stackPointer - 1, result);
     }
 
@@ -2580,7 +2581,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     private void f64_trunc(long[] stack, int stackPointer) {
         double x = popAsDouble(stack, stackPointer - 1);
-        double result = ExactMath.truncate(x);
+        double result = truncDouble(x);
         pushDouble(stack, stackPointer - 1, result);
     }
 
