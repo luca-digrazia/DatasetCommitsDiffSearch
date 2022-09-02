@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,7 +52,6 @@ import com.oracle.truffle.api.OptimizationFailedException;
 import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.DefaultCompilerOptions;
@@ -553,15 +552,15 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     private boolean shouldCompileImpl(int intCallCount, int intLoopCallCount) {
-        return !compilationFailed //
-                        && !isSubmittedForCompilation() //
+        return intCallCount >= engine.callThresholdInInterpreter //
+                        && intLoopCallCount >= engine.callAndLoopThresholdInInterpreter //
+                        && !compilationFailed //
+                        && !isSubmittedForCompilation()
                         /*
                          * Compilation of OSR loop call target is scheduled in
                          * OptimizedOSRLoopNode#compileImpl.
                          */
-                        && !(getRootNode() instanceof OSRRootNode) //
-                        && intCallCount >= engine.callThresholdInInterpreter //
-                        && intLoopCallCount >= engine.callAndLoopThresholdInInterpreter * runtime().compilationThresholdScale(); //
+                        && !(getRootNode() instanceof OSRRootNode);
     }
 
     public final boolean shouldCompile() {
@@ -593,10 +592,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         this.callCount = firstTierCallCount == Integer.MAX_VALUE ? firstTierCallCount : ++firstTierCallCount;
         int firstTierLoopCallCount = this.callAndLoopCount;
         this.callAndLoopCount = firstTierLoopCallCount == Integer.MAX_VALUE ? firstTierLoopCallCount : ++firstTierLoopCallCount;
-        if (!compilationFailed //
-                        && !isSubmittedForCompilation()//
-                        && firstTierCallCount >= engine.callThresholdInFirstTier //
-                        && firstTierLoopCallCount >= engine.callAndLoopThresholdInFirstTier * runtime().compilationThresholdScale()) {
+        if (firstTierCallCount >= engine.callThresholdInFirstTier //
+                        && firstTierLoopCallCount >= engine.callAndLoopThresholdInFirstTier //
+                        && !compilationFailed //
+                        && !isSubmittedForCompilation()) {
             return lastTierCompile();
         }
         return false;
@@ -618,12 +617,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             GraalRuntimeAccessor.LANGUAGE.onThrowable(null, this, profiledT, frame);
             throw rethrow(profiledT);
         } finally {
+            // this assertion is needed to keep the values from being cleared as non-live locals
+            assert frame != null && this != null;
             if (CompilerDirectives.inInterpreter() && inCompiled) {
                 notifyDeoptimized(frame);
             }
-            TruffleSafepoint.poll(rootNode);
-            // this assertion is needed to keep the values from being cleared as non-live locals
-            assert frame != null && this != null;
         }
     }
 
@@ -664,7 +662,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     public final OptionValues getOptionValues() {
-        return engine.getEngineOptions();
+        return engine.engineOptions;
     }
 
     public final <T> T getOptionValue(OptionKey<T> key) {

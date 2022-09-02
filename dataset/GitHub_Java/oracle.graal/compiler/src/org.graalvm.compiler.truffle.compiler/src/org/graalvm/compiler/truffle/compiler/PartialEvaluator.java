@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -308,7 +308,6 @@ public abstract class PartialEvaluator {
             Objects.requireNonNull(compilable);
             Objects.requireNonNull(inliningPlan);
             Objects.requireNonNull(compilationId);
-            Objects.requireNonNull(task);
             this.options = options;
             this.debug = debug;
             this.compilable = compilable;
@@ -333,7 +332,7 @@ public abstract class PartialEvaluator {
         }
 
         public boolean isFirstTier() {
-            return task.isFirstTier();
+            return task != null && task.isFirstTier();
         }
     }
 
@@ -349,7 +348,7 @@ public abstract class PartialEvaluator {
                 ComputeLoopFrequenciesClosure.compute(request.graph);
                 applyInstrumentationPhases(request);
                 handler.reportPerformanceWarnings(request.compilable, request.graph);
-                if (request.task.isCancelled()) {
+                if (request.task != null && request.task.isCancelled()) {
                     return null;
                 }
                 new VerifyFrameDoesNotEscapePhase().apply(request.graph, false);
