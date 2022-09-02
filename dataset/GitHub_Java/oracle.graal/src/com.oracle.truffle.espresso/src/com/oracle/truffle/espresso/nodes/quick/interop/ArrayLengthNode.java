@@ -32,7 +32,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
@@ -50,9 +49,9 @@ public abstract class ArrayLengthNode extends QuickNode {
     @Override
     public final int execute(VirtualFrame frame) {
         BytecodeNode root = getBytecodesNode();
-        StaticObject array = nullCheck(root.popObject(frame, top - 1));
+        StaticObject array = root.popObject(frame, top - 1);
         root.putInt(frame, top - 1, executeGetLength(array));
-        return Bytecodes.stackEffectOf(Bytecodes.ARRAYLENGTH);
+        return 0;
     }
 
     abstract int executeGetLength(StaticObject array);
