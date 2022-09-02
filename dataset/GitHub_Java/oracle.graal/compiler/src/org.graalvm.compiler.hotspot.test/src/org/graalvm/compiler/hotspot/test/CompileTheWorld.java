@@ -70,7 +70,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -94,7 +93,6 @@ import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalCompiler;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntime;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-import org.graalvm.compiler.hotspot.test.CompileTheWorld.LibGraalParams.OptionsBuffer;
 import org.graalvm.compiler.hotspot.test.CompileTheWorld.LibGraalParams.StackTraceBuffer;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
@@ -103,7 +101,6 @@ import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.libgraal.LibGraal;
-import org.graalvm.libgraal.LibGraalIsolate;
 import org.graalvm.libgraal.LibGraalScope;
 import org.graalvm.util.OptionsEncoder;
 
@@ -209,12 +206,6 @@ public final class CompileTheWorld {
     private AtomicLong compileTime = new AtomicLong();
     private AtomicLong memoryUsed = new AtomicLong();
 
-    /**
-     * Per-isolate values used to control if metrics should be printed and reset as part of the next
-     * CTW compilation in the isolate.
-     */
-    final Map<Long, AtomicBoolean> printMetrics = new HashMap<>();
-
     private boolean verbose;
 
     /**
@@ -260,6 +251,7 @@ public final class CompileTheWorld {
                     Object value = cursor.getValue();
                     map.put(key.getName(), value);
                 }
+
                 byte[] encoded = OptionsEncoder.encode(map);
                 size = encoded.length;
                 hash = Arrays.hashCode(encoded);
@@ -310,22 +302,7 @@ public final class CompileTheWorld {
             }
         }
 
-        private final OptionValues inputOptions;
-        private final List<OptionsBuffer> optionsBuffers = new ArrayList<>();
-
-        /**
-         * Gets the isolate-specific buffer used to pass options to an isolate.
-         */
-        OptionsBuffer getOptions() {
-            return LibGraalScope.current().getIsolate().getSingleton(OptionsBuffer.class, () -> {
-                OptionsBuffer optionsBuffer = new OptionsBuffer(inputOptions);
-                synchronized (optionsBuffers) {
-                    optionsBuffers.add(optionsBuffer);
-                }
-                return optionsBuffer;
-            });
-
-        }
+        final OptionsBuffer options;
 
         private final List<StackTraceBuffer> stackTraceBuffers = new ArrayList<>();
 
@@ -347,15 +324,13 @@ public final class CompileTheWorld {
             }
         };
 
-        LibGraalParams(OptionValues inputOptions) {
-            this.inputOptions = inputOptions;
+        LibGraalParams(OptionValues options) {
+            this.options = new OptionsBuffer(options);
         }
 
         @Override
         public void close() {
-            for (OptionsBuffer options : optionsBuffers) {
-                options.free();
-            }
+            options.free();
             synchronized (stackTraceBuffers) {
                 for (StackTraceBuffer buffer : stackTraceBuffers) {
                     buffer.free();
@@ -764,7 +739,6 @@ public final class CompileTheWorld {
             if (threadCount == 0) {
                 threadCount = Runtime.getRuntime().availableProcessors();
             }
-            TTY.printf("CompileTheWorld : Using %d threads%n", threadCount);
         } else {
             running = true;
         }
@@ -903,29 +877,17 @@ public final class CompileTheWorld {
         }
         int wakeups = 0;
         long lastCompletedTaskCount = 0;
-        int statsInterval = Options.StatsInterval.getValue(harnessOptions);
-        long taskCount = threadPool.getTaskCount();
-        long completedTaskCount;
-        do {
-            completedTaskCount = threadPool.getCompletedTaskCount();
-            if (wakeups % statsInterval == 0 || completedTaskCount == taskCount) {
-                long compiles = completedTaskCount - lastCompletedTaskCount;
-                double rate = (double) compiles / statsInterval;
-                long percent = completedTaskCount * 100 / taskCount;
-                TTY.printf("CompileTheWorld : [%2d%%, %.1f compiles/s] Waiting for %d compiles, just completed %d compiles%n",
-                                percent, rate, taskCount - completedTaskCount, compiles);
-                if (libgraal != null) {
-                    armPrintMetrics();
-                }
+        for (long completedTaskCount = threadPool.getCompletedTaskCount(); completedTaskCount != threadPool.getTaskCount(); completedTaskCount = threadPool.getCompletedTaskCount()) {
+            if (wakeups % 15 == 0) {
+                TTY.printf("CompileTheWorld : Waiting for %d compiles, just completed %d compiles%n", threadPool.getTaskCount() - completedTaskCount, completedTaskCount - lastCompletedTaskCount);
                 lastCompletedTaskCount = completedTaskCount;
             }
             try {
                 threadPool.awaitTermination(1, TimeUnit.SECONDS);
                 wakeups++;
             } catch (InterruptedException e) {
-
             }
-        } while (completedTaskCount != taskCount);
+        }
         threadPool.shutdown();
         threadPool = null;
 
@@ -980,26 +942,6 @@ public final class CompileTheWorld {
         }
     }
 
-    /**
-     * Requests that the next compilation in each libgraal isolate prints and resets global metrics.
-     */
-    private void armPrintMetrics() {
-        synchronized (printMetrics) {
-            for (AtomicBoolean value : printMetrics.values()) {
-                value.set(true);
-            }
-        }
-    }
-
-    /**
-     * Determines if the next compilation in {@code isolate} should print and reset global metrics.
-     */
-    private boolean shouldPrintMetrics(LibGraalIsolate isolate) {
-        synchronized (printMetrics) {
-            return printMetrics.computeIfAbsent(isolate.getId(), id -> new AtomicBoolean()).getAndSet(false);
-        }
-    }
-
     private synchronized void startThreads() {
         running = true;
         // Wake up any waiting threads
@@ -1045,7 +987,6 @@ public final class CompileTheWorld {
                     long methodHandle,
                     boolean useProfilingInfo,
                     boolean installAsDefault,
-                    boolean printMetrics,
                     long optionsAddress,
                     int optionsSize,
                     int optionsHash,
@@ -1071,15 +1012,13 @@ public final class CompileTheWorld {
                 StackTraceBuffer stackTraceBuffer = libgraal.getStackTraceBuffer();
 
                 long stackTraceBufferAddress = stackTraceBuffer.getAddress();
-                OptionsBuffer options = libgraal.getOptions();
                 long installedCodeHandle = compileMethodInLibgraal(isolateThread,
                                 methodHandle,
                                 useProfilingInfo,
                                 installAsDefault,
-                                shouldPrintMetrics(LibGraalScope.current().getIsolate()),
-                                options.getAddress(),
-                                options.size,
-                                options.hash,
+                                libgraal.options.getAddress(),
+                                libgraal.options.size,
+                                libgraal.options.hash,
                                 stackTraceBufferAddress,
                                 stackTraceBuffer.size);
 
@@ -1162,7 +1101,6 @@ public final class CompileTheWorld {
         public static final OptionKey<Integer> MaxClasses = new OptionKey<>(Integer.MAX_VALUE);
         public static final OptionKey<String> Config = new OptionKey<>(null);
         public static final OptionKey<Boolean> MultiThreaded = new OptionKey<>(false);
-        public static final OptionKey<Integer> StatsInterval = new OptionKey<>(15);
         public static final OptionKey<Integer> Threads = new OptionKey<>(0);
         public static final OptionKey<Boolean> InvalidateInstalledCode = new OptionKey<>(true);
 
@@ -1185,7 +1123,6 @@ public final class CompileTheWorld {
                                    "'PartialEscapeAnalysis=false PrintCompilation=true'. " +
                                    "Unless explicitly enabled with 'Inline=true' here, inlining is disabled.",
                   "MultiThreaded", "Run using multiple threads for compilation.",
-                  "StatsInterval", "Report progress stats every N seconds.",
                         "Threads", "Number of threads to use for multithreaded execution. Defaults to Runtime.getRuntime().availableProcessors().",
         "InvalidateInstalledCode", "Invalidate the generated code so the code cache doesn't fill up.");
         // @formatter:on
