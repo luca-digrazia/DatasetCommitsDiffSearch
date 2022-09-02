@@ -163,7 +163,7 @@ public class NativeImageMojo extends AbstractMojo {
         addClasspath(project.getArtifact());
         String classpathStr = classpath.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator));
 
-        Path nativeImageExecutable = getMojoJavaHome().resolve("bin").resolve(withExeSuffix("native-image"));
+        Path nativeImageExecutable = getJavaHome().resolve("bin").resolve(withExeSuffix("native-image"));
         if (Files.isExecutable(nativeImageExecutable)) {
             String nativeImageExecutableVersion = "Unknown";
             Process versionCheckProcess = null;
@@ -298,7 +298,7 @@ public class NativeImageMojo extends AbstractMojo {
         classpath.add(jarFilePath);
     }
 
-    private static Path getMojoJavaHome() {
+    private static Path getJavaHome() {
         return Paths.get(System.getProperty("java.home"));
     }
 
@@ -393,11 +393,6 @@ public class NativeImageMojo extends AbstractMojo {
         @Override
         public Path getWorkingDirectory() {
             return NativeImageMojo.this.getWorkingDirectory();
-        }
-
-        @Override
-        public Path getJavaHome() {
-            return getMojoJavaHome();
         }
 
         @Override
