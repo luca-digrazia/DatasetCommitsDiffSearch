@@ -139,13 +139,10 @@ public class NativeImage {
         }
 
         abstract boolean consume(Queue<String> args);
-
-        void addFallbackBuildArgs(@SuppressWarnings("unused") List<String> buildArgs) {
-            /* Override to forward fallback relevant args */
-        }
     }
 
     final APIOptionHandler apiOptionHandler;
+    final DefaultOptionHandler defaultOptionHandler;
 
     public static final String oH = "-H:";
     static final String oR = "-R:";
@@ -298,7 +295,10 @@ public class NativeImage {
 
             String[] flagsForVersion = graalCompilerFlags.get(javaVersion);
             if (flagsForVersion == null) {
-                showError("Image building not supported for Java version " + javaVersion);
+                showError(String.format("Image building not supported for Java version %s in %s with VM configuration \"%s\"",
+                                System.getProperty("java.version"),
+                                System.getProperty("java.home"),
+                                System.getProperty("java.vm.name")));
             }
 
             if (useJVMCINativeLibrary == null) {
@@ -556,7 +556,7 @@ public class NativeImage {
         }
     }
 
-    private ArrayList<String> createFallbackBuildArgs() {
+    protected ArrayList<String> createFallbackBuildArgs() {
         ArrayList<String> buildArgs = new ArrayList<>();
         Collection<String> fallbackSystemProperties = customJavaArgs.stream()
                         .filter(s -> s.startsWith("-D"))
@@ -583,9 +583,7 @@ public class NativeImage {
         buildArgs.add(FallbackExecutor.class.getName());
         buildArgs.add(imageName);
 
-        for (OptionHandler<? extends NativeImage> handler : optionHandlers) {
-            handler.addFallbackBuildArgs(buildArgs);
-        }
+        defaultOptionHandler.addFallbackBuildArgs(buildArgs);
         return buildArgs;
     }
 
@@ -639,7 +637,8 @@ public class NativeImage {
         optionRegistry = new MacroOption.Registry();
 
         /* Default handler needs to be fist */
-        registerOptionHandler(new DefaultOptionHandler(this));
+        defaultOptionHandler = new DefaultOptionHandler(this);
+        registerOptionHandler(defaultOptionHandler);
         apiOptionHandler = new APIOptionHandler(this);
         registerOptionHandler(apiOptionHandler);
         registerOptionHandler(new MacroOptionHandler(this));
@@ -935,7 +934,7 @@ public class NativeImage {
         } else {
             args.accept(oH(resourceType.optionKey) + resourceRoot.relativize(resourcePath));
         }
-        args.apply(true);
+        args.apply();
     }
 
     private int completeImageBuild() {
@@ -1165,10 +1164,11 @@ public class NativeImage {
             if (resourceType == MetaInfFileType.Properties) {
                 Map<String, String> properties = loadProperties(Files.newInputStream(resourcePath));
                 forEachPropertyValue(properties.get("Args"), args, resolver);
+                args.apply();
             } else {
                 args.accept(oH(resourceType.optionKey) + resourceRoot.relativize(resourcePath));
+                args.apply();
             }
-            args.apply(true);
             extractionResults.put(classpathEntry, new ArrayList<>(nativeImage.imageBuilderArgs));
         };
         for (String entry : imageClasspath) {
@@ -1204,7 +1204,11 @@ public class NativeImage {
             try {
                 nativeImage.prepareImageBuildArgs();
             } catch (NativeImageError e) {
-                throw showError("Requirements for building native images are not fulfilled", nativeImage.isVerbose() ? e : null);
+                if (nativeImage.isVerbose()) {
+                    throw showError("Requirements for building native images are not fulfilled", e);
+                } else {
+                    throw showError("Requirements for building native images are not fulfilled [cause: " + e.getMessage() + "]", null);
+                }
             }
             int buildStatus = nativeImage.completeImageBuild();
             if (buildStatus == 2) {
@@ -1266,35 +1270,22 @@ public class NativeImage {
     }
 
     class NativeImageArgsProcessor implements Consumer<String> {
-        Queue<String> args = new ArrayDeque<>();
+        ArrayDeque<String> args = new ArrayDeque<>();
 
         @Override
         public void accept(String arg) {
             args.add(arg);
         }
 
-        List<String> apply(boolean strict) {
-            List<String> leftoverArgs = new ArrayList<>();
+        void apply() {
             while (!args.isEmpty()) {
                 boolean consumed = false;
-                for (int index = optionHandlers.size() - 1; index >= 0; --index) {
-                    OptionHandler<? extends NativeImage> handler = optionHandlers.get(index);
-                    int numArgs = args.size();
-                    if (handler.consume(args)) {
-                        assert args.size() < numArgs : "OptionHandler pretends to consume argument(s) but isn't: " + handler.getClass().getName();
-                        consumed = true;
-                        break;
-                    }
-                }
+                consumed = consumed || apiOptionHandler.consume(args);
+                consumed = consumed || defaultOptionHandler.consume(args);
                 if (!consumed) {
-                    if (strict) {
-                        showError("Property 'Args' contains invalid entry '" + args.peek() + "'");
-                    } else {
-                        leftoverArgs.add(args.poll());
-                    }
+                    showError("Property 'Args' contains invalid entry '" + args.peek() + "'");
                 }
             }
-            return leftoverArgs;
         }
     }
 
@@ -1328,15 +1319,14 @@ public class NativeImage {
         Path classpathEntry;
         try {
             classpathEntry = canonicalize(classpath);
+            processClasspathNativeImageMetaInf(classpathEntry);
         } catch (NativeImageError e) {
             if (isVerbose()) {
                 showWarning("Invalid classpath entry: " + classpath);
             }
             /* Allow non-existent classpath entries to comply with `java` command behaviour. */
-            customImageClasspath.add(canonicalize(classpath, false));
-            return;
+            classpathEntry = canonicalize(classpath, false);
         }
-        processClasspathNativeImageMetaInf(classpathEntry);
         customImageClasspath.add(classpathEntry);
     }
 
@@ -1444,31 +1434,45 @@ public class NativeImage {
     }
 
     private List<String> processNativeImageArgs() {
-        NativeImageArgsProcessor argsProcessor = new NativeImageArgsProcessor();
+        List<String> leftoverArgs = new ArrayList<>();
+        Queue<String> arguments = new ArrayDeque<>();
         String defaultNativeImageArgs = getUserConfigProperties().get(pKeyNativeImageArgs);
         if (defaultNativeImageArgs != null && !defaultNativeImageArgs.isEmpty()) {
-            for (String defaultArg : defaultNativeImageArgs.split(" ")) {
-                argsProcessor.accept(defaultArg);
-            }
+            arguments.addAll(Arrays.asList(defaultNativeImageArgs.split(" ")));
         }
         for (String arg : config.getBuildArgs()) {
             switch (arg) {
                 case "--language:all":
                     for (String lang : optionRegistry.getAvailableOptions(MacroOptionKind.Language)) {
-                        argsProcessor.accept("--language:" + lang);
+                        arguments.add("--language:" + lang);
                     }
                     break;
                 case "--tool:all":
                     for (String lang : optionRegistry.getAvailableOptions(MacroOptionKind.Tool)) {
-                        argsProcessor.accept("--tool:" + lang);
+                        arguments.add("--tool:" + lang);
                     }
                     break;
                 default:
-                    argsProcessor.accept(arg);
+                    arguments.add(arg);
                     break;
             }
         }
-        return argsProcessor.apply(false);
+        while (!arguments.isEmpty()) {
+            boolean consumed = false;
+            for (int index = optionHandlers.size() - 1; index >= 0; --index) {
+                OptionHandler<? extends NativeImage> handler = optionHandlers.get(index);
+                int numArgs = arguments.size();
+                if (handler.consume(arguments)) {
+                    assert arguments.size() < numArgs : "OptionHandler pretends to consume argument(s) but isn't: " + handler.getClass().getName();
+                    consumed = true;
+                    break;
+                }
+            }
+            if (!consumed) {
+                leftoverArgs.add(arguments.poll());
+            }
+        }
+        return leftoverArgs;
     }
 
     protected String getXmsValue() {
