@@ -30,6 +30,8 @@
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
 import java.util.List;
+import java.util.stream.Collectors;
+
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
@@ -44,35 +46,28 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public class DebugExprFunctionCallNode extends LLVMExpressionNode {
 
     private final String functionName;
-    @Children private final LLVMExpressionNode[] arguments;
+    private DebugExprType type;
+    private Object member;
+    private List<LLVMExpressionNode> arguments;
     private Iterable<Scope> scopes;
 
     public DebugExprFunctionCallNode(String functionName, List<DebugExpressionPair> arguments, Iterable<Scope> scopes) {
         this.functionName = functionName;
+        this.arguments = arguments.stream().map(dp -> dp.getNode()).collect(Collectors.toList());
         this.scopes = scopes;
-        this.arguments = new LLVMExpressionNode[arguments.size()];
-        for (int i = 0; i < this.arguments.length; i++) {
-            this.arguments[i] = arguments.get(i).getNode();
-        }
+        this.type = null;
     }
 
     public DebugExprType getType() {
-        InteropLibrary library = InteropLibrary.getFactory().getUncached();
-        for (Scope scope : scopes) {
-            Object vars = scope.getVariables();
-            if (!library.isMemberExisting(vars, functionName))
-                continue;
-            try {
-                Object member = library.readMember(vars, functionName);
-                System.out.println(member.getClass().getName());
-                return DebugExprType.getIntType(32, true);
-            } catch (UnsupportedMessageException e) {
-                throw DebugExprException.create(this, "error while accessing function " + functionName);
-            } catch (UnknownIdentifierException e) {
-                throw DebugExprException.symbolNotFound(this, functionName, null);
-            }
+        if (type == null) {
+            // TODO change later!!!!
+            type = DebugExprType.getIntType(32, true);
         }
-        throw DebugExprException.create(this, "no type found for function " + functionName);
+        return type;
+    }
+
+    public Object getMember() {
+        return member;
     }
 
     @Override
@@ -83,26 +78,26 @@ public class DebugExprFunctionCallNode extends LLVMExpressionNode {
             if (!library.isMemberExisting(vars, functionName))
                 continue;
             try {
-                Object member = library.readMember(vars, functionName);
+                member = library.readMember(vars, functionName);
                 if (library.isExecutable(member)) {
                     try {
-                        Object[] argumentArr = new Object[arguments.length];
-                        for (int i = 0; i < arguments.length; i++) {
-                            argumentArr[i] = arguments[i].executeGeneric(frame);
-                        }
+                        Object[] argumentArr = arguments.stream().map(n -> n.executeGeneric(frame)).toArray();
                         return library.execute(member, argumentArr);
                     } catch (UnsupportedTypeException e) {
-                        throw DebugExprException.create(this, "actual and formal parameters of " + functionName + " do not match");
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
                     } catch (ArityException e) {
-                        throw DebugExprException.create(this, functionName + " requires " + e.getExpectedArity() + " argument(s) but got " + e.getActualArity());
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
                     }
                 } else {
                     throw DebugExprException.create(this, functionName + " is not invocable");
                 }
             } catch (UnsupportedMessageException e1) {
-                throw DebugExprException.create(this, "Error while accessing function " + functionName);
+                // TODO Auto-generated catch block
+                e1.printStackTrace();
             } catch (UnknownIdentifierException e1) {
-                throw DebugExprException.symbolNotFound(this, e1.getUnknownIdentifier(), functionName);
+                throw DebugExprException.symbolNotFound(this, e1.getUnknownIdentifier(), member);
             }
 
         }
