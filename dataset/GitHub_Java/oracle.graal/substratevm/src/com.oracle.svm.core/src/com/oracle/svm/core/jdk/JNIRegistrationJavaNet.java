@@ -117,10 +117,9 @@ class JNIRegistrationJavaNet extends JNIRegistrationUtil implements Feature {
 
             a.registerReachabilityHandler(JNIRegistrationJavaNet::registerPlainSocketImplInitProto,
                             method(a, "java.net.PlainSocketImpl", "initProto"));
-            if (JavaVersionUtil.JAVA_SPEC <= 8) {
-                a.registerReachabilityHandler(JNIRegistrationJavaNet::registerExtendedOptionsImplInit,
-                        method(a, "sun.net.ExtendedOptionsImpl", "init"));
-            }
+
+            a.registerReachabilityHandler(JNIRegistrationJavaNet::registerExtendedOptionsImplInit,
+                            method(a, "sun.net.ExtendedOptionsImpl", "init"));
         }
     }
 
