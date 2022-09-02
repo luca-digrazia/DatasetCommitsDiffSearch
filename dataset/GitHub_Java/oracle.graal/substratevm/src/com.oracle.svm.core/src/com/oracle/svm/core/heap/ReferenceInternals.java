@@ -167,6 +167,8 @@ public final class ReferenceInternals {
                     enqueueDirectly(ref);
                 }
             }
+        } catch (StackOverflowError | OutOfMemoryError e) {
+            throw e;
         } catch (Throwable t) {
             VMError.shouldNotReachHere("ReferenceQueue and Cleaner must handle all potential exceptions", t);
         } finally {

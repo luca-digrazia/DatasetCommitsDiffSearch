@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.core.heap;
 
+import java.lang.management.MemoryMXBean;
 import java.lang.ref.Reference;
 import java.util.List;
 
@@ -36,8 +37,6 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.code.CodeInfo;
-import com.oracle.svm.core.os.CommittedMemoryProvider;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 
@@ -108,6 +107,9 @@ public abstract class Heap {
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public abstract ObjectHeader getObjectHeader();
 
+    /** Get the MemoryMXBean for this heap. */
+    public abstract MemoryMXBean getMemoryMXBean();
+
     /** Tear down the heap and free all allocated virtual memory chunks. */
     @Uninterruptible(reason = "Tear-down in progress.")
     public abstract boolean tearDown();
@@ -122,14 +124,6 @@ public abstract class Heap {
      * Returns a suitable {@link BarrierSet} for the garbage collector that is used for this heap.
      */
     public abstract BarrierSet createBarrierSet(MetaAccessProvider metaAccess);
-
-    /**
-     * Returns a multiple to which the heap address space should be aligned to at runtime.
-     *
-     * @see CommittedMemoryProvider#guaranteesHeapPreferredAddressSpaceAlignment()
-     */
-    @Fold
-    public abstract int getPreferredAddressSpaceAlignment();
 
     /**
      * Returns the offset that the image heap should have when mapping the native image file to the
@@ -165,30 +159,4 @@ public abstract class Heap {
      * May return {@code null}.
      */
     public abstract Reference<?> getAndClearReferencePendingList();
-
-    /**
-     * Notify the GC that a code metadata object references Java heap objects from native-memory.
-     */
-    @Uninterruptible(reason = "Called when installing code.", callerMustBe = true)
-    public abstract void registerRuntimeCodeInfo(CodeInfo codeInfo);
-
-    /**
-     * Notify the GC that run-time compiled code has embedded references to Java heap objects.
-     */
-    @Uninterruptible(reason = "Called when installing code.", callerMustBe = true)
-    public abstract void registerCodeConstants(CodeInfo codeInfo);
-
-    /**
-     * Notify the GC that run-time compiled code will be freed that has embedded references to Java
-     * heap objects.
-     */
-    @Uninterruptible(reason = "Called when freeing code.", callerMustBe = true)
-    public abstract void unregisterCodeConstants(CodeInfo info);
-
-    /**
-     * Notify the GC that a code metadata object will be freed that references Java heap objects
-     * from native-memory.
-     */
-    @Uninterruptible(reason = "Called when freeing code.", callerMustBe = true)
-    public abstract void unregisterRuntimeCodeInfo(CodeInfo codeInfo);
 }
