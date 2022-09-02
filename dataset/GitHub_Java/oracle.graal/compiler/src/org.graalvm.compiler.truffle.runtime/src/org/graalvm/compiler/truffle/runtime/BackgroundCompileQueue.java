@@ -154,7 +154,7 @@ public class BackgroundCompileQueue {
 
     public CancellableCompileTask submitTask(Priority priority, OptimizedCallTarget target, Request request) {
         final WeakReference<OptimizedCallTarget> targetReference = new WeakReference<>(target);
-        CancellableCompileTask cancellable = new CancellableCompileTask(targetReference, priority.tier == Priority.Tier.LAST);
+        CancellableCompileTask cancellable = new CancellableCompileTask(targetReference, priority == Priority.LAST_TIER);
         RequestImpl<Void> requestImpl = new RequestImpl<>(nextId(), priority, targetReference, cancellable, request);
         cancellable.setFuture(getExecutorService(target).submit(requestImpl));
         return cancellable;
@@ -212,21 +212,16 @@ public class BackgroundCompileQueue {
         }
     }
 
-    public static class Priority {
+    public enum Priority {
 
-        public enum Tier {
-            INITIALIZATION,
-            FIRST,
-            LAST
-        }
-        public static final Priority INITIALIZATION = new Priority(0, Tier.INITIALIZATION);
+        INITIALIZATION(0),
+        FIRST_TIER(1),
+        LAST_TIER(2);
 
-        private final Tier tier;
         private final int value;
 
-        Priority(int value, Tier tier) {
+        Priority(int value) {
             this.value = value;
-            this.tier = tier;
         }
 
     }
@@ -255,15 +250,16 @@ public class BackgroundCompileQueue {
 
         @Override
         public int compareTo(RequestImpl<?> that) {
-            int tierCompare = priority.tier.compareTo(that.priority.tier);
-            if (tierCompare != 0) {
-                return tierCompare;
+            int diff = priority.value - that.priority.value;
+            if (diff == 0) {
+                OptimizedCallTarget thisTarget = targetRef.get();
+                OptimizedCallTarget thatTarget = that.targetRef.get();
+                if (thisTarget != null && thatTarget != null/* && optimizedCallTarget.getName().contains("SolveVelocityConstraints")*/) {
+                    return -1 * Long.compare(thisTarget.getCallAndLoopCount(), thatTarget.getCallAndLoopCount());
+                }
+                diff = Long.compare(this.id, that.id);
             }
-            int valueCompare = Long.compare(priority.value, that.priority.value);
-            if (valueCompare != 0) {
-                return valueCompare;
-            }
-            return Long.compare(this.id, that.id);
+            return diff;
         }
 
         @SuppressWarnings("try")
