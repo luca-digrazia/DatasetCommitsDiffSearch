@@ -47,6 +47,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
@@ -89,6 +90,7 @@ public class DeadlockTest {
     }
 
     @Test
+    @Ignore
     public void testNoDeadlockOnSourceExecuteBindingInstall() throws InterruptedException {
         testNoDeadlockOnBindingInstall(false);
     }
