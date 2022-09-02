@@ -30,36 +30,34 @@
 package com.oracle.truffle.wasm.parser.binary;
 
 
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
-
 /** Simple recursive-descend parser for the binary WebAssembly format.
  */
-public class BinaryReader extends BinaryStreamReader {
+public class BinaryReader {
 
     private static final int MAGIC = 0x6d736100;
     private static final int VERSION = 0x00000001;
 
-    private WasmLanguage wasmLanguage;
-    private WasmModule wasmModule;
+    private byte[] data;
+    private int offset;
 
-    public BinaryReader(WasmLanguage wasmLanguage, String moduleName, byte[] data) {
-        super(data);
-        this.wasmLanguage = wasmLanguage;
-        this.wasmModule = new WasmModule(moduleName);
+    private SymbolTable symbolTable;
+
+    public BinaryReader(byte[] data) {
+        this.data = data;
+        this.offset = 0;
+        this.symbolTable = new SymbolTable();
     }
 
     public void readModule() {
         Assert.assertEquals(read4(), MAGIC, "Invalid MAGIC number");
         Assert.assertEquals(read4(), VERSION, "Invalid VERSION number");
         readSections();
-        wasmLanguage.getContextReference().get().registerModule(wasmModule);
     }
 
     public void readSections() {
         while (!isEOF()) {
             byte sectionID = read1();
-            int size = readUnsignedInt32();
+            int size = readUnsignedLEB128();
             int startOffset = offset;
             switch(sectionID) {
                 case 0x00:
@@ -129,8 +127,7 @@ public class BinaryReader extends BinaryStreamReader {
     public void readFunctionSection() {
         int numFunctionTypeIdxs = readVectorLength();
         for (byte t = 0; t != numFunctionTypeIdxs; ++t) {
-            int funcTypeIdx = readUnsignedInt32();
-            wasmModule.symbolTable().allocateFunction(funcTypeIdx);
+            int funcTypeIdx = readUnsignedLEB128();
         }
     }
 
@@ -146,43 +143,37 @@ public class BinaryReader extends BinaryStreamReader {
     private void readCodeSection() {
         int numCodeEntries = readVectorLength();
         for (int entry = 0; entry < numCodeEntries; entry++) {
-            int codeEntrySize = readUnsignedInt32();
+            int codeEntrySize = readUnsignedLEB128();
             int startOffset = offset;
-            // TODO: Offset the entry by the number of already parsed code entries
-            readCodeEntry(codeEntrySize, entry);
+            readCodeEntry(codeEntrySize);
             Assert.assertEquals(offset - startOffset, codeEntrySize, String.format("Code entry %d size is incorrect", entry));
         }
     }
 
-    private void readCodeEntry(int codeEntrySize, int funcIndex) {
+    private void readCodeEntry(int codeEntrySize) {
         int startOffset = offset;
         int numLocals = readVectorLength();
+        WasmCodeEntry codeEntry = new WasmCodeEntry(numLocals);
         for (int local = 0; local < numLocals; local++) {
             throw new RuntimeException("Not implemented");
         }
         int expressionSize = codeEntrySize - (offset - startOffset);
-        byte returnTypeId = wasmModule.symbolTable().function(funcIndex).returnType();
-        WasmBlockNode block = new WasmBlockNode(offset, expressionSize, returnTypeId);
-        WasmRootNode rootNode = new WasmRootNode(wasmLanguage, data, block);
-        readBlock(block);
-        RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
-        wasmModule.symbolTable().function(funcIndex).setCallTarget(callTarget);
+        codeEntry.expression = new WasmBlock(data, offset, expressionSize);
+        readCodeEntryExpression(codeEntry.expression);
         // TODO: For structured code, we need to set the expressionSize later
     }
 
-    private void readBlock(WasmBlockNode currentBlock) {
+    private void readCodeEntryExpression(WasmBlock currentBlock) {
         byte instruction;
         do {
             instruction = read1();
             switch (instruction) {
                 case 0x41:  // i32.const
+                case 0x42:  // i64.const
                 {
-                    int val = readSignedInt32();
+                    int val = readSignedLEB128();
                     break;
                 }
-                case 0x42:  // i64.const
-                    Assert.fail("Not implemented");
-                    break;
                 case 0x43:  // f32.const
                 {
                     float val = readF32();
@@ -213,9 +204,9 @@ public class BinaryReader extends BinaryStreamReader {
 
     public void readFunctionType() {
         int paramsLength = readVectorLength();
-        int resultLength = peakUnsignedInt32(paramsLength);
+        int resultLength = peakUnsignedLEB128(paramsLength);
         resultLength = (resultLength == 0x40) ? 0 : resultLength;
-        int idx = wasmModule.symbolTable().allocateFunctionType(paramsLength, resultLength);
+        int idx = symbolTable.allocateFunctionType(paramsLength, resultLength);
         readParameterList(idx, paramsLength);
         readResultList(idx);
     }
@@ -223,7 +214,7 @@ public class BinaryReader extends BinaryStreamReader {
     public void readParameterList(int funcTypeIdx, int numParams) {
         for (int paramIdx = 0; paramIdx != numParams; ++paramIdx) {
             byte type = readValueType();
-            wasmModule.symbolTable().registerFunctionTypeParameter(funcTypeIdx, paramIdx, type);
+            symbolTable.registerFunctionTypeParameter(funcTypeIdx, paramIdx, type);
         }
     }
 
@@ -239,7 +230,7 @@ public class BinaryReader extends BinaryStreamReader {
                 break;
             case 0x01:  // vector with one element (produced by the Wasm binary compiler)
                 byte type = readValueType();
-                wasmModule.symbolTable().registerFunctionTypeReturnType(funcTypeIdx, 0, type);
+                symbolTable.registerFunctionTypeReturnType(funcTypeIdx, 0, type);
                 break;
             default:
                 Assert.fail(String.format("Invalid return value specifier: 0x%02X", b));
@@ -260,11 +251,104 @@ public class BinaryReader extends BinaryStreamReader {
         return b;
     }
 
+    public byte peak1() {
+        return data[offset];
+    }
+
+    public byte peak1(int ahead) {
+        return data[offset + ahead];
+    }
+
     public boolean isEOF() {
         return offset == data.length;
     }
 
+    public byte read1() {
+        return data[offset++];
+    }
+
+    public int read4() {
+        int result = 0;
+        for (int i = 0; i != 4; ++i) {
+            int x = Byte.toUnsignedInt(read1());
+            result |= x << 8 * i;
+        }
+        return result;
+    }
+
+    public long read8() {
+        long result = 0;
+        for (int i = 0; i != 8; ++i) {
+            long x = Byte.toUnsignedLong(read1());
+            result |= x << 8 * i;
+        }
+        return result;
+    }
+
+    public int readSignedLEB128() {
+        int result = 0;
+        int shift = 0;
+        byte b;
+        do {
+          b = read1();
+          result |= ((b & 0x7F) << shift);
+          shift += 7;
+        } while ((b & 0x80) != 0);
+
+        if ((shift < 32) && (b & 0x40) == 0) {
+            result |= (~0 << shift);
+        }
+        return result;
+    }
+
+    public int peakUnsignedLEB128(int ahead) {
+        int result = 0;
+        int shift = 0;
+        int i = 0;
+        do {
+            byte b = peak1(i + ahead);
+            result |= (b & 0x7F) << shift;
+            if ((b & 0x80) == 0) {
+                break;
+            }
+            shift += 7;
+            i++;
+        } while (shift < 35);
+        if (shift == 35) {
+            Assert.fail("Unsigned LEB128 overflow");
+        }
+        return result;
+    }
+
+    // This is used for indices, so we don't expect values larger than 2^31.
+    public int readUnsignedLEB128() {
+        int result = 0;
+        int shift = 0;
+        do {
+            byte b = read1();
+            result |= (b & 0x7F) << shift;
+            if ((b & 0x80) == 0) {
+                break;
+            }
+            shift += 7;
+        } while (shift < 35);
+        if (shift == 35) {
+            Assert.fail("Unsigned LEB128 overflow");
+        }
+        return result;
+    }
+
+    public float readF32() {
+        int rawBits = read4();
+        return Float.intBitsToFloat(rawBits);
+    }
+
+    public double readF64() {
+        long rawBits = read8();
+        return Double.longBitsToDouble(rawBits);
+    }
+
     public int readVectorLength() {
-        return readUnsignedInt32();
+        return readUnsignedLEB128();
     }
 }
