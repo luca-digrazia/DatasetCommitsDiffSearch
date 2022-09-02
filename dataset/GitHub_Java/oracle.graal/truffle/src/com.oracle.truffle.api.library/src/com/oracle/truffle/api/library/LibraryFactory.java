@@ -354,16 +354,9 @@ public abstract class LibraryFactory<T extends Library> {
             assert validateExport(receiver, dispatchClass, uncached);
             return uncached;
         }
-        return getUncachedSlowPath(receiver, dispatchClass);
-    }
-
-    /**
-     * Handles {@link #getUncached(Object)} cache miss.
-     */
-    private T getUncachedSlowPath(Object receiver, Class<?> dispatchClass) {
         ensureLibraryInitialized();
         LibraryExport<T> export = lookupExport(receiver, dispatchClass);
-        T uncached = export.createUncached(receiver);
+        uncached = export.createUncached(receiver);
         assert validateExport(receiver, dispatchClass, uncached);
         assert uncached.accepts(receiver);
         assert (uncached = createAssertionsImpl(export, uncached)) != null;
