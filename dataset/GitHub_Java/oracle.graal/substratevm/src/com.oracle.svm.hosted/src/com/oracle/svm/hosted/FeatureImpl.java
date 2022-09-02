@@ -47,7 +47,6 @@ import java.util.stream.Collectors;
 
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.Feature.DuringAnalysisAccess;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
@@ -464,15 +463,15 @@ public class FeatureImpl {
 
         protected final AnalysisUniverse aUniverse;
         protected final HostedUniverse hUniverse;
+        protected final HostedMetaAccess hMetaAccess;
         protected final NativeImageHeap heap;
-        protected final SharedRuntimeConfigurationBuilder runtimeBuilder;
 
-        CompilationAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, AnalysisUniverse aUniverse, HostedUniverse hUniverse, NativeImageHeap heap, DebugContext debugContext,
-                        SharedRuntimeConfigurationBuilder runtimeBuilder) {
+        CompilationAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, AnalysisUniverse aUniverse, HostedUniverse hUniverse, HostedMetaAccess hMetaAccess,
+                        NativeImageHeap heap, DebugContext debugContext) {
             super(featureHandler, imageClassLoader, debugContext);
             this.aUniverse = aUniverse;
             this.hUniverse = hUniverse;
-            this.runtimeBuilder = runtimeBuilder;
+            this.hMetaAccess = hMetaAccess;
             this.heap = heap;
         }
 
@@ -538,11 +537,7 @@ public class FeatureImpl {
         }
 
         public HostedMetaAccess getMetaAccess() {
-            return (HostedMetaAccess) getProviders().getMetaAccess();
-        }
-
-        public Providers getProviders() {
-            return runtimeBuilder.getRuntimeConfig().getProviders();
+            return hMetaAccess;
         }
 
         public HostedUniverse getUniverse() {
@@ -563,10 +558,12 @@ public class FeatureImpl {
     }
 
     public static class BeforeCompilationAccessImpl extends CompilationAccessImpl implements Feature.BeforeCompilationAccess {
+        SharedRuntimeConfigurationBuilder runtimeBuilder;
 
-        BeforeCompilationAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, AnalysisUniverse aUniverse, HostedUniverse hUniverse,
-                        NativeImageHeap heap, DebugContext debugContext, SharedRuntimeConfigurationBuilder runtimeBuilder) {
-            super(featureHandler, imageClassLoader, aUniverse, hUniverse, heap, debugContext, runtimeBuilder);
+        BeforeCompilationAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, AnalysisUniverse aUniverse, HostedUniverse hUniverse, HostedMetaAccess hMetaAccess,
+                        NativeImageHeap heap, DebugContext debugContext, SharedRuntimeConfigurationBuilder runtime) {
+            super(featureHandler, imageClassLoader, aUniverse, hUniverse, hMetaAccess, heap, debugContext);
+            runtimeBuilder = runtime;
         }
 
         public SharedRuntimeConfigurationBuilder getRuntimeBuilder() {
@@ -577,9 +574,9 @@ public class FeatureImpl {
     public static class AfterCompilationAccessImpl extends CompilationAccessImpl implements Feature.AfterCompilationAccess {
         private Collection<CompileQueue.CompileTask> compilationTasks;
 
-        AfterCompilationAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, AnalysisUniverse aUniverse, HostedUniverse hUniverse,
-                        Collection<CompileQueue.CompileTask> compilationTasks, NativeImageHeap heap, DebugContext debugContext, SharedRuntimeConfigurationBuilder runtimeBuilder) {
-            super(featureHandler, imageClassLoader, aUniverse, hUniverse, heap, debugContext, runtimeBuilder);
+        AfterCompilationAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, AnalysisUniverse aUniverse, HostedUniverse hUniverse, HostedMetaAccess hMetaAccess,
+                        Collection<CompileQueue.CompileTask> compilationTasks, NativeImageHeap heap, DebugContext debugContext) {
+            super(featureHandler, imageClassLoader, aUniverse, hUniverse, hMetaAccess, heap, debugContext);
             this.compilationTasks = compilationTasks;
         }
 

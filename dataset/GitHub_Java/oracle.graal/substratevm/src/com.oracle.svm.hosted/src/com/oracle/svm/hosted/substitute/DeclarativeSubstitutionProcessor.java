@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,6 +28,7 @@ import static com.oracle.svm.core.util.UserError.guarantee;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -36,24 +39,22 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.options.Option;
+import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-import com.oracle.shadowed.com.google.gson.Gson;
-import com.oracle.shadowed.com.google.gson.GsonBuilder;
-import com.oracle.shadowed.com.google.gson.JsonArray;
-import com.oracle.shadowed.com.google.gson.JsonObject;
-import com.oracle.shadowed.com.google.gson.JsonPrimitive;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AnnotateOriginal;
 import com.oracle.svm.core.annotate.Delete;
@@ -64,10 +65,15 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
+import com.oracle.svm.core.configure.ConfigurationFiles;
 import com.oracle.svm.core.option.HostedOptionKey;
+import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.core.util.json.JSONParser;
+import com.oracle.svm.core.util.json.JSONParserException;
 import com.oracle.svm.hosted.ImageClassLoader;
+import com.oracle.svm.hosted.classinitialization.ClassInitializationSupport;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 
@@ -78,84 +84,84 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProcessor {
 
     public static class Options {
-        @Option(help = "Comma-separated list of file names with declarative substitutions")//
-        public static final HostedOptionKey<String> SubstitutionFiles = new HostedOptionKey<>("");
 
-        @Option(help = "Comma-separated list of resource file names with declarative substitutions")//
-        public static final HostedOptionKey<String> SubstitutionResources = new HostedOptionKey<>("");
-
-        @Option(help = "Print all substitutions in the format expected by SubstitutionFiles")//
-        public static final HostedOptionKey<Boolean> PrintSubstitutions = new HostedOptionKey<>(false);
+        @Option(help = "Comma-separated list of resource file names with declarative substitutions", type = OptionType.User)//
+        public static final HostedOptionKey<String[]> SubstitutionResources = new HostedOptionKey<>(null);
     }
 
     private final Map<Class<?>, ClassDescriptor> classDescriptors;
     private final Map<Executable, MethodDescriptor> methodDescriptors;
     private final Map<Field, FieldDescriptor> fieldDescriptors;
 
-    public DeclarativeSubstitutionProcessor(ImageClassLoader imageClassLoader, MetaAccessProvider metaAccess) {
-        super(imageClassLoader, metaAccess);
+    public DeclarativeSubstitutionProcessor(ImageClassLoader imageClassLoader, MetaAccessProvider metaAccess, ClassInitializationSupport classInitializationSupport) {
+        super(imageClassLoader, metaAccess, classInitializationSupport);
 
         classDescriptors = new HashMap<>();
         methodDescriptors = new HashMap<>();
         fieldDescriptors = new HashMap<>();
 
-        for (String substitutionFileName : Options.SubstitutionFiles.getValue().split(",")) {
+        for (String substitutionFileName : OptionUtils.flatten(",", ConfigurationFiles.Options.SubstitutionFiles.getValue())) {
             try {
-                if (!substitutionFileName.isEmpty()) {
-                    loadFile(new FileReader(substitutionFileName));
-                }
+                loadFile(new FileReader(substitutionFileName));
             } catch (FileNotFoundException ex) {
-                throw UserError.abort("Substitution file " + substitutionFileName + " not found.");
+                throw UserError.abort("Substitution file %s not found.", substitutionFileName);
+            } catch (IOException | JSONParserException ex) {
+                throw UserError.abort("Could not parse substitution file %s: %s", substitutionFileName, ex.getMessage());
             }
         }
-        for (String substitutionResourceName : Options.SubstitutionResources.getValue().split(",")) {
-            if (!substitutionResourceName.isEmpty()) {
-                InputStream substitutionStream = imageClassLoader.findResourceByName(substitutionResourceName);
-                guarantee(substitutionStream != null, "substitution file %s does not exist", substitutionResourceName);
+        for (String substitutionResourceName : OptionUtils.flatten(",", Options.SubstitutionResources.getValue())) {
+            try {
+                InputStream substitutionStream = imageClassLoader.findResourceAsStreamByName(substitutionResourceName);
+                if (substitutionStream == null) {
+                    throw UserError.abort("Substitution resource not found: %s", substitutionResourceName);
+                }
                 loadFile(new InputStreamReader(substitutionStream));
+            } catch (IOException | JSONParserException ex) {
+                throw UserError.abort("Could not parse substitution resource %s: %s", substitutionResourceName, ex.getMessage());
             }
-        }
-
-        if (Options.PrintSubstitutions.getValue()) {
-            printAllAnnotations();
         }
     }
 
-    private void loadFile(Reader reader) {
-        Set<Class<?>> annotatedClasses = new HashSet<>(imageClassLoader.findAnnotatedClasses(TargetClass.class));
+    private void loadFile(Reader reader) throws IOException {
+        Set<Class<?>> annotatedClasses = new HashSet<>(imageClassLoader.findAnnotatedClasses(TargetClass.class, false));
 
-        Gson gson = new GsonBuilder().create();
-        ClassDescriptor[] allDescriptors = gson.fromJson(reader, ClassDescriptor[].class);
-        for (ClassDescriptor classDescriptor : allDescriptors) {
-            if (classDescriptor == null) {
+        JSONParser parser = new JSONParser(reader);
+        @SuppressWarnings("unchecked")
+        List<Object> allDescriptors = (List<Object>) parser.parse();
+
+        for (Object classDescriptorData : allDescriptors) {
+            if (classDescriptorData == null) {
                 /* Empty or trailing array elements are parsed to null. */
                 continue;
             }
+            ClassDescriptor classDescriptor = new ClassDescriptor(classDescriptorData);
 
-            Class<?> annotatedClass = imageClassLoader.findClassByName(classDescriptor.annotatedClass);
+            Class<?> annotatedClass = imageClassLoader.findClassOrFail(classDescriptor.annotatedClass());
 
             if (annotatedClasses.contains(annotatedClass)) {
-                throw UserError.abort("target class already registered using explicit @TargetClass annotation: " + annotatedClass);
+                throw UserError.abort("Target class already registered using explicit @TargetClass annotation: %s", annotatedClass);
             } else if (classDescriptors.containsKey(annotatedClass)) {
-                throw UserError.abort("target class already registered using substitution file: " + annotatedClass);
+                throw UserError.abort("Target class already registered using substitution file: %s", annotatedClass);
             }
             classDescriptors.put(annotatedClass, classDescriptor);
 
-            for (MethodDescriptor methodDescriptor : classDescriptor.methods) {
-                if (methodDescriptor == null) {
+            for (Object methodDescriptorData : classDescriptor.methods()) {
+                if (methodDescriptorData == null) {
                     /* Empty or trailing array elements are parsed to null. */
                     continue;
                 }
+                MethodDescriptor methodDescriptor = new MethodDescriptor(methodDescriptorData);
                 Executable annotatedMethod;
-                if (methodDescriptor.parameterTypes != null) {
-                    annotatedMethod = findMethod(annotatedClass, methodDescriptor.annotatedName, methodDescriptor.parameterTypes);
+                if (methodDescriptor.parameterTypes() != null) {
+                    annotatedMethod = findMethod(annotatedClass, methodDescriptor.annotatedName(), methodDescriptor.parameterTypes());
                 } else {
-                    annotatedMethod = findMethod(annotatedClass, methodDescriptor.annotatedName, true);
+                    annotatedMethod = findMethod(annotatedClass, methodDescriptor.annotatedName(), true);
                 }
                 methodDescriptors.put(annotatedMethod, methodDescriptor);
             }
-            for (FieldDescriptor fieldDescriptor : classDescriptor.fields) {
-                Field annotatedField = findField(annotatedClass, fieldDescriptor.annotatedName);
+            for (Object fieldDescriptorData : classDescriptor.fields()) {
+                FieldDescriptor fieldDescriptor = new FieldDescriptor(fieldDescriptorData);
+                Field annotatedField = findField(annotatedClass, fieldDescriptor.annotatedName());
                 fieldDescriptors.put(annotatedField, fieldDescriptor);
             }
         }
@@ -190,7 +196,7 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
     private Executable findMethod(Class<?> declaringClass, String methodName, String[] parameterTypeNames) {
         Class<?>[] parameterTypes = new Class<?>[parameterTypeNames.length];
         for (int i = 0; i < parameterTypes.length; i++) {
-            parameterTypes[i] = imageClassLoader.findClassByName(parameterTypeNames[i]);
+            parameterTypes[i] = imageClassLoader.findClassOrFail(parameterTypeNames[i]);
         }
         try {
             if (methodName.equals(TargetElement.CONSTRUCTOR_NAME)) {
@@ -224,13 +230,13 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
         if (element instanceof Class && classDescriptors.containsKey(element)) {
             ClassDescriptor classDescriptor = classDescriptors.get(element);
             if (annotationClass == Platforms.class) {
-                result = classDescriptor.platforms != null ? classDescriptor.new PlatformsImpl(imageClassLoader) : null;
+                result = classDescriptor.platforms() != null ? classDescriptor.new PlatformsImpl(imageClassLoader) : null;
             } else if (annotationClass == TargetClass.class) {
                 result = classDescriptor.new TargetClassImpl();
             } else if (annotationClass == Delete.class) {
-                result = classDescriptor.delete ? new DeleteImpl() : null;
+                result = classDescriptor.delete() ? new DeleteImpl() : null;
             } else if (annotationClass == Substitute.class) {
-                result = classDescriptor.substitute ? new SubstituteImpl() : null;
+                result = classDescriptor.substitute() ? new SubstituteImpl() : null;
             } else {
                 throw VMError.shouldNotReachHere("Unexpected annotation type: " + annotationClass.getName());
             }
@@ -238,19 +244,19 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
         } else if (element instanceof Executable && methodDescriptors.containsKey(element)) {
             MethodDescriptor methodDescriptor = methodDescriptors.get(element);
             if (annotationClass == Platforms.class) {
-                result = methodDescriptor.platforms != null ? methodDescriptor.new PlatformsImpl(imageClassLoader) : null;
+                result = methodDescriptor.platforms() != null ? methodDescriptor.new PlatformsImpl(imageClassLoader) : null;
             } else if (annotationClass == TargetElement.class) {
                 result = methodDescriptor.new TargetElementImpl();
             } else if (annotationClass == Delete.class) {
-                result = methodDescriptor.delete ? new DeleteImpl() : null;
+                result = methodDescriptor.delete() ? new DeleteImpl() : null;
             } else if (annotationClass == Substitute.class) {
-                result = methodDescriptor.substitute ? new SubstituteImpl() : null;
+                result = methodDescriptor.substitute() ? new SubstituteImpl() : null;
             } else if (annotationClass == AnnotateOriginal.class) {
-                result = methodDescriptor.annotateOriginal ? new AnnotateOriginalImpl() : null;
+                result = methodDescriptor.annotateOriginal() ? new AnnotateOriginalImpl() : null;
             } else if (annotationClass == KeepOriginal.class) {
-                result = methodDescriptor.keepOriginal ? new KeepOriginalImpl() : null;
+                result = methodDescriptor.keepOriginal() ? new KeepOriginalImpl() : null;
             } else if (annotationClass == Alias.class) {
-                result = methodDescriptor.alias ? new AliasImpl() : null;
+                result = methodDescriptor.alias() ? new AliasImpl() : null;
             } else {
                 throw VMError.shouldNotReachHere("Unexpected annotation type: " + annotationClass.getName());
             }
@@ -258,19 +264,19 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
         } else if (element instanceof Field && fieldDescriptors.containsKey(element)) {
             FieldDescriptor fieldDescriptor = fieldDescriptors.get(element);
             if (annotationClass == Platforms.class) {
-                result = fieldDescriptor.platforms != null ? fieldDescriptor.new PlatformsImpl(imageClassLoader) : null;
+                result = fieldDescriptor.platforms() != null ? fieldDescriptor.new PlatformsImpl(imageClassLoader) : null;
             } else if (annotationClass == TargetElement.class) {
                 result = fieldDescriptor.new TargetElementImpl();
             } else if (annotationClass == Delete.class) {
-                result = fieldDescriptor.delete ? new DeleteImpl() : null;
+                result = fieldDescriptor.delete() ? new DeleteImpl() : null;
             } else if (annotationClass == Alias.class) {
-                result = fieldDescriptor.alias ? new AliasImpl() : null;
+                result = fieldDescriptor.alias() ? new AliasImpl() : null;
             } else if (annotationClass == Inject.class) {
-                result = fieldDescriptor.inject ? new InjectImpl() : null;
+                result = fieldDescriptor.inject() ? new InjectImpl() : null;
             } else if (annotationClass == RecomputeFieldValue.class) {
-                result = fieldDescriptor.kind != null ? fieldDescriptor.new RecomputeFieldValueImpl() : null;
+                result = fieldDescriptor.kind() != null ? fieldDescriptor.new RecomputeFieldValueImpl() : null;
             } else if (annotationClass == InjectAccessors.class) {
-                result = fieldDescriptor.injectAccessors != null ? fieldDescriptor.new InjectAccessorsImpl(imageClassLoader) : null;
+                result = fieldDescriptor.injectAccessors() != null ? fieldDescriptor.new InjectAccessorsImpl(imageClassLoader) : null;
             } else {
                 throw VMError.shouldNotReachHere("Unexpected annotation type: " + annotationClass.getName());
             }
@@ -279,189 +285,6 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
             result = super.lookupAnnotation(element, annotationClass);
         }
         return annotationClass.cast(result);
-    }
-
-    /**
-     * Prints out all substitutions in the JSON format. Only the minimal set of properties is
-     * printed to make the file as readable as possible.
-     */
-    private void printAllAnnotations() {
-        List<Class<?>> annotatedClasses = findTargetClasses();
-        annotatedClasses.sort(Comparator.comparing(Class::getName));
-
-        JsonArray classesArray = new JsonArray();
-        for (Class<?> annotatedClass : annotatedClasses) {
-            JsonObject classObject = printClass(annotatedClass);
-            classesArray.add(classObject);
-
-            JsonArray methodsArray = new JsonArray();
-            for (Constructor<?> annotatedMethod : annotatedClass.getDeclaredConstructors()) {
-                printMethod(annotatedMethod, methodsArray);
-            }
-            Method[] declaredMethods = annotatedClass.getDeclaredMethods();
-            Arrays.sort(declaredMethods, Comparator.comparing(Method::getName));
-            for (Method annotatedMethod : declaredMethods) {
-                printMethod(annotatedMethod, methodsArray);
-            }
-            JsonArray fieldsArray = new JsonArray();
-            Field[] declaredFields = annotatedClass.getDeclaredFields();
-            Arrays.sort(declaredFields, Comparator.comparing(Field::getName));
-            for (Field annotatedField : declaredFields) {
-                printField(annotatedField, fieldsArray);
-            }
-
-            if (methodsArray.size() > 0) {
-                classObject.add("methods", methodsArray);
-            }
-            if (fieldsArray.size() > 0) {
-                classObject.add("fields", fieldsArray);
-            }
-        }
-
-        Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
-        gson.toJson(classesArray, System.out);
-    }
-
-    private JsonObject printClass(Class<?> annotatedClass) {
-        TargetClass targetClassAnnotation = lookupAnnotation(annotatedClass, TargetClass.class);
-        Delete deleteAnnotation = lookupAnnotation(annotatedClass, Delete.class);
-        Substitute substituteAnnotation = lookupAnnotation(annotatedClass, Substitute.class);
-        JsonObject element = new JsonObject();
-        element.addProperty("annotatedClass", annotatedClass.getName());
-        Class<?> originalClass = findTargetClass(annotatedClass, targetClassAnnotation);
-        if (originalClass != null) {
-            element.addProperty("originalClass", originalClass.getName());
-        } else {
-            element.addProperty("disabled", "true");
-        }
-
-        if (deleteAnnotation != null) {
-            element.addProperty("delete", true);
-        }
-        if (substituteAnnotation != null) {
-            element.addProperty("substitute", true);
-        }
-        printPlatforms(annotatedClass, element);
-        return element;
-    }
-
-    private void printMethod(Executable annotatedMethod, JsonArray methodsArray) {
-        Delete deleteAnnotation = lookupAnnotation(annotatedMethod, Delete.class);
-        Substitute substituteAnnotation = lookupAnnotation(annotatedMethod, Substitute.class);
-        AnnotateOriginal annotateOriginalAnnotation = lookupAnnotation(annotatedMethod, AnnotateOriginal.class);
-        KeepOriginal keepOriginalAnnotation = lookupAnnotation(annotatedMethod, KeepOriginal.class);
-        Alias aliasAnnotation = lookupAnnotation(annotatedMethod, Alias.class);
-
-        JsonObject methodObject = new JsonObject();
-        String annotatedName;
-        if (annotatedMethod instanceof Constructor) {
-            annotatedName = TargetElement.CONSTRUCTOR_NAME;
-        } else {
-            annotatedName = annotatedMethod.getName();
-        }
-        methodObject.addProperty("annotatedName", annotatedName);
-
-        Executable uniqueMethod = findMethod(annotatedMethod.getDeclaringClass(), annotatedName, false);
-        if (uniqueMethod == null) {
-            /* We did not find a unique method, so we need the parameter types to disambiguate. */
-            JsonArray parameterTypesArray = new JsonArray();
-            for (Class<?> parameterType : annotatedMethod.getParameterTypes()) {
-                parameterTypesArray.add(new JsonPrimitive(parameterType.getName()));
-            }
-            methodObject.add("parameterTypes", parameterTypesArray);
-        }
-
-        printTargetElement(annotatedMethod, methodObject);
-
-        if (deleteAnnotation != null) {
-            methodObject.addProperty("delete", true);
-        }
-        if (substituteAnnotation != null) {
-            methodObject.addProperty("substitute", true);
-        }
-        if (annotateOriginalAnnotation != null) {
-            methodObject.addProperty("annotateOriginal", true);
-        }
-        if (keepOriginalAnnotation != null) {
-            methodObject.addProperty("keepOriginal", true);
-        }
-        if (aliasAnnotation != null) {
-            methodObject.addProperty("alias", true);
-        }
-        if (methodObject.entrySet().size() > 1) {
-            printPlatforms(annotatedMethod, methodObject);
-        }
-        if (methodObject.entrySet().size() > 1) {
-            methodsArray.add(methodObject);
-        }
-    }
-
-    private void printField(Field annotatedField, JsonArray fieldsArray) {
-        Delete deleteAnnotation = lookupAnnotation(annotatedField, Delete.class);
-        Alias aliasAnnotation = lookupAnnotation(annotatedField, Alias.class);
-        Inject injectAnnotation = lookupAnnotation(annotatedField, Inject.class);
-        RecomputeFieldValue recomputeAnnotation = lookupAnnotation(annotatedField, RecomputeFieldValue.class);
-        InjectAccessors injectAccessorsAnnotation = lookupAnnotation(annotatedField, InjectAccessors.class);
-
-        JsonObject fieldObject = new JsonObject();
-        fieldObject.addProperty("annotatedName", annotatedField.getName());
-        printTargetElement(annotatedField, fieldObject);
-
-        if (deleteAnnotation != null) {
-            fieldObject.addProperty("delete", true);
-        }
-        if (aliasAnnotation != null) {
-            fieldObject.addProperty("alias", true);
-        }
-        if (injectAnnotation != null) {
-            fieldObject.addProperty("inject", true);
-        }
-        if (recomputeAnnotation != null) {
-            fieldObject.addProperty("kind", recomputeAnnotation.kind().name());
-            if (recomputeAnnotation.declClass() != RecomputeFieldValue.class) {
-                fieldObject.addProperty("declClassName", recomputeAnnotation.declClass().getName());
-            } else if (!recomputeAnnotation.declClassName().isEmpty()) {
-                fieldObject.addProperty("declClassName", recomputeAnnotation.declClassName());
-            }
-            if (!recomputeAnnotation.name().isEmpty()) {
-                fieldObject.addProperty("name", recomputeAnnotation.name());
-            }
-            if (recomputeAnnotation.isFinal()) {
-                fieldObject.addProperty("isFinal", true);
-            }
-        }
-        if (injectAccessorsAnnotation != null) {
-            fieldObject.addProperty("injectAccessors", injectAccessorsAnnotation.value().getName());
-        }
-        if (fieldObject.entrySet().size() > 1) {
-            printPlatforms(annotatedField, fieldObject);
-        }
-
-        if (fieldObject.entrySet().size() > 1) {
-            fieldsArray.add(fieldObject);
-        }
-    }
-
-    private void printPlatforms(AnnotatedElement annotatedElement, JsonObject object) {
-        Platforms platformsAnnotation = lookupAnnotation(annotatedElement, Platforms.class);
-        if (platformsAnnotation != null) {
-            JsonArray platformsArray = new JsonArray();
-            for (Class<?> platform : platformsAnnotation.value()) {
-                platformsArray.add(new JsonPrimitive(platform.getName()));
-            }
-            object.add("platforms", platformsArray);
-        }
-    }
-
-    private void printTargetElement(AnnotatedElement annotatedElement, JsonObject object) {
-        TargetElement targetElementAnnotation = lookupAnnotation(annotatedElement, TargetElement.class);
-
-        if (targetElementAnnotation != null && !targetElementAnnotation.name().isEmpty()) {
-            object.addProperty("originalName", targetElementAnnotation.name());
-        }
-        if (targetElementAnnotation != null && targetElementAnnotation.optional()) {
-            object.addProperty("optional", true);
-        }
     }
 }
 
@@ -499,6 +322,10 @@ class DeleteImpl extends AnnotationImpl implements Delete {
 
 @SuppressWarnings("all")
 class SubstituteImpl extends AnnotationImpl implements Substitute {
+    @Override
+    public boolean polymorphicSignature() {
+        return false;
+    }
 }
 
 @SuppressWarnings("all")
@@ -517,9 +344,34 @@ class KeepOriginalImpl extends AnnotationImpl implements KeepOriginal {
 class InjectImpl extends AnnotationImpl implements Inject {
 }
 
+class DataObject {
+    final Map<String, Object> data;
+
+    @SuppressWarnings("unchecked")
+    DataObject(Object data) {
+        this.data = (Map<String, Object>) data;
+    }
+
+    @SuppressWarnings("unchecked")
+    <T> T get(String propertyName, T defaultValue) {
+        if (data.containsKey(propertyName)) {
+            return (T) data.get(propertyName);
+        } else {
+            return defaultValue;
+        }
+    }
+}
+
 @SuppressFBWarnings(value = "UwF", justification = "Fields written by GSON using reflection")
-class PlatformsDescriptor {
-    String[] platforms;
+class PlatformsDescriptor extends DataObject {
+
+    PlatformsDescriptor(Object data) {
+        super(data);
+    }
+
+    List<String> platforms() {
+        return get("platforms", null);
+    }
 
     @SuppressWarnings("all")
     @SuppressFBWarnings(value = "NP", justification = "Fields written by GSON using reflection")
@@ -532,9 +384,10 @@ class PlatformsDescriptor {
 
         @Override
         public Class<? extends Platform>[] value() {
-            Class<?>[] result = new Class<?>[platforms.length];
+            List<String> platforms = platforms();
+            Class<?>[] result = new Class<?>[platforms.size()];
             for (int i = 0; i < result.length; i++) {
-                result[i] = loader.findClassByName(platforms[i]);
+                result[i] = loader.findClassOrFail(platforms.get(i));
             }
             return cast(result);
         }
@@ -552,14 +405,30 @@ class PlatformsDescriptor {
 @SuppressWarnings("unchecked")
 @SuppressFBWarnings(value = "UwF", justification = "Fields written by GSON using reflection")
 class ClassDescriptor extends PlatformsDescriptor {
-    String annotatedClass;
-    String originalClass;
 
-    boolean delete;
-    boolean substitute;
+    ClassDescriptor(Object data) {
+        super(data);
+    }
 
-    MethodDescriptor[] methods = new MethodDescriptor[0];
-    FieldDescriptor[] fields = new FieldDescriptor[0];
+    String annotatedClass() {
+        return get("annotatedClass", null);
+    }
+
+    boolean delete() {
+        return get("delete", false);
+    }
+
+    boolean substitute() {
+        return get("substitute", false);
+    }
+
+    List<Object> methods() {
+        return get("methods", Collections.emptyList());
+    }
+
+    List<Object> fields() {
+        return get("fields", Collections.emptyList());
+    }
 
     @SuppressWarnings("all")
     class TargetClassImpl extends AnnotationImpl implements TargetClass {
@@ -570,12 +439,17 @@ class ClassDescriptor extends PlatformsDescriptor {
 
         @Override
         public String className() {
-            return originalClass;
+            return get("originalClass", null);
         }
 
         @Override
-        public String innerClass() {
-            return "";
+        public Class<? extends Function<TargetClass, String>> classNameProvider() {
+            return TargetClass.NoClassNameProvider.class;
+        }
+
+        @Override
+        public String[] innerClass() {
+            return new String[0];
         }
 
         /*
@@ -585,61 +459,103 @@ class ClassDescriptor extends PlatformsDescriptor {
          */
         @Override
         public Class<? extends BooleanSupplier>[] onlyWith() {
-            return (Class<? extends BooleanSupplier>[]) new Class<?>[]{DEFAULT_TARGETCLASS_PREDICATE};
+            return (Class<? extends BooleanSupplier>[]) new Class<?>[]{TargetClass.AlwaysIncluded.class};
         }
     }
 }
 
+@SuppressWarnings("unchecked")
 @SuppressFBWarnings(value = "UwF", justification = "Fields written by GSON using reflection")
 class ElementDescriptor extends PlatformsDescriptor {
-    String annotatedName;
-    String originalName = "";
-    boolean optional;
+
+    ElementDescriptor(Object data) {
+        super(data);
+    }
+
+    String annotatedName() {
+        return get("annotatedName", null);
+    }
 
     @SuppressWarnings("all")
     class TargetElementImpl extends AnnotationImpl implements TargetElement {
         @Override
         public String name() {
-            return originalName;
+            return get("originalName", "");
         }
 
         @Override
-        public boolean optional() {
-            return optional;
+        public Class<? extends Predicate<Class<?>>>[] onlyWith() {
+            return (Class<? extends Predicate<Class<?>>>[]) new Class<?>[]{TargetClass.AlwaysIncluded.class};
         }
     }
 }
 
 @SuppressFBWarnings(value = "UwF", justification = "Fields written by GSON using reflection")
 class MethodDescriptor extends ElementDescriptor {
-    String[] parameterTypes;
 
-    boolean delete;
-    boolean substitute;
-    boolean annotateOriginal;
-    boolean keepOriginal;
-    boolean alias;
+    MethodDescriptor(Object data) {
+        super(data);
+    }
+
+    String[] parameterTypes() {
+        return get("parameterTypes", null);
+    }
+
+    boolean delete() {
+        return get("delete", false);
+    }
+
+    boolean substitute() {
+        return get("substitute", false);
+    }
+
+    boolean annotateOriginal() {
+        return get("annotateOriginal", false);
+    }
+
+    boolean keepOriginal() {
+        return get("keepOriginal", false);
+    }
+
+    boolean alias() {
+        return get("alias", false);
+    }
 }
 
 @SuppressFBWarnings(value = "UwF", justification = "Fields written by GSON using reflection")
 class FieldDescriptor extends ElementDescriptor {
-    boolean delete;
-    boolean alias;
-    boolean inject;
 
-    RecomputeFieldValue.Kind kind;
-    String declClassName = "";
-    String name = "";
-    boolean isFinal;
+    FieldDescriptor(Object data) {
+        super(data);
+    }
 
-    String injectAccessors;
+    boolean delete() {
+        return get("delete", false);
+    }
+
+    boolean alias() {
+        return get("alias", false);
+    }
+
+    boolean inject() {
+        return get("inject", false);
+    }
+
+    RecomputeFieldValue.Kind kind() {
+        return RecomputeFieldValue.Kind.valueOf(get("kind", null));
+    }
+
+    String injectAccessors() {
+        return get("injectAccessors", null);
+    }
 
     @SuppressWarnings("all")
     class RecomputeFieldValueImpl extends AnnotationImpl implements RecomputeFieldValue {
         @Override
         public Kind kind() {
-            assert kind != null;
-            return kind;
+            Kind result = get("kind", null);
+            assert result != null;
+            return result;
         }
 
         @Override
@@ -649,17 +565,17 @@ class FieldDescriptor extends ElementDescriptor {
 
         @Override
         public String declClassName() {
-            return declClassName;
+            return get("declClassName", "");
         }
 
         @Override
         public String name() {
-            return name;
+            return get("name", "");
         }
 
         @Override
         public boolean isFinal() {
-            return isFinal;
+            return get("isFinal", false);
         }
     }
 
@@ -673,8 +589,8 @@ class FieldDescriptor extends ElementDescriptor {
 
         @Override
         public Class<?> value() {
-            assert injectAccessors != null;
-            return loader.findClassByName(injectAccessors);
+            assert injectAccessors() != null;
+            return loader.findClassOrFail(injectAccessors());
         }
     }
 }

@@ -147,6 +147,7 @@ public final class ReflectionConfigurationParser<T> extends ConfigurationParser 
     private void parseField(Map<String, Object> data, T clazz) {
         String fieldName = null;
         boolean allowWrite = false;
+        boolean allowUnsafeAccess = false;
         for (Map.Entry<String, Object> entry : data.entrySet()) {
             String propertyName = entry.getKey();
             if (propertyName.equals("name")) {
@@ -154,7 +155,7 @@ public final class ReflectionConfigurationParser<T> extends ConfigurationParser 
             } else if (propertyName.equals("allowWrite")) {
                 allowWrite = asBoolean(entry.getValue(), "allowWrite");
             } else if (propertyName.equals("allowUnsafeAccess")) {
-                // ignored (no longer required)
+                allowUnsafeAccess = asBoolean(entry.getValue(), "allowUnsafeAccess");
             } else {
                 throw new JSONParserException("Unknown attribute '" + propertyName + "' (supported attributes: 'name') in definition of field for class '" + delegate.getTypeName(clazz) + "'");
             }
@@ -165,7 +166,7 @@ public final class ReflectionConfigurationParser<T> extends ConfigurationParser 
         }
 
         try {
-            delegate.registerField(clazz, fieldName, allowWrite);
+            delegate.registerField(clazz, fieldName, allowWrite, allowUnsafeAccess);
         } catch (NoSuchFieldException e) {
             handleError("Field " + formatField(clazz, fieldName) + " not found.");
         } catch (LinkageError e) {

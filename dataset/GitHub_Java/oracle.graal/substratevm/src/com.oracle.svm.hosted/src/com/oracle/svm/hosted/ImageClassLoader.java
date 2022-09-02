@@ -427,13 +427,6 @@ class ClassLoaderQueryImpl implements ClassLoaderQuery {
 
     @Override
     public boolean isNativeImageClassLoader(ClassLoader classLoader) {
-        ClassLoader loader = classLoader;
-        while (loader != null) {
-            if (loader == imageClassLoader || loader instanceof NativeImageSystemClassLoader) {
-                return true;
-            }
-            loader = loader.getParent();
-        }
-        return false;
+        return classLoader == imageClassLoader;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -48,6 +48,7 @@ import com.oracle.truffle.llvm.runtime.config.Configuration;
 import com.oracle.truffle.llvm.runtime.config.LLVMCapability;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 
 public class NativeConfiguration implements Configuration {
 
@@ -60,7 +61,7 @@ public class NativeConfiguration implements Configuration {
         intrinsicProvider = new BasicIntrinsicsProvider(language);
         platformCapability = BasicPlatformCapability.create(key.loadCxxLibraries);
         if (key.enableNFI) {
-            ctxExtRegistry.register(NativeContextExtension.class, new NFIContextExtension.Factory());
+            ctxExtRegistry.register(NativeContextExtension.class, NFIContextExtension::new);
         }
     }
 
@@ -74,6 +75,8 @@ public class NativeConfiguration implements Configuration {
     public <C extends LLVMCapability> C getCapability(Class<C> type) {
         if (type == LLVMMemory.class) {
             return type.cast(LLVMNativeMemory.getInstance());
+        } else if (type == UnsafeArrayAccess.class) {
+            return type.cast(UnsafeArrayAccess.getInstance());
         } else if (type == ToolchainConfig.class) {
             return type.cast(NativeToolchainConfig.getInstance());
         } else if (type == Loader.class) {
