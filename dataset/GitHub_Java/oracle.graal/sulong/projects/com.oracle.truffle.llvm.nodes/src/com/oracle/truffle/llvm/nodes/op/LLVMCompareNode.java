@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,14 +30,16 @@
 package com.oracle.truffle.llvm.nodes.op;
 
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+@NodeChild(type = LLVMExpressionNode.class)
+@NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
+
+    public abstract boolean executeCompare(Object val1, Object val2);
 
     public abstract static class LLVMEqNode extends LLVMCompareNode {
         @Specialization
@@ -67,7 +69,7 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
 
         @Specialization
         protected boolean eq(LLVMIVarBit val1, LLVMIVarBit val2) {
-            return val1.compare(val2) == 0;
+            return val1.isEqual(val2);
         }
     }
 
@@ -99,7 +101,7 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
 
         @Specialization
         protected boolean nq(LLVMIVarBit val1, LLVMIVarBit val2) {
-            return val1.compare(val2) != 0;
+            return !val1.isEqual(val2);
         }
     }
 
@@ -223,11 +225,7 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean doubleCompare(double val1, double val2) {
-            if (val1 < val2) {
-                return true;
-            } else {
-                return false;
-            }
+            return val1 < val2;
         }
 
         @Specialization
@@ -236,12 +234,8 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean floatCompare(float val1, float val2) {
-            if (val1 < val2) {
-                assert areOrdered(val1, val2);
-                return true;
-            } else {
-                return false;
-            }
+            assert !(val1 < val2) || areOrdered(val1, val2);
+            return val1 < val2;
         }
     }
 
@@ -257,11 +251,7 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean doubleCompare(double val1, double val2) {
-            if (val1 > val2) {
-                return true;
-            } else {
-                return false;
-            }
+            return val1 > val2;
         }
 
         @Specialization
@@ -270,12 +260,8 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean floatCompare(float val1, float val2) {
-            if (val1 > val2) {
-                assert areOrdered(val1, val2);
-                return true;
-            } else {
-                return false;
-            }
+            assert !(val1 > val2) || areOrdered(val1, val2);
+            return val1 > val2;
         }
     }
 
@@ -291,11 +277,7 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean doubleCompare(double val1, double val2) {
-            if (val1 >= val2) {
-                return true;
-            } else {
-                return false;
-            }
+            return val1 >= val2;
         }
 
         @Specialization
@@ -304,12 +286,8 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean floatCompare(float val1, float val2) {
-            if (val1 >= val2) {
-                assert areOrdered(val1, val2);
-                return true;
-            } else {
-                return false;
-            }
+            assert !(val1 >= val2) || areOrdered(val1, val2);
+            return val1 >= val2;
         }
     }
 
@@ -325,11 +303,7 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean doubleCompare(double val1, double val2) {
-            if (val1 <= val2) {
-                return true;
-            } else {
-                return false;
-            }
+            return val1 <= val2;
         }
 
         @Specialization
@@ -338,12 +312,8 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean floatCompare(float val1, float val2) {
-            if (val1 <= val2) {
-                assert areOrdered(val1, val2);
-                return true;
-            } else {
-                return false;
-            }
+            assert !(val1 <= val2) || areOrdered(val1, val2);
+            return val1 <= val2;
         }
     }
 
@@ -359,11 +329,7 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean doubleCompare(double val1, double val2) {
-            if (val1 == val2) {
-                return true;
-            } else {
-                return false;
-            }
+            return val1 == val2;
         }
 
         @Specialization
@@ -372,12 +338,8 @@ public abstract class LLVMCompareNode extends LLVMAbstractCompareNode {
         }
 
         private static boolean floatCompare(float val1, float val2) {
-            if (val1 == val2) {
-                assert areOrdered(val1, val2);
-                return true;
-            } else {
-                return false;
-            }
+            assert !(val1 == val2) || areOrdered(val1, val2);
+            return val1 == val2;
         }
     }
 

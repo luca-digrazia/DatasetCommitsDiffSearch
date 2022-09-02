@@ -31,8 +31,6 @@ package com.oracle.truffle.llvm.runtime.debug.value;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
@@ -46,17 +44,10 @@ public abstract class LLVMDebugManagedValue extends LLVMDebuggerValue {
         this.llvmType = llvmType;
     }
 
-    @ExportMessage
-    public final Object getMetaObject() throws UnsupportedMessageException {
-        if (llvmType == null) {
-            throw UnsupportedMessageException.create();
-        }
-        return new LLVMDebugManagedType(llvmType);
-    }
-
-    @ExportMessage
-    public final boolean hasMetaObject() {
-        return llvmType != null;
+    @Override
+    @TruffleBoundary
+    public Object getMetaObject() {
+        return llvmType != null ? String.valueOf(llvmType) : "";
     }
 
     public static LLVMDebugManagedValue create(Object llvmType, Object value) {
