@@ -899,7 +899,6 @@ public final class ObjectKlass extends Klass {
         }
     }
 
-    @Override
     public ModuleEntry module() {
         if (!inUnnamedPackage()) {
             return packageEntry.module();
@@ -910,9 +909,8 @@ public final class ObjectKlass extends Klass {
         return getRegistries().getClassRegistry(getDefiningClassLoader()).getUnnamedModule();
     }
 
-    @Override
-    public PackageEntry packageEntry() {
-        return packageEntry;
+    private boolean inUnnamedPackage() {
+        return packageEntry == null;
     }
 
     @TruffleBoundary

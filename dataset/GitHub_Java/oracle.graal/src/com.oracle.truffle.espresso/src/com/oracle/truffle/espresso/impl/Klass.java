@@ -57,8 +57,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
-import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
 import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
 import com.oracle.truffle.espresso.jdwp.api.JDWPConstantPool;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
@@ -254,7 +252,9 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         this.superInterfaces = superInterfaces;
         this.id = context.getNewKlassId();
         this.modifiers = modifiers;
-        this.runtimePackage = initRuntimePackage();
+        if (!isArray() && !isPrimitive()) {
+            initRuntimePackage();
+        }
     }
 
     public abstract @Host(ClassLoader.class) StaticObject getDefiningClassLoader();
@@ -913,15 +913,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return runtimePackage;
     }
 
-    public abstract ModuleEntry module();
-
-    public abstract PackageEntry packageEntry();
-
-    public final boolean inUnnamedPackage() {
-        return packageEntry() == null;
-    }
-
     private Symbol<Name> initRuntimePackage() {
+        assert !isArray();
         String hostPkgName = Types.getRuntimePackage(getType());
         assert !hostPkgName.endsWith(";");
         if (hostPkgName.length() == 0) {

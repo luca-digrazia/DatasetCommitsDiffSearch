@@ -115,7 +115,6 @@ public final class EspressoContext {
     }
 
     @CompilationFinal private boolean modulesInitialized = false;
-    @CompilationFinal private boolean metaInitialized = false;
     private boolean initialized = false;
 
     private Classpath bootClasspath;
@@ -280,7 +279,6 @@ public final class EspressoContext {
         // TODO: link libjimage
 
         this.meta = new Meta(this);
-        this.metaInitialized = true;
 
         this.interpreterToVM = new InterpreterToVM(this);
 
@@ -360,7 +358,6 @@ public final class EspressoContext {
             if (e != 0) {
                 throw EspressoError.shouldNotReachHere();
             }
-            modulesInitialized = true;
             meta.java_lang_System_initPhase3.invokeDirect(null);
         }
 
@@ -537,10 +534,6 @@ public final class EspressoContext {
     private void initializeKnownClass(Symbol<Type> type) {
         Klass klass = getRegistries().loadKlassWithBootClassLoader(type);
         klass.safeInitialize();
-    }
-
-    public boolean metaInitialized() {
-        return metaInitialized;
     }
 
     public boolean modulesInitialized() {

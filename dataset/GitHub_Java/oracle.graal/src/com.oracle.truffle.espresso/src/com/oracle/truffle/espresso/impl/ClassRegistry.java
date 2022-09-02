@@ -57,6 +57,7 @@ public abstract class ClassRegistry implements ContextAccess {
     static final ThreadLocal<TypeStack> stack = ThreadLocal.withInitial(TypeStack.supplier);
 
     static final class TypeStack {
+
         static final Supplier<TypeStack> supplier = new Supplier<TypeStack>() {
             @Override
             public TypeStack get() {
@@ -66,6 +67,7 @@ public abstract class ClassRegistry implements ContextAccess {
         Node head = null;
 
         static final class Node {
+
             Symbol<Type> entry;
             Node next;
 
@@ -73,6 +75,7 @@ public abstract class ClassRegistry implements ContextAccess {
                 this.entry = entry;
                 this.next = next;
             }
+
         }
 
         boolean isEmpty() {
@@ -105,6 +108,7 @@ public abstract class ClassRegistry implements ContextAccess {
 
         private TypeStack() {
         }
+
     }
 
     private final EspressoContext context;

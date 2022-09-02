@@ -493,24 +493,11 @@ public final class StaticObject implements TruffleObject {
         initInstanceFields(guestClass);
         if (klass.getContext().modulesEnabled()) {
             setField(klass.getMeta().java_lang_class_classLoader, klass.getDefiningClassLoader());
-            setModule(klass);
-        }
-        setHiddenField(klass.getMeta().HIDDEN_MIRROR_KLASS, klass);
-    }
-
-    private void setModule(Klass klass) {
-        if (klass instanceof ObjectKlass) {
-            StaticObject module = klass.module().module();
-            if (StaticObject.isNull(module)) {
-                if (klass.getRegistries().javaBaseDefined()) {
-                    setField(klass.getMeta().java_lang_class_module, klass.getRegistries().getJavaBaseModule().module());
-                } else {
-                    klass.getRegistries().addToFixupList(klass);
-                }
-            } else {
-                setField(klass.getMeta().java_lang_class_module, module);
+            if (klass instanceof ObjectKlass) {
+                setField(klass.getMeta().java_lang_class_module, ((ObjectKlass) klass).module());
             }
         }
+        setHiddenField(klass.getMeta().HIDDEN_MIRROR_KLASS, klass);
     }
 
     // Constructor for static fields storage.
