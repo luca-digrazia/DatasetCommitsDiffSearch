@@ -42,7 +42,6 @@ package org.graalvm.wasm.predefined.testutil;
 
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.WasmOptions;
 import org.graalvm.wasm.predefined.BuiltinModule;
@@ -84,10 +83,10 @@ public class TestutilModule extends BuiltinModule {
     }
 
     @Override
-    protected WasmInstance createInstance(WasmLanguage language, WasmContext context, String name) {
+    protected WasmModule createModule(WasmLanguage language, WasmContext context, String name) {
         final Path temporaryDirectory = createTemporaryDirectory();
-        final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy = WasmOptions.StoreConstantsPolicy.getValue(context.environment().getOptions());
-        WasmInstance module = new WasmInstance(new WasmModule(name, null), storeConstantsPolicy);
+        final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy = WasmOptions.StoreConstantsInPool.getValue(context.environment().getOptions());
+        WasmModule module = new WasmModule(name, null, storeConstantsPolicy);
 
         // Note: in the following methods, the types are not important here, since these methods
         // are not accessed by Wasm code.
