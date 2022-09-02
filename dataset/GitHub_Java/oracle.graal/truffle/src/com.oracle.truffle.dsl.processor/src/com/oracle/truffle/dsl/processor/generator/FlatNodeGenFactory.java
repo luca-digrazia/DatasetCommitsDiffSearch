@@ -1415,7 +1415,7 @@ public class FlatNodeGenFactory {
             renameOriginalParameters(forType, method, frameState);
         }
 
-        boolean isExecutableInUncached = forType.getEvaluatedCount() != node.getExecutionCount() && !node.getChildren().isEmpty();
+        boolean isExecutableInUncached = forType.getEvaluatedCount() != node.getExecutionCount();
         if (!isExecutableInUncached) {
             method.getAnnotationMirrors().add(new CodeAnnotationMirror(types.CompilerDirectives_TruffleBoundary));
         }
