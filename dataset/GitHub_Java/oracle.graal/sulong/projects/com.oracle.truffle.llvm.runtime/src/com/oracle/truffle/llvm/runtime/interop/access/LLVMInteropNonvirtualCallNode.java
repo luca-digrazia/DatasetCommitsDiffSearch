@@ -48,7 +48,6 @@ import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Clazz;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Method;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMDynAccessSymbolNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @GenerateUncached
@@ -70,8 +69,7 @@ public abstract class LLVMInteropNonvirtualCallNode extends LLVMNode {
      * @param llvmFunction
      */
     @Specialization(guards = {"argCount==arguments.length", "llvmFunction!=null", "methodName==method.getName()", "type==method.getObjectClass()", "type==asClazz(receiver)"})
-    Object doCached(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments,
-                    @CachedContext(LLVMLanguage.class) LLVMContext context,
+    Object doCached(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments, @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @CachedLibrary(limit = "5") InteropLibrary interop, @Cached(value = "arguments.length", allowUncached = true) int argCount,
                     @Cached(value = "getLLVMFunction(context, method, type)", allowUncached = true) LLVMFunction llvmFunction,
                     @Cached(value = "create(llvmFunction)", allowUncached = true) LLVMAccessSymbolNode accessSymbolNode)
@@ -84,14 +82,12 @@ public abstract class LLVMInteropNonvirtualCallNode extends LLVMNode {
      * @param method
      */
     @Specialization
-    Object doResolve(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments,
-                    @CachedContext(LLVMLanguage.class) LLVMContext context,
-                    @Cached LLVMDynAccessSymbolNode dynAccessSymbolNode,
+    Object doResolve(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments, @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @CachedLibrary(limit = "5") InteropLibrary interop)
                     throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
         Method newMethod = type.findMethodByArgumentsWithSelf(methodName, arguments);
         LLVMFunction newLLVMFunction = getLLVMFunction(context, newMethod, type);
-        Object newReceiver = dynAccessSymbolNode.execute(newLLVMFunction);
+        Object newReceiver = context.createFunctionDescriptor(newLLVMFunction);
         return interop.execute(newReceiver, arguments);
     }
 
