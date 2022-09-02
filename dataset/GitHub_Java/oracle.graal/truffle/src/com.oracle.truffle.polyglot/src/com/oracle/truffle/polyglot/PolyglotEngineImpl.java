@@ -40,15 +40,14 @@
  */
 package com.oracle.truffle.polyglot;
 
-import static com.oracle.truffle.polyglot.EngineAccessor.INSTRUMENT;
-import static com.oracle.truffle.polyglot.EngineAccessor.LANGUAGE;
+import static com.oracle.truffle.polyglot.VMAccessor.INSTRUMENT;
+import static com.oracle.truffle.polyglot.VMAccessor.LANGUAGE;
 
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -73,7 +72,6 @@ import org.graalvm.collections.Equivalence;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.EnvironmentAccess;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
@@ -93,8 +91,8 @@ import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.impl.Accessor.CastUnsafe;
 import com.oracle.truffle.api.impl.DispatchOutputStream;
+import com.oracle.truffle.api.impl.Accessor.CastUnsafe;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.EventContext;
@@ -105,6 +103,7 @@ import com.oracle.truffle.api.instrumentation.ThreadsListener;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.polyglot.PolyglotContextImpl.ContextWeakReference;
+import org.graalvm.polyglot.EnvironmentAccess;
 
 final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
@@ -192,7 +191,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         this.contextClassLoader = contextClassLoader;
         this.boundEngine = boundEngine;
         this.logHandler = logHandler;
-        this.castUnsafe = EngineAccessor.ACCESSOR.getCastUnsafe();
+        this.castUnsafe = VMAccessor.SPI.getCastUnsafe();
 
         Map<String, LanguageInfo> languageInfos = new LinkedHashMap<>();
         this.idToLanguage = Collections.unmodifiableMap(initializeLanguages(languageInfos));
@@ -217,7 +216,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
 
         OptionDescriptors engineOptionDescriptors = new PolyglotEngineOptionsOptionDescriptors();
-        OptionDescriptors compilerOptionDescriptors = EngineAccessor.ACCESSOR.getCompilerOptions();
+        OptionDescriptors compilerOptionDescriptors = VMAccessor.SPI.getCompilerOptions();
         this.engineOptions = OptionDescriptors.createUnion(engineOptionDescriptors, compilerOptionDescriptors);
         this.engineOptionValues = new OptionValuesImpl(this, engineOptions);
 
@@ -445,49 +444,37 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         return this;
     }
 
-    PolyglotLanguage findLanguage(PolyglotLanguageContext accessingLanguage, String languageId, String mimeType, boolean failIfNotFound, boolean allowInternal) {
+    PolyglotLanguage findLanguage(String languageId, String mimeType, boolean failIfNotFound) {
         assert languageId != null || mimeType != null : Objects.toString(languageId) + ", " + Objects.toString(mimeType);
-
-        Map<String, LanguageInfo> languages;
-        if (accessingLanguage != null) {
-            languages = accessingLanguage.getAccessibleLanguages();
-        } else {
-            assert allowInternal : "non internal access is not yet supported for instrument lookups";
-            languages = this.idToInternalLanguageInfo;
-        }
-
-        LanguageInfo foundLanguage = null;
         if (languageId != null) {
-            foundLanguage = languages.get(languageId);
+            PolyglotLanguage language = idToLanguage.get(languageId);
+            if (language != null) {
+                return language;
+            }
         }
-        if (mimeType != null && foundLanguage == null) {
+        if (mimeType != null) {
             // we need to interpret mime types for compatibility.
-            foundLanguage = languages.get(mimeType);
-            if (foundLanguage == null) {
-                for (LanguageInfo searchLanguage : languages.values()) {
-                    if (searchLanguage.getMimeTypes().contains(mimeType)) {
-                        foundLanguage = searchLanguage;
-                        break;
-                    }
+            PolyglotLanguage language = idToLanguage.get(mimeType);
+            if (language != null) {
+                return language;
+            }
+            for (PolyglotLanguage searchLanguage : idToLanguage.values()) {
+                if (searchLanguage.cache.getMimeTypes().contains(mimeType)) {
+                    return searchLanguage;
                 }
             }
         }
-
-        if (foundLanguage != null && (allowInternal || !foundLanguage.isInternal())) {
-            return (PolyglotLanguage) EngineAccessor.NODES.getEngineObject(foundLanguage);
-        }
-
         if (failIfNotFound) {
             if (languageId != null) {
                 Set<String> ids = new LinkedHashSet<>();
-                for (LanguageInfo language : languages.values()) {
-                    ids.add(language.getId());
+                for (PolyglotLanguage language : idToLanguage.values()) {
+                    ids.add(language.cache.getId());
                 }
                 throw new IllegalStateException("No language for id " + languageId + " found. Supported languages are: " + ids);
             } else {
                 Set<String> mimeTypes = new LinkedHashSet<>();
-                for (LanguageInfo language : languages.values()) {
-                    mimeTypes.addAll(language.getMimeTypes());
+                for (PolyglotLanguage language : idToLanguage.values()) {
+                    mimeTypes.addAll(language.cache.getMimeTypes());
                 }
                 throw new IllegalStateException("No language for MIME type " + mimeType + " found. Supported languages are: " + mimeTypes);
             }
@@ -499,7 +486,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     private Map<String, PolyglotInstrument> initializeInstruments(Map<String, InstrumentInfo> infos) {
         Map<String, PolyglotInstrument> instruments = new LinkedHashMap<>();
         ClassLoader loader = getAPIAccess().useContextClassLoader() ? Thread.currentThread().getContextClassLoader() : null;
-        List<InstrumentCache> cachedInstruments = InstrumentCache.load(EngineAccessor.allLoaders(), loader);
+        List<InstrumentCache> cachedInstruments = InstrumentCache.load(VMAccessor.allLoaders(), loader);
         for (InstrumentCache instrumentCache : cachedInstruments) {
             PolyglotInstrument instrumentImpl = new PolyglotInstrument(this, instrumentCache);
             instrumentImpl.info = LANGUAGE.createInstrument(instrumentImpl, instrumentCache.getId(), instrumentCache.getName(), instrumentCache.getVersion());
@@ -1166,7 +1153,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     PolyglotAccess polyglotAccess, boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO,
                     boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter, Map<String, String> options,
                     Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream, boolean allowCreateProcess, ProcessHandler processHandler,
-                    EnvironmentAccess environmentAccess, Map<String, String> environment, ZoneId zone) {
+                    EnvironmentAccess environmentAccess, Map<String, String> environment) {
         checkState();
         if (boundEngine && preInitializedContext == null && !contexts.isEmpty()) {
             throw new IllegalArgumentException("Automatically created engines cannot be used to create more than one context. " +
@@ -1175,13 +1162,12 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
         initializeHostAccess(hostAccess);
 
-        EconomicSet<String> allowedLanguages = EconomicSet.create();
+        Set<String> allowedLanguages;
         if (onlyLanguages.length == 0) {
-            allowedLanguages.addAll(getLanguages().keySet());
+            allowedLanguages = getLanguages().keySet();
         } else {
-            allowedLanguages.addAll(Arrays.asList(onlyLanguages));
+            allowedLanguages = new HashSet<>(Arrays.asList(onlyLanguages));
         }
-        getAPIAccess().validatePolyglotAccess(polyglotAccess, allowedLanguages);
         final FileSystem fs;
         if (!ALLOW_IO) {
             if (fileSystem == null) {
@@ -1232,7 +1218,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         PolyglotContextConfig config = new PolyglotContextConfig(this, useOut, useErr, useIn,
                         allowHostLookup, polyglotAccess, allowNativeAccess, allowCreateThread, allowHostClassLoading,
                         allowExperimentalOptions, classFilter, arguments, allowedLanguages, options, fs, useHandler, allowCreateProcess, useProcessHandler,
-                        environmentAccess, environment, zone);
+                        environmentAccess, environment);
 
         PolyglotContextImpl context = loadPreinitializedContext(config);
         if (context == null) {
