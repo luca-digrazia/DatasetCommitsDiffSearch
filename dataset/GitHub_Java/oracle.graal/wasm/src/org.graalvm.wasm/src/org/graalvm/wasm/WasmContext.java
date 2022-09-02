@@ -59,7 +59,6 @@ public final class WasmContext {
     private final TableRegistry tableRegistry;
     private final Linker linker;
     private Map<String, WasmInstance> moduleInstances;
-    private int moduleNameCount;
 
     public static WasmContext getCurrent() {
         return WasmLanguage.getCurrentContext();
@@ -73,7 +72,6 @@ public final class WasmContext {
         this.memoryRegistry = new MemoryRegistry();
         this.moduleInstances = new LinkedHashMap<>();
         this.linker = new Linker(language);
-        this.moduleNameCount = 0;
         instantiateBuiltinModules();
     }
 
@@ -143,32 +141,8 @@ public final class WasmContext {
             }
             final String name = parts[0];
             final String key = parts.length == 2 ? parts[1] : parts[0];
-            final WasmInstance module = BuiltinModule.createBuiltinInstance(language, this, name, key);
+            final WasmInstance module = BuiltinModule.createBuiltinModule(language, this, name, key);
             moduleInstances.put(name, module);
         }
-    }
-
-    private String freshModuleName() {
-        return "module-" + moduleNameCount++;
-    }
-
-    public WasmModule readModule(byte[] data) {
-        return readModule(freshModuleName(), data);
-    }
-
-    public WasmModule readModule(String moduleName, byte[] data) {
-        final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy = WasmOptions.StoreConstantsPolicy.getValue(this.environment().getOptions());
-        final WasmModule module = new WasmModule(moduleName, data, storeConstantsPolicy);
-        final BinaryParser reader = new BinaryParser(language, module);
-        reader.readModule();
-        return module;
-    }
-
-    public WasmInstance readInstance(WasmModule module) {
-        final WasmInstance instance = new WasmInstance(module, module.storeConstantsPolicy());
-        final BinaryParser reader = new BinaryParser(language, module);
-        reader.readInstance(this, instance);
-        this.registerModule(instance);
-        return instance;
     }
 }

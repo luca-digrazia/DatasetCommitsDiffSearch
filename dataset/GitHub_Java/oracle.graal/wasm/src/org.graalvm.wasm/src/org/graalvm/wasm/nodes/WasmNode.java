@@ -101,7 +101,7 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
         return codeEntry;
     }
 
-    public final WasmInstance instance() {
+    public final WasmInstance module() {
         return wasmInstance;
     }
 

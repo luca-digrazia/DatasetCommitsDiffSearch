@@ -43,7 +43,6 @@ package org.graalvm.wasm;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Consumer;
 
 import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 
@@ -54,7 +53,7 @@ import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 public final class WasmModule {
     private final String name;
     private final SymbolTable symbolTable;
-    private final ArrayList<Consumer<WasmContext>> linkActions;
+    private final ArrayList<Runnable> linkActions;
     @CompilationFinal(dimensions = 1) private byte[] data;
     @CompilationFinal private boolean isParsed;
 
@@ -86,11 +85,11 @@ public final class WasmModule {
         return data;
     }
 
-    public List<Consumer<WasmContext>> linkActions() {
+    public List<Runnable> linkActions() {
         return Collections.unmodifiableList(linkActions);
     }
 
-    public void addLinkAction(Consumer<WasmContext> action) {
+    public void addLinkAction(Runnable action) {
         linkActions.add(action);
     }
 

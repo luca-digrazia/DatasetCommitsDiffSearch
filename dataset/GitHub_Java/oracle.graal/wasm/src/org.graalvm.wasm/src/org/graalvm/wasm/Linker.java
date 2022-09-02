@@ -56,7 +56,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 import org.graalvm.wasm.Linker.ResolutionDag.DataSym;
 import org.graalvm.wasm.Linker.ResolutionDag.ExportMemorySym;
@@ -113,11 +112,10 @@ public class Linker {
         // We therefore check the link state again.
         if (linkState == LinkState.notLinked) {
             linkState = LinkState.inProgress;
-            final WasmContext context = WasmContext.getCurrent();
-            Map<String, WasmInstance> instances = context.moduleInstances();
+            Map<String, WasmInstance> instances = WasmContext.getCurrent().moduleInstances();
             for (WasmInstance instance : instances.values()) {
-                for (Consumer<WasmContext> action : instance.module().linkActions()) {
-                    action.accept(context);
+                for (Runnable action : instance.module().linkActions()) {
+                    action.run();
                 }
             }
             linkTopologically();

@@ -59,7 +59,7 @@ public class WasiArgsGetNode extends WasmBuiltinRootNode {
 
     @Override
     public Object executeWithContext(VirtualFrame frame, WasmContext context) {
-        final WasmMemory memory = instance.memory();
+        final WasmMemory memory = module.symbolTable().memory();
         final int argvAddress = (int) frame.getArguments()[0];
         final int argvBuffAddress = (int) frame.getArguments()[1];
 

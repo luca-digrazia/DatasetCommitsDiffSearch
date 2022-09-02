@@ -43,7 +43,6 @@ package org.graalvm.wasm;
 import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import static com.oracle.truffle.api.CompilerDirectives.transferToInterpreter;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -53,7 +52,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import org.graalvm.wasm.constants.GlobalModifier;
 import org.graalvm.wasm.collection.IntArrayList;
-import org.graalvm.wasm.memory.WasmMemory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,51 +62,12 @@ import java.util.List;
 @ExportLibrary(InteropLibrary.class)
 @SuppressWarnings("static-method")
 public final class WasmInstance implements TruffleObject {
-    private static final int INITIAL_GLOBALS_SIZE = 64;
-
     private final WasmModule module;
     private final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy;
 
-    /**
-     * This array is monotonically populated from the left. An index i denotes the i-th global in
-     * this module. The value at the index i denotes the address of the global in the memory space
-     * for all the globals from all the modules (see {@link GlobalRegistry}).
-     *
-     * This separation of global indices is done because the index spaces of the globals are
-     * module-specific, and the globals can be imported across modules. Thus, the address-space of
-     * the globals is not the same as the module-specific index-space.
-     */
-    @CompilationFinal(dimensions = 1) int[] globalAddresses;
-
-    /**
-     * The table from the context-specific table space, which this module is using.
-     *
-     * In the current WebAssembly specification, a module can use at most one table. The value
-     * {@code null} denotes that this module uses no table.
-     */
-    @CompilationFinal private WasmTable table;
-
-    /**
-     * Memory that this module is using.
-     *
-     * In the current WebAssembly specification, a module can use at most one memory. The value
-     * {@code null} denotes that this module uses no memory.
-     */
-    @CompilationFinal private WasmMemory memory;
-
-    private void ensureGlobalsCapacity(int index) {
-        while (index >= globalAddresses.length) {
-            final int[] nGlobalIndices = new int[globalAddresses.length * 2];
-            System.arraycopy(globalAddresses, 0, nGlobalIndices, 0, globalAddresses.length);
-            globalAddresses = nGlobalIndices;
-        }
-    }
-
     public WasmInstance(WasmModule module, WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy) {
         this.module = module;
-        ensureGlobalsCapacity(module.maxGlobalIndex());
         this.storeConstantsPolicy = storeConstantsPolicy;
-        this.globalAddresses = new int[INITIAL_GLOBALS_SIZE];
     }
 
     public SymbolTable symbolTable() {
@@ -127,33 +86,6 @@ public final class WasmInstance implements TruffleObject {
         return module;
     }
 
-    public int globalAddress(int index) {
-        return globalAddresses[index];
-    }
-
-    void setGlobalAddress(int globalIndex, int address) {
-        // TODO: checkNotLinked();
-        globalAddresses[globalIndex] = address;
-    }
-
-    public WasmTable table() {
-        return table;
-    }
-
-    void setTable(WasmTable table) {
-        // TODO: checkNotLinked();
-        this.table = table;
-    }
-
-    public WasmMemory memory() {
-        return memory;
-    }
-
-    public void setMemory(WasmMemory memory) {
-        // TODO: checkNotLinked();
-        this.memory = memory;
-    }
-
     @ExportMessage
     boolean hasMembers() {
         return true;
@@ -169,10 +101,10 @@ public final class WasmInstance implements TruffleObject {
         }
         final Integer globalIndex = symbolTable.exportedGlobals().get(member);
         if (globalIndex != null) {
-            readGlobal(this, symbolTable, globalIndex);
+            readGlobal(symbolTable, globalIndex);
         }
         if (member.equals(symbolTable.exportedMemory())) {
-            return memory();
+            return symbolTable.memory();
         }
         throw UnknownIdentifierException.create(member);
     }
@@ -186,7 +118,7 @@ public final class WasmInstance implements TruffleObject {
         if (index == null) {
             throw UnknownIdentifierException.create(member);
         }
-        final int address = globalAddress(index);
+        final int address = symbolTable.globalAddress(index);
         if (!(value instanceof Number)) {
             throw UnsupportedMessageException.create();
         }
@@ -232,8 +164,8 @@ public final class WasmInstance implements TruffleObject {
         return false;
     }
 
-    private static Object readGlobal(WasmInstance instance, SymbolTable symbolTable, int globalIndex) {
-        final int address = instance.globalAddress(globalIndex);
+    private static Object readGlobal(SymbolTable symbolTable, int globalIndex) {
+        final int address = symbolTable.globalAddress(globalIndex);
         final GlobalRegistry globals = WasmContext.getCurrent().globals();
         final byte type = symbolTable.globalValueType(globalIndex);
         switch (type) {
@@ -254,7 +186,7 @@ public final class WasmInstance implements TruffleObject {
     @TruffleBoundary
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
         // TODO: Handle includeInternal.
-        return new ExportedMembers(this, symbolTable());
+        return new ExportedMembers(symbolTable());
     }
 
     public boolean isBuiltin() {
@@ -267,13 +199,11 @@ public final class WasmInstance implements TruffleObject {
 
     @ExportLibrary(InteropLibrary.class)
     static final class ExportedMembers implements TruffleObject {
-        private final WasmInstance instance;
         private final SymbolTable symbolTable;
         private final List<WasmFunction> exportedFunctions;
         private final IntArrayList exportedGlobals;
 
-        ExportedMembers(WasmInstance instance, SymbolTable symbolTable) {
-            this.instance = instance;
+        ExportedMembers(SymbolTable symbolTable) {
             this.symbolTable = symbolTable;
             this.exportedFunctions = new ArrayList<>(symbolTable.exportedFunctions().values());
             this.exportedGlobals = new IntArrayList();
@@ -318,9 +248,9 @@ public final class WasmInstance implements TruffleObject {
             index -= exportedFunctions.size();
             if (index < exportedGlobals.size()) {
                 final int globalIndex = exportedGlobals.get((int) index);
-                return readGlobal(instance, symbolTable, globalIndex);
+                return readGlobal(symbolTable, globalIndex);
             }
-            return memory();
+            return symbolTable.memory();
         }
     }
 
