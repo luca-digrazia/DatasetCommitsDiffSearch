@@ -247,7 +247,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
         final LLVMSourceLocation source = getSourceLocation(call, false);
         final SymbolImpl target = call.getCallTarget();
-        LLVMExpressionNode result = nodeFactory.createLLVMBuiltin(target, argNodes, argTypes, argCount, source);
+        LLVMExpressionNode result = nodeFactory.createLLVMBuiltin(target, argNodes, argCount, source);
         if (result == null) {
             if (target instanceof InlineAsmConstant) {
                 final InlineAsmConstant inlineAsmConstant = (InlineAsmConstant) target;
@@ -290,7 +290,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         final LLVMExpressionNode newNode = symbols.resolve(cmpxchg.getReplace());
         final Type elementType = cmpxchg.getCmp().getType();
 
-        createFrameWrite(nodeFactory.createCompareExchangeInstruction(cmpxchg.getAggregateType(), elementType, ptrNode, cmpNode, newNode), cmpxchg);
+        createFrameWrite(nodeFactory.createCompareExchangeInstruction(cmpxchg.getType(), elementType, ptrNode, cmpNode, newNode), cmpxchg);
     }
 
     private void visitDebugIntrinsic(SymbolImpl value, SourceVariable variable, MDExpression expression, long index, boolean isDeclaration) {
@@ -340,7 +340,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
         final LLVMSourceLocation source = getSourceLocation(call, false);
         final SymbolImpl target = call.getCallTarget();
-        LLVMExpressionNode node = nodeFactory.createLLVMBuiltin(target, args, argsType, argCount, source);
+        LLVMExpressionNode node = nodeFactory.createLLVMBuiltin(target, args, argCount, source);
         if (node == null) {
             if (target instanceof InlineAsmConstant) {
                 final InlineAsmConstant inlineAsmConstant = (InlineAsmConstant) target;
@@ -390,7 +390,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         List<LLVMExpressionNode> unwindValue = new ArrayList<>();
         if (blockPhis != null) {
             for (Phi phi : blockPhis) {
-                FrameSlot slot = getSlot(phi.getPhiValue());
+                FrameSlot slot = getSlot(phi.getPhiValue().getName());
                 LLVMExpressionNode value = symbols.resolve(phi.getValue());
                 if (call.normalSuccessor() == phi.getBlock()) {
                     normalTo.add(slot);
@@ -410,11 +410,11 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
                         unwindType.toArray(Type.EMPTY_ARRAY));
 
         final LLVMSourceLocation source = getSourceLocation(call, false);
-        LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(target, argNodes, argTypes, argCount, null);
+        LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(target, argNodes, argCount, null);
         if (function == null) {
             function = symbols.resolve(target);
         }
-        LLVMControlFlowNode result = nodeFactory.createFunctionInvoke(getSlot(call), function, argNodes, new FunctionType(targetType, argTypes, false),
+        LLVMControlFlowNode result = nodeFactory.createFunctionInvoke(getSlot(call.getName()), function, argNodes, new FunctionType(targetType, argTypes, false),
                         regularIndex, unwindIndex, normalPhi,
                         unwindPhi, source);
 
@@ -455,7 +455,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         List<LLVMExpressionNode> unwindValue = new ArrayList<>();
         if (blockPhis != null) {
             for (Phi phi : blockPhis) {
-                FrameSlot slot = getSlot(phi.getPhiValue());
+                FrameSlot slot = getSlot(phi.getPhiValue().getName());
                 LLVMExpressionNode value = symbols.resolve(phi.getValue());
                 if (call.normalSuccessor() == phi.getBlock()) {
                     normalTo.add(slot);
@@ -475,7 +475,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
                         unwindType.toArray(Type.EMPTY_ARRAY));
 
         final LLVMSourceLocation source = getSourceLocation(call, false);
-        LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(target, args, argsType, argCount, null);
+        LLVMExpressionNode function = nodeFactory.createLLVMBuiltin(target, args, argCount, null);
         if (function == null) {
             function = symbols.resolve(target);
         }
@@ -774,7 +774,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             Type[] types = new Type[phisPerSuccessor[i].size()];
             for (int j = 0; j < phisPerSuccessor[i].size(); j++) {
                 Phi phi = phisPerSuccessor[i].get(j);
-                to[j] = getSlot(phi.getPhiValue());
+                to[j] = getSlot(phi.getPhiValue().getName());
                 from[j] = symbols.resolve(phi.getValue());
                 types[j] = phi.getValue().getType();
             }
@@ -827,7 +827,7 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
     }
 
     private void createFrameWrite(LLVMExpressionNode result, ValueInstruction source, LLVMSourceLocation sourceLocation) {
-        final LLVMStatementNode node = nodeFactory.createFrameWrite(source.getType(), result, getSlot(source), sourceLocation);
+        final LLVMStatementNode node = nodeFactory.createFrameWrite(source.getType(), result, getSlot(source.getName()), sourceLocation);
         addInstruction(node);
     }
 
@@ -841,16 +841,16 @@ final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         return nodeFactory.createInlineAssemblerExpression(library, inlineAsmConstant.getAsmExpression(), inlineAsmConstant.getAsmFlags(), argNodes, argsType, retType, sourceLocation);
     }
 
-    private FrameSlot getSlot(ValueInstruction instruction) {
-        return frame.findFrameSlot(instruction.getName());
+    private FrameSlot getSlot(String name) {
+        return frame.findFrameSlot(name);
     }
 
     private FrameSlot getExceptionSlot() {
-        return frame.findFrameSlot(LLVMUserException.FRAME_SLOT_ID);
+        return getSlot(LLVMUserException.FRAME_SLOT_ID);
     }
 
     private FrameSlot getStackSlot() {
-        return frame.findFrameSlot(LLVMStack.FRAME_ID);
+        return getSlot(LLVMStack.FRAME_ID);
     }
 
     private void addInstruction(LLVMStatementNode node) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -62,6 +62,7 @@ import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMFrameValueAccess;
+import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
@@ -111,7 +112,7 @@ final class LLVMRuntimeDebugInformation {
         private void visitFrameValue(String name) {
             final FrameSlot slot = frame.findFrameSlot(name);
             assert slot != null;
-            final LLVMFrameValueAccess valueAccess = context.getNodeFactory().createDebugFrameValue(slot, isDeclaration);
+            final LLVMFrameValueAccess valueAccess = context.getLanguage().getNodeFactory().createDebugFrameValue(slot, isDeclaration);
             context.getSourceContext().registerFrameValue(symbol, valueAccess);
             notNullableSlots.add(slot);
             variable.addStaticValue();
@@ -120,7 +121,7 @@ final class LLVMRuntimeDebugInformation {
         private void visitSimpleConstant(SymbolImpl constant) {
             final LLVMExpressionNode node = symbols.resolve(constant);
             assert node != null;
-            final LLVMDebugObjectBuilder value = context.getNodeFactory().createDebugStaticValue(node, false);
+            final LLVMDebugObjectBuilder value = context.getLanguage().getNodeFactory().createDebugStaticValue(node, false);
             context.getSourceContext().registerStatic(symbol, value);
             variable.addStaticValue();
         }
@@ -204,7 +205,7 @@ final class LLVMRuntimeDebugInformation {
                 }
 
                 final LLVMSourceSymbol symbol = local.getSymbol();
-                final LLVMFrameValueAccess alloc = context.getNodeFactory().createDebugFrameValue(frameSlot, true);
+                final LLVMFrameValueAccess alloc = context.getLanguage().getNodeFactory().createDebugFrameValue(frameSlot, true);
                 notNullableSlots.add(frameSlot);
                 context.getSourceContext().registerFrameValue(symbol, alloc);
                 local.addStaticValue();
@@ -245,7 +246,7 @@ final class LLVMRuntimeDebugInformation {
             }
         }
 
-        return context.getNodeFactory().createDebugValueInit(targetSlot, offsets, lengths);
+        return context.getLanguage().getNodeFactory().createDebugValueInit(targetSlot, offsets, lengths);
     }
 
     private static final int[] CLEAR_NONE = new int[0];
@@ -304,7 +305,7 @@ final class LLVMRuntimeDebugInformation {
         if (partIndex < 0 && variable.hasFragments()) {
             partIndex = variable.getFragmentIndex(0, (int) variable.getSymbol().getType().getSize());
             if (partIndex < 0) {
-                throw new IllegalStateException("Cannot find index of value fragment!");
+                throw new LLVMParserException("Cannot find index of value fragment!");
             }
 
             clearParts = new int[variable.getFragments().size() - 1];
@@ -319,8 +320,8 @@ final class LLVMRuntimeDebugInformation {
         final boolean mustDereference = isDeclaration || mustDereferenceValue(expression, variable.getSourceType(), value);
 
         final FrameSlot targetSlot = frame.findOrAddFrameSlot(variable.getSymbol(), MetaType.DEBUG, FrameSlotKind.Object);
-        final LLVMExpressionNode containerRead = context.getNodeFactory().createFrameRead(MetaType.DEBUG, targetSlot);
-        return context.getNodeFactory().createDebugValueUpdate(mustDereference, valueRead, targetSlot, containerRead, partIndex, clearParts);
+        final LLVMExpressionNode containerRead = context.getLanguage().getNodeFactory().createFrameRead(MetaType.DEBUG, targetSlot);
+        return context.getLanguage().getNodeFactory().createDebugValueUpdate(mustDereference, valueRead, targetSlot, containerRead, partIndex, clearParts);
     }
 
 }

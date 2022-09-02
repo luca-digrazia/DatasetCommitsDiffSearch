@@ -33,6 +33,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
+import javax.xml.bind.DatatypeConverter;
+
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -59,6 +61,7 @@ public final class LLVM80BitFloat implements LLVMArithmetic {
     private static final int BIT_TO_HEX_FACTOR = 4;
     public static final int BIT_WIDTH = 80;
     public static final int BYTE_WIDTH = BIT_WIDTH / Byte.SIZE;
+    private static final int HEX_WIDTH = BIT_WIDTH / BIT_TO_HEX_FACTOR;
 
     private static final int EXPONENT_BIT_WIDTH = 15;
     private static final int FRACTION_BIT_WIDTH = 64;
@@ -158,14 +161,6 @@ public final class LLVM80BitFloat implements LLVMArithmetic {
         return biasedExponent - EXPONENT_BIAS;
     }
 
-    public static LLVM80BitFloat createPositiveZero() {
-        if (CompilerDirectives.inCompiledCode()) {
-            return new LLVM80BitFloat(false, 0, 0);
-        } else {
-            return POSITIVE_ZERO;
-        }
-    }
-
     private static long bit(int i) {
         return 1 << i;
     }
@@ -176,7 +171,7 @@ public final class LLVM80BitFloat implements LLVMArithmetic {
 
     public static LLVM80BitFloat fromLong(long val) {
         if (val == 0) {
-            return createPositiveZero();
+            return new LLVM80BitFloat(POSITIVE_ZERO);
         }
         boolean sign = val < 0;
         return fromLong(Math.abs(val), sign);
@@ -637,6 +632,13 @@ public final class LLVM80BitFloat implements LLVMArithmetic {
 
     public static int compare(LLVM80BitFloat val1, LLVM80BitFloat val2) {
         return val1.compareOrdered(val2);
+    }
+
+    public static LLVM80BitFloat fromString(String stringValue) {
+        if (stringValue.length() != HEX_WIDTH) {
+            throw new IllegalArgumentException("unexpected length of input string!");
+        }
+        return fromBytesBigEndian(DatatypeConverter.parseHexBinary(stringValue));
     }
 
     protected abstract static class LLVM80BitFloatNativeCallNode extends LLVMNode {

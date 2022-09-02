@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -41,16 +40,15 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension.NativeLookupResult;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType;
@@ -84,25 +82,24 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
 
     @CompilationFinal private TruffleObject nativeWrapper;
     @CompilationFinal private long nativePointer;
-
-    // used for calls from foreign languages
-    // includes boundary conversions
-    private CallTarget foreignCallTarget;
-
-    CallTarget getForeignCallTarget() {
-        if (foreignCallTarget == null) {
-            CompilerDirectives.transferToInterpreter();
-            LLVMSourceFunctionType sourceType = getFunction().getSourceType();
-            LLVMInteropType interopType = context.getInteropType(sourceType);
-            LLVMForeignCallNode foreignCall = new LLVMForeignCallNode(context.getLanguage(), this, interopType);
-            foreignCallTarget = Truffle.getRuntime().createCallTarget(foreignCall);
-            assert foreignCallTarget != null;
-        }
-        return foreignCallTarget;
-    }
+    @CompilationFinal private boolean interopTypeCached;
+    @CompilationFinal private LLVMInteropType interopType;
 
     private static long tagSulongFunctionPointer(int id) {
         return id | SULONG_FUNCTION_POINTER_TAG;
+    }
+
+    /**
+     * @see LLVMGlobal#getInteropType()
+     */
+    public LLVMInteropType getInteropType() {
+        if (!interopTypeCached) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            LLVMSourceFunctionType sourceType = getFunction().getSourceType();
+            interopType = context.getInteropType(sourceType);
+            interopTypeCached = true;
+        }
+        return interopType;
     }
 
     public static final class Intrinsic {
@@ -204,11 +201,6 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
             final RootCallTarget callTarget = converter.convert();
             final LLVMSourceFunctionType sourceType = converter.getSourceType();
             descriptor.setFunction(new LLVMIRFunction(callTarget, sourceType));
-        }
-
-        @Override
-        LLVMSourceFunctionType getSourceType() {
-            return converter.getSourceType();
         }
     }
 
@@ -469,22 +461,9 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
     }
 
     @ExportMessage
-    static class Execute {
-
-        @Specialization(limit = "5", guards = "self == cachedSelf")
-        @SuppressWarnings("unused")
-        static Object doCached(LLVMFunctionDescriptor self, Object[] args,
-                        @Cached("self") LLVMFunctionDescriptor cachedSelf,
-                        @Cached(parameters = "cachedSelf.getForeignCallTarget()") DirectCallNode call) {
-            call.forceInlining();
-            return call.call(args);
-        }
-
-        @Specialization(replaces = "doCached")
-        static Object doPolymorphic(LLVMFunctionDescriptor self, Object[] args,
-                        @Cached IndirectCallNode call) {
-            return call.call(self.getForeignCallTarget(), args);
-        }
+    Object execute(Object[] args,
+                    @Cached LLVMForeignCallNode callNode) throws ArityException, UnsupportedTypeException {
+        return callNode.executeCall(this, args);
     }
 
     @ExportMessage

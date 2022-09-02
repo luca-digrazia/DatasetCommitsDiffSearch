@@ -151,11 +151,12 @@ public final class LLVMParser {
     private void defineFunction(FunctionSymbol functionSymbol, ModelModule model, List<String> importedSymbols) {
         assert !functionSymbol.isExternal();
         // handle the file scope
+        LLVMFunctionDescriptor descriptor = context.createFunctionDescriptor(functionSymbol.getName(), functionSymbol.getType());
         FunctionDefinition functionDefinition = (FunctionDefinition) functionSymbol;
         LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(runtime, functionDefinition, source, model.getFunctionParser(functionDefinition),
                         model.getFunctionProcessor());
         Function function = new LazyLLVMIRFunction(lazyConverter);
-        LLVMFunctionDescriptor descriptor = context.createFunctionDescriptor(functionSymbol.getName(), functionSymbol.getType(), function, library);
+        descriptor.define(library, function);
         runtime.getFileScope().register(descriptor);
 
         // handle the global scope
