@@ -384,54 +384,41 @@ public final class FrameStateBuilder implements SideEffectsState {
         return new FrameStateBuilder(this);
     }
 
-    private String incompatibilityErrorMessage(String reason, FrameStateBuilder other) {
-        return String.format("Frame states being merged are incompatible: %s%n This frame state: %s%nOther frame state: %s%nParser context: %s", reason, this, other, parser);
-    }
-
-    /**
-     * Checks invariants that must hold when merging {@code other} into this frame state.
-     *
-     * @param other
-     * @throws PermanentBailoutException if the frame states are incompatible with respect to their
-     *             locked objects. This indicates bytecode that has unstructured or unbalanced
-     *             locks.
-     * @throws GraalError if the frame states are incompatible in terms of {@link #rethrowException}
-     *             or stack slots
-     */
-    public void checkCompatibleWith(FrameStateBuilder other) {
+    public boolean isCompatibleWith(FrameStateBuilder other) {
         assert code.equals(other.code) && graph == other.graph && localsSize() == other.localsSize() : "Can only compare frame states of the same method";
         assert lockedObjects.length == monitorIds.length && other.lockedObjects.length == other.monitorIds.length : "mismatch between lockedObjects and monitorIds";
 
         if (rethrowException != other.rethrowException) {
-            throw new GraalError(incompatibilityErrorMessage("mismatch in rethrowException flag", other));
+            return false;
         }
 
         if (stackSize() != other.stackSize()) {
-            throw new GraalError(incompatibilityErrorMessage("mismatch in stack sizes", other));
+            return false;
         }
         for (int i = 0; i < stackSize(); i++) {
             ValueNode x = stack[i];
             ValueNode y = other.stack[i];
             assert x != null && y != null;
             if (x != y && (x == TWO_SLOT_MARKER || x.isDeleted() || y == TWO_SLOT_MARKER || y.isDeleted() || x.getStackKind() != y.getStackKind())) {
-                throw new GraalError(incompatibilityErrorMessage("mismatch in stack types", other));
+                return false;
             }
         }
         if (lockedObjects.length != other.lockedObjects.length) {
-            throw new PermanentBailoutException(incompatibilityErrorMessage("unbalanced monitors - locked objects do not match", other));
+            throw new PermanentBailoutException("unbalanced monitors - locked objects do not match: %s != %s", Arrays.toString(lockedObjects), Arrays.toString(other.lockedObjects));
         }
         for (int i = 0; i < lockedObjects.length; i++) {
             if (originalValue(lockedObjects[i], false) != originalValue(other.lockedObjects[i], false)) {
-                throw new PermanentBailoutException(incompatibilityErrorMessage("unbalanced monitors - locked objects do not match", other));
+                throw new PermanentBailoutException("unbalanced monitors - locked objects do not match: %s != %s", Arrays.toString(lockedObjects), Arrays.toString(other.lockedObjects));
             }
             if (monitorIds[i] != other.monitorIds[i]) {
-                throw new PermanentBailoutException(incompatibilityErrorMessage("unbalanced monitors - monitors do not match", other));
+                throw new PermanentBailoutException("unbalanced monitors - monitors do not match: %s != %s", Arrays.toString(monitorIds), Arrays.toString(other.monitorIds));
             }
         }
+        return true;
     }
 
     public void merge(AbstractMergeNode block, FrameStateBuilder other) {
-        checkCompatibleWith(other);
+        GraalError.guarantee(isCompatibleWith(other), "stacks do not match on merge; bytecodes would not verify:%nexpect: %s%nactual: %s", block, other);
 
         for (int i = 0; i < localsSize(); i++) {
             locals[i] = merge(locals[i], other.locals[i], block);
