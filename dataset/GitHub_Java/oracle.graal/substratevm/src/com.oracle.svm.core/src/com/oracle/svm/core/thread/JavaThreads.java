@@ -197,19 +197,10 @@ public abstract class JavaThreads {
 
     /** Before detaching a thread, run any Java cleanup code. */
     static void cleanupBeforeDetach(IsolateThread thread) {
-        if (thread.equal(CurrentIsolate.getCurrentThread())) {
-            Target_java_lang_Thread javaThread = SubstrateUtil.cast(currentThread.get(thread), Target_java_lang_Thread.class);
-            javaThread.exit();
-        } else {
-            /*
-             * We cannot call Thread.exit() for another thread: it may use synchronization, which is
-             * not permitted since we must be at a safepoint here, and any TerminatingThreadLocal
-             * instances access the current thread's thread-local values, so we would end up
-             * cleaning up the wrong thread's resources. Of course, not calling Thread.exit() means
-             * that there will be leaks. Since the Java thread code is not designed for detaching
-             * other threads, we shouldn't support this in the first place.
-             */
-        }
+        VMError.guarantee(thread.equal(CurrentIsolate.getCurrentThread()), "Cleanup must execute in detaching thread");
+
+        Target_java_lang_Thread javaThread = SubstrateUtil.cast(currentThread.get(thread), Target_java_lang_Thread.class);
+        javaThread.exit();
     }
 
     /**
@@ -683,11 +674,26 @@ public abstract class JavaThreads {
         final Thread thread = Thread.currentThread();
         final ParkEvent parkEvent = ensureUnsafeParkEvent(thread);
 
+        final long startNanos = System.nanoTime();
+        /* Can not park past the end of a 64-bit nanosecond epoch. */
+        final long endNanos = TimeUtils.addOrMaxValue(startNanos, delayNanos);
+
         final int oldStatus = JavaThreads.getThreadStatus(thread);
         int newStatus = MonitorSupport.maybeAdjustNewParkStatus(ThreadStatus.PARKED_TIMED);
         JavaThreads.setThreadStatus(thread, newStatus);
         try {
-            return parkEvent.condTimedWait(delayNanos);
+            // How much longer should I sleep?
+            long remainingNanos = delayNanos;
+            while (0L < remainingNanos) {
+                WaitResult result = parkEvent.condTimedWait(remainingNanos);
+                if (result == WaitResult.INTERRUPTED || result == WaitResult.UNPARKED) {
+                    return result;
+                }
+                // If the sleep returns early, how much longer should I delay?
+                remainingNanos = endNanos - System.nanoTime();
+            }
+            return WaitResult.TIMED_OUT;
+
         } finally {
             JavaThreads.setThreadStatus(thread, oldStatus);
         }
@@ -709,10 +715,25 @@ public abstract class JavaThreads {
         final Thread thread = Thread.currentThread();
         final ParkEvent sleepEvent = ensureSleepEvent(thread);
 
+        final long startNanos = System.nanoTime();
+        /* Can not sleep past the end of a 64-bit nanosecond epoch. */
+        final long endNanos = TimeUtils.addOrMaxValue(startNanos, delayNanos);
+
         final int oldStatus = JavaThreads.getThreadStatus(thread);
         JavaThreads.setThreadStatus(thread, ThreadStatus.SLEEPING);
         try {
-            return sleepEvent.condTimedWait(delayNanos);
+            // How much longer should I sleep?
+            long remainingNanos = delayNanos;
+            while (0L < remainingNanos) {
+                final WaitResult result = sleepEvent.condTimedWait(remainingNanos);
+                if (result == WaitResult.INTERRUPTED || result == WaitResult.UNPARKED) {
+                    return result;
+                }
+                // If the sleep returns early, how much longer should I delay?
+                remainingNanos = endNanos - System.nanoTime();
+            }
+            return WaitResult.TIMED_OUT;
+
         } finally {
             JavaThreads.setThreadStatus(thread, oldStatus);
         }

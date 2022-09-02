@@ -36,6 +36,7 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.annotate.ForceFixedRegisterReads;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.Uninterruptible;
@@ -141,7 +142,7 @@ public abstract class VMThreads {
 
     /** Is threading being torn down? */
     @Uninterruptible(reason = "Called from uninterruptible code during tear down.")
-    public static boolean isTearingDown() {
+    static boolean isTearingDown() {
         return initializationState.get() >= STATE_TEARING_DOWN;
     }
 
@@ -469,12 +470,6 @@ public abstract class VMThreads {
     protected abstract OSThreadId getCurrentOSThreadId();
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isCurrentThread(IsolateThread thread) {
-        OSThreadId osThreadId = getCurrentOSThreadId();
-        return OSThreadIdTL.get(thread).equal(osThreadId);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public IsolateThread findIsolateThreadForCurrentOSThread(boolean inCrashHandler) {
         OSThreadId osThreadId = getCurrentOSThreadId();
 
@@ -611,6 +606,7 @@ public abstract class VMThreads {
 
         /** A guarded transition from native to another status. */
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @ForceFixedRegisterReads
         public static boolean compareAndSetNativeToNewStatus(int newStatus) {
             return statusTL.compareAndSet(STATUS_IN_NATIVE, newStatus);
         }
@@ -705,21 +701,25 @@ public abstract class VMThreads {
         private static final int SYNCHRONIZE_CODE = NO_ACTION + 1;
 
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @ForceFixedRegisterReads
         public static boolean isActionPending() {
             return actionTL.getVolatile() != NO_ACTION;
         }
 
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @ForceFixedRegisterReads
         public static boolean isSynchronizeCode() {
             return actionTL.getVolatile() == SYNCHRONIZE_CODE;
         }
 
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @ForceFixedRegisterReads
         public static void clearActions() {
             actionTL.setVolatile(NO_ACTION);
         }
 
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @ForceFixedRegisterReads
         public static void setSynchronizeCode(IsolateThread vmThread) {
             assert StatusSupport.isStatusCreated(vmThread) || VMOperation.isInProgressAtSafepoint() : "Invariant to avoid races between setting and clearing.";
             actionTL.setVolatile(vmThread, SYNCHRONIZE_CODE);

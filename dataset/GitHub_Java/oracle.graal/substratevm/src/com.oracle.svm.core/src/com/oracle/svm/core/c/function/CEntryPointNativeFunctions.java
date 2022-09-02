@@ -78,17 +78,16 @@ public final class CEntryPointNativeFunctions {
     @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, nameTransformation = NameTransformation.class)
     public static int createIsolate(CEntryPointCreateIsolateParameters params, IsolatePointer isolate, IsolateThreadPointer thread) {
         int result = CEntryPointActions.enterCreateIsolate(params);
-        if (result != 0) {
-            return result;
+        if (result == 0) {
+            if (isolate.isNonNull()) {
+                isolate.write(CurrentIsolate.getIsolate());
+            }
+            if (thread.isNonNull()) {
+                thread.write(CurrentIsolate.getCurrentThread());
+            }
+            result = CEntryPointActions.leave();
         }
-
-        if (isolate.isNonNull()) {
-            isolate.write(CurrentIsolate.getIsolate());
-        }
-        if (thread.isNonNull()) {
-            thread.write(CurrentIsolate.getCurrentThread());
-        }
-        return CEntryPointActions.leave();
+        return result;
     }
 
     @Uninterruptible(reason = UNINTERRUPTIBLE_REASON)
@@ -101,12 +100,11 @@ public final class CEntryPointNativeFunctions {
     @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, nameTransformation = NameTransformation.class)
     public static int attachThread(Isolate isolate, IsolateThreadPointer thread) {
         int result = CEntryPointActions.enterAttachThread(isolate, true);
-        if (result != 0) {
-            return result;
+        if (result == 0) {
+            thread.write(CurrentIsolate.getCurrentThread());
+            result = CEntryPointActions.leave();
         }
-
-        thread.write(CurrentIsolate.getCurrentThread());
-        return CEntryPointActions.leave();
+        return result;
     }
 
     @Uninterruptible(reason = UNINTERRUPTIBLE_REASON)
@@ -116,13 +114,14 @@ public final class CEntryPointNativeFunctions {
                     "attached to the passed isolate or if another error occurs, returns NULL."})
     @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, nameTransformation = NameTransformation.class)
     public static IsolateThread getCurrentThread(Isolate isolate) {
-        int status = CEntryPointActions.enterIsolate(isolate);
-        if (status != 0) {
+        int result = CEntryPointActions.enterIsolate(isolate);
+        if (result != 0) {
             return WordFactory.nullPointer();
         }
-
         IsolateThread thread = CurrentIsolate.getCurrentThread();
-        CEntryPointActions.leave();
+        if (CEntryPointActions.leave() != 0) {
+            thread = WordFactory.nullPointer();
+        }
         return thread;
     }
 
@@ -158,9 +157,11 @@ public final class CEntryPointNativeFunctions {
     public static int detachThread(IsolateThread thread) {
         int result = CEntryPointActions.enter(thread);
         if (result != 0) {
+            CEntryPointActions.leave();
             return result;
         }
-        return CEntryPointActions.leaveDetachThread();
+        result = CEntryPointActions.leaveDetachThread();
+        return result;
     }
 
     @Uninterruptible(reason = UNINTERRUPTIBLE_REASON)
@@ -173,6 +174,7 @@ public final class CEntryPointNativeFunctions {
     public static int tearDownIsolate(IsolateThread isolateThread) {
         int result = CEntryPointActions.enter(isolateThread);
         if (result != 0) {
+            CEntryPointActions.leave();
             return result;
         }
         return CEntryPointActions.leaveTearDownIsolate();
@@ -194,6 +196,7 @@ public final class CEntryPointNativeFunctions {
     public static int detachAllThreadsAndTearDownIsolate(IsolateThread isolateThread) {
         int result = CEntryPointActions.enter(isolateThread);
         if (result != 0) {
+            CEntryPointActions.leave();
             return result;
         }
         if (SubstrateOptions.MultiThreaded.getValue()) {

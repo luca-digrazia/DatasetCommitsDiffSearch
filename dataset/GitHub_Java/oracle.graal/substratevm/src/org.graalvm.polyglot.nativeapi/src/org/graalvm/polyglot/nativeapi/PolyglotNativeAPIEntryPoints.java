@@ -41,6 +41,7 @@ import org.graalvm.polyglot.nativeapi.types.PolyglotNativeAPITypes.PolyglotIsola
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.CConst;
 import com.oracle.svm.core.c.CHeader;
+import com.oracle.svm.core.c.CTypedef;
 import com.oracle.svm.core.c.function.CEntryPointCreateIsolateParameters;
 import com.oracle.svm.core.c.function.CEntryPointNativeFunctions.IsolatePointer;
 import com.oracle.svm.core.c.function.CEntryPointNativeFunctions.IsolateThreadPointer;
@@ -62,7 +63,7 @@ public final class PolyglotNativeAPIEntryPoints {
                     "Every thread starts with a default handle scope. This scope is released when",
                     "the thread is detached."})
     @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, nameTransformation = UnchangedNameTransformation.class)
-    public static int polyCreateIsolate(@CConst PolyglotIsolateParameters params, PolyglotIsolatePointer isolate, PolyglotIsolateThreadPointer thread) {
+    public static @CTypedef(name = "poly_status") int polyCreateIsolate(@CConst PolyglotIsolateParameters params, PolyglotIsolatePointer isolate, PolyglotIsolateThreadPointer thread) {
         return createIsolate(params, isolate, thread) == 0 ? Poly.ok() : Poly.generic_failure();
     }
 
@@ -74,7 +75,7 @@ public final class PolyglotNativeAPIEntryPoints {
                     "If the thread has already been attached, the call succeeds and also provides",
                     "the thread's isolate thread structure."})
     @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, nameTransformation = UnchangedNameTransformation.class)
-    public static int polyAttachThread(PolyglotIsolate isolate, PolyglotIsolateThreadPointer thread) {
+    public static @CTypedef(name = "poly_status") int polyAttachThread(PolyglotIsolate isolate, PolyglotIsolateThreadPointer thread) {
         return attachThread(isolate, thread) == 0 ? Poly.ok() : Poly.generic_failure();
     }
 
@@ -105,24 +106,25 @@ public final class PolyglotNativeAPIEntryPoints {
                     "be executing in the isolate thread's context.",
                     "Returns poly_ok on success, or poly_generic_failure on failure."})
     @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, nameTransformation = UnchangedNameTransformation.class)
-    public static int polyDetachThread(PolyglotIsolateThread thread) {
+    public static @CTypedef(name = "poly_status") int polyDetachThread(PolyglotIsolateThread thread) {
         return detachThread(thread) == 0 ? Poly.ok() : Poly.generic_failure();
     }
 
     @Uninterruptible(reason = UNINTERRUPTIBLE_REASON)
-    @CEntryPoint(name = "poly_detach_threads", documentation = {
-                    "Using the context of the isolate thread from the first argument, detaches the",
-                    "threads in an array pointed to by the second argument, with the length of the",
-                    "array given in the third argument. All of the passed threads must be in the",
-                    "same isolate, including the first argument. None of the threads to detach may",
-                    "execute Java code at the time of the call or later without reattaching first,",
-                    "or their behavior will be entirely undefined. The current thread may be part of",
-                    "the array, however, using poly_detach_thread() should be preferred for detaching",
-                    "only the current thread.",
+    @CEntryPoint(name = "poly_detach_all_threads_and_tear_down_isolate", documentation = {
+                    "In the isolate of the passed isolate thread, detach all those threads that were",
+                    "externally started (not within Java, which includes the \"main thread\") and were",
+                    "attached to the isolate afterwards. Afterwards, all threads that were started",
+                    "within Java undergo a regular shutdown process, followed by the tear-down of the",
+                    "entire isolate, which detaches the current thread and discards the objects,",
+                    "threads, and any other state or context associated with the isolate.",
+                    "None of the manually attached threads targeted by this function may be executing",
+                    "Java code at the time when this function is called or at any point in the future",
+                    "or this will cause entirely undefined (and likely fatal) behavior.",
                     "Returns poly_ok on success, or poly_generic_failure on failure."})
     @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, nameTransformation = UnchangedNameTransformation.class)
-    public static int polyDetachThreads(PolyglotIsolateThread thread, PolyglotIsolateThreadPointer threads, int length) {
-        return detachThreads(thread, threads, length) == 0 ? Poly.ok() : Poly.generic_failure();
+    public static @CTypedef(name = "poly_status") int polyDetachAllThreadsAndTearDownIsolate(PolyglotIsolateThread thread) {
+        return detachAllThreadsAndTearDownIsolate(thread) == 0 ? Poly.ok() : Poly.generic_failure();
     }
 
     @Uninterruptible(reason = UNINTERRUPTIBLE_REASON)
@@ -132,7 +134,7 @@ public final class PolyglotNativeAPIEntryPoints {
                     "that is associated with it.",
                     "Returns poly_ok on success, or poly_generic_failure on failure."})
     @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, nameTransformation = UnchangedNameTransformation.class)
-    public static int polyTearDownIsolate(PolyglotIsolateThread thread) {
+    public static @CTypedef(name = "poly_status") int polyTearDownIsolate(PolyglotIsolateThread thread) {
         return tearDownIsolate(thread) == 0 ? Poly.ok() : Poly.generic_failure();
     }
 
@@ -151,8 +153,8 @@ public final class PolyglotNativeAPIEntryPoints {
     @CFunction(value = "graal_detach_thread", transition = NO_TRANSITION)
     private static native int detachThread(IsolateThread thread);
 
-    @CFunction(value = "graal_detach_threads", transition = NO_TRANSITION)
-    private static native int detachThreads(IsolateThread thread, IsolateThreadPointer array, int length);
+    @CFunction(value = "graal_detach_all_threads_and_tear_down_isolate", transition = NO_TRANSITION)
+    private static native int detachAllThreadsAndTearDownIsolate(IsolateThread thread);
 
     @CFunction(value = "graal_tear_down_isolate", transition = NO_TRANSITION)
     private static native int tearDownIsolate(IsolateThread thread);
