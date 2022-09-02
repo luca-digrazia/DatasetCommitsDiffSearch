@@ -33,7 +33,6 @@ import static org.graalvm.compiler.hotspot.HotSpotBackend.GHASH_PROCESS_BLOCKS;
 import static org.graalvm.compiler.hotspot.HotSpotBackend.UPDATE_BYTES_CRC32;
 import static org.graalvm.compiler.hotspot.HotSpotBackend.UPDATE_BYTES_CRC32C;
 import static org.graalvm.compiler.hotspot.meta.HotSpotAOTProfilingPlugin.Options.TieredAOT;
-import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.HOTSPOT_OOP_HANDLE_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.JAVA_THREAD_THREAD_OBJECT_LOCATION;
 import static org.graalvm.compiler.java.BytecodeParserOptions.InlineDuringParsing;
 import static org.graalvm.compiler.nodes.ConstantNode.forBoolean;
@@ -113,7 +112,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registratio
 import org.graalvm.compiler.nodes.java.ArrayLengthNode;
 import org.graalvm.compiler.nodes.java.DynamicNewInstanceNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
-import org.graalvm.compiler.nodes.java.ValidateNewInstanceClassNode;
 import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
@@ -411,8 +409,7 @@ public class HotSpotGraphBuilderPlugins {
                  * check. Such a DynamicNewInstanceNode is also never constant folded to a
                  * NewInstanceNode.
                  */
-                ValueNode clazzLegal = b.add(new ValidateNewInstanceClassNode(clazz));
-                b.addPush(JavaKind.Object, new DynamicNewInstanceNode(b.nullCheckedValue(clazzLegal, DeoptimizationAction.None), true));
+                b.addPush(JavaKind.Object, new DynamicNewInstanceNode(b.nullCheckedValue(clazz, DeoptimizationAction.None), true));
                 return true;
             }
         });
@@ -508,22 +505,12 @@ public class HotSpotGraphBuilderPlugins {
                 AddressNode address = b.add(new OffsetAddressNode(thread, offset));
                 // JavaThread::_threadObj is never compressed
                 ObjectStamp stamp = StampFactory.objectNonNull(TypeReference.create(b.getAssumptions(), metaAccess.lookupJavaType(Thread.class)));
-                ReadNode value = b.add(new ReadNode(address, JAVA_THREAD_THREAD_OBJECT_LOCATION,
-                                config.threadObjectFieldIsHandle ? StampFactory.forKind(wordTypes.getWordKind()) : stamp, BarrierType.NONE));
-                if (config.threadObjectFieldIsHandle) {
-                    // Read the Object from the OopHandle
-                    ValueNode handleOffset = ConstantNode.forIntegerKind(wordTypes.getWordKind(), 0, b.getGraph());
-                    AddressNode handleAddress = b.add(new OffsetAddressNode(value, handleOffset));
-                    value = b.add(new ReadNode(handleAddress, HOTSPOT_OOP_HANDLE_LOCATION, stamp, BarrierType.NONE));
-                }
-                b.push(JavaKind.Object, value);
+                b.addPush(JavaKind.Object, new ReadNode(address, JAVA_THREAD_THREAD_OBJECT_LOCATION, stamp, BarrierType.NONE));
                 return true;
             }
         });
 
         if (config.osThreadInterruptedOffset != Integer.MAX_VALUE) {
-            // This substitution is no longer in used when threadObj is a handle
-            assert !config.threadObjectFieldIsHandle;
             r.registerMethodSubstitution(ThreadSubstitutions.class, "isInterrupted", Receiver.class, boolean.class);
         }
 
