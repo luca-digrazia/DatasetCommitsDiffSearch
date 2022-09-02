@@ -42,10 +42,11 @@ package com.oracle.truffle.tck.instrumentation;
 
 import java.util.function.Predicate;
 
+import org.junit.Assert;
+
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.tck.InlineSnippet;
-import org.junit.Assert;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -66,7 +67,6 @@ import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.tck.common.inline.InlineVerifier;
 
@@ -89,9 +89,6 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
         instrumentEnv.getInstrumenter().attachExecutionEventListener(
                         SourceSectionFilter.newBuilder().tagIs(RootTag.class).build(),
                         new RootFrameChecker());
-        instrumentEnv.getInstrumenter().attachExecutionEventListener(
-                        SourceSectionFilter.newBuilder().tagIs(RootTag.class).build(),
-                        new NodePropertyChecker());
     }
 
     @Override
@@ -220,28 +217,6 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
             private void verify(final Object result) {
                 resultVerifier.verify(result);
             }
-        }
-    }
-
-    private static class NodePropertyChecker implements ExecutionEventListener {
-
-        public void onEnter(EventContext context, VirtualFrame frame) {
-            Node instrumentedNode = context.getInstrumentedNode();
-            RootNode root = instrumentedNode.getRootNode();
-            checkRootNames(root);
-        }
-
-        @TruffleBoundary
-        private static void checkRootNames(RootNode root) {
-            Assert.assertNotNull(root);
-            root.getName(); // should not crash
-            root.getQualifiedName(); // should not crash
-        }
-
-        public void onReturnValue(EventContext context, VirtualFrame frame, Object result) {
-        }
-
-        public void onReturnExceptional(EventContext context, VirtualFrame frame, Throwable exception) {
         }
     }
 
