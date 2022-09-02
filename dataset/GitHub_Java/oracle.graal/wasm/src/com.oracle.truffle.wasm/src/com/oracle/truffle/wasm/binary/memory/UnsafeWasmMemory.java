@@ -42,6 +42,7 @@ public class UnsafeWasmMemory extends WasmMemory {
     private long startAddress;
     private long pageSize;
     private final long maxPageSize;
+    private long byteSize;
 
     public UnsafeWasmMemory(long initPageSize, long maxPageSize) {
         try {
@@ -53,7 +54,7 @@ public class UnsafeWasmMemory extends WasmMemory {
         }
         this.pageSize = initPageSize;
         this.maxPageSize = maxPageSize;
-        long byteSize = byteSize();
+        this.byteSize = initPageSize * PAGE_SIZE;
         this.startAddress = unsafe.allocateMemory(byteSize);
         unsafe.setMemory(startAddress, byteSize, (byte) 0);
     }
@@ -61,7 +62,7 @@ public class UnsafeWasmMemory extends WasmMemory {
     @Override
     public void validateAddress(long address, int offset) {
         logger.finest(() -> String.format("validating memory address: 0x%016X (%d)", address, address));
-        if (address < 0 || address + offset >= this.byteSize()) {
+        if (address < 0 || address + offset >= this.byteSize) {
             throw new WasmException("Requested memory address out-of-bounds");
         }
     }
@@ -97,20 +98,20 @@ public class UnsafeWasmMemory extends WasmMemory {
         if (extraPageSize < 0) {
             throw new WasmException("Extra size cannot be negative.");
         }
-        long targetSize = byteSize() + extraPageSize * PAGE_SIZE;
+        long targetSize = byteSize + extraPageSize * PAGE_SIZE;
         if (maxPageSize >= 0 && targetSize > maxPageSize * PAGE_SIZE) {
             // Cannot grow the memory beyond maxPageSize bytes.
             return false;
         }
-        if (targetSize * PAGE_SIZE == byteSize()) {
+        if (targetSize * PAGE_SIZE == byteSize) {
             return true;
         }
         long updatedStartAddress = unsafe.allocateMemory(targetSize);
-        unsafe.copyMemory(startAddress, updatedStartAddress, byteSize());
-        unsafe.setMemory(updatedStartAddress + byteSize(), targetSize - byteSize(), (byte) 0);
+        unsafe.copyMemory(startAddress, updatedStartAddress, byteSize);
+        unsafe.setMemory(updatedStartAddress + byteSize, targetSize - byteSize, (byte) 0);
         unsafe.freeMemory(startAddress);
         startAddress = updatedStartAddress;
-        pageSize += extraPageSize;
+        byteSize = targetSize;
         return true;
     }
 
@@ -280,12 +281,5 @@ public class UnsafeWasmMemory extends WasmMemory {
     public void store_i64_32(long address, int value) {
         logger.finest(() -> String.format("store.i64_32 address = %d, value = 0x%08X (%d)", address, value, value));
         unsafe.putInt(startAddress + address, value);
-    }
-
-    @Override
-    public WasmMemory duplicate() {
-        final UnsafeWasmMemory other = new UnsafeWasmMemory(pageSize, maxPageSize);
-        unsafe.copyMemory(this.startAddress, other.startAddress, this.byteSize());
-        return other;
     }
 }

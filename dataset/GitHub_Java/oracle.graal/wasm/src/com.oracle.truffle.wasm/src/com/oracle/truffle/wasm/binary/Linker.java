@@ -29,21 +29,17 @@
  */
 package com.oracle.truffle.wasm.binary;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.wasm.binary.constants.GlobalModifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalResolution;
 import com.oracle.truffle.wasm.binary.exception.WasmLinkerException;
 import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 
-import java.util.Map;
-
 import static com.oracle.truffle.wasm.binary.constants.GlobalResolution.IMPORTED;
 import static com.oracle.truffle.wasm.binary.constants.GlobalResolution.UNRESOLVED_IMPORT;
 
 public class Linker {
     private final WasmLanguage language;
-    private @CompilerDirectives.CompilationFinal boolean linked;
 
     public Linker(WasmLanguage language) {
         this.language = language;
@@ -51,26 +47,9 @@ public class Linker {
 
     // TODO: Many of the following methods should work on all the modules in the context, instead of a single one.
     //  See which ones and update.
-    void tryLink() {
-        if (!linked) {
-            tryLinkOutsidePartialEvaluation();
-        }
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private void tryLinkOutsidePartialEvaluation() {
-        // Some Truffle configurations allow that the code gets compiled before executing the code.
-        // We therefore check the link state again.
-        if (!linked) {
-            Map<String, WasmModule> modules = WasmContext.getCurrent().modules();
-            for (WasmModule module : modules.values()) {
-                linkFunctions(module);
-                linkGlobals(module);
-                linkTables(module);
-                linkMemories(module);
-                module.setLinked();
-            }
-        }
+    void link(WasmModule module) {
+        linkFunctions(module);
+        linkGlobals(module);
     }
 
     private void linkFunctions(WasmModule module) {
@@ -98,11 +77,7 @@ public class Linker {
     }
 
     private void linkTables(WasmModule module) {
-        // TODO: Ensure that tables are resolved.
-    }
-
-    private void linkMemories(WasmModule module) {
-        // TODO: Ensure that tables are resolved.
+        // TODO: Ensure that tables are resolve
     }
 
     /**
@@ -110,10 +85,9 @@ public class Linker {
      *
      * The intent is to use this functionality only in the test suite and the benchmark suite.
      */
-    public void resetModuleState(WasmModule module, byte[] data) {
+    public void resetGlobalState(WasmModule module, byte[] data) {
         final BinaryReader reader = new BinaryReader(language, module, data);
         reader.resetGlobalState();
-        reader.resetMemoryState();
     }
 
     int importGlobal(WasmModule module, int index, String importedModuleName, String importedGlobalName, int valueType, int mutability) {
