@@ -48,6 +48,11 @@ public final class LLVMIVarBit {
     // represents value as big-endian two's-complement
     @CompilationFinal(dimensions = 1) private final byte[] array;
 
+    private LLVMIVarBit() {
+        this.bits = 0;
+        this.array = new byte[0];
+    }
+
     private LLVMIVarBit(int bits, byte[] arr, int arrBits, boolean signExtend) {
         this.bits = bits;
 
@@ -87,6 +92,10 @@ public final class LLVMIVarBit {
 
     public static LLVMIVarBit create(int bitWidth, byte[] loadedBytes, int loadedArrBits, boolean signExtend) {
         return new LLVMIVarBit(bitWidth, loadedBytes, loadedArrBits, signExtend);
+    }
+
+    public static LLVMIVarBit createNull() {
+        return new LLVMIVarBit();
     }
 
     public static LLVMIVarBit createZeroExt(int bits, byte from) {
@@ -136,12 +145,15 @@ public final class LLVMIVarBit {
 
     @TruffleBoundary
     private static BigInteger asBigInteger(LLVMIVarBit right) {
+        if (right.getBytes() == null) {
+            return BigInteger.ZERO;
+        }
         return new BigInteger(right.getBytes());
     }
 
     @TruffleBoundary
     public BigInteger asUnsignedBigInteger() {
-        if (array.length == 0) {
+        if (array == null || array.length == 0) {
             return BigInteger.ZERO;
         }
         byte[] newArr = new byte[array.length + 1];
@@ -151,7 +163,7 @@ public final class LLVMIVarBit {
 
     @TruffleBoundary
     public BigInteger asBigInteger() {
-        if (array.length != 0) {
+        if (array != null && array.length != 0) {
             return new BigInteger(array);
         } else {
             return BigInteger.ZERO;
@@ -420,7 +432,7 @@ public final class LLVMIVarBit {
 
     @TruffleBoundary
     public boolean isZero() {
-        return array.length == 0 || BigInteger.ZERO.equals(asBigInteger());
+        return array == null || array.length == 0 || BigInteger.ZERO.equals(asBigInteger());
     }
 
     @Override
