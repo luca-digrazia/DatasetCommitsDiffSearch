@@ -22,43 +22,24 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.nodes;
+package org.graalvm.compiler.lir;
 
-import org.graalvm.compiler.core.common.type.Stamp;
-import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.nodeinfo.NodeInfo;
-
+import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.VirtualObject;
 import jdk.vm.ci.meta.JavaConstant;
 
-@NodeInfo
-public abstract class ImplicitNullCheckNode extends DeoptimizingFixedWithNextNode {
+/**
+ * An {@link LIRFrameState} with additional information for implicit exception.
+ */
+public class ImplicitLIRFrameState extends LIRFrameState {
 
-    public static final NodeClass<ImplicitNullCheckNode> TYPE = NodeClass.create(ImplicitNullCheckNode.class);
+    public final JavaConstant deoptReasonAndAction;
+    public final JavaConstant deoptSpeculation;
 
-    protected JavaConstant deoptReasonAndAction;
-    protected JavaConstant deoptSpeculation;
-
-    protected ImplicitNullCheckNode(NodeClass<? extends ImplicitNullCheckNode> c, Stamp stamp) {
-        super(c, stamp);
-    }
-
-    protected ImplicitNullCheckNode(NodeClass<? extends ImplicitNullCheckNode> c, Stamp stamp, FrameState stateBefore) {
-        super(c, stamp, stateBefore);
-    }
-
-    public JavaConstant getDeoptReasonAndAction() {
-        return deoptReasonAndAction;
-    }
-
-    public void setDeoptReasonAndAction(JavaConstant deoptReasonAndAction) {
+    public ImplicitLIRFrameState(BytecodeFrame topFrame, VirtualObject[] virtualObjects, LabelRef exceptionEdge,
+                    JavaConstant deoptReasonAndAction, JavaConstant deoptSpeculation) {
+        super(topFrame, virtualObjects, exceptionEdge);
         this.deoptReasonAndAction = deoptReasonAndAction;
-    }
-
-    public JavaConstant getDeoptSpeculation() {
-        return deoptSpeculation;
-    }
-
-    public void setDeoptSpeculation(JavaConstant deoptSpeculation) {
         this.deoptSpeculation = deoptSpeculation;
     }
 

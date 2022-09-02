@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,26 +28,32 @@ import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Queue;
 
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.Equivalence;
+import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.lir.ConstantValue;
+import org.graalvm.compiler.lir.ImplicitLIRFrameState;
 import org.graalvm.compiler.lir.LIRFrameState;
+import org.graalvm.compiler.lir.LIRValueUtil;
 import org.graalvm.compiler.lir.LabelRef;
-import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.NodeValueMap;
+import org.graalvm.compiler.nodes.spi.NodeWithState;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.EscapeObjectState;
+import org.graalvm.compiler.nodes.virtual.VirtualBoxingNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.virtual.nodes.MaterializedObjectState;
 import org.graalvm.compiler.virtual.nodes.VirtualObjectState;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.Equivalence;
 
 import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.VirtualObject;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -61,10 +69,12 @@ import jdk.vm.ci.meta.Value;
 public class DebugInfoBuilder {
 
     protected final NodeValueMap nodeValueMap;
+    protected final MetaAccessExtensionProvider metaAccessExtensionProvider;
     protected final DebugContext debug;
 
-    public DebugInfoBuilder(NodeValueMap nodeValueMap, DebugContext debug) {
+    public DebugInfoBuilder(NodeValueMap nodeValueMap, MetaAccessExtensionProvider metaAccessExtensionProvider, DebugContext debug) {
         this.nodeValueMap = nodeValueMap;
+        this.metaAccessExtensionProvider = metaAccessExtensionProvider;
         this.debug = debug;
     }
 
@@ -76,7 +86,7 @@ public class DebugInfoBuilder {
 
     protected final Queue<VirtualObjectNode> pendingVirtualObjects = new ArrayDeque<>();
 
-    public LIRFrameState build(FrameState topState, LabelRef exceptionEdge) {
+    public LIRFrameState build(NodeWithState node, FrameState topState, LabelRef exceptionEdge, JavaConstant deoptReasonAndAction, JavaConstant deoptSpeculation) {
         assert virtualObjects.size() == 0;
         assert objectStates.size() == 0;
         assert pendingVirtualObjects.size() == 0;
@@ -96,7 +106,8 @@ public class DebugInfoBuilder {
             current = current.outerFrameState();
         } while (current != null);
 
-        BytecodeFrame frame = computeFrameForState(topState);
+        assert verifyFrameState(node, topState);
+        BytecodeFrame frame = computeFrameForState(node, topState);
 
         VirtualObject[] virtualObjectsArray = null;
         if (virtualObjects.size() != 0) {
@@ -123,7 +134,7 @@ public class DebugInfoBuilder {
                     for (int i = 0; i < entryCount; i++) {
                         ValueNode value = currentField.values().get(i);
                         if (value == null) {
-                            JavaKind entryKind = vobjNode.entryKind(i);
+                            JavaKind entryKind = vobjNode.entryKind(metaAccessExtensionProvider, i);
                             values[pos] = JavaConstant.defaultForKind(entryKind.getStackKind());
                             slotKinds[pos] = entryKind.getStackKind();
                             pos++;
@@ -132,8 +143,31 @@ public class DebugInfoBuilder {
                             slotKinds[pos] = toSlotKind(value);
                             pos++;
                         } else {
-                            assert currentField.values().get(i - 1).getStackKind() == JavaKind.Double || currentField.values().get(i - 1).getStackKind() == JavaKind.Long : vobjNode + " " + i + " " +
-                                            currentField.values().get(i - 1);
+                            assert value.getStackKind() == JavaKind.Illegal;
+                            ValueNode previousValue = currentField.values().get(i - 1);
+                            assert (previousValue != null && (previousValue.getStackKind().needsTwoSlots()) || vobjNode.isVirtualByteArray(metaAccessExtensionProvider)) : vobjNode + " " + i +
+                                            " " + previousValue + " " + currentField.values().snapshot();
+                            if (vobjNode.isVirtualByteArray(metaAccessExtensionProvider)) {
+                                /*
+                                 * Let Illegals pass through to help knowing the number of bytes to
+                                 * write. For example, writing a short to index 2 of a byte array of
+                                 * size 6 would look like, in debug info:
+                                 *
+                                 * {b0, b1, INT(...), ILLEGAL, b4, b5}
+                                 *
+                                 * Thus, from the VM, we can simply count the number of illegals to
+                                 * restore the byte count.
+                                 */
+                                values[pos] = Value.ILLEGAL;
+                                slotKinds[pos] = JavaKind.Illegal;
+                                pos++;
+                            } else if (previousValue == null || !previousValue.getStackKind().needsTwoSlots()) {
+                                // Don't allow the IllegalConstant to leak into the debug info
+                                JavaKind entryKind = vobjNode.entryKind(metaAccessExtensionProvider, i);
+                                values[pos] = JavaConstant.defaultForKind(entryKind.getStackKind());
+                                slotKinds[pos] = entryKind.getStackKind();
+                                pos++;
+                            }
                         }
                     }
                     if (pos != entryCount) {
@@ -154,7 +188,11 @@ public class DebugInfoBuilder {
         }
         objectStates.clear();
 
-        return newLIRFrameState(exceptionEdge, frame, virtualObjectsArray);
+        if (deoptReasonAndAction == null && deoptSpeculation == null) {
+            return new LIRFrameState(frame, virtualObjectsArray, exceptionEdge);
+        } else {
+            return new ImplicitLIRFrameState(frame, virtualObjectsArray, exceptionEdge, deoptReasonAndAction, deoptSpeculation);
+        }
     }
 
     private boolean checkValues(ResolvedJavaType type, JavaValue[] values, JavaKind[] slotKinds) {
@@ -164,19 +202,19 @@ public class DebugInfoBuilder {
             if (!type.isArray()) {
                 ResolvedJavaField[] fields = type.getInstanceFields(true);
                 int fieldIndex = 0;
-                for (int i = 0; i < values.length; i++) {
-                    ResolvedJavaField field = fields[fieldIndex++];
-                    JavaKind valKind = slotKinds[i].getStackKind();
+                for (int valueIndex = 0; valueIndex < values.length; valueIndex++, fieldIndex++) {
+                    ResolvedJavaField field = fields[fieldIndex];
+                    JavaKind valKind = slotKinds[valueIndex].getStackKind();
                     JavaKind fieldKind = storageKind(field.getType());
-                    if (fieldKind == JavaKind.Object) {
-                        assert valKind.isObject() : field + ": " + valKind + " != " + fieldKind;
+                    if ((valKind == JavaKind.Double || valKind == JavaKind.Long) && fieldKind == JavaKind.Int) {
+                        assert fieldIndex + 1 < fields.length : String.format("Not enough fields for fieldIndex = %d valueIndex = %d %s %s", fieldIndex, valueIndex, Arrays.toString(fields),
+                                        Arrays.toString(values));
+                        assert storageKind(fields[fieldIndex + 1].getType()) == JavaKind.Int : String.format("fieldIndex = %d valueIndex = %d %s %s %s", fieldIndex, valueIndex,
+                                        storageKind(fields[fieldIndex + 1].getType()), Arrays.toString(fields),
+                                        Arrays.toString(values));
+                        fieldIndex++;
                     } else {
-                        if ((valKind == JavaKind.Double || valKind == JavaKind.Long) && fieldKind == JavaKind.Int) {
-                            assert storageKind(fields[fieldIndex].getType()) == JavaKind.Int;
-                            fieldIndex++;
-                        } else {
-                            assert valKind == fieldKind.getStackKind() : field + ": " + valKind + " != " + fieldKind;
-                        }
+                        assert valKind == fieldKind.getStackKind() : field + ": " + valKind + " != " + fieldKind;
                     }
                 }
                 assert fields.length == fieldIndex : type + ": fields=" + Arrays.toString(fields) + ", field values=" + Arrays.toString(values);
@@ -188,7 +226,9 @@ public class DebugInfoBuilder {
                     }
                 } else {
                     for (int i = 0; i < values.length; i++) {
-                        assert slotKinds[i] == componentKind || componentKind.getBitCount() >= slotKinds[i].getBitCount() ||
+                        assert slotKinds[i] == componentKind ||
+                                        (slotKinds[i] == JavaKind.Illegal && storageKind(type.getComponentType()) == JavaKind.Byte) ||
+                                        componentKind.getBitCount() >= slotKinds[i].getBitCount() ||
                                         (componentKind == JavaKind.Int && slotKinds[i].getBitCount() >= JavaKind.Int.getBitCount()) : slotKinds[i] + " != " + componentKind;
                     }
                 }
@@ -206,11 +246,18 @@ public class DebugInfoBuilder {
         return type.getJavaKind();
     }
 
-    protected LIRFrameState newLIRFrameState(LabelRef exceptionEdge, BytecodeFrame frame, VirtualObject[] virtualObjectsArray) {
-        return new LIRFrameState(frame, virtualObjectsArray, exceptionEdge);
+    /**
+     * Perform platform dependent verification of the FrameState.
+     *
+     * @param node the node using the state
+     * @param topState the state
+     * @return true if the validation succeeded
+     */
+    protected boolean verifyFrameState(NodeWithState node, FrameState topState) {
+        return true;
     }
 
-    protected BytecodeFrame computeFrameForState(FrameState state) {
+    protected BytecodeFrame computeFrameForState(NodeWithState node, FrameState state) {
         try {
             assert state.bci != BytecodeFrame.INVALID_FRAMESTATE_BCI;
             assert state.bci != BytecodeFrame.UNKNOWN_BCI;
@@ -236,12 +283,12 @@ public class DebugInfoBuilder {
 
             BytecodeFrame caller = null;
             if (state.outerFrameState() != null) {
-                caller = computeFrameForState(state.outerFrameState());
+                caller = computeFrameForState(node, state.outerFrameState());
             }
 
             if (!state.canProduceBytecodeFrame()) {
                 // This typically means a snippet or intrinsic frame state made it to the backend
-                StackTraceElement ste = state.getCode().asStackTraceElement(state.bci);
+                String ste = state.getCode() != null ? state.getCode().asStackTraceElement(state.bci).toString() : state.toString();
                 throw new GraalError("Frame state for %s cannot be converted to a BytecodeFrame since the frame state's code is " +
                                 "not the same as the frame state method's code", ste);
             }
@@ -306,7 +353,8 @@ public class DebugInfoBuilder {
                     assert obj.entryCount() == 0 || state instanceof VirtualObjectState;
                     VirtualObject vobject = virtualObjects.get(obj);
                     if (vobject == null) {
-                        vobject = VirtualObject.get(obj.type(), virtualObjects.size());
+                        boolean isAutoBox = obj instanceof VirtualBoxingNode;
+                        vobject = GraalServices.createVirtualObject(obj.type(), virtualObjects.size(), isAutoBox);
                         virtualObjects.put(obj, vobject);
                         pendingVirtualObjects.add(obj);
                     }
@@ -325,8 +373,10 @@ public class DebugInfoBuilder {
                     Value operand = nodeValueMap.operand(value);
                     if (operand instanceof ConstantValue && ((ConstantValue) operand).isJavaConstant()) {
                         return ((ConstantValue) operand).getJavaConstant();
+                    } else if (LIRValueUtil.isVariable(operand)) {
+                        return LIRValueUtil.asVariable(operand);
                     } else {
-                        assert operand instanceof Variable : operand + " for " + value;
+                        assert operand instanceof RegisterValue : operand + " for " + value;
                         return (JavaValue) operand;
                     }
 
