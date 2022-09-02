@@ -87,6 +87,4 @@ public interface FieldRef {
     void addFieldBreakpointInfo(FieldBreakpointInfo info);
 
     void removeFieldBreakpointInfo(int requestId);
-
-    boolean hasActiveBreakpoint();
 }
