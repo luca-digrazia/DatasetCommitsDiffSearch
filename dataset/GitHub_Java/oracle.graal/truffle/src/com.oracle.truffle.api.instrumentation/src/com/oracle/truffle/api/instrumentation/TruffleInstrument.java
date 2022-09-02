@@ -300,7 +300,7 @@ public abstract class TruffleInstrument {
      * }
      * </pre>
      *
-     * @since 20.3
+     * @since 20.2
      */
     protected final <T> ContextLocal<T> createContextLocal(ContextLocalFactory<T> factory) {
         ContextLocal<T> local = ENGINE.createInstrumentContextLocal(factory);
@@ -330,9 +330,6 @@ public abstract class TruffleInstrument {
      * each instance of a registered language class. If the return value of the factory is not
      * stable or <code>null</code> then an {@link IllegalStateException} is thrown. These
      * restrictions allow the Truffle runtime to read the value more efficiently.
-     * <p>
-     * Context thread locals should not contain a strong reference to the provided thread. Use a
-     * weak reference instance for that purpose.
      * <p>
      * Usage example:
      *
@@ -377,7 +374,7 @@ public abstract class TruffleInstrument {
      * }
      * </pre>
      *
-     * @since 20.3
+     * @since 20.2
      */
     protected final <T> ContextThreadLocal<T> createContextThreadLocal(ContextThreadLocalFactory<T> factory) {
         ContextThreadLocal<T> local = ENGINE.createInstrumentContextThreadLocal(factory);
@@ -395,7 +392,7 @@ public abstract class TruffleInstrument {
     /**
      * Context local factory for Truffle instruments. Creates a new value per context and thread.
      *
-     * @since 20.3
+     * @since 20.2
      */
     @FunctionalInterface
     protected interface ContextLocalFactory<T> {
@@ -407,7 +404,7 @@ public abstract class TruffleInstrument {
          * multiple instances of the same {@link TruffleInstrument}.
          *
          * @see TruffleInstrument#createContextLocal(ContextLocalFactory)
-         * @since 20.3
+         * @since 20.2
          */
         T create(TruffleContext context);
     }
@@ -415,7 +412,7 @@ public abstract class TruffleInstrument {
     /**
      * Context local factory for Truffle instruments. Creates a new value per context.
      *
-     * @since 20.3
+     * @since 20.2
      */
     @FunctionalInterface
     protected interface ContextThreadLocalFactory<T> {
@@ -428,7 +425,7 @@ public abstract class TruffleInstrument {
          * {@link TruffleInstrument}.
          *
          * @see TruffleInstrument#createContextThreadLocal(ContextThreadLocalFactory)
-         * @since 20.3
+         * @since 20.2
          */
         T create(TruffleContext context, Thread thread);
     }
