@@ -101,7 +101,7 @@ public class LazyClassLoadingTest {
             vmArgs.add("-XX:+TraceClassLoading");
         } else {
             vmArgs.add("-Xlog:class+init=info");
-            vmArgs.add(SubprocessUtil.PACKAGE_OPENING_OPTIONS);
+            vmArgs.addAll(SubprocessUtil.getPackageOpeningOptions());
         }
         vmArgs.add("-dsa");
         vmArgs.add("-da");
