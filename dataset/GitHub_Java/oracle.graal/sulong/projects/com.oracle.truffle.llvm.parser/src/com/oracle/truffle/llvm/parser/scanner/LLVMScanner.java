@@ -96,6 +96,11 @@ public final class LLVMScanner {
                 return UNKNOWN;
             }
         }
+
+        public static Magic get(ByteSequence bytes) {
+            return get(BitStream.create(bytes));
+        }
+
     }
 
     private static final int MAX_BLOCK_DEPTH = 3;
