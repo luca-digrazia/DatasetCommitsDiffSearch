@@ -66,8 +66,14 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
         this.value = null;
     }
 
-    void setValue(Integer value) {
-        this.value = value;
+    static void setValues(Integer[] values) {
+        for (HotSpotMarkId markId : values()) {
+            markId.value = values[markId.ordinal()];
+        }
+    }
+
+    private Integer value() {
+        return value;
     }
 
     @Override
@@ -78,7 +84,7 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
     @Override
     public Object getId() {
         assert isAvailable() : this;
-        return value;
+        return value();
     }
 
     @Override
@@ -87,13 +93,13 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
     }
 
     public boolean isAvailable() {
-        return value != null;
+        return value() != null;
     }
 
     @Override
     public String toString() {
         return "HotSpotCodeMark{" + name() +
-                        ", value=" + value +
+                        ", value=" + value() +
                         '}';
     }
 

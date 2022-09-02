@@ -907,13 +907,14 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     // Checkstyle: resume
 
-    private static void checkForMissingRequiredValue(HotSpotMarkId markId, boolean required) {
-        if (!markId.isAvailable() && required) {
+    private static void checkForMissingRequiredValue(Integer[] markConstants, HotSpotMarkId markId, boolean required) {
+        if (markConstants[markId.ordinal()] == null && required) {
             throw shouldNotReachHere("Unsupported Mark " + markId);
         }
     }
 
     private void populateMarkConstants() {
+        Integer[] markConstants = new Integer[HotSpotMarkId.values().length];
         boolean jdk13JvmciBackport = (JVMCI && JDK > 8) ? jvmciGE(JVMCI_19_3_b03) : JDK > 9;
         boolean verifyOopsMarkSupported = (JVMCI && JDK > 8) ? jvmciGE(JVMCI_20_2_b04) : JDK >= 16;
         Map<String, Long> constants = getStore().getConstants();
@@ -924,30 +925,32 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
             if (result != null) {
                 value = result.intValue();
             }
-            markId.setValue(value);
+            markConstants[markId.ordinal()] = value;
             if (!JVMCI_PRERELEASE) {
                 switch (markId) {
                     case FRAME_COMPLETE:
-                        checkForMissingRequiredValue(markId, JVMCI ? jvmciGE(JVMCI_20_1_b01) : JDK_8245443);
+                        checkForMissingRequiredValue(markConstants, markId, JVMCI ? jvmciGE(JVMCI_20_1_b01) : JDK_8245443);
                         break;
                     case DEOPT_MH_HANDLER_ENTRY:
-                        checkForMissingRequiredValue(markId, JVMCI ? jvmciGE(JVMCI_20_2_b01) : false);
+                        checkForMissingRequiredValue(markConstants, markId, JVMCI ? jvmciGE(JVMCI_20_2_b01) : false);
                         break;
                     case NARROW_KLASS_BASE_ADDRESS:
                     case CRC_TABLE_ADDRESS:
                     case NARROW_OOP_BASE_ADDRESS:
                     case LOG_OF_HEAP_REGION_GRAIN_BYTES:
-                        checkForMissingRequiredValue(markId, jdk13JvmciBackport);
+                        checkForMissingRequiredValue(markConstants, markId, jdk13JvmciBackport);
                         break;
                     case VERIFY_OOPS:
                     case VERIFY_OOP_COUNT_ADDRESS:
-                        checkForMissingRequiredValue(markId, verifyOopsMarkSupported);
+                        checkForMissingRequiredValue(markConstants, markId, verifyOopsMarkSupported);
                         break;
                     default:
-                        checkForMissingRequiredValue(markId, true);
+                        checkForMissingRequiredValue(markConstants, markId, true);
                 }
             }
         }
+
+        HotSpotMarkId.setValues(markConstants);
     }
 
     protected boolean check() {
