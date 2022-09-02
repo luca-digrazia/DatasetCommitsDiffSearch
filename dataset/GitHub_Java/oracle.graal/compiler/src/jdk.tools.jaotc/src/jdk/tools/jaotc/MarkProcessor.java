@@ -55,7 +55,6 @@ final class MarkProcessor {
         switch (markId) {
             case EXCEPTION_HANDLER_ENTRY:
             case DEOPT_HANDLER_ENTRY:
-            case DEOPT_MH_HANDLER_ENTRY:
                 break;
             case POLL_FAR:
             case POLL_RETURN_FAR:

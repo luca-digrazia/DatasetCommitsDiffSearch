@@ -29,6 +29,8 @@ import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Map;
 
+import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
+
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
 import org.graalvm.compiler.core.common.CompressEncoding;
@@ -719,9 +721,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     // ARMv8-A architecture reference manual D12.2.35 Data Cache Zero ID register says:
     // * BS, bits [3:0] indicate log2 of the DC ZVA block size in (4-byte) words.
     // * DZP, bit [4] of indicates whether use of DC ZVA instruction is prohibited.
-    public final int psrInfoDczidValue = getFieldValue("VM_Version::_psr_info.dczid_el0", Integer.class, "uint32_t", 0x10, (JVMCI ? jvmciGE(JVMCI_19_3_b04) : (JDK == 14 || JDK == 15)) && osArch.equals("aarch64"));
-
-    public final int zvaLength = getFieldValue("VM_Version::_zva_length", Integer.class, "int", 0, JDK >= 16 && osArch.equals("aarch64"));
+    public final int psrInfoDczidValue = getFieldValue("VM_Version::_psr_info.dczid_el0", Integer.class, "uint32_t", 0x10, (JVMCI ? jvmciGE(JVMCI_19_3_b04) : JDK >= 14) && osArch.equals("aarch64"));
 
     // FIXME This is only temporary until the GC code is changed.
     public final boolean inlineContiguousAllocationSupported = getFieldValue("CompilerToVM::Data::_supports_inline_contig_alloc", Boolean.class);
@@ -897,10 +897,10 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     private static final boolean JDK_8245443 = ((JDK == 11 && JDK_UPDATE >= 8) || JDK >= 15);
 
     // Checkstyle: stop
-    public final int VMINTRINSIC_FIRST_MH_SIG_POLY = getConstant("vmIntrinsics::FIRST_MH_SIG_POLY", Integer.class, -1, (JVMCI ? jvmciGE(JVMCI_20_2_b01) : JDK >= 16));
-    public final int VMINTRINSIC_LAST_MH_SIG_POLY = getConstant("vmIntrinsics::LAST_MH_SIG_POLY", Integer.class, -1, (JVMCI ? jvmciGE(JVMCI_20_2_b01) : JDK >= 16));
-    public final int VMINTRINSIC_INVOKE_GENERIC = getConstant("vmIntrinsics::_invokeGeneric", Integer.class, -1, (JVMCI ? jvmciGE(JVMCI_20_2_b01) : JDK >= 16));
-    public final int VMINTRINSIC_COMPILED_LAMBDA_FORM = getConstant("vmIntrinsics::_compiledLambdaForm", Integer.class, -1, (JVMCI ? jvmciGE(JVMCI_20_2_b01) : JDK >= 16));
+    public final int VMINTRINSIC_FIRST_MH_SIG_POLY = getConstant("vmIntrinsics::FIRST_MH_SIG_POLY", Integer.class, -1, (JVMCI ? jvmciGE(JVMCI_20_2_b01) : false));
+    public final int VMINTRINSIC_LAST_MH_SIG_POLY = getConstant("vmIntrinsics::LAST_MH_SIG_POLY", Integer.class, -1, (JVMCI ? jvmciGE(JVMCI_20_2_b01) : false));
+    public final int VMINTRINSIC_INVOKE_GENERIC = getConstant("vmIntrinsics::_invokeGeneric", Integer.class, -1, (JVMCI ? jvmciGE(JVMCI_20_2_b01) : false));
+    public final int VMINTRINSIC_COMPILED_LAMBDA_FORM = getConstant("vmIntrinsics::_compiledLambdaForm", Integer.class, -1, (JVMCI ? jvmciGE(JVMCI_20_2_b01) : false));
 
     public final boolean CPU_HAS_INTEL_JCC_ERRATUM = getFieldValue("VM_Version::_has_intel_jcc_erratum", Boolean.class, "bool",
                     true, "amd64".equals(osArch) && (JVMCI ? jvmciGE(JVMCI_20_1_b01) : JDK >= 15));
@@ -909,7 +909,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     private static void checkForMissingRequiredValue(HotSpotMarkId markId, boolean required) {
         if (!markId.isAvailable() && required) {
-            GraalHotSpotVMConfigAccess.reportError("Unsupported Mark " + markId);
+            throw shouldNotReachHere("Unsupported Mark " + markId);
         }
     }
 
@@ -925,27 +925,29 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
                 value = result.intValue();
             }
             markId.setValue(value);
-            switch (markId) {
-                case FRAME_COMPLETE:
-                    checkForMissingRequiredValue(markId, JVMCI ? jvmciGE(JVMCI_20_1_b01) : JDK_8245443);
-                    break;
-                case DEOPT_MH_HANDLER_ENTRY:
-                    checkForMissingRequiredValue(markId, JVMCI ? jvmciGE(JVMCI_20_2_b01) : JDK >= 16);
-                    break;
-                case NARROW_KLASS_BASE_ADDRESS:
-                case CRC_TABLE_ADDRESS:
-                case NARROW_OOP_BASE_ADDRESS:
-                case LOG_OF_HEAP_REGION_GRAIN_BYTES:
-                    checkForMissingRequiredValue(markId, jdk13JvmciBackport);
-                    break;
-                case VERIFY_OOPS:
-                case VERIFY_OOP_BITS:
-                case VERIFY_OOP_MASK:
-                case VERIFY_OOP_COUNT_ADDRESS:
-                    checkForMissingRequiredValue(markId, verifyOopsMarkSupported);
-                    break;
-                default:
-                    checkForMissingRequiredValue(markId, true);
+            if (!JVMCI_PRERELEASE) {
+                switch (markId) {
+                    case FRAME_COMPLETE:
+                        checkForMissingRequiredValue(markId, JVMCI ? jvmciGE(JVMCI_20_1_b01) : JDK_8245443);
+                        break;
+                    case DEOPT_MH_HANDLER_ENTRY:
+                        checkForMissingRequiredValue(markId, JVMCI ? jvmciGE(JVMCI_20_2_b01) : false);
+                        break;
+                    case NARROW_KLASS_BASE_ADDRESS:
+                    case CRC_TABLE_ADDRESS:
+                    case NARROW_OOP_BASE_ADDRESS:
+                    case LOG_OF_HEAP_REGION_GRAIN_BYTES:
+                        checkForMissingRequiredValue(markId, jdk13JvmciBackport);
+                        break;
+                    case VERIFY_OOPS:
+                    case VERIFY_OOP_BITS:
+                    case VERIFY_OOP_MASK:
+                    case VERIFY_OOP_COUNT_ADDRESS:
+                        checkForMissingRequiredValue(markId, verifyOopsMarkSupported);
+                        break;
+                    default:
+                        checkForMissingRequiredValue(markId, true);
+                }
             }
         }
     }

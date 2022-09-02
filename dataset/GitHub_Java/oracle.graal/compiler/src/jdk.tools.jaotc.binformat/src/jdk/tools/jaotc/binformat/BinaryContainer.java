@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,26 +31,29 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 
 import jdk.tools.jaotc.binformat.Symbol.Binding;
 import jdk.tools.jaotc.binformat.Symbol.Kind;
 import jdk.tools.jaotc.binformat.elf.JELFRelocObject;
 import jdk.tools.jaotc.binformat.macho.JMachORelocObject;
 import jdk.tools.jaotc.binformat.pecoff.JPECoffRelocObject;
-import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.options.OptionValues;
 
 /**
  * A format-agnostic container class that holds various components of a binary.
  *
  * <p>
  * This class holds information necessary to create platform-specific binary containers such as
- * ELFContainer for Linux and Solaris operating systems or MachOContainer for Mac OS or PEContainer
- * for MS Windows operating systems.
+ * ELFContainer for Linux or MachOContainer for Mac OS or PEContainer for MS Windows operating
+ * systems.
  *
  * <p>
  * Method APIs provided by this class are used to construct and populate platform-independent
@@ -137,22 +142,24 @@ public final class BinaryContainer implements SymbolTable {
      */
     private static final HashMap<String, String> functionNamesToAOTSymbols = new HashMap<>();
 
+    //@formatter:off
     private static final String[][] map = {
-//@formatter:off
-        {"CompilerToVM::Data::SharedRuntime_deopt_blob_unpack",        "_aot_deopt_blob_unpack"},
-        {"CompilerToVM::Data::SharedRuntime_deopt_blob_uncommon_trap", "_aot_deopt_blob_uncommon_trap"},
-        {"CompilerToVM::Data::SharedRuntime_ic_miss_stub",             "_aot_ic_miss_stub"},
-        {"CompilerToVM::Data::SharedRuntime_handle_wrong_method_stub", "_aot_handle_wrong_method_stub"},
-        {"SharedRuntime::exception_handler_for_return_address",        "_aot_exception_handler_for_return_address"},
-        {"SharedRuntime::register_finalizer",                          "_aot_register_finalizer"},
-        {"SharedRuntime::OSR_migration_end",                           "_aot_OSR_migration_end"},
-        {"CompilerRuntime::resolve_dynamic_invoke",                    "_aot_resolve_dynamic_invoke"},
-        {"CompilerRuntime::resolve_string_by_symbol",                  "_aot_resolve_string_by_symbol"},
-        {"CompilerRuntime::resolve_klass_by_symbol",                   "_aot_resolve_klass_by_symbol"},
-        {"CompilerRuntime::resolve_method_by_symbol_and_load_counters","_aot_resolve_method_by_symbol_and_load_counters"},
-        {"CompilerRuntime::initialize_klass_by_symbol",                "_aot_initialize_klass_by_symbol"},
-        {"CompilerRuntime::invocation_event",                          "_aot_invocation_event"},
-        {"CompilerRuntime::backedge_event",                            "_aot_backedge_event"},
+        {"CompilerToVM::Data::SharedRuntime_deopt_blob_unpack",         "_aot_deopt_blob_unpack"},
+        {"CompilerToVM::Data::SharedRuntime_deopt_blob_uncommon_trap",  "_aot_deopt_blob_uncommon_trap"},
+        {"CompilerToVM::Data::SharedRuntime_deopt_blob_unpack_with_exception_in_tls",  "_aot_deopt_blob_unpack_with_exception_in_tls"},
+        {"CompilerToVM::Data::SharedRuntime_ic_miss_stub",              "_aot_ic_miss_stub"},
+        {"CompilerToVM::Data::SharedRuntime_handle_wrong_method_stub",  "_aot_handle_wrong_method_stub"},
+        {"SharedRuntime::exception_handler_for_return_address",         "_aot_exception_handler_for_return_address"},
+        {"SharedRuntime::register_finalizer",                           "_aot_register_finalizer"},
+        {"SharedRuntime::OSR_migration_end",                            "_aot_OSR_migration_end"},
+        {"SharedRuntime::enable_stack_reserved_zone",                   "_aot_enable_stack_reserved_zone"},
+        {"CompilerRuntime::resolve_dynamic_invoke",                     "_aot_resolve_dynamic_invoke"},
+        {"CompilerRuntime::resolve_string_by_symbol",                   "_aot_resolve_string_by_symbol"},
+        {"CompilerRuntime::resolve_klass_by_symbol",                    "_aot_resolve_klass_by_symbol"},
+        {"CompilerRuntime::resolve_method_by_symbol_and_load_counters", "_aot_resolve_method_by_symbol_and_load_counters"},
+        {"CompilerRuntime::initialize_klass_by_symbol",                 "_aot_initialize_klass_by_symbol"},
+        {"CompilerRuntime::invocation_event",                           "_aot_invocation_event"},
+        {"CompilerRuntime::backedge_event",                             "_aot_backedge_event"},
 
         {"CompilerToVM::Data::dpow", "_aot_shared_runtime_dpow"},
         {"CompilerToVM::Data::dexp", "_aot_shared_runtime_dexp"},
@@ -200,6 +207,8 @@ public final class BinaryContainer implements SymbolTable {
         {"StubRoutines::_aescrypt_decryptBlock", "_aot_stub_routines_aescrypt_decryptBlock"},
         {"StubRoutines::_cipherBlockChaining_encryptAESCrypt", "_aot_stub_routines_cipherBlockChaining_encryptAESCrypt"},
         {"StubRoutines::_cipherBlockChaining_decryptAESCrypt", "_aot_stub_routines_cipherBlockChaining_decryptAESCrypt"},
+        {"StubRoutines::_electronicCodeBook_encryptAESCrypt", "_aot_stub_routines_electronicCodeBook_encryptAESCrypt"},
+        {"StubRoutines::_electronicCodeBook_decryptAESCrypt", "_aot_stub_routines_electronicCodeBook_decryptAESCrypt"},
         {"StubRoutines::_updateBytesCRC32", "_aot_stub_routines_update_bytes_crc32"},
         {"StubRoutines::_crc_table_adr", "_aot_stub_routines_crc_table_adr"},
 
@@ -213,6 +222,7 @@ public final class BinaryContainer implements SymbolTable {
 
         {"StubRoutines::_counterMode_AESCrypt", "_aot_stub_routines_counterMode_AESCrypt" },
         {"StubRoutines::_ghash_processBlocks", "_aot_stub_routines_ghash_processBlocks" },
+        {"StubRoutines::_base64_encodeBlock", "_aot_stub_routines_base64_encodeBlock" },
         {"StubRoutines::_crc32c_table_addr", "_aot_stub_routines_crc32c_table_addr" },
         {"StubRoutines::_updateBytesCRC32C", "_aot_stub_routines_updateBytesCRC32C" },
         {"StubRoutines::_updateBytesAdler32", "_aot_stub_routines_updateBytesAdler32" },
@@ -221,6 +231,8 @@ public final class BinaryContainer implements SymbolTable {
         {"StubRoutines::_montgomeryMultiply", "_aot_stub_routines_montgomeryMultiply" },
         {"StubRoutines::_montgomerySquare", "_aot_stub_routines_montgomerySquare" },
         {"StubRoutines::_vectorizedMismatch", "_aot_stub_routines_vectorizedMismatch" },
+        {"StubRoutines::_bigIntegerRightShiftWorker", "_aot_stub_routines_bigIntegerRightShiftWorker" },
+        {"StubRoutines::_bigIntegerLeftShiftWorker", "_aot_stub_routines_bigIntegerLeftShiftWorker" },
 
         {"StubRoutines::_throw_delayed_StackOverflowError_entry", "_aot_stub_routines_throw_delayed_StackOverflowError_entry" },
 
@@ -236,14 +248,20 @@ public final class BinaryContainer implements SymbolTable {
         {"JVMCIRuntime::log_printf", "_aot_jvmci_runtime_log_printf"},
         {"JVMCIRuntime::vm_message", "_aot_jvmci_runtime_vm_message"},
         {"JVMCIRuntime::new_instance", "_aot_jvmci_runtime_new_instance"},
-        {"JVMCIRuntime::log_primitive", "_aot_jvmci_runtime_log_primitive"},
+        {"JVMCIRuntime::new_array", "_aot_jvmci_runtime_new_array"},
         {"JVMCIRuntime::new_multi_array", "_aot_jvmci_runtime_new_multi_array"},
-        {"JVMCIRuntime::validate_object", "_aot_jvmci_runtime_validate_object"},
+        {"JVMCIRuntime::dynamic_new_instance", "_aot_jvmci_runtime_dynamic_new_instance"},
         {"JVMCIRuntime::dynamic_new_array", "_aot_jvmci_runtime_dynamic_new_array"},
+        {"JVMCIRuntime::new_instance_or_null", "_aot_jvmci_runtime_new_instance_or_null"},
+        {"JVMCIRuntime::new_array_or_null", "_aot_jvmci_runtime_new_array_or_null"},
+        {"JVMCIRuntime::new_multi_array_or_null", "_aot_jvmci_runtime_new_multi_array_or_null"},
+        {"JVMCIRuntime::dynamic_new_instance_or_null", "_aot_jvmci_runtime_dynamic_new_instance_or_null"},
+        {"JVMCIRuntime::dynamic_new_array_or_null", "_aot_jvmci_runtime_dynamic_new_array_or_null"},
+        {"JVMCIRuntime::log_primitive", "_aot_jvmci_runtime_log_primitive"},
+        {"JVMCIRuntime::validate_object", "_aot_jvmci_runtime_validate_object"},
         {"JVMCIRuntime::write_barrier_pre", "_aot_jvmci_runtime_write_barrier_pre"},
         {"JVMCIRuntime::identity_hash_code", "_aot_jvmci_runtime_identity_hash_code"},
         {"JVMCIRuntime::write_barrier_post", "_aot_jvmci_runtime_write_barrier_post"},
-        {"JVMCIRuntime::dynamic_new_instance", "_aot_jvmci_runtime_dynamic_new_instance"},
         {"JVMCIRuntime::thread_is_interrupted", "_aot_jvmci_runtime_thread_is_interrupted"},
         {"JVMCIRuntime::exception_handler_for_pc", "_aot_jvmci_runtime_exception_handler_for_pc"},
         {"JVMCIRuntime::test_deoptimize_call_int", "_aot_jvmci_runtime_test_deoptimize_call_int"},
@@ -252,10 +270,9 @@ public final class BinaryContainer implements SymbolTable {
         {"JVMCIRuntime::throw_klass_external_name_exception", "_aot_jvmci_runtime_throw_klass_external_name_exception"},
         {"JVMCIRuntime::throw_class_cast_exception",          "_aot_jvmci_runtime_throw_class_cast_exception"},
 
-        {"JVMCIRuntime::vm_error", "_aot_jvmci_runtime_vm_error"},
-        {"JVMCIRuntime::new_array", "_aot_jvmci_runtime_new_array"}
-        //@formatter:on
+        {"JVMCIRuntime::vm_error", "_aot_jvmci_runtime_vm_error"}
     };
+    //@formatter:on
 
     static {
         for (String[] entry : map) {
@@ -270,7 +287,7 @@ public final class BinaryContainer implements SymbolTable {
      *
      * @param graalOptions
      */
-    public BinaryContainer(OptionValues graalOptions, GraalHotSpotVMConfig graalHotSpotVMConfig, GraphBuilderConfiguration graphBuilderConfig, String jvmVersion) {
+    public BinaryContainer(OptionValues graalOptions, GraalHotSpotVMConfig graalHotSpotVMConfig, GraphBuilderConfiguration graphBuilderConfig, int gc, String jvmVersion) {
         this.graalOptions = graalOptions;
 
         this.codeSegmentSize = graalHotSpotVMConfig.codeSegmentSize;
@@ -283,7 +300,7 @@ public final class BinaryContainer implements SymbolTable {
 
         this.codeEntryAlignment = graalHotSpotVMConfig.codeEntryAlignment;
 
-        this.threadLocalHandshakes = graalHotSpotVMConfig.threadLocalHandshakes;
+        this.threadLocalHandshakes = graalHotSpotVMConfig.useThreadLocalPolling;
 
         // Section unique name is limited to 8 characters due to limitation on Windows.
         // Name could be longer but only first 8 characters are stored on Windows.
@@ -314,35 +331,49 @@ public final class BinaryContainer implements SymbolTable {
 
         addGlobalSymbols();
 
-        recordConfiguration(graalHotSpotVMConfig, graphBuilderConfig);
+        recordConfiguration(graalHotSpotVMConfig, graphBuilderConfig, gc);
     }
 
-    private void recordConfiguration(GraalHotSpotVMConfig graalHotSpotVMConfig, GraphBuilderConfiguration graphBuilderConfig) {
+    private void recordConfiguration(GraalHotSpotVMConfig graalHotSpotVMConfig, GraphBuilderConfiguration graphBuilderConfig, int gc) {
+        // @Checkstyle: stop
         // @formatter:off
-        boolean[] booleanFlags = { graalHotSpotVMConfig.cAssertions, // Debug VM
-                                   graalHotSpotVMConfig.useCompressedOops,
-                                   graalHotSpotVMConfig.useCompressedClassPointers,
-                                   graalHotSpotVMConfig.compactFields,
-                                   graalHotSpotVMConfig.useG1GC,
-                                   graalHotSpotVMConfig.useTLAB,
-                                   graalHotSpotVMConfig.useBiasedLocking,
-                                   TieredAOT.getValue(graalOptions),
-                                   graalHotSpotVMConfig.enableContended,
-                                   graalHotSpotVMConfig.restrictContended,
-                                   graphBuilderConfig.omitAssertions(),
-                                   graalHotSpotVMConfig.threadLocalHandshakes
-        };
+        ArrayList<Boolean> booleanFlagsList = new ArrayList<>();
 
-        int[] intFlags         = { graalHotSpotVMConfig.getOopEncoding().getShift(),
-                                   graalHotSpotVMConfig.getKlassEncoding().getShift(),
-                                   graalHotSpotVMConfig.contendedPaddingWidth,
-                                   graalHotSpotVMConfig.fieldsAllocationStyle,
-                                   1 << graalHotSpotVMConfig.logMinObjAlignment(),
-                                   graalHotSpotVMConfig.codeSegmentSize,
-        };
+        booleanFlagsList.addAll(Arrays.asList(graalHotSpotVMConfig.cAssertions, // Debug VM
+                                              graalHotSpotVMConfig.useCompressedOops,
+                                              graalHotSpotVMConfig.useCompressedClassPointers));
+        if (JavaVersionUtil.JAVA_SPEC < 15) {
+            // See JDK-8236224. FieldsAllocationStyle and CompactFields flags were removed in JDK15.
+            booleanFlagsList.add(graalHotSpotVMConfig.compactFields);
+        }
+        booleanFlagsList.addAll(Arrays.asList(graalHotSpotVMConfig.useTLAB,
+                                              graalHotSpotVMConfig.useBiasedLocking,
+                                              TieredAOT.getValue(graalOptions),
+                                              graalHotSpotVMConfig.enableContended,
+                                              graalHotSpotVMConfig.restrictContended,
+                                              graphBuilderConfig.omitAssertions()));
+        if (JavaVersionUtil.JAVA_SPEC < 14) {
+            // See JDK-8220049. Thread local handshakes are on by default since JDK14, the command line option has been removed.
+            booleanFlagsList.add(graalHotSpotVMConfig.useThreadLocalPolling);
+        }
+
+        ArrayList<Integer> intFlagsList = new ArrayList<>();
+        intFlagsList.addAll(Arrays.asList(graalHotSpotVMConfig.getOopEncoding().getShift(),
+                                          graalHotSpotVMConfig.getKlassEncoding().getShift(),
+                                          graalHotSpotVMConfig.contendedPaddingWidth));
+        if (JavaVersionUtil.JAVA_SPEC < 15) {
+            // See JDK-8236224. FieldsAllocationStyle and CompactFields flags were removed in JDK15.
+            intFlagsList.add(graalHotSpotVMConfig.fieldsAllocationStyle);
+        }
+        intFlagsList.addAll(Arrays.asList(1 << graalHotSpotVMConfig.logMinObjAlignment(),
+                                          graalHotSpotVMConfig.codeSegmentSize,
+                                          gc));
+
         // @formatter:on
+        // @Checkstyle: resume
 
-        byte[] booleanFlagsAsBytes = flagsToByteArray(booleanFlags);
+        byte[] booleanFlagsAsBytes = booleanListToByteArray(booleanFlagsList);
+        int[] intFlags = intFlagsList.stream().mapToInt(i -> i).toArray();
         int size0 = configContainer.getByteStreamSize();
 
         // @formatter:off
@@ -359,10 +390,10 @@ public final class BinaryContainer implements SymbolTable {
         assert size == computedSize;
     }
 
-    private static byte[] flagsToByteArray(boolean[] flags) {
-        byte[] byteArray = new byte[flags.length];
-        for (int i = 0; i < flags.length; ++i) {
-            byteArray[i] = boolToByte(flags[i]);
+    private static byte[] booleanListToByteArray(ArrayList<Boolean> list) {
+        byte[] byteArray = new byte[list.size()];
+        for (int i = 0; i < list.size(); ++i) {
+            byteArray[i] = boolToByte(list.get(i));
         }
         return byteArray;
     }
@@ -433,6 +464,22 @@ public final class BinaryContainer implements SymbolTable {
         return "_aot_inline_contiguous_allocation_supported";
     }
 
+    public static String getVerifyOopsSymbolName() {
+        return "_aot_verify_oops";
+    }
+
+    public static String getVerifyOopCountAddressSymbolName() {
+        return "_aot_verify_oop_count_address";
+    }
+
+    public static String getVerifyOopBitsSymbolName() {
+        return "_aot_verify_oop_bits";
+    }
+
+    public static String getVerifyOopMaskSymbolName() {
+        return "_aot_verify_oop_mask";
+    }
+
     public int getCodeSegmentSize() {
         return codeSegmentSize;
     }
@@ -484,6 +531,10 @@ public final class BinaryContainer implements SymbolTable {
         createGotSymbol(getPollingPageSymbolName());
         createGotSymbol(getLogOfHeapRegionGrainBytesSymbolName());
         createGotSymbol(getInlineContiguousAllocationSupportedSymbolName());
+        createGotSymbol(getVerifyOopsSymbolName());
+        createGotSymbol(getVerifyOopCountAddressSymbolName());
+        createGotSymbol(getVerifyOopBitsSymbolName());
+        createGotSymbol(getVerifyOopMaskSymbolName());
 
         for (HashMap.Entry<String, String> entry : functionNamesToAOTSymbols.entrySet()) {
             createGotSymbol(entry.getValue());
@@ -526,8 +577,7 @@ public final class BinaryContainer implements SymbolTable {
         String osName = System.getProperty("os.name");
         switch (osName) {
             case "Linux":
-            case "SunOS":
-                JELFRelocObject elfobj = new JELFRelocObject(this, outputFileName);
+                JELFRelocObject elfobj = JELFRelocObject.newInstance(this, outputFileName);
                 elfobj.createELFRelocObject(relocationTable, symbolTable.values());
                 break;
             case "Mac OS X":
@@ -539,8 +589,9 @@ public final class BinaryContainer implements SymbolTable {
                     JPECoffRelocObject pecoffobj = new JPECoffRelocObject(this, outputFileName);
                     pecoffobj.createPECoffRelocObject(relocationTable, symbolTable.values());
                     break;
-                } else
+                } else {
                     throw new InternalError("Unsupported platform: " + osName);
+                }
         }
     }
 
@@ -576,7 +627,8 @@ public final class BinaryContainer implements SymbolTable {
      * @param info relocation information to be added
      */
     public void addRelocation(Relocation info) {
-        // System.out.println("# Relocation [" + symName + "] [" + info.getOffset() + "] [" +
+        // System.out.println("# Relocation [" + info.getSymbol() + "] [" + info.getOffset() + "] ["
+        // +
         // info.getSection().getContainerName() + "] [" + info.getSymbol().getName() + "] [" +
         // info.getSymbol().getOffset() + " @ " + info.getSymbol().getSection().getContainerName() +
         // "]");

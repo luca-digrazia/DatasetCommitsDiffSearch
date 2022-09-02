@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,85 +25,78 @@
 
 package org.graalvm.compiler.hotspot;
 
-import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
-
 import org.graalvm.compiler.code.CompilationResult;
 
 import jdk.vm.ci.common.NativeImageReinitialize;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 
 /**
  * Constants used to mark special positions in code being installed into the code cache by Graal C++
  * code.
  */
 public enum HotSpotMarkId implements CompilationResult.MarkId {
-    VERIFIED_ENTRY("VERIFIED_ENTRY"),
-    UNVERIFIED_ENTRY("UNVERIFIED_ENTRY"),
-    OSR_ENTRY("OSR_ENTRY"),
-    EXCEPTION_HANDLER_ENTRY("EXCEPTION_HANDLER_ENTRY"),
-    DEOPT_HANDLER_ENTRY("DEOPT_HANDLER_ENTRY"),
-    FRAME_COMPLETE("FRAME_COMPLETE", true),
-    INVOKEINTERFACE("INVOKEINTERFACE"),
-    INVOKEVIRTUAL("INVOKEVIRTUAL"),
-    INVOKESTATIC("INVOKESTATIC"),
-    INVOKESPECIAL("INVOKESPECIAL"),
-    INLINE_INVOKE("INLINE_INVOKE"),
-    POLL_NEAR("POLL_NEAR"),
-    POLL_RETURN_NEAR("POLL_RETURN_NEAR"),
-    POLL_FAR("POLL_FAR"),
-    POLL_RETURN_FAR("POLL_RETURN_FAR"),
-    CARD_TABLE_ADDRESS("CARD_TABLE_ADDRESS"),
-    NARROW_KLASS_BASE_ADDRESS("NARROW_KLASS_BASE_ADDRESS"),
-    NARROW_OOP_BASE_ADDRESS("NARROW_OOP_BASE_ADDRESS"),
-    CRC_TABLE_ADDRESS("CRC_TABLE_ADDRESS"),
-    LOG_OF_HEAP_REGION_GRAIN_BYTES("LOG_OF_HEAP_REGION_GRAIN_BYTES");
+    VERIFIED_ENTRY(false),
+    UNVERIFIED_ENTRY(false),
+    OSR_ENTRY(false),
+    EXCEPTION_HANDLER_ENTRY(false),
+    DEOPT_HANDLER_ENTRY(false),
+    DEOPT_MH_HANDLER_ENTRY(false),
+    FRAME_COMPLETE(true),
+    INVOKEINTERFACE(false),
+    INVOKEVIRTUAL(false),
+    INVOKESTATIC(false),
+    INVOKESPECIAL(false),
+    INLINE_INVOKE(false),
+    POLL_NEAR(false),
+    POLL_RETURN_NEAR(false),
+    POLL_FAR(false),
+    POLL_RETURN_FAR(false),
+    CARD_TABLE_ADDRESS(true),
+    NARROW_KLASS_BASE_ADDRESS(true),
+    NARROW_OOP_BASE_ADDRESS(true),
+    CRC_TABLE_ADDRESS(true),
+    LOG_OF_HEAP_REGION_GRAIN_BYTES(true),
+    VERIFY_OOPS(true),
+    VERIFY_OOP_BITS(true),
+    VERIFY_OOP_MASK(true),
+    VERIFY_OOP_COUNT_ADDRESS(true);
 
-    private final String name;
+    private final boolean isMarkAfter;
     @NativeImageReinitialize private Integer value;
-    private final boolean optional;
 
-    HotSpotMarkId(String name) {
-        this.name = name;
-        this.optional = false;
+    HotSpotMarkId(boolean isMarkAfter) {
+        this.isMarkAfter = isMarkAfter;
+        this.value = null;
     }
 
-    HotSpotMarkId(String name, boolean optional) {
-        this.name = name;
-        this.optional = optional;
-    }
-
-    private Integer getValue() {
-        if (value == null) {
-            Long result = HotSpotJVMCIRuntime.runtime().getConfigStore().getConstants().get("CodeInstaller::" + name);
-            if (result != null) {
-                this.value = result.intValue();
-            } else if (!optional) {
-                throw shouldNotReachHere("Unsupported Mark " + name);
-            }
-        }
-        return value;
+    void setValue(Integer value) {
+        this.value = value;
     }
 
     @Override
     public String getName() {
-        return name;
+        return name();
     }
 
     @Override
     public Object getId() {
         assert isAvailable() : this;
-        return getValue();
+        return value;
+    }
+
+    @Override
+    public boolean isMarkAfter() {
+        return isMarkAfter;
     }
 
     public boolean isAvailable() {
-        return getValue() != null;
+        return value != null;
     }
 
     @Override
     public String toString() {
-        return "HotSpotCodeMark{" + name +
-                        ", value=" + getValue() +
-                        ", optional=" + optional +
+        return "HotSpotCodeMark{" + name() +
+                        ", value=" + value +
                         '}';
     }
+
 }
