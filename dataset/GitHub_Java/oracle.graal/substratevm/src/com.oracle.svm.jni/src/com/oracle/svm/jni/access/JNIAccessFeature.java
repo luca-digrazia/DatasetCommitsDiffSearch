@@ -51,16 +51,15 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.svm.core.configure.ConfigurationFiles;
 import com.oracle.svm.core.configure.ReflectionConfigurationParser;
-import com.oracle.svm.core.jni.JNIRuntimeAccess;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.hosted.FallbackFeature;
 import com.oracle.svm.hosted.FeatureImpl.AfterRegistrationAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.CompilationAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.config.ConfigurationParserUtils;
+import com.oracle.svm.hosted.jni.JNIRuntimeAccess.JNIRuntimeAccessibilitySupport;
 import com.oracle.svm.hosted.meta.MaterializedConstantFields;
 import com.oracle.svm.hosted.substitute.SubstitutionReflectivityFilter;
 import com.oracle.svm.jni.JNIJavaCallWrappers;
@@ -92,8 +91,6 @@ public class JNIAccessFeature implements Feature {
     private JNICallTrampolineMethod arrayNonvirtualCallTrampolineMethod;
     private JNICallTrampolineMethod valistNonvirtualCallTrampolineMethod;
 
-    private int loadedConfigurations;
-
     private final Set<Class<?>> newClasses = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Set<Executable> newMethods = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Map<Field, Boolean> newFields = new ConcurrentHashMap<>();
@@ -119,14 +116,14 @@ public class JNIAccessFeature implements Feature {
         JNIReflectionDictionary.initialize();
 
         JNIRuntimeAccessibilitySupportImpl registry = new JNIRuntimeAccessibilitySupportImpl();
-        ImageSingletons.add(JNIRuntimeAccess.JNIRuntimeAccessibilitySupport.class, registry);
+        ImageSingletons.add(JNIRuntimeAccessibilitySupport.class, registry);
 
         ReflectionConfigurationParser<Class<?>> parser = ConfigurationParserUtils.create(registry, access.getImageClassLoader());
-        loadedConfigurations = ConfigurationParserUtils.parseAndRegisterConfigurations(parser, access.getImageClassLoader(), "JNI",
+        ConfigurationParserUtils.parseAndRegisterConfigurations(parser, access.getImageClassLoader(), "JNI",
                         ConfigurationFiles.Options.JNIConfigurationFiles, ConfigurationFiles.Options.JNIConfigurationResources, ConfigurationFiles.JNI_NAME);
     }
 
-    private class JNIRuntimeAccessibilitySupportImpl implements JNIRuntimeAccess.JNIRuntimeAccessibilitySupport, ReflectionRegistry {
+    private class JNIRuntimeAccessibilitySupportImpl implements JNIRuntimeAccessibilitySupport, ReflectionRegistry {
         @Override
         public void register(Class<?>... classes) {
             abortIfSealed();
@@ -140,8 +137,7 @@ public class JNIAccessFeature implements Feature {
         }
 
         @Override
-        public void register(boolean finalIsWritable, boolean allowUnsafeAccess, Field... fields) {
-            UserError.guarantee(!allowUnsafeAccess, "Unsafe access cannot be controlled through JNI configuration.");
+        public void register(boolean finalIsWritable, Field... fields) {
             abortIfSealed();
             for (Field field : fields) {
                 boolean writable = finalIsWritable || !Modifier.isFinal(field.getModifiers());
@@ -322,13 +318,6 @@ public class JNIAccessFeature implements Feature {
 
     @Override
     public void beforeCompilation(BeforeCompilationAccess a) {
-        if (ImageSingletons.contains(FallbackFeature.class)) {
-            FallbackFeature.FallbackImageRequest jniFallback = ImageSingletons.lookup(FallbackFeature.class).jniFallback;
-            if (jniFallback != null && loadedConfigurations == 0) {
-                throw jniFallback;
-            }
-        }
-
         CompilationAccessImpl access = (CompilationAccessImpl) a;
         for (JNIAccessibleClass clazz : JNIReflectionDictionary.singleton().getClasses()) {
             for (JNIAccessibleField field : clazz.getFields()) {

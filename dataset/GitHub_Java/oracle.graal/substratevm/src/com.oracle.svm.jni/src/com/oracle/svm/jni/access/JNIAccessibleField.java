@@ -28,6 +28,7 @@ package com.oracle.svm.jni.access;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.stream.Stream;
 
 import org.graalvm.nativeimage.Platform.HOSTED_ONLY;
 import org.graalvm.nativeimage.Platforms;
@@ -41,7 +42,6 @@ import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.jni.nativeapi.JNIFieldId;
 
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
  * Information on a field that can be looked up and accessed via JNI.
@@ -59,9 +59,7 @@ public final class JNIAccessibleField extends JNIAccessibleMember {
      * {@link StaticFieldsSupport#getStaticObjectFields()}.
      */
     public static WordBase getOffsetFromId(JNIFieldId id) {
-        UnsignedWord result = ((UnsignedWord) id).and(ID_OFFSET_MASK);
-        assert result.notEqual(0);
-        return result;
+        return ((UnsignedWord) id).and(ID_OFFSET_MASK);
     }
 
     private final String name;
@@ -98,15 +96,6 @@ public final class JNIAccessibleField extends JNIAccessibleMember {
         } catch (NoSuchFieldException e) {
             throw new RuntimeException(e);
         }
-        setHidingSubclasses(access.getMetaAccess(), sub -> anyMatchName(sub.getInstanceFields(false)) || anyMatchName(sub.getStaticFields()));
-    }
-
-    private boolean anyMatchName(ResolvedJavaField[] fields) {
-        for (ResolvedJavaField field : fields) {
-            if (field.getName().equals(name)) {
-                return true;
-            }
-        }
-        return false;
+        setHidingSubclasses(access.getMetaAccess(), sub -> Stream.of(sub.getDeclaredFields()).anyMatch(f -> f.getName().equals(name)));
     }
 }
