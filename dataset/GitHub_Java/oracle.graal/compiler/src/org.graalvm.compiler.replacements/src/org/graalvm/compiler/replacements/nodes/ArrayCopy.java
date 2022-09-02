@@ -35,7 +35,6 @@ import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.memory.MemoryAccess;
 import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.type.StampTool;
@@ -83,11 +82,6 @@ public interface ArrayCopy extends Virtualizable, SingleMemoryKill, MemoryAccess
 
     JavaKind getElementKind();
 
-    @Override
-    default void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this.asNode(), tool);
-    }
-
     default boolean checkBounds(int position, int length, VirtualObjectNode virtualObject) {
         assert length >= 0;
         return position >= 0 && position <= virtualObject.entryCount() - length;
@@ -125,13 +119,6 @@ public interface ArrayCopy extends Virtualizable, SingleMemoryKill, MemoryAccess
             }
         }
         return false;
-    }
-
-    /**
-     * Perform any work required to safely delete this node during virtualization.
-     */
-    default void deleteThisNode(VirtualizerTool tool) {
-        tool.delete();
     }
 
     @Override
@@ -177,7 +164,7 @@ public interface ArrayCopy extends Virtualizable, SingleMemoryKill, MemoryAccess
                             tool.setVirtualEntry(destVirtual, destPosInt + i, tool.getEntry(srcVirtual, srcPosInt + i));
                         }
                     }
-                    deleteThisNode(tool);
+                    tool.delete();
                     DebugContext debug = this.asNode().getDebug();
                     if (debug.isLogEnabled()) {
                         debug.log("virtualized arraycopy(%s, %d, %s, %d, %d)", getSource(), srcPosInt, getDestination(), destPosInt, len);
@@ -199,7 +186,7 @@ public interface ArrayCopy extends Virtualizable, SingleMemoryKill, MemoryAccess
                         tool.addNode(load);
                         tool.setVirtualEntry(destVirtual, destPosInt + i, load);
                     }
-                    deleteThisNode(tool);
+                    tool.delete();
                 }
             }
         }

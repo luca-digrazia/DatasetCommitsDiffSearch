@@ -79,7 +79,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     @OptionalInput(State) FrameState stateDuring;
     protected int bci;
     protected boolean polymorphic;
-    protected InlineControl inlineControl;
+    protected boolean useForInlining;
     protected final LocationIdentity identity;
 
     public InvokeNode(CallTargetNode callTarget, int bci) {
@@ -99,7 +99,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         this.callTarget = callTarget;
         this.bci = bci;
         this.polymorphic = false;
-        this.inlineControl = InlineControl.Normal;
+        this.useForInlining = true;
         this.identity = identity;
     }
 
@@ -108,7 +108,7 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         this.callTarget = invoke.callTarget;
         this.bci = invoke.bci;
         this.polymorphic = invoke.polymorphic;
-        this.inlineControl = invoke.inlineControl;
+        this.useForInlining = invoke.useForInlining;
         this.identity = invoke.getKilledLocationIdentity();
     }
 
@@ -143,13 +143,13 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     }
 
     @Override
-    public void setInlineControl(InlineControl control) {
-        this.inlineControl = control;
+    public boolean useForInlining() {
+        return useForInlining;
     }
 
     @Override
-    public InlineControl getInlineControl() {
-        return inlineControl;
+    public void setUseForInlining(boolean value) {
+        this.useForInlining = value;
     }
 
     @Override

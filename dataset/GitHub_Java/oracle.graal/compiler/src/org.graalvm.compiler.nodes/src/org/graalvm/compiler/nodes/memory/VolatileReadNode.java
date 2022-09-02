@@ -30,30 +30,37 @@ import static org.graalvm.compiler.nodeinfo.InputType.Memory;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
-import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.type.Stamp;
+import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.word.LocationIdentity;
 
 @NodeInfo(nameTemplate = "VolatileRead#{p#location/s}", allowedUsageTypes = Memory, cycles = CYCLES_2, size = SIZE_1)
-public class VolatileReadNode extends ReadNode implements SingleMemoryKill, Lowerable {
+public class VolatileReadNode extends ReadNode implements SingleMemoryKill, Lowerable, Simplifiable {
     public static final NodeClass<VolatileReadNode> TYPE = NodeClass.create(VolatileReadNode.class);
 
-    public VolatileReadNode(AddressNode address, Stamp stamp, BarrierType barrierType) {
-        super(TYPE, address, LocationIdentity.any(), stamp, null, barrierType, false, null);
+    public VolatileReadNode(AddressNode address, LocationIdentity location, Stamp stamp, BarrierType barrierType) {
+        super(TYPE, address, location, stamp, null, barrierType, false, null);
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        LIRKind readKind = gen.getLIRGeneratorTool().getLIRKind(getAccessStamp(NodeView.DEFAULT));
-        gen.setResult(this, gen.getLIRGeneratorTool().getArithmetic().emitVolatileLoad(readKind, gen.operand(address), gen.state(this)));
+        throw new GraalError("Shouldn't be generated");
+    }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        if (lastLocationAccess != null && hasOnlyUsagesOfType(Memory)) {
+            replaceAtUsages(lastLocationAccess.asNode(), Memory);
+            assert hasNoUsages();
+            graph().removeFixed(this);
+        }
     }
 
     @SuppressWarnings("try")

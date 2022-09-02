@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.core.nodes;
 
+import static org.graalvm.compiler.nodeinfo.InputType.Memory;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_8;
 
@@ -32,16 +33,34 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
+import org.graalvm.compiler.nodes.InvokeNode;
+import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.debug.ControlFlowAnchored;
-import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
+import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.word.LocationIdentity;
 
-@NodeInfo(cycles = CYCLES_8, size = SIZE_8)
-public final class CFunctionPrologueNode extends FixedWithNextNode implements Lowerable, MemoryCheckpoint.Single, ControlFlowAnchored {
+import com.oracle.svm.core.stack.JavaFrameAnchor;
+import com.oracle.svm.core.thread.VMThreads.StatusSupport;
+
+/**
+ * Represents the prologue that must be executed before a call to a C function, i.e., a function
+ * that requires the setup of a {@link JavaFrameAnchor} and a {@link StatusSupport thread state
+ * transition}.
+ *
+ * It must always be paired with a {@link CFunctionEpilogueNode}. In between the prologue and
+ * epilogue, there must be exactly one {@link InvokeNode} (note that it must not be an invoke that
+ * requires an exception handler, i.e., it must not be an {@link InvokeWithExceptionNode}.
+ *
+ * Part of the prologue/epilogue are emitted by the lowering of these nodes using snippets, see
+ * class CFunctionSnippets. Other parts are emitted in the backend when the call instruction is
+ * emitted.
+ */
+@NodeInfo(cycles = CYCLES_8, size = SIZE_8, allowedUsageTypes = {Memory})
+public final class CFunctionPrologueNode extends FixedWithNextNode implements Lowerable, SingleMemoryKill, ControlFlowAnchored {
     public static final NodeClass<CFunctionPrologueNode> TYPE = NodeClass.create(CFunctionPrologueNode.class);
 
+    private final int newThreadStatus;
     /**
      * The marker object prevents value numbering of the node. This means that the marker must be a
      * unique object per node, even after node cloning (e.g., because of method inlining).
@@ -52,15 +71,16 @@ public final class CFunctionPrologueNode extends FixedWithNextNode implements Lo
      */
     private CFunctionPrologueMarker marker;
 
-    public CFunctionPrologueNode() {
+    public CFunctionPrologueNode(int newThreadStatus) {
         super(TYPE, StampFactory.forVoid());
-        marker = new CFunctionPrologueMarker();
+        this.newThreadStatus = newThreadStatus;
+        marker = new CFunctionPrologueMarker(newThreadStatus);
     }
 
     @Override
     protected void afterClone(Node other) {
         super.afterClone(other);
-        marker = new CFunctionPrologueMarker();
+        marker = new CFunctionPrologueMarker(newThreadStatus);
     }
 
     public CFunctionPrologueMarker getMarker() {
@@ -68,15 +88,14 @@ public final class CFunctionPrologueNode extends FixedWithNextNode implements Lo
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
-    }
-
-    @Override
-    public LocationIdentity getLocationIdentity() {
+    public LocationIdentity getKilledLocationIdentity() {
         return LocationIdentity.any();
     }
 
+    public int getNewThreadStatus() {
+        return newThreadStatus;
+    }
+
     @NodeIntrinsic
-    public static native void cFunctionPrologue();
+    public static native void cFunctionPrologue(@ConstantNodeParameter int newThreadStatus);
 }

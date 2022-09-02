@@ -51,7 +51,7 @@ public final class SubstrateObjectCloneNode extends BasicObjectCloneNode impleme
 
     @OptionalInput(InputType.State) protected FrameState stateBefore;
 
-    protected SubstrateObjectCloneNode(MacroParams p) {
+    public SubstrateObjectCloneNode(MacroParams p) {
         super(TYPE, p);
     }
 

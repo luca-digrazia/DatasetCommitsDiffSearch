@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,27 +31,33 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.replacements.nodes.BasicArrayCopyNode;
 import org.graalvm.word.LocationIdentity;
-
-import jdk.vm.ci.meta.JavaKind;
 
 @NodeInfo
 public final class ArrayCopyNode extends BasicArrayCopyNode implements Lowerable {
 
     public static final NodeClass<ArrayCopyNode> TYPE = NodeClass.create(ArrayCopyNode.class);
 
-    private JavaKind elementKind;
+    protected final boolean forceAnyLocation;
 
     public ArrayCopyNode(int bci, ValueNode src, ValueNode srcPos, ValueNode dst, ValueNode dstPos, ValueNode length) {
+        this(bci, src, srcPos, dst, dstPos, length, false);
+    }
+
+    public ArrayCopyNode(int bci, ValueNode src, ValueNode srcPos, ValueNode dst, ValueNode dstPos, ValueNode length, boolean forceAnyLocation) {
         super(TYPE, src, srcPos, dst, dstPos, length, null, bci);
-        elementKind = ArrayCopySnippets.Templates.selectComponentKind(this);
+        this.forceAnyLocation = forceAnyLocation;
+        if (!forceAnyLocation) {
+            elementKind = ArrayCopySnippets.Templates.selectComponentKind(this);
+        } else {
+            assert elementKind == null;
+        }
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        if (elementKind == null) {
+    public LocationIdentity getKilledLocationIdentity() {
+        if (!forceAnyLocation && elementKind == null) {
             elementKind = ArrayCopySnippets.Templates.selectComponentKind(this);
         }
         if (elementKind != null) {
@@ -60,8 +66,7 @@ public final class ArrayCopyNode extends BasicArrayCopyNode implements Lowerable
         return any();
     }
 
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    public boolean killsAnyLocation() {
+        return forceAnyLocation;
     }
 }
