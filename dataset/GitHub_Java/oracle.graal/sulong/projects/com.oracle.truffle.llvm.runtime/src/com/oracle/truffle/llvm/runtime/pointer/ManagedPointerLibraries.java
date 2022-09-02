@@ -36,7 +36,7 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
+import com.oracle.truffle.llvm.runtime.library.LLVMNativeLibrary;
 
 @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = LLVMPointerImpl.class)
 @ExportLibrary(value = InteropLibrary.class, receiverType = LLVMPointerImpl.class)
@@ -97,5 +97,4 @@ abstract class ManagedPointerLibraries extends CommonPointerLibraries {
                     @CachedLibrary("receiver.object") LLVMNativeLibrary natives) {
         return natives.toNativePointer(receiver.object).increment(receiver.getOffset());
     }
-
 }
