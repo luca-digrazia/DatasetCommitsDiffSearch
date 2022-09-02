@@ -301,7 +301,6 @@ final class EngineAccessor extends Accessor {
             for (AbstractClassLoaderSupplier loaderSupplier : EngineAccessor.locatorOrDefaultLoaders()) {
                 ClassLoader loader = loaderSupplier.get();
                 if (seesTheSameClass(loader, type)) {
-                    EngineAccessor.JDKSERVICES.exportTo(loader, null);
                     for (T service : ServiceLoader.load(type, loader)) {
                         found.putIfAbsent(service.getClass(), service);
                     }
@@ -817,9 +816,7 @@ final class EngineAccessor extends Accessor {
         public boolean isInstrumentExceptionsAreThrown(Object polyglotEngine) {
             // We want to enable this option for testing in general, to ensure tests fail if
             // instruments throw.
-            OptionValuesImpl engineOptionValues = getEngine(polyglotEngine).engineOptionValues;
-            return areAssertionsEnabled() && !engineOptionValues.hasBeenSet(PolyglotEngineOptions.InstrumentExceptionsAreThrown) ||
-                            engineOptionValues.get(PolyglotEngineOptions.InstrumentExceptionsAreThrown);
+            return areAssertionsEnabled() || getEngine(polyglotEngine).engineOptionValues.get(PolyglotEngineOptions.InstrumentExceptionsAreThrown);
         }
 
         @SuppressWarnings("all")
