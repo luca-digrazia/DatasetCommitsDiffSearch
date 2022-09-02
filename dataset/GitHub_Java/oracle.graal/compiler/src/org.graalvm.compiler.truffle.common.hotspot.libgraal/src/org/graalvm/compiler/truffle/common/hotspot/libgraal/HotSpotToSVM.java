@@ -46,9 +46,12 @@ public @interface HotSpotToSVM {
      */
     // Please keep sorted
     enum Id {
+        AttachThread,
+        CleanReferences,
         CloseCompilation,
         CloseDebugContext,
         CloseDebugContextScope,
+        CreateSpeculationLog,
         DoCompile,
         DumpChannelClose,
         DumpChannelWrite,

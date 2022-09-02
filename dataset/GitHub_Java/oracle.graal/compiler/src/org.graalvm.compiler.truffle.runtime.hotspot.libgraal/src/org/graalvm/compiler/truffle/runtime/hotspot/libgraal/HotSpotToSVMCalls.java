@@ -24,11 +24,13 @@
  */
 package org.graalvm.compiler.truffle.runtime.hotspot.libgraal;
 
+import java.nio.ByteBuffer;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.AttachThread;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.CleanReferences;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.CloseCompilation;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.CloseDebugContext;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.CloseDebugContextScope;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.CreateSpeculationLog;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.DoCompile;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.DumpChannelClose;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.DumpChannelWrite;
@@ -62,8 +64,6 @@ import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.ReleaseHandle;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.Shutdown;
 
-import java.nio.ByteBuffer;
-
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
@@ -80,7 +80,7 @@ final class HotSpotToSVMCalls {
     static native long attachThread(long isolate);
 
     @HotSpotToSVM(InitializeRuntime)
-    static native long initializeRuntime(long isolateThreadId, TruffleCompilerRuntime truffleRuntime, long classLoaderDelegateId);
+    static native long initializeRuntime(long isolateThreadId, TruffleCompilerRuntime truffleRuntime, long classLoaderDelegateId, byte[] properties);
 
     @HotSpotToSVM(GetCompilerConfigurationFactoryName)
     static native String getCompilerConfigurationFactoryName(long isolateThreadId);
@@ -124,6 +124,9 @@ final class HotSpotToSVMCalls {
 
     @HotSpotToSVM(Log)
     static native void log(long isolateThreadId, String message);
+
+    @HotSpotToSVM(CreateSpeculationLog)
+    static native long createSpeculationLog(long isolateThreadId);
 
     @HotSpotToSVM(GetNodeCount)
     static native int getNodeCount(long isolateThreadId, long handle);
