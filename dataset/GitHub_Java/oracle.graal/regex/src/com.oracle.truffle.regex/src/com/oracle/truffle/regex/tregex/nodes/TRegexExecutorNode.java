@@ -175,6 +175,7 @@ public abstract class TRegexExecutorNode extends Node {
     }
 
     public void inputAdvance(TRegexExecutorLocals locals) {
+        assert isForward() ? locals.getIndex() < locals.getNextIndex() : locals.getIndex() > locals.getNextIndex();
         locals.setIndex(locals.getNextIndex());
     }
 
@@ -186,7 +187,7 @@ public abstract class TRegexExecutorNode extends Node {
         inputSkipIntl(locals, !isForward());
     }
 
-    protected void inputSkipIntl(TRegexExecutorLocals locals, boolean forward) {
+    private void inputSkipIntl(TRegexExecutorLocals locals, boolean forward) {
         if (getEncoding() == Encodings.UTF_8) {
             if (forward) {
                 int c = inputReadRaw(locals, true);
