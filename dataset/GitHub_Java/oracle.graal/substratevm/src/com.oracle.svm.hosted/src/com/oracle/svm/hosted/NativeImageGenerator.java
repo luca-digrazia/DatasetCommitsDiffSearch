@@ -81,11 +81,11 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GeneratedPluginFactory;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
+import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeoptimizationGroupingPhase;
@@ -118,7 +118,6 @@ import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
-import org.graalvm.nativeimage.c.struct.RawPointerTo;
 import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.Feature.OnAnalysisExitAccess;
@@ -583,8 +582,7 @@ public class NativeImageGenerator {
                                 bigbang.getUnsupportedFeatures()).build(debug);
 
                 ClassInitializationSupport classInitializationSupport = bigbang.getHostVM().getClassInitializationSupport();
-                runtime = new HostedRuntimeConfigurationBuilder(options, bigbang.getHostVM(), hUniverse, hMetaAccess, bigbang.getProviders(), nativeLibraries, classInitializationSupport,
-                                GraalAccess.getOriginalProviders().getLoopsDataProvider()).build();
+                runtime = new HostedRuntimeConfigurationBuilder(options, bigbang.getHostVM(), hUniverse, hMetaAccess, bigbang.getProviders(), nativeLibraries, classInitializationSupport).build();
                 registerGraphBuilderPlugins(featureHandler, runtime.getRuntimeConfig(), (HostedProviders) runtime.getRuntimeConfig().getProviders(), bigbang.getMetaAccess(), aUniverse,
                                 hMetaAccess, hUniverse,
                                 nativeLibraries, loader, false, true, bigbang.getAnnotationSubstitutionProcessor(), new SubstrateClassInitializationPlugin((SVMHost) aUniverse.hostVM()),
@@ -892,7 +890,7 @@ public class NativeImageGenerator {
 
                 ForeignCallsProvider aForeignCalls = new SubstrateForeignCallsProvider();
                 bigbang = createBigBang(options, target, aUniverse, nativeLibraries, analysisExecutor, watchdog::recordActivity, aMetaAccess, aConstantReflection, aWordTypes, aSnippetReflection,
-                                annotationSubstitutions, aForeignCalls, classInitializationSupport, originalProviders);
+                                annotationSubstitutions, aForeignCalls, classInitializationSupport);
 
                 try (Indent ignored2 = debug.logAndIndent("process startup initializers")) {
                     FeatureImpl.DuringSetupAccessImpl config = new FeatureImpl.DuringSetupAccessImpl(featureHandler, loader, bigbang, debug);
@@ -1038,8 +1036,7 @@ public class NativeImageGenerator {
     public static Inflation createBigBang(OptionValues options, TargetDescription target, AnalysisUniverse aUniverse, NativeLibraries nativeLibraries, ForkJoinPool analysisExecutor,
                     Runnable heartbeatCallback,
                     AnalysisMetaAccess aMetaAccess, AnalysisConstantReflectionProvider aConstantReflection, WordTypes aWordTypes, SnippetReflectionProvider aSnippetReflection,
-                    AnnotationSubstitutionProcessor annotationSubstitutionProcessor, ForeignCallsProvider aForeignCalls, ClassInitializationSupport classInitializationSupport,
-                    Providers originalProviders) {
+                    AnnotationSubstitutionProcessor annotationSubstitutionProcessor, ForeignCallsProvider aForeignCalls, ClassInitializationSupport classInitializationSupport) {
         assert aUniverse != null : "Analysis universe must be initialized.";
         assert nativeLibraries != null : "Native libraries must be set.";
         aMetaAccess.lookupJavaType(String.class).registerAsReachable();
@@ -1055,11 +1052,11 @@ public class NativeImageGenerator {
         LoweringProvider aLoweringProvider = SubstrateLoweringProvider.create(aMetaAccess, null, platformConfig, aMetaAccessExtensionProvider);
         StampProvider aStampProvider = new SubstrateStampProvider(aMetaAccess);
         HostedProviders aProviders = new HostedProviders(aMetaAccess, null, aConstantReflection, aConstantFieldProvider, aForeignCalls, aLoweringProvider, null, aStampProvider, aSnippetReflection,
-                        aWordTypes, platformConfig, aMetaAccessExtensionProvider, originalProviders.getLoopsDataProvider());
+                        aWordTypes, platformConfig, aMetaAccessExtensionProvider);
         BytecodeProvider bytecodeProvider = new ResolvedJavaMethodBytecodeProvider();
         SubstrateReplacements aReplacments = new SubstrateReplacements(aProviders, aSnippetReflection, bytecodeProvider, target, aWordTypes, new SubstrateGraphMakerFactory(aWordTypes));
         aProviders = new HostedProviders(aMetaAccess, null, aConstantReflection, aConstantFieldProvider, aForeignCalls, aLoweringProvider, aReplacments, aStampProvider,
-                        aSnippetReflection, aWordTypes, platformConfig, aMetaAccessExtensionProvider, originalProviders.getLoopsDataProvider());
+                        aSnippetReflection, aWordTypes, platformConfig, aMetaAccessExtensionProvider);
 
         return new Inflation(options, aUniverse, aProviders, annotationSubstitutionProcessor, analysisExecutor, heartbeatCallback);
     }
@@ -1362,7 +1359,7 @@ public class NativeImageGenerator {
 
         lowTier.addBeforeLast(new OptimizeExceptionCallsPhase());
 
-        BasePhase<CoreProviders> addressLoweringPhase = backend.newAddressLoweringPhase(runtimeCallProviders.getCodeCache());
+        Phase addressLoweringPhase = backend.newAddressLoweringPhase(runtimeCallProviders.getCodeCache());
         if (firstTier) {
             lowTier.findPhase(ExpandLogicPhase.class, true).add(addressLoweringPhase);
         } else {
@@ -1573,12 +1570,6 @@ public class NativeImageGenerator {
         for (Class<?> clazz : loader.findAnnotatedClasses(CPointerTo.class, false)) {
             if (LibCBase.isTypeProvidedInCurrentLibc(clazz)) {
                 classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + CPointerTo.class.getSimpleName() + " are always initialized");
-                nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
-            }
-        }
-        for (Class<?> clazz : loader.findAnnotatedClasses(RawPointerTo.class, false)) {
-            if (LibCBase.isTypeProvidedInCurrentLibc(clazz)) {
-                classInitializationSupport.initializeAtBuildTime(clazz, "classes annotated with " + RawPointerTo.class.getSimpleName() + " are always initialized");
                 nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
             }
         }
