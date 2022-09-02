@@ -61,7 +61,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -103,7 +102,6 @@ import com.oracle.truffle.api.nodes.NodeInterface;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.polyglot.HostClassDesc.AdapterResult;
 import com.oracle.truffle.polyglot.PolyglotImpl.VMObject;
 import com.oracle.truffle.polyglot.PolyglotLocals.InstrumentContextLocal;
 import com.oracle.truffle.polyglot.PolyglotLocals.InstrumentContextThreadLocal;
@@ -1309,31 +1307,6 @@ final class EngineAccessor extends Accessor {
                 }
                 context.closeImpl(false, false, true);
             }
-        }
-
-        @Override
-        public <T, G> Iterator<T> mergeHostGuestFrames(StackTraceElement[] hostStack, Iterator<G> guestFrames, boolean inHostLanguage, Function<StackTraceElement, T> hostFrameConvertor,
-                        Function<G, T> guestFrameConvertor) {
-            return new PolyglotExceptionImpl.MergedHostGuestIterator<>(hostStack, guestFrames, inHostLanguage, hostFrameConvertor, guestFrameConvertor);
-        }
-
-        @Override
-        public Object createHostAdapterClass(Object polyglotLanguageContext, Class<?>[] types, Object classOverrides) {
-            CompilerAsserts.neverPartOfCompilation();
-            PolyglotLanguageContext context = (PolyglotLanguageContext) polyglotLanguageContext;
-            PolyglotEngineImpl engine = context.getEngine();
-            if (types.length == 1 && classOverrides == null) {
-                HostClassDesc classDesc = HostClassDesc.forClass(engine, types[0]);
-                AdapterResult adapter = classDesc.getAdapter();
-                if (adapter.isSuccess()) {
-                    return asHostSymbol(polyglotLanguageContext, adapter.getAdapterClass());
-                } else {
-                    throw adapter.throwException();
-                }
-            }
-            Value classOverridesAsValue = classOverrides == null ? null : context.asValue(classOverrides);
-            Class<?> adapterClass = HostAdapterFactory.getAdapterClassFor(engine.getHostClassCache(), types, classOverridesAsValue);
-            return asHostSymbol(polyglotLanguageContext, adapterClass);
         }
 
         @Override

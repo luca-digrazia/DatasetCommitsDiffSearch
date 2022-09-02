@@ -74,11 +74,6 @@ final class DefaultRuntimeAccessor extends Accessor {
         }
 
         @Override
-        public ThreadLocalHandshake getThreadLocalHandshake() {
-            return DefaultThreadLocalHandshake.INSTANCE;
-        }
-
-        @Override
         public void onLoopCount(Node source, int iterations) {
             // do nothing
         }
@@ -182,41 +177,6 @@ final class DefaultRuntimeAccessor extends Accessor {
         @Override
         public boolean isOSRRootNode(RootNode rootNode) {
             return false;
-        }
-
-        @Override
-        public int getObjectAlignment() {
-            throw new UnsupportedOperationException();
-        }
-
-        @SuppressWarnings("unused")
-        @Override
-        public int getArrayBaseOffset(Class<?> componentType) {
-            throw new UnsupportedOperationException();
-        }
-
-        @SuppressWarnings("unused")
-        @Override
-        public int getArrayIndexScale(Class<?> componentType) {
-            throw new UnsupportedOperationException();
-        }
-
-        @SuppressWarnings("unused")
-        @Override
-        public int getBaseInstanceSize(Class<?> type) {
-            throw new UnsupportedOperationException();
-        }
-
-        @SuppressWarnings("unused")
-        @Override
-        public Object[] getNonPrimitiveResolvedFields(Class<?> type) {
-            throw new UnsupportedOperationException();
-        }
-
-        @SuppressWarnings("unused")
-        @Override
-        public Object getFieldValue(Object resolvedJavaField, Object obj) {
-            throw new UnsupportedOperationException();
         }
     }
 
