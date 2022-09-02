@@ -122,6 +122,7 @@ import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.nodes.AnalysisArraysCopyOfNode;
+import com.oracle.graal.pointsto.nodes.ConvertUnknownValueNode;
 import com.oracle.graal.pointsto.nodes.UnsafePartitionLoadNode;
 import com.oracle.graal.pointsto.nodes.UnsafePartitionStoreNode;
 import com.oracle.graal.pointsto.typestate.TypeState;
@@ -240,6 +241,14 @@ public class MethodTypeFlowBuilder {
                 StoreFieldNode node = (StoreFieldNode) n;
                 AnalysisField field = (AnalysisField) node.field();
                 field.registerAsWritten(methodFlow);
+
+            } else if (n instanceof StoreIndexedNode) {
+                StoreIndexedNode node = (StoreIndexedNode) n;
+                AnalysisType arrayType = (AnalysisType) StampTool.typeOrNull(node.array());
+                if (arrayType != null) {
+                    assert arrayType.isArray();
+                    arrayType.getComponentType().registerAsReachable();
+                }
 
             } else if (n instanceof ConstantNode) {
                 ConstantNode cn = (ConstantNode) n;
@@ -475,9 +484,9 @@ public class MethodTypeFlowBuilder {
                     AnalysisType type = (AnalysisType) (stamp.type() == null ? bb.getObjectType() : stamp.type());
 
                     if (type.isJavaLangObject()) {
-                        /* Return a proxy to the all-instantiated type flow. */
+                        /* Return a proxy to the unknown type flow. */
                         result = TypeFlowBuilder.create(bb, node, ProxyTypeFlow.class, () -> {
-                            ProxyTypeFlow proxy = new ProxyTypeFlow(node, bb.getAllInstantiatedTypeFlow());
+                            ProxyTypeFlow proxy = new ProxyTypeFlow(node, bb.getUnknownTypeFlow());
                             methodFlow.addMiscEntry(proxy);
                             return proxy;
                         });
@@ -1149,8 +1158,9 @@ public class MethodTypeFlowBuilder {
                 } else {
                     /* Word-to-object: Any object can flow out from a low level memory read. */
                     TypeFlowBuilder<?> wordToObjectBuilder = TypeFlowBuilder.create(bb, node, WordToObjectTypeFlow.class, () -> {
-                        /* Use the all-instantiated type flow. */
-                        WordToObjectTypeFlow objectFlow = new WordToObjectTypeFlow(node, bb.getAllInstantiatedTypeFlow());
+                        /* Use the unknown type flow. */
+                        TypeFlow<?> unknown = bb.getUnknownTypeFlow();
+                        WordToObjectTypeFlow objectFlow = new WordToObjectTypeFlow(node, unknown);
                         methodFlow.addMiscEntry(objectFlow);
                         return objectFlow;
                     });
@@ -1199,6 +1209,22 @@ public class MethodTypeFlowBuilder {
                 monitorEntryBuilder.addUseDependency(objectBuilder);
                 /* Monitor enters must not be removed. */
                 typeFlowGraphBuilder.registerSinkBuilder(monitorEntryBuilder);
+            } else if (n instanceof ConvertUnknownValueNode) {
+                ConvertUnknownValueNode node = (ConvertUnknownValueNode) n;
+
+                /*
+                 * Wire the all-instantiated type flow, of either the Object type or a more concrete
+                 * sub-type if precise type information is available, to the uses of this node.
+                 */
+                AnalysisType nodeType = (AnalysisType) StampTool.typeOrNull(node);
+                TypeFlowBuilder<?> resultBuilder = TypeFlowBuilder.create(bb, node, ConvertUnknownValueTypeFlow.class, () -> {
+                    ConvertUnknownValueTypeFlow resultFlow = new ConvertUnknownValueTypeFlow(node, nodeType.getTypeFlow(bb, true));
+                    methodFlow.addMiscEntry(resultFlow);
+                    return resultFlow;
+                });
+
+                state.add(node, resultBuilder);
+
             } else if (n instanceof MacroNode) {
                 /*
                  * Macro nodes can either be constant folded during compilation, or lowered back to

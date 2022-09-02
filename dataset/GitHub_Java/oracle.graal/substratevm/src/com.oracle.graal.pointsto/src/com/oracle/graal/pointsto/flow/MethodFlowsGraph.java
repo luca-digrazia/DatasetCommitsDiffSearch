@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,14 +32,20 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.graalvm.compiler.nodes.Invoke;
+
 import com.oracle.graal.pointsto.BigBang;
-import com.oracle.graal.pointsto.flow.OffsetLoadTypeFlow.LoadIndexedTypeFlow;
 import com.oracle.graal.pointsto.flow.context.AnalysisContext;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
+
+import jdk.vm.ci.code.BytecodePosition;
 
 public class MethodFlowsGraph {
 
@@ -53,17 +61,14 @@ public class MethodFlowsGraph {
     // points in the method
     private FormalParamTypeFlow[] parameters;
     private InitialParamTypeFlow[] initialParameterFlows;
-    private List<SourceTypeFlow> sources;
-    private List<LoadFieldTypeFlow> fieldLoads;
-    private List<LoadIndexedTypeFlow> indexedLoads;
     private List<TypeFlow<?>> miscEntryFlows;
-
-    private List<NewInstanceTypeFlow> allocations;
-    private List<DynamicNewInstanceTypeFlow> dynamicAllocations;
-    private List<CloneTypeFlow> clones;
-    private List<MonitorEnterTypeFlow> monitorEntries;
-
-    private List<InstanceOfTypeFlow> instaceOfFlows;
+    private Map<Object, TypeFlow<?>> nodeFlows;
+    /*
+     * We keep a bci->flow mapping for instanceof and invoke flows since they are queried by the
+     * analysis results builder.
+     */
+    private Set<Object> nonUniqueBcis;
+    private Map<Object, InstanceOfTypeFlow> instanceOfFlows;
     private Map<Object, InvokeTypeFlow> invokeFlows;
 
     private FormalReturnTypeFlow result;
@@ -102,33 +107,11 @@ public class MethodFlowsGraph {
         // never linked and parsed
         method.getSignature().getReturnType(method.getDeclaringClass());
 
-        // allocations
-        allocations = new ArrayList<>();
-
-        dynamicAllocations = new ArrayList<>();
-
-        monitorEntries = new ArrayList<>();
-
-        // clones
-        clones = new ArrayList<>();
-
-        // sources
-        sources = new ArrayList<>();
-
-        // field loads
-        fieldLoads = new ArrayList<>();
-
-        // indexed loads
-        indexedLoads = new ArrayList<>();
-
-        // misc entry inputs
         miscEntryFlows = new ArrayList<>();
-
-        // instanceof
-        instaceOfFlows = new ArrayList<>();
-
-        // invoke
+        nodeFlows = new HashMap<>();
+        instanceOfFlows = new HashMap<>();
         invokeFlows = new HashMap<>(4, 0.75f);
+        nonUniqueBcis = new HashSet<>();
     }
 
     public MethodFlowsGraph(AnalysisMethod method, AnalysisContext context) {
@@ -159,40 +142,12 @@ public class MethodFlowsGraph {
             }
         }
 
-        // initial parameter flows
         initialParameterFlows = new InitialParamTypeFlow[originalMethodFlowsGraph.initialParameterFlows.length];
 
-        // allocations
-        allocations = originalMethodFlowsGraph.allocations.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // dynamic allocations
-        dynamicAllocations = originalMethodFlowsGraph.dynamicAllocations.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // monitor entries
-        monitorEntries = originalMethodFlowsGraph.monitorEntries.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // clones
-        clones = originalMethodFlowsGraph.clones.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // sources
-        sources = originalMethodFlowsGraph.sources.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // result
+        nodeFlows = originalMethodFlowsGraph.nodeFlows.entrySet().stream().collect(Collectors.toMap(e -> e.getKey(), e -> lookupCloneOf(bb, e.getValue())));
         result = originalMethodFlowsGraph.getResult() != null ? lookupCloneOf(bb, originalMethodFlowsGraph.getResult()) : null;
-
-        // field loads
-        fieldLoads = originalMethodFlowsGraph.fieldLoads.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // indexed loads
-        indexedLoads = originalMethodFlowsGraph.indexedLoads.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // instanceof
-        instaceOfFlows = originalMethodFlowsGraph.instaceOfFlows.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // misc entry flows (merge, proxy, etc.)
+        instanceOfFlows = originalMethodFlowsGraph.instanceOfFlows.entrySet().stream().collect(Collectors.toMap(e -> e.getKey(), e -> lookupCloneOf(bb, e.getValue())));
         miscEntryFlows = originalMethodFlowsGraph.miscEntryFlows.stream().map(f -> lookupCloneOf(bb, f)).collect(Collectors.toList());
-
-        // instanceof
         invokeFlows = originalMethodFlowsGraph.invokeFlows.entrySet().stream().collect(Collectors.toMap(e -> e.getKey(), e -> lookupCloneOf(bb, e.getValue())));
 
         /* At this point all the clones should have been created. */
@@ -201,13 +156,18 @@ public class MethodFlowsGraph {
 
     @SuppressWarnings("unchecked")
     public <T extends TypeFlow<?>> T lookupCloneOf(BigBang bb, T original) {
-        assert original != null && !original.isClone();
+        assert original != null : "Looking for the clone of a 'null' flow in " + this;
+        assert !original.isClone() : "Looking for the clone of the already cloned flow " + original + " in " + this;
         assert !(original instanceof FieldTypeFlow) : "Trying to clone a field type flow";
         assert !(original instanceof ArrayElementsTypeFlow) : "Trying to clone an mixed elements type flow";
 
         if (original instanceof AllInstantiatedTypeFlow || original instanceof AllSynchronizedTypeFlow) {
             /* All instantiated is not cloneable. */
             return original;
+        }
+        if (original instanceof ProxyTypeFlow) {
+            /* The ProxyTypeFlow is just a place holder in the original graph for its input. */
+            return (T) ((ProxyTypeFlow) original).getInput();
         }
 
         int slot = original.getSlot();
@@ -315,11 +275,11 @@ public class MethodFlowsGraph {
     }
 
     public void linearizeGraph() {
-        linearizedGraph = getLinearizeGraph();
+        linearizedGraph = doLinearizeGraph();
         isLinearized = true;
     }
 
-    public TypeFlow<?>[] getLinearizeGraph() {
+    private TypeFlow<?>[] doLinearizeGraph() {
 
         Deque<TypeFlow<?>> worklist = new ArrayDeque<>();
 
@@ -329,16 +289,9 @@ public class MethodFlowsGraph {
             }
         }
 
-        worklist.addAll(allocations);
-        worklist.addAll(dynamicAllocations);
-        worklist.addAll(monitorEntries);
-        worklist.addAll(clones);
-        worklist.addAll(sources);
+        worklist.addAll(nodeFlows.values());
         worklist.addAll(miscEntryFlows);
-        worklist.addAll(fieldLoads);
-        worklist.addAll(indexedLoads);
-
-        worklist.addAll(instaceOfFlows);
+        worklist.addAll(instanceOfFlows.values());
         worklist.addAll(invokeFlows.values());
 
         if (result != null) {
@@ -421,53 +374,23 @@ public class MethodFlowsGraph {
         return initialParameterFlows;
     }
 
-    public void addAllocation(NewInstanceTypeFlow allocation) {
-        allocations.add(allocation);
+    public void addNodeFlow(Object key, TypeFlow<?> flow) {
+        assert flow != null && !(flow instanceof AllInstantiatedTypeFlow);
+        Object previous = nodeFlows.put(key, flow);
+        assert previous == null : "Overwriting flow for " + key + ": " + previous + " - " + flow;
     }
 
-    public List<NewInstanceTypeFlow> getAllocations() {
-        return allocations;
+    public Collection<TypeFlow<?>> getMiscFlows() {
+        return miscEntryFlows;
     }
 
-    public void addDynamicAllocation(DynamicNewInstanceTypeFlow allocation) {
-        dynamicAllocations.add(allocation);
-    }
-
-    public List<DynamicNewInstanceTypeFlow> getDynamicAllocations() {
-        return dynamicAllocations;
-    }
-
-    public void addMonitorEntry(MonitorEnterTypeFlow monitorEntry) {
-        monitorEntries.add(monitorEntry);
-    }
-
-    public List<MonitorEnterTypeFlow> getMonitorEntries() {
-        return monitorEntries;
-    }
-
-    public void addClone(CloneTypeFlow clone) {
-        clones.add(clone);
-    }
-
-    public List<CloneTypeFlow> getClones() {
-        return clones;
-    }
-
-    public void addSource(SourceTypeFlow source) {
-        sources.add(source);
+    public Map<Object, TypeFlow<?>> getNodeFlows() {
+        return nodeFlows;
     }
 
     public void addMiscEntryFlow(TypeFlow<?> entryFlow) {
         assert !(entryFlow instanceof AllInstantiatedTypeFlow);
         miscEntryFlows.add(entryFlow);
-    }
-
-    public void addFieldLoad(LoadFieldTypeFlow fieldLoad) {
-        fieldLoads.add(fieldLoad);
-    }
-
-    public void addIndexedLoad(LoadIndexedTypeFlow indexedLoad) {
-        indexedLoads.add(indexedLoad);
     }
 
     public void setResult(FormalReturnTypeFlow result) {
@@ -478,29 +401,58 @@ public class MethodFlowsGraph {
         return this.result;
     }
 
-    public Collection<InvokeTypeFlow> getInvokes() {
+    public Set<Entry<Object, InvokeTypeFlow>> getInvokes() {
+        return invokeFlows.entrySet();
+    }
+
+    public InvokeTypeFlow getInvokeFlow(Invoke invoke) {
+        return invokeFlows.get(invoke);
+    }
+
+    Collection<InvokeTypeFlow> getInvokeFlows() {
         return invokeFlows.values();
     }
 
-    public Collection<InstanceOfTypeFlow> getInstaceOfFlows() {
-        return instaceOfFlows;
+    public Set<Entry<Object, InstanceOfTypeFlow>> getInstanceOfFlows() {
+        return instanceOfFlows.entrySet();
     }
 
-    public void addInstanceOf(InstanceOfTypeFlow instanceOf) {
-        instaceOfFlows.add(instanceOf);
+    void addInstanceOf(Object key, InstanceOfTypeFlow instanceOf) {
+        doAddFlow(key, instanceOf, instanceOfFlows);
     }
 
-    public void addInvoke(Object key, InvokeTypeFlow invokeTypeFlow) {
-        assert !invokeFlows.containsKey(key);
-        invokeFlows.put(key, invokeTypeFlow);
+    void addInvoke(Object key, InvokeTypeFlow invokeTypeFlow) {
+        doAddFlow(key, invokeTypeFlow, invokeFlows);
+    }
+
+    private <T extends TypeFlow<BytecodePosition>> void doAddFlow(Object key, T flow, Map<Object, T> map) {
+        assert map == instanceOfFlows || map == invokeFlows : "Keys of these maps must not be overlapping";
+        Object uniqueKey = key;
+        if (nonUniqueBcis.contains(key) || removeNonUnique(key, instanceOfFlows) || removeNonUnique(key, invokeFlows)) {
+            uniqueKey = new Object();
+        }
+        map.put(uniqueKey, flow);
+    }
+
+    private <T extends TypeFlow<BytecodePosition>> boolean removeNonUnique(Object key, Map<Object, T> map) {
+        T oldFlow = map.remove(key);
+        if (oldFlow != null) {
+            /*
+             * This can happen when Graal inlines jsr/ret routines and the inlined nodes share the
+             * same bci. Or for some invokes where the bytecode parser needs to insert a type check
+             * before the invoke. Remove the old bci->flow pairing and replace it with a
+             * uniqueKey->flow pairing.
+             */
+            map.put(new Object(), oldFlow);
+            nonUniqueBcis.add(key);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     public InvokeTypeFlow getInvoke(Object key) {
         return invokeFlows.get(key);
-    }
-
-    public TypeFlow<?>[] getLinearizedGraph() {
-        return linearizedGraph;
     }
 
     public boolean isLinearized() {
@@ -520,10 +472,15 @@ public class MethodFlowsGraph {
          * TODO cache the result
          */
         List<MethodFlowsGraph> callers = new ArrayList<>();
-        for (AnalysisMethod caller : method.getJavaInvocations()) {
+        for (AnalysisMethod caller : method.getCallers()) {
             for (MethodFlowsGraph callerFlowGraph : caller.getTypeFlow().getFlows()) {
-                for (InvokeTypeFlow callerInvoke : callerFlowGraph.getInvokes()) {
-                    for (MethodFlowsGraph calleeFlowGraph : callerInvoke.getCalleesFlows(bb)) {
+                for (InvokeTypeFlow callerInvoke : callerFlowGraph.getInvokeFlows()) {
+                    InvokeTypeFlow invoke = callerInvoke;
+                    if (InvokeTypeFlow.isContextInsensitiveVirtualInvoke(callerInvoke)) {
+                        /* The invoke has been replaced by the context insensitive one. */
+                        invoke = callerInvoke.getTargetMethod().getContextInsensitiveInvoke();
+                    }
+                    for (MethodFlowsGraph calleeFlowGraph : invoke.getCalleesFlows(bb)) {
                         // 'this' method graph was found among the callees of an invoke flow in one
                         // of the clones of the caller methods, hence we regiter that clone as a
                         // caller for 'this' method clone
@@ -545,7 +502,7 @@ public class MethodFlowsGraph {
      * @return the InvokeTypeFlow object belonging to the caller that linked to this callee.
      */
     public InvokeTypeFlow invokeFlow(MethodFlowsGraph callerFlowGraph, BigBang bb) {
-        for (InvokeTypeFlow callerInvoke : callerFlowGraph.getInvokes()) {
+        for (InvokeTypeFlow callerInvoke : callerFlowGraph.getInvokeFlows()) {
             for (MethodFlowsGraph calleeFlowGraph : callerInvoke.getCalleesFlows(bb)) {
                 // 'this' method graph was found among the callees of an invoke flow in the caller
                 // method clone, hence we register return it

@@ -79,7 +79,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
     public final ResolvedJavaMethod wrapped;
 
     private final int id;
-    private final boolean hasNeverInlineDirective;
     private final ExceptionHandler[] exceptionHandlers;
     private final LocalVariableTable localVariableTable;
     private final String qualifiedName;
@@ -91,12 +90,10 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
     private Object entryPointData;
     private boolean isInvoked;
     private boolean isImplementationInvoked;
-    private boolean isInlined;
 
     private final AtomicReference<Object> parsedGraphCacheState = new AtomicReference<>(GRAPH_CACHE_UNPARSED);
     private static final Object GRAPH_CACHE_UNPARSED = "unparsed";
-
-    private StructuredGraph analyzedGraph;
+    private static final Object GRAPH_CACHE_CLEARED = "cleared";
 
     /**
      * All concrete methods that can actually be called when calling this method. This includes all
@@ -112,8 +109,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
         this.wrapped = wrapped;
         this.id = universe.nextMethodId.getAndIncrement();
         declaringClass = universe.lookup(wrapped.getDeclaringClass());
-
-        hasNeverInlineDirective = universe.hostVM().hasNeverInlineDirective(wrapped);
 
         if (PointstoOptions.TrackAccessChain.getValue(universe.hostVM().options())) {
             startTrackInvocations();
@@ -238,10 +233,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
         getDeclaringClass().registerAsReachable();
     }
 
-    public void registerAsInlined() {
-        isInlined = true;
-    }
-
     /** Get the set of all callers for this method, as inferred by the static analysis. */
     public Set<AnalysisMethod> getCallers() {
         return getInvokeLocations().stream().map(location -> (AnalysisMethod) location.getMethod()).collect(Collectors.toSet());
@@ -306,10 +297,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
      */
     public boolean isImplementationInvoked() {
         return !Modifier.isAbstract(getModifiers()) && (isIntrinsicMethod || isRootMethod() || isImplementationInvoked);
-    }
-
-    public boolean isReachable() {
-        return isImplementationInvoked() || isInlined;
     }
 
     @Override
@@ -470,12 +457,12 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
 
     @Override
     public boolean canBeInlined() {
-        return !hasNeverInlineDirective();
+        return true;
     }
 
     @Override
     public boolean hasNeverInlineDirective() {
-        return hasNeverInlineDirective;
+        return wrapped.hasNeverInlineDirective();
     }
 
     @Override
@@ -569,8 +556,13 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
     /**
      * Ensures that the method has been parsed, i.e., that the {@link StructuredGraph Graal IR} for
      * the method is available.
+     * 
+     * @param clearCache if true, the cached graph is cleared, and no more calls to this method are
+     *            allowed. This reduces the memory footprint, since Graal IR graphs are typically
+     *            large.
+     * @return The successfully parsed graph, or null if clearCache was true in a previous call.
      */
-    public AnalysisParsedGraph ensureGraphParsed(BigBang bb) {
+    public AnalysisParsedGraph ensureGraphParsed(BigBang bb, boolean clearCache) {
         while (true) {
             Object curState = parsedGraphCacheState.get();
 
@@ -600,10 +592,16 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
                     AnalysisParsedGraph graph = bb.getHostVM().parseBytecode(bb, this);
 
                     /*
+                     * Must be called before any other thread can access the graph, i.e., before the
+                     * graph is published and the lock is released.
+                     */
+                    bb.getHostVM().methodAfterParsingHook(bb, this, graph.getGraph());
+
+                    /*
                      * Since we still hold the parsing lock, the transition form "parsing" to
                      * "parsed" cannot fail.
                      */
-                    boolean result = parsedGraphCacheState.compareAndSet(lock, graph);
+                    boolean result = parsedGraphCacheState.compareAndSet(lock, clearCache ? GRAPH_CACHE_CLEARED : graph);
                     AnalysisError.guarantee(result, "State transition failed");
 
                     return graph;
@@ -629,7 +627,14 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
                 lock.unlock();
 
             } else if (curState instanceof AnalysisParsedGraph) {
-                return (AnalysisParsedGraph) curState;
+                AnalysisParsedGraph result = (AnalysisParsedGraph) curState;
+                if (clearCache) {
+                    parsedGraphCacheState.set(GRAPH_CACHE_CLEARED);
+                }
+                return result;
+
+            } else if (curState == GRAPH_CACHE_CLEARED) {
+                return null;
 
             } else if (curState instanceof Throwable) {
                 throw AnalysisError.shouldNotReachHere("parsing had failed in another thread", (Throwable) curState);
@@ -641,14 +646,15 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
     }
 
     /**
-     * Returns the {@link StructuredGraph Graal IR} for the method that has been processed by the
-     * static analysis.
+     * Returns the {@link StructuredGraph Graal IR} for the method if it has already been parsed
+     * using {@link #ensureGraphParsed}, or null if no graph is available.
      */
-    public StructuredGraph getAnalyzedGraph() {
-        return analyzedGraph;
-    }
-
-    public void setAnalyzedGraph(StructuredGraph analyzedGraph) {
-        this.analyzedGraph = analyzedGraph;
+    public StructuredGraph parsedGraph() {
+        Object curState = parsedGraphCacheState.get();
+        if (curState instanceof AnalysisParsedGraph) {
+            return ((AnalysisParsedGraph) curState).getGraph();
+        } else {
+            return null;
+        }
     }
 }
