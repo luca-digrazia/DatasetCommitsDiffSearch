@@ -31,7 +31,6 @@ import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.VirtualizableAllocation;
@@ -122,7 +121,7 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
                 runAnalysis(graph, context);
             }
             if (finalPEA) {
-                graph.setAfterStage(StageFlag.PARTIAL_ESCAPE);
+                graph.setAfterPEA();
             }
         }
     }
@@ -145,8 +144,7 @@ public class PartialEscapePhase extends EffectsPhase<CoreProviders> {
         return false;
     }
 
-    public PartialEscapePhase setFinalPEA() {
+    public void setFinalPEA() {
         this.finalPEA = true;
-        return this;
     }
 }
