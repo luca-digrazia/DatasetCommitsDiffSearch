@@ -723,7 +723,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
             @Override
             public boolean isDeoptTarget() {
-                return hostedMethod.isDeoptTarget();
+                return name().endsWith(HostedMethod.METHOD_NAME_DEOPT_SUFFIX);
             }
 
             @Override
@@ -984,7 +984,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
         @Override
         public boolean isDeoptTarget() {
-            return hostedMethod.isDeoptTarget();
+            return name().endsWith(HostedMethod.METHOD_NAME_DEOPT_SUFFIX);
         }
 
         @Override
@@ -1128,9 +1128,6 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
         @Override
         public boolean isDeoptTarget() {
-            if (method instanceof HostedMethod) {
-                return ((HostedMethod) method).isDeoptTarget();
-            }
             return name().endsWith(HostedMethod.METHOD_NAME_DEOPT_SUFFIX);
         }
 
