@@ -42,6 +42,7 @@ package com.oracle.truffle.sl.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -144,26 +145,52 @@ public final class SLObject extends DynamicObject implements TruffleObject {
 
     @ExportMessage
     void removeMember(String member,
-                    @CachedLibrary("this") DynamicObjectLibrary objectLibrary) throws UnknownIdentifierException {
-        if (objectLibrary.containsKey(this, member)) {
-            objectLibrary.removeKey(this, member);
+                    @CachedLibrary("this") DynamicObjectLibrary removeNode) throws UnknownIdentifierException {
+        if (removeNode.containsKey(this, member)) {
+            removeNode.removeKey(this, member);
         } else {
             throw UnknownIdentifierException.create(member);
         }
     }
 
     @ExportMessage
-    Object getMembers(@SuppressWarnings("unused") boolean includeInternal,
-                    @CachedLibrary("this") DynamicObjectLibrary objectLibrary) {
-        return new Keys(objectLibrary.getKeyArray(this));
+    @SuppressWarnings("unused")
+    static class GetMembers {
+
+        @Specialization(guards = "receiver.getShape() == cachedShape")
+        static Keys doCached(SLObject receiver, boolean includeInternal,
+                        @Cached("receiver.getShape()") Shape cachedShape,
+                        @Cached(value = "doGeneric(receiver, includeInternal)", allowUncached = true) Keys cachedKeys) {
+            return cachedKeys;
+        }
+
+        @Specialization(replaces = "doCached")
+        @TruffleBoundary
+        static Keys doGeneric(SLObject receiver, boolean includeInternal) {
+            return new Keys(receiver.getShape().getKeyList().toArray());
+        }
     }
 
     @ExportMessage(name = "isMemberReadable")
     @ExportMessage(name = "isMemberModifiable")
     @ExportMessage(name = "isMemberRemovable")
-    boolean existsMember(String member,
-                    @CachedLibrary("this") DynamicObjectLibrary objectLibrary) {
-        return objectLibrary.containsKey(this, member);
+    @SuppressWarnings("unused")
+    static class ExistsMember {
+
+        @Specialization(guards = {"receiver.getShape() == cachedShape", "cachedMember.equals(member)"})
+        static boolean doCached(SLObject receiver, String member,
+                        @Cached("receiver.getShape()") Shape cachedShape,
+                        @Cached("member") String cachedMember,
+                        @Cached("doGeneric(receiver, member)") boolean cachedResult) {
+            assert cachedResult == doGeneric(receiver, member);
+            return cachedResult;
+        }
+
+        @Specialization(replaces = "doCached")
+        @TruffleBoundary
+        static boolean doGeneric(SLObject receiver, String member) {
+            return receiver.getShape().getProperty(member) != null;
+        }
     }
 
     @ExportMessage
@@ -171,6 +198,10 @@ public final class SLObject extends DynamicObject implements TruffleObject {
     boolean isMemberInsertable(String member,
                     @CachedLibrary("this") InteropLibrary receivers) {
         return !receivers.isMemberExisting(this, member);
+    }
+
+    static boolean shapeCheck(Shape shape, DynamicObject receiver) {
+        return shape != null && shape.check(receiver);
     }
 
     @ExportLibrary(InteropLibrary.class)
@@ -212,8 +243,8 @@ public final class SLObject extends DynamicObject implements TruffleObject {
      */
     @ExportMessage
     Object readMember(String name,
-                    @CachedLibrary("this") DynamicObjectLibrary objectLibrary) throws UnknownIdentifierException {
-        Object result = objectLibrary.getOrDefault(this, name, null);
+                    @CachedLibrary("this") DynamicObjectLibrary readNode) throws UnknownIdentifierException {
+        Object result = readNode.getOrDefault(this, name, null);
         if (result == null) {
             /* Property does not exist. */
             throw UnknownIdentifierException.create(name);
@@ -226,7 +257,7 @@ public final class SLObject extends DynamicObject implements TruffleObject {
      */
     @ExportMessage
     void writeMember(String name, Object value,
-                    @CachedLibrary("this") DynamicObjectLibrary objectLibrary) {
-        objectLibrary.put(this, name, value);
+                    @CachedLibrary("this") DynamicObjectLibrary writeNode) {
+        writeNode.put(this, name, value);
     }
 }
