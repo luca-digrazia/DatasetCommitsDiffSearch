@@ -435,9 +435,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
             initialize();
         } catch (EspressoException e) {
             StaticObject cause = e.getExceptionObject();
-            Meta meta = getMeta();
-            if (!InterpreterToVM.instanceOf(cause, meta.java_lang_Error)) {
-                throw meta.throwExceptionWithCause(meta.java_lang_ExceptionInInitializerError, cause);
+            if (!InterpreterToVM.instanceOf(cause, getMeta().java_lang_Error)) {
+                throw getMeta().throwExWithCause(ExceptionInInitializerError.class, cause);
             } else {
                 throw e;
             }
