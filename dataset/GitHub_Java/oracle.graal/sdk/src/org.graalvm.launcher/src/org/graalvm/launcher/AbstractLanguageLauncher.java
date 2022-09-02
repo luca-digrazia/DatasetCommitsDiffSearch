@@ -210,8 +210,6 @@ public abstract class AbstractLanguageLauncher extends Launcher {
         String engineImplementationName = engine.getImplementationName();
         if (isAOT()) {
             engineImplementationName += " Native";
-        } else {
-            engineImplementationName += " JVM";
         }
         System.out.println(String.format("%s %s (%s %s)", languageImplementationName, language.getVersion(), engineImplementationName, engine.getVersion()));
     }
