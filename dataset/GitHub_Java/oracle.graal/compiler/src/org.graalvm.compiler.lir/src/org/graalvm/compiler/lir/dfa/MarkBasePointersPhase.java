@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,8 +23,6 @@
  * questions.
  */
 package org.graalvm.compiler.lir.dfa;
-
-import static org.graalvm.compiler.lir.LIRValueUtil.asVariable;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -94,7 +92,7 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
             @Override
             public void put(Value v) {
-                Variable base = asVariable(v.getValueKind(LIRKind.class).getDerivedReferenceBase());
+                Variable base = (Variable) v.getValueKind(LIRKind.class).getDerivedReferenceBase();
                 assert !base.getValueKind(LIRKind.class).isValue();
 
                 Set<Value> derivedRefs = baseDerivedRefs.get(base.index);
@@ -126,7 +124,7 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
             @Override
             public void remove(Value v) {
-                Variable base = asVariable(v.getValueKind(LIRKind.class).getDerivedReferenceBase());
+                Variable base = (Variable) v.getValueKind(LIRKind.class).getDerivedReferenceBase();
                 assert !base.getValueKind(LIRKind.class).isValue();
                 Set<Value> derivedRefs = baseDerivedRefs.get(base.index);
                 // Just mark the base pointer as null if no derived references exist.
@@ -150,7 +148,7 @@ public final class MarkBasePointersPhase extends AllocationPhase {
                         continue;
                     }
                     Value v = entry.iterator().next();
-                    Variable base = asVariable(v.getValueKind(LIRKind.class).getDerivedReferenceBase());
+                    Variable base = (Variable) v.getValueKind(LIRKind.class).getDerivedReferenceBase();
                     result.put(base.index, base);
                 }
                 return result;
