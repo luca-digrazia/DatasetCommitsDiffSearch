@@ -82,6 +82,7 @@ public class BinaryParser extends BinaryStreamParser {
 
     private WasmLanguage language;
     private WasmModule module;
+    private byte[] bytesConsumed;
     private int[] limitsResult;
 
     /**
@@ -98,6 +99,7 @@ public class BinaryParser extends BinaryStreamParser {
         super(data);
         this.language = language;
         this.module = module;
+        this.bytesConsumed = new byte[1];
         this.limitsResult = new int[2];
         this.moduleFunctionIndex = 0;
     }
@@ -448,7 +450,9 @@ public class BinaryParser extends BinaryStreamParser {
                     // the stack depends on the branch target.
                     // Assert.assertEquals(state.stackSize() - startStackSize,
                     // currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
-                    final int unwindLevel = readLabelIndex(state);
+                    int unwindLevel = readLabelIndex(bytesConsumed);
+                    state.useIntConstant(unwindLevel);
+                    state.useByteConstant(bytesConsumed[0]);
                     final int targetStackSize = state.getStackState(unwindLevel);
                     state.useIntConstant(targetStackSize);
                     final int continuationReturnLength = state.getContinuationReturnLength(unwindLevel);
@@ -468,7 +472,9 @@ public class BinaryParser extends BinaryStreamParser {
                     // stack depends on the branch target.
                     // Assert.assertEquals(state.stackSize() - startStackSize,
                     // currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
-                    final int unwindLevel = readLabelIndex(state);
+                    int unwindLevel = readLabelIndex(bytesConsumed);
+                    state.useIntConstant(unwindLevel);
+                    state.useByteConstant(bytesConsumed[0]);
                     state.useIntConstant(state.getStackState(unwindLevel));
                     state.useIntConstant(state.getContinuationReturnLength(unwindLevel));
                     break;
@@ -517,7 +523,9 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case Instructions.CALL: {
-                    int functionIndex = readFunctionIndex(state);
+                    int functionIndex = readFunctionIndex(bytesConsumed);
+                    state.useIntConstant(functionIndex);
+                    state.useByteConstant(bytesConsumed[0]);
                     WasmFunction function = module.symbolTable().function(functionIndex);
                     state.pop(function.numArguments());
                     state.push(function.returnTypeLength());
@@ -536,7 +544,9 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case Instructions.CALL_INDIRECT: {
-                    int expectedFunctionTypeIndex = readTypeIndex(state);
+                    int expectedFunctionTypeIndex = readTypeIndex(bytesConsumed);
+                    state.useIntConstant(expectedFunctionTypeIndex);
+                    state.useByteConstant(bytesConsumed[0]);
                     int numArguments = module.symbolTable().functionTypeArgumentCount(expectedFunctionTypeIndex);
                     int returnLength = module.symbolTable().functionTypeReturnTypeLength(expectedFunctionTypeIndex);
 
@@ -559,14 +569,18 @@ public class BinaryParser extends BinaryStreamParser {
                     state.push();
                     break;
                 case Instructions.LOCAL_GET: {
-                    int localIndex = readLocalIndex(state);
+                    int localIndex = readLocalIndex(bytesConsumed);
+                    state.useIntConstant(localIndex);
+                    state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.get");
                     state.push();
                     break;
                 }
                 case Instructions.LOCAL_SET: {
-                    int localIndex = readLocalIndex(state);
+                    int localIndex = readLocalIndex(bytesConsumed);
+                    state.useIntConstant(localIndex);
+                    state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.set");
                     // Assert there is a value on the top of the stack.
@@ -575,7 +589,9 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case Instructions.LOCAL_TEE: {
-                    int localIndex = readLocalIndex(state);
+                    int localIndex = readLocalIndex(bytesConsumed);
+                    state.useIntConstant(localIndex);
+                    state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee");
                     // Assert there is a value on the top of the stack.
@@ -583,14 +599,18 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case Instructions.GLOBAL_GET: {
-                    int index = readLocalIndex(state);
+                    int index = readLocalIndex(bytesConsumed);
+                    state.useIntConstant(index);
+                    state.useByteConstant(bytesConsumed[0]);
                     Assert.assertIntLessOrEqual(index, module.symbolTable().maxGlobalIndex(),
                                     "Invalid global index for global.get.");
                     state.push();
                     break;
                 }
                 case Instructions.GLOBAL_SET: {
-                    int index = readLocalIndex(state);
+                    int index = readLocalIndex(bytesConsumed);
+                    state.useIntConstant(index);
+                    state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
                     Assert.assertIntLessOrEqual(index, module.symbolTable().maxGlobalIndex(),
                                     "Invalid global index for global.set.");
@@ -619,9 +639,12 @@ public class BinaryParser extends BinaryStreamParser {
                     // We don't store the `align` literal, as our implementation does not make use
                     // of it, but we need to store it's byte length, so that we can skip it
                     // during execution.
-                    state.useByteConstant(getLeb128Length());
-                    readUnsignedInt32(); // align
-                    readUnsignedInt32(state); // load offset
+                    readUnsignedInt32(bytesConsumed);
+                    // Set consume count for the bytes.
+                    state.useByteConstant(bytesConsumed[0]);
+                    int loadOffset = readUnsignedInt32(bytesConsumed);
+                    state.useIntConstant(loadOffset);
+                    state.useByteConstant(bytesConsumed[0]);
                     Assert.assertIntGreater(state.stackSize(), 0, String.format("load instruction 0x%02X requires at least one element in the stack", opcode));
                     state.pop();   // Base address.
                     state.push();  // Loaded value.
@@ -636,12 +659,14 @@ public class BinaryParser extends BinaryStreamParser {
                 case Instructions.I64_STORE_8:
                 case Instructions.I64_STORE_16:
                 case Instructions.I64_STORE_32: {
+                    readUnsignedInt32(bytesConsumed);  // align
                     // We don't store the `align` literal, as our implementation does not make use
-                    // of it, but we need to store it's byte length, so that we can skip it
+                    // of it,but we need to store it's byte length, so that we can skip it
                     // during the execution.
-                    state.useByteConstant(getLeb128Length());
-                    readUnsignedInt32(); // align
-                    readUnsignedInt32(state); // store offset
+                    state.useByteConstant(bytesConsumed[0]);
+                    int storeOffset = readUnsignedInt32(bytesConsumed);
+                    state.useIntConstant(storeOffset);
+                    state.useByteConstant(bytesConsumed[0]);
                     Assert.assertIntGreater(state.stackSize(), 1, String.format("store instruction 0x%02X requires at least two elements in the stack", opcode));
                     state.pop();  // Value to store.
                     state.pop();  // Base address.
@@ -661,12 +686,16 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case Instructions.I32_CONST: {
-                    readSignedInt32(state);
+                    int value = readSignedInt32(bytesConsumed);
+                    state.useIntConstant(value);
+                    state.useByteConstant(bytesConsumed[0]);
                     state.push();
                     break;
                 }
                 case Instructions.I64_CONST: {
-                    readSignedInt64(state);
+                    long value = readSignedInt64(bytesConsumed);
+                    state.useLongConstant(value);
+                    state.useByteConstant(bytesConsumed[0]);
                     state.push();
                     break;
                 }
@@ -1213,12 +1242,12 @@ public class BinaryParser extends BinaryStreamParser {
         return readUnsignedInt32();
     }
 
-    private int readTypeIndex(ExecutionState state) {
-        return readUnsignedInt32(state);
+    private int readTypeIndex(byte[] bytesConsumedResult) {
+        return readUnsignedInt32(bytesConsumedResult);
     }
 
-    private int readFunctionIndex(ExecutionState state) {
-        return readUnsignedInt32(state);
+    private int readFunctionIndex(byte[] bytesConsumedResult) {
+        return readUnsignedInt32(bytesConsumedResult);
     }
 
     private int readTableIndex() {
@@ -1233,16 +1262,21 @@ public class BinaryParser extends BinaryStreamParser {
         return readUnsignedInt32();
     }
 
-    private int readLocalIndex(ExecutionState state) {
-        return readUnsignedInt32(state);
+    @SuppressWarnings("unused")
+    private int readLocalIndex() {
+        return readUnsignedInt32();
+    }
+
+    private int readLocalIndex(byte[] bytesConsumedResult) {
+        return readUnsignedInt32(bytesConsumedResult);
     }
 
     private int readLabelIndex() {
-        return readUnsignedInt32(null);
+        return readUnsignedInt32();
     }
 
-    private int readLabelIndex(ExecutionState state) {
-        return readUnsignedInt32(state);
+    private int readLabelIndex(byte[] bytesConsumedResult) {
+        return readUnsignedInt32(bytesConsumedResult);
     }
 
     private byte readExportType() {
@@ -1303,55 +1337,6 @@ public class BinaryParser extends BinaryStreamParser {
             name[i] = read1();
         }
         return new String(name, StandardCharsets.US_ASCII);
-    }
-
-    protected int readUnsignedInt32() {
-        return readUnsignedInt32(null);
-    }
-
-    protected int readSignedInt32() {
-        return readSignedInt32(null);
-    }
-
-    protected long readSignedInt64() {
-        return readSignedInt64(null);
-    }
-
-    protected int readUnsignedInt32(ExecutionState state) {
-        int value = peekUnsignedInt32(data, offset);
-        byte length = getLeb128Length(data, offset);
-        if(state != null && storeLeb128InPool(data, offset)) {
-            state.useIntConstant(value);
-            state.useByteConstant(length);
-        }
-        offset += length;
-        return value;
-    }
-
-    protected int readSignedInt32(ExecutionState state) {
-        int value = peekSignedInt32(data, offset);
-        byte length = getLeb128Length(data, offset);
-        if(state != null && storeLeb128InPool(data, offset)) {
-            state.useIntConstant(value);
-            state.useByteConstant(length);
-        }
-        offset += length;
-        return value;
-    }
-
-    protected long readSignedInt64(ExecutionState state){
-        long value = peekSignedInt64(data, offset);
-        byte length = getLeb128Length(data, offset);
-        if(state != null && storeLeb128InPool(data, offset)) {
-            state.useLongConstant(value);
-            state.useByteConstant(length);
-        }
-        offset += length;
-        return value;
-    }
-    
-    byte getLeb128Length() {
-        return getLeb128Length(data, offset);
     }
 
     private boolean tryJumpToSection(int targetSectionId) {
