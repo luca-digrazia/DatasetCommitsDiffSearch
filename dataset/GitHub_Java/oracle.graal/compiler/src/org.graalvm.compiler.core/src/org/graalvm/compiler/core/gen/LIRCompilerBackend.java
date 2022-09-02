@@ -124,11 +124,7 @@ public class LIRCompilerBackend {
     }
 
     @SuppressWarnings("try")
-    private static LIRGenerationResult emitLIR0(Backend backend,
-                    StructuredGraph graph,
-                    Object stub,
-                    RegisterConfig registerConfig,
-                    LIRSuites lirSuites,
+    private static LIRGenerationResult emitLIR0(Backend backend, StructuredGraph graph, Object stub, RegisterConfig registerConfig, LIRSuites lirSuites,
                     String[] allocationRestrictedTo) {
         DebugContext debug = graph.getDebug();
         try (DebugContext.Scope ds = debug.scope("EmitLIR"); DebugCloseable a = EmitLIR.start(debug)) {
@@ -145,8 +141,7 @@ public class LIRCompilerBackend {
             LIR lir = new LIR(schedule.getCFG(), linearScanOrder, codeEmittingOrder, graph.getOptions(), graph.getDebug());
 
             LIRGenerationProvider lirBackend = (LIRGenerationProvider) backend;
-            RegisterAllocationConfig registerAllocationConfig = backend.newRegisterAllocationConfig(registerConfig, allocationRestrictedTo);
-            LIRGenerationResult lirGenRes = lirBackend.newLIRGenerationResult(graph.compilationId(), lir, registerAllocationConfig, graph, stub);
+            LIRGenerationResult lirGenRes = lirBackend.newLIRGenerationResult(graph.compilationId(), lir, registerConfig, graph, stub);
             LIRGeneratorTool lirGen = lirBackend.newLIRGenerator(lirGenRes);
             NodeLIRBuilderTool nodeLirGen = lirBackend.newNodeLIRBuilder(graph, lirGen);
 
@@ -157,7 +152,7 @@ public class LIRCompilerBackend {
             try (DebugContext.Scope s = debug.scope("LIRStages", nodeLirGen, lirGenRes, lir)) {
                 // Dump LIR along with HIR (the LIR is looked up from context)
                 debug.dump(DebugContext.BASIC_LEVEL, graph.getLastSchedule(), "After LIR generation");
-                LIRGenerationResult result = emitLowLevel(backend.getTarget(), lirGenRes, lirGen, lirSuites, registerAllocationConfig);
+                LIRGenerationResult result = emitLowLevel(backend.getTarget(), lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig, allocationRestrictedTo));
                 return result;
             } catch (Throwable e) {
                 throw debug.handle(e);

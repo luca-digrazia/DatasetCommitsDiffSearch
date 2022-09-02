@@ -26,6 +26,8 @@ package org.graalvm.compiler.truffle.compiler;
 
 import static jdk.vm.ci.runtime.JVMCICompiler.INVOCATION_ENTRY_BCI;
 import static org.graalvm.compiler.core.CompilationWrapper.ExceptionAction.Diagnose;
+import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationBailoutAction;
+import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationFailureAction;
 import static org.graalvm.compiler.core.common.CompilationRequestIdentifier.asCompilationRequest;
 import static org.graalvm.compiler.phases.OptimisticOptimizations.ALL;
 import static org.graalvm.compiler.phases.OptimisticOptimizations.Optimization.RemoveNeverExecutedCode;
@@ -77,6 +79,7 @@ import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import org.graalvm.compiler.options.EnumOptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.PhaseSuite;
@@ -85,7 +88,6 @@ import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
-import org.graalvm.compiler.truffle.common.TruffleCompilation;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
@@ -107,6 +109,7 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
+import org.graalvm.compiler.truffle.common.TruffleCompilation;
 
 /**
  * Coordinates partial evaluation of a Truffle AST and subsequent compilation via Graal.
@@ -184,7 +187,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
     }
 
     /**
-     * Gets the compiler backend used for Truffle compilation.
+     * Gets the Graal compiler backend used for Truffle compilation.
      */
     public Backend getBackend() {
         return backend;
@@ -253,10 +256,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
 
     @Override
     @SuppressWarnings("try")
-    public final void doCompile(TruffleDebugContext truffleDebug,
-                    TruffleCompilation compilation,
-                    Map<String, Object> optionsMap,
-                    TruffleInliningPlan inliningPlan,
+    public final void doCompile(TruffleDebugContext truffleDebug, TruffleCompilation compilation, Map<String, Object> optionsMap, TruffleInliningPlan inliningPlan,
                     TruffleCompilationTask task,
                     TruffleCompilerListener inListener) {
         Objects.requireNonNull(compilation, "Compilation must be non null.");
@@ -420,11 +420,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
      * @param listener
      */
     @SuppressWarnings("try")
-    public void compileAST(DebugContext debug,
-                    final CompilableTruffleAST compilable,
-                    TruffleInliningPlan inliningPlan,
-                    CompilationIdentifier compilationId,
-                    CancellableTruffleCompilationTask task,
+    public void compileAST(DebugContext debug, final CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan, CompilationIdentifier compilationId, CancellableTruffleCompilationTask task,
                     TruffleCompilerListener listener) {
         final CompilationPrinter printer = CompilationPrinter.begin(TruffleCompilerOptions.getOptions(), compilationId, new TruffleDebugJavaMethod(compilable), INVOCATION_ENTRY_BCI);
         StructuredGraph graph = null;
@@ -432,7 +428,12 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
         try (CompilationAlarm alarm = CompilationAlarm.trackCompilationPeriod(TruffleCompilerOptions.getOptions())) {
             PhaseSuite<HighTierContext> graphBuilderSuite = createGraphBuilderSuite();
 
-            SpeculationLog speculationLog = compilable.getCompilationSpeculationLog();
+            // Failed speculations must be collected before any compilation or
+            // partial evaluation is performed.
+            SpeculationLog speculationLog = compilable.getSpeculationLog();
+            if (speculationLog != null) {
+                speculationLog.collectFailedSpeculations();
+            }
 
             try (DebugCloseable a = PartialEvaluationTime.start(debug); DebugCloseable c = PartialEvaluationMemUse.start(debug)) {
                 graph = partialEvaluator.createGraph(debug, compilable, inliningPlan, AllowAssumptions.YES, compilationId, speculationLog, task);
@@ -487,13 +488,8 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
      * @param listener
      */
     @SuppressWarnings("try")
-    public CompilationResult compilePEGraph(StructuredGraph graph,
-                    String name,
-                    PhaseSuite<HighTierContext> graphBuilderSuite,
-                    CompilableTruffleAST compilable,
-                    CompilationRequest compilationRequest,
-                    TruffleCompilerListener listener,
-                    TruffleCompilationTask task) {
+    public CompilationResult compilePEGraph(StructuredGraph graph, String name, PhaseSuite<HighTierContext> graphBuilderSuite, CompilableTruffleAST compilable,
+                    CompilationRequest compilationRequest, TruffleCompilerListener listener, TruffleCompilationTask task) {
         DebugContext debug = graph.getDebug();
         try (DebugContext.Scope s = debug.scope("TruffleFinal")) {
             debug.dump(DebugContext.BASIC_LEVEL, graph, "After TruffleTier");
@@ -593,20 +589,23 @@ public abstract class TruffleCompilerImpl implements TruffleCompiler {
         }
 
         @Override
-        protected ExceptionAction lookupAction(OptionValues options, Throwable cause) {
+        protected ExceptionAction lookupAction(OptionValues options, EnumOptionKey<ExceptionAction> actionKey, Throwable cause) {
             // Respect current action if it has been explicitly set.
-            if (!(cause instanceof BailoutException) || ((BailoutException) cause).isPermanent()) {
-                if (TruffleCompilerOptions.areTruffleCompilationExceptionsFatal()) {
-                    // Get more info for Truffle compilation exceptions
-                    // that will cause the VM to exit.
-                    return Diagnose;
+            if (!actionKey.hasBeenSet(options)) {
+                if (actionKey == CompilationFailureAction ||
+                                (actionKey == CompilationBailoutAction && ((BailoutException) cause).isPermanent())) {
+                    if (TruffleCompilerOptions.areTruffleCompilationExceptionsFatal()) {
+                        // Get more info for Truffle compilation exceptions
+                        // that will cause the VM to exit.
+                        return Diagnose;
+                    }
                 }
             }
-            return super.lookupAction(options, cause);
+            return super.lookupAction(options, actionKey, cause);
         }
 
         @Override
-        protected DebugContext createRetryDebugContext(DebugContext initialDebug, OptionValues options, PrintStream logStream) {
+        protected DebugContext createRetryDebugContext(OptionValues options, PrintStream logStream) {
             return createDebugContext(options, compilationId, compilable, logStream);
         }
 
