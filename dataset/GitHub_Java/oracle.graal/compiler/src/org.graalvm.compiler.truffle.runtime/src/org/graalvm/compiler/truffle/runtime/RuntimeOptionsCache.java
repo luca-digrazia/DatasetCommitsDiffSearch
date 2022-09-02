@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.options.OptionValues;
-
 /**
  * A cache that enables the Runtime options to be read without the lookup. This is intended to only
  * be used on performance critical paths.
@@ -43,7 +41,7 @@ public class RuntimeOptionsCache {
     private final double splittingGrowthLimit;
     private final int splittingMaxNumberOfSplitNodes;
 
-    public RuntimeOptionsCache(OptionValues engineOptions) {
+    public RuntimeOptionsCache() {
         // Splitting
         splitting = TruffleRuntimeOptions.getValue(PolyglotCompilerOptions.Splitting) && TruffleRuntimeOptions.getValue(PolyglotCompilerOptions.Mode) != PolyglotCompilerOptions.EngineModeEnum.LATENCY;
         legacySplitting = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleLegacySplitting);
