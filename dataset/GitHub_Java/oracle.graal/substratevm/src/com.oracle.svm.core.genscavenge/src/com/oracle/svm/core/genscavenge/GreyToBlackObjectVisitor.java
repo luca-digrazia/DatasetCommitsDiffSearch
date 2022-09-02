@@ -89,7 +89,7 @@ public final class GreyToBlackObjectVisitor implements ObjectVisitor {
         if (diagnosticReporter != null) {
             diagnosticReporter.noteObject(o);
         }
-        ReferenceObjectProcessing.discoverIfReference(o);
+        DiscoverableReferenceProcessing.discoverDiscoverableReference(o);
         InteriorObjRefWalker.walkObjectInline(o, objRefVisitor);
         return true;
     }
