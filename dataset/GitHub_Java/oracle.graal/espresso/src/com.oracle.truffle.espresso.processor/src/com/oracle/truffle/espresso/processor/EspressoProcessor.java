@@ -48,8 +48,6 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.JavaFileObject;
 
-import com.oracle.truffle.espresso.processor.SubstitutionHelper.GuestCall;
-
 /**
  * Helper class for creating all kinds of Substitution processor in Espresso. A processor need only
  * implement its own process method, along with providing three strings:
@@ -230,7 +228,6 @@ public abstract class EspressoProcessor extends AbstractProcessor {
     // Special annotations
     TypeElement guestCall;
     ExecutableElement guestCallTarget;
-    ExecutableElement guestCallOriginal;
     private static final String GUEST_CALL = "com.oracle.truffle.espresso.substitutions.GuestCall";
 
     TypeElement injectMeta;
@@ -357,9 +354,6 @@ public abstract class EspressoProcessor extends AbstractProcessor {
             if (e.getKind() == ElementKind.METHOD) {
                 if (e.getSimpleName().contentEquals("target")) {
                     this.guestCallTarget = (ExecutableElement) e;
-                }
-                if (e.getSimpleName().contentEquals("original")) {
-                    this.guestCallOriginal = (ExecutableElement) e;
                 }
             }
         }
@@ -581,7 +575,7 @@ public abstract class EspressoProcessor extends AbstractProcessor {
             first = checkFirst(str, first);
             str.append(param);
         }
-        for (GuestCall call : helper.guestCalls) {
+        for (String call : helper.guestCalls) {
             first = checkFirst(str, first);
             str.append(DIRECT_CALL_NODE);
         }
@@ -670,7 +664,7 @@ public abstract class EspressoProcessor extends AbstractProcessor {
             return "";
         }
         StringBuilder str = new StringBuilder();
-        for (GuestCall call : helper.guestCalls) {
+        for (String call : helper.guestCalls) {
             str.append(TAB_1).append(PRIVATE_FINAL).append(" ").append(DIRECT_CALL_NODE).append(" ").append(call).append(";\n");
         }
         if (helper.hasMetaInjection || helper.hasProfileInjection) {
@@ -683,30 +677,24 @@ public abstract class EspressoProcessor extends AbstractProcessor {
     /**
      * Generates the initialization of the GuestCalls fields in the Substitutor's constructor.
      */
-    private static String generateGuestCalls(List<GuestCall> guestCalls) {
+    private static String generateGuestCalls(List<String> guestCalls) {
         if (guestCalls.isEmpty()) {
             return "";
         }
         StringBuilder str = new StringBuilder();
-        for (GuestCall call : guestCalls) {
+        for (String call : guestCalls) {
             str.append("\n").append(TAB_2).append(call).append(" = ").append(DIRECT_CALL_NODE).append(".").append(CREATE).append("(");
-            str.append(META_VAR).append(".").append(call).append(".");
-            if (call.original) {
-                str.append("getCallTargetNoSubstitution");
-            } else {
-                str.append("getCallTarget");
-            }
-            str.append("());");
+            str.append(META_VAR).append(".").append(call).append(".").append("getCallTargetNoSubstitution").append("());");
         }
         return str.toString();
     }
 
-    List<GuestCall> getGuestCalls(ExecutableElement method) {
-        ArrayList<GuestCall> guestCalls = new ArrayList<>();
+    List<String> getGuestCalls(ExecutableElement method) {
+        ArrayList<String> guestCalls = new ArrayList<>();
         for (VariableElement param : method.getParameters()) {
             AnnotationMirror g = getAnnotation(param.asType(), guestCall);
             if (g != null) {
-                guestCalls.add(new GuestCall(getMetaField(g, param), getIsOriginal(g)));
+                guestCalls.add(getMetaField(g, param));
             }
         }
         return guestCalls;
@@ -720,21 +708,12 @@ public abstract class EspressoProcessor extends AbstractProcessor {
         } else {
             return param.getSimpleName().toString();
         }
+
     }
 
-    private boolean getIsOriginal(AnnotationMirror g) {
-        Map<? extends ExecutableElement, ? extends AnnotationValue> members = g.getElementValues();
-        AnnotationValue targetAnnotation = members.get(guestCallOriginal);
-        if (targetAnnotation != null) {
-            return (boolean) targetAnnotation.getValue();
-        } else {
-            return false;
-        }
-    }
-
-    static boolean getGuestCallsForInvoke(StringBuilder str, List<GuestCall> guestCalls, boolean wasFirst) {
+    static boolean getGuestCallsForInvoke(StringBuilder str, List<String> guestCalls, boolean wasFirst) {
         boolean first = wasFirst;
-        for (GuestCall call : guestCalls) {
+        for (String call : guestCalls) {
             first = checkFirst(str, first);
             str.append("\n");
             str.append(TAB_3).append(call);
