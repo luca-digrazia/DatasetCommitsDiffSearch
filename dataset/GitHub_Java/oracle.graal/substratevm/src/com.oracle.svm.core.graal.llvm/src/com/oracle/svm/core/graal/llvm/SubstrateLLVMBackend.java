@@ -29,6 +29,11 @@ import static com.oracle.svm.core.util.VMError.unimplemented;
 
 import java.util.Collections;
 
+import com.oracle.svm.core.SubstrateOptions;
+import org.bytedeco.javacpp.LLVM;
+import org.bytedeco.javacpp.LLVM.LLVMValueRef;
+import org.bytedeco.javacpp.LLVM.LLVMBasicBlockRef;
+import org.bytedeco.javacpp.LLVM.LLVMContextRef;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.NumUtil;
@@ -46,12 +51,7 @@ import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.common.AddressLoweringPhase;
 import org.graalvm.compiler.phases.util.Providers;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMBasicBlockRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMContextRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMValueRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.global.LLVM;
 
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.CompilationRequest;
@@ -96,7 +96,7 @@ public class SubstrateLLVMBackend extends SubstrateBackend implements LLVMGenera
             LLVMValueRef heapBaseAddress = builder.buildGEP(builder.buildIntToPtr(thread, builder.rawPointerType()), builder.constantInt(threadIsolateOffset));
             LLVMValueRef heapBase = builder.buildLoad(heapBaseAddress, builder.rawPointerType());
             LLVMValueRef methodId = builder.buildInlineGetRegister(methodIdArg.getRegister().name);
-            LLVMValueRef methodBase = builder.buildGEP(builder.buildIntToPtr(heapBase, builder.rawPointerType()), builder.buildPtrToInt(methodId, builder.longType()));
+            LLVMValueRef methodBase = builder.buildGEP(builder.buildIntToPtr(heapBase, builder.rawPointerType()), builder.buildIntToPtr(methodId, builder.rawPointerType()));
             jumpAddressAddress = builder.buildGEP(methodBase, builder.constantInt(methodObjEntryPointOffset));
         } else {
             LLVMValueRef methodBase = builder.buildInlineGetRegister(methodIdArg.getRegister().name);
