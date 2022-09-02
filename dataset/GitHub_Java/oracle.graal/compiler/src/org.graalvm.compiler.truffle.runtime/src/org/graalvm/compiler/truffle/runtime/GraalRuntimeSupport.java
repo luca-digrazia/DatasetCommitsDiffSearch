@@ -37,7 +37,6 @@ import com.oracle.truffle.api.nodes.BlockNode.ElementExecutor;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import jdk.vm.ci.services.Services;
 
 final class GraalRuntimeSupport extends RuntimeSupport {
 
@@ -110,11 +109,6 @@ final class GraalRuntimeSupport extends RuntimeSupport {
     @Override
     public OutputStream getConfiguredLogStream() {
         return TruffleDebugOptions.getConfiguredLogStream();
-    }
-
-    @Override
-    public String getSystemProperty(String key) {
-        return Services.getSavedProperties().get(key);
     }
 
     @Override
