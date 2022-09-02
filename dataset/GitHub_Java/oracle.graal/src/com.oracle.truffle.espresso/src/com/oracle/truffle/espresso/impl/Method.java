@@ -85,7 +85,6 @@ import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
 public final class Method extends Member<Signature> implements TruffleObject, ContextAccess, MethodRef {
@@ -875,11 +874,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     @Override
     public Object invokeMethod(Object callee, Object[] args) {
-        if (isConstructor()) {
-            callee = InterpreterToVM.newObject(getDeclaringKlass());
-            invokeWithConversions(callee, args);
-            return callee;
-        }
         return invokeWithConversions(callee, args);
     }
 
