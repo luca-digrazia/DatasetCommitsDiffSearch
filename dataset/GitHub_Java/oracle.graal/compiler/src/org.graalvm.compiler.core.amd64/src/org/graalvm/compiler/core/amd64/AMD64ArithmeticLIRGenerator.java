@@ -1361,9 +1361,10 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
         }
     }
 
-    protected Variable emitBinary(LIRKind resultKind, VexRVMOp op, Value a, Value b) {
+    private Variable emitBinary(LIRKind resultKind, VexRVMOp op, Value a, Value b) {
         Variable result = getLIRGen().newVariable(resultKind);
-        if (b instanceof ConstantValue && (b.getPlatformKind() == AMD64Kind.SINGLE || b.getPlatformKind() == AMD64Kind.DOUBLE)) {
+        assert b.getPlatformKind() == AMD64Kind.SINGLE || b.getPlatformKind() == AMD64Kind.DOUBLE;
+        if (b instanceof ConstantValue) {
             getLIRGen().append(new AVXBinaryConstFloatOp(op, getRegisterSize(result), result, asAllocatable(a), (ConstantValue) b));
         } else {
             getLIRGen().append(new AVXBinaryOp(op, getRegisterSize(result), result, asAllocatable(a), asAllocatable(b)));
