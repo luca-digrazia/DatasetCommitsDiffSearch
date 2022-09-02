@@ -253,7 +253,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
 
         if (isLogic) {
             assert trueValue.getValueKind().equals(falseValue.getValueKind());
-            return emitCondMoveOp(Condition.EQ, trueValue, falseValue, false, false);
+            Variable result = newVariable(trueValue.getValueKind());
+            append(new CondMoveOp(result, Condition.EQ, asAllocatable(trueValue), falseValue));
+            return result;
         } else {
             if (isXmm) {
                 return arithmeticLIRGen.emitReinterpret(accessKind, aRes);
@@ -459,35 +461,31 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
             finalCondition = emitCompare(cmpKind, left, right, cond);
         }
 
-        return emitCondMoveOp(finalCondition, finalTrueValue, finalFalseValue, isFloatComparison, unorderedIsTrue);
-    }
-
-    private Variable emitCondMoveOp(Condition condition, Value trueValue, Value falseValue, boolean isFloatComparison, boolean unorderedIsTrue) {
-        boolean isParityCheckNecessary = isFloatComparison && unorderedIsTrue != AMD64ControlFlow.trueOnUnordered(condition);
-        Variable result = newVariable(trueValue.getValueKind());
-        if (!isParityCheckNecessary && isIntConstant(trueValue, 1) && isIntConstant(falseValue, 0)) {
+        boolean isParityCheckNecessary = isFloatComparison && unorderedIsTrue != AMD64ControlFlow.trueOnUnordered(finalCondition);
+        Variable result = newVariable(finalTrueValue.getValueKind());
+        if (!isParityCheckNecessary && isIntConstant(finalTrueValue, 1) && isIntConstant(finalFalseValue, 0)) {
             if (isFloatComparison) {
-                append(new FloatCondSetOp(result, condition));
+                append(new FloatCondSetOp(result, finalCondition));
             } else {
-                append(new CondSetOp(result, condition));
+                append(new CondSetOp(result, finalCondition));
             }
-        } else if (!isParityCheckNecessary && isIntConstant(trueValue, 0) && isIntConstant(falseValue, 1)) {
+        } else if (!isParityCheckNecessary && isIntConstant(finalTrueValue, 0) && isIntConstant(finalFalseValue, 1)) {
             if (isFloatComparison) {
-                if (unorderedIsTrue == AMD64ControlFlow.trueOnUnordered(condition.negate())) {
-                    append(new FloatCondSetOp(result, condition.negate()));
+                if (unorderedIsTrue == AMD64ControlFlow.trueOnUnordered(finalCondition.negate())) {
+                    append(new FloatCondSetOp(result, finalCondition.negate()));
                 } else {
-                    append(new FloatCondSetOp(result, condition));
+                    append(new FloatCondSetOp(result, finalCondition));
                     Variable negatedResult = newVariable(result.getValueKind());
                     append(new AMD64Binary.ConstOp(AMD64BinaryArithmetic.XOR, OperandSize.get(result.getPlatformKind()), negatedResult, result, 1));
                     result = negatedResult;
                 }
             } else {
-                append(new CondSetOp(result, condition.negate()));
+                append(new CondSetOp(result, finalCondition.negate()));
             }
         } else if (isFloatComparison) {
-            append(new FloatCondMoveOp(result, condition, unorderedIsTrue, load(trueValue), load(falseValue)));
+            append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue, load(finalTrueValue), load(finalFalseValue)));
         } else {
-            append(new CondMoveOp(result, condition, load(trueValue), loadNonConst(falseValue)));
+            append(new CondMoveOp(result, finalCondition, load(finalTrueValue), loadNonConst(finalFalseValue)));
         }
         return result;
     }
@@ -495,7 +493,9 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
     @Override
     public Variable emitIntegerTestMove(Value left, Value right, Value trueValue, Value falseValue) {
         emitIntegerTest(left, right);
-        return emitCondMoveOp(Condition.EQ, load(trueValue), loadNonConst(falseValue), false, false);
+        Variable result = newVariable(trueValue.getValueKind());
+        append(new CondMoveOp(result, Condition.EQ, load(trueValue), loadNonConst(falseValue)));
+        return result;
     }
 
     protected static AVXSize getRegisterSize(Value a) {
@@ -583,7 +583,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         RegisterValue cnt2 = AMD64.rdx.asValue(length2.getValueKind());
         emitMove(cnt1, length1);
         emitMove(cnt2, length2);
-        append(new AMD64ArrayCompareToOp(this, getAVX3Threshold(), kind1, kind2, raxRes, array1, array2, cnt1, cnt2));
+        append(new AMD64ArrayCompareToOp(this, kind1, kind2, raxRes, array1, array2, cnt1, cnt2));
         Variable result = newVariable(resultKind);
         emitMove(result, raxRes);
         return result;
@@ -611,13 +611,6 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         return -1;
     }
 
-    /**
-     * Return the minimal array size for using AVX3 instructions.
-     */
-    protected int getAVX3Threshold() {
-        return 4096;
-    }
-
     @Override
     public Variable emitArrayIndexOf(JavaKind arrayKind, JavaKind valueKind, boolean findTwoConsecutive, Value arrayPointer, Value arrayLength, Value fromIndex, Value... searchValues) {
         Variable result = newVariable(LIRKind.value(AMD64Kind.DWORD));
@@ -636,7 +629,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         emitMove(rdst, dst);
         emitMove(rlen, len);
 
-        append(new AMD64StringLatin1InflateOp(this, getAVX3Threshold(), rsrc, rdst, rlen));
+        append(new AMD64StringLatin1InflateOp(this, rsrc, rdst, rlen));
     }
 
     @Override
@@ -652,7 +645,7 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         LIRKind reskind = LIRKind.value(AMD64Kind.DWORD);
         RegisterValue rres = AMD64.rax.asValue(reskind);
 
-        append(new AMD64StringUTF16CompressOp(this, getAVX3Threshold(), rres, rsrc, rdst, rlen));
+        append(new AMD64StringUTF16CompressOp(this, rres, rsrc, rdst, rlen));
 
         Variable res = newVariable(reskind);
         emitMove(res, rres);
