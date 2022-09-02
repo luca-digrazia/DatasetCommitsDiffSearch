@@ -56,7 +56,7 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
                 return "callee:interpreter";
             }
             boundary();
-            if (GraalCompilerDirectives.hasNextTier()) {
+            if (GraalCompilerDirectives.inFirstTier()) {
                 return "callee:first-tier";
             }
             if (CompilerDirectives.inCompilationRoot()) {
@@ -122,7 +122,7 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
         @Override
         public Object execute(VirtualFrame frame) {
             body.iteration = 0;
-            if (GraalCompilerDirectives.hasNextTier()) {
+            if (GraalCompilerDirectives.inFirstTier()) {
                 this.firstTierCallCount += 1;
             }
             final Object result = loop.execute(frame);
@@ -161,7 +161,7 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
                 if (CompilerDirectives.inInterpreter()) {
                     return "break:interpreter";
                 }
-                if (GraalCompilerDirectives.hasNextTier()) {
+                if (GraalCompilerDirectives.inFirstTier()) {
                     return "break:first-tier";
                 }
                 return "break:second-tier";
@@ -169,7 +169,7 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
             if (CompilerDirectives.inInterpreter()) {
                 return "continue:interpreter";
             }
-            if (GraalCompilerDirectives.hasNextTier()) {
+            if (GraalCompilerDirectives.inFirstTier()) {
                 return "continue:first-tier";
             }
             return "continue:last-tier";
