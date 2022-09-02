@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,6 @@ import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node.ConstantNodeParameter;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
-import org.graalvm.compiler.hotspot.nodes.StubForeignCallNode;
 import org.graalvm.compiler.hotspot.nodes.StubStartNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
@@ -60,24 +59,21 @@ public class AssertionSnippets implements Snippets {
     public static final ForeignCallDescriptor ASSERTION_VM_MESSAGE_C = new ForeignCallDescriptor("assertionVmMessageC", void.class, boolean.class, Word.class, long.class, long.class, long.class);
 
     @Snippet
-    public static void assertion(boolean condition, @ConstantParameter String message, long l1, long l2) {
+    public static void assertion(boolean condition, @ConstantParameter String message) {
         if (injectBranchProbability(SLOWPATH_PROBABILITY, !condition)) {
-            vmMessageC(ASSERTION_VM_MESSAGE_C, true, cstring(message), l1, l2, 0L);
+            vmMessageC(ASSERTION_VM_MESSAGE_C, true, cstring(message), 0L, 0L, 0L);
         }
     }
 
     @Snippet
-    public static void stubAssertion(boolean condition, @ConstantParameter String message, long l1, long l2) {
+    public static void stubAssertion(boolean condition, @ConstantParameter String message) {
         if (injectBranchProbability(SLOWPATH_PROBABILITY, !condition)) {
-            vmMessageStub(ASSERTION_VM_MESSAGE_C, true, cstring(message), l1, l2, 0L);
+            vmMessageC(ASSERTION_VM_MESSAGE_C, true, cstring(message), 0L, 0L, 0L);
         }
     }
 
     @NodeIntrinsic(ForeignCallNode.class)
     static native void vmMessageC(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
-
-    @NodeIntrinsic(StubForeignCallNode.class)
-    static native void vmMessageStub(@ConstantNodeParameter ForeignCallDescriptor stubPrintfC, boolean vmError, Word format, long v1, long v2, long v3);
 
     public static class Templates extends AbstractTemplates {
 
@@ -93,8 +89,7 @@ public class AssertionSnippets implements Snippets {
             Arguments args = new Arguments(graph.start() instanceof StubStartNode ? stubAssertion : assertion, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("condition", assertionNode.condition());
             args.addConst("message", "failed runtime assertion in snippet/stub: " + assertionNode.message() + " (" + graph.method() + ")");
-            args.add("l1", assertionNode.getL1());
-            args.add("l2", assertionNode.getL2());
+
             template(assertionNode, args).instantiate(providers.getMetaAccess(), assertionNode, DEFAULT_REPLACER, args);
         }
     }

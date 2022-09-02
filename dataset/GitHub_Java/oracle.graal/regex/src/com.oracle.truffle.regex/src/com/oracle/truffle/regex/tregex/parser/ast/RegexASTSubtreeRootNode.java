@@ -116,7 +116,6 @@ public abstract class RegexASTSubtreeRootNode extends Term implements RegexASTVi
         return "(" + getPrefix() + group.alternativesToString() + ")";
     }
 
-    @TruffleBoundary
     @Override
     protected JsonObject toJson(String typeName) {
         return super.toJson(typeName).append(Json.prop("group", astNodeId(group)));

@@ -75,10 +75,6 @@ public final class ObjectArrayBuffer extends AbstractArrayBuffer implements Iter
         return buf[i];
     }
 
-    public Object getLast() {
-        return buf[length() - 1];
-    }
-
     public void add(Object o) {
         if (length == buf.length) {
             grow(length * 2);
@@ -87,19 +83,11 @@ public final class ObjectArrayBuffer extends AbstractArrayBuffer implements Iter
         length++;
     }
 
-    public void addAll(ObjectArrayBuffer other) {
-        addAll(other.buf, 0, other.length);
-    }
-
     public void addAll(Object[] arr, int fromIndex, int toIndex) {
         int len = toIndex - fromIndex;
         ensureCapacity(length + len);
         System.arraycopy(arr, fromIndex, buf, length, len);
         length += len;
-    }
-
-    public Object pop() {
-        return buf[--length];
     }
 
     @SuppressWarnings("unchecked")

@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.regex.tregex.automaton;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.PrimitiveIterator;
@@ -31,8 +33,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
-
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /**
  * A specialized set for sequentially indexed objects. The objects stored in this set must implement
@@ -51,28 +51,26 @@ public class StateSet<S extends IndexedState> implements Set<S>, Iterable<S> {
     private static final long SHORT_MASK = 0xffff;
 
     private final StateIndex<? super S> stateIndex;
-    private final StateSetBackingSetFactory backingSetFactory;
-    private StateSetBackingSet backingSet;
+    private final StateSetBackingSet backingSet;
     private byte flags = 0;
     private int size = 0;
     private long stateList = 0;
     private int cachedHash;
 
-    public StateSet(StateIndex<? super S> stateIndex, StateSetBackingSetFactory backingSetFactory) {
+    public StateSet(StateIndex<? super S> stateIndex, StateSetBackingSet backingSet) {
         this.stateIndex = stateIndex;
-        this.backingSetFactory = backingSetFactory;
+        this.backingSet = backingSet;
     }
 
     public StateSet(StateIndex<? super S> stateIndex) {
-        this(stateIndex, StateSetBackingSetFactory.BIT_SET);
+        this(stateIndex, new StateSetBackingBitSet());
     }
 
     protected StateSet(StateSet<S> copy) {
         this.stateIndex = copy.stateIndex;
         this.flags = copy.flags;
         this.size = copy.size;
-        this.backingSetFactory = copy.backingSetFactory;
-        this.backingSet = copy.backingSet == null ? null : copy.backingSet.copy();
+        this.backingSet = copy.backingSet.copy();
         this.stateList = copy.stateList;
         this.cachedHash = copy.cachedHash;
     }
@@ -87,7 +85,7 @@ public class StateSet<S extends IndexedState> implements Set<S>, Iterable<S> {
 
     private void checkSwitchToBitSet(int newSize) {
         if (!useBackingSet() && newSize > SWITCH_TO_BACKING_SET_THRESHOLD) {
-            backingSet = backingSetFactory.create(stateIndex.getNumberOfStates());
+            backingSet.create(stateIndex.getNumberOfStates());
             for (int i = 0; i < size(); i++) {
                 backingSet.addBatch(stateListElement(stateList));
                 stateList >>>= Short.SIZE;
@@ -107,7 +105,7 @@ public class StateSet<S extends IndexedState> implements Set<S>, Iterable<S> {
     }
 
     private boolean useBackingSet() {
-        return backingSet != null;
+        return backingSet.isActive();
     }
 
     private void setFlag(byte flag, boolean value) {

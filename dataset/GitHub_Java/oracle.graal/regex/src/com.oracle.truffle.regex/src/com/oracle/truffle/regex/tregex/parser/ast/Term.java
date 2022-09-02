@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.regex.tregex.parser.ast;
 
-import com.oracle.truffle.regex.tregex.parser.Token;
-
 /**
  * A common supertype for all {@link RegexASTNode}s except {@link Sequence}s.
  * <p>
@@ -38,7 +36,6 @@ import com.oracle.truffle.regex.tregex.parser.Token;
 public abstract class Term extends RegexASTNode {
 
     private short seqIndex = 0;
-    private Token.Quantifier quantifier;
 
     Term() {
     }
@@ -56,18 +53,6 @@ public abstract class Term extends RegexASTNode {
 
     public void setSeqIndex(int seqIndex) {
         this.seqIndex = (short) seqIndex;
-    }
-
-    public boolean hasQuantifier() {
-        return quantifier != null;
-    }
-
-    public Token.Quantifier getQuantifier() {
-        return quantifier;
-    }
-
-    public void setQuantifier(Token.Quantifier quantifier) {
-        this.quantifier = quantifier;
     }
 
     @Override
