@@ -1497,10 +1497,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      */
     @JniImpl
     public StaticObject FindClass(String name) {
-        if (name == null || name.contains(".")) {
-            throw getMeta().throwExWithMessage(NoClassDefFoundError.class, name);
-        }
-        StaticObject internalName = getMeta().toGuestString(name.replace("/", "."));
+        StaticObject internalName = getMeta().toGuestString(name);
         assert getMeta().Class_forName_String.isStatic();
         try {
             return (StaticObject) getMeta().Class_forName_String.invokeDirect(null, internalName);
