@@ -99,7 +99,13 @@ public abstract class LoopTransformations {
          * structure, thus we disable simplification and manually simplify conditions in the peeled
          * iteration to simplify the exit path.
          */
-        CanonicalizerPhase c = canonicalizer.copyWithoutSimplification();
+        // New canonicalizer until GR-18822 is discussed
+        CanonicalizerPhase c = new CanonicalizerPhase();
+        if (!canonicalizer.getCanonicalizeReads()) {
+            c.disableReadCanonicalization();
+        }
+        c.disableSimplification();
+        // canonicalizer.disableSimplification();
         EconomicSetNodeEventListener l = new EconomicSetNodeEventListener();
         try (NodeEventScope ev = graph.trackNodeEvents(l)) {
             while (!loopBegin.isDeleted()) {
@@ -129,8 +135,10 @@ public abstract class LoopTransformations {
                 }
             }
         }
-        // Canonicalize with the original canonicalizer to capture all simplifications
-        canonicalizer.applyIncremental(graph, context, l.getNodes());
+        // New canonicalizer until GR-18822 is discussed
+        // canonicalizer.enableSimplification();
+        c.enableSimplification();
+        c.applyIncremental(graph, context, l.getNodes());
     }
 
     public static void unswitch(LoopEx loop, List<ControlSplitNode> controlSplitNodeSet) {

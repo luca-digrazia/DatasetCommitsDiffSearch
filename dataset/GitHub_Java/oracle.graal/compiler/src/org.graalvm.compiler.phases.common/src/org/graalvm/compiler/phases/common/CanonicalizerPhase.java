@@ -24,12 +24,6 @@
  */
 package org.graalvm.compiler.phases.common;
 
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.CFG_SIMPLIFICATION;
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.GVN;
-import static org.graalvm.compiler.phases.common.CanonicalizerPhase.CanonicalizerFeature.READ_CANONICALIZATION;
-
-import java.util.EnumSet;
-
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.CounterKey;
@@ -72,12 +66,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 
 public class CanonicalizerPhase extends BasePhase<CoreProviders> {
 
-    public enum CanonicalizerFeature {
-        READ_CANONICALIZATION,
-        CFG_SIMPLIFICATION,
-        GVN
-    }
-
     private static final int MAX_ITERATION_PER_NODE = 10;
     private static final CounterKey COUNTER_CANONICALIZED_NODES = DebugContext.counter("CanonicalizedNodes");
     private static final CounterKey COUNTER_PROCESSED_NODES = DebugContext.counter("ProcessedNodes");
@@ -87,8 +75,11 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
     private static final CounterKey COUNTER_SIMPLIFICATION_CONSIDERED_NODES = DebugContext.counter("SimplificationConsideredNodes");
     private static final CounterKey COUNTER_GLOBAL_VALUE_NUMBERING_HITS = DebugContext.counter("GlobalValueNumberingHits");
 
-    private final EnumSet<CanonicalizerFeature> features;
-    private final CustomCanonicalizer customCanonicalizer;
+    private boolean globalValueNumber = true;
+    private boolean canonicalizeReads = true;
+    private boolean simplify = true;
+    private CustomCanonicalization customCanonicalization;
+    private CustomSimplification customSimplification;
 
     public interface CustomCanonicalization {
         /**
@@ -107,21 +98,11 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
         void simplify(Node node, SimplifierTool tool);
     }
 
-    protected CanonicalizerPhase(EnumSet<CanonicalizerFeature> features) {
-        this(null, features);
+    public static CanonicalizerPhase create() {
+        return new CanonicalizerPhase();
     }
 
     protected CanonicalizerPhase() {
-        this(null, EnumSet.allOf(CanonicalizerFeature.class));
-    }
-
-    protected CanonicalizerPhase(CustomCanonicalizer customCanonicalizer) {
-        this(customCanonicalizer, EnumSet.allOf(CanonicalizerFeature.class));
-    }
-
-    protected CanonicalizerPhase(CustomCanonicalizer customCanonicalizer, EnumSet<CanonicalizerFeature> features) {
-        this.customCanonicalizer = customCanonicalizer;
-        this.features = features;
     }
 
     public void setCustomCanonicalization(CustomCanonicalization customCanonicalization) {
@@ -132,36 +113,20 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
         this.customSimplification = customSimplification;
     }
 
-    public CanonicalizerPhase copyWithoutGVN() {
-        EnumSet<CanonicalizerFeature> newFeatures = EnumSet.copyOf(features);
-        newFeatures.remove(GVN);
-        return new CanonicalizerPhase(customCanonicalizer, newFeatures);
+    public void disableGVN() {
+        globalValueNumber = false;
     }
 
-    public CanonicalizerPhase copyWithoutSimplification() {
-        EnumSet<CanonicalizerFeature> newFeatures = EnumSet.copyOf(features);
-        newFeatures.remove(CFG_SIMPLIFICATION);
-        return new CanonicalizerPhase(customCanonicalizer, newFeatures);
+    public void disableReadCanonicalization() {
+        canonicalizeReads = false;
     }
 
-    public static CanonicalizerPhase create() {
-        EnumSet<CanonicalizerFeature> features = EnumSet.allOf(CanonicalizerFeature.class);
-        return new CanonicalizerPhase(null, features);
+    public void disableSimplification() {
+        simplify = false;
     }
 
-    public static CanonicalizerPhase createWithoutReadCanonicalization() {
-        EnumSet<CanonicalizerFeature> features = EnumSet.complementOf(EnumSet.of(READ_CANONICALIZATION));
-        return new CanonicalizerPhase(null, features);
-    }
-
-    public static CanonicalizerPhase createWithoutGVN() {
-        EnumSet<CanonicalizerFeature> features = EnumSet.complementOf(EnumSet.of(GVN));
-        return new CanonicalizerPhase(null, features);
-    }
-
-    public static CanonicalizerPhase createWithoutCFGSimplification() {
-        EnumSet<CanonicalizerFeature> features = EnumSet.complementOf(EnumSet.of(CFG_SIMPLIFICATION));
-        return new CanonicalizerPhase(null, features);
+    public void enableSimplification() {
+        simplify = true;
     }
 
     @Override
