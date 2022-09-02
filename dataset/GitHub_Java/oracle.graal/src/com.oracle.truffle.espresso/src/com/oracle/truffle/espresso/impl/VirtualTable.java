@@ -40,6 +40,7 @@ public class VirtualTable {
     public static Method[] create(ObjectKlass superKlass, Method[] declaredMethods, ObjectKlass thisKlass) {
         ArrayList<Method> tmp;
         ArrayList<Method> overrides = new ArrayList<>();
+        String runtimePackage = thisKlass.getRuntimePackage();
         if (superKlass != null) {
             tmp = new ArrayList<>(Arrays.asList(superKlass.getVTable()));
         } else {
@@ -49,7 +50,7 @@ public class VirtualTable {
             if (m.getName() != Symbol.Name.CLINIT && m.getName() != Symbol.Name.INIT) {
                 // Do not bloat the vtable with these two methods that cannot be called through
                 // virtual invocation.
-                checkOverride(superKlass, m, tmp, thisKlass, overrides);
+                checkOverride(superKlass, m, tmp, runtimePackage, overrides);
             }
         }
         for (Method m : thisKlass.getMirandaMethods()) {
@@ -60,12 +61,12 @@ public class VirtualTable {
         return tmp.toArray(Method.EMPTY_ARRAY);
     }
 
-    private static void checkOverride(ObjectKlass superKlass, Method m, ArrayList<Method> tmp, Klass thisKlass, ArrayList<Method> overrides) {
+    private static void checkOverride(ObjectKlass superKlass, Method m, ArrayList<Method> tmp, String runtimePackage, ArrayList<Method> overrides) {
         if (!overrides.isEmpty()) {
             overrides.clear();
         }
         if (superKlass != null) {
-            superKlass.lookupVirtualMethodOverrides(m.getName(), m.getRawSignature(), thisKlass, overrides);
+            superKlass.lookupVirtualMethodOverrides(m.getName(), m.getRawSignature(), runtimePackage, overrides);
         }
         Method toSet = m;
         if (!overrides.isEmpty()) {

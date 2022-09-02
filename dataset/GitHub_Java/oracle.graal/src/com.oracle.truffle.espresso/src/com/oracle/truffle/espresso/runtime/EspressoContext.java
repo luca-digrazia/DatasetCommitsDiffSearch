@@ -22,18 +22,14 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
-import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -42,7 +38,6 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.descriptors.Names;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -149,8 +144,7 @@ public final class EspressoContext {
     public Classpath getBootClasspath() {
         if (bootClasspath == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            bootClasspath = new Classpath(
-                            getVmProperties().bootClasspath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+            bootClasspath = new Classpath(getVmProperties().getBootClasspath());
         }
         return bootClasspath;
     }
@@ -281,14 +275,7 @@ public final class EspressoContext {
     }
 
     private void initVmProperties() {
-        EspressoProperties.Builder builder;
-        if (EspressoOptions.RUNNING_ON_SVM) {
-            builder = new EspressoProperties.Builder() //
-                            .espressoLibraryPath(Collections.singletonList(Paths.get(getLanguage().getEspressoHome()).resolve("lib")));
-        } else {
-            builder = EspressoProperties.inheritFromHostVM();
-        }
-        vmProperties = builder.processOptions(getEnv().getOptions()).build();
+        vmProperties = EspressoProperties.getDefault().processOptions(getEnv().getOptions());
     }
 
     private void initializeKnownClass(Symbol<Type> type) {
