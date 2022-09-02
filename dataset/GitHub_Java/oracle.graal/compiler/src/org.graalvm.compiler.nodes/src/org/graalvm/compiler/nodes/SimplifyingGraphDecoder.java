@@ -46,8 +46,6 @@ import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.compiler.nodes.virtual.VirtualFrameGetNodeInterface;
-import org.graalvm.compiler.nodes.virtual.VirtualFrameSetNodeInterface;
 import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.Architecture;
@@ -254,19 +252,14 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
                 }
             }
             return node;
-        } else if (node instanceof VirtualFrameSetNodeInterface) {
-            VirtualFrameSetNodeInterface set = (VirtualFrameSetNodeInterface) node;
-            methodScope.frameSlotStates.put(set.frameSlotIndex(), set.value());
-            return node;
-        } else if (node instanceof VirtualFrameGetNodeInterface) {
-            // TODO: This is currently not doing the right thing if we have branching control flow,
-            //  so we should fix this!
-            VirtualFrameGetNodeInterface get = (VirtualFrameGetNodeInterface) node;
-            ValueNode value = methodScope.frameSlotStates.get(get.frameSlotIndex());
+        } else if (node instanceof FrameSetFoo) {
+            FrameSetFoo set = (FrameSetFoo) node;
+            methodScope.frameSlotStates.put(set.index(), set.value());
+        } else if (node instanceof FrameGetFoo) {
+            FrameGetFoo get = (FrameGetFoo) node;
+            ValueNode value = methodScope.frameSlotStates.get(get.index());
             if (value != null) {
                 return value;
-            } else {
-                return node;
             }
         } else if (node instanceof Canonicalizable) {
             return ((Canonicalizable) node).canonical(canonicalizerTool);
