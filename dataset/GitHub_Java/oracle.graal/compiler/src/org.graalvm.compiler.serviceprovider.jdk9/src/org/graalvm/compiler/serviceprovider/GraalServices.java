@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,37 +28,22 @@ import static java.lang.Thread.currentThread;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicLong;
 
+import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
+import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.services.JVMCIPermission;
 import jdk.vm.ci.services.Services;
 
 /**
- * Interface to functionality that abstracts over which JDK version Graal is running on.
+ * JDK 9+ version of {@link GraalServices}.
  */
 public final class GraalServices {
-
-    private static int getJavaSpecificationVersion() {
-        String value = System.getProperty("java.specification.version");
-        if (value.startsWith("1.")) {
-            value = value.substring(2);
-        }
-        return Integer.parseInt(value);
-    }
-
-    /**
-     * The integer value corresponding to the value of the {@code java.specification.version} system
-     * property after any leading {@code "1."} has been stripped.
-     */
-    public static final int JAVA_SPECIFICATION_VERSION = getJavaSpecificationVersion();
-
-    /**
-     * Determines if the Java runtime is version 8 or earlier.
-     */
-    public static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
 
     private GraalServices() {
     }
@@ -68,7 +55,6 @@ public final class GraalServices {
      *             {@link JVMCIPermission}
      */
     public static <S> Iterable<S> load(Class<S> service) {
-        assert !service.getName().startsWith("jdk.vm.ci") : "JVMCI services must be loaded via " + Services.class.getName();
         Iterable<S> iterable = ServiceLoader.load(service);
         return new Iterable<>() {
             @Override
@@ -109,6 +95,11 @@ public final class GraalServices {
         if (jvmciModule != otherModule) {
             for (String pkg : jvmciModule.getPackages()) {
                 if (!jvmciModule.isOpen(pkg, otherModule)) {
+                    // JVMCI initialization opens all JVMCI packages
+                    // to Graal which is a prerequisite for Graal to
+                    // open JVMCI packages to other modules.
+                    JVMCI.initialize();
+
                     jvmciModule.addOpens(pkg, otherModule);
                 }
             }
@@ -182,6 +173,44 @@ public final class GraalServices {
     }
 
     /**
+     * An implementation of {@link SpeculationReason} based on direct, unencoded values.
+     */
+    static final class DirectSpeculationReason implements SpeculationReason {
+        final int groupId;
+        final String groupName;
+        final Object[] context;
+
+        DirectSpeculationReason(int groupId, String groupName, Object[] context) {
+            this.groupId = groupId;
+            this.groupName = groupName;
+            this.context = context;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof DirectSpeculationReason) {
+                DirectSpeculationReason that = (DirectSpeculationReason) obj;
+                return this.groupId == that.groupId && Arrays.equals(this.context, that.context);
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return groupId + Arrays.hashCode(this.context);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s@%d%s", groupName, groupId, Arrays.toString(context));
+        }
+    }
+
+    static SpeculationReason createSpeculationReason(int groupId, String groupName, Object... context) {
+        return new DirectSpeculationReason(groupId, groupName, context);
+    }
+
+    /**
      * Gets a unique identifier for this execution such as a process ID or a
      * {@linkplain #getGlobalTimeStamp() fixed timestamp}.
      */
@@ -200,29 +229,6 @@ public final class GraalServices {
             globalTimeStamp.compareAndSet(0, System.currentTimeMillis());
         }
         return globalTimeStamp.get();
-    }
-
-    /**
-     * Access to thread specific information made available via Java Management Extensions (JMX).
-     * Using this abstraction enables avoiding a dependency to the {@code java.management} and
-     * {@code jdk.management} modules on JDK 9 and later.
-     */
-    public abstract static class JMXService {
-        protected abstract long getThreadAllocatedBytes(long id);
-
-        protected abstract long getCurrentThreadCpuTime();
-
-        protected abstract boolean isThreadAllocatedMemorySupported();
-
-        protected abstract boolean isCurrentThreadCpuTimeSupported();
-    }
-
-    static class LazyJMX {
-        // In this implementation for JDK 9 and later, we cannot reference
-        // JMX classes directly since that would introduce a dependency from Graal
-        // to the {@code java.management} and {@code jdk.management} modules
-        // and we want Graal to be able to run without these modules being required.
-        static final JMXService jmx = loadSingle(JMXService.class, false);
     }
 
     /**
@@ -250,7 +256,7 @@ public final class GraalServices {
      *             measurement.
      */
     public static long getThreadAllocatedBytes(long id) {
-        JMXService jmx = LazyJMX.jmx;
+        JMXService jmx = JMXService.instance;
         if (jmx == null) {
             throw new UnsupportedOperationException();
         }
@@ -279,7 +285,7 @@ public final class GraalServices {
      *             the current thread
      */
     public static long getCurrentThreadCpuTime() {
-        JMXService jmx = LazyJMX.jmx;
+        JMXService jmx = JMXService.instance;
         if (jmx == null) {
             throw new UnsupportedOperationException();
         }
@@ -291,7 +297,7 @@ public final class GraalServices {
      * measurement.
      */
     public static boolean isThreadAllocatedMemorySupported() {
-        JMXService jmx = LazyJMX.jmx;
+        JMXService jmx = JMXService.instance;
         if (jmx == null) {
             return false;
         }
@@ -302,10 +308,50 @@ public final class GraalServices {
      * Determines if the Java virtual machine supports CPU time measurement for the current thread.
      */
     public static boolean isCurrentThreadCpuTimeSupported() {
-        JMXService jmx = LazyJMX.jmx;
+        JMXService jmx = JMXService.instance;
         if (jmx == null) {
             return false;
         }
         return jmx.isCurrentThreadCpuTimeSupported();
+    }
+
+    /**
+     * Gets the input arguments passed to the Java virtual machine which does not include the
+     * arguments to the {@code main} method. This method returns an empty list if there is no input
+     * argument to the Java virtual machine.
+     * <p>
+     * Some Java virtual machine implementations may take input arguments from multiple different
+     * sources: for examples, arguments passed from the application that launches the Java virtual
+     * machine such as the 'java' command, environment variables, configuration files, etc.
+     * <p>
+     * Typically, not all command-line options to the 'java' command are passed to the Java virtual
+     * machine. Thus, the returned input arguments may not include all command-line options.
+     *
+     * @return the input arguments to the JVM or {@code null} if they are unavailable
+     */
+    public static List<String> getInputArguments() {
+        JMXService jmx = JMXService.instance;
+        if (jmx == null) {
+            return null;
+        }
+        return jmx.getInputArguments();
+    }
+
+    /**
+     * Returns the fused multiply add of the three arguments; that is, returns the exact product of
+     * the first two arguments summed with the third argument and then rounded once to the nearest
+     * {@code float}.
+     */
+    public static float fma(float a, float b, float c) {
+        return Math.fma(a, b, c);
+    }
+
+    /**
+     * Returns the fused multiply add of the three arguments; that is, returns the exact product of
+     * the first two arguments summed with the third argument and then rounded once to the nearest
+     * {@code double}.
+     */
+    public static double fma(double a, double b, double c) {
+        return Math.fma(a, b, c);
     }
 }
