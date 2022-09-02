@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.truffle.compiler.phases;
 
-import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
-
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -49,17 +47,17 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
-import org.graalvm.options.OptionValues;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
 
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaUtil;
 
-public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
+public abstract class InstrumentPhase extends BasePhase<PhaseContext> {
 
     private static boolean checkMethodExists(String declaringClassName, String methodName) {
         try {
@@ -107,10 +105,10 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
     }
 
     protected String instrumentationFilter(OptionValues options) {
-        return getPolyglotOptionValue(options, PolyglotCompilerOptions.InstrumentFilter);
+        return TruffleCompilerOptions.TruffleInstrumentFilter.getValue(options);
     }
 
-    protected static void insertCounter(StructuredGraph graph, CoreProviders context, JavaConstant tableConstant,
+    protected static void insertCounter(StructuredGraph graph, PhaseContext context, JavaConstant tableConstant,
                     FixedWithNextNode targetNode, int slotIndex) {
         assert (tableConstant != null);
         TypeReference typeRef = TypeReference.createExactTrusted(context.getMetaAccess().lookupJavaType(tableConstant));
@@ -131,7 +129,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
     }
 
     @Override
-    protected void run(StructuredGraph graph, CoreProviders context) {
+    protected void run(StructuredGraph graph, PhaseContext context) {
         JavaConstant tableConstant = snippetReflection.forObject(instrumentation.getAccessTable());
         try {
             instrumentGraph(graph, context, tableConstant);
@@ -140,11 +138,11 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
         }
     }
 
-    protected abstract void instrumentGraph(StructuredGraph graph, CoreProviders context, JavaConstant tableConstant);
+    protected abstract void instrumentGraph(StructuredGraph graph, PhaseContext context, JavaConstant tableConstant);
 
     protected abstract int instrumentationPointSlotCount();
 
-    protected abstract boolean instrumentPerInlineSite(org.graalvm.compiler.options.OptionValues options);
+    protected abstract boolean instrumentPerInlineSite(OptionValues options);
 
     protected abstract Point createPoint(int id, int startIndex, Node n);
 
@@ -221,7 +219,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
             }
         }
 
-        private static String prettify(org.graalvm.compiler.options.OptionValues options, String key, Point p) {
+        private static String prettify(String key, Point p, OptionValues options) {
             if (p.isPrettified(options)) {
                 StringBuilder sb = new StringBuilder();
                 NodeSourcePosition pos = p.getPosition();
@@ -274,7 +272,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
             }
         }
 
-        public synchronized ArrayList<String> accessTableToList(org.graalvm.compiler.options.OptionValues options) {
+        public synchronized ArrayList<String> accessTableToList(OptionValues options) {
 
             /*
              * Using sortedEntries.addAll(pointMap.entrySet(), instead of the iteration below, is
@@ -298,7 +296,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
 
             ArrayList<String> list = new ArrayList<>();
             for (Map.Entry<String, Point> entry : sortedEntries) {
-                list.add(prettify(options, entry.getKey(), entry.getValue()) + CodeUtil.NEW_LINE + entry.getValue());
+                list.add(prettify(entry.getKey(), entry.getValue(), options) + CodeUtil.NEW_LINE + entry.getValue());
             }
             return list;
         }
@@ -326,7 +324,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
             return histogram;
         }
 
-        public synchronized void dumpAccessTable(org.graalvm.compiler.options.OptionValues options) {
+        public synchronized void dumpAccessTable(OptionValues options) {
             // Dump accumulated profiling information.
             TTY.println("Execution profile (sorted by hotness)");
             TTY.println("=====================================");
@@ -398,7 +396,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
 
         public abstract long getHotness();
 
-        public abstract boolean isPrettified(org.graalvm.compiler.options.OptionValues options);
+        public abstract boolean isPrettified(OptionValues options);
 
         public boolean shouldInclude() {
             return true;
