@@ -61,13 +61,6 @@ class JDKRegistrations extends JNIRegistrationUtil implements GraalFeature {
              */
             rerunClassInit(a, "jdk.internal.loader.NativeLibraries$LibraryPaths");
         }
-        if (JavaVersionUtil.JAVA_SPEC >= 16) {
-            /*
-             * Contains lots of state that is only available at run time: loads a native library,
-             * stores a `Random` object and the temporary directory in a static final field.
-             */
-            rerunClassInit(a, "sun.nio.ch.UnixDomainSockets");
-        }
 
         /*
          * CopyOnWriteArrayList.resetLock uses reflection to write the final field `lock`. The
@@ -80,9 +73,8 @@ class JDKRegistrations extends JNIRegistrationUtil implements GraalFeature {
 
         /*
          * Re-initialize the registered shutdown hooks, because any hooks registered during native
-         * image construction must not survive into the running image. Both classes have only static
-         * members and do not allow instantiation.
+         * image construction can not survive into the running image.
          */
-        rerunClassInit(a, "java.lang.ApplicationShutdownHooks", "java.io.DeleteOnExitHook");
+        rerunClassInit(a, "java.lang.ApplicationShutdownHooks");
     }
 }
