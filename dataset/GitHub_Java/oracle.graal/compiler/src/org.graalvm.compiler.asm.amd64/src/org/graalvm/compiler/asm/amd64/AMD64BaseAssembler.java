@@ -210,20 +210,6 @@ public abstract class AMD64BaseAssembler extends Assembler {
         }
     }
 
-    public static class AddressDisplacementAnnotation extends CodeAnnotation {
-        /**
-         * The position (bytes from the beginning of the method) of the operand.
-         */
-        public final int operandPosition;
-
-        public final Object annotation;
-
-        AddressDisplacementAnnotation(int operandPosition, Object annotation) {
-            this.operandPosition = operandPosition;
-            this.annotation = annotation;
-        }
-    }
-
     public static class OperandDataAnnotation extends CodeAnnotation {
         /**
          * The position (bytes from the beginning of the method) of the annotated instruction.
@@ -593,7 +579,6 @@ public abstract class AMD64BaseAssembler extends Assembler {
 
         Scale scale = addr.getScale();
         int disp = addr.getDisplacement();
-        Object dispAnnotation = addr.getDisplacementAnnotation();
 
         if (base.equals(AMD64.rip)) { // also matches addresses returned by getPlaceholder()
             // [00 reg 101] disp32
@@ -602,15 +587,15 @@ public abstract class AMD64BaseAssembler extends Assembler {
             if (codePatchingAnnotationConsumer != null && addr.instructionStartPosition >= 0) {
                 codePatchingAnnotationConsumer.accept(new OperandDataAnnotation(addr.instructionStartPosition, position(), 4, position() + 4 + additionalInstructionSize));
             }
-            emitDisplacementInt(disp, dispAnnotation);
+            emitInt(disp);
         } else if (base.isValid()) {
-            boolean overriddenForce4Byte = force4Byte || dispAnnotation != null;
+            boolean overriddenForce4Byte = force4Byte;
             int baseenc = base.isValid() ? encode(base) : 0;
 
             if (index.isValid()) {
                 int indexenc = encode(index) << 3;
                 // [base + indexscale + disp]
-                if (dispAnnotation == null && disp == 0 && !base.equals(rbp) && !base.equals(r13)) {
+                if (disp == 0 && !base.equals(rbp) && !base.equals(r13)) {
                     // [base + indexscale]
                     // [00 reg 100][ss index base]
                     assert !index.equals(rsp) : "illegal addressing mode";
@@ -634,7 +619,6 @@ public abstract class AMD64BaseAssembler extends Assembler {
                         assert !index.equals(rsp) : "illegal addressing mode";
                         emitByte(0x44 | regenc);
                         emitByte(scale.log2 << 6 | indexenc | baseenc);
-                        assert dispAnnotation == null;
                         emitByte(disp & 0xFF);
                     } else {
                         // [base + indexscale + disp32]
@@ -642,12 +626,12 @@ public abstract class AMD64BaseAssembler extends Assembler {
                         assert !index.equals(rsp) : "illegal addressing mode";
                         emitByte(0x84 | regenc);
                         emitByte(scale.log2 << 6 | indexenc | baseenc);
-                        emitDisplacementInt(disp, dispAnnotation);
+                        emitInt(disp);
                     }
                 }
             } else if (base.equals(rsp) || base.equals(r12)) {
                 // [rsp + disp]
-                if (dispAnnotation == null && disp == 0) {
+                if (disp == 0) {
                     // [rsp]
                     // [00 reg 100][00 100 100]
                     emitByte(0x04 | regenc);
@@ -669,20 +653,19 @@ public abstract class AMD64BaseAssembler extends Assembler {
                         // [01 reg 100][00 100 100] disp8
                         emitByte(0x44 | regenc);
                         emitByte(0x24);
-                        assert dispAnnotation == null;
                         emitByte(disp & 0xFF);
                     } else {
                         // [rsp + imm32]
                         // [10 reg 100][00 100 100] disp32
                         emitByte(0x84 | regenc);
                         emitByte(0x24);
-                        emitDisplacementInt(disp, dispAnnotation);
+                        emitInt(disp);
                     }
                 }
             } else {
                 // [base + disp]
                 assert !base.equals(rsp) && !base.equals(r12) : "illegal addressing mode";
-                if (dispAnnotation == null && disp == 0 && !base.equals(rbp) && !base.equals(r13)) {
+                if (disp == 0 && !base.equals(rbp) && !base.equals(r13)) {
                     // [base]
                     // [00 reg base]
                     emitByte(0x00 | regenc | baseenc);
@@ -702,13 +685,12 @@ public abstract class AMD64BaseAssembler extends Assembler {
                         // [base + disp8]
                         // [01 reg base] disp8
                         emitByte(0x40 | regenc | baseenc);
-                        assert dispAnnotation == null;
                         emitByte(disp & 0xFF);
                     } else {
                         // [base + disp32]
                         // [10 reg base] disp32
                         emitByte(0x80 | regenc | baseenc);
-                        emitDisplacementInt(disp, dispAnnotation);
+                        emitInt(disp);
                     }
                 }
             }
@@ -720,22 +702,15 @@ public abstract class AMD64BaseAssembler extends Assembler {
                 assert !index.equals(rsp) : "illegal addressing mode";
                 emitByte(0x04 | regenc);
                 emitByte(scale.log2 << 6 | indexenc | 0x05);
-                emitDisplacementInt(disp, dispAnnotation);
+                emitInt(disp);
             } else {
                 // [disp] ABSOLUTE
                 // [00 reg 100][00 100 101] disp32
                 emitByte(0x04 | regenc);
                 emitByte(0x25);
-                emitDisplacementInt(disp, dispAnnotation);
+                emitInt(disp);
             }
         }
-    }
-
-    private void emitDisplacementInt(int disp, Object dispAnnotation) {
-        if (dispAnnotation != null && codePatchingAnnotationConsumer != null) {
-            codePatchingAnnotationConsumer.accept(new AddressDisplacementAnnotation(position(), dispAnnotation));
-        }
-        emitInt(disp);
     }
 
     private interface SIMDEncoder {
