@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,8 +46,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.MethodSubstitutionPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.util.Providers;
@@ -66,22 +64,19 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
     protected final OptimisticOptimizations optimisticOpts;
     private final AllowAssumptions allowAssumptions;
     private final EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache;
-    private final BasePhase<? super CoreProviders> postParsingPhase;
 
     public CachingPEGraphDecoder(Architecture architecture, StructuredGraph graph, Providers providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
                     AllowAssumptions allowAssumptions, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin[] inlineInvokePlugins,
                     ParameterPlugin parameterPlugin,
-                    NodePlugin[] nodePlugins, ResolvedJavaMethod callInlinedMethod, ResolvedJavaMethod callInlinedAgnosticMethod, SourceLanguagePositionProvider sourceLanguagePositionProvider,
-                    BasePhase<? super CoreProviders> postParsingPhase, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
+                    NodePlugin[] nodePlugins, ResolvedJavaMethod callInlinedMethod, SourceLanguagePositionProvider sourceLanguagePositionProvider) {
         super(architecture, graph, providers, loopExplosionPlugin,
-                        invocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, callInlinedMethod, callInlinedAgnosticMethod, sourceLanguagePositionProvider);
+                        invocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, callInlinedMethod, sourceLanguagePositionProvider);
 
         this.providers = providers;
         this.graphBuilderConfig = graphBuilderConfig;
         this.optimisticOpts = optimisticOpts;
         this.allowAssumptions = allowAssumptions;
-        this.graphCache = graphCache;
-        this.postParsingPhase = postParsingPhase;
+        this.graphCache = EconomicMap.create();
     }
 
     protected GraphBuilderPhase.Instance createGraphBuilderPhaseInstance(IntrinsicContext initialIntrinsicContext) {
@@ -132,10 +127,7 @@ public class CachingPEGraphDecoder extends PEGraphDecoder {
                             : null;
             GraphBuilderPhase.Instance graphBuilderPhaseInstance = createGraphBuilderPhaseInstance(initialIntrinsicContext);
             graphBuilderPhaseInstance.apply(graphToEncode);
-            CanonicalizerPhase.create().apply(graphToEncode, providers);
-            if (postParsingPhase != null) {
-                postParsingPhase.apply(graphToEncode, providers);
-            }
+            new CanonicalizerPhase().apply(graphToEncode, providers);
         } catch (Throwable ex) {
             throw debug.handle(ex);
         }

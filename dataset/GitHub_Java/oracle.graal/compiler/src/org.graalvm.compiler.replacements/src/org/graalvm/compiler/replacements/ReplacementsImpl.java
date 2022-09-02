@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -269,12 +269,8 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
     }
 
     @Override
-    public void registerMethodSubstitution(MethodSubstitutionPlugin plugin) {
+    public void registerMethodSubstitution(MethodSubstitutionPlugin plugin, ResolvedJavaMethod original, IntrinsicContext.CompilationContext context, OptionValues options) {
         // No initialization needed as method substitutions are parsed by the BytecodeParser.
-    }
-
-    @Override
-    public void registerConditionalPlugin(InvocationPlugin plugin) {
     }
 
     @Override
@@ -564,7 +560,7 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
 
                 createGraphBuilder(replacements.providers, config, OptimisticOptimizations.NONE, initialIntrinsicContext).apply(graph);
 
-                CanonicalizerPhase.create().apply(graph, replacements.providers);
+                new CanonicalizerPhase().apply(graph, replacements.providers);
             } catch (Throwable e) {
                 throw debug.handle(e);
             }

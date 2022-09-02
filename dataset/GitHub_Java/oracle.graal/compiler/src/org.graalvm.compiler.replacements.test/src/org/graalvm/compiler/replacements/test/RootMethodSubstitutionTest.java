@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,12 +30,10 @@ import java.util.List;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.core.common.jfr.JFRContext;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
@@ -54,7 +52,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * Exercise
- * {@link org.graalvm.compiler.nodes.spi.Replacements#getIntrinsicGraph(ResolvedJavaMethod, CompilationIdentifier, DebugContext, JFRContext, Cancellable)}
+ * {@link org.graalvm.compiler.nodes.spi.Replacements#getIntrinsicGraph(ResolvedJavaMethod, CompilationIdentifier, DebugContext, Cancellable)}
  * with regular method substitutions and encoded graphs.
  */
 @RunWith(Parameterized.class)
@@ -115,8 +113,8 @@ public class RootMethodSubstitutionTest extends GraalCompilerTest {
 
     private StructuredGraph getIntrinsicGraph(boolean useEncodedGraphs) {
         OptionValues options = new OptionValues(getDebugContext().getOptions(), GraalOptions.UseEncodedGraphs, useEncodedGraphs);
-        DebugContext debugContext = new Builder(options, getDebugHandlersFactories()).description(getDebugContext().getDescription()).build();
-        return getReplacements().getIntrinsicGraph(method, CompilationIdentifier.INVALID_COMPILATION_ID, debugContext, JFRContext.DISABLED_JFR, null);
+        DebugContext debugContext = DebugContext.create(options, getDebugContext().getDescription(), getDebugHandlersFactories());
+        return getReplacements().getIntrinsicGraph(method, CompilationIdentifier.INVALID_COMPILATION_ID, debugContext, null);
     }
 
     StructuredGraph expectedGraph;
