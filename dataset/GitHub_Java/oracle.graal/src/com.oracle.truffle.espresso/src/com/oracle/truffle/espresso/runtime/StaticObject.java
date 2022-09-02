@@ -578,7 +578,7 @@ public final class StaticObject implements TruffleObject {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw EspressoError.shouldNotReachHere("Uninitialized mirror class");
         }
-        return result;
+        return (Klass) getHiddenField(getKlass().getMeta().HIDDEN_MIRROR_KLASS);
     }
 
     @TruffleBoundary
