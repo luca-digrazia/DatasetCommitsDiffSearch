@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,27 +48,20 @@ import static jdk.vm.ci.aarch64.AArch64.r6;
 import static jdk.vm.ci.aarch64.AArch64.r7;
 import static jdk.vm.ci.aarch64.AArch64.r8;
 import static jdk.vm.ci.aarch64.AArch64.r9;
+import static jdk.vm.ci.aarch64.AArch64.sp;
 import static jdk.vm.ci.aarch64.AArch64.v0;
 import static jdk.vm.ci.aarch64.AArch64.v1;
-import static jdk.vm.ci.aarch64.AArch64.v10;
-import static jdk.vm.ci.aarch64.AArch64.v11;
-import static jdk.vm.ci.aarch64.AArch64.v12;
-import static jdk.vm.ci.aarch64.AArch64.v13;
-import static jdk.vm.ci.aarch64.AArch64.v14;
-import static jdk.vm.ci.aarch64.AArch64.v15;
 import static jdk.vm.ci.aarch64.AArch64.v2;
 import static jdk.vm.ci.aarch64.AArch64.v3;
 import static jdk.vm.ci.aarch64.AArch64.v4;
 import static jdk.vm.ci.aarch64.AArch64.v5;
 import static jdk.vm.ci.aarch64.AArch64.v6;
 import static jdk.vm.ci.aarch64.AArch64.v7;
-import static jdk.vm.ci.aarch64.AArch64.v8;
-import static jdk.vm.ci.aarch64.AArch64.v9;
 import static jdk.vm.ci.aarch64.AArch64.zr;
 
 import java.util.ArrayList;
 
-import com.oracle.svm.core.ReservedRegisters;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.graal.code.SubstrateCallingConvention;
 import com.oracle.svm.core.graal.code.SubstrateCallingConventionType;
@@ -98,11 +91,13 @@ public class SubstrateAArch64RegisterConfig implements SubstrateRegisterConfig {
     private final TargetDescription target;
     private final int nativeParamsStackOffset;
     private final RegisterArray generalParameterRegs;
-    private final RegisterArray simdParameterRegs;
+    private final RegisterArray xmmParameterRegs;
     private final RegisterArray allocatableRegs;
     private final RegisterArray calleeSaveRegisters;
     private final RegisterAttributes[] attributesMap;
     private final MetaAccessProvider metaAccess;
+    private final Register threadRegister;
+    private final Register heapBaseRegister;
     private final RegisterArray javaGeneralParameterRegisters;
 
     public SubstrateAArch64RegisterConfig(ConfigKind config, MetaAccessProvider metaAccess, TargetDescription target) {
@@ -111,21 +106,24 @@ public class SubstrateAArch64RegisterConfig implements SubstrateRegisterConfig {
 
         // This is the Linux 64-bit ABI for parameters.
         generalParameterRegs = new RegisterArray(r0, r1, r2, r3, r4, r5, r6, r7);
-        simdParameterRegs = new RegisterArray(v0, v1, v2, v3, v4, v5, v6, v7);
+        xmmParameterRegs = new RegisterArray(v0, v1, v2, v3, v4, v5, v6, v7);
 
         javaGeneralParameterRegisters = new RegisterArray(r1, r2, r3, r4, r5, r6, r7, r0);
 
         nativeParamsStackOffset = 0;
 
+        heapBaseRegister = SubstrateOptions.SpawnIsolates.getValue() ? r27 : null;
+        threadRegister = SubstrateOptions.MultiThreaded.getValue() ? r28 : null;
+
         ArrayList<Register> regs = new ArrayList<>(allRegisters.asList());
-        regs.remove(ReservedRegisters.singleton().getFrameRegister());
+        regs.remove(sp);
         regs.remove(zr);
         regs.remove(r8);
         regs.remove(r9);
         regs.remove(r29);
         regs.remove(r31);
-        regs.remove(ReservedRegisters.singleton().getHeapBaseRegister());
-        regs.remove(ReservedRegisters.singleton().getThreadRegister());
+        regs.remove(heapBaseRegister);
+        regs.remove(threadRegister);
         allocatableRegs = new RegisterArray(regs);
 
         switch (config) {
@@ -134,8 +132,7 @@ public class SubstrateAArch64RegisterConfig implements SubstrateRegisterConfig {
                 break;
 
             case NATIVE_TO_JAVA:
-                calleeSaveRegisters = new RegisterArray(r19, r20, r21, r22, r23, r24, r25, r26, r27, r28,
-                                v8, v9, v10, v11, v12, v13, v14, v15);
+                calleeSaveRegisters = new RegisterArray(r19, r20, r21, r22, r23, r24, r25, r26, r27, r28);
                 break;
 
             default:
@@ -164,6 +161,21 @@ public class SubstrateAArch64RegisterConfig implements SubstrateRegisterConfig {
             default:
                 throw shouldNotReachHere();
         }
+    }
+
+    @Override
+    public Register getFrameRegister() {
+        return sp;
+    }
+
+    @Override
+    public Register getThreadRegister() {
+        return threadRegister;
+    }
+
+    @Override
+    public Register getHeapBaseRegister() {
+        return heapBaseRegister;
     }
 
     @Override
@@ -205,7 +217,7 @@ public class SubstrateAArch64RegisterConfig implements SubstrateRegisterConfig {
                 return (type.nativeABI ? generalParameterRegs : javaGeneralParameterRegisters);
             case Float:
             case Double:
-                return simdParameterRegs;
+                return xmmParameterRegs;
             default:
                 throw VMError.shouldNotReachHere();
         }
@@ -219,7 +231,7 @@ public class SubstrateAArch64RegisterConfig implements SubstrateRegisterConfig {
         AllocatableValue[] locations = new AllocatableValue[parameterTypes.length];
 
         int currentGeneral = 0;
-        int currentSIMD = 0;
+        int currentXMM = 0;
 
         /*
          * We have to reserve a slot between return address and outgoing parameters for the deopt
@@ -247,8 +259,8 @@ public class SubstrateAArch64RegisterConfig implements SubstrateRegisterConfig {
                     break;
                 case Float:
                 case Double:
-                    if (currentSIMD < simdParameterRegs.size()) {
-                        Register register = simdParameterRegs.get(currentSIMD++);
+                    if (currentXMM < xmmParameterRegs.size()) {
+                        Register register = xmmParameterRegs.get(currentXMM++);
                         locations[i] = register.asValue(valueKindFactory.getValueKind(kind));
                     }
                     break;
