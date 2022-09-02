@@ -29,10 +29,12 @@
  */
 package com.oracle.truffle.wasm.nodes;
 
+import static com.oracle.truffle.wasm.WasmTracing.trace;
+
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -47,7 +49,6 @@ import com.oracle.truffle.wasm.WasmVoidResult;
 
 @NodeInfo(language = "wasm", description = "The root node of all WebAssembly functions")
 public class WasmRootNode extends RootNode implements WasmNodeInterface {
-    private static final TruffleLogger logger = TruffleLogger.getLogger("wasm");
 
     @CompilationFinal private WasmCodeEntry codeEntry;
     @CompilationFinal private ContextReference<WasmContext> rawContextReference;
@@ -61,6 +62,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
     protected ContextReference<WasmContext> contextReference() {
         if (rawContextReference == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             rawContextReference = lookupContextReference(WasmLanguage.class);
         }
         return rawContextReference;
@@ -68,6 +70,11 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
     public void setBody(WasmNode body) {
         this.body = insert(body);
+    }
+
+    @Override
+    protected boolean isInstrumentable() {
+        return false;
     }
 
     @Override
@@ -80,14 +87,15 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
         /*
          * WebAssembly structure dictates that a function's arguments are provided to the function
-         * as local variables, followed by any additional local variables that the function declares.
-         * A VirtualFrame contains a special array for the arguments, so we need to move them to the locals.
+         * as local variables, followed by any additional local variables that the function
+         * declares. A VirtualFrame contains a special array for the arguments, so we need to move
+         * them to the locals.
          */
         argumentsToLocals(frame);
 
         /*
-         * WebAssembly rules dictate that a function's locals must be initialized to zero before function invocation.
-         * For more information, check the specification:
+         * WebAssembly rules dictate that a function's locals must be initialized to zero before
+         * function invocation. For more information, check the specification:
          * https://webassembly.github.io/spec/core/exec/instructions.html#function-calls
          */
         initializeLocals(frame);
