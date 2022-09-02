@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -62,45 +62,49 @@ public class ArrayUtilsIndexOfWithMaskTest {
                     " erat, \u0000 sed diam voluptua. At vero \uffff eos et ac" +
                     "cusa\u016f et justo duo dolores 0";
 
-    @Parameters(name = "{index}: haystack {0} fromIndex {1} maxIndex {2} needle {3} expected {5}")
+    @Parameters(name = "{index}: haystack {0} fromIndex {1} length {2} needle {3} expected {5}")
     public static Iterable<Object[]> data() {
         ArrayList<Object[]> ret = new ArrayList<>();
         for (int length : new int[]{15, 16, 17, strAlphabet.length()}) {
             for (String str : new String[]{strAlphabet.substring(0, length), strAlphabet.substring(0, length).toLowerCase()}) {
                 for (int i = 0; i < 2; i++) {
                     for (int len = 1; len < 4; len++) {
-                        ret.add(dataRow(str, 0, length, str.substring(i, i + len).toLowerCase(), mask(len), i));
-                        ret.add(dataRow(str, 0, length, str.substring(length - len - i, length - i).toLowerCase(), mask(len), length - len - i));
+                        add(ret, dataRow(str, 0, length, str.substring(i, i + len).toLowerCase(), mask(len), i));
+                        add(ret, dataRow(str, 0, length, str.substring(length - len - i, length - i).toLowerCase(), mask(len), length - len - i));
                     }
                 }
             }
         }
         for (String s : new String[]{lipsum, lipsum.toLowerCase(), lipsum.toUpperCase()}) {
-            ret.addAll(Arrays.asList(
-                            dataRow(s, 1, 1, "", noMask(0), 1),
-                            dataRow(s, 0, s.length(), "l", mask(1), 0),
-                            dataRow(s, 1, s.length(), "l", mask(1), 14),
-                            dataRow(s, 0, s.length(), "o", mask(1), 1),
-                            dataRow(s, 1, s.length(), "o", mask(1), 1),
-                            dataRow(s, 3, s.length(), "o", mask(1), 13),
-                            dataRow(s, 3, s.length(), "\u0000", noMask(1), 137),
-                            dataRow(s, 3, s.length(), " \u0000", noMask(2), 136),
-                            dataRow(s, 3, s.length(), ", \u0000", noMask(3), 135),
-                            dataRow(s, 3, s.length(), "t, \u0000", mask("t, \u0000"), 134),
-                            dataRow(s, 3, s.length(), "\uffff", noMask(1), 166),
-                            dataRow(s, 3, s.length(), " \uffff", noMask(2), 165),
-                            dataRow(s, 3, s.length(), "o \uffff", mask("o \uffff"), 164),
-                            dataRow(s, 3, s.length(), "0", noMask(1), 204),
-                            dataRow(s, 3, s.length(), " 0", noMask(2), 203),
-                            dataRow(s, 3, s.length(), "s 0", mask("s 0"), 202),
-                            dataRow(s, 0, s.length(), "lo", mask(2), 0),
-                            dataRow(s, 1, s.length(), "lo", mask(2), 14),
-                            dataRow(s, 0, s.length(), " dolor", mask(" dolor"), 11)));
+            add(ret, dataRow(s, 1, 0, "", noMask(0), 1));
+            add(ret, dataRow(s, 0, s.length(), "l", mask(1), 0));
+            add(ret, dataRow(s, 1, s.length() - 1, "l", mask(1), 14));
+            add(ret, dataRow(s, 0, s.length(), "o", mask(1), 1));
+            add(ret, dataRow(s, 1, s.length() - 1, "o", mask(1), 1));
+            add(ret, dataRow(s, 3, s.length() - 3, "o", mask(1), 13));
+            add(ret, dataRow(s, 3, s.length() - 3, "\u0000", noMask(1), 137));
+            add(ret, dataRow(s, 3, s.length() - 3, " \u0000", noMask(2), 136));
+            add(ret, dataRow(s, 3, s.length() - 3, ", \u0000", noMask(3), 135));
+            add(ret, dataRow(s, 3, s.length() - 3, "t, \u0000", mask("t, \u0000"), 134));
+            add(ret, dataRow(s, 3, s.length() - 3, "\uffff", noMask(1), 166));
+            add(ret, dataRow(s, 3, s.length() - 3, " \uffff", noMask(2), 165));
+            add(ret, dataRow(s, 3, s.length() - 3, "o \uffff", mask("o \uffff"), 164));
+            add(ret, dataRow(s, 3, s.length() - 3, "0", noMask(1), 204));
+            add(ret, dataRow(s, 3, s.length() - 3, " 0", noMask(2), 203));
+            add(ret, dataRow(s, 3, s.length() - 3, "s 0", mask("s 0"), 202));
+            add(ret, dataRow(s, 0, s.length(), "lo", mask(2), 0));
+            add(ret, dataRow(s, 1, s.length() - 1, "lo", mask(2), 14));
+            add(ret, dataRow(s, 0, s.length(), " dolor", mask(" dolor"), 11));
         }
-        ret.add(dataRow(strAlphabet, 0, strAlphabet.length(), "O", String.valueOf('\u0100'), 14, -1));
-        ret.add(dataRow(strAlphabet, 0, strAlphabet.length(), "\u014f", String.valueOf('\u0100'), 14));
-        ret.add(dataRow(lipsum, 0, lipsum.length(), "o", String.valueOf('\u0100'), 1, -1));
-        ret.add(dataRow(lipsum, 0, lipsum.length(), "\u016f", String.valueOf('\u0100'), 1));
+        add(ret, dataRow(strAlphabet, 0, strAlphabet.length(), "O", String.valueOf('\u0100'), 14, -1));
+        add(ret, dataRow(strAlphabet, 0, strAlphabet.length(), "\u014f", String.valueOf('\u0100'), 14));
+        add(ret, dataRow(lipsum, 0, lipsum.length(), "o", String.valueOf('\u0100'), 1, -1));
+        add(ret, dataRow(lipsum, 0, lipsum.length(), "\u016f", String.valueOf('\u0100'), 1));
+        add(ret, dataRow(lipsum, 0, lipsum.length(), "X", mask(1), -1));
+        add(ret, dataRow(lipsum, 0, lipsum.length(), "XX", mask(2), -1));
+        add(ret, dataRow(lipsum, 0, lipsum.length(), "XXX", mask(3), -1));
+        add(ret, dataRow(lipsum, 0, lipsum.length(), "s x", mask("s x"), -1));
+        add(ret, dataRow("l", 0, 1, "lo", mask(2), -1));
         return ret;
     }
 
@@ -112,18 +116,36 @@ public class ArrayUtilsIndexOfWithMaskTest {
         return new Object[]{haystack, fromIndex, maxIndex, needle, mask, expectedByte, expectedChar};
     }
 
+    private static void add(ArrayList<Object[]> ret, Object[] data) {
+        if (isAllZeros((String) data[4])) {
+            Object[] copy = Arrays.copyOf(data, data.length);
+            copy[4] = null;
+            ret.add(copy);
+        }
+        ret.add(data);
+    }
+
+    private static boolean isAllZeros(String str) {
+        for (int i = 0; i < str.length(); i++) {
+            if (str.charAt(i) != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private final String haystack;
     private final int fromIndex;
-    private final int maxIndex;
+    private final int length;
     private final String needle;
     private final String mask;
     private final int expectedB;
     private final int expectedC;
 
-    public ArrayUtilsIndexOfWithMaskTest(String haystack, int fromIndex, int maxIndex, String needle, String mask, int expectedByte, int expectedChar) {
+    public ArrayUtilsIndexOfWithMaskTest(String haystack, int fromIndex, int length, String needle, String mask, int expectedByte, int expectedChar) {
         this.haystack = haystack;
         this.fromIndex = fromIndex;
-        this.maxIndex = maxIndex;
+        this.length = length;
         this.needle = needle;
         this.mask = mask;
         this.expectedB = expectedByte;
@@ -132,20 +154,9 @@ public class ArrayUtilsIndexOfWithMaskTest {
 
     @Test
     public void test() {
-        if (mask.length() == 1) {
-            Assert.assertEquals(expectedB, ArrayUtils.indexOfWithORMask(toByteArray(haystack), fromIndex, maxIndex, (byte) needle.charAt(0), (byte) mask.charAt(0)));
-            Assert.assertEquals(expectedC, ArrayUtils.indexOfWithORMask(haystack.toCharArray(), fromIndex, maxIndex, needle.charAt(0), mask.charAt(0)));
-            Assert.assertEquals(expectedC, ArrayUtils.indexOfWithORMask(haystack, fromIndex, maxIndex, needle.charAt(0), mask.charAt(0)));
-        }
-        if (mask.length() == 2) {
-            Assert.assertEquals(expectedB, ArrayUtils.indexOf2ConsecutiveWithORMask(toByteArray(haystack), fromIndex, maxIndex,
-                            (byte) needle.charAt(0), (byte) needle.charAt(1), (byte) mask.charAt(0), (byte) mask.charAt(1)));
-            Assert.assertEquals(expectedC, ArrayUtils.indexOf2ConsecutiveWithORMask(haystack.toCharArray(), fromIndex, maxIndex, needle.charAt(0), needle.charAt(1), mask.charAt(0), mask.charAt(1)));
-            Assert.assertEquals(expectedC, ArrayUtils.indexOf2ConsecutiveWithORMask(haystack, fromIndex, maxIndex, needle.charAt(0), needle.charAt(1), mask.charAt(0), mask.charAt(1)));
-        }
-        Assert.assertEquals(expectedB, ArrayUtils.indexOfWithORMask(toByteArray(haystack), fromIndex, maxIndex, toByteArray(needle), toByteArray(mask)));
-        Assert.assertEquals(expectedC, ArrayUtils.indexOfWithORMask(haystack.toCharArray(), fromIndex, maxIndex, needle.toCharArray(), mask.toCharArray()));
-        Assert.assertEquals(expectedC, ArrayUtils.indexOfWithORMask(haystack, fromIndex, maxIndex, needle, mask));
+        Assert.assertEquals(expectedB, ArrayUtils.indexOfWithOrMask(toByteArray(haystack), fromIndex, length, toByteArray(needle), toByteArray(mask)));
+        Assert.assertEquals(expectedC, ArrayUtils.indexOfWithOrMask(haystack.toCharArray(), fromIndex, length, needle.toCharArray(), mask == null ? null : mask.toCharArray()));
+        Assert.assertEquals(expectedC, ArrayUtils.indexOfWithOrMask(haystack, fromIndex, length, needle, mask));
     }
 
     public static String noMask(int len) {
