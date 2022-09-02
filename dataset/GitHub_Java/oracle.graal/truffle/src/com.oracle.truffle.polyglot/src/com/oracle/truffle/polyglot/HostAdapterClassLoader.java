@@ -40,6 +40,9 @@
  */
 package com.oracle.truffle.polyglot;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.security.AllPermission;
 import java.security.CodeSigner;
 import java.security.CodeSource;
@@ -50,9 +53,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.function.Supplier;
 
-import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 
 /**
@@ -65,7 +69,12 @@ import org.graalvm.polyglot.Value;
 final class HostAdapterClassLoader {
     static final ProtectionDomain GENERATED_PROTECTION_DOMAIN = createGeneratedProtectionDomain();
     static final Collection<String> VISIBLE_INTERNAL_CLASS_NAMES = Collections.unmodifiableCollection(
-                    new HashSet<>(Arrays.asList(HostAdapterServices.class.getName(), Value.class.getName(), HostAccess.Export.class.getName())));
+                    new HashSet<>(Arrays.asList(Value.class.getName())));
+    static final String SERVICE_CLASS_NAME = "com.oracle.truffle.polyglot.hostadapters.HostAdapterServices";
+
+    interface LazyClassBytes {
+        byte[] SERVICE_CLASS_BYTES = loadClassBytes(SERVICE_CLASS_NAME);
+    }
 
     private final String className;
     private final byte[] classBytes;
@@ -81,7 +90,7 @@ final class HostAdapterClassLoader {
      * @param parentLoader the parent class loader for the generated class loader
      * @return the generated adapter class
      */
-    Class<?> generateClass(ClassLoader parentLoader, Value classOverrides) {
+    Class<?> generateClass(ClassLoader parentLoader, Object classOverrides) {
         try {
             return Class.forName(className, true, createClassLoader(parentLoader, classOverrides));
         } catch (final ClassNotFoundException e) {
@@ -89,38 +98,64 @@ final class HostAdapterClassLoader {
         }
     }
 
-    private ClassLoader createClassLoader(final ClassLoader parentLoader, final Value classOverrides) {
-        return new CLImpl(parentLoader, classOverrides);
+    private ClassLoader createClassLoader(final ClassLoader parentLoader, final Object classOverrides) {
+        return new GeneratedClassLoader(parentLoader, classOverrides);
     }
 
-    final class CLImpl extends SecureClassLoader implements Supplier<Value> {
-        private final ClassLoader myLoader = getClass().getClassLoader();
-        private final Value classOverrides;
+    static boolean isAdapterInstance(Object adapter) {
+        return isGeneratedClass(adapter.getClass());
+    }
 
-        private CLImpl(final ClassLoader parentLoader, final Value classOverrides) {
+    static boolean isGeneratedClass(Class<?> clazz) {
+        return isGeneratedClassLoader(clazz.getClassLoader());
+    }
+
+    static boolean isGeneratedClassLoader(ClassLoader classLoader) {
+        return classLoader instanceof GeneratedClassLoader;
+    }
+
+    final class GeneratedClassLoader extends SecureClassLoader implements Supplier<Value> {
+        private final ClassLoader internalLoader;
+        private final Object classOverrides;
+
+        private GeneratedClassLoader(final ClassLoader parentLoader, final Object classOverrides) {
             super(parentLoader);
+            this.internalLoader = GeneratedClassLoader.class.getClassLoader();
             this.classOverrides = classOverrides;
         }
 
         @Override
         public Class<?> loadClass(final String name, final boolean resolve) throws ClassNotFoundException {
-            try {
-                return super.loadClass(name, resolve);
-            } catch (final SecurityException se) {
-                /*
-                 * we may be implementing an interface or extending a class that was loaded by a
-                 * loader that prevents package.access. If so, it'd throw SecurityException for
-                 * internal classes used by generated adapter classes.
-                 */
-                if (VISIBLE_INTERNAL_CLASS_NAMES.contains(name)) {
-                    return loadInternalClass(name);
+            // bypass the parent class loader for the generated class and allowed internal classes.
+            if (isGeneratedClassName(name)) {
+                return loadGeneratedClass(name, resolve);
+            }
+            if (VISIBLE_INTERNAL_CLASS_NAMES.contains(name)) {
+                return loadInternalClass(name);
+            }
+            return super.loadClass(name, resolve);
+        }
+
+        private Class<?> loadGeneratedClass(final String name, final boolean resolve) throws ClassNotFoundException {
+            synchronized (getClassLoadingLock(name)) {
+                Class<?> c = findLoadedClass(name);
+                if (c == null) {
+                    c = findClass(name);
                 }
-                throw se;
+                if (resolve) {
+                    resolveClass(c);
+                }
+                return c;
             }
         }
 
         private Class<?> loadInternalClass(final String name) throws ClassNotFoundException {
-            return myLoader != null ? myLoader.loadClass(name) : Class.forName(name, false, myLoader);
+            assert VISIBLE_INTERNAL_CLASS_NAMES.contains(name);
+            return internalLoader != null ? internalLoader.loadClass(name) : Class.forName(name, false, internalLoader);
+        }
+
+        private boolean isGeneratedClassName(final String name) {
+            return name.equals(className) || name.equals(SERVICE_CLASS_NAME);
         }
 
         @Override
@@ -128,15 +163,16 @@ final class HostAdapterClassLoader {
             if (name.equals(className)) {
                 return defineClass(name, classBytes, 0, classBytes.length, GENERATED_PROTECTION_DOMAIN);
             }
-            if (VISIBLE_INTERNAL_CLASS_NAMES.contains(name)) {
-                return loadInternalClass(name);
+            if (name.equals(SERVICE_CLASS_NAME)) {
+                byte[] bytes = LazyClassBytes.SERVICE_CLASS_BYTES;
+                return defineClass(name, bytes, 0, bytes.length, GENERATED_PROTECTION_DOMAIN);
             }
             throw new ClassNotFoundException(name);
         }
 
         @Override
         public Value get() {
-            return classOverrides;
+            return Context.getCurrent().asValue(classOverrides);
         }
     }
 
@@ -158,4 +194,20 @@ final class HostAdapterClassLoader {
     static Value getClassOverrides(ClassLoader classLoader) {
         return ((Supplier<Value>) classLoader).get();
     }
+
+    static byte[] loadClassBytes(String className) {
+        String classFileName = "/" + className.replace('.', '/') + ".class";
+        try (InputStream in = Objects.requireNonNull(HostAdapterClassLoader.class.getResourceAsStream(classFileName), className);
+                        ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[4000];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+            }
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
 }
