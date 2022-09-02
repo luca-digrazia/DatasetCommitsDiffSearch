@@ -532,6 +532,16 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return iterateImpl(visitor, 0);
     }
 
+    private double compilationThresholdScale = 1.0;
+
+    public double compilationThresholdScale() {
+        return compilationThresholdScale;
+    }
+
+    void setCompilationThresholdScale(double scale) {
+        this.compilationThresholdScale = scale;
+    }
+
     private static final class FrameVisitor<T> implements InspectedFrameVisitor<T> {
 
         private final FrameInstanceVisitor<T> visitor;
@@ -662,8 +672,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     protected final void doCompile(TruffleDebugContext debug, OptimizedCallTarget callTarget, TruffleCompilationTask task) {
-        Objects.requireNonNull(callTarget, "Cannot compile null call target.");
-        Objects.requireNonNull(task, "Compilation task required.");
         List<OptimizedCallTarget> oldBlockCompilations = callTarget.blockCompilations;
         if (oldBlockCompilations != null) {
             for (OptimizedCallTarget blockTarget : oldBlockCompilations) {
