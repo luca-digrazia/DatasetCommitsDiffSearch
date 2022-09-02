@@ -1386,7 +1386,9 @@ public final class BytecodeNode extends EspressoMethodNode {
         int newTop = top + Bytecodes.stackEffectOf(opcode);
         if (targetBCI <= curBCI) {
             checkStopping(curBCI, targetBCI);
-            LoopNode.reportLoopCount(this, 1);
+            if (CompilerDirectives.inInterpreter()) {
+                LoopNode.reportLoopCount(this, 1);
+            }
         }
         return newTop;
     }
