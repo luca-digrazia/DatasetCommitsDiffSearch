@@ -1504,7 +1504,7 @@ public final class StaticObject implements TruffleObject {
     }
 
     public boolean isArray() {
-        return !isNull(this) && getKlass().isArray();
+        return getKlass().isArray();
     }
 
     public static long getArrayByteOffset(int index) {
