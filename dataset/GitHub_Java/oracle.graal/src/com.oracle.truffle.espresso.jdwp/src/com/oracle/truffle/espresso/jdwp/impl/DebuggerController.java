@@ -86,7 +86,6 @@ public final class DebuggerController implements ContextsListener {
     private VMEventListener eventListener;
     private TruffleContext truffleContext;
     private Object previous;
-    private Object mainThread;
 
     public DebuggerController(JDWPInstrument instrument) {
         this.instrument = instrument;
@@ -96,13 +95,12 @@ public final class DebuggerController implements ContextsListener {
         this.eventFilters = new EventFilters();
     }
 
-    public void initialize(Debugger debug, JDWPOptions jdwpOptions, JDWPContext jdwpContext, Object thread) {
+    public void initialize(Debugger debug, JDWPOptions jdwpOptions, JDWPContext jdwpContext) {
         this.debugger = debug;
         this.options = jdwpOptions;
         this.context = jdwpContext;
         this.ids = jdwpContext.getIds();
-        this.eventListener = new VMEventListenerImpl(this, thread);
-        this.mainThread = thread;
+        this.eventListener = new VMEventListenerImpl(this);
 
         // setup the debug session object early to make sure instrumentable nodes are materialized
         debuggerSession = debug.startSession(new SuspendedCallbackImpl(), SourceElement.ROOT, SourceElement.STATEMENT);
@@ -112,7 +110,7 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public void reInitialize() {
-        initialize(debugger, options, context, mainThread);
+        initialize(debugger, options, context);
     }
 
     public JDWPContext getContext() {
@@ -327,7 +325,7 @@ public final class DebuggerController implements ContextsListener {
 
             SimpleLock lock = getSuspendLock(thread);
             synchronized (lock) {
-                JDWPLogger.log("Waking up thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
+                JDWPLogger.log("Waiking up thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
                 lock.release();
                 lock.notifyAll();
                 threadSuspension.removeHardSuspendedThread(thread);
@@ -339,24 +337,33 @@ public final class DebuggerController implements ContextsListener {
         }
     }
 
+    private String getThreadName(Object thread) {
+        return getContext().getThreadName(thread);
+    }
+
+    private boolean isStepping(Object thread) {
+        return commandRequestIds.get(thread) != null;
+    }
+
     public void resumeAll(boolean sessionClosed) {
-        Object eventThread = null;
+        Object steppingThread = null;
 
         // The order of which to resume threads is not specified, however when RESUME_ALL command is
         // sent while performing a stepping request, some debuggers (IntelliJ is a known case) will
         // expect all other threads but the current stepping thread to be resumed first.
         for (Object thread : getContext().getAllGuestThreads()) {
             while (threadSuspension.getSuspensionCount(thread) > 0) {
-                if (isStepping(thread)) {
-                    eventThread = thread;
+                SteppingInfo steppingInfo = commandRequestIds.get(thread);
+                if (steppingInfo != null) {
+                    steppingThread = thread;
                     break;
                 } else {
                     resume(thread, sessionClosed);
                 }
             }
         }
-        if (eventThread != null) {
-            resume(eventThread, sessionClosed);
+        if (steppingThread != null) {
+            resume(steppingThread, sessionClosed);
         }
     }
 
@@ -373,6 +380,9 @@ public final class DebuggerController implements ContextsListener {
             JDWPLogger.log("State: %s", JDWPLogger.LogLevel.THREAD, getContext().asHostThread(guestThread).getState());
             JDWPLogger.log("calling underlying suspend method for guestThread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(guestThread));
             debuggerSession.suspend(getContext().asHostThread(guestThread));
+
+            boolean suspended = threadSuspension.getSuspensionCount(guestThread) != 0;
+            JDWPLogger.log("suspend success: %b", JDWPLogger.LogLevel.THREAD, suspended);
 
             // quite often the Debug API will not call back the onSuspend method in time,
             // even if the guestThread is executing. If the guestThread is blocked or waiting we
@@ -434,14 +444,6 @@ public final class DebuggerController implements ContextsListener {
             suspendLocks.put(thread, lock);
         }
         return lock;
-    }
-
-    private String getThreadName(Object thread) {
-        return getContext().getThreadName(thread);
-    }
-
-    private boolean isStepping(Object thread) {
-        return commandRequestIds.get(thread) != null;
     }
 
     public void disposeDebugger(boolean prepareReconnect) {
@@ -961,12 +963,7 @@ public final class DebuggerController implements ContextsListener {
 
                 // for bytecode-based languages (Espresso) we can read the precise bci from the
                 // frame instance
-                codeIndex = -1;
-                try {
-                    codeIndex = context.readBCIFromFrame(root, rawFrame);
-                } catch (Throwable t) {
-                    JDWPLogger.log("Unable to read BCI: %s.%s", JDWPLogger.LogLevel.ALL, klass.getNameAsString(), method.getNameAsString());
-                }
+                codeIndex = context.readBCIFromFrame(root, rawFrame);
 
                 if (codeIndex == -1) {
                     // fall back to line precision through the source section
