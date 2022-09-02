@@ -142,64 +142,55 @@ public class Option {
             .type("Integer")
             .category("INTERNAL")
             .def("100")
-            .help("Disable call target splitting if tree size exceeds this limit")
-            .deprecatedBy("SplittingMaxCalleeSize"),
+            .help("Disable call target splitting if tree size exceeds this limit"),
 
         option("TruffleSplittingGrowthLimit")
             .type("Double")
             .category("INTERNAL")
             .def("1.5")
-            .help("Disable call target splitting if the number of nodes created by splitting exceeds this factor times node count")
-            .deprecatedBy("SplittingGrowthLimit"),
+            .help("Disable call target splitting if the number of nodes created by splitting exceeds this factor times node count"),
 
         option("TruffleSplittingMaxNumberOfSplitNodes")
             .type("Integer")
             .category("INTERNAL")
             .def("500_000")
-            .help("Disable call target splitting if number of nodes created by splitting exceeds this limit")
-            .deprecatedBy("SplittingMaxNumberOfSplitNodes"),
+            .help("Disable call target splitting if number of nodes created by splitting exceeds this limit"),
 
         option("TruffleSplittingMaxPropagationDepth")
             .type("Integer")
             .category("INTERNAL")
             .def("5")
-            .help("Propagate info about a polymorphic specialize through maximum this many call targets")
-            .deprecatedBy("SplittingMaxPropagationDepth"),
+            .help("Propagate info about a polymorphic specialize through maximum this many call targets"),
 
         option("TruffleLegacySplitting")
             .type("Boolean")
             .category("EXPERT")
             .def("false")
-            .help("Use legacy splitting heuristic. This option will be removed.")
-            .deprecatedBy("LegacySplitting"),
+            .help("Use legacy splitting heuristic. This option will be removed."),
 
         option("TruffleTraceSplittingSummary")
             .type("Boolean")
             .category("EXPERT")
             .def("false")
-            .help("Used for debugging the splitting implementation. Prints splitting summary directly to stdout on shutdown")
-            .deprecatedBy("TraceSplittingSummary"),
+            .help("Used for debugging the splitting implementation. Prints splitting summary directly to stdout on shutdown"),
 
         option("TruffleSplittingTraceEvents")
             .type("Boolean")
             .category("EXPERT")
             .def("false")
-            .help("Trace details of splitting events and decisions.")
-            .deprecatedBy("SplittingTraceEvents"),
+            .help("Trace details of splitting events and decisions."),
 
         option("TruffleSplittingDumpDecisions")
             .type("Boolean")
             .category("EXPERT")
             .def("false")
-            .help("Dumps to IGV information on polymorphic events")
-            .deprecatedBy("SplittingDumpDecisions"),
+            .help("Dumps to IGV information on polymorphic events"),
 
         option("TruffleSplittingAllowForcedSplits")
             .type("Boolean")
             .category("EXPERT")
             .def("true")
-            .help("Should forced splits be allowed.")
-            .deprecatedBy("SplittingAllowForcedSplits"),
+            .help("Should forced splits be allowed."),
 
         option("TruffleBackgroundCompilation")
             .type("Boolean")
