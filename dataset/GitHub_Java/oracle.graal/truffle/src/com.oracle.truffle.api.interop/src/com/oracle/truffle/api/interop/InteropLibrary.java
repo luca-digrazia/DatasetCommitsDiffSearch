@@ -1899,7 +1899,7 @@ public abstract class InteropLibrary extends Library {
      * <pre>
      * interface GuestLanguageIterator {
      *
-     *     final class Stop extends AbstractTruffleException {
+     *     final class Stop extends Exception {
      *     }
      *
      *     Object next() throws Stop;

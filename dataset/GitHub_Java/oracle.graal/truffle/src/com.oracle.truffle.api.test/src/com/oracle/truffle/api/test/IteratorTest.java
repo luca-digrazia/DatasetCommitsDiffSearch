@@ -474,7 +474,7 @@ public class IteratorTest extends AbstractPolyglotTest {
     interface GuestLanguageIterator {
 
         @SuppressWarnings("serial")
-        final class Stop extends AbstractTruffleException {
+        final class Stop extends Exception {
         }
 
         Object next() throws Stop;

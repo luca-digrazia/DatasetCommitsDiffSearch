@@ -43,7 +43,6 @@ package org.graalvm.polyglot.proxy;
 import java.util.Iterator;
 import java.util.Objects;
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Value;
 
 /**
  * Interface to be implemented to mimic guest language iterables.
@@ -70,8 +69,7 @@ public interface ProxyIterable extends Proxy {
     Object getIterator();
 
     /**
-     * Creates a proxy iterable backed by a Java {@link Iterable}. If the values of the iterable are
-     * host values then the they will be {@link Value#asHostObject() unboxed}.
+     * Creates a proxy iterable backed by a Java {@link Iterable}.
      *
      * @since 21.1
      */
