@@ -100,7 +100,6 @@ public class AArch64HotSpotBackendFactory extends HotSpotBackendFactory {
     public HotSpotBackend createBackend(HotSpotGraalRuntimeProvider graalRuntime, CompilerConfiguration compilerConfiguration, HotSpotJVMCIRuntime jvmciRuntime, HotSpotBackend host) {
         assert host == null;
 
-        OptionValues options = graalRuntime.getOptions();
         JVMCIBackend jvmci = jvmciRuntime.getHostJVMCIBackend();
         GraalHotSpotVMConfig config = graalRuntime.getVMConfig();
         HotSpotProviders providers;
@@ -141,7 +140,7 @@ public class AArch64HotSpotBackendFactory extends HotSpotBackendFactory {
                 stampProvider = createStampProvider();
             }
             try (InitTimer rt = timer("create GC provider")) {
-                gc = createGCProvider(config, metaAccess);
+                gc = createGCProvider(config);
             }
 
             Providers p = new Providers(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, null, stampProvider, gc);
@@ -157,7 +156,7 @@ public class AArch64HotSpotBackendFactory extends HotSpotBackendFactory {
             }
             try (InitTimer rt = timer("create GraphBuilderPhase plugins")) {
                 plugins = createGraphBuilderPlugins(graalRuntime, compilerConfiguration, config, constantReflection, foreignCalls, metaAccess, snippetReflection, replacements, wordTypes,
-                                graalRuntime.getOptions(), target);
+                                graalRuntime.getOptions());
                 replacements.setGraphBuilderPlugins(plugins);
             }
             try (InitTimer rt = timer("create Suites provider")) {
@@ -166,7 +165,6 @@ public class AArch64HotSpotBackendFactory extends HotSpotBackendFactory {
             providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, replacements, suites, registers,
                             snippetReflection, wordTypes, plugins, gc);
             replacements.setProviders(providers);
-            replacements.maybeInitializeEncoder(options);
         }
         try (InitTimer rt = timer("instantiate backend")) {
             return createBackend(config, graalRuntime, providers);
@@ -182,8 +180,7 @@ public class AArch64HotSpotBackendFactory extends HotSpotBackendFactory {
                     HotSpotSnippetReflectionProvider snippetReflection,
                     HotSpotReplacementsImpl replacements,
                     HotSpotWordTypes wordTypes,
-                    OptionValues options,
-                    TargetDescription target) {
+                    OptionValues options) {
         Plugins plugins = HotSpotGraphBuilderPlugins.create(graalRuntime,
                         compilerConfiguration,
                         config,
@@ -193,9 +190,8 @@ public class AArch64HotSpotBackendFactory extends HotSpotBackendFactory {
                         snippetReflection,
                         foreignCalls,
                         replacements,
-                        options,
-                        target);
-        AArch64GraphBuilderPlugins.register(plugins, replacements, false, //
+                        options);
+        AArch64GraphBuilderPlugins.register(plugins, replacements.getDefaultReplacementBytecodeProvider(), false,
                         /* registerMathPlugins */true, /* emitJDK9StringSubstitutions */true, config.useFMAIntrinsics);
         return plugins;
     }
