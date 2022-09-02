@@ -30,8 +30,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -315,14 +313,6 @@ public class DirectoryStorage implements ManagementStorage {
             String text = postInst.replace("\\n", "\n").replace("\\\\", "\\"); // NOI18N
             ci.setPostinstMessage(text);
         }
-        String u = loaded.getProperty(CommonConstants.BUNDLE_ORIGIN_URL);
-        if (u != null) {
-            try {
-                ci.setRemoteURL(new URL(u));
-            } catch (MalformedURLException ex) {
-                // ignore
-            }
-        }
         return ci;
     }
 
@@ -333,10 +323,6 @@ public class DirectoryStorage implements ManagementStorage {
         Version v = getGraalVMVersion();
         ComponentInfo ci = new ComponentInfo(BundleConstants.GRAAL_COMPONENT_ID, feedback.l10n("NAME_GraalCoreComponent"),
                         v.originalString());
-        Path cmpFile = registryPath.resolve(SystemUtils.fileName(BundleConstants.GRAAL_COMPONENT_ID + NATIVE_COMPONENT_FILE_SUFFIX));
-        if (Files.exists(cmpFile)) {
-            ci.setNativeComponent(true);
-        }
         graalCore = ci;
         return graalCore;
     }
@@ -528,10 +514,6 @@ public class DirectoryStorage implements ManagementStorage {
         }
         if (!info.getWorkingDirectories().isEmpty()) {
             p.setProperty(BundleConstants.BUNDLE_WORKDIRS, info.getWorkingDirectories().stream().sequential().collect(Collectors.joining(":")));
-        }
-        URL u = info.getRemoteURL();
-        if (u != null) {
-            p.setProperty(CommonConstants.BUNDLE_ORIGIN_URL, u.toString());
         }
         return p;
     }

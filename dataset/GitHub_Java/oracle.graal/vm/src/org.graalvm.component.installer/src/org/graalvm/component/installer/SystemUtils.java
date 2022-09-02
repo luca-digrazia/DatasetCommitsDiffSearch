@@ -187,13 +187,10 @@ public class SystemUtils {
             throw new IllegalArgumentException("Absolute path");
         }
         String[] comps = p.split(SPLIT_DELIMITER);
-        int d = base == null ? 0 : base.normalize().getNameCount() - 1;
-        int fromIndex = 0;
-        int toIndex = 0;
+        int d = base == null ? 0 : base.getNameCount();
         for (String s : comps) {
             if (s.isEmpty()) {
-                fromIndex++;
-                continue;
+                throw new IllegalArgumentException("Empty path component");
             }
             if (DOTDOT.equals(s)) {
                 d--;
@@ -203,20 +200,8 @@ public class SystemUtils {
             } else {
                 d++;
             }
-            if (toIndex < fromIndex) {
-                comps[toIndex] = comps[fromIndex];
-            }
-            fromIndex++;
-            toIndex++;
         }
-        if (fromIndex == toIndex) {
-            return comps;
-        } else {
-            // return without the empty parts
-            String[] newcomps = new String[toIndex];
-            System.arraycopy(comps, 0, newcomps, 0, toIndex);
-            return newcomps;
-        }
+        return comps;
     }
 
     private static final Pattern OLD_VERSION_PATTERN = Pattern.compile("([0-9]+\\.[0-9]+\\.[0-9]+)(-([a-z]+)([0-9]+))?");
