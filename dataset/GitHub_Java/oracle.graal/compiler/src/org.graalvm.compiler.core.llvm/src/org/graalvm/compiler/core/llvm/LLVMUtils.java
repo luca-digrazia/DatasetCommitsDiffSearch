@@ -24,14 +24,15 @@
  */
 package org.graalvm.compiler.core.llvm;
 
+import static com.oracle.svm.shadowed.org.bytedeco.llvm.global.LLVM.LLVMTypeOf;
 import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
 import static org.graalvm.compiler.debug.GraalError.unimplemented;
 
-import org.bytedeco.javacpp.LLVM;
-import org.bytedeco.javacpp.LLVM.LLVMContextRef;
-import org.bytedeco.javacpp.LLVM.LLVMTypeRef;
-import org.bytedeco.javacpp.LLVM.LLVMValueRef;
-import org.bytedeco.javacpp.Pointer;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.List;
+
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
@@ -39,6 +40,14 @@ import org.graalvm.compiler.core.common.spi.LIRKindTool;
 import org.graalvm.compiler.lir.ConstantValue;
 import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.lir.VirtualStackSlot;
+import org.graalvm.home.HomeFinder;
+import org.graalvm.nativeimage.ImageSingletons;
+
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.Pointer;
+import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMContextRef;
+import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMTypeRef;
+import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMValueRef;
+import com.oracle.svm.shadowed.org.bytedeco.llvm.global.LLVM;
 
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.PlatformKind;
@@ -51,12 +60,146 @@ public class LLVMUtils {
     public static final Pointer NULL = null;
     static final int UNTRACKED_POINTER_ADDRESS_SPACE = 0;
     static final int TRACKED_POINTER_ADDRESS_SPACE = 1;
+    static final int COMPRESSED_POINTER_ADDRESS_SPACE = 2;
+    public static final long DEFAULT_PATCHPOINT_ID = 0xABCDEF00L;
+    public static final String ALWAYS_INLINE = "alwaysinline";
+    public static final String COMPRESS_FUNCTION_NAME = "__llvm_compress";
+    public static final String UNCOMPRESS_FUNCTION_NAME = "__llvm_uncompress";
+    public static final String GC_REGISTER_FUNCTION_NAME = "__llvm_gc_register";
+    public static final String GC_REGISTER_COMPRESSED_FUNCTION_NAME = "__llvm_gc_register_compressed";
+    public static final String ATOMIC_OBJECT_XCHG_FUNCTION_NAME = "__llvm_atomic_object_xchg";
+    public static final String ATOMIC_COMPRESSED_OBJECT_XCHG_FUNCTION_NAME = "__llvm_atomic_compressed_object_xchg";
+    public static final String LOAD_OBJECT_FROM_UNTRACKED_POINTER_FUNCTION_NAME = "__llvm_load_object_from_untracked_pointer";
+    public static final String LOAD_COMPRESSED_OBJECT_FROM_UNTRACKED_POINTER_FUNCTION_NAME = "__llvm_load_compressed_object_from_untracked_pointer";
+    public static final String GC_LEAF_FUNCTION_NAME = "gc-leaf-function";
+    public static final String JNI_WRAPPER_PREFIX = "__llvm_jni_wrapper_";
 
     public static final class DebugLevel {
         public static final int NONE = 0;
         public static final int FUNCTION = 1;
         public static final int BLOCK = 2;
         public static final int NODE = 3;
+    }
+
+    public static Path getLLVMBinDir() {
+        final String property = System.getProperty("llvm.bin.dir");
+        if (property != null) {
+            return Paths.get(property);
+        }
+
+        // TODO (GR-18389): Set only for standalones currently
+        Path toolchainHome = HomeFinder.getInstance().getLanguageHomes().get("llvm-toolchain");
+        if (toolchainHome != null) {
+            return toolchainHome.resolve("bin");
+        }
+
+        return getRuntimeDir().resolve("lib").resolve("llvm").resolve("bin");
+    }
+
+    private static boolean hasJreDir = System.getProperty("java.specification.version").startsWith("1.");
+
+    private static Path getRuntimeDir() {
+        Path runtimeDir = HomeFinder.getInstance().getHomeFolder();
+        if (runtimeDir == null) {
+            throw new IllegalStateException("Could not find GraalVM home");
+        }
+        if (hasJreDir) {
+            runtimeDir = runtimeDir.resolve("jre");
+        }
+        return runtimeDir;
+    }
+
+    public enum LLVMIntrinsicOperation {
+        LOG(1),
+        LOG10(1),
+        EXP(1),
+        POW(2),
+        SIN(1),
+        COS(1),
+        SQRT(1),
+        ABS(1),
+        ROUND(1),
+        RINT(1),
+        CEIL(1),
+        FLOOR(1),
+        MIN(2),
+        MAX(2),
+        COPYSIGN(2),
+        FMA(3),
+        CTLZ(1),
+        CTTZ(1),
+        CTPOP(1);
+
+        private int argCount;
+
+        LLVMIntrinsicOperation(int argCount) {
+            this.argCount = argCount;
+        }
+
+        public int argCount() {
+            return argCount;
+        }
+    }
+
+    /**
+     * LLVM target-specific inline assembly snippets and information.
+     */
+    public interface TargetSpecific {
+        static TargetSpecific get() {
+            return ImageSingletons.lookup(TargetSpecific.class);
+        }
+
+        /**
+         * Snippet that gets the value of an arbitrary register.
+         */
+        String getRegisterInlineAsm(String register);
+
+        /**
+         * Snippet that jumps to a runtime-computed address.
+         */
+        String getJumpInlineAsm();
+
+        /**
+         * Name of the architecture to be passed to the LLVM compiler.
+         */
+        String getLLVMArchName();
+
+        /**
+         * Number of bytes separating two adjacent call frames. A call frame starts at the stack
+         * pointer and its size is as given by the LLVM stack map.
+         */
+        int getCallFrameSeparation();
+
+        /**
+         * Offset of the frame pointer relative to the first address outside the current call frame.
+         * This offset should be negative.
+         */
+        int getFramePointerOffset();
+
+        /**
+         * Register number of the stack pointer used by the LLVM stack maps.
+         */
+        int getStackPointerDwarfRegNum();
+
+        /**
+         * Register number of the frame pointer used by the LLVM stack maps.
+         */
+        int getFramePointerDwarfRegNum();
+
+        /**
+         * Additional target-specific options to be passed to the LLVM compiler.
+         */
+        default List<String> getLLCAdditionalOptions() {
+            return Collections.emptyList();
+        }
+
+        /**
+         * Transformation to be applied to the name of a register given by Graal to obtain the
+         * corresponding name in assembly.
+         */
+        default String getLLVMRegisterName(String register) {
+            return register;
+        }
     }
 
     static int getLLVMIntCond(Condition cond) {
@@ -139,7 +282,7 @@ public class LLVMUtils {
         return builder.toString();
     }
 
-    static class LLVMVariable extends Variable implements LLVMValueWrapper {
+    public static class LLVMVariable extends Variable implements LLVMValueWrapper {
         private static int id = 0;
 
         private LLVMValueRef value;
@@ -152,8 +295,9 @@ public class LLVMUtils {
             this(LLVMKind.toLIRKind(type));
         }
 
-        LLVMVariable(LLVMValueRef value) {
-            this(LLVM.LLVMTypeOf(value));
+        public LLVMVariable(LLVMValueRef value) {
+            this(LLVMKind.toLIRKind(LLVMTypeOf(value)));
+
             this.value = value;
         }
 
@@ -165,11 +309,6 @@ public class LLVMUtils {
         @Override
         public LLVMValueRef get() {
             return value;
-        }
-
-        @Override
-        public String toString() {
-            return LLVM.LLVMPrintValueToString(value).getString();
         }
     }
 
@@ -184,11 +323,6 @@ public class LLVMUtils {
         @Override
         public LLVMValueRef get() {
             return value;
-        }
-
-        @Override
-        public String toString() {
-            return LLVM.LLVMPrintValueToString(value).getString();
         }
     }
 
@@ -212,11 +346,6 @@ public class LLVMUtils {
 
         public LLVMVariable address() {
             return address;
-        }
-
-        @Override
-        public String toString() {
-            return LLVM.LLVMPrintValueToString(value).getString();
         }
     }
 
@@ -256,7 +385,7 @@ public class LLVMUtils {
 
         @Override
         public LIRKind getNarrowOopKind() {
-            throw unimplemented();
+            return LIRKind.compressedReference(new LLVMKind(LLVM.LLVMPointerType(LLVM.LLVMInt8TypeInContext(context), COMPRESSED_POINTER_ADDRESS_SPACE)));
         }
 
         @Override
@@ -273,11 +402,14 @@ public class LLVMUtils {
         }
 
         static LIRKind toLIRKind(LLVMTypeRef type) {
-            if (LLVM.LLVMGetTypeKind(type) == LLVM.LLVMPointerTypeKind && LLVM.LLVMGetPointerAddressSpace(type) == TRACKED_POINTER_ADDRESS_SPACE) {
-                return LIRKind.reference(new LLVMKind(type));
-            } else {
-                return LIRKind.value(new LLVMKind(type));
+            if (LLVM.LLVMGetTypeKind(type) == LLVM.LLVMPointerTypeKind) {
+                if (LLVM.LLVMGetPointerAddressSpace(type) == TRACKED_POINTER_ADDRESS_SPACE) {
+                    return LIRKind.reference(new LLVMKind(type));
+                } else if (LLVM.LLVMGetPointerAddressSpace(type) == COMPRESSED_POINTER_ADDRESS_SPACE) {
+                    return LIRKind.compressedReference(new LLVMKind(type));
+                }
             }
+            return LIRKind.value(new LLVMKind(type));
         }
 
         @Override
@@ -287,7 +419,7 @@ public class LLVMUtils {
 
         @Override
         public String name() {
-            throw unimplemented();
+            return LLVM.LLVMPrintTypeToString(type).getString();
         }
 
         @Override

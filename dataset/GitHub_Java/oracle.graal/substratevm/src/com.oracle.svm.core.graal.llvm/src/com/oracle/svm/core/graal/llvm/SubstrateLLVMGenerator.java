@@ -159,13 +159,6 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
     }
 
     @Override
-    public void emitInstructionSynchronizationBarrier() {
-        /*
-         * No-op - for now this is not needed for LLVM backend.
-         */
-    }
-
-    @Override
     protected LLVMValueRef convertEnumReturnValue(LLVMValueRef longValue) {
         if (returnsCEnum) {
             return builder.buildTrunc(longValue, JavaKind.Int.getBitCount());
@@ -174,7 +167,7 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
     }
 
     @Override
-    public void emitFarReturn(AllocatableValue result, Value sp, Value setjmpBuffer, boolean fromMethodWithCalleeSavedRegisters) {
+    public void emitFarReturn(AllocatableValue result, Value sp, Value setjmpBuffer) {
         /* Exception unwinding is handled by libunwind */
         throw unimplemented();
     }
