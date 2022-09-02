@@ -29,6 +29,8 @@ package com.oracle.svm.reflect.target;
 import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.Constructor;
 
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Inject;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
@@ -36,17 +38,14 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue.CustomFieldValueComputer
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.reflect.hosted.AccessorComputer;
-import com.oracle.svm.reflect.hosted.ReflectionFeature;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import sun.reflect.generics.repository.ConstructorRepository;
 
-@TargetClass(value = Constructor.class, onlyWith = ReflectionFeature.IsEnabled.class)
+@TargetClass(value = Constructor.class)
 public final class Target_java_lang_reflect_Constructor {
 
     @Alias ConstructorRepository genericInfo;
@@ -61,10 +60,6 @@ public final class Target_java_lang_reflect_Constructor {
     @Alias
     native Target_java_lang_reflect_Constructor copy();
 
-    @Alias //
-    @TargetElement(onlyWith = JDK8OrEarlier.class)
-    native Target_java_lang_reflect_Executable getRoot();
-
     @Substitute
     Target_jdk_internal_reflect_ConstructorAccessor acquireConstructorAccessor() {
         if (constructorAccessor == null) {
@@ -76,7 +71,9 @@ public final class Target_java_lang_reflect_Constructor {
     @Substitute
     public AnnotatedType getAnnotatedReceiverType() {
         Target_java_lang_reflect_Constructor holder = ReflectionHelper.getHolder(this);
-        return ReflectionHelper.requireNonNull(holder.annotatedReceiverType, "Annotated receiver type must be computed during native image generation");
+        return JavaVersionUtil.JAVA_SPEC == 8
+                        ? ReflectionHelper.requireNonNull(holder.annotatedReceiverType, "Annotated receiver type must be computed during native image generation")
+                        : holder.annotatedReceiverType; // can be null (JDK-8044629)
     }
 
     /**
