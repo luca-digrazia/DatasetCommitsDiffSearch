@@ -41,7 +41,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
-import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -113,20 +112,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary
     @ExportMessage
-    Object toDisplayString(boolean allowSideEffects) {
+    Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
         if (StaticObject.isNull(this)) {
             return "NULL";
         }
         Klass thisKlass = getKlass();
-
-        if (allowSideEffects) {
-            // Call guest toString.
-            int toStringIndex = thisKlass.getMeta().java_lang_Object_toString.getVTableIndex();
-            Method toString = thisKlass.vtableLookup(toStringIndex);
-            return Meta.toHostString((StaticObject) toString.invokeDirect(this));
-        }
-
-        // Handle some special instances without side effects.
         if (thisKlass == thisKlass.getMeta().java_lang_Class) {
             return "class " + thisKlass.getTypeAsString();
         }
