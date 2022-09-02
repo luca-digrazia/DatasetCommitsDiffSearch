@@ -228,35 +228,50 @@ public class BciBlockMappingDumpHandler implements DebugDumpHandler {
 
         @Override
         public String edgeName(BlockEdges port, int index) {
-            if (index == 0) {
-                return "successors";
-            } else if (index == 1 && port.block.getJsrSuccessor() != null) {
-                return "jsr successor";
+            switch (index) {
+                case 0:
+                    return "successors";
+                case 1:
+                    if (port.block.getJsrSuccessor() != null) {
+                        return "jsr successor";
+                    }
+                    // fall through
+                case 2:
+                    return "ret successor";
             }
-            GraalError.guarantee(index <= 2, Integer.toString(index));
-            return "ret successor";
+            throw GraalError.shouldNotReachHere(Integer.toString(index));
         }
 
         @Override
         public Object edgeType(BlockEdges port, int index) {
-            if (index == 0) {
-                return EdgeType.Successor;
-            } else if (index == 1 && port.block.getJsrSuccessor() != null) {
-                return EdgeType.JsrSuccessor;
+            switch (index) {
+                case 0:
+                    return EdgeType.Successor;
+                case 1:
+                    if (port.block.getJsrSuccessor() != null) {
+                        return EdgeType.JsrSuccessor;
+                    }
+                    // fall through
+                case 2:
+                    return EdgeType.RetSuccessor;
             }
-            GraalError.guarantee(index <= 2, Integer.toString(index));
-            return EdgeType.RetSuccessor;
+            throw GraalError.shouldNotReachHere(Integer.toString(index));
         }
 
         @Override
         public Collection<? extends BciBlock> edgeNodes(BciBlockMapping graph, BciBlock node, BlockEdges port, int index) {
-            if (index == 0) {
-                return node.getSuccessors();
-            } else if (index == 1 && port.block.getJsrSuccessor() != null) {
-                return Collections.singletonList(node.getJsrSuccessor());
+            switch (index) {
+                case 0:
+                    return node.getSuccessors();
+                case 1:
+                    if (port.block.getJsrSuccessor() != null) {
+                        return Collections.singletonList(node.getJsrSuccessor());
+                    }
+                    // fall through
+                case 2:
+                    return Collections.singletonList(node.getRetSuccessor());
             }
-            GraalError.guarantee(index <= 2, Integer.toString(index));
-            return Collections.singletonList(node.getRetSuccessor());
+            throw GraalError.shouldNotReachHere(Integer.toString(index));
         }
     }
 
