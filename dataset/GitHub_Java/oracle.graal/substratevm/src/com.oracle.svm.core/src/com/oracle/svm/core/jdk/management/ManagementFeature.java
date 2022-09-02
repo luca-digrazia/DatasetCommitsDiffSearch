@@ -47,7 +47,6 @@ import javax.management.openmbean.OpenType;
 
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
@@ -82,8 +81,6 @@ public final class ManagementFeature extends JNIRegistrationUtil implements Feat
             }
         }
         access.registerObjectReplacer(this::replaceHostedPlatformManagedObject);
-
-        RuntimeClassInitialization.initializeAtBuildTime("com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory", "Avoids unnecessary reflection in the image");
     }
 
     /**
