@@ -29,6 +29,9 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
@@ -61,7 +64,6 @@ import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMSourceTypeFactory;
-import com.oracle.truffle.llvm.runtime.except.LLVMMemoryException;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode.LLVMPointerDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
@@ -102,9 +104,6 @@ import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.spi.NativeTypeLibrary;
-
-import java.util.ArrayList;
-import java.util.Arrays;
 
 /**
  * This class implements the AMD64 (X86_64) version of the va_list managed object and reflects the
@@ -238,7 +237,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
     @TruffleBoundary
     Object getNativeType(@CachedContext(LLVMLanguage.class) LLVMContext ctx) {
         // This method should never be invoked
-        return ctx.getLanguage().getInteropType(LLVMSourceTypeFactory.resolveType(VA_LIST_TYPE, getDataLayout()));
+        return ctx.getInteropType(LLVMSourceTypeFactory.resolveType(VA_LIST_TYPE, getDataLayout()));
     }
 
     // InteropLibrary implementation
@@ -506,11 +505,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
                 case X86_64BitVarArgs.OVERFLOW_ARG_AREA:
                     // Assume that updating the overflowArea pointer means shifting the current
                     // argument, according to abi
-                    if (!LLVMManagedPointer.isInstance(value) || LLVMManagedPointer.cast(value).getObject() != vaList.overflowArgArea) {
-                        CompilerDirectives.transferToInterpreter();
-                        throw new LLVMMemoryException(null, "updates to VA_LIST overflowArea pointer can only shift the current argument");
-                    }
-                    vaList.overflowArgArea.setOffset(LLVMManagedPointer.cast(value).getOffset());
+                    assert LLVMManagedPointer.isInstance(value);
+                    vaList.overflowArgArea.shift(value);
                     break;
                 default:
                     CompilerDirectives.transferToInterpreter();
@@ -742,7 +738,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
 
             dest.fpOffset = srcReadLib.readI32(source, X86_64BitVarArgs.FP_OFFSET);
             dest.gpOffset = srcReadLib.readI32(source, X86_64BitVarArgs.GP_OFFSET);
-            dest.overflowArgArea.setOffset(getArgPtrFromNativePtr(source, srcReadLib));
+            dest.overflowArgArea.currentArgPtr = getArgPtrFromNativePtr(source, dest, srcReadLib);
         }
     }
 
@@ -752,7 +748,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
      * @param srcVaList
      * @param readLib
      */
-    private static long getArgPtrFromNativePtr(LLVMX86_64VaListStorage srcVaList, LLVMManagedReadLibrary readLib) {
+    private static LLVMManagedPointer getArgPtrFromNativePtr(LLVMX86_64VaListStorage srcVaList, LLVMX86_64VaListStorage dstVaList, LLVMManagedReadLibrary readLib) {
         long curAddr;
         long baseAddr;
         LLVMPointer overflowAreaPtr = readLib.readPointer(srcVaList, X86_64BitVarArgs.OVERFLOW_ARG_AREA);
@@ -763,7 +759,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
             curAddr = LLVMManagedPointer.cast(overflowAreaPtr).getOffset();
             baseAddr = LLVMManagedPointer.cast(srcVaList.overflowArgAreaBaseNativePtr).getOffset();
         }
-        return curAddr - baseAddr;
+        long shift = curAddr - baseAddr;
+        return LLVMManagedPointer.create(dstVaList.overflowArgArea, shift);
     }
 
     /**
@@ -815,12 +812,12 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         // overflow area
         if (isNativizedProfile.profile(isNativized())) {
             // Synchronize the managed current argument pointer from the native overflow area
-            this.overflowArgArea.setOffset(getArgPtrFromNativePtr(this, readLib));
+            this.overflowArgArea.shift(getArgPtrFromNativePtr(this, this, readLib));
             Object currentArg = this.overflowArgArea.getCurrentArg();
             // Shift the managed current argument pointer
             this.overflowArgArea.shift(1);
             // Update the new native current argument pointer from the managed one
-            long shiftOffs = this.overflowArgArea.getOffset();
+            long shiftOffs = this.overflowArgArea.getCurrentArgPtr().getOffset();
             LLVMPointer shiftedOverflowAreaPtr = overflowArgAreaBaseNativePtr.increment(shiftOffs);
             writeLib.writePointer(this, X86_64BitVarArgs.OVERFLOW_ARG_AREA, shiftedOverflowAreaPtr);
 
@@ -835,13 +832,13 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
     @SuppressWarnings("static-method")
     LLVMExpressionNode createAllocaNode(LLVMContext llvmCtx) {
         DataLayout dataLayout = getDataLayout();
-        return llvmCtx.getLanguage().getActiveConfiguration().createNodeFactory(llvmCtx.getLanguage(), dataLayout).createAlloca(VA_LIST_TYPE, 16);
+        return llvmCtx.getLanguage().getActiveConfiguration().createNodeFactory(llvmCtx, dataLayout).createAlloca(VA_LIST_TYPE, 16);
     }
 
     @SuppressWarnings("static-method")
     VarargsAreaStackAllocationNode createVarargsAreaStackAllocationNode(LLVMContext llvmCtx) {
         DataLayout dataLayout = getDataLayout();
-        return llvmCtx.getLanguage().getActiveConfiguration().createNodeFactory(llvmCtx.getLanguage(), dataLayout).createVarargsAreaStackAllocation();
+        return llvmCtx.getLanguage().getActiveConfiguration().createNodeFactory(llvmCtx, dataLayout).createVarargsAreaStackAllocation();
     }
 
     private static DataLayout getDataLayout() {
@@ -924,7 +921,8 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
 
     private LLVMPointer allocateNativeAreas(VarargsAreaStackAllocationNode stackAllocationNode, LLVMStoreNode gpOffsetStore, LLVMStoreNode fpOffsetStore, LLVMStoreNode overflowArgAreaStore,
                     LLVMStoreNode regSaveAreaStore, VirtualFrame frame) {
-        LLVMPointer regSaveAreaNativePtr = stackAllocationNode.executeWithTarget(frame, X86_64BitVarArgs.FP_LIMIT);
+        LLVMPointer regSaveAreaNativePtr = stackAllocationNode.executeWithTarget(frame,
+                        X86_64BitVarArgs.FP_LIMIT);
         this.overflowArgAreaBaseNativePtr = stackAllocationNode.executeWithTarget(frame, overflowArgArea.overflowAreaSize);
 
         Object p = nativized.increment(X86_64BitVarArgs.GP_OFFSET);
@@ -934,7 +932,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         fpOffsetStore.executeWithTarget(p, fpOffset);
 
         p = nativized.increment(X86_64BitVarArgs.OVERFLOW_ARG_AREA);
-        overflowArgAreaStore.executeWithTarget(p, overflowArgAreaBaseNativePtr.increment(overflowArgArea.getOffset()));
+        overflowArgAreaStore.executeWithTarget(p, overflowArgAreaBaseNativePtr.increment(overflowArgArea.currentArgPtr.getOffset()));
 
         p = nativized.increment(X86_64BitVarArgs.REG_SAVE_AREA);
         regSaveAreaStore.executeWithTarget(p, regSaveAreaNativePtr);
@@ -1354,14 +1352,13 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
     public static final class OverflowArgArea extends ArgsArea implements Cloneable {
         private final long[] offsets;
         final int overflowAreaSize;
-
-        private long currentOffset;
+        private LLVMManagedPointer currentArgPtr;
 
         OverflowArgArea(Object[] args, long[] offsets, int overflowAreaSize) {
             super(args);
             this.overflowAreaSize = overflowAreaSize;
             this.offsets = offsets;
-            this.currentOffset = offsets[0];
+            this.currentArgPtr = LLVMManagedPointer.create(this, offsets[0]);
         }
 
         @Override
@@ -1402,39 +1399,38 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
         }
 
         void shift(int steps) {
-            long n = offsetToIndex(currentOffset);
+            long n = offsetToIndex(currentArgPtr.getOffset());
             int i = (int) ((n << 32) >> 32);
-            currentOffset = offsets[i + steps];
+            long newOffset = offsets[i + steps];
+            currentArgPtr = LLVMManagedPointer.create(this, newOffset);
         }
 
-        void setOffset(long newOffset) {
-            currentOffset = newOffset;
+        void shift(LLVMPointer p) {
+            assert LLVMManagedPointer.isInstance(p);
+            assert LLVMManagedPointer.cast(p).getObject() == this;
+            currentArgPtr = LLVMManagedPointer.cast(p);
         }
 
         Object getCurrentArg() {
-            long n = offsetToIndex(currentOffset);
+            long n = offsetToIndex(currentArgPtr.getOffset());
             int i = (int) ((n << 32) >> 32);
             return i < 0 ? null : args[i];
         }
 
         int getCurrentArgIndex() {
-            long n = offsetToIndex(currentOffset);
+            long n = offsetToIndex(currentArgPtr.getOffset());
             int i = (int) ((n << 32) >> 32);
             return i;
         }
 
         LLVMManagedPointer getCurrentArgPtr() {
-            return LLVMManagedPointer.create(this, currentOffset);
-        }
-
-        long getOffset() {
-            return currentOffset;
+            return currentArgPtr;
         }
 
         @Override
         public OverflowArgArea clone() {
             OverflowArgArea cloned = new OverflowArgArea(args, offsets, overflowAreaSize);
-            cloned.currentOffset = currentOffset;
+            cloned.currentArgPtr = LLVMManagedPointer.create(cloned, currentArgPtr.getOffset());
             return cloned;
         }
 
