@@ -140,9 +140,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
     class DarwinCCLinkerInvocation extends CCLinkerInvocation {
 
         DarwinCCLinkerInvocation() {
-            if (!SubstrateOptions.CompilerBackend.getValue().equals("llvm")) {
-                additionalPreOptions.add("-Wl,-no_compact_unwind");
-            }
+            additionalPreOptions.add("-Wl,-no_compact_unwind");
 
             if (removeUnusedSymbols()) {
                 /* Remove functions and data unreachable by entry points. */
