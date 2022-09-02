@@ -31,6 +31,7 @@ import static org.graalvm.compiler.lir.LIRValueUtil.isJavaConstant;
 
 import java.util.function.Function;
 
+import org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 import org.graalvm.compiler.core.common.LIRKind;
@@ -146,8 +147,7 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
         if (address instanceof AArch64AddressValue) {
             return (AArch64AddressValue) address;
         } else {
-            int size = address.getValueKind().getPlatformKind().getSizeInBytes() * Byte.SIZE;
-            return AArch64AddressValue.makeAddress(address.getValueKind(), size, asAllocatable(address));
+            return new AArch64AddressValue(address.getValueKind(), asAllocatable(address), Value.ILLEGAL, 0, 1, AddressingMode.BASE_REGISTER_ONLY);
         }
     }
 
