@@ -29,19 +29,24 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.others;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.LLVMElemPtrSymbol;
+import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class LLVMAccessElemPtrSymbolNode extends LLVMExpressionNode {
 
-    @Child protected LLVMExpressionNode elemPtrExpression;
+    protected final LLVMElemPtrSymbol elemPtrSymbol;
 
     public LLVMAccessElemPtrSymbolNode(LLVMElemPtrSymbol elemPtrSymbol) {
-        this.elemPtrExpression = elemPtrSymbol.createGetElementPtrNode().get();
+        this.elemPtrSymbol = elemPtrSymbol;
     }
 
     @Override
@@ -52,10 +57,20 @@ public abstract class LLVMAccessElemPtrSymbolNode extends LLVMExpressionNode {
         return getShortString("elemPtrSymbol");
     }
 
+    private LLVMPointer checkNull(LLVMPointer result) {
+        if (result == null) {
+            CompilerDirectives.transferToInterpreter();
+            throw new LLVMLinkerException(this, String.format("External %s %s cannot be found.", elemPtrSymbol.getKind(), elemPtrSymbol.getName()));
+        }
+        return result;
+    }
+
     @Specialization
-    public LLVMPointer doResolve(VirtualFrame frame) {
+    public LLVMPointer doResolve(VirtualFrame frame,
+                    @Cached(value = "elemPtrSymbol.getElementPtrNode()") LLVMGetElementPtrNode offsetResolve) {
+
         try {
-            return elemPtrExpression.executeLLVMPointer(frame);
+            return checkNull(offsetResolve.executeLLVMPointer(frame));
         } catch (UnexpectedResultException e) {
             assert (false);
             throw new IllegalStateException(e);
