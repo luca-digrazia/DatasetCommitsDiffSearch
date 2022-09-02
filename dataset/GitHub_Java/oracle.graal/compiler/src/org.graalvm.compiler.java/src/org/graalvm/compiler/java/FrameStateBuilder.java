@@ -275,11 +275,6 @@ public final class FrameStateBuilder implements SideEffectsState {
         monitorIds = other.monitorIds.length == 0 ? other.monitorIds : other.monitorIds.clone();
 
         assert lockedObjects.length == monitorIds.length;
-
-        if (other.sideEffects != null) {
-            sideEffects = new ArrayList<>();
-            sideEffects.addAll(other.sideEffects);
-        }
     }
 
     private static ValueNode[] allocateArray(int length) {
@@ -531,21 +526,21 @@ public final class FrameStateBuilder implements SideEffectsState {
             ValueNode value = locals[i];
             if (value != null && value != TWO_SLOT_MARKER && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
                 debug.log(" inserting proxy for %s", value);
-                locals[i] = ProxyNode.forValue(value, loopExit);
+                locals[i] = ProxyNode.forValue(value, loopExit, graph);
             }
         }
         for (int i = 0; i < stackSize(); i++) {
             ValueNode value = stack[i];
             if (value != null && value != TWO_SLOT_MARKER && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
                 debug.log(" inserting proxy for %s", value);
-                stack[i] = ProxyNode.forValue(value, loopExit);
+                stack[i] = ProxyNode.forValue(value, loopExit, graph);
             }
         }
         for (int i = 0; i < lockedObjects.length; i++) {
             ValueNode value = lockedObjects[i];
             if (value != null && (!loopEntryState.contains(value) || loopExit.loopBegin().isPhiAtMerge(value))) {
                 debug.log(" inserting proxy for %s", value);
-                lockedObjects[i] = ProxyNode.forValue(value, loopExit);
+                lockedObjects[i] = ProxyNode.forValue(value, loopExit, graph);
             }
         }
     }

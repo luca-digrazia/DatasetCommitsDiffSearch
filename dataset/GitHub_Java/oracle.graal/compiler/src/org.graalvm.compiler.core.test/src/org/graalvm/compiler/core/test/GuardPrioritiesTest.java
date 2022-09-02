@@ -93,7 +93,7 @@ public class GuardPrioritiesTest extends GraphScheduleTest {
         return graph;
     }
 
-    public int unknownCondition(int c, Object o, int[] a, int i) {
+    public int unknownCondition(Integer c, Object o, int[] a, Integer i) {
         if (o != null) {
             GraalDirectives.deoptimizeAndInvalidate();
         }

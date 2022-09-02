@@ -48,6 +48,27 @@ public class UnsafeEATest extends EATestBase {
 
     public static int zero = 0;
 
+    private static final long fieldOffset1;
+    private static final long fieldOffset2;
+
+    static {
+        try {
+            long localFieldOffset1 = UNSAFE.objectFieldOffset(TestClassInt.class.getField("x"));
+            // Make the fields 8 byte aligned (Required for testing setLong on Architectures which
+            // does not support unaligned memory access
+            if (localFieldOffset1 % 8 == 0) {
+                fieldOffset1 = localFieldOffset1;
+                fieldOffset2 = UNSAFE.objectFieldOffset(TestClassInt.class.getField("y"));
+            } else {
+                fieldOffset1 = UNSAFE.objectFieldOffset(TestClassInt.class.getField("y"));
+                fieldOffset2 = UNSAFE.objectFieldOffset(TestClassInt.class.getField("z"));
+            }
+            assert fieldOffset2 == fieldOffset1 + 4;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Override
     protected void testEscapeAnalysis(String snippet, JavaConstant expectedConstantResult, boolean iterativeEscapeAnalysis) {
         // Exercise both a graph containing UnsafeAccessNodes and one which has been possibly been
@@ -113,8 +134,8 @@ public class UnsafeEATest extends EATestBase {
 
     public static int testSimpleIntSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putInt(x, TestClassInt.fieldOffset1, 101);
-        return UNSAFE.getInt(x, TestClassInt.fieldOffset1);
+        UNSAFE.putInt(x, fieldOffset1, 101);
+        return UNSAFE.getInt(x, fieldOffset1);
     }
 
     @Test
@@ -124,7 +145,7 @@ public class UnsafeEATest extends EATestBase {
 
     public static TestClassInt testMaterializedIntSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putInt(x, TestClassInt.fieldOffset1, 101);
+        UNSAFE.putInt(x, fieldOffset1, 101);
         return x;
     }
 
@@ -135,8 +156,8 @@ public class UnsafeEATest extends EATestBase {
 
     public static double testSimpleDoubleSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putDouble(x, TestClassInt.fieldOffset1, 10.1);
-        return UNSAFE.getDouble(x, TestClassInt.fieldOffset1);
+        UNSAFE.putDouble(x, fieldOffset1, 10.1);
+        return UNSAFE.getDouble(x, fieldOffset1);
     }
 
     @Test
@@ -146,9 +167,9 @@ public class UnsafeEATest extends EATestBase {
 
     public static int testSimpleDoubleOverwriteWithIntSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putDouble(x, TestClassInt.fieldOffset1, 10.1);
-        UNSAFE.putInt(x, TestClassInt.fieldOffset1, 10);
-        return UNSAFE.getInt(x, TestClassInt.fieldOffset1);
+        UNSAFE.putDouble(x, fieldOffset1, 10.1);
+        UNSAFE.putInt(x, fieldOffset1, 10);
+        return UNSAFE.getInt(x, fieldOffset1);
     }
 
     @Test
@@ -162,9 +183,9 @@ public class UnsafeEATest extends EATestBase {
 
     public static int testSimpleDoubleOverwriteWithSecondIntSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putDouble(x, TestClassInt.fieldOffset1, 10.1);
-        UNSAFE.putInt(x, TestClassInt.fieldOffset1, 10);
-        return UNSAFE.getInt(x, TestClassInt.fieldOffset2);
+        UNSAFE.putDouble(x, fieldOffset1, 10.1);
+        UNSAFE.putInt(x, fieldOffset1, 10);
+        return UNSAFE.getInt(x, fieldOffset2);
     }
 
     @Test
@@ -178,9 +199,9 @@ public class UnsafeEATest extends EATestBase {
 
     public static int testSimpleDoubleOverwriteWithFirstIntSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putDouble(x, TestClassInt.fieldOffset1, 10.1);
-        UNSAFE.putInt(x, TestClassInt.fieldOffset2, 10);
-        return UNSAFE.getInt(x, TestClassInt.fieldOffset1);
+        UNSAFE.putDouble(x, fieldOffset1, 10.1);
+        UNSAFE.putInt(x, fieldOffset2, 10);
+        return UNSAFE.getInt(x, fieldOffset1);
     }
 
     @Test
@@ -194,9 +215,9 @@ public class UnsafeEATest extends EATestBase {
 
     public static int testSimpleLongOverwriteWithSecondIntSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putLong(x, TestClassInt.fieldOffset1, 0x1122334455667788L);
-        UNSAFE.putInt(x, TestClassInt.fieldOffset1, 10);
-        return UNSAFE.getInt(x, TestClassInt.fieldOffset2);
+        UNSAFE.putLong(x, fieldOffset1, 0x1122334455667788L);
+        UNSAFE.putInt(x, fieldOffset1, 10);
+        return UNSAFE.getInt(x, fieldOffset2);
     }
 
     @Test
@@ -210,9 +231,9 @@ public class UnsafeEATest extends EATestBase {
 
     public static int testSimpleLongOverwriteWithFirstIntSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putLong(x, TestClassInt.fieldOffset1, 0x1122334455667788L);
-        UNSAFE.putInt(x, TestClassInt.fieldOffset2, 10);
-        return UNSAFE.getInt(x, TestClassInt.fieldOffset1);
+        UNSAFE.putLong(x, fieldOffset1, 0x1122334455667788L);
+        UNSAFE.putInt(x, fieldOffset2, 10);
+        return UNSAFE.getInt(x, fieldOffset1);
     }
 
     @Test
@@ -229,12 +250,12 @@ public class UnsafeEATest extends EATestBase {
         TestClassInt x;
         if (a) {
             x = new TestClassInt(0, 0);
-            UNSAFE.putDouble(x, TestClassInt.fieldOffset1, doubleField);
+            UNSAFE.putDouble(x, fieldOffset1, doubleField);
         } else {
             x = new TestClassInt();
-            UNSAFE.putDouble(x, TestClassInt.fieldOffset1, doubleField2);
+            UNSAFE.putDouble(x, fieldOffset1, doubleField2);
         }
-        return UNSAFE.getDouble(x, TestClassInt.fieldOffset1);
+        return UNSAFE.getDouble(x, fieldOffset1);
     }
 
     static class ExtendedTestClassInt extends TestClassInt {
@@ -250,14 +271,14 @@ public class UnsafeEATest extends EATestBase {
         TestClassInt x;
         if (value == 1) {
             x = new TestClassInt();
-            UNSAFE.putDouble(x, TestClassInt.fieldOffset1, 10);
+            UNSAFE.putDouble(x, fieldOffset1, 10);
         } else {
             x = new TestClassInt();
-            UNSAFE.putInt(x, TestClassInt.fieldOffset1, 0);
+            UNSAFE.putInt(x, fieldOffset1, 0);
         }
-        UNSAFE.putInt(x, TestClassInt.fieldOffset1, 0);
+        UNSAFE.putInt(x, fieldOffset1, 0);
         if (value == 2) {
-            UNSAFE.putInt(x, TestClassInt.fieldOffset2, 0);
+            UNSAFE.putInt(x, fieldOffset2, 0);
         }
         GraalDirectives.deoptimizeAndInvalidate();
         return x;
@@ -270,7 +291,7 @@ public class UnsafeEATest extends EATestBase {
 
     public static TestClassInt testMaterializedDoubleSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putDouble(x, TestClassInt.fieldOffset1, 10.1);
+        UNSAFE.putDouble(x, fieldOffset1, 10.1);
         return x;
     }
 
@@ -284,10 +305,10 @@ public class UnsafeEATest extends EATestBase {
 
     public static TestClassInt testDeoptDoubleVarSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putDouble(x, TestClassInt.fieldOffset1, doubleField);
+        UNSAFE.putDouble(x, fieldOffset1, doubleField);
         doubleField2 = 123;
         try {
-            doubleField = ((int) UNSAFE.getDouble(x, TestClassInt.fieldOffset1)) / zero;
+            doubleField = ((int) UNSAFE.getDouble(x, fieldOffset1)) / zero;
         } catch (RuntimeException e) {
             return x;
         }
@@ -301,10 +322,10 @@ public class UnsafeEATest extends EATestBase {
 
     public static TestClassInt testDeoptDoubleConstantSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putDouble(x, TestClassInt.fieldOffset1, 10.123);
+        UNSAFE.putDouble(x, fieldOffset1, 10.123);
         doubleField2 = 123;
         try {
-            doubleField = ((int) UNSAFE.getDouble(x, TestClassInt.fieldOffset1)) / zero;
+            doubleField = ((int) UNSAFE.getDouble(x, fieldOffset1)) / zero;
         } catch (RuntimeException e) {
             return x;
         }
@@ -321,10 +342,10 @@ public class UnsafeEATest extends EATestBase {
 
     public static TestClassInt testDeoptLongVarSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putLong(x, TestClassInt.fieldOffset1, longField);
+        UNSAFE.putLong(x, fieldOffset1, longField);
         longField2 = 123;
         try {
-            longField = UNSAFE.getLong(x, TestClassInt.fieldOffset1) / zero;
+            longField = UNSAFE.getLong(x, fieldOffset1) / zero;
         } catch (RuntimeException e) {
             return x;
         }
@@ -338,10 +359,10 @@ public class UnsafeEATest extends EATestBase {
 
     public static TestClassInt testDeoptLongConstantSnippet() {
         TestClassInt x = new TestClassInt();
-        UNSAFE.putLong(x, TestClassInt.fieldOffset1, 0x2222222210123L);
+        UNSAFE.putLong(x, fieldOffset1, 0x2222222210123L);
         longField2 = 123;
         try {
-            longField = UNSAFE.getLong(x, TestClassInt.fieldOffset1) / zero;
+            longField = UNSAFE.getLong(x, fieldOffset1) / zero;
         } catch (RuntimeException e) {
             return x;
         }

@@ -54,7 +54,6 @@ import java.util.function.Supplier;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.test.Graal;
-import org.graalvm.compiler.api.test.ModuleSupport;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.CompilationPrinter;
 import org.graalvm.compiler.core.GraalCompiler;
@@ -127,6 +126,7 @@ import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.runtime.RuntimeProvider;
 import org.graalvm.compiler.test.AddExports;
 import org.graalvm.compiler.test.GraalTest;
+import org.graalvm.compiler.test.ModuleSupport;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -606,15 +606,11 @@ public abstract class GraalCompilerTest extends GraalTest {
         return providers;
     }
 
-    protected OptimisticOptimizations getOptimisticOptimizations() {
-        return OptimisticOptimizations.ALL;
-    }
-
-    protected final HighTierContext getDefaultHighTierContext() {
+    protected HighTierContext getDefaultHighTierContext() {
         return new HighTierContext(getProviders(), getDefaultGraphBuilderSuite(), getOptimisticOptimizations());
     }
 
-    protected final MidTierContext getDefaultMidTierContext() {
+    protected MidTierContext getDefaultMidTierContext() {
         return new MidTierContext(getProviders(), getTargetProvider(), getOptimisticOptimizations(), null);
     }
 
@@ -1085,6 +1081,10 @@ public abstract class GraalCompilerTest extends GraalTest {
         return compile(installedCodeOwner, graph, new CompilationResult(compilationId), compilationId, options);
     }
 
+    protected OptimisticOptimizations getOptimisticOptimizations() {
+        return OptimisticOptimizations.ALL;
+    }
+
     /**
      * Compiles a given method.
      *
@@ -1115,12 +1115,6 @@ public abstract class GraalCompilerTest extends GraalTest {
 
     protected StructuredGraph getFinalGraph(ResolvedJavaMethod method) {
         StructuredGraph graph = parseForCompile(method);
-        applyFrontEnd(graph);
-        return graph;
-    }
-
-    protected StructuredGraph getFinalGraph(ResolvedJavaMethod method, OptionValues options) {
-        StructuredGraph graph = parseForCompile(method, options);
         applyFrontEnd(graph);
         return graph;
     }

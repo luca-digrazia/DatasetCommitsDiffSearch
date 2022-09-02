@@ -142,8 +142,6 @@ public abstract class PartialEvaluationTest extends TruffleCompilerImplTest {
         truffleCompiler.compilePEGraph(graph, methodName, suite, compilable, asCompilationRequest(compilationId), null, new CancellableCompileTask(true));
     }
 
-    DebugContext lastDebug;
-
     @SuppressWarnings("try")
     protected StructuredGraph partialEval(OptimizedCallTarget compilable, Object[] arguments, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId) {
         // Executed AST so that all classes are loaded and initialized.
@@ -162,7 +160,6 @@ public abstract class PartialEvaluationTest extends TruffleCompilerImplTest {
 
         OptionValues options = getOptions();
         DebugContext debug = getDebugContext(options);
-        lastDebug = debug;
         try (DebugContext.Scope s = debug.scope("TruffleCompilation", new TruffleDebugJavaMethod(compilable))) {
             TruffleInlining inliningDecision = new TruffleInlining(compilable, new DefaultInliningPolicy());
             SpeculationLog speculationLog = compilable.getCompilationSpeculationLog();

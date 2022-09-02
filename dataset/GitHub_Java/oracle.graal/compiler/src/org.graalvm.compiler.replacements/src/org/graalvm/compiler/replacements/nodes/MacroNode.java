@@ -130,10 +130,6 @@ public abstract class MacroNode extends FixedWithNextNode implements Lowerable, 
         return targetMethod;
     }
 
-    public InvokeKind getInvokeKind() {
-        return invokeKind;
-    }
-
     protected FrameState stateAfter() {
         return null;
     }

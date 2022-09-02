@@ -125,10 +125,6 @@ public class CanonicalizerPhase extends BasePhase<CoreProviders> {
         simplify = false;
     }
 
-    public void enableSimplification() {
-        simplify = true;
-    }
-
     @Override
     public boolean checkContract() {
         /*
