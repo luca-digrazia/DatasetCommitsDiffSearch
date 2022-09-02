@@ -24,11 +24,11 @@
  */
 package org.graalvm.compiler.hotspot.management;
 
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXFromLibGraal.Id.GetFactory;
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXFromLibGraal.Id.SignalRegistrationRequest;
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXFromLibGraal.Id.Unregister;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXFromLibGraal.Id.GetFactory;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXFromLibGraal.Id.NewMBean;
 
-import org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXFromLibGraal;
+import org.graalvm.compiler.hotspot.management.LibGraalMBean.Factory;
+import org.graalvm.compiler.hotspot.management.libgraal.JMXFromLibGraal;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -42,27 +42,26 @@ public final class JMXFromLibGraalEntryPoints {
     }
 
     /**
-     * @see Factory#getInstance()
+     * @see LibGraalMBean#getFactory()
      */
     @JMXFromLibGraal(GetFactory)
-    static Object getFactory() {
-        Factory factory = Factory.getInstance();
+    static Factory getFactory() {
+        Factory factory = LibGraalMBean.getFactory();
         return factory;
     }
 
     /**
      * @see Factory#signalRegistrationRequest(long)
      */
-    @JMXFromLibGraal(SignalRegistrationRequest)
-    static void signalRegistrationRequest(Object factory, long isolate) {
-        ((Factory) factory).signalRegistrationRequest(isolate);
+    @JMXFromLibGraal(NewMBean)
+    static void signalRegistrationRequest(Factory factory, long isolate) {
+        factory.signalRegistrationRequest(isolate);
     }
 
     /**
-     * @see Factory#unregister(long)
+     * @see Factory#unregister(long, java.lang.String[])
      */
-    @JMXFromLibGraal(Unregister)
-    static void unregister(Object factory, long isolate) {
-        ((Factory) factory).unregister(isolate);
+    static void unregister(Factory factory, long isolate, String[] objectIds) {
+        factory.unregister(isolate, objectIds);
     }
 }

@@ -30,15 +30,12 @@ import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
 
-import org.graalvm.compiler.core.GraalServiceThread;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalManagementRegistration;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntime;
 import org.graalvm.compiler.hotspot.management.HotSpotGraalRuntimeMBean;
-import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionType;
+import org.graalvm.compiler.serviceprovider.IsolateUtil;
 
 /**
  * Dynamically registers a {@link HotSpotGraalRuntimeMBean}s created in libgraal heap with an
@@ -48,16 +45,6 @@ import org.graalvm.compiler.options.OptionType;
 public final class LibGraalHotSpotGraalManagement extends MBeanProxy<HotSpotGraalRuntimeMBean> implements HotSpotGraalManagementRegistration {
 
     public LibGraalHotSpotGraalManagement() {
-    }
-
-    static class Options {
-        /**
-         * The initialization of this management interface is delayed to avoid slowing down Graal
-         * initialization. The HotSpot side of this management interface requires initializing a
-         * complete JVMCI runtime which loads ~200 classes.
-         */
-        @Option(help = "Milliseconds to delay initialization of libgraal JMX interface.", type = OptionType.Expert)//
-        static final OptionKey<Integer> LibGraalManagementDelay = new OptionKey<>(1000);
     }
 
     /**
@@ -71,28 +58,6 @@ public final class LibGraalHotSpotGraalManagement extends MBeanProxy<HotSpotGraa
      */
     @Override
     public void initialize(HotSpotGraalRuntime runtime, GraalHotSpotVMConfig config) {
-        int delay = Options.LibGraalManagementDelay.getValue(runtime.getOptions());
-        if (delay == 0) {
-            initialize0(runtime, config);
-        } else {
-            Thread t = new GraalServiceThread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        Thread.sleep(delay);
-                        initialize0(runtime, config);
-                    } catch (Throwable error) {
-                        runtime.handleManagementInitializationFailure(error);
-                    }
-                }
-            });
-            t.setName("LibGraalHotSpotGraalManagementInitialization");
-            t.setDaemon(true); // don't delay VM shutdown
-            t.start();
-        }
-    }
-
-    private void initialize0(HotSpotGraalRuntime runtime, GraalHotSpotVMConfig config) {
         if (!initializeJNI(config, runtime)) {
             return;
         }
@@ -102,7 +67,11 @@ public final class LibGraalHotSpotGraalManagement extends MBeanProxy<HotSpotGraa
                 throw new IllegalArgumentException("Cannot initialize a second management object for runtime " + runtime.getName());
             }
             try {
-                String beanName = nameWithIsolateId("org.graalvm.compiler.hotspot:type=" + runtime.getName().replace(':', '_'));
+                String beanName = "org.graalvm.compiler.hotspot:type=%s" + runtime.getName().replace(':', '_');
+                long id = IsolateUtil.getIsolateID();
+                if (id != 0L) {
+                    beanName += '@' + id;
+                }
                 ObjectName objectName = new ObjectName(beanName);
                 mbean = new HotSpotGraalRuntimeMBean(objectName, runtime);
                 initialize(mbean, beanName, objectName);

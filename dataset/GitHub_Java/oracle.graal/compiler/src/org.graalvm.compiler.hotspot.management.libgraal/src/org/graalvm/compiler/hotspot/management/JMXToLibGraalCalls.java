@@ -24,15 +24,17 @@
  */
 package org.graalvm.compiler.hotspot.management;
 
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.FinishRegistration;
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.GetAttributes;
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.GetMBeanInfo;
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.GetObjectName;
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.Invoke;
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.PollRegistrations;
-import static org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal.Id.SetAttributes;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.AttachThread;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.DetachThread;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.FinishRegistration;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.GetAttributes;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.GetMBeanInfo;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.GetObjectName;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.Invoke;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.PollRegistrations;
+import static org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal.Id.SetAttributes;
 
-import org.graalvm.compiler.hotspot.management.libgraal.annotation.JMXToLibGraal;
+import org.graalvm.compiler.hotspot.management.libgraal.JMXToLibGraal;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -41,6 +43,13 @@ import org.graalvm.nativeimage.Platforms;
  */
 @Platforms(Platform.HOSTED_ONLY.class)
 public final class JMXToLibGraalCalls {
+
+    /**
+     * Used to synchronize libgraal isolates waiting for registration of the native methods in this
+     * class. The field is set to {@code true} from the libgraal native library when all natives in
+     * this class have been registered.
+     */
+    private static volatile boolean nativesRegistered;
 
     private JMXToLibGraalCalls() {
     }

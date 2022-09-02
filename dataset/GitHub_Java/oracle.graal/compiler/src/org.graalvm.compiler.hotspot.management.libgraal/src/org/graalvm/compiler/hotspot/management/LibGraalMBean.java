@@ -62,7 +62,6 @@ import javax.management.openmbean.OpenType;
 import javax.management.openmbean.SimpleType;
 
 import org.graalvm.compiler.debug.TTY;
-import org.graalvm.libgraal.LibGraal;
 import org.graalvm.libgraal.LibGraalScope;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -326,9 +325,8 @@ public class LibGraalMBean implements DynamicMBean {
     }
 
     /**
-     * Returns a factory for registering the {@link LibGraalMBean} instances into
-     * {@link MBeanServer}. If the factory does not exist it is created and its registration thread
-     * is started.
+     * Returns a factory for registering the {@link LibGraalMBean} instances into {@link MBeanServer}. If
+     * the factory does not exist it is created and its registration thread is started.
      */
     static Factory getFactory() {
         Factory res = factory;
@@ -336,31 +334,13 @@ public class LibGraalMBean implements DynamicMBean {
             synchronized (LibGraalMBean.class) {
                 res = factory;
                 if (res == null) {
-                    try {
-                        res = new Factory();
-                        res.start();
-                        factory = res;
-                    } catch (LinkageError e) {
-                        Throwable cause = findCause(e);
-                        throw sthrow(RuntimeException.class, cause);
-                    }
+                    res = new Factory();
+                    res.start();
+                    factory = res;
                 }
             }
         }
         return res;
-    }
-
-    private static Throwable findCause(Throwable e) {
-        Throwable current = e;
-        while (current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    @SuppressWarnings({"unchecked", "unused"})
-    private static <T extends Throwable> T sthrow(Class<T> exceptionClass, Throwable exception) throws T {
-        throw (T) exception;
     }
 
     /**
@@ -567,7 +547,6 @@ public class LibGraalMBean implements DynamicMBean {
             this.pendingIsolates = new LinkedHashSet<>();
             this.setPriority(Thread.MIN_PRIORITY);
             this.setDaemon(true);
-            LibGraal.registerNativeMethods(JMXToLibGraalCalls.class);
         }
 
         /**
@@ -612,8 +591,8 @@ public class LibGraalMBean implements DynamicMBean {
         }
 
         /**
-         * Called by {@code MBeanProxy} in libgraal heap when the isolate is closing to unregister
-         * its {@link DynamicMBean}s.
+         * Called by {@code MBeanProxy} in libgraal heap when the isolate is closing to unregister its
+         * {@link DynamicMBean}s.
          */
         synchronized void unregister(long isolate, String[] objectIds) {
             // Remove pending registration requests
@@ -636,8 +615,8 @@ public class LibGraalMBean implements DynamicMBean {
         }
 
         /**
-         * In case of successful {@link MBeanServer} initialization creates {@link LibGraalMBean}s
-         * for pending libgraal {@link DynamicMBean}s and registers them.
+         * In case of successful {@link MBeanServer} initialization creates {@link LibGraalMBean}s for
+         * pending libgraal {@link DynamicMBean}s and registers them.
          *
          * @return {@code true} if {@link LibGraalMBean}s were successfuly registered, {@code false}
          *         when {@link MBeanServer} is not yet available and {@code poll} should be retried.
@@ -686,7 +665,7 @@ public class LibGraalMBean implements DynamicMBean {
                 iter.remove();
                 try (LibGraalScope scope = new LibGraalScope(isolate)) {
                     long isolateThread = scope.getIsolateThreadAddress();
-                    long[] handles = JMXToLibGraalCalls.pollRegistrations(isolateThread);
+                    long[] handles =  JMXToLibGraalCalls.pollRegistrations(isolateThread);
                     if (handles.length > 0) {
                         for (long handle : handles) {
                             LibGraalMBean bean = new LibGraalMBean(isolate, handle);
