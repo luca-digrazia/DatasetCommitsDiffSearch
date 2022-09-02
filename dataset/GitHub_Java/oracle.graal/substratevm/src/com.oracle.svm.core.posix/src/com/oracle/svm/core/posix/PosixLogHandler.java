@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,11 +35,11 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.headers.Errno;
+import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.LibC;
 
 @AutomaticFeature
-@Platforms({Platform.LINUX_AND_JNI.class, Platform.DARWIN_AND_JNI.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 class PosixLogHandlerFeature implements Feature {
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
