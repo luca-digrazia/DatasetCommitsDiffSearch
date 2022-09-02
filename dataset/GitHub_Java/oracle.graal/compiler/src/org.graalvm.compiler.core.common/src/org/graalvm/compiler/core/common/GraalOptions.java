@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,13 +24,13 @@
  */
 package org.graalvm.compiler.core.common;
 
-import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionKey;
+import org.graalvm.compiler.options.OptionStability;
+import org.graalvm.compiler.options.OptionType;
 
 /**
- * This class encapsulates options that control the behavior of the Graal compiler.
+ * This class encapsulates options that control the behavior of the GraalVM compiler.
  */
 // @formatter:off
 public final class GraalOptions {
@@ -61,7 +63,7 @@ public final class GraalOptions {
     public static final OptionKey<Integer> MaximumInliningSize = new OptionKey<>(300);
 
     @Option(help = "If the previous low-level graph size of the method exceeds the threshold, it is not inlined.", type = OptionType.Expert)
-    public static final OptionKey<Integer> SmallCompiledLowLevelGraphSize = new OptionKey<>(300);
+    public static final OptionKey<Integer> SmallCompiledLowLevelGraphSize = new OptionKey<>(330);
 
     @Option(help = "", type = OptionType.Expert)
     public static final OptionKey<Double> LimitInlinedInvokes = new OptionKey<>(5.0);
@@ -82,17 +84,8 @@ public final class GraalOptions {
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<String> EscapeAnalyzeOnly = new OptionKey<>(null);
 
-    @Option(help = "", type = OptionType.Expert)
-    public static final OptionKey<Integer> MaximumEscapeAnalysisArrayLength = new OptionKey<>(32);
-
-    @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> PEAInliningHints = new OptionKey<>(false);
-
-    @Option(help = "", type = OptionType.Expert)
-    public static final OptionKey<Double> TailDuplicationProbability = new OptionKey<>(0.5);
-
-    @Option(help = "", type = OptionType.Expert)
-    public static final OptionKey<Integer> TailDuplicationTrivialSize = new OptionKey<>(1);
+    @Option(help = "The maximum length of an array that will be escape analyzed.", type = OptionType.Expert)
+    public static final OptionKey<Integer> MaximumEscapeAnalysisArrayLength = new OptionKey<>(128);
 
     @Option(help = "", type = OptionType.Expert)
     public static final OptionKey<Integer> DeoptsToDisableOptimisticOptimization = new OptionKey<>(40);
@@ -100,8 +93,8 @@ public final class GraalOptions {
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> LoopPeeling = new OptionKey<>(true);
 
-    @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> ReassociateInvariants = new OptionKey<>(true);
+    @Option(help = "Re-associate loop invariants and constants.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> ReassociateExpressions = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> FullUnroll = new OptionKey<>(true);
@@ -109,14 +102,23 @@ public final class GraalOptions {
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> LoopUnswitch = new OptionKey<>(true);
 
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionKey<Boolean> PartialUnroll = new OptionKey<>(true);
+
     @Option(help = "", type = OptionType.Expert)
-    public static final OptionKey<Float> MinimumPeelProbability = new OptionKey<>(0.35f);
+    public static final OptionKey<Float> MinimumPeelFrequency = new OptionKey<>(0.35f);
 
     @Option(help = "", type = OptionType.Expert)
     public static final OptionKey<Integer> LoopMaxUnswitch = new OptionKey<>(3);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> UseLoopLimitChecks = new OptionKey<>(true);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionKey<Boolean> LoopPredication = new OptionKey<>(true);
+
+    @Option(help = "", type = OptionType.Debug)
+    public static final OptionKey<Boolean> LoopPredicationMainPath = new OptionKey<>(true);
 
     // debugging settings
     @Option(help = "", type = OptionType.Debug)
@@ -138,7 +140,7 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> VerifyPhases = new OptionKey<>(false);
 
     // Debug settings:
-    @Option(help = "", type = OptionType.Debug)
+    @Option(help = "Start tracing compiled GC barriers after N garbage collections (disabled if N <= 0).", type = OptionType.Debug)
     public static final OptionKey<Integer> GCDebugStartCycle = new OptionKey<>(-1);
 
     @Option(help = "Perform platform dependent validation of the Java heap at returns", type = OptionType.Debug)
@@ -163,6 +165,9 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> ConditionalElimination = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
+    public static final OptionKey<Integer> ConditionalEliminationMaxIterations = new OptionKey<>(4);
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> RawConditionalElimination = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
@@ -178,9 +183,6 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> OmitHotExceptionStacktrace = new OptionKey<>(false);
 
     @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> GenSafepoints = new OptionKey<>(true);
-
-    @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> GenLoopSafepoints = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
@@ -193,9 +195,6 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> AlwaysInlineVTableStubs = new OptionKey<>(false);
 
     @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> ResolveClassBeforeStaticInvoke = new OptionKey<>(false);
-
-    @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> CanOmitFrame = new OptionKey<>(true);
 
     // Ahead of time compilation
@@ -205,8 +204,8 @@ public final class GraalOptions {
     @Option(help = "Generate position independent code", type = OptionType.Expert)
     public static final OptionKey<Boolean> GeneratePIC = new OptionKey<>(false);
 
-    @Option(help = "", type = OptionType.Expert)
-    public static final OptionKey<Boolean> CallArrayCopy = new OptionKey<>(true);
+    @Option(help = "Generate verify oop checks in AOT code", type = OptionType.Expert)
+    public static final OptionKey<Boolean> AOTVerifyOops = new OptionKey<>(false);
 
     // Runtime settings
     @Option(help = "", type = OptionType.Expert)
@@ -231,28 +230,25 @@ public final class GraalOptions {
     public static final OptionKey<Boolean> OptScheduleOutOfLoops = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
+    public static final OptionKey<Boolean> GuardPriorities = new OptionKey<>(true);
+
+    @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> OptEliminateGuards = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> OptImplicitNullChecks = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> OptClearNonLiveLocals = new OptionKey<>(true);
-
-    @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> OptLoopTransform = new OptionKey<>(true);
-
-    @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> OptFloatingReads = new OptionKey<>(true);
 
     @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> OptEliminatePartiallyRedundantGuards = new OptionKey<>(true);
-
-    @Option(help = "", type = OptionType.Debug)
-    public static final OptionKey<Boolean> OptFilterProfiledTypes = new OptionKey<>(true);
-
-    @Option(help = "", type = OptionType.Debug)
     public static final OptionKey<Boolean> OptDevirtualizeInvokesOptimistically = new OptionKey<>(true);
+
+    @Option(help = "Track the NodeSourcePosition.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> TrackNodeSourcePosition = new OptionKey<>(false);
+
+    @Option(help = "Track source stack trace where a node was inserted into the graph.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> TrackNodeInsertion = new OptionKey<>(false);
 
     @Option(help = "Allow backend to match complex expressions.", type = OptionType.Debug)
     public static final OptionKey<Boolean> MatchExpressions = new OptionKey<>(true);
@@ -266,10 +262,27 @@ public final class GraalOptions {
     @Option(help = "Use a cache for snippet graphs.", type = OptionType.Debug)
     public static final OptionKey<Boolean> UseSnippetGraphCache = new OptionKey<>(true);
 
-    @Option(help = "Enable expensive assertions.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> DetailedAsserts = new OptionKey<>(Assertions.ENABLED);
+    @Option(help = "file:doc-files/TraceInliningHelp.txt", type = OptionType.Debug, stability = OptionStability.STABLE)
+    public static final OptionKey<Boolean> TraceInlining = new OptionKey<>(false);
 
-    @Option(help = "Enable experimental Trace Register Allocation.", type = OptionType.Debug)
-    public static final OptionKey<Boolean> TraceRA = new OptionKey<>(false);
+    @Option(help = "Enable inlining decision tracing in stubs and snippets.", type = OptionType.Debug)
+    public static final OptionKey<Boolean> TraceInliningForStubsAndSnippets = new OptionKey<>(false);
 
+    @Option(help = "Use Graal-generated stubs for complicated LIR operations instead of embedding all the emitted code.", type = OptionType.Expert)
+    public static final OptionKey<Boolean> UseGraalStubs = new OptionKey<>(true);
+
+    @Option(help = "Encode and decode snippets and substitutions before parsing to test libgraal code path. This option is ignored in the context of libgraal.")
+    public static final OptionKey<Boolean> UseEncodedGraphs = new OptionKey<>(false);
+
+    @Option(help = "If applicable, use bulk zeroing instructions when the zeroing size in bytes exceeds this threshold.", type = OptionType.Expert)
+    public static final OptionKey<Integer> MinimalBulkZeroingSize = new OptionKey<>(2048);
+
+    @Option(help = "Alignment in bytes for loop header blocks.", type = OptionType.Expert)
+    public static final OptionKey<Integer> LoopHeaderAlignment = new OptionKey<>(16);
+
+    @Option(help = "String.indexOf invocations will be evaluated at compile time if the receiver is a constant and its length is lower than this value.", type = OptionType.Expert)
+    public static final OptionKey<Integer> StringIndexOfLimit = new OptionKey<>(4096);
+    
+    @Option(help = "Emit substitutions for String methods", type = OptionType.Debug)//
+    public static final OptionKey<Boolean> EmitStringSubstitutions = new OptionKey<>(true);
 }

@@ -27,7 +27,6 @@ package com.oracle.svm.core;
 import static org.graalvm.compiler.core.common.GraalOptions.TrackNodeSourcePosition;
 import static org.graalvm.compiler.core.common.SpectrePHTMitigations.None;
 import static org.graalvm.compiler.core.common.SpectrePHTMitigations.Options.SpectrePHTBarriers;
-import static org.graalvm.compiler.options.OptionType.Debug;
 import static org.graalvm.compiler.options.OptionType.Expert;
 import static org.graalvm.compiler.options.OptionType.User;
 
@@ -38,6 +37,7 @@ import java.nio.file.Paths;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.replacements.Fold;
+import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionStability;
@@ -362,8 +362,9 @@ public class SubstrateOptions {
         @Override
         protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
             if ("llvm".equals(newValue)) {
-                if (JavaVersionUtil.JAVA_SPEC > 8) {
-                    EmitStringEncodingSubstitutions.update(values, false);
+                if (JavaVersionUtil.JAVA_SPEC >= 9) {
+                    /* See GR-14405, https://github.com/oracle/graal/issues/1056 */
+                    GraalOptions.EmitStringSubstitutions.update(values, false);
                 }
                 /*
                  * The code information is filled before linking, which means that stripping dead
@@ -382,9 +383,6 @@ public class SubstrateOptions {
     public static boolean useLLVMBackend() {
         return "llvm".equals(CompilerBackend.getValue());
     }
-
-    @Option(help = "Emit substitutions for UTF16 and latin1 compression", type = OptionType.Debug)//
-    public static final HostedOptionKey<Boolean> EmitStringEncodingSubstitutions = new HostedOptionKey<>(true);
 
     @Option(help = "Determines if VM operations should be executed in a dedicated thread.", type = OptionType.Expert)//
     public static final HostedOptionKey<Boolean> UseDedicatedVMOperationThread = new HostedOptionKey<>(false);
@@ -521,7 +519,4 @@ public class SubstrateOptions {
 
     @Option(help = "Overwrites the available number of processors provided by the OS. Any value <= 0 means using the processor count from the OS.")//
     public static final RuntimeOptionKey<Integer> ActiveProcessorCount = new RuntimeOptionKey<>(-1);
-
-    @Option(help = "For internal purposes only. Disables type id result verification even when running with assertions enabled.", stability = OptionStability.EXPERIMENTAL, type = Debug)//
-    public static final HostedOptionKey<Boolean> DisableTypeIdResultVerification = new HostedOptionKey<>(false);
 }
