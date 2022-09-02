@@ -634,10 +634,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     protected final void doCompile(OptimizedCallTarget callTarget, TruffleCompilationTask task) {
-        doCompile(null, callTarget, task);
-    }
-
-    protected final void doCompile(TruffleDebugContext debug, OptimizedCallTarget callTarget, TruffleCompilationTask task) {
         List<OptimizedCallTarget> oldBlockCompilations = callTarget.blockCompilations;
         if (oldBlockCompilations != null) {
             for (OptimizedCallTarget blockTarget : oldBlockCompilations) {
@@ -650,10 +646,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                     listeners.onCompilationDequeued(blockTarget, null, "Partial block is too big to be compiled.");
                     continue;
                 }
-                compileImpl(debug, blockTarget, task);
+                compileImpl(blockTarget, task);
             }
         }
-        compileImpl(debug, callTarget, task);
+        compileImpl(callTarget, task);
 
         if (oldBlockCompilations == null && callTarget.blockCompilations != null) {
             // retry with block compilations
@@ -664,17 +660,13 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     @SuppressWarnings("try")
-    private void compileImpl(TruffleDebugContext initialDebug, OptimizedCallTarget callTarget, TruffleCompilationTask task) {
+    private void compileImpl(OptimizedCallTarget callTarget, TruffleCompilationTask task) {
         boolean compilationStarted = false;
         try {
             TruffleCompiler compiler = getTruffleCompiler(callTarget);
             try (TruffleCompilation compilation = compiler.openCompilation(callTarget)) {
                 final Map<String, Object> optionsMap = getOptionsForCompiler(callTarget);
-                TruffleDebugContext debug = initialDebug;
-                if (debug == null) {
-                    debug = compiler.openDebugContext(optionsMap, compilation);
-                }
-                try {
+                try (TruffleDebugContext debug = compiler.openDebugContext(optionsMap, compilation)) {
                     compilationStarted = true;
                     listeners.onCompilationStarted(callTarget);
                     TruffleInlining inlining = new TruffleInlining();
@@ -700,10 +692,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                     }
                     // used by language-agnostic inlining
                     inlining.dequeueTargets();
-                } finally {
-                    if (initialDebug == null) {
-                        debug.close();
-                    }
                 }
             }
         } catch (OptimizationFailedException e) {
@@ -991,6 +979,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             }
         } else if (getAnnotation(TruffleCallBoundary.class, original) != null) {
             return InlineKind.DO_NOT_INLINE_WITH_EXCEPTION;
+        } else if (JFRListener.isInstrumented(original)) {
+            return InlineKind.DO_NOT_INLINE_WITH_EXCEPTION;
         }
         return InlineKind.INLINE;
     }
@@ -1105,5 +1095,4 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                         valueClass == Double.class ||
                         valueClass == String.class;
     }
-
 }
