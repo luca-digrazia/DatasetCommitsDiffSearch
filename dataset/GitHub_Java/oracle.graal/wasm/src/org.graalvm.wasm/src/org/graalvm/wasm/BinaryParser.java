@@ -594,8 +594,6 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case Instructions.CALL_INDIRECT: {
-                    assertTrue(module.symbolTable().tableExists(), Failure.UNKNOWN_TABLE);
-
                     int expectedFunctionTypeIndex = readTypeIndex();
 
                     // Pop the function index to call
@@ -1331,9 +1329,7 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     private int readTypeIndex() {
-        final int result = readUnsignedInt32();
-        assertUnsignedIntLess(result, module.symbolTable().typeCount(), Failure.UNKNOWN_TYPE);
-        return result;
+        return readUnsignedInt32();
     }
 
     private int readFunctionIndex() {
