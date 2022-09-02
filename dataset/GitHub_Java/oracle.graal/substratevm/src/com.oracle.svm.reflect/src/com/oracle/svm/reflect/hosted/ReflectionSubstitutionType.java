@@ -56,6 +56,7 @@ import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
+import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
@@ -63,7 +64,6 @@ import org.graalvm.util.GuardedAnnotationAccess;
 
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.annotate.Delete;
-import com.oracle.svm.core.graal.nodes.SubstrateNewInstanceNode;
 import com.oracle.svm.core.jdk.InternalVMMethod;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.util.VMError;
@@ -210,6 +210,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
 
         ValueNode exception = graphKit.createJavaCallWithExceptionAndUnwind(InvokeKind.Static, createFailedCast, expectedNode, actual);
         graphKit.append(new UnwindNode(exception));
+        graphKit.mergeUnwinds();
     }
 
     private static ValueNode createCheckcast(HostedGraphKit graphKit, ValueNode value, ResolvedJavaType type, boolean nonNull) {
@@ -253,7 +254,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
 
     private static void throwIllegalArgumentException(HostedGraphKit graphKit, String message) {
         ResolvedJavaType exceptionType = graphKit.getMetaAccess().lookupJavaType(IllegalArgumentException.class);
-        ValueNode ite = graphKit.append(new SubstrateNewInstanceNode(exceptionType, true));
+        ValueNode ite = graphKit.append(new NewInstanceNode(exceptionType, true));
 
         ResolvedJavaMethod cons = null;
         for (ResolvedJavaMethod c : exceptionType.getDeclaredConstructors()) {
@@ -268,6 +269,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
         graphKit.createJavaCallWithExceptionAndUnwind(InvokeKind.Special, cons, ite, msgNode, cause);
 
         graphKit.append(new UnwindNode(ite));
+        graphKit.mergeUnwinds();
     }
 
     private static boolean canImplicitCast(JavaKind from, JavaKind to) {
@@ -406,7 +408,8 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
                 throwIllegalArgumentException(graphKit, "cannot read field of type " + targetField.getJavaKind() + " with " + method.getName());
             }
 
-            return graphKit.finalizeGraph();
+            assert graphKit.getGraph().verify();
+            return graphKit.getGraph();
         }
     }
 
@@ -491,7 +494,10 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
                 throwIllegalArgumentException(graphKit, "cannot write field of type " + targetField.getJavaKind() + " with Field." + method.getName());
             }
 
-            return graphKit.finalizeGraph();
+            graphKit.mergeUnwinds();
+
+            assert graphKit.getGraph().verify();
+            return graphKit.getGraph();
         }
     }
 
@@ -554,7 +560,10 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
 
             graphKit.endInvokeWithException();
 
-            return graphKit.finalizeGraph();
+            graphKit.mergeUnwinds();
+
+            assert graphKit.getGraph().verify();
+            return graphKit.getGraph();
         }
     }
 
@@ -578,7 +587,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
             ResolvedJavaMethod cons = providers.getMetaAccess().lookupJavaMethod(constructor);
             Class<?>[] argTypes = constructor.getParameterTypes();
 
-            ValueNode ret = graphKit.append(new SubstrateNewInstanceNode(type, true));
+            ValueNode ret = graphKit.append(new NewInstanceNode(type, true));
 
             ValueNode[] args = new ValueNode[argTypes.length + 1];
             args[0] = ret;
@@ -598,7 +607,10 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
 
             graphKit.endInvokeWithException();
 
-            return graphKit.finalizeGraph();
+            graphKit.mergeUnwinds();
+
+            assert graphKit.getGraph().verify();
+            return graphKit.getGraph();
         }
     }
 
@@ -618,7 +630,8 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
             ValueNode nameNode = graphKit.createObject(name);
             graphKit.createReturn(nameNode, JavaKind.Object);
 
-            return graphKit.finalizeGraph();
+            assert graphKit.getGraph().verify();
+            return graphKit.getGraph();
         }
     }
 
@@ -638,7 +651,8 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
             ValueNode nameNode = graphKit.createInt(hashCode);
             graphKit.createReturn(nameNode, JavaKind.Int);
 
-            return graphKit.finalizeGraph();
+            assert graphKit.getGraph().verify();
+            return graphKit.getGraph();
         }
     }
 
@@ -688,7 +702,8 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
 
             graphKit.endIf();
 
-            return graphKit.finalizeGraph();
+            assert graphKit.getGraph().verify();
+            return graphKit.getGraph();
         }
     }
 
@@ -707,7 +722,7 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
         public StructuredGraph buildGraph(DebugContext ctx, ResolvedJavaMethod method, HostedProviders providers, Purpose purpose) {
             HostedGraphKit graphKit = new HostedGraphKit(ctx, providers, method);
             ResolvedJavaType exceptionType = graphKit.getMetaAccess().lookupJavaType(exceptionClass);
-            ValueNode instance = graphKit.append(new SubstrateNewInstanceNode(exceptionType, true));
+            ValueNode instance = graphKit.append(new NewInstanceNode(exceptionType, true));
             ResolvedJavaMethod cons = null;
             for (ResolvedJavaMethod c : exceptionType.getDeclaredConstructors()) {
                 if (c.getSignature().getParameterCount(false) == 1) {
@@ -721,8 +736,9 @@ public final class ReflectionSubstitutionType extends CustomSubstitutionType<Cus
             ValueNode msgNode = graphKit.createConstant(msg, JavaKind.Object);
             graphKit.createJavaCallWithExceptionAndUnwind(InvokeKind.Special, cons, instance, msgNode);
             graphKit.append(new UnwindNode(instance));
-
-            return graphKit.finalizeGraph();
+            graphKit.mergeUnwinds();
+            assert graphKit.getGraph().verify();
+            return graphKit.getGraph();
         }
     }
 
