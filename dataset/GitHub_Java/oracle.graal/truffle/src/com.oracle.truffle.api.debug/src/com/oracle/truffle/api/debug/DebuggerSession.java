@@ -804,26 +804,6 @@ public final class DebuggerSession implements Closeable {
     }
 
     /**
-     * Request for languages to provide stack frames of scheduled asynchronous execution. Languages
-     * might not provide asynchronous stack frames by default for performance reasons. At most
-     * <code>depth</code> asynchronous stack frames are asked for. When multiple debugger sessions
-     * or other instruments call this method, the languages get a maximum depth of these calls and
-     * may therefore provide longer asynchronous stacks than requested. Also, languages may provide
-     * asynchronous stacks if it's of no performance penalty, or if requested by other options.
-     * <p/>
-     * Asynchronous stacks can then be accessed via {@link SuspendedEvent#getAsynchronousStacks()},
-     * or {@link DebugException#getDebugAsynchronousStacks()}.
-     *
-     * @param depth the requested stack depth, 0 means no asynchronous stack frames are required.
-     * @see SuspendedEvent#getAsynchronousStacks()
-     * @see DebugException#getDebugAsynchronousStacks()
-     * @since 20.1.0
-     */
-    public void setAsynchronousStackDepth(int depth) {
-        debugger.getEnv().setAsynchronousStackDepth(depth);
-    }
-
-    /**
      * Set a {@link DebugContextsListener listener} to be notified about changes in contexts in
      * guest language application. One listener can be set at a time, call with <code>null</code> to
      * remove the current listener.
@@ -1525,10 +1505,9 @@ public final class DebuggerSession implements Closeable {
         @TruffleBoundary
         private void doReturn(MaterializedFrame frame, Object result) {
             SteppingStrategy steppingStrategy;
-            Object newResult = null;
             try {
                 if (hasRootElement) {
-                    newResult = doStepAfter(frame, result);
+                    doStepAfter(frame, result);
                 }
             } finally {
                 steppingStrategy = strategyMap.get(Thread.currentThread());
@@ -1538,7 +1517,7 @@ public final class DebuggerSession implements Closeable {
                 }
             }
             if (steppingStrategy != null && steppingStrategy.isStopAfterCall()) {
-                newResult = notifyCallerReturn(context, steppingStrategy, this, SuspendAnchor.AFTER, newResult != null ? newResult : result);
+                Object newResult = notifyCallerReturn(context, steppingStrategy, this, SuspendAnchor.AFTER, result);
                 if (newResult != result) {
                     throw getContext().createUnwind(new ChangedReturnInfo(newResult));
                 }
