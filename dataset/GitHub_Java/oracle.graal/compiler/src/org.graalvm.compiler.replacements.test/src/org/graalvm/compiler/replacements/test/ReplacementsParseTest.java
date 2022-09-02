@@ -430,7 +430,7 @@ public class ReplacementsParseTest extends ReplacementsTest {
         String compiledReturnValue = IN_COMPILED_HANDLER_MARKER;
         forceCompileOverride = true;
         inlineInvokeDecision = InlineInvokePlugin.InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
-        inlineInvokeMethodName = "stringize";
+        inlineInvokeMethodName = "stringizeId";
         try {
             testWithDifferentReturnValues(options, standardReturnValue, compiledReturnValue, "callStringize", THROW_EXCEPTION_MARKER);
         } finally {
@@ -680,11 +680,6 @@ public class ReplacementsParseTest extends ReplacementsTest {
                     @Override
                     public ForeignCallLinkage lookupForeignCall(ForeignCallDescriptor descriptor) {
                         return null;
-                    }
-
-                    @Override
-                    public boolean isAvailable(ForeignCallDescriptor descriptor) {
-                        return false;
                     }
                 };
             }
