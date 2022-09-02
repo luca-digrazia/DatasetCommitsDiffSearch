@@ -360,16 +360,16 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                     testData = expectedStdout(resultValue);
                     break;
                 case "int":
-                    testData = expected(Integer.parseInt(resultValue.trim()));
+                    testData = expected(Integer.parseInt(resultValue));
                     break;
                 case "long":
-                    testData = expected(Long.parseLong(resultValue.trim()));
+                    testData = expected(Long.parseLong(resultValue));
                     break;
                 case "float":
-                    testData = expected(Float.parseFloat(resultValue.trim()));
+                    testData = expected(Float.parseFloat(resultValue));
                     break;
                 case "double":
-                    testData = expected(Double.parseDouble(resultValue.trim()));
+                    testData = expected(Double.parseDouble(resultValue));
                     break;
                 case "exception":
                     testData = expectedThrows(resultValue);
