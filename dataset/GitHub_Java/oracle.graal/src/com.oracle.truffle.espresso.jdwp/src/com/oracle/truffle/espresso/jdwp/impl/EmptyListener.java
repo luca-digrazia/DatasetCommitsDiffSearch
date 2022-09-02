@@ -5,7 +5,6 @@ import com.oracle.truffle.espresso.jdwp.api.JDWPListener;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
 public final class EmptyListener implements JDWPListener {
-
     @Override
     public void vmStarted(Object mainThread) {
 

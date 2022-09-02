@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.jdwp.api;
 
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPDebuggerController;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
 
@@ -35,8 +34,9 @@ public final class JDWPSetup {
 
     private JDWPDebuggerController controller;
 
-    public void setup(Debugger debugger, JDWPDebuggerController control, JDWPOptions options, JDWPContext context) {
-        control.initialize(debugger, options, context, false);
+    public void setup(TruffleLanguage.Env env, JDWPOptions options, JDWPContext context) {
+        JDWPDebuggerController control = env.lookup(env.getInstruments().get(JDWPInstrument.ID), JDWPDebuggerController.class);
+        control.initialize(env, options, context, false);
         this.controller = control;
     }
 

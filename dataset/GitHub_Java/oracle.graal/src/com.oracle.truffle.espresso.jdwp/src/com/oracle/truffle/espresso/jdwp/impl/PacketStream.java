@@ -29,7 +29,7 @@ public final class PacketStream {
     private final Packet packet;
     private int readPosition;
 
-    private final ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
+    ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
 
     PacketStream() {
         packet = new Packet();
@@ -212,6 +212,7 @@ public final class PacketStream {
         try {
             ret = new String(packet.data, readPosition, len, "UTF8");
         } catch(java.io.UnsupportedEncodingException e) {
+            System.err.println(e);
             ret = "Conversion error!";
         }
         readPosition += len;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,10 +23,10 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
-import com.oracle.truffle.espresso.jdwp.api.FieldBreakpoint;
+import com.oracle.truffle.espresso.jdwp.api.JDWPFieldBreakpoint;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
-public final class FieldBreakpointInfo extends AbstractBreakpointInfo implements BreakpointInfo, FieldBreakpoint {
+public final class FieldBreakpointInfo extends AbstractBreakpointInfo implements BreakpointInfo, JDWPFieldBreakpoint {
 
     private final KlassRef klass;
     private final FieldRef field;

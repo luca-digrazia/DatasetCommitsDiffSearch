@@ -52,21 +52,21 @@ public final class Packet {
     public byte[] toByteArray() {
         int len = data.length + 11;
         byte b[] = new byte[len];
-        b[0] = (byte) ((len >>> 24) & 0xff);
-        b[1] = (byte) ((len >>> 16) & 0xff);
-        b[2] = (byte) ((len >>> 8) & 0xff);
-        b[3] = (byte) ((len >>> 0) & 0xff);
-        b[4] = (byte) ((id >>> 24) & 0xff);
-        b[5] = (byte) ((id >>> 16) & 0xff);
-        b[6] = (byte) ((id >>> 8) & 0xff);
-        b[7] = (byte) ((id >>> 0) & 0xff);
-        b[8] = (byte) flags;
+        b[0] = (byte)((len >>> 24) & 0xff);
+        b[1] = (byte)((len >>> 16) & 0xff);
+        b[2] = (byte)((len >>>  8) & 0xff);
+        b[3] = (byte)((len >>>  0) & 0xff);
+        b[4] = (byte)((id >>> 24) & 0xff);
+        b[5] = (byte)((id >>> 16) & 0xff);
+        b[6] = (byte)((id >>>  8) & 0xff);
+        b[7] = (byte)((id >>>  0) & 0xff);
+        b[8] = (byte)flags;
         if ((flags & Packet.Reply) == 0) {
-            b[9] = (byte) cmdSet;
-            b[10] = (byte) cmd;
+            b[9] = (byte)cmdSet;
+            b[10] = (byte)cmd;
         } else {
-            b[9] = (byte) ((errorCode >>> 8) & 0xff);
-            b[10] = (byte) ((errorCode >>> 0) & 0xff);
+            b[9] = (byte)((errorCode >>>  8) & 0xff);
+            b[10] = (byte)((errorCode >>>  0) & 0xff);
         }
         if (data.length > 0) {
             System.arraycopy(data, 0, b, 11, data.length);
@@ -108,15 +108,15 @@ public final class Packet {
         Packet p = new Packet();
         p.id = ((b4 << 24) | (b5 << 16) | (b6 << 8) | (b7 << 0));
 
-        p.flags = (short) (b[8] & 0xff);
+        p.flags = (short)(b[8] & 0xff);
 
         if ((p.flags & Packet.Reply) == 0) {
-            p.cmdSet = (short) (b[9] & 0xff);
-            p.cmd = (short) (b[10] & 0xff);
+            p.cmdSet = (short)(b[9] & 0xff);
+            p.cmd = (short)(b[10] & 0xff);
         } else {
-            short b9 = (short) (b[9] & 0xff);
-            short b10 = (short) (b[10] & 0xff);
-            p.errorCode = (short) ((b9 << 8) + (b10 << 0));
+            short b9 = (short)(b[9] & 0xff);
+            short b10 = (short)(b[10] & 0xff);
+            p.errorCode = (short)((b9 << 8) + (b10 << 0));
         }
 
         p.data = new byte[b.length - 11];
@@ -124,17 +124,67 @@ public final class Packet {
         return p;
     }
 
-    Packet() {
+    Packet()
+    {
         id = uniqID();
         flags = NoFlags;
         data = nullData;
     }
 
-    static synchronized private int uniqID() {
+    static synchronized private int uniqID()
+    {
         /*
-         * JDWP spec does not require this id to be sequential and increasing, but our
-         * implementation does. See VirtualMachine.notifySuspend, for example.
+         * JDWP spec does not require this id to be sequential and
+         * increasing, but our implementation does. See
+         * VirtualMachine.notifySuspend, for example.
          */
         return uID++;
+    }
+
+    public void dump(boolean sending) {
+        String direction = sending ? "Sending" : "Receiving";
+        if (sending) {
+            System.out.println(direction + " Command. id=" + id +
+                    ", length=" + data.length +
+                    ", commandSet=" + cmdSet +
+                    ", command=" + cmd +
+                    ", flags=" + flags);
+        } else {
+            String type = (flags & Packet.Reply) != 0 ?
+                    "Reply" : "Event";
+            System.out.println(direction + " " + type + ". id=" + id +
+                    ", length=" + data.length +
+                    ", errorCode=" + errorCode +
+                    ", flags=" + flags);
+        }
+
+        StringBuffer line = new StringBuffer(80);
+
+        line.append("0000: ");
+        if (data.length == 0) {
+            line.append("no data in packet");
+        }
+        for (int i = 0; i < data.length; i++) {
+            if ((i > 0) && (i % 16 == 0)) {
+                System.out.println(line.toString());
+                line.setLength(0);
+                line.append(String.valueOf(i));
+                line.append(": ");
+                int len = line.length();
+                for (int j = 0; j < 6 - len; j++) {
+                    line.insert(0, '0');
+                }
+            }
+            int val = 0xff & data[i];
+            String str = Integer.toHexString(val);
+            if (str.length() == 1) {
+                line.append('0');
+            }
+            line.append(str);
+            line.append(' ');
+        }
+        if (line.length() > 6) {
+            System.out.println(line.toString());
+        }
     }
 }

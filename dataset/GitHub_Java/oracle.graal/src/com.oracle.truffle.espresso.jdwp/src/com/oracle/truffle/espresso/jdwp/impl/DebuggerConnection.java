@@ -205,7 +205,7 @@ public final class DebuggerConnection implements JDWPCommands {
                     }
                 } catch (IOException e) {
                     if (!Thread.currentThread().isInterrupted()) {
-                        JDWPLogger.log("Failed to process jdwp packet with message: %s", JDWPLogger.LogLevel.ALL, e.getMessage());
+                        JDWPLogger.log("Failed to process jdwp packet with message: " + e.getMessage(), JDWPLogger.LogLevel.ALL);
                     }
                 } catch (ConnectionClosedException e) {
                     // we closed the session, so let the thread run dry
@@ -218,10 +218,10 @@ public final class DebuggerConnection implements JDWPCommands {
 
             if (packet.flags == Packet.Reply) {
                 // result packet from debugger!
-                JDWPLogger.log("Should not get any reply packet from debugger", JDWPLogger.LogLevel.PACKET);
+                System.err.println("Should not get any reply packet from debugger");
             } else {
                 // process a command packet from debugger
-                JDWPLogger.log("received command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
+                JDWPLogger.log("received command(" + packet.cmdSet + "." + packet.cmd + ")", JDWPLogger.LogLevel.PACKET);
 
                 switch (packet.cmdSet) {
                     case JDWP.VirtualMachine.ID: {
@@ -311,6 +311,9 @@ public final class DebuggerConnection implements JDWPCommands {
                             case JDWP.ReferenceType.METHODS_WITH_GENERIC.ID:
                                 result = JDWP.ReferenceType.METHODS_WITH_GENERIC.createReply(packet, context);
                                 break;
+                            //case JDWP.ReferenceType.CONSTANT_POOL.ID:
+                            //    result = JDWP.ReferenceType.CONSTANT_POOL.createReply(packet);
+                            //    break;
                         }
                         break;
                     }
@@ -511,10 +514,10 @@ public final class DebuggerConnection implements JDWPCommands {
                 }
             }
             if (result != null && result.getReply() != null) {
-                JDWPLogger.log("replying to command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
+                JDWPLogger.log("replying to command(" + packet.cmdSet + "." + packet.cmd + ")", JDWPLogger.LogLevel.PACKET);
                 connection.queuePacket(result.getReply());
             } else {
-                JDWPLogger.log("no result for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
+                System.err.println("no result for command(" + packet.cmdSet + "." + packet.cmd + ")");
             }
 
             if (result != null && result.getFutures() != null) {

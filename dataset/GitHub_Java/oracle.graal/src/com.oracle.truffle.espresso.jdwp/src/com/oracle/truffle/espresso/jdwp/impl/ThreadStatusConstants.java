@@ -29,6 +29,5 @@ public final class ThreadStatusConstants {
     public static final int MONITOR = 3;
     public static final int WAIT = 4;
 
-    private ThreadStatusConstants() {
-    }
+    private ThreadStatusConstants() {}
 }

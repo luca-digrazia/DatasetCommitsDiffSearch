@@ -22,27 +22,28 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
+import java.util.List;
 import java.util.concurrent.Callable;
 
-public class JDWPResult {
+public final class JDWPResult {
 
     private final PacketStream reply;
-    private final Callable future;
+    private final List<Callable<Void>> futures;
 
     JDWPResult(PacketStream reply) {
         this(reply, null);
     }
 
-    JDWPResult(PacketStream reply, Callable future) {
+    JDWPResult(PacketStream reply, List<Callable<Void>> futures) {
         this.reply = reply;
-        this.future = future;
+        this.futures = futures;
     }
 
     public PacketStream getReply() {
         return reply;
     }
 
-    public Callable getFuture() {
-        return future;
+    public List<Callable<Void>> getFutures() {
+        return futures;
     }
 }
