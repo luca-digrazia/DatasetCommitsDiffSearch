@@ -72,7 +72,7 @@ public final class FunctionDefinition implements Constant, FunctionSymbol, Metad
     private int currentBlock = 0;
     private String name;
 
-    private FunctionDefinition(FunctionType type, String name, Linkage linkage, Visibility visibility, AttributesCodeEntry paramAttr) {
+    public FunctionDefinition(FunctionType type, String name, Linkage linkage, Visibility visibility, AttributesCodeEntry paramAttr) {
         this.type = type;
         this.name = name;
         this.paramAttr = paramAttr;
@@ -114,6 +114,7 @@ public final class FunctionDefinition implements Constant, FunctionSymbol, Metad
 
     @Override
     public void setName(String name) {
+        assert !name.startsWith("@");
         this.name = name;
     }
 
@@ -216,7 +217,7 @@ public final class FunctionDefinition implements Constant, FunctionSymbol, Metad
     }
 
     public void nameBlock(int index, String argName) {
-        blocks[index].setName(LLVMIdentifier.toExplicitBlockName(argName));
+        blocks[index].setName(argName);
     }
 
     public void onAfterParse() {
