@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -51,6 +53,10 @@ public class GraalError extends Error {
 
     public static RuntimeException shouldNotReachHere(Throwable cause) {
         throw new GraalError(cause);
+    }
+
+    public static RuntimeException shouldNotReachHere(Throwable cause, String msg) {
+        throw new GraalError(cause, "should not reach here: %s", msg);
     }
 
     /**
@@ -123,6 +129,26 @@ public class GraalError extends Error {
     }
 
     /**
+     * Checks a given condition and throws a {@link GraalError} if it is false. Guarantees are
+     * stronger than assertions in that they are always checked. Error messages for guarantee
+     * violations should clearly indicate the nature of the problem as well as a suggested solution
+     * if possible.
+     *
+     * @param condition the condition to check
+     * @param msg the message that will be associated with the error, in
+     *            {@link String#format(String, Object...)} syntax
+     * @param arg1 argument to the format string in {@code msg}
+     * @param arg2 argument to the format string in {@code msg}
+     * @param arg3 argument to the format string in {@code msg}
+     * @param arg4 argument to the format string in {@code msg}
+     */
+    public static void guarantee(boolean condition, String msg, Object arg1, Object arg2, Object arg3, Object arg4) {
+        if (!condition) {
+            throw new GraalError("failed guarantee: " + msg, arg1, arg2, arg3, arg4);
+        }
+    }
+
+    /**
      * This override exists to catch cases when {@link #guarantee(boolean, String, Object)} is
      * called with one argument bound to a varargs method parameter. It will bind to this method
      * instead of the single arg variant and produce a deprecation warning instead of silently
@@ -167,6 +193,14 @@ public class GraalError extends Error {
     }
 
     /**
+     * This constructor creates a {@link GraalError} for a given causing Throwable instance with
+     * detailed error message.
+     */
+    public GraalError(Throwable cause, String msg, Object... args) {
+        super(format(msg, args), cause);
+    }
+
+    /**
      * This constructor creates a {@link GraalError} and adds all the
      * {@linkplain #addContext(String) context} of another {@link GraalError}.
      *
@@ -181,6 +215,12 @@ public class GraalError extends Error {
     public String toString() {
         StringBuilder str = new StringBuilder();
         str.append(super.toString());
+        str.append(context());
+        return str.toString();
+    }
+
+    public String context() {
+        StringBuilder str = new StringBuilder();
         for (String s : context) {
             str.append("\n\tat ").append(s);
         }
