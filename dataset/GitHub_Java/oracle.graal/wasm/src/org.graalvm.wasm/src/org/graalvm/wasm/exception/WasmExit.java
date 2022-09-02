@@ -71,6 +71,12 @@ public class WasmExit extends AbstractTruffleException {
 
     @ExportMessage
     @SuppressWarnings("static-method")
+    boolean isExceptionUnwind() {
+        return true;
+    }
+
+    @ExportMessage
+    @SuppressWarnings("static-method")
     ExceptionType getExceptionType() {
         return ExceptionType.EXIT;
     }
