@@ -137,9 +137,9 @@ public final class EngineData {
     @CompilationFinal public boolean traceTransferToInterpreter;
 
     // computed fields.
-    @CompilationFinal public int callThresholdInInterpreter;
-    @CompilationFinal public int callAndLoopThresholdInInterpreter;
-    @CompilationFinal public int callThresholdInFirstTier;
+    @CompilationFinal public int firstTierCallThreshold;
+    @CompilationFinal public int firstTierCallAndLoopThreshold;
+    @CompilationFinal public int lastTierCallThreshold;
 
     // Cached logger
     private volatile TruffleLogger logger;
@@ -154,6 +154,10 @@ public final class EngineData {
 
         // the splittingStatistics requires options to be initialized
         this.splittingStatistics = new TruffleSplittingStrategy.SplitStatisticsData();
+    }
+
+    public OptionValues getEngineOptions() {
+        return engineOptions;
     }
 
     void loadOptions(OptionValues options) {
@@ -187,12 +191,9 @@ public final class EngineData {
         this.traceCompilation = getPolyglotOptionValue(options, TraceCompilation);
         this.traceCompilationDetails = getPolyglotOptionValue(options, TraceCompilationDetails);
         this.backgroundCompilation = getPolyglotOptionValue(options, BackgroundCompilation);
-        this.callThresholdInInterpreter = computeCallThresholdInInterpreter(options);
-        this.callAndLoopThresholdInInterpreter = computeCallAndLoopThresholdInInterpreter(options);
-        this.callThresholdInFirstTier = computeCallThresholdInFirstTier(options);
-        System.out.println(this.callThresholdInInterpreter);
-        System.out.println(this.callAndLoopThresholdInInterpreter);
-        System.out.println(this.callThresholdInFirstTier);
+        this.firstTierCallThreshold = computeFirstTierCallThreshold(options);
+        this.firstTierCallAndLoopThreshold = computeFirstTierCallAndLoopThreshold(options);
+        this.lastTierCallThreshold = firstTierCallAndLoopThreshold;
         this.callTargetStatisticDetails = getPolyglotOptionValue(options, CompilationStatisticDetails);
         this.callTargetStatistics = getPolyglotOptionValue(options, CompilationStatistics) || this.callTargetStatisticDetails;
         this.statisticsListener = this.callTargetStatistics ? StatisticsListener.createEngineListener(GraalTruffleRuntime.getRuntime()) : null;
@@ -300,7 +301,7 @@ public final class EngineData {
         }
     }
 
-    private int computeCallThresholdInInterpreter(OptionValues options) {
+    private int computeFirstTierCallThreshold(OptionValues options) {
         if (compileImmediately) {
             return 0;
         }
@@ -311,7 +312,7 @@ public final class EngineData {
         }
     }
 
-    private int computeCallAndLoopThresholdInInterpreter(OptionValues options) {
+    private int computeFirstTierCallAndLoopThreshold(OptionValues options) {
         if (compileImmediately) {
             return 0;
         }
@@ -320,13 +321,6 @@ public final class EngineData {
         } else {
             return getPolyglotOptionValue(options, CompilationThreshold);
         }
-    }
-
-    private int computeCallThresholdInFirstTier(OptionValues options) {
-        if (compileImmediately) {
-            return 0;
-        }
-        return getPolyglotOptionValue(options, CompilationThreshold);
     }
 
     public TruffleLogger getLogger() {

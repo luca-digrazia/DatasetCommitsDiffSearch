@@ -24,8 +24,7 @@
  */
 package org.graalvm.compiler.truffle.runtime.debug;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import com.oracle.truffle.api.TruffleLogger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -38,8 +37,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-import java.util.logging.Level;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
@@ -53,12 +52,14 @@ import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining.CallTreeNodeVisitor;
 import org.graalvm.compiler.truffle.runtime.TruffleInliningDecision;
 
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.logging.Level;
 
 public final class StatisticsListener extends AbstractGraalTruffleRuntimeListener {
 
@@ -118,7 +119,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
     private final TargetIntStatistics compilationResultTotalFrameSize = new TargetIntStatistics();
     private final TargetIntStatistics compilationResultDataPatches = new TargetIntStatistics();
 
-    private final Map<OptimizedCallTarget, Long> timeQueued = new HashMap<>();
+    private final ConcurrentHashMap<OptimizedCallTarget, Long> timeQueued = new ConcurrentHashMap<>();
 
     private StatisticsListener(GraalTruffleRuntime runtime) {
         super(runtime);
