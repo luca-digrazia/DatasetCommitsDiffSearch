@@ -103,6 +103,7 @@ import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.OSUtils;
 import java.nio.file.FileSystemException;
@@ -2624,6 +2625,14 @@ public class FileSystemsTest {
             public String toString() {
                 return file.toString();
             }
+        }
+    }
+
+    private static final TestAPIAccessor API = new TestAPIAccessor();
+
+    private static final class TestAPIAccessor extends Accessor {
+        static EngineSupport engineAccess() {
+            return API.engineSupport();
         }
     }
 }
