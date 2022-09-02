@@ -152,10 +152,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      */
     private boolean isInstantiated;
 
-    /**
-     * Boolean value or exception that happend at image-build time.
-     */
-    private Object isAnonymousClass;
+    private boolean isAnonymousClass;
 
     /**
      * The {@link Modifier modifiers} of this class.
@@ -274,18 +271,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private AnnotatedSuperInfo annotatedSuperInfo;
 
     /**
-     * Field used for module information access at run-time The run time type of this field is
-     * java.lang.Module but can be casted to {@link Target_java_lang_Module} The module is of type
-     * Object to avoid ClassCastExceptions at image build time due to base module miss-match.
-     */
-    private Object module;
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public void setModule(Object module) {
-        this.module = module;
-    }
-
-    /**
      * Final fields in subsituted classes are treated as implicitly RecomputeFieldValue even when
      * not annotated with @RecomputeFieldValue. Their name must not match a field in the original
      * class, i.e., allPermDomain.
@@ -317,7 +302,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private final LazyFinalReference<String> packageNameReference = new LazyFinalReference<>(this::computePackageName);
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public DynamicHub(String name, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName, int modifiers,
+    public DynamicHub(String name, boolean isLocalClass, boolean isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName, int modifiers,
                     ClassLoader classLoader) {
         this.name = name;
         this.isLocalClass = isLocalClass;
@@ -732,15 +717,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private boolean isAnonymousClass() {
-        if (isAnonymousClass instanceof Boolean) {
-            return (Boolean) isAnonymousClass;
-        } else if (isAnonymousClass instanceof NoClassDefFoundError) {
-            throw (NoClassDefFoundError) isAnonymousClass;
-        } else if (isAnonymousClass instanceof InternalError) {
-            throw (InternalError) isAnonymousClass;
-        } else {
-            throw VMError.shouldNotReachHere();
-        }
+        return isAnonymousClass;
     }
 
     @Substitute
@@ -1272,9 +1249,9 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute //
-    @TargetElement(name = "getModule", onlyWith = JDK11OrLater.class)
+    @TargetElement(onlyWith = JDK11OrLater.class)
     public Target_java_lang_Module getModule() {
-        return (Target_java_lang_Module) module;
+        return singleModuleReference.get();
     }
 
     @Substitute //
@@ -1309,7 +1286,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class)
     private String getSimpleBinaryName0() {
-        if (isAnonymousClass() || enclosingClass == null) {
+        if (isAnonymousClass || enclosingClass == null) {
             return null;
         }
         try {
