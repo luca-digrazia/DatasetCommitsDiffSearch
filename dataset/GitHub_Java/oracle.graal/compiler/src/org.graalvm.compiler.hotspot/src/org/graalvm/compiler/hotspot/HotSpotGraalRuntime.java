@@ -157,7 +157,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     /**
      * @param nameQualifier a qualifier to be added to this runtime's {@linkplain #getName() name}
      * @param compilerConfigurationFactory factory for the compiler configuration
-     *            {@link CompilerConfigurationFactory#selectFactory}
+     *            {@link CompilerConfigurationFactory#selectFactory(String, OptionValues)}
      */
     @SuppressWarnings("try")
     HotSpotGraalRuntime(String nameQualifier, HotSpotJVMCIRuntime jvmciRuntime, CompilerConfigurationFactory compilerConfigurationFactory, OptionValues initialOptions) {
@@ -246,58 +246,37 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     }
 
     /**
-     * Constants denoting the GC algorithms available in HotSpot. The names of the constants match
-     * the constants in the {@code CollectedHeap::Name} C++ enum.
+     * Constants denoting the GC algorithms available in HotSpot.
      */
     public enum HotSpotGC {
         // Supported GCs
-        Serial(true, JDK >= 11, "UseSerialGC", true),
-        Parallel(true, JDK >= 11, "UseParallelGC", true, "UseParallelOldGC", JDK < 15, "UseParNewGC", JDK < 10),
-        CMS(true, JDK >= 11 && JDK <= 14, "UseConcMarkSweepGC", JDK < 14),
-        G1(true, JDK >= 11, "UseG1GC", true),
+        Serial(true, "UseSerialGC", true),
+        Parallel(true, "UseParallelGC", true, "UseParallelOldGC", JDK < 15, "UseParNewGC", JDK < 10),
+        CMS(true, "UseConcMarkSweepGC", JDK < 14),
+        G1(true, "UseG1GC", true),
 
         // Unsupported GCs
-        Epsilon(false, JDK >= 11, "UseEpsilonGC", JDK >= 11),
-        Z(false, JDK >= 11, "UseZGC", JDK >= 11),
-        Shenandoah(false, JDK >= 12, "UseShenandoahGC", JDK >= 12);
+        Epsilon(false, "UseEpsilonGC", JDK >= 11),
+        Z(false, "UseZGC", JDK >= 11);
 
-        HotSpotGC(boolean supported, boolean expectNamePresent,
+        HotSpotGC(boolean supported,
                         String flag1, boolean expectFlagPresent1,
                         String flag2, boolean expectFlagPresent2,
                         String flag3, boolean expectFlagPresent3) {
             this.supported = supported;
-            this.expectNamePresent = expectNamePresent;
             this.expectFlagsPresent = new boolean[]{expectFlagPresent1, expectFlagPresent2, expectFlagPresent3};
             this.flags = new String[]{flag1, flag2, flag3};
         }
 
-        HotSpotGC(boolean supported, boolean expectNamePresent, String flag, boolean expectFlagPresent) {
+        HotSpotGC(boolean supported, String flag, boolean expectFlagPresent) {
             this.supported = supported;
-            this.expectNamePresent = expectNamePresent;
             this.expectFlagsPresent = new boolean[]{expectFlagPresent};
             this.flags = new String[]{flag};
         }
 
-        /**
-         * Specifies if this GC supported by Graal.
-         */
         final boolean supported;
-
-        /**
-         * Specifies if {@link #name()} is expected to be present in the {@code CollectedHeap::Name}
-         * C++ enum.
-         */
-        final boolean expectNamePresent;
-
-        /**
-         * The VM flags that will select this GC.
-         */
-        private final String[] flags;
-
-        /**
-         * Specifies which {@link #flags} are expected to be present in the VM.
-         */
         final boolean[] expectFlagsPresent;
+        private final String[] flags;
 
         public boolean isSelected(GraalHotSpotVMConfig config) {
             boolean selected = false;
@@ -312,20 +291,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
                 }
             }
             return selected;
-        }
-
-        /**
-         * Gets the GC matching {@code name}.
-         *
-         * @param name the ordinal of a {@code CollectedHeap::Name} value
-         */
-        static HotSpotGC forName(int name, GraalHotSpotVMConfig config) {
-            for (HotSpotGC gc : HotSpotGC.values()) {
-                if (config.getConstant("CollectedHeap::" + gc.name(), Integer.class, -1, gc.expectNamePresent) == name) {
-                    return gc;
-                }
-            }
-            return null;
         }
     }
 
