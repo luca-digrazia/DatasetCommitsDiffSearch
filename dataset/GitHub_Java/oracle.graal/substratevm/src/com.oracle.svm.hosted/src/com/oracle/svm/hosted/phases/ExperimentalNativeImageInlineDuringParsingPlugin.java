@@ -70,6 +70,8 @@ import org.graalvm.util.GuardedAnnotationAccess;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.HostedProviders;
+import com.oracle.svm.core.ParsingReason;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.DeoptTest;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.NeverInlineTrivial;
@@ -77,14 +79,14 @@ import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.core.ParsingReason;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.phases.AnalysisGraphBuilderPhase.AnalysisBytecodeParser;
 import com.oracle.svm.hosted.phases.ExperimentalNativeImageInlineDuringParsingPlugin.CallSite;
 import com.oracle.svm.hosted.phases.ExperimentalNativeImageInlineDuringParsingPlugin.InvocationResult;
 import com.oracle.svm.hosted.phases.ExperimentalNativeImageInlineDuringParsingPlugin.InvocationResultInline;
+import com.oracle.svm.hosted.phases.IntrinsifyMethodHandlesInvocationPlugin.IntrinsificationRegistry;
 import com.oracle.svm.hosted.phases.SharedGraphBuilderPhase.SharedBytecodeParser;
-import com.oracle.svm.hosted.snippets.ReflectionPlugins;
+import com.oracle.svm.hosted.snippets.ReflectionPlugins.ReflectionPluginRegistry;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -148,7 +150,7 @@ public class ExperimentalNativeImageInlineDuringParsingPlugin implements InlineI
 
     public static class Options {
         @Option(help = "Experimental: Inline methods which folds to constant during parsing before the static analysis.")//
-        public static final HostedOptionKey<Boolean> InlineBeforeAnalysis = new HostedOptionKey<>(false);
+        public static final HostedOptionKey<Boolean> OldInlineBeforeAnalysis = new HostedOptionKey<>(false);
 
         @Option(help = "Maximum depth when inlining.")//
         public static final HostedOptionKey<Integer> InlineBeforeAnalysisMaxDepth = new HostedOptionKey<>(9);
@@ -176,8 +178,8 @@ public class ExperimentalNativeImageInlineDuringParsingPlugin implements InlineI
         if (reason == ParsingReason.PointsToAnalysis) {
             DebugContext debug = b.getDebug();
             try (DebugContext.Scope ignored = debug.scope("TrivialMethodDetectorAnalysis", this);
-                            AutoCloseable ignored1 = ReflectionPlugins.ReflectionPluginRegistry.startThreadLocalRegistry();
-                            AutoCloseable ignored2 = IntrinsifyMethodHandlesInvocationPlugin.IntrinsificationRegistry.startThreadLocalnRegistry()) {
+                            AutoCloseable ignored1 = ReflectionPluginRegistry.startThreadLocalRegistry();
+                            AutoCloseable ignored2 = IntrinsificationRegistry.startThreadLocalnRegistry()) {
                 TrivialMethodDetector detector = new TrivialMethodDetector(providers, ((SharedBytecodeParser) b).getGraphBuilderConfig(), b.getOptions(), b.getDebug());
                 InvocationResult newResult = detector.analyzeMethod(callSite, (AnalysisMethod) callee, args);
                 ExperimentalNativeImageInlineDuringParsingPlugin.support().add(callSite, newResult);
@@ -198,7 +200,10 @@ public class ExperimentalNativeImageInlineDuringParsingPlugin implements InlineI
 
             if (reason == ParsingReason.PointsToAnalysis) {
                 AnalysisMethod aMethod = (AnalysisMethod) callee;
-                aMethod.registerAsImplementationInvoked(null);
+
+                if (!SubstrateOptions.parseOnce()) {
+                    aMethod.registerAsImplementationInvoked(null);
+                }
 
                 if (!aMethod.isStatic() && args[0].isConstant()) {
                     AnalysisType receiverType = (AnalysisType) StampTool.typeOrNull(args[0]);
@@ -218,6 +223,11 @@ public class ExperimentalNativeImageInlineDuringParsingPlugin implements InlineI
                         GuardedAnnotationAccess.isAnnotationPresent(callee, NeverInline.class) || GuardedAnnotationAccess.isAnnotationPresent(callee, NeverInlineTrivial.class) ||
                         GuardedAnnotationAccess.isAnnotationPresent(callee, Uninterruptible.class) || GuardedAnnotationAccess.isAnnotationPresent(caller, Uninterruptible.class) ||
                         GuardedAnnotationAccess.isAnnotationPresent(callee, RestrictHeapAccess.class) || GuardedAnnotationAccess.isAnnotationPresent(caller, RestrictHeapAccess.class) ||
+                        /*
+                         * Inlining during parsing into a class initializer can lead to recursive
+                         * parsing of that class initializer.
+                         */
+                        caller.isClassInitializer() ||
                         /*
                          * Canonicalization during inlining folds to a constant in analysis, but not
                          * for
