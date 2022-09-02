@@ -63,7 +63,6 @@ import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.option.APIOption;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.LocatableMultiOptionValue;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.util.UserError;
@@ -131,7 +130,7 @@ public class ClassInitializationFeature implements GraalFeature {
                         deprecated = "Currently there is no replacement for this option. Try using --initialize-at-run-time or use the non-API option -H:ClassInitialization directly.", //
                         defaultValue = "", customHelp = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized both at runtime and during image building") //
         @Option(help = "A comma-separated list of classes appended with their initialization strategy (':build_time', ':rerun', or ':run_time')", type = OptionType.User)//
-        public static final HostedOptionKey<LocatableMultiOptionValue.Strings> ClassInitialization = new HostedOptionKey<>(new LocatableMultiOptionValue.Strings());
+        public static final HostedOptionKey<String[]> ClassInitialization = new HostedOptionKey<>(new String[0]);
 
         @Option(help = "Prints class initialization info for all classes detected by analysis.", type = OptionType.Debug)//
         public static final HostedOptionKey<Boolean> PrintClassInitialization = new HostedOptionKey<>(false);
@@ -139,19 +138,18 @@ public class ClassInitializationFeature implements GraalFeature {
 
     public static void processClassInitializationOptions(ClassInitializationSupport initializationSupport) {
         initializeNativeImagePackagesAtBuildTime(initializationSupport);
-        Options.ClassInitialization.getValue().getValuesWithOrigins().forEach(entry -> {
-            for (String info : entry.getLeft().split(",")) {
+        String[] initializationInfo = Options.ClassInitialization.getValue();
+        for (String infos : initializationInfo) {
+            for (String info : infos.split(",")) {
                 boolean noMatches = Arrays.stream(InitKind.values()).noneMatch(v -> info.endsWith(v.suffix()));
-                String origin = entry.getRight();
                 if (noMatches) {
-                    throw UserError.abort("Element in class initialization configuration must end in %s, %s, or %s. Found: %s (from %s)",
-                                    RUN_TIME.suffix(), RERUN.suffix(), BUILD_TIME.suffix(), info, origin);
+                    throw UserError.abort("Element in class initialization configuration must end in %s, %s, or %s. Found: %s", RUN_TIME.suffix(), RERUN.suffix(), BUILD_TIME.suffix(), info);
                 }
 
                 Pair<String, InitKind> elementType = InitKind.strip(info);
-                elementType.getRight().stringConsumer(initializationSupport, origin).accept(elementType.getLeft());
+                elementType.getRight().stringConsumer(initializationSupport).accept(elementType.getLeft());
             }
-        });
+        }
     }
 
     private static void initializeNativeImagePackagesAtBuildTime(ClassInitializationSupport initializationSupport) {
@@ -260,10 +258,6 @@ public class ClassInitializationFeature implements GraalFeature {
                 reportSafeTypeInitiazliation(universe, initGraph, path, provenSafe);
                 reportMethodInitializationInfo(path);
             }
-
-            if (SubstrateOptions.TraceClassInitialization.hasBeenSet()) {
-                reportTrackedClassInitializationTraces(path);
-            }
         }
     }
 
@@ -299,21 +293,6 @@ public class ClassInitializationFeature implements GraalFeature {
         }
     }
 
-    private static void reportTrackedClassInitializationTraces(String path) {
-        Map<Class<?>, StackTraceElement[]> initializedClasses = ConfigurableClassInitialization.getInitializedClasses();
-        int size = initializedClasses.size();
-        if (size > 0) {
-            ReportUtils.report(size + " classes are tracked for initialization", path, "tracked_class_initialization", "txt", writer -> {
-                initializedClasses.forEach((k, v) -> {
-                    writer.println(k.getName());
-                    writer.println("---------------------------------------------");
-                    writer.println(ConfigurableClassInitialization.getTraceString(v));
-                    writer.println();
-                });
-            });
-        }
-    }
-
     private static boolean isRelevantForPrinting(AnalysisType type) {
         return !type.isPrimitive() && !type.isArray() && type.isReachable();
     }
@@ -343,9 +322,7 @@ public class ClassInitializationFeature implements GraalFeature {
                                  */
                                 if (!classInitializationSupport.shouldInitializeAtRuntime(c)) {
                                     provenSafe.add(type);
-                                    ClassInitializationInfo initializationInfo = type.getClassInitializer() == null ? ClassInitializationInfo.NO_INITIALIZER_INFO_SINGLETON
-                                                    : ClassInitializationInfo.INITIALIZED_INFO_SINGLETON;
-                                    ((SVMHost) universe.hostVM()).dynamicHub(type).setClassInitializationInfo(initializationInfo);
+                                    ((SVMHost) universe.hostVM()).dynamicHub(type).setClassInitializationInfo(ClassInitializationInfo.INITIALIZED_INFO_SINGLETON);
                                 }
                             }
                         });
@@ -367,7 +344,7 @@ public class ClassInitializationFeature implements GraalFeature {
             info = buildRuntimeInitializationInfo(access, type);
         } else {
             assert type.isInitialized();
-            info = type.getClassInitializer() == null ? ClassInitializationInfo.NO_INITIALIZER_INFO_SINGLETON : ClassInitializationInfo.INITIALIZED_INFO_SINGLETON;
+            info = ClassInitializationInfo.INITIALIZED_INFO_SINGLETON;
         }
         hub.setClassInitializationInfo(info, type.hasDefaultMethods(), type.declaresDefaultMethods());
     }
