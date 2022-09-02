@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,6 +42,7 @@ import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugOptions;
 import org.graalvm.compiler.graph.CachedGraph;
 import org.graalvm.compiler.graph.Edges;
 import org.graalvm.compiler.graph.Graph;
@@ -65,6 +66,7 @@ import org.graalvm.compiler.nodes.VirtualState;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.util.JavaConstantFormattable;
+import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.graalvm.graphio.GraphBlocks;
 import org.graalvm.graphio.GraphElements;
 import org.graalvm.graphio.GraphLocations;
@@ -89,7 +91,7 @@ public class BinaryGraphPrinter implements
     public BinaryGraphPrinter(DebugContext ctx, SnippetReflectionProvider snippetReflection) throws IOException {
         // @formatter:off
         this.output = ctx.buildOutput(GraphOutput.newBuilder(this).
-                        protocolVersion(7, 0).
+                        protocolVersion(6, 1).
                         blocks(this).
                         elementsAndLocations(this, this).
                         types(this)
@@ -589,8 +591,22 @@ public class BinaryGraphPrinter implements
             this.graph = graph;
             StructuredGraph.ScheduleResult scheduleResult = null;
             if (graph instanceof StructuredGraph) {
+
                 StructuredGraph structuredGraph = (StructuredGraph) graph;
-                scheduleResult = GraalDebugHandlersFactory.tryGetSchedule(debug, structuredGraph);
+                scheduleResult = structuredGraph.getLastSchedule();
+                if (scheduleResult == null) {
+
+                    // Also provide a schedule when an error occurs
+                    if (DebugOptions.PrintGraphWithSchedule.getValue(graph.getOptions()) || debug.contextLookup(Throwable.class) != null) {
+                        try {
+                            SchedulePhase schedule = new SchedulePhase(graph.getOptions());
+                            schedule.apply(structuredGraph);
+                            scheduleResult = structuredGraph.getLastSchedule();
+                        } catch (Throwable t) {
+                        }
+                    }
+
+                }
             }
             cfg = scheduleResult == null ? debug.contextLookup(ControlFlowGraph.class) : scheduleResult.getCFG();
             blockToNodes = scheduleResult == null ? null : scheduleResult.getBlockToNodesMap();
