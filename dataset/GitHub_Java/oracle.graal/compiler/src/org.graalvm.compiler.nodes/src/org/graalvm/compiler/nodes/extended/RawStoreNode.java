@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,24 +28,21 @@ import static org.graalvm.compiler.nodeinfo.InputType.State;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
-import org.graalvm.compiler.core.common.LocationIdentity;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
-import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
+import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
+import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.meta.Assumptions;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
@@ -52,27 +51,43 @@ import jdk.vm.ci.meta.ResolvedJavaField;
  * performed before the store.
  */
 @NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public final class RawStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, MemoryCheckpoint.Single {
+public class RawStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, SingleMemoryKill {
 
     public static final NodeClass<RawStoreNode> TYPE = NodeClass.create(RawStoreNode.class);
     @Input ValueNode value;
     @OptionalInput(State) FrameState stateAfter;
     private final boolean needsBarrier;
+    private boolean isVolatile;
 
     public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity) {
-        this(object, offset, value, accessKind, locationIdentity, true);
+        this(object, offset, value, accessKind, locationIdentity, true, false, null, false);
     }
 
     public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier) {
-        this(object, offset, value, accessKind, locationIdentity, needsBarrier, null, false);
+        this(object, offset, value, accessKind, locationIdentity, needsBarrier, false, null, false);
+    }
+
+    public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier, boolean isVolatile) {
+        this(object, offset, value, accessKind, locationIdentity, needsBarrier, isVolatile, null, false);
     }
 
     public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier, FrameState stateAfter,
-                    boolean forceAnyLocation) {
-        super(TYPE, StampFactory.forVoid(), object, offset, accessKind, locationIdentity, forceAnyLocation);
+                    boolean forceLocation) {
+        this(object, offset, value, accessKind, locationIdentity, needsBarrier, false, stateAfter, forceLocation);
+    }
+
+    public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier, boolean isVolatile, FrameState stateAfter,
+                    boolean forceLocation) {
+        this(TYPE, object, offset, value, accessKind, locationIdentity, needsBarrier, isVolatile, stateAfter, forceLocation);
+    }
+
+    protected RawStoreNode(NodeClass<? extends RawStoreNode> c, ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier,
+                    boolean isVolatile, FrameState stateAfter, boolean forceLocation) {
+        super(c, StampFactory.forVoid(), object, offset, accessKind, locationIdentity, forceLocation);
         this.value = value;
         this.needsBarrier = needsBarrier;
         this.stateAfter = stateAfter;
+        this.isVolatile = isVolatile;
         assert accessKind != JavaKind.Void && accessKind != JavaKind.Illegal;
     }
 
@@ -82,6 +97,9 @@ public final class RawStoreNode extends UnsafeAccessNode implements StateSplit, 
 
     @NodeIntrinsic
     public static native Object storeChar(Object object, long offset, char value, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
+
+    @NodeIntrinsic
+    public static native Object storeByte(Object object, long offset, byte value, @ConstantNodeParameter JavaKind kind, @ConstantNodeParameter LocationIdentity locationIdentity);
 
     public boolean needsBarrier() {
         return needsBarrier;
@@ -109,11 +127,6 @@ public final class RawStoreNode extends UnsafeAccessNode implements StateSplit, 
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
-    }
-
-    @Override
     public void virtualize(VirtualizerTool tool) {
         ValueNode alias = tool.getAlias(object());
         if (alias instanceof VirtualObjectNode) {
@@ -121,41 +134,38 @@ public final class RawStoreNode extends UnsafeAccessNode implements StateSplit, 
             ValueNode indexValue = tool.getAlias(offset());
             if (indexValue.isConstant()) {
                 long off = indexValue.asJavaConstant().asLong();
-                int entryIndex = virtual.entryIndexForOffset(off, accessKind());
-                if (entryIndex != -1) {
-                    JavaKind entryKind = virtual.entryKind(entryIndex);
-                    if (entryKind == accessKind() || entryKind == accessKind().getStackKind()) {
-                        tool.setVirtualEntry(virtual, entryIndex, value(), true);
-                        tool.delete();
-                    } else {
-                        if ((accessKind() == JavaKind.Long || accessKind() == JavaKind.Double) && entryKind == JavaKind.Int) {
-                            int nextIndex = virtual.entryIndexForOffset(off + 4, entryKind);
-                            if (nextIndex != -1) {
-                                JavaKind nextKind = virtual.entryKind(nextIndex);
-                                if (nextKind == JavaKind.Int) {
-                                    tool.setVirtualEntry(virtual, entryIndex, value(), true);
-                                    tool.setVirtualEntry(virtual, nextIndex, ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccessProvider(), graph()), true);
-                                    tool.delete();
-                                }
-                            }
-                        }
-                    }
+                int entryIndex = virtual.entryIndexForOffset(tool.getMetaAccess(), off, accessKind());
+                if (entryIndex != -1 && tool.setVirtualEntry(virtual, entryIndex, value(), accessKind(), off)) {
+                    tool.delete();
                 }
             }
         }
     }
 
     @Override
-    protected ValueNode cloneAsFieldAccess(Assumptions assumptions, ResolvedJavaField field) {
-        return new StoreFieldNode(object(), field, value(), stateAfter());
+    public boolean isVolatile() {
+        return isVolatile;
     }
 
     @Override
-    protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
-        return new RawStoreNode(object(), location, value, accessKind(), identity, needsBarrier, stateAfter(), isAnyLocationForced());
+    protected ValueNode cloneAsFieldAccess(Assumptions assumptions, ResolvedJavaField field, boolean volatileAccess) {
+        return new StoreFieldNode(field.isStatic() ? null : object(), field, value(), stateAfter(), volatileAccess);
+    }
+
+    @Override
+    protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity, boolean volatileAccess) {
+        return new RawStoreNode(object(), location, value, accessKind(), identity, needsBarrier, volatileAccess, stateAfter(), isLocationForced());
     }
 
     public FrameState getState() {
         return stateAfter;
+    }
+
+    @Override
+    public LocationIdentity getKilledLocationIdentity() {
+        if (isVolatile()) {
+            return LocationIdentity.any();
+        }
+        return getLocationIdentity();
     }
 }
