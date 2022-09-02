@@ -315,7 +315,7 @@ public class Fcntl {
     public static native short F_SHLCK();
 
     @CConstant
-    @Platforms({Platform.DARWIN.class})
+    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
     public static native int F_NOCACHE();
 
     /** Shared lock. */
