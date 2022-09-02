@@ -66,7 +66,6 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.target.TargetTriple;
 import com.oracle.truffle.llvm.toolchain.config.LLVMConfig;
-import java.lang.ref.ReferenceQueue;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionValues;
@@ -136,21 +135,8 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     @CompilationFinal private LLVMMemory cachedLLVMMemory;
 
     private final EconomicMap<String, LLVMScope> internalFileScopes = EconomicMap.create();
-
-    private static final class LibraryCacheEntry extends WeakReference<CallTarget> {
-
-        final String path;
-
-        LibraryCacheEntry(LLVMLanguage language, String path, CallTarget callTarget) {
-            super(callTarget, language.libraryCacheQueue);
-            this.path = path;
-        }
-    }
-
-    private final EconomicMap<String, LibraryCacheEntry> libraryCache = EconomicMap.create();
-    private final ReferenceQueue<CallTarget> libraryCacheQueue = new ReferenceQueue<>();
+    private final EconomicMap<String, WeakReference<CallTarget>> libraryCache = EconomicMap.create();
     private final Object libraryCacheLock = new Object();
-
     private final EconomicMap<String, Source> librarySources = EconomicMap.create();
 
     private final IDGenerater idGenerater = new IDGenerater();
@@ -519,8 +505,8 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
                     assert !libraryCache.containsKey(path) : "racy insertion despite lock?";
 
                     cached = getCapability(Loader.class).load(getContext(), source, idGenerater.generateID());
-                    LibraryCacheEntry entry = new LibraryCacheEntry(this, path, cached);
-                    libraryCache.put(path, entry);
+                    WeakReference<CallTarget> ref = new WeakReference<>(cached);
+                    libraryCache.put(path, ref);
                 }
                 return cached;
             }
@@ -530,31 +516,16 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
         }
     }
 
-    private void lazyCacheCleanup() {
-        /*
-         * Just lazily clean up one entry. We do this on every lookup. Under the assumption that
-         * lookups are more frequent than insertions, this will eventually catch up and remove every
-         * GCed entry.
-         */
-        LibraryCacheEntry ref = (LibraryCacheEntry) libraryCacheQueue.poll();
-        if (ref != null) {
-            libraryCache.removeKey(ref.path);
-        }
-    }
-
     public CallTarget getCachedLibrary(String path) {
         synchronized (libraryCacheLock) {
-            lazyCacheCleanup();
-            LibraryCacheEntry entry = libraryCache.get(path);
-            if (entry == null) {
+            WeakReference<CallTarget> ref = libraryCache.get(path);
+            if (ref == null) {
                 return null;
             }
-
-            assert entry.path.equals(path);
-            CallTarget ret = entry.get();
+            CallTarget ret = ref.get();
             if (ret == null) {
                 // clean up the map after an entry has been cleared by the GC
-                libraryCache.removeKey(entry.path);
+                libraryCache.removeKey(path);
             }
             return ret;
         }
