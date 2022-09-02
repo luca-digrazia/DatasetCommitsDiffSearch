@@ -36,9 +36,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import com.oracle.svm.core.SubstrateUtil;
-import com.oracle.svm.core.annotate.Alias;
-import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.hub.DynamicHub;
 
 import jdk.vm.ci.meta.JavaKind;
@@ -247,11 +244,7 @@ final class MethodHandleIntrinsic {
              */
             case Arg: {
                 assert args.length == 1;
-                Target_java_lang_invoke_MethodHandle mh = (Target_java_lang_invoke_MethodHandle) args[0];
-                if (args[0] instanceof Target_java_lang_invoke_MethodHandleImpl_IntrinsicMethodHandle) {
-                    mh = (SubstrateUtil.cast(args[0], Target_java_lang_invoke_MethodHandleImpl_IntrinsicMethodHandle.class).getTarget());
-                }
-                Target_java_lang_invoke_SimpleMethodHandle bmh = SubstrateUtil.cast(mh, Target_java_lang_invoke_SimpleMethodHandle.class);
+                Target_java_lang_invoke_SimpleMethodHandle bmh = (Target_java_lang_invoke_SimpleMethodHandle) args[0];
                 return bmh.args[index];
             }
 
@@ -299,7 +292,7 @@ final class MethodHandleIntrinsic {
                 Object[] dest = (Object[]) args[1];
                 Object[] src = Arrays.copyOfRange(args, 2, args.length);
                 System.arraycopy(src, 0, dest, pos, src.length);
-                return dest;
+                return null;
             }
 
             /* java.lang.invoke.MethodHandleImpl$ArrayAccessor helper functions */
@@ -417,7 +410,6 @@ final class MethodHandleIntrinsic {
                 case "linkToVirtual":
                 case "linkToStatic":
                 case "linkToSpecial":
-                case "linkToInterface":
                     return MethodHandleIntrinsic.intrinsic(Variant.Link);
             }
         } else if ("jdk.internal.misc.Unsafe".equals(declaringClass.getTypeName()) &&
@@ -428,12 +420,7 @@ final class MethodHandleIntrinsic {
                          * The L species is directly accessed in some places and needs a special
                          * case to redirect it to the correct intrinsic
                          */
-                        declaringClass == Target_java_lang_invoke_BoundMethodHandle_Species_L.class ||
-                        /*
-                         * Method handles that were resolved at build time try to access their
-                         * fields via the original species classes, so we need to redirect those.
-                         */
-                        declaringClass.getTypeName().startsWith("java.lang.invoke.BoundMethodHandle$Species_")) {
+                        declaringClass == Target_java_lang_invoke_BoundMethodHandle_Species_L.class) {
             /* Bound parameter fields can take arbitrary kinds and indexes */
             if (name.startsWith("arg")) {
                 JavaKind kind = kindForKey(name.charAt("arg".length()));
@@ -469,8 +456,7 @@ final class MethodHandleIntrinsic {
                 case "identity_I":
                 case "identity_J":
                 case "identity_F":
-                case "identity_D":
-                case "identity_V": {
+                case "identity_D": {
                     JavaKind kind = kindForKey(name.charAt("identity_".length()));
                     return MethodHandleIntrinsic.intrinsic(Variant.Identity, kind);
                 }
@@ -478,7 +464,8 @@ final class MethodHandleIntrinsic {
                 case "zero_I":
                 case "zero_J":
                 case "zero_F":
-                case "zero_D": {
+                case "zero_D":
+                case "zero_V": {
                     JavaKind kind = kindForKey(name.charAt("zero_".length()));
                     return MethodHandleIntrinsic.intrinsic(Variant.Zero, kind);
                 }
@@ -536,10 +523,4 @@ final class MethodHandleIntrinsic {
         }
         return null; /* No intrinsic found */
     }
-}
-
-@TargetClass(className = "java.lang.invoke.MethodHandleImpl", innerClass = "IntrinsicMethodHandle", onlyWith = MethodHandlesSupported.class)
-final class Target_java_lang_invoke_MethodHandleImpl_IntrinsicMethodHandle {
-    @Alias
-    protected native Target_java_lang_invoke_MethodHandle getTarget();
 }
