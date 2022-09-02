@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,34 +41,82 @@
 package com.oracle.truffle.api.test.host;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
-import java.util.logging.Logger;
+import java.util.Arrays;
+import java.util.List;
 
+import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-public class CallerSensitiveTest extends ProxyLanguageEnvTest {
-    private static final InteropLibrary INTEROP = InteropLibrary.getFactory().getUncached();
+@SuppressWarnings("static-method")
+@ExportLibrary(InteropLibrary.class)
+public class BoxedStringTest extends ProxyLanguageEnvTest implements TruffleObject {
+    public interface ExactMatchInterop {
+        String stringValue();
+
+        char charValue();
+    }
+
+    private String value;
+    private ExactMatchInterop interop;
+
+    static final List<String> KEYS = Arrays.asList(new String[]{"charValue", "stringValue"});
+
+    @Before
+    public void initObjects() {
+        interop = asJavaObject(ExactMatchInterop.class, this);
+    }
 
     @Test
-    public void testLogger() throws InteropException {
-        TruffleObject loggerClass = asTruffleHostSymbol(Logger.class);
-        String loggerName = "test-logger-name";
-        TruffleObject logger;
-
-        TruffleObject getLogger = (TruffleObject) INTEROP.readMember(loggerClass, "getLogger");
-        logger = (TruffleObject) INTEROP.execute(getLogger, loggerName);
-        assertTrue(env.isHostObject(logger));
-        assertTrue(env.asHostObject(logger) instanceof Logger);
-        assertEquals(loggerName, asJavaObject(Logger.class, logger).getName());
-
-        logger = (TruffleObject) INTEROP.invokeMember(loggerClass, "getLogger", loggerName);
-        assertTrue(env.isHostObject(logger));
-        assertTrue(env.asHostObject(logger) instanceof Logger);
-        assertEquals(loggerName, asJavaObject(Logger.class, logger).getName());
+    public void convertToString() {
+        value = "Hello";
+        assertEquals("Hello", interop.stringValue());
     }
+
+    @Test
+    public void convertToChar() {
+        value = "W";
+        assertEquals('W', interop.charValue());
+    }
+
+    public static boolean isInstance(TruffleObject object) {
+        return object instanceof BoxedStringTest;
+    }
+
+    @ExportMessage
+    boolean isString() {
+        return true;
+    }
+
+    @ExportMessage
+    String asString() {
+        return value;
+    }
+
+    @ExportMessage
+    final boolean hasMembers() {
+        return true;
+    }
+
+    @ExportMessage
+    Object readMember(String member) {
+        assert KEYS.contains(member);
+        return this;
+    }
+
+    @ExportMessage
+    final Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+        return asTruffleObject(KEYS);
+    }
+
+    @ExportMessage
+    final boolean isMemberReadable(String member) {
+        return KEYS.contains(member);
+    }
+
 }

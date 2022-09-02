@@ -69,7 +69,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
-import org.graalvm.polyglot.HostAccess;
 
 @SuppressWarnings({"rawtypes", "unchecked", "deprecation"})
 public class AsCollectionsLegacyTest {
@@ -203,7 +202,6 @@ public class AsCollectionsLegacyTest {
     }
 
     public static class Validator {
-        @HostAccess.Export
         public boolean validateMap(Map<String, Object> mapGen, Map mapRaw) {
             for (Map map : new Map[]{mapGen, mapRaw}) {
                 assertEquals(1, map.size());
@@ -212,7 +210,6 @@ public class AsCollectionsLegacyTest {
             return true;
         }
 
-        @HostAccess.Export
         public boolean validateArrayOfMap(Map<String, Object>[] arrayOfMapGen, Map[] arrayOfMapRaw) {
             for (Map[] arrayOfMap : new Map[][]{arrayOfMapGen, arrayOfMapRaw}) {
                 assertEquals(1, arrayOfMap.length);
@@ -223,7 +220,6 @@ public class AsCollectionsLegacyTest {
             return true;
         }
 
-        @HostAccess.Export
         public boolean validateListOfMap(List<Map<String, Object>> listOfMapGen, List<Map> listOfMapRaw) {
             for (List<Map> listOfMap : new List[]{listOfMapGen, listOfMapRaw}) {
                 assertEquals(1, listOfMap.size());
@@ -261,7 +257,6 @@ public class AsCollectionsLegacyTest {
     }
 
     public interface ProxyValidator {
-        @HostAccess.Export
         boolean test(List<Map> list);
     }
 
