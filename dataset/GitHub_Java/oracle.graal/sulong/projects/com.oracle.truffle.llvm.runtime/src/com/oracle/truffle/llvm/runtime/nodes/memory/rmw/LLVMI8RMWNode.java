@@ -37,6 +37,7 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI8StoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI8StoreNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -44,6 +45,10 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 @NodeChild(type = LLVMExpressionNode.class, value = "pointerNode")
 @NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
 public abstract class LLVMI8RMWNode extends LLVMExpressionNode {
+
+    protected static LLVMI8LoadNode createRead() {
+        return LLVMI8LoadNodeGen.create(null);
+    }
 
     protected static LLVMI8StoreNode createWrite() {
         return LLVMI8StoreNodeGen.create(null, null);
@@ -59,7 +64,7 @@ public abstract class LLVMI8RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected byte doOp(LLVMManagedPointer address, byte value,
-                        @Cached LLVMI8LoadNode read,
+                        @Cached("createRead()") LLVMI8LoadNode read,
                         @Cached("createWrite()") LLVMI8StoreNode write) {
             synchronized (address.getObject()) {
                 byte result = (byte) read.executeWithTarget(address);
@@ -79,7 +84,7 @@ public abstract class LLVMI8RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected byte doOp(LLVMManagedPointer address, byte value,
-                        @Cached LLVMI8LoadNode read,
+                        @Cached("createRead()") LLVMI8LoadNode read,
                         @Cached("createWrite()") LLVMI8StoreNode write) {
             synchronized (address.getObject()) {
                 byte result = (byte) read.executeWithTarget(address);
@@ -99,7 +104,7 @@ public abstract class LLVMI8RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected byte doOp(LLVMManagedPointer address, byte value,
-                        @Cached LLVMI8LoadNode read,
+                        @Cached("createRead()") LLVMI8LoadNode read,
                         @Cached("createWrite()") LLVMI8StoreNode write) {
             synchronized (address.getObject()) {
                 byte result = (byte) read.executeWithTarget(address);
@@ -119,7 +124,7 @@ public abstract class LLVMI8RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected byte doOp(LLVMManagedPointer address, byte value,
-                        @Cached LLVMI8LoadNode read,
+                        @Cached("createRead()") LLVMI8LoadNode read,
                         @Cached("createWrite()") LLVMI8StoreNode write) {
             synchronized (address.getObject()) {
                 byte result = (byte) read.executeWithTarget(address);
@@ -139,7 +144,7 @@ public abstract class LLVMI8RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected byte doOp(LLVMManagedPointer address, byte value,
-                        @Cached LLVMI8LoadNode read,
+                        @Cached("createRead()") LLVMI8LoadNode read,
                         @Cached("createWrite()") LLVMI8StoreNode write) {
             synchronized (address.getObject()) {
                 byte result = (byte) read.executeWithTarget(address);
@@ -159,7 +164,7 @@ public abstract class LLVMI8RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected byte doOp(LLVMManagedPointer address, byte value,
-                        @Cached LLVMI8LoadNode read,
+                        @Cached("createRead()") LLVMI8LoadNode read,
                         @Cached("createWrite()") LLVMI8StoreNode write) {
             synchronized (address.getObject()) {
                 byte result = (byte) read.executeWithTarget(address);
@@ -179,7 +184,7 @@ public abstract class LLVMI8RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected byte doOp(LLVMManagedPointer address, byte value,
-                        @Cached LLVMI8LoadNode read,
+                        @Cached("createRead()") LLVMI8LoadNode read,
                         @Cached("createWrite()") LLVMI8StoreNode write) {
             synchronized (address.getObject()) {
                 byte result = (byte) read.executeWithTarget(address);

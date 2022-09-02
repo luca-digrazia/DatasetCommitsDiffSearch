@@ -29,38 +29,29 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.DoubleValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@GenerateUncached
 public abstract class LLVMDoubleLoadNode extends LLVMAbstractLoadNode {
 
-    public static LLVMDoubleLoadNode create() {
-        return LLVMDoubleLoadNodeGen.create((LLVMExpressionNode) null);
-    }
+    private final DoubleValueProfile profile = DoubleValueProfile.createRawIdentityProfile();
 
-    @Specialization(guards = "!isAutoDerefHandle(language, addr)")
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
     protected double doDoubleNative(LLVMNativePointer addr,
-                    @Cached("createRawIdentityProfile()") DoubleValueProfile profile,
                     @CachedLanguage LLVMLanguage language) {
         return profile.profile(language.getLLVMMemory().getDouble(addr));
     }
 
-    @Specialization(guards = "isAutoDerefHandle(language, addr)")
+    @Specialization(guards = "isAutoDerefHandle(addr)")
     protected double doDoubleDerefHandle(LLVMNativePointer addr,
-                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
-                    @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
                     @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
-        return doDoubleManaged(getReceiver.execute(addr), nativeRead);
+        return doDoubleManaged(getDerefHandleGetReceiverNode().execute(addr), nativeRead);
     }
 
     @Specialization(limit = "3")

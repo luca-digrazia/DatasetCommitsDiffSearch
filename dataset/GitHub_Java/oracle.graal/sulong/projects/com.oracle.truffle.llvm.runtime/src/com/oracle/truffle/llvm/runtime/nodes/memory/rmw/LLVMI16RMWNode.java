@@ -37,6 +37,7 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI16StoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI16StoreNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -44,6 +45,10 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 @NodeChild(type = LLVMExpressionNode.class, value = "pointerNode")
 @NodeChild(type = LLVMExpressionNode.class, value = "valueNode")
 public abstract class LLVMI16RMWNode extends LLVMExpressionNode {
+
+    protected static LLVMI16LoadNode createRead() {
+        return LLVMI16LoadNodeGen.create(null);
+    }
 
     protected static LLVMI16StoreNode createWrite() {
         return LLVMI16StoreNodeGen.create(null, null);
@@ -59,7 +64,7 @@ public abstract class LLVMI16RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected short doOp(LLVMManagedPointer address, short value,
-                        @Cached LLVMI16LoadNode read,
+                        @Cached("createRead()") LLVMI16LoadNode read,
                         @Cached("createWrite()") LLVMI16StoreNode write) {
             synchronized (address.getObject()) {
                 short result = (short) read.executeWithTarget(address);
@@ -79,7 +84,7 @@ public abstract class LLVMI16RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected short doOp(LLVMManagedPointer address, short value,
-                        @Cached LLVMI16LoadNode read,
+                        @Cached("createRead()") LLVMI16LoadNode read,
                         @Cached("createWrite()") LLVMI16StoreNode write) {
             synchronized (address.getObject()) {
                 short result = (short) read.executeWithTarget(address);
@@ -99,7 +104,7 @@ public abstract class LLVMI16RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected short doOp(LLVMManagedPointer address, short value,
-                        @Cached LLVMI16LoadNode read,
+                        @Cached("createRead()") LLVMI16LoadNode read,
                         @Cached("createWrite()") LLVMI16StoreNode write) {
             synchronized (address.getObject()) {
                 short result = (short) read.executeWithTarget(address);
@@ -119,7 +124,7 @@ public abstract class LLVMI16RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected short doOp(LLVMManagedPointer address, short value,
-                        @Cached LLVMI16LoadNode read,
+                        @Cached("createRead()") LLVMI16LoadNode read,
                         @Cached("createWrite()") LLVMI16StoreNode write) {
             synchronized (address.getObject()) {
                 short result = (short) read.executeWithTarget(address);
@@ -139,7 +144,7 @@ public abstract class LLVMI16RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected short doOp(LLVMManagedPointer address, short value,
-                        @Cached LLVMI16LoadNode read,
+                        @Cached("createRead()") LLVMI16LoadNode read,
                         @Cached("createWrite()") LLVMI16StoreNode write) {
             synchronized (address.getObject()) {
                 short result = (short) read.executeWithTarget(address);
@@ -159,7 +164,7 @@ public abstract class LLVMI16RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected short doOp(LLVMManagedPointer address, short value,
-                        @Cached LLVMI16LoadNode read,
+                        @Cached("createRead()") LLVMI16LoadNode read,
                         @Cached("createWrite()") LLVMI16StoreNode write) {
             synchronized (address.getObject()) {
                 short result = (short) read.executeWithTarget(address);
@@ -179,7 +184,7 @@ public abstract class LLVMI16RMWNode extends LLVMExpressionNode {
 
         @Specialization
         protected short doOp(LLVMManagedPointer address, short value,
-                        @Cached LLVMI16LoadNode read,
+                        @Cached("createRead()") LLVMI16LoadNode read,
                         @Cached("createWrite()") LLVMI16StoreNode write) {
             synchronized (address.getObject()) {
                 short result = (short) read.executeWithTarget(address);

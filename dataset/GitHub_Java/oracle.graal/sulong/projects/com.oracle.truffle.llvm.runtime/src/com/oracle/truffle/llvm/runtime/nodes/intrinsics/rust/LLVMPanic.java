@@ -50,7 +50,6 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMPanic extends LLVMIntrinsic {
@@ -80,13 +79,8 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
         private PanicLocType(DataLayout dataLayout, Type type, StrSliceType strslice) {
             this.strslice = strslice;
             StructureType structureType = (StructureType) ((PointerType) type).getElementType(0);
-            try {
-                this.offsetFilename = structureType.getOffsetOf(1, dataLayout);
-                this.offsetLineNr = structureType.getOffsetOf(2, dataLayout);
-            } catch (TypeOverflowException e) {
-                // should not reach here
-                throw new AssertionError(e);
-            }
+            this.offsetFilename = structureType.getOffsetOf(1, dataLayout);
+            this.offsetLineNr = structureType.getOffsetOf(2, dataLayout);
         }
 
         @TruffleBoundary
@@ -102,7 +96,7 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
         static PanicLocType create(DataLayout dataLayout) {
             CompilerAsserts.neverPartOfCompilation();
             StrSliceType strslice = StrSliceType.create(dataLayout);
-            Type type = new PointerType((StructureType.createUnnamedByCopy(false, new Type[]{strslice.getType(), strslice.getType(), PrimitiveType.I32})));
+            Type type = new PointerType((new StructureType(false, new Type[]{strslice.getType(), strslice.getType(), PrimitiveType.I32})));
             return new PanicLocType(dataLayout, type, strslice);
         }
     }
@@ -113,12 +107,7 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
         private final Type type;
 
         private StrSliceType(DataLayout dataLayout, Type type) {
-            try {
-                this.lengthOffset = ((StructureType) type).getOffsetOf(1, dataLayout);
-            } catch (TypeOverflowException e) {
-                // should not reach here
-                throw new AssertionError(e);
-            }
+            this.lengthOffset = ((StructureType) type).getOffsetOf(1, dataLayout);
             this.type = type;
         }
 
@@ -139,7 +128,7 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
         }
 
         static StrSliceType create(DataLayout dataLayout) {
-            Type type = StructureType.createUnnamedByCopy(false, new Type[]{new PointerType(PrimitiveType.I8), PrimitiveType.I64});
+            Type type = new StructureType(false, new Type[]{new PointerType(PrimitiveType.I8), PrimitiveType.I64});
             return new StrSliceType(dataLayout, type);
         }
     }

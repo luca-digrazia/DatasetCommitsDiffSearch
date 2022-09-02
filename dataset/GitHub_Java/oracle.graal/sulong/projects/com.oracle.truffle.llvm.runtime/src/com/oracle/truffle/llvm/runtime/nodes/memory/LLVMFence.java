@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,14 +29,15 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory;
 
+import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.memory.MemoryFence;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 
 public abstract class LLVMFence extends LLVMStatementNode {
 
     @Specialization
-    protected void doOp() {
-        MemoryFence.full();
+    protected void doOp(@CachedLanguage LLVMLanguage language) {
+        language.getLLVMMemory().fullFence();
     }
 }

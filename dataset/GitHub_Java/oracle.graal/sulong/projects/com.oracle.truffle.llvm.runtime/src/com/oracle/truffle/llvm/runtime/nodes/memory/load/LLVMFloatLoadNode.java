@@ -29,38 +29,29 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.FloatValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@GenerateUncached
 public abstract class LLVMFloatLoadNode extends LLVMAbstractLoadNode {
 
-    public static LLVMFloatLoadNode create() {
-        return LLVMFloatLoadNodeGen.create((LLVMExpressionNode) null);
-    }
+    private final FloatValueProfile profile = FloatValueProfile.createRawIdentityProfile();
 
-    @Specialization(guards = "!isAutoDerefHandle(language, addr)")
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
     protected float doFloatNative(LLVMNativePointer addr,
-                    @Cached("createRawIdentityProfile()") FloatValueProfile profile,
                     @CachedLanguage LLVMLanguage language) {
         return profile.profile(language.getLLVMMemory().getFloat(addr));
     }
 
-    @Specialization(guards = "isAutoDerefHandle(language, addr)")
+    @Specialization(guards = "isAutoDerefHandle(addr)")
     protected float doFloatDerefHandle(LLVMNativePointer addr,
-                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
-                    @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
                     @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
-        return doFloatManaged(getReceiver.execute(addr), nativeRead);
+        return doFloatManaged(getDerefHandleGetReceiverNode().execute(addr), nativeRead);
     }
 
     @Specialization(limit = "3")

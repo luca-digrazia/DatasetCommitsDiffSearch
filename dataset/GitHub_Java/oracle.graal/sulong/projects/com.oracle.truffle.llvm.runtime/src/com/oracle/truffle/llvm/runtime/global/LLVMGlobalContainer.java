@@ -52,7 +52,7 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 @ExportLibrary(InteropLibrary.class)
 @ExportLibrary(LLVMManagedReadLibrary.class)
 @ExportLibrary(LLVMManagedWriteLibrary.class)
-public final class LLVMGlobalContainer extends LLVMInternalTruffleObject {
+public final class LLVMGlobalContainer implements LLVMInternalTruffleObject {
 
     private long address;
     private Object contents;
@@ -408,5 +408,4 @@ public final class LLVMGlobalContainer extends LLVMInternalTruffleObject {
     public String toString() {
         return String.format("LLVMGlobalContainer (address = 0x%x, contents = %s)", address, contents);
     }
-
 }

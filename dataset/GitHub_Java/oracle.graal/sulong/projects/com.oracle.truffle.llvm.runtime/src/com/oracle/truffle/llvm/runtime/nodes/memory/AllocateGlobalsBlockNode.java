@@ -37,22 +37,17 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
-import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
 public abstract class AllocateGlobalsBlockNode extends LLVMNode implements LLVMAllocateNode {
 
     private final long size;
 
-    protected AllocateGlobalsBlockNode(long size) {
-        this.size = size;
+    public AllocateGlobalsBlockNode(StructureType type, DataLayout dataLayout) {
+        this.size = type.getSize(dataLayout);
     }
 
     @Specialization
     LLVMPointer doAllocate(@CachedLanguage LLVMLanguage language) {
-        return language.getLLVMMemory().allocateMemory(this, size);
-    }
-
-    public static AllocateGlobalsBlockNode create(StructureType type, DataLayout dataLayout) throws TypeOverflowException {
-        return AllocateGlobalsBlockNodeGen.create(type.getSize(dataLayout));
+        return language.getLLVMMemory().allocateMemory(size);
     }
 }

@@ -38,7 +38,6 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
@@ -57,7 +56,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
 
     protected abstract void executeManaged(LLVMManagedPointer address, Object vector);
 
-    @Specialization(guards = "!isAutoDerefHandle(language, address)")
+    @Specialization(guards = "!isAutoDerefHandle(address)")
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMDoubleVector vector,
                     @CachedLanguage LLVMLanguage language) {
@@ -65,7 +64,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         LLVMMemory memory = language.getLLVMMemory();
         long currentPtr = address.asNative();
         for (int i = 0; i < getVectorLength(); i++) {
-            memory.putDouble(this, currentPtr, vector.getValue(i));
+            memory.putDouble(currentPtr, vector.getValue(i));
             currentPtr += DOUBLE_SIZE_IN_BYTES;
         }
     }
@@ -74,15 +73,13 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         return LLVMStoreVectorNodeGen.create(null, null, getVectorLength());
     }
 
-    @Specialization(guards = "isAutoDerefHandle(language, address)")
+    @Specialization(guards = "isAutoDerefHandle(address)")
     protected void writeVectorDerefHandle(LLVMNativePointer address, Object value,
-                    @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
-                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
                     @Cached("createRecursive()") LLVMStoreVectorNode store) {
-        store.executeManaged(getReceiver.execute(address), value);
+        store.executeManaged(getDerefHandleGetReceiverNode().execute(address), value);
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(language, address)")
+    @Specialization(guards = "!isAutoDerefHandle(address)")
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMFloatVector vector,
                     @CachedLanguage LLVMLanguage language) {
@@ -90,12 +87,12 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         LLVMMemory memory = language.getLLVMMemory();
         long currentPtr = address.asNative();
         for (int i = 0; i < getVectorLength(); i++) {
-            memory.putFloat(this, currentPtr, vector.getValue(i));
+            memory.putFloat(currentPtr, vector.getValue(i));
             currentPtr += FLOAT_SIZE_IN_BYTES;
         }
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(language, address)")
+    @Specialization(guards = "!isAutoDerefHandle(address)")
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMI16Vector vector,
                     @CachedLanguage LLVMLanguage language) {
@@ -103,12 +100,12 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         LLVMMemory memory = language.getLLVMMemory();
         long currentPtr = address.asNative();
         for (int i = 0; i < getVectorLength(); i++) {
-            memory.putI16(this, currentPtr, vector.getValue(i));
+            memory.putI16(currentPtr, vector.getValue(i));
             currentPtr += I16_SIZE_IN_BYTES;
         }
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(language, address)")
+    @Specialization(guards = "!isAutoDerefHandle(address)")
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMI1Vector vector,
                     @CachedLanguage LLVMLanguage language) {
@@ -117,18 +114,18 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         long basePtr = address.asNative();
         for (int byteOffset = 0; byteOffset < (getVectorLength() / 8) + 1; byteOffset++) {
             long byteAddr = basePtr + byteOffset;
-            int b = memory.getI8(this, byteAddr);
+            int b = memory.getI8(byteAddr);
             for (int bitOffset = 0; bitOffset < 8 && ((byteOffset * 8) + bitOffset) < getVectorLength(); bitOffset++) {
                 int mask = (1 << bitOffset) & 0xFF;
                 int maskInvert = (~mask) & 0xFF;
                 int v = vector.getValue((byteOffset * 8) + bitOffset) ? 1 : 0;
                 b = (b & maskInvert) | ((v << bitOffset) & mask);
             }
-            memory.putI8(this, byteAddr, (byte) b);
+            memory.putI8(byteAddr, (byte) b);
         }
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(language, address)")
+    @Specialization(guards = "!isAutoDerefHandle(address)")
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMI32Vector vector,
                     @CachedLanguage LLVMLanguage language) {
@@ -136,12 +133,12 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         LLVMMemory memory = language.getLLVMMemory();
         long currentPtr = address.asNative();
         for (int i = 0; i < getVectorLength(); i++) {
-            memory.putI32(this, currentPtr, vector.getValue(i));
+            memory.putI32(currentPtr, vector.getValue(i));
             currentPtr += I32_SIZE_IN_BYTES;
         }
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(language, address)")
+    @Specialization(guards = "!isAutoDerefHandle(address)")
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMI64Vector vector,
                     @CachedLanguage LLVMLanguage language) {
@@ -149,12 +146,12 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         LLVMMemory memory = language.getLLVMMemory();
         long currentPtr = address.asNative();
         for (int i = 0; i < getVectorLength(); i++) {
-            memory.putI64(this, currentPtr, vector.getValue(i));
+            memory.putI64(currentPtr, vector.getValue(i));
             currentPtr += I64_SIZE_IN_BYTES;
         }
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(language, address)")
+    @Specialization(guards = "!isAutoDerefHandle(address)")
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMI8Vector vector,
                     @CachedLanguage LLVMLanguage language) {
@@ -162,15 +159,14 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
         LLVMMemory memory = language.getLLVMMemory();
         long currentPtr = address.asNative();
         for (int i = 0; i < getVectorLength(); i++) {
-            memory.putI8(this, currentPtr, vector.getValue(i));
+            memory.putI8(currentPtr, vector.getValue(i));
             currentPtr += I8_SIZE_IN_BYTES;
         }
     }
 
-    @Specialization(guards = "!isAutoDerefHandle(language, address)")
+    @Specialization(guards = "!isAutoDerefHandle(address)")
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMPointerVector value,
-                    @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
                     @Cached("createPointerStore()") LLVMPointerStoreNode write) {
         assert value.getLength() == getVectorLength();
         long currentPtr = address.asNative();

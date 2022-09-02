@@ -113,6 +113,7 @@ public final class LLVMContext {
     private final List<LLVMThread> runningThreads = new ArrayList<>();
     @CompilationFinal private LLVMThreadingStack threadingStack;
     private Object[] mainArguments;     // effectively final after initialization
+    private final Map<String, String> environment;
     private final ArrayList<LLVMNativePointer> caughtExceptionStack = new ArrayList<>();
     private ConcurrentHashMap<String, Integer> nativeCallStatistics;        // effectively final
     // after initialization
@@ -198,6 +199,7 @@ public final class LLVMContext {
         this.dynamicLinkChain = new DynamicLinkChain();
 
         this.mainArguments = getMainArguments(env);
+        this.environment = System.getenv();
 
         addLibraryPaths(SulongEngineOption.getPolyglotOptionSearchPaths(env));
 
@@ -248,7 +250,7 @@ public final class LLVMContext {
                 ctx.initialized = true;
                 ctx.cleanupNecessary = true;
                 try (StackPointer sp = ((StackPointer) FrameUtil.getObjectSafe(frame, stackPointer)).newFrame()) {
-                    Object[] args = new Object[]{sp, ctx.getApplicationArguments(), getEnvironmentVariables(), getRandomValues()};
+                    Object[] args = new Object[]{sp, ctx.getApplicationArguments(), ctx.getEnvironmentVariables(), getRandomValues()};
                     initContext.call(args);
                 }
             }
@@ -351,8 +353,8 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    private static LLVMManagedPointer getEnvironmentVariables() {
-        String[] result = System.getenv().entrySet().stream().map((e) -> e.getKey() + "=" + e.getValue()).toArray(String[]::new);
+    private LLVMManagedPointer getEnvironmentVariables() {
+        String[] result = environment.entrySet().stream().map((e) -> e.getKey() + "=" + e.getValue()).toArray(String[]::new);
         return toTruffleObjects(result);
     }
 

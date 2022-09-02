@@ -36,7 +36,6 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
@@ -48,18 +47,16 @@ public abstract class LLVMIVarBitStoreNode extends LLVMStoreNodeCommon {
 
     protected abstract void executeManaged(LLVMManagedPointer address, LLVMIVarBit value);
 
-    @Specialization(guards = "!isAutoDerefHandle(language, addr)")
+    @Specialization(guards = "!isAutoDerefHandle(addr)")
     protected void doOp(LLVMNativePointer addr, LLVMIVarBit value,
                     @CachedLanguage LLVMLanguage language) {
-        language.getLLVMMemory().putIVarBit(this, addr, value);
+        language.getLLVMMemory().putIVarBit(addr, value);
     }
 
-    @Specialization(guards = "isAutoDerefHandle(language, addr)")
+    @Specialization(guards = "isAutoDerefHandle(addr)")
     protected void doOpDerefHandle(LLVMNativePointer addr, LLVMIVarBit value,
-                    @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
-                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
                     @Cached LLVMIVarBitStoreNode store) {
-        store.executeManaged(getReceiver.execute(addr), value);
+        store.executeManaged(getDerefHandleGetReceiverNode().execute(addr), value);
     }
 
     @Specialization(limit = "3")

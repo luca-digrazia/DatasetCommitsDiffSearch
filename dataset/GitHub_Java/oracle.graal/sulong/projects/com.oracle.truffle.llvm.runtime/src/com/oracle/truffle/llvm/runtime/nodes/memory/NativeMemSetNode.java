@@ -65,14 +65,14 @@ public abstract class NativeMemSetNode extends LLVMMemSetNode {
                     long v64 = v32 << 32 | v32;
 
                     for (long i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i64ValuesToWrite); i++) {
-                        memory.putI64(this, current, v64);
+                        memory.putI64(current, v64);
                         current += 8;
                     }
                 }
 
                 long i8ValuesToWrite = length & 0x07;
                 for (long i = 0; CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, i < i8ValuesToWrite); i++) {
-                    memory.putI8(this, current, value);
+                    memory.putI8(current, value);
                     current++;
                 }
             } else {
@@ -85,8 +85,8 @@ public abstract class NativeMemSetNode extends LLVMMemSetNode {
     }
 
     @SuppressWarnings("deprecation")
-    private void nativeMemSet(LLVMMemory memory, LLVMNativePointer address, byte value, long length) {
-        memory.memset(this, address, length, value);
+    private static void nativeMemSet(LLVMMemory memory, LLVMNativePointer address, byte value, long length) {
+        memory.memset(address, length, value);
     }
 
     long getAccessLength(LLVMManagedPointer pointer, long length, NativeTypeLibrary nativeTypes) {
