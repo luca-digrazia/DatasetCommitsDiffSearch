@@ -48,6 +48,7 @@ import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.runtime.GraalJVMCICompiler;
 import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
+import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.AbstractObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -87,6 +88,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
 import org.graalvm.compiler.nodes.java.AccessFieldNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.spi.DelegatingReplacements;
+import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
@@ -110,6 +112,7 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MemoryAccessProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.MethodHandleAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -308,7 +311,10 @@ public class SymbolicSnippetEncoder extends DelegatingReplacements {
                 PEGraphDecoder graphDecoder = new PEGraphDecoder(
                                 providers.getCodeCache().getTarget().arch,
                                 result,
-                                providers,
+                                providers.getMetaAccess(),
+                                providers.getConstantReflection(),
+                                providers.getConstantFieldProvider(),
+                                providers.getStampProvider(),
                                 null, // loopExplosionPlugin
                                 replacements.getGraphBuilderPlugins().getInvocationPlugins(),
                                 new InlineInvokePlugin[0],
@@ -401,7 +407,10 @@ public class SymbolicSnippetEncoder extends DelegatingReplacements {
                 PEGraphDecoder graphDecoder = new PEGraphDecoder(
                                 architecture,
                                 result,
-                                providers,
+                                providers.getMetaAccess(),
+                                providers.getConstantReflection(),
+                                providers.getConstantFieldProvider(),
+                                providers.getStampProvider(),
                                 null,
                                 replacements.getGraphBuilderPlugins().getInvocationPlugins(),
                                 new InlineInvokePlugin[0],
@@ -460,21 +469,23 @@ public class SymbolicSnippetEncoder extends DelegatingReplacements {
                 for (int i = 0; i < encodedGraph.getNumObjects(); i++) {
                     filterSnippetObject(encodedGraph.getObject(i));
                 }
-                StructuredGraph snippet = filteringReplacements.makeGraph(debug, filteringReplacements.getDefaultReplacementBytecodeProvider(), method, null, original,
-                                trackNodeSourcePosition, null);
-                SymbolicEncodedGraph symbolicGraph = new SymbolicEncodedGraph(encodedGraph, method.getDeclaringClass(), original != null ? methodKey(original) : null);
-                StructuredGraph decodedSnippet = decodeSnippetGraph(symbolicGraph, method, replacements, null, arch);
-                String snippetString = getCanonicalGraphString(snippet, true, false);
-                String decodedSnippetString = getCanonicalGraphString(decodedSnippet, true, false);
-                if (snippetString.equals(decodedSnippetString)) {
-                    debug.log("Snippet decode for %s produces exactly same graph", method);
-                    debug.dump(DebugContext.INFO_LEVEL, decodedSnippet, "Decoded snippet graph for %s", method);
-                } else {
-                    debug.log("Snippet decode for %s produces different graph", method);
-                    debug.log("%s", compareGraphStrings(snippet, snippetString, decodedSnippet, decodedSnippetString));
-                    debug.dump(DebugContext.INFO_LEVEL, snippet, "Snippet graph for %s", method);
-                    debug.dump(DebugContext.INFO_LEVEL, structuredGraph, "Encoded snippet graph for %s", method);
-                    debug.dump(DebugContext.INFO_LEVEL, decodedSnippet, "Decoded snippet graph for %s", method);
+                if (method.getAnnotation(Snippet.class) != null) {
+                    StructuredGraph snippet = filteringReplacements.makeGraph(debug, filteringReplacements.getDefaultReplacementBytecodeProvider(), method, null, original,
+                                    trackNodeSourcePosition, null);
+                    SymbolicEncodedGraph symbolicGraph = new SymbolicEncodedGraph(encodedGraph, method.getDeclaringClass(), original != null ? methodKey(original) : null);
+                    StructuredGraph decodedSnippet = decodeSnippetGraph(symbolicGraph, method, replacements, null, arch);
+                    String snippetString = getCanonicalGraphString(snippet, true, false);
+                    String decodedSnippetString = getCanonicalGraphString(decodedSnippet, true, false);
+                    if (snippetString.equals(decodedSnippetString)) {
+                        debug.log("Snippet decode for %s produces exactly same graph", method);
+                        debug.dump(DebugContext.INFO_LEVEL, decodedSnippet, "Decoded snippet graph for %s", method);
+                    } else {
+                        debug.log("Snippet decode for %s produces different graph", method);
+                        debug.log("%s", compareGraphStrings(snippet, snippetString, decodedSnippet, decodedSnippetString));
+                        debug.dump(DebugContext.INFO_LEVEL, snippet, "Snippet graph for %s", method);
+                        debug.dump(DebugContext.INFO_LEVEL, structuredGraph, "Encoded snippet graph for %s", method);
+                        debug.dump(DebugContext.INFO_LEVEL, decodedSnippet, "Decoded snippet graph for %s", method);
+                    }
                 }
             } catch (Throwable t) {
                 throw debug.handle(t);
@@ -521,7 +532,7 @@ public class SymbolicSnippetEncoder extends DelegatingReplacements {
     }
 
     EncodedSnippets encodeSnippets(DebugContext debug) {
-        GraphEncoder encoder = new GraphEncoder(HotSpotJVMCIRuntime.runtime().getHostJVMCIBackend().getTarget().arch, debug);
+        GraphEncoder encoder = new GraphEncoder(HotSpotJVMCIRuntime.runtime().getHostJVMCIBackend().getTarget().arch);
         for (StructuredGraph graph : preparedSnippetGraphs.values()) {
             encoder.prepare(graph);
         }
@@ -909,7 +920,7 @@ public class SymbolicSnippetEncoder extends DelegatingReplacements {
                     if (!excludeVirtual || !(node instanceof VirtualObjectNode || node instanceof ProxyNode || node instanceof FullInfopointNode || node instanceof ParameterNode)) {
                         if (node instanceof ConstantNode) {
                             if (checkConstants) {
-                                String name = node.toString(Verbosity.Name);
+                                String name = checkConstants ? node.toString(Verbosity.Name) : node.getClass().getSimpleName();
                                 if (excludeVirtual) {
                                     constantsLines.add(name);
                                 } else {
@@ -984,15 +995,17 @@ public class SymbolicSnippetEncoder extends DelegatingReplacements {
         }
 
         @Override
-        protected GraphBuilderPhase.Instance createGraphBuilder(Providers providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
-                        IntrinsicContext initialIntrinsicContext) {
-            return new HotSpotSnippetGraphBuilderPhase(providers, graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
+        protected GraphBuilderPhase.Instance createGraphBuilder(MetaAccessProvider metaAccess, StampProvider stampProvider, ConstantReflectionProvider constantReflection,
+                        ConstantFieldProvider constantFieldProvider, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, IntrinsicContext initialIntrinsicContext) {
+            return new HotSpotSnippetGraphBuilderPhase(metaAccess, stampProvider, constantReflection, constantFieldProvider, graphBuilderConfig, optimisticOpts,
+                            initialIntrinsicContext);
         }
     }
 
     static class HotSpotSnippetGraphBuilderPhase extends GraphBuilderPhase.Instance {
-        HotSpotSnippetGraphBuilderPhase(Providers theProviders, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, IntrinsicContext initialIntrinsicContext) {
-            super(theProviders, graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
+        HotSpotSnippetGraphBuilderPhase(MetaAccessProvider metaAccess, StampProvider stampProvider, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
+                        GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, IntrinsicContext initialIntrinsicContext) {
+            super(metaAccess, stampProvider, constantReflection, constantFieldProvider, graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
         }
 
         @Override
