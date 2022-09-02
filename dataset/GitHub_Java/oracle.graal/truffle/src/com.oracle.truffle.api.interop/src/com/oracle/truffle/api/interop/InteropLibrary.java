@@ -1598,7 +1598,7 @@ public abstract class InteropLibrary extends Library {
      *
      * @param other the other value to compare to
      *
-     * @since 20.2
+     * @since 20.1
      */
     @Abstract(ifExported = {"isIdentical", "identityHashCode"})
     protected TriState isIdenticalOrUndefined(Object receiver, Object other) {
@@ -1645,7 +1645,7 @@ public abstract class InteropLibrary extends Library {
      * This method performs double dispatch by forwarding calls to
      * {@link #isIdenticalOrUndefined(Object, Object)} with receiver and other value first and then
      * with reversed parameters if the result was {@link TriState#UNDEFINED undefined}. This allows
-     * the receiver and the other value to negotiate identity semantics. This method is supposed to
+     * the receiver and the other value to negotiate sameness semantics. This method is supposed to
      * be exported only if the receiver represents a wrapper that forwards messages. In such a case
      * the isIdentical message should be forwarded to the delegate value. Otherwise, the
      * {@link #isIdenticalOrUndefined(Object, Object)} should be exported instead.
@@ -1681,7 +1681,7 @@ public abstract class InteropLibrary extends Library {
      * For a full example please refer to the SLEqualNode of the SimpleLanguage example
      * implementation.
      *
-     * @since 20.2
+     * @since 20.1
      */
     public boolean isIdentical(Object receiver, Object other, InteropLibrary otherInterop) {
         TriState result = this.isIdenticalOrUndefined(receiver, other);
@@ -1699,7 +1699,7 @@ public abstract class InteropLibrary extends Library {
      * {@link #isIdenticalOrUndefined(Object, Object)} instead.
      *
      * @see #isIdenticalOrUndefined(Object, Object)
-     * @since 20.2
+     * @since 20.1
      */
     public final boolean hasIdentity(Object receiver) {
         return this.isIdentical(receiver, receiver, this);
@@ -1729,7 +1729,7 @@ public abstract class InteropLibrary extends Library {
      *             <code>false</code> for the same receiver.
      * @see #isIdenticalOrUndefined(Object, Object)
      * @see #isIdentical(Object, Object, InteropLibrary)
-     * @since 20.2
+     * @since 20.1
      */
     @Abstract(ifExported = "isIdenticalOrUndefined")
     public int identityHashCode(Object receiver) throws UnsupportedMessageException {
@@ -1752,7 +1752,7 @@ public abstract class InteropLibrary extends Library {
      * short-cut for calling <code>InteropLibrary.getFactory().getUncached()</code>.
      *
      * @see LibraryFactory#getUncached()
-     * @since 20.2
+     * @since 20.1
      */
     public static InteropLibrary getUncached() {
         return UNCACHED;
@@ -1763,7 +1763,7 @@ public abstract class InteropLibrary extends Library {
      * for calling <code>InteropLibrary.getFactory().getUncached(v)</code>.
      *
      * @see LibraryFactory#getUncached(Object)
-     * @since 20.2
+     * @since 20.1
      */
     public static InteropLibrary getUncached(Object v) {
         return FACTORY.getUncached(v);

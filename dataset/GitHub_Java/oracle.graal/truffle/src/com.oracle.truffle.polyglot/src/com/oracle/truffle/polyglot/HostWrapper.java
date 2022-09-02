@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -120,7 +120,7 @@ interface HostWrapper {
             return receiverLib.isIdentical(receiver, obj, objLib);
         } catch (Throwable t) {
             // propagate errors in languages they should be reported.
-            throw PolyglotImpl.guestToHostException(languageContext, t, true);
+            throw PolyglotImpl.guestToHostException(languageContext, t);
         } finally {
             try {
                 PolyglotValue.hostLeave(languageContext, prev);
@@ -153,7 +153,7 @@ interface HostWrapper {
             }
         } catch (Throwable t) {
             // propagate errors in languages they should be reported.
-            throw PolyglotImpl.guestToHostException(languageContext, t, true);
+            throw PolyglotImpl.guestToHostException(languageContext, t);
         } finally {
             try {
                 PolyglotValue.hostLeave(languageContext, prev);
