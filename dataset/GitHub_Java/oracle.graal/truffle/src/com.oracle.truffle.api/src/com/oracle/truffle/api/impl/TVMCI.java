@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,14 +43,25 @@ package com.oracle.truffle.api.impl;
 import java.io.Closeable;
 import java.util.Objects;
 import java.util.function.BiFunction;
-import java.util.function.Function;
+import java.util.function.Supplier;
 
+import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.impl.Accessor.CallInlined;
+import com.oracle.truffle.api.impl.Accessor.CallProfiled;
+import com.oracle.truffle.api.impl.Accessor.CastUnsafe;
 import com.oracle.truffle.api.impl.Accessor.EngineSupport;
-import com.oracle.truffle.api.impl.Accessor.RuntimeSupport;
+import com.oracle.truffle.api.impl.Accessor.InstrumentSupport;
+import com.oracle.truffle.api.nodes.BlockNode;
+import com.oracle.truffle.api.nodes.BlockNode.ElementExecutor;
+import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
 /**
@@ -125,7 +136,113 @@ public abstract class TVMCI {
         return true;
     }
 
-    protected abstract RuntimeSupport createRuntimeSupport(Object permission);
+    /**
+     * Reports the execution count of a loop.
+     *
+     * @param source the Node which invoked the loop.
+     * @param iterations the number iterations to report to the runtime system
+     * @since 0.12
+     */
+    protected abstract void onLoopCount(Node source, int iterations);
+
+    /**
+     * Reports when a new root node is loaded into the system.
+     *
+     * @since 0.15
+     */
+    protected void onLoad(RootNode rootNode) {
+        InstrumentSupport support = TVMCIAccessor.instrumentAccess();
+        if (support != null) {
+            support.onLoad(rootNode);
+        }
+    }
+
+    protected void setCallTarget(RootNode root, RootCallTarget callTarget) {
+        TVMCIAccessor.nodesAccess().setCallTarget(root, callTarget);
+    }
+
+    /**
+     * Makes sure the <code>rootNode</code> is initialized.
+     *
+     * @param rootNode
+     * @since 0.12
+     */
+    protected void onFirstExecution(RootNode rootNode) {
+        final Accessor.InstrumentSupport accessor = TVMCIAccessor.instrumentAccess();
+        if (accessor != null) {
+            accessor.onFirstExecution(rootNode);
+        }
+    }
+
+    /**
+     * Accessor for non-public state in {@link FrameDescriptor}.
+     *
+     * @since 0.14
+     */
+    protected void markFrameMaterializeCalled(FrameDescriptor descriptor) {
+        TVMCIAccessor.framesAccess().markMaterializeCalled(descriptor);
+    }
+
+    /**
+     * Accessor for non-public state in {@link FrameDescriptor}.
+     *
+     * @since 0.14
+     */
+    protected boolean getFrameMaterializeCalled(FrameDescriptor descriptor) {
+        return TVMCIAccessor.framesAccess().getMaterializeCalled(descriptor);
+    }
+
+    /**
+     * Accessor for non-public API in {@link RootNode}.
+     *
+     * @since 0.24
+     */
+    protected boolean isCloneUninitializedSupported(RootNode root) {
+        return TVMCIAccessor.nodesAccess().isCloneUninitializedSupported(root);
+    }
+
+    protected void onThrowable(Node callNode, RootCallTarget root, Throwable e, Frame frame) {
+        final Accessor.LanguageSupport language = TVMCIAccessor.languageAccess();
+        if (language != null) {
+            language.onThrowable(callNode, root, e, frame);
+        }
+    }
+
+    /**
+     * Accessor for non-public API in {@link RootNode}.
+     *
+     * @since 0.24
+     */
+    protected RootNode cloneUninitialized(RootNode root) {
+        return TVMCIAccessor.nodesAccess().cloneUninitialized(root);
+    }
+
+    protected int adoptChildrenAndCount(RootNode root) {
+        return TVMCIAccessor.nodesAccess().adoptChildrenAndCount(root);
+    }
+
+    /**
+     * Returns the compiler options specified available from the runtime.
+     *
+     * @since 0.27
+     */
+    protected OptionDescriptors getCompilerOptionDescriptors() {
+        return OptionDescriptors.EMPTY;
+    }
+
+    /**
+     * Returns <code>true</code> if the java stack frame is a representing a guest language call.
+     * Needs to return <code>true</code> only once per java stack frame per guest language call.
+     *
+     * @since 0.27
+     */
+    protected boolean isGuestCallStackFrame(@SuppressWarnings("unused") StackTraceElement e) {
+        return false;
+    }
+
+    @SuppressWarnings("unused")
+    protected void initializeProfile(CallTarget target, Class<?>[] argumentTypes) {
+    }
 
     /**
      * Accessor for {@link TVMCI#Test} class.
@@ -169,10 +286,10 @@ public abstract class TVMCI {
      * The resulting instance is cached in the Engine.
      */
     @SuppressWarnings("unchecked")
-    protected static <T> T getOrCreateRuntimeData(RootNode rootNode, BiFunction<OptionValues, Function<String, TruffleLogger>, T> constructor) {
+    protected static <T> T getOrCreateRuntimeData(RootNode rootNode, BiFunction<OptionValues, Supplier<TruffleLogger>, T> constructor) {
         Objects.requireNonNull(constructor);
-        final Accessor.NodeSupport nodesAccess = DefaultRuntimeAccessor.NODES;
-        final EngineSupport engineAccess = DefaultRuntimeAccessor.ENGINE;
+        final Accessor.NodeSupport nodesAccess = TVMCIAccessor.nodesAccess();
+        final EngineSupport engineAccess = TVMCIAccessor.engineAccess();
 
         final Object polyglotEngine;
         if (rootNode == null) {
@@ -193,6 +310,44 @@ public abstract class TVMCI {
 
     protected static void resetFallbackEngineData() {
         fallbackEngineData = null;
+    }
+
+    @SuppressWarnings("unused")
+    protected void reportPolymorphicSpecialize(Node node) {
+    }
+
+    protected ThreadLocal<Object> createFastThreadLocal() {
+        return new ThreadLocal<>();
+    }
+
+    protected IndirectCallNode createUncachedIndirectCall() {
+        return null;
+    }
+
+    protected CallInlined getCallInlined() {
+        return null;
+    }
+
+    protected CallProfiled getCallProfiled() {
+        return null;
+    }
+
+    protected CastUnsafe getCastUnsafe() {
+        return null;
+    }
+
+    protected abstract <T extends Node> BlockNode<T> createBlockNode(T[] elements, ElementExecutor<T> executor);
+
+    @SuppressWarnings("unused")
+    protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
+    }
+
+    @SuppressWarnings("unused")
+    protected void onEngineClosed(Object runtimeData) {
+    }
+
+    protected void applyPolyglotEngine(RootNode from, RootNode to) {
+        TVMCIAccessor.nodesAccess().applyPolyglotEngine(from, to);
     }
 
 }
