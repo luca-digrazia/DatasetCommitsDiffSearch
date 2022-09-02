@@ -257,7 +257,7 @@ public final class ObjectKlass extends Klass {
         synchronized (this) {
             if (!(isInitializedOrPrepared())) { // Check under lock
                 if (initState == ERRONEOUS) {
-                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
+                    throw getMeta().throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
                 }
                 try {
                     // Spec fragment: Then, initialize each final static field of C with the
@@ -292,7 +292,7 @@ public final class ObjectKlass extends Klass {
                     StaticObject cause = e.getExceptionObject();
                     Meta meta = getMeta();
                     if (!InterpreterToVM.instanceOf(cause, meta.java_lang_Error)) {
-                        throw Meta.throwExceptionWithCause(meta.java_lang_ExceptionInInitializerError, cause);
+                        throw meta.throwExceptionWithCause(meta.java_lang_ExceptionInInitializerError, cause);
                     } else {
                         throw e;
                     }
@@ -303,7 +303,7 @@ public final class ObjectKlass extends Klass {
                     throw e;
                 }
                 if (initState == ERRONEOUS) {
-                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
+                    throw getMeta().throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
                 }
                 initState = INITIALIZED;
                 assert isInitialized();
@@ -452,6 +452,11 @@ public final class ObjectKlass extends Klass {
         return declaredFields;
     }
 
+    @Override
+    public Klass getComponentType() {
+        return null;
+    }
+
     public EnclosingMethodAttribute getEnclosingMethod() {
         return enclosingMethod;
     }
@@ -541,7 +546,7 @@ public final class ObjectKlass extends Klass {
         try {
             return itable[findITableIndex(interfKlass)][index];
         } catch (IndexOutOfBoundsException e) {
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IncompatibleClassChangeError, "Class " + getName() + " does not implement interface " + interfKlass.getName());
+            throw getMeta().throwExceptionWithMessage(getMeta().java_lang_IncompatibleClassChangeError, "Class " + getName() + " does not implement interface " + interfKlass.getName());
         }
     }
 
@@ -733,7 +738,7 @@ public final class ObjectKlass extends Klass {
             if (mode == VerifyMode.ALL || !StaticObject.isNull(getDefiningClassLoader())) {
                 Meta meta = getMeta();
                 if (getSuperKlass() != null && getSuperKlass().isFinalFlagSet()) {
-                    throw Meta.throwException(meta.java_lang_VerifyError);
+                    throw meta.throwException(meta.java_lang_VerifyError);
                 }
                 if (getSuperKlass() != null) {
                     getSuperKlass().verify();
@@ -755,20 +760,14 @@ public final class ObjectKlass extends Klass {
                 for (Method m : getDeclaredMethods()) {
                     try {
                         MethodVerifier.verify(m);
-                        // The verifier convention use host exceptions and they must be
-                        // explicitly converted.
-                        // This is acceptable since these particular set of host exceptions are not
-                        // expected at all e.g. we don't expect any host
-                        // VerifyError/ClassFormatError to be thrown by the host itself (at this
-                        // point, or even ever at all).
                     } catch (VerifyError e) {
-                        throw Meta.throwExceptionWithMessage(meta.java_lang_VerifyError, e.getMessage());
+                        throw meta.throwExceptionWithMessage(meta.java_lang_VerifyError, e.getMessage());
                     } catch (ClassFormatError e) {
-                        throw Meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, e.getMessage());
+                        throw meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, e.getMessage());
                     } catch (IncompatibleClassChangeError e) {
-                        throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, e.getMessage());
+                        throw meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, e.getMessage());
                     } catch (NoClassDefFoundError e) {
-                        throw Meta.throwExceptionWithMessage(meta.java_lang_NoClassDefFoundError, e.getMessage());
+                        throw meta.throwExceptionWithMessage(meta.java_lang_NoClassDefFoundError, e.getMessage());
                     }
                 }
             }
