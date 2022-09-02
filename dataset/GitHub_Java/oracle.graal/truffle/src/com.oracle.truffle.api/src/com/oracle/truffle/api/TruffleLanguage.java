@@ -1797,9 +1797,8 @@ public abstract class TruffleLanguage<C> {
          * regular expression engine should call {@link #parseInternal(Source, String...)} instead,
          * as this is considered an implementation detail of the language.
          * <p>
-         * It is recommended that the language uses {@link Env#parsePublic(Source, String...)} or
-         * {@link Env#parseInternal(Source, String...)} instead of directly passing the Source to
-         * the parser, in order to support code caching with {@link ContextPolicy#SHARED} and
+         * It is recommended that the language uses parse even for sources of the current language
+         * in order to support code caching with {@link ContextPolicy#SHARED} and
          * {@link ContextPolicy#REUSE}.
          *
          * @param source the source to evaluate
@@ -1836,9 +1835,8 @@ public abstract class TruffleLanguage<C> {
          * internal regular expression engine should call {@link #parseInternal(Source, String...)}
          * instead, as this is considered an implementation detail of the language.
          * <p>
-         * It is recommended that the language uses {@link Env#parsePublic(Source, String...)} or
-         * {@link Env#parseInternal(Source, String...)} instead of directly passing the Source to
-         * the parser, in order to support code caching with {@link ContextPolicy#SHARED} and
+         * It is recommended that the language uses parse even for sources of the current language
+         * in order to support code caching with {@link ContextPolicy#SHARED} and
          * {@link ContextPolicy#REUSE}.
          *
          * @param source the source to evaluate
