@@ -386,7 +386,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notifyAll is just forwarded from the guest.")
     public void JVM_MonitorNotifyAll(@Host(Object.class) StaticObject self) {
         try {
-            self.getLock().signalAll();
+            self.notifyAll();
         } catch (IllegalMonitorStateException e) {
             throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
         }
@@ -397,7 +397,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notify is just forwarded from the guest.")
     public void JVM_MonitorNotify(@Host(Object.class) StaticObject self) {
         try {
-            self.getLock().signal();
+            self.notify();
         } catch (IllegalMonitorStateException e) {
             throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
         }
@@ -410,7 +410,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         StaticObject currentThread = getMeta().getContext().getCurrentThread();
         try {
             Target_java_lang_Thread.fromRunnable(currentThread, getMeta(), (timeout > 0 ? State.TIMED_WAITING : State.WAITING));
-            self.getLock().await(timeout);
+            self.wait(timeout);
         } catch (InterruptedException e) {
             Target_java_lang_Thread.setInterrupt(currentThread, false);
             throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
