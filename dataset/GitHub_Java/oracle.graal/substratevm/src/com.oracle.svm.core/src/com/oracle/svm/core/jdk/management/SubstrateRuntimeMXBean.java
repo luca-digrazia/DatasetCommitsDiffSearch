@@ -46,6 +46,7 @@ import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.svm.core.JavaMainWrapper;
 import com.oracle.svm.core.jdk.RuntimeSupport;
+import com.oracle.svm.core.util.VMError;
 
 import sun.management.Util;
 //Checkstyle: resume
