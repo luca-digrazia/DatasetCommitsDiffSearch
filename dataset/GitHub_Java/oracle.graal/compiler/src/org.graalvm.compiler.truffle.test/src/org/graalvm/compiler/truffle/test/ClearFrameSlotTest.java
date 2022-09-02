@@ -202,7 +202,7 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     @Test
     public void clearAccess() {
         doTest(ClearFrameSlotTest::clearedAccessRoot,
-                        voidChecker, emptyArgs, false, true, false);
+                        voidChecker, emptyArgs, false, true);
     }
 
     /**
@@ -225,7 +225,7 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     @Test
     public void setClearsPrim() {
         doTest(ClearFrameSlotTest::setClearsPrimitive,
-                        graphFSChecker(regularFSChecker), emptyArgs, false, false, true);
+                        graphFSChecker(regularFSChecker), emptyArgs, false, false);
     }
 
     /**
@@ -248,7 +248,7 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     @Test
     public void setClearsObj() {
         doTest(ClearFrameSlotTest::setClearsObject,
-                        graphFSChecker(regularFSChecker), emptyArgs, false, false, true);
+                        graphFSChecker(regularFSChecker), emptyArgs, false, false);
     }
 
     /**
@@ -275,13 +275,11 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     @Test
     public void setNotClear() {
         doTest(ClearFrameSlotTest::setNotClearPhi,
-                        graphFSChecker(noClearPhiChecker), trueArg, false, false, true);
+                        graphFSChecker(noClearPhiChecker), trueArg, false, false);
     }
 
-    private void doTest(Supplier<RootNode> rootProvider, Consumer<StructuredGraph> graphChecker, Object[] args, boolean peFails, boolean executionFails, boolean forceClearPhase) {
-        if (forceClearPhase) {
-            setupContext(Context.newBuilder().option("engine.ForceFrameLivenessAnalysis", "true"));
-        }
+    private void doTest(Supplier<RootNode> rootProvider, Consumer<StructuredGraph> graphChecker, Object[] args, boolean peFails, boolean executionFails) {
+        setupContext(Context.newBuilder().option("engine.ForceFrameLivenessAnalysis", "true"));
         RootNode rootNode = rootProvider.get();
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         StructuredGraph graph = null;
