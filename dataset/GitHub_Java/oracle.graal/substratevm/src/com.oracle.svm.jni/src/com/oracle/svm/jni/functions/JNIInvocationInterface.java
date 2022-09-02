@@ -34,7 +34,6 @@ import java.io.CharConversionException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-import org.graalvm.compiler.serviceprovider.IsolateUtil;
 import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.struct.SizeOf;
@@ -45,6 +44,7 @@ import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.function.CEntryPointActions;
@@ -57,7 +57,6 @@ import com.oracle.svm.core.c.function.CEntryPointSetup;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveDetachThreadEpilogue;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveTearDownIsolateEpilogue;
 import com.oracle.svm.core.jdk.RuntimeSupport;
-import com.oracle.svm.core.monitor.MonitorSupport;
 import com.oracle.svm.core.option.RuntimeOptionParser;
 import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.util.Utf8;
@@ -138,7 +137,6 @@ final class JNIInvocationInterface {
         @CEntryPointOptions(prologue = JNICreateJavaVMPrologue.class, publishAs = Publish.SymbolOnly, include = CEntryPointOptions.NotIncludedAutomatically.class)
         static int JNI_CreateJavaVM(JNIJavaVMPointer vmBuf, JNIEnvironmentPointer penv, JNIJavaVMInitArgs vmArgs) {
             // NOTE: could check version, extra options (-verbose etc.), hooks etc.
-            WordPointer javavmIdPointer = WordFactory.nullPointer();
             if (vmArgs.isNonNull()) {
                 Pointer p = (Pointer) vmArgs.getOptions();
                 int count = vmArgs.getNOptions();
@@ -147,22 +145,13 @@ final class JNIInvocationInterface {
                     JNIJavaVMOption option = (JNIJavaVMOption) p.add(i * SizeOf.get(JNIJavaVMOption.class));
                     CCharPointer str = option.getOptionString();
                     if (str.isNonNull()) {
-                        String optionString = CTypeConversion.toJavaString(option.getOptionString());
-                        if (optionString.equals("_javavm_id")) {
-                            javavmIdPointer = option.getExtraInfo();
-                        } else {
-                            options.add(optionString);
-                        }
+                        options.add(CTypeConversion.toJavaString(option.getOptionString()));
                     }
                 }
                 RuntimeOptionParser.parseAndConsumeAllOptions(options.toArray(new String[0]));
             }
             JNIJavaVM javavm = JNIFunctionTables.singleton().getGlobalJavaVM();
             JNIJavaVMList.addJavaVM(javavm);
-            if (javavmIdPointer.isNonNull()) {
-                long javavmId = IsolateUtil.getIsolateID();
-                javavmIdPointer.write(WordFactory.pointer(javavmId));
-            }
             RuntimeSupport.getRuntimeSupport().addTearDownHook(new Runnable() {
                 @Override
                 public void run() {
@@ -308,7 +297,7 @@ final class JNIInvocationInterface {
         static void releaseCurrentThreadOwnedMonitors() {
             JNIThreadOwnedMonitors.forEach((obj, depth) -> {
                 for (int i = 0; i < depth; i++) {
-                    MonitorSupport.singleton().monitorExit(obj);
+                    MonitorSupport.monitorExit(obj);
                 }
                 assert !Thread.holdsLock(obj);
             });
