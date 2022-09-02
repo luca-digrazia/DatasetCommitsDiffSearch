@@ -33,11 +33,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Properties;
-import java.util.function.BiConsumer;
 
 import com.oracle.truffle.wasm.utils.Assert;
 import com.oracle.truffle.wasm.utils.SystemProperties;
@@ -91,19 +89,19 @@ public abstract class WasmCase {
     }
 
     public static WasmCaseData expectedStdout(String expectedOutput) {
-        return new WasmCaseData((Value result, String output) -> Assert.assertEquals("Failure: stdout:", expectedOutput, output));
+        return new WasmCaseData((Value result, String output) -> Assert.assertEquals("Failure: stdout: ", expectedOutput, output));
     }
 
     public static WasmCaseData expected(Object expectedValue) {
-        return new WasmCaseData((Value result, String output) -> Assert.assertEquals("Failure: result:", expectedValue, result.as(Object.class)));
+        return new WasmCaseData((Value result, String output) -> Assert.assertEquals("Failure: result: ", expectedValue, result.as(Object.class)));
     }
 
     public static WasmCaseData expectedFloat(float expectedValue, float delta) {
-        return new WasmCaseData((Value result, String output) -> Assert.assertEquals("Failure: result:", expectedValue, result.as(Float.class)));
+        return new WasmCaseData((Value result, String output) -> Assert.assertEquals("Failure: result: ", expectedValue, result.as(Float.class)));
     }
 
     public static WasmCaseData expectedDouble(double expectedValue, float delta) {
-        return new WasmCaseData((Value result, String output) -> Assert.assertEquals("Failure: result:", expectedValue, result.as(Double.class)));
+        return new WasmCaseData((Value result, String output) -> Assert.assertEquals("Failure: result: ", expectedValue, result.as(Double.class)));
     }
 
     public static WasmCaseData expectedThrows(String expectedErrorMessage) {
@@ -179,13 +177,5 @@ public abstract class WasmCase {
         }
 
         return null;
-    }
-
-    public static void validateResult(BiConsumer<Value, String> validator, Value result, OutputStream capturedStdout) {
-        if (validator != null) {
-            validator.accept(result, capturedStdout.toString());
-        } else {
-            Assert.fail("Test was not expected to return a value.");
-        }
     }
 }
