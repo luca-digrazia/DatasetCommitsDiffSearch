@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.runtime;
 
 import static com.oracle.truffle.api.CompilerDirectives.castExact;
-import static com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import static com.oracle.truffle.espresso.impl.Klass.STATIC_TO_CLASS;
 import static com.oracle.truffle.espresso.runtime.InteropUtils.*;
 import static com.oracle.truffle.espresso.vm.InterpreterToVM.instanceOf;
@@ -42,7 +41,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Field;
@@ -196,7 +194,7 @@ public final class StaticObject implements TruffleObject {
         if (!fitsInByte()) {
             throw UnsupportedMessageException.create();
         }
-        return (byte) getKlass().lookupMethod(Name.byteValue, Signature._byte).invokeDirect(this);
+        return (byte) 0;
     }
 
     @ExportMessage
@@ -204,7 +202,7 @@ public final class StaticObject implements TruffleObject {
         if (!fitsInShort()) {
             throw UnsupportedMessageException.create();
         }
-        return (short) getKlass().lookupMethod(Name.shortValue, Signature._short).invokeDirect(this);
+        return (short) 0;
     }
 
     @ExportMessage
@@ -212,7 +210,7 @@ public final class StaticObject implements TruffleObject {
         if (!fitsInInt()) {
             throw UnsupportedMessageException.create();
         }
-        return (int) getKlass().lookupMethod(Name.intValue, Signature._int).invokeDirect(this);
+        return 0;
     }
 
     @ExportMessage
@@ -220,7 +218,7 @@ public final class StaticObject implements TruffleObject {
         if (!fitsInLong()) {
             throw UnsupportedMessageException.create();
         }
-        return (long) getKlass().lookupMethod(Name.longValue, Signature._long).invokeDirect(this);
+        return 0L;
     }
 
     @ExportMessage
@@ -228,7 +226,7 @@ public final class StaticObject implements TruffleObject {
         if (!fitsInFloat()) {
             throw UnsupportedMessageException.create();
         }
-        return (float) getKlass().lookupMethod(Name.floatValue, Signature._float).invokeDirect(this);
+        return 0.0F;
     }
 
     @ExportMessage
@@ -236,7 +234,7 @@ public final class StaticObject implements TruffleObject {
         if (!fitsInDouble()) {
             throw UnsupportedMessageException.create();
         }
-        return (double) getKlass().lookupMethod(Name.doubleValue, Signature._double).invokeDirect(this);
+        return 0.0D;
     }
 
     @SuppressWarnings("static-method")
