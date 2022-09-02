@@ -150,17 +150,6 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         }
     }
 
-    /**
-     * Different stages of the compilation regarding the status of various graph properties.
-     */
-    public enum StageFlags {
-        AFTER_FLOATING_READ_PHASE,
-        AFTER_FIXED_READ_PHASE,
-        HAS_VALUE_PROXIES,
-        AFTER_EXPAND_LOGIC,
-        AFTER_FINAL_CANONICALIZATION
-    }
-
     public static class ScheduleResult {
         private final ControlFlowGraph cfg;
         private final NodeMap<Block> nodeToBlockMap;
@@ -354,7 +343,10 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     private final CompilationIdentifier compilationId;
     private final int entryBCI;
     private GuardsStage guardsStage = GuardsStage.FLOATING_GUARDS;
-    private EnumSet<StageFlags> stageFlags = EnumSet.of(StageFlags.HAS_VALUE_PROXIES);
+    private boolean isAfterFloatingReadPhase = false;
+    private boolean isAfterFixedReadPhase = false;
+    private boolean hasValueProxies = true;
+    private boolean isAfterExpandLogic = false;
     private FrameStateVerification frameStateVerification;
 
     /**
@@ -669,7 +661,9 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
         }
         copy.hasUnsafeAccess = hasUnsafeAccess;
         copy.setGuardsStage(getGuardsStage());
-        copy.stageFlags = EnumSet.copyOf(stageFlags);
+        copy.isAfterFloatingReadPhase = isAfterFloatingReadPhase;
+        copy.hasValueProxies = hasValueProxies;
+        copy.isAfterExpandLogic = isAfterExpandLogic;
         copy.trackNodeSourcePosition = trackNodeSourcePosition;
         if (fields != null) {
             copy.fields = createFieldSet(fields);
@@ -951,43 +945,38 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
     }
 
     public boolean isAfterFloatingReadPhase() {
-        return stageFlags.contains(StageFlags.AFTER_FLOATING_READ_PHASE);
+        return isAfterFloatingReadPhase;
     }
 
     public boolean isAfterFixedReadPhase() {
-        return stageFlags.contains(StageFlags.AFTER_FIXED_READ_PHASE);
+        return isAfterFixedReadPhase;
     }
 
-    public void setAfterFloatingReadPhase() {
-        stageFlags.add(StageFlags.AFTER_FLOATING_READ_PHASE);
+    public void setAfterFloatingReadPhase(boolean state) {
+        assert state : "cannot 'unapply' floating read phase on graph";
+        isAfterFloatingReadPhase = state;
     }
 
-    public void setAfterFixReadPhase() {
-        stageFlags.add(StageFlags.AFTER_FIXED_READ_PHASE);
+    public void setAfterFixReadPhase(boolean state) {
+        assert state : "cannot 'unapply' fix reads phase on graph";
+        isAfterFixedReadPhase = state;
     }
 
     public boolean hasValueProxies() {
-        return stageFlags.contains(StageFlags.HAS_VALUE_PROXIES);
+        return hasValueProxies;
     }
 
-    public void unsetHasValueProxies() {
-        stageFlags.remove(StageFlags.HAS_VALUE_PROXIES);
+    public void setHasValueProxies(boolean state) {
+        assert !state : "cannot 'unapply' value proxy removal on graph";
+        hasValueProxies = state;
     }
 
     public boolean isAfterExpandLogic() {
-        return stageFlags.contains(StageFlags.AFTER_EXPAND_LOGIC);
+        return isAfterExpandLogic;
     }
 
     public void setAfterExpandLogic() {
-        stageFlags.add(StageFlags.AFTER_EXPAND_LOGIC);
-    }
-
-    public boolean isAfterFinalCanonicalization() {
-        return stageFlags.contains(StageFlags.AFTER_FINAL_CANONICALIZATION);
-    }
-
-    public void setAfterFinalCanonicalization() {
-        stageFlags.add(StageFlags.AFTER_FINAL_CANONICALIZATION);
+        isAfterExpandLogic = true;
     }
 
     /**

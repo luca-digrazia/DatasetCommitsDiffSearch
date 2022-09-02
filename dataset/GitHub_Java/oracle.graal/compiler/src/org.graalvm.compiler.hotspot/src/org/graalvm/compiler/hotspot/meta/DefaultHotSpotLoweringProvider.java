@@ -89,7 +89,6 @@ import org.graalvm.compiler.hotspot.replacements.LoadExceptionObjectSnippets;
 import org.graalvm.compiler.hotspot.replacements.MonitorSnippets;
 import org.graalvm.compiler.hotspot.replacements.ObjectCloneSnippets;
 import org.graalvm.compiler.hotspot.replacements.ObjectSnippets;
-import org.graalvm.compiler.hotspot.replacements.RegisterFinalizerSnippets;
 import org.graalvm.compiler.hotspot.replacements.StringToBytesSnippets;
 import org.graalvm.compiler.hotspot.replacements.UnsafeCopyMemoryNode;
 import org.graalvm.compiler.hotspot.replacements.UnsafeSnippets;
@@ -154,7 +153,6 @@ import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.graalvm.compiler.nodes.java.NewMultiArrayNode;
-import org.graalvm.compiler.nodes.java.RegisterFinalizerNode;
 import org.graalvm.compiler.nodes.java.ValidateNewInstanceClassNode;
 import org.graalvm.compiler.nodes.memory.FloatingReadNode;
 import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
@@ -213,7 +211,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected UnsafeSnippets.Templates unsafeSnippets;
     protected ObjectCloneSnippets.Templates objectCloneSnippets;
     protected ForeignCallSnippets.Templates foreignCallSnippets;
-    protected RegisterFinalizerSnippets.Templates registerFinalizerSnippets;
 
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     HotSpotConstantReflectionProvider constantReflection, PlatformConfigurationProvider platformConfig, MetaAccessExtensionProvider metaAccessExtensionProvider,
@@ -249,7 +246,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         resolveConstantSnippets = new ResolveConstantSnippets.Templates(options, factories, providers, target);
         objectCloneSnippets = new ObjectCloneSnippets.Templates(options, factories, providers, target);
         foreignCallSnippets = new ForeignCallSnippets.Templates(options, factories, providers, target);
-        registerFinalizerSnippets = new RegisterFinalizerSnippets.Templates(options, factories, providers, target);
         if (JavaVersionUtil.JAVA_SPEC >= 11) {
             objectSnippets = new ObjectSnippets.Templates(options, factories, providers, target);
         }
@@ -447,8 +443,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 if (graph.getGuardsStage() == GuardsStage.AFTER_FSA) {
                     unsafeSnippets.lower((UnsafeCopyMemoryNode) n, tool);
                 }
-            } else if (n instanceof RegisterFinalizerNode) {
-                lowerRegisterFinalizer((RegisterFinalizerNode) n, tool);
             } else {
                 super.lower(n, tool);
             }
@@ -836,9 +830,5 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     @Override
     public ForeignCallSnippets.Templates getForeignCallSnippets() {
         return foreignCallSnippets;
-    }
-
-    private void lowerRegisterFinalizer(RegisterFinalizerNode n, LoweringTool tool) {
-        registerFinalizerSnippets.lower(n, tool);
     }
 }

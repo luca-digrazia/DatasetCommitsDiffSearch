@@ -47,6 +47,7 @@ import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.graph.Edges;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeList;
+import org.graalvm.compiler.java.BytecodeParser;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.DynamicPiNode;
@@ -530,6 +531,7 @@ public class SubstrateGraphBuilderPlugins {
             r.register3("allocateUninitializedArray", Receiver.class, Class.class, int.class, new InvocationPlugin() {
                 @Override
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unsafe, ValueNode componentTypeNode, ValueNode lengthNode) {
+                    BytecodeParser p = (BytecodeParser) b;
                     /*
                      * For simplicity, we only intrinsify if the componentType is a compile-time
                      * constant. That also allows us to constant-fold the required check that the
@@ -542,7 +544,7 @@ public class SubstrateGraphBuilderPlugins {
                             unsafe.get();
 
                             LogicNode lengthNegative = b.append(IntegerLessThanNode.create(lengthNode, ConstantNode.forInt(0), NodeView.DEFAULT));
-                            b.emitBytecodeExceptionCheck(lengthNegative, false, BytecodeExceptionNode.BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION,
+                            p.emitBytecodeExceptionCheck(lengthNegative, false, BytecodeExceptionNode.BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION,
                                             ConstantNode.forConstant(snippetReflection.forObject("Negative length"), b.getMetaAccess(), b.getGraph()));
                             b.addPush(JavaKind.Object, new NewArrayNode(componentType, lengthNode, false));
                             return true;
@@ -819,9 +821,10 @@ public class SubstrateGraphBuilderPlugins {
         r.register2("castExact", Object.class, Class.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object, ValueNode javaClass) {
-                ValueNode nullCheckedClass = b.nullCheckedValue(javaClass);
+                BytecodeParser p = (BytecodeParser) b;
+                ValueNode nullCheckedClass = p.maybeEmitExplicitNullCheck(javaClass);
                 LogicNode condition = b.append(InstanceOfDynamicNode.create(b.getAssumptions(), b.getConstantReflection(), nullCheckedClass, object, true, true));
-                AbstractBeginNode guard = b.emitBytecodeExceptionCheck(condition, true, BytecodeExceptionNode.BytecodeExceptionKind.CLASS_CAST, object, nullCheckedClass);
+                AbstractBeginNode guard = p.emitBytecodeExceptionCheck(condition, true, BytecodeExceptionNode.BytecodeExceptionKind.CLASS_CAST, object, nullCheckedClass);
                 if (guard != null) {
                     b.addPush(JavaKind.Object, DynamicPiNode.create(b.getAssumptions(), b.getConstantReflection(), object, guard, nullCheckedClass, true));
                 } else {
@@ -921,7 +924,7 @@ public class SubstrateGraphBuilderPlugins {
                     } else {
                         throw VMError.shouldNotReachHere("Unexpected class object: " + clazzOrHub);
                     }
-                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(desiredAssertionStatus));
+                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(!desiredAssertionStatus));
                     return true;
                 }
                 return false;
