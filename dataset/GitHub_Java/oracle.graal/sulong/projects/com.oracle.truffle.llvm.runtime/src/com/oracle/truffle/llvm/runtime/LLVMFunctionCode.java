@@ -179,10 +179,10 @@ public class LLVMFunctionCode {
         @Override
         Object createNativeWrapper(LLVMFunctionDescriptor descriptor) {
             CompilerAsserts.neverPartOfCompilation();
-            LLVMContext context = LLVMLanguage.getContext();
+
             Object wrapper = null;
             LLVMNativePointer pointer = null;
-            NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
+            NFIContextExtension nfiContextExtension = descriptor.getContext().getContextExtensionOrNull(NFIContextExtension.class);
             if (nfiContextExtension != null) {
                 wrapper = nfiContextExtension.createNativeWrapper(descriptor);
                 if (wrapper != null) {
@@ -200,7 +200,7 @@ public class LLVMFunctionCode {
                 wrapper = pointer;
             }
 
-            context.registerFunctionPointer(pointer, descriptor);
+            descriptor.getContext().registerFunctionPointer(pointer, descriptor);
             return wrapper;
         }
     }

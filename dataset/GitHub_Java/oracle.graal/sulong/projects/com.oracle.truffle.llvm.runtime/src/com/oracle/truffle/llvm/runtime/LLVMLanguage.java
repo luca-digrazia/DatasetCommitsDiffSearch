@@ -342,7 +342,7 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
         final ContextReference<LLVMContext> ctx;
 
-        FreeGlobalsNode(LLVMLanguage language, NodeFactory nodeFactory) {
+        public FreeGlobalsNode(LLVMLanguage language, NodeFactory nodeFactory) {
             super(language);
             this.ctx = lookupContextReference(LLVMLanguage.class);
             this.freeRo = nodeFactory.createFreeGlobalsBlock(true);

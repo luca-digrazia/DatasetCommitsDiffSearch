@@ -107,7 +107,7 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
 
     @BeforeClass
     public static void createEngine() {
-        engine = Engine.newBuilder().allowExperimentalOptions(true).build();
+        engine = Engine.newBuilder().build();
     }
 
     @AfterClass
@@ -126,7 +126,6 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
         String[] inputArgs = getInputArgs(candidateBinary);
         ProcessResult result;
         try {
-            assert engine != null;
             result = ProcessUtil.executeSulongTestMainSameEngine(candidateBinary.toAbsolutePath().toFile(), inputArgs, getContextOptions(), getCaptureOutput(), engine);
         } catch (Exception e) {
             throw fail(getTestName(), new Exception("Candidate binary that failed: " + candidateBinary, e));
