@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,70 +30,35 @@
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
+import com.oracle.truffle.api.interop.NodeLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.debug.scope.LLVMDebuggerScopeFactory;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode.LLVMPointerDataEscapeNode;
+import com.oracle.truffle.llvm.runtime.nodes.func.LLVMFunctionStartNode;
+import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
+@ExportLibrary(NodeLibrary.class)
 public abstract class LLVMInstrumentableNode extends LLVMNode implements InstrumentableNode {
 
-    @CompilationFinal private LLVMNodeSourceDescriptor sourceDescriptor = null;
+    private LLVMSourceLocation sourceLocation;
+    private boolean statement;
 
-    /**
-     * Get a {@link LLVMNodeSourceDescriptor descriptor} for the debug and instrumentation
-     * properties of this node.
-     *
-     * @return a source descriptor attached to this node
-     */
-    public final LLVMNodeSourceDescriptor getSourceDescriptor() {
-        return sourceDescriptor;
-    }
-
-    /**
-     * Get a {@link LLVMNodeSourceDescriptor descriptor} for the debug and instrumentation
-     * properties of this node. If no such descriptor is currently attached to this node, one will
-     * be created.
-     *
-     * @return a source descriptor attached to this node
-     */
-    public final LLVMNodeSourceDescriptor getOrCreateSourceDescriptor() {
-        if (sourceDescriptor == null) {
-            setSourceDescriptor(new LLVMNodeSourceDescriptor());
-        }
-        return sourceDescriptor;
-    }
-
-    public final void setSourceDescriptor(LLVMNodeSourceDescriptor sourceDescriptor) {
-        // the source descriptor should only be set in the parser, and should only be modified
-        // before this node is first executed
-        CompilerAsserts.neverPartOfCompilation();
-        this.sourceDescriptor = sourceDescriptor;
-    }
-
-    @Override
-    public SourceSection getSourceSection() {
-        return sourceDescriptor != null ? sourceDescriptor.getSourceSection() : null;
-    }
-
-    @Override
-    public boolean isInstrumentable() {
-        return getSourceSection() != null;
-    }
-
-    /**
-     * Describes whether this node has source-level debug information attached. Individual nodes can
-     * use this to determine whether they should provide any of the {@link StandardTags}. Per
-     * default, all nodes for which this method returns {@code true} provide the
-     * {@link com.oracle.truffle.api.instrumentation.StandardTags.StatementTag}. Individual nodes
-     * can implement {@link InstrumentableNode#hasTag(Class)} to change this.
-     *
-     * @return whether this node has an associated
-     *         {@link com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation}
-     */
-    protected boolean hasSourceLocation() {
-        return sourceDescriptor != null && sourceDescriptor.getSourceLocation() != null;
+    private LLVMInstrumentableNode unwrap() {
+        return this instanceof WrapperNode ? (LLVMInstrumentableNode) ((WrapperNode) this).getDelegateNode() : this;
     }
 
     /**
@@ -102,35 +67,101 @@ public abstract class LLVMInstrumentableNode extends LLVMNode implements Instrum
      *
      * @return the {@link LLVMSourceLocation} attached to this node
      */
-    public LLVMSourceLocation getSourceLocation() {
-        return sourceDescriptor != null ? sourceDescriptor.getSourceLocation() : null;
+    public final LLVMSourceLocation getSourceLocation() {
+        return unwrap().sourceLocation;
+    }
+
+    public final void setSourceLocation(LLVMSourceLocation sourceLocation) {
+        unwrap().sourceLocation = sourceLocation;
+    }
+
+    @Override
+    public final SourceSection getSourceSection() {
+        LLVMSourceLocation location = getSourceLocation();
+        return location == null ? null : location.getSourceSection();
+    }
+
+    protected final boolean isStatement() {
+        return unwrap().statement;
+    }
+
+    protected final void setStatement(boolean statementTag) {
+        unwrap().statement = statementTag;
     }
 
     /**
-     * This implementation of {@link InstrumentableNode#hasTag(Class)} delegates to
-     * {@link LLVMNodeSourceDescriptor#hasTag(Class)} if it has an attached source descriptor. If
-     * this node {@link LLVMInstrumentableNode#hasSourceLocation() has an attached source location},
-     * this function also considers the node to be tagged with
+     * Describes whether this node has source-level debug information attached and should be
+     * considered a source-level statement for instrumentation.
+     *
+     * @return whether this node may provide the
+     *         {@link com.oracle.truffle.api.instrumentation.StandardTags.StatementTag}
+     */
+    public boolean hasStatementTag() {
+        return isStatement() && getSourceLocation() != null;
+    }
+
+    public void setHasStatementTag(boolean b) {
+        CompilerAsserts.neverPartOfCompilation();
+        setStatement(b);
+    }
+
+    @Override
+    public final boolean isInstrumentable() {
+        return getSourceLocation() != null;
+    }
+
+    /**
+     * If this node {@link LLVMInstrumentableNode#hasStatementTag() is a statement for source-level
+     * instrumentatipon}, this function considers the node to be tagged with
      * {@link com.oracle.truffle.api.instrumentation.StandardTags.StatementTag}.
      *
      * @param tag class of a tag {@link com.oracle.truffle.api.instrumentation.ProvidedTags
      *            provided} by {@link com.oracle.truffle.llvm.runtime.LLVMLanguage}
      *
-     * @return whether this node is associated with the given tag.
+     * @return whether this node is associated with the given tag
      */
     @Override
     public boolean hasTag(Class<? extends Tag> tag) {
         if (tag == StandardTags.StatementTag.class) {
-            return hasSourceLocation();
-        } else if (sourceDescriptor != null) {
-            return sourceDescriptor.hasTag(tag);
+            return hasStatementTag();
         } else {
             return false;
         }
     }
 
-    @Override
-    public Object getNodeObject() {
-        return sourceDescriptor != null ? sourceDescriptor.getNodeObject() : null;
+    @ExportMessage
+    boolean hasScope(@SuppressWarnings("unused") Frame frame) {
+        return sourceLocation != null;
+    }
+
+    @ExportMessage
+    public boolean hasRootInstance(@SuppressWarnings("unused") Frame frame) {
+        return this.getRootNode() instanceof LLVMFunctionStartNode;
+    }
+
+    @ExportMessage
+    public Object getScope(Frame frame, @SuppressWarnings("unused") boolean nodeEnter,
+                    @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+        if (isLLDebugEnabled(ctx)) {
+            return LLVMDebuggerScopeFactory.createIRLevelScope(this, frame, ctx);
+        } else {
+            return LLVMDebuggerScopeFactory.createSourceLevelScope(this, frame, ctx);
+        }
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private static boolean isLLDebugEnabled(LLVMContext ctx) {
+        return ctx.getEnv().getOptions().get(SulongEngineOption.LL_DEBUG);
+    }
+
+    @ExportMessage
+    public Object getRootInstance(Frame frame,
+                    @CachedContext(LLVMLanguage.class) LLVMContext ctx,
+                    @Cached LLVMPointerDataEscapeNode dataEscapeNode) throws UnsupportedMessageException {
+        if (hasRootInstance(frame)) {
+            LLVMPointer pointer = ctx.getSymbol(((LLVMFunctionStartNode) this.getRootNode()).getRootFunction());
+            return dataEscapeNode.executeWithTarget(pointer);
+        }
+        throw UnsupportedMessageException.create();
     }
 }
