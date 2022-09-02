@@ -173,8 +173,9 @@ public class UniverseBuilder {
 
         String typeName = aType.getName();
 
-        assert SubstrateUtil.isBuildingLibgraal() || !typeName.contains("/hotspot/") || typeName.contains("/jtt/hotspot/") || typeName.contains("/hotspot/shared/") : "HotSpot object in image " +
-                        typeName;
+        assert typeName.contains("hotspot/HotSpotInstrumentationSupport") ||
+                        typeName.contains("hotspot/HotSpotProfilingProvider") ||
+                        SubstrateUtil.isBuildingLibgraal() || !typeName.contains("/hotspot/") || typeName.contains("/jtt/hotspot/") : "HotSpot object in image " + typeName;
         assert !typeName.contains("/analysis/meta/") : "Analysis meta object in image " + typeName;
         assert !typeName.contains("/hosted/meta/") : "Hosted meta object in image " + typeName;
 
@@ -1148,7 +1149,7 @@ public class UniverseBuilder {
             referenceMaps.put(type, referenceMap);
             referenceMapEncoder.add(referenceMap);
         }
-        ImageSingletons.lookup(DynamicHubSupport.class).setData(referenceMapEncoder.encodeAll());
+        ImageSingletons.lookup(DynamicHubSupport.class).setData(referenceMapEncoder.encodeAll(null));
 
         ObjectLayout ol = ConfigurationValues.getObjectLayout();
         for (HostedType type : hUniverse.orderedTypes) {
@@ -1163,16 +1164,16 @@ public class UniverseBuilder {
                     HybridLayout<?> hybridLayout = new HybridLayout<>(instanceClass, ol);
                     JavaKind storageKind = hybridLayout.getArrayElementStorageKind();
                     boolean isObject = (storageKind == JavaKind.Object);
-                    layoutHelper = LayoutEncoding.forArray(type, isObject, hybridLayout.getArrayBaseOffset(), ol.getArrayIndexShift(storageKind));
+                    layoutHelper = LayoutEncoding.forArray(isObject, hybridLayout.getArrayBaseOffset(), ol.getArrayIndexShift(storageKind));
                 } else {
-                    layoutHelper = LayoutEncoding.forInstance(type, ConfigurationValues.getObjectLayout().alignUp(instanceClass.getInstanceSize()));
+                    layoutHelper = LayoutEncoding.forInstance(ConfigurationValues.getObjectLayout().alignUp(instanceClass.getInstanceSize()));
                 }
                 monitorOffset = instanceClass.getMonitorFieldOffset();
                 hashCodeOffset = instanceClass.getHashCodeFieldOffset();
             } else if (type.isArray()) {
                 JavaKind storageKind = type.getComponentType().getStorageKind();
                 boolean isObject = (storageKind == JavaKind.Object);
-                layoutHelper = LayoutEncoding.forArray(type, isObject, ol.getArrayBaseOffset(storageKind), ol.getArrayIndexShift(storageKind));
+                layoutHelper = LayoutEncoding.forArray(isObject, ol.getArrayBaseOffset(storageKind), ol.getArrayIndexShift(storageKind));
                 hashCodeOffset = ol.getArrayHashCodeOffset();
             } else if (type.isInterface()) {
                 layoutHelper = LayoutEncoding.forInterface();
