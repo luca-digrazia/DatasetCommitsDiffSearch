@@ -25,7 +25,6 @@ package com.oracle.truffle.espresso.libespresso;
 
 import static com.oracle.truffle.espresso.libespresso.Arguments.abort;
 
-import java.lang.ref.WeakReference;
 import java.util.EnumSet;
 
 import org.graalvm.nativeimage.RuntimeOptions;
@@ -36,31 +35,21 @@ import org.graalvm.options.OptionType;
 class Native {
     private String argPrefix;
 
-    private WeakReference<OptionDescriptors> compilerOptionDescriptors;
-    private WeakReference<OptionDescriptors> vmOptionDescriptors;
+    private OptionDescriptors compilerOptionDescriptors;
+    private OptionDescriptors vmOptionDescriptors;
 
     private OptionDescriptors getCompilerOptions() {
-        OptionDescriptors descriptors = null;
-        if (compilerOptionDescriptors != null) {
-            descriptors = compilerOptionDescriptors.get();
+        if (compilerOptionDescriptors == null) {
+            compilerOptionDescriptors = RuntimeOptions.getOptions(EnumSet.of(RuntimeOptions.OptionClass.Compiler));
         }
-        if (descriptors == null) {
-            descriptors = RuntimeOptions.getOptions(EnumSet.of(RuntimeOptions.OptionClass.Compiler));
-            compilerOptionDescriptors = new WeakReference<>(descriptors);
-        }
-        return descriptors;
+        return compilerOptionDescriptors;
     }
 
     private OptionDescriptors getVMOptions() {
-        OptionDescriptors descriptors = null;
-        if (vmOptionDescriptors != null) {
-            descriptors = vmOptionDescriptors.get();
+        if (vmOptionDescriptors == null) {
+            vmOptionDescriptors = RuntimeOptions.getOptions(EnumSet.of(RuntimeOptions.OptionClass.VM));
         }
-        if (descriptors == null) {
-            descriptors = RuntimeOptions.getOptions(EnumSet.of(RuntimeOptions.OptionClass.VM));
-            vmOptionDescriptors = new WeakReference<>(descriptors);
-        }
-        return descriptors;
+        return vmOptionDescriptors;
     }
 
     void init(boolean fromXXHandling) {
@@ -82,7 +71,7 @@ class Native {
             if (isXOption(arg)) {
                 setXOption(arg.substring("X".length()));
             } else {
-                throw abort("Unrecognized option: " + formatArg(arg) + "'. Some VM options may be only supported in --jvm mode.");
+                throw abort("Unrecognized option: " + formatArg(arg) + "'.");
             }
         } else {
             throw abort("Unrecognized option: " + formatArg(arg) + "'.");
@@ -168,7 +157,7 @@ class Native {
     }
 
     /* Is an option that starts with an 'X' one of the recognized X options? */
-    private boolean isXOption(String arg) {
+    private static boolean isXOption(String arg) {
         return (arg.startsWith("Xmn") || arg.startsWith("Xms") || arg.startsWith("Xmx") || arg.startsWith("Xss"));
     }
 
@@ -181,11 +170,12 @@ class Native {
         }
     }
 
-    private boolean isBooleanOption(OptionDescriptor descriptor) {
+    private static boolean isBooleanOption(OptionDescriptor descriptor) {
         return descriptor.getKey().getType().equals(OptionType.defaultType(Boolean.class));
     }
 
-    private Arguments.ArgumentException unknownOption(String key) {
-        throw abort("Unknown native option: " + key + ". Use --help:vm to list available options.");
+    private static Arguments.ArgumentException unknownOption(String key) {
+        throw abort("Unknown native option: " + key + "."
+        /* + "Use --help:vm to list available options." */);
     }
 }
