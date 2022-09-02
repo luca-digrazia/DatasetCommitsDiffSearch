@@ -61,7 +61,6 @@ public class ArgumentsHandler {
 
     private boolean helpVM = false;
     private boolean helpTools = false;
-    private boolean helpEngine = false;
     private boolean helpLanguages = false;
 
     private boolean helpExpert = false;
@@ -177,9 +176,6 @@ public class ArgumentsHandler {
             case "--help:tools":
                 helpTools = true;
                 break;
-            case "--help:engine":
-                helpEngine = true;
-                break;
             case "--help:languages":
                 helpLanguages = true;
                 break;
@@ -194,8 +190,8 @@ public class ArgumentsHandler {
         }
     }
 
-    void printRaw(String message) {
-        out.println(message);
+    void printRaw(String category) {
+        out.println(category);
     }
 
     void printLauncherOption(String option, String description) {
@@ -220,18 +216,14 @@ public class ArgumentsHandler {
             printHelp(polyglotAccess::printToolsHelp);
             help = true;
         }
-        if (helpEngine) {
-            printHelp(polyglotAccess::printEngineHelp);
-            help = true;
-        }
         if (helpLanguages) {
             printHelp(polyglotAccess::printLanguageHelp);
             help = true;
         }
         if ((helpExpert || helpInternal) && !help) {
             // an expert or internal help was requested, but no category was specified. Default to
-            // engine help.
-            printHelp(polyglotAccess::printEngineHelp);
+            // language help.
+            printHelp(polyglotAccess::printLanguageHelp);
             help = true;
         }
         if (help) {
