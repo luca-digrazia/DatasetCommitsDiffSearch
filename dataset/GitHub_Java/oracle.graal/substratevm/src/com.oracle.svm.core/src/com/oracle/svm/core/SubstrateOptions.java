@@ -169,9 +169,6 @@ public class SubstrateOptions {
         }
     };
 
-    @Option(help = "The maximum number of lines in the stack trace for Java exceptions (-1 means all)", type = OptionType.User)//
-    public static final RuntimeOptionKey<Integer> MaxJavaStackTraceDepth = new RuntimeOptionKey<>(1024);
-
     /* Same option name and specification as the Java HotSpot VM. */
     @Option(help = "Maximum total size of NIO direct-buffer allocations")//
     public static final RuntimeOptionKey<Long> MaxDirectMemorySize = new RuntimeOptionKey<>(0L);
@@ -375,9 +372,6 @@ public class SubstrateOptions {
         return "llvm".equals(CompilerBackend.getValue());
     }
 
-    @Option(help = "Revert to using previous native-image type check.")//
-    public static final HostedOptionKey<Boolean> UseLegacyTypeCheck = new HostedOptionKey<>(false);
-
     @Option(help = "Emit substitutions for UTF16 and latin1 compression", type = OptionType.Debug)//
     public static final HostedOptionKey<Boolean> EmitStringEncodingSubstitutions = new HostedOptionKey<>(true);
 
@@ -447,15 +441,15 @@ public class SubstrateOptions {
     };
 
     private static void defaultDebugInfoValueUpdateHandler(EconomicMap<OptionKey<?>, Object> values, @SuppressWarnings("unused") Integer oldValue, Integer newValue) {
-        // force update of TrackNodeSourcePosition and DeleteLocalSymbols
-        TrackNodeSourcePosition.update(values, newValue > 0);
-        DeleteLocalSymbols.update(values, newValue == 0);
+        // force update of TrackNodeSourcePosition
+        if (newValue > 0 && !Boolean.TRUE.equals(values.get(TrackNodeSourcePosition))) {
+            TrackNodeSourcePosition.update(values, true);
+        }
     }
 
     @Option(help = "Search path for source files for Application or GraalVM classes (list of comma-separated directories or jar files)")//
     public static final HostedOptionKey<String[]> DebugInfoSourceSearchPath = new HostedOptionKey<String[]>(null) {
     };
-
     @Option(help = "Directory under which to create source file cache for Application or GraalVM classes")//
     public static final HostedOptionKey<String> DebugInfoSourceCacheRoot = new HostedOptionKey<>("sources");
 
