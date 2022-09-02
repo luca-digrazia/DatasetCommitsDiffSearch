@@ -143,7 +143,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             return Array.getBoolean(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -155,7 +154,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             return Array.getByte(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -167,7 +165,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             return Array.getChar(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -179,7 +176,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             return Array.getShort(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -191,7 +187,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             return Array.getInt(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -203,7 +198,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             return Array.getFloat(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -215,7 +209,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             return Array.getDouble(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -227,7 +220,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             return Array.getLong(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -273,7 +265,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             Array.setBoolean(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -285,7 +276,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             Array.setByte(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -297,7 +287,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             Array.setChar(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -309,7 +298,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             Array.setShort(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -321,7 +309,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             Array.setInt(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -333,7 +320,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             Array.setFloat(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -345,7 +331,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             Array.setDouble(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }
@@ -357,7 +342,6 @@ public final class Target_java_lang_reflect_Array {
         try {
             Array.setLong(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
         }
     }

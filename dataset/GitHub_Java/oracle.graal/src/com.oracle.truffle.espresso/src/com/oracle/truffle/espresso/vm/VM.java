@@ -363,7 +363,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     public static @Host(Object.class) StaticObject JVM_Clone(@Host(Object.class) StaticObject self,
-                    @GuestCall(target = "java_lang_ref_Finalizer_register") DirectCallNode finalizerRegister,
+                    @GuestCall DirectCallNode java_lang_ref_Finalizer_register,
                     @InjectMeta Meta meta, @InjectProfile SubstitutionProfiler profiler) {
         assert StaticObject.notNull(self);
         if (self.isArray()) {
@@ -405,7 +405,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         assert self.getKlass() instanceof ObjectKlass;
         if (((ObjectKlass) self.getKlass()).hasFinalizer()) {
             profiler.profile(2);
-            finalizerRegister.call(clone);
+            java_lang_ref_Finalizer_register.call(clone);
         }
 
         return clone;
@@ -649,8 +649,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     public @Host(StackTraceElement.class) StaticObject JVM_GetStackTraceElement(@Host(Throwable.class) StaticObject self, int index,
-                    @GuestCall(target = "java_lang_StackTraceElement_init") DirectCallNode stackTraceElementInit,
-                    @InjectProfile SubstitutionProfiler profiler) {
+                    @GuestCall DirectCallNode java_lang_StackTraceElement_init, @InjectProfile SubstitutionProfiler profiler) {
         Meta meta = getMeta();
         if (index < 0) {
             profiler.profile(0);
@@ -669,7 +668,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
         int bci = stackElement.getBCI();
 
-        stackTraceElementInit.call(
+        java_lang_StackTraceElement_init.call(
                         /* this */ ste,
                         /* declaringClass */ meta.toGuestString(MetaUtil.internalNameToJava(method.getDeclaringKlass().getType().toString(), true, true)),
                         /* methodName */ meta.toGuestString(method.getName()),
@@ -1277,7 +1276,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                     @Host(typeName = "PrivilegedAction OR PrivilegedActionException") StaticObject action,
                     @Host(AccessControlContext.class) StaticObject context,
                     boolean wrapException,
-                    @GuestCall(target = "java_security_PrivilegedActionException_init_Exception") DirectCallNode privilegedActionExceptionInit,
+                    @GuestCall DirectCallNode java_security_PrivilegedActionException_init_Exception,
                     @InjectProfile SubstitutionProfiler profiler) {
         if (StaticObject.isNull(action)) {
             profiler.profile(0);
@@ -1312,7 +1311,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                             !getMeta().java_lang_RuntimeException.isAssignableFrom(e.getExceptionObject().getKlass())) {
                 profiler.profile(3);
                 StaticObject wrapper = getMeta().java_security_PrivilegedActionException.allocateInstance();
-                privilegedActionExceptionInit.call(wrapper, e.getExceptionObject());
+                java_security_PrivilegedActionException_init_Exception.call(wrapper, e.getExceptionObject());
                 throw Meta.throwException(wrapper);
             }
             profiler.profile(4);
@@ -2106,13 +2105,13 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     @VmImpl
     public @Host(Object[].class) StaticObject GetMemoryPools(@SuppressWarnings("unused") @Host(Object.class) StaticObject unused,
-                    @GuestCall(target = "sun_management_ManagementFactory_createMemoryPool") DirectCallNode createMemoryPool) {
+                    @GuestCall DirectCallNode sun_management_ManagementFactory_createMemoryPool) {
         Klass memoryPoolMXBean = getMeta().loadKlass(Type.java_lang_management_MemoryPoolMXBean, StaticObject.NULL);
         return memoryPoolMXBean.allocateReferenceArray(1, new IntFunction<StaticObject>() {
             @Override
             public StaticObject apply(int value) {
                 // (String name, boolean isHeap, long uThreshold, long gcThreshold)
-                return (StaticObject) createMemoryPool.call(
+                return (StaticObject) sun_management_ManagementFactory_createMemoryPool.call(
                                 /* String name */ getMeta().toGuestString("foo"),
                                 /* boolean isHeap */ true,
                                 /* long uThreshold */ -1L,
@@ -2124,13 +2123,13 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     @VmImpl
     public @Host(Object[].class) StaticObject GetMemoryManagers(@SuppressWarnings("unused") @Host(Object.class) StaticObject pool,
-                    @GuestCall(target = "sun_management_ManagementFactory_createMemoryManager") DirectCallNode createMemoryManager) {
+                    @GuestCall DirectCallNode sun_management_ManagementFactory_createMemoryManager) {
         Klass memoryManagerMXBean = getMeta().loadKlass(Type.java_lang_management_MemoryManagerMXBean, StaticObject.NULL);
         return memoryManagerMXBean.allocateReferenceArray(1, new IntFunction<StaticObject>() {
             @Override
             public StaticObject apply(int value) {
                 // (String name, String type)
-                return (StaticObject) createMemoryManager.call(
+                return (StaticObject) sun_management_ManagementFactory_createMemoryManager.call(
                                 /* String name */ getMeta().toGuestString("foo"));
             }
         });
@@ -2184,7 +2183,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                 return System.currentTimeMillis() - getContext().initVMDoneMs;
             case JMM_OS_PROCESS_ID:
                 String processName = java.lang.management.ManagementFactory.getRuntimeMXBean().getName();
-                String[] parts = boundarySplit(processName, "@");
+                String[] parts = processName.split("@");
                 return Long.parseLong(parts[0]);
             case JMM_THREAD_DAEMON_COUNT:
                 int daemonCount = 0;
@@ -2203,11 +2202,6 @@ public final class VM extends NativeEnv implements ContextAccess {
                 return getContext().getCreatedThreadCount();
         }
         throw EspressoError.unimplemented("GetLongAttribute " + att);
-    }
-
-    @TruffleBoundary
-    public static String[] boundarySplit(String processName, String regex) {
-        return processName.split(regex);
     }
 
     private boolean JMM_VERBOSE_GC_state = false;

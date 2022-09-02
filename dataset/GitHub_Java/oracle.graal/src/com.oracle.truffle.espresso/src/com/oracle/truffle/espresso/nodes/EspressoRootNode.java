@@ -238,8 +238,7 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
             //
             // synchronized (monitor) {
             initMonitorStack(frame);
-            // Do not register monitor on the stack. On abort signal, it would monitor exit twice.
-            InterpreterToVM.monitorEnter(monitor, getMeta());
+            monitorEnter(frame, monitor);
             Object result;
             try {
                 result = methodNode.execute(frame);
@@ -247,7 +246,7 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
                 // force early return has already released the monitor on the frame, so don't
                 // do an unbalanced monitor exit here
                 if (getContext().getJDWPListener().getAndRemoveEarlyReturnValue() == null) {
-                    InterpreterToVM.monitorExit(monitor, getMeta());
+                    monitorExit(frame, monitor);
                 }
             }
             return result;

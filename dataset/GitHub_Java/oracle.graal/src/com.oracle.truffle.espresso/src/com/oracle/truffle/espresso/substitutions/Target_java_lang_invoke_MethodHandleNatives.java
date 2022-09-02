@@ -232,7 +232,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                     @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
                     @Host(value = Class.class) StaticObject caller,
                     // Checkstyle: stop
-                    @GuestCall(target = "java_lang_invoke_MemberName_getSignature") DirectCallNode mnGetSignature,
+                    @GuestCall DirectCallNode java_lang_invoke_MemberName_getSignature,
                     // Checkstyle: resume
                     @InjectMeta Meta meta,
                     @InjectProfile SubstitutionProfiler profiler) {
@@ -260,7 +260,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                 throw Meta.throwException(meta.java_lang_NoSuchMethodException);
             }
         }
-        StaticObject type = (StaticObject) mnGetSignature.call(self);
+        StaticObject type = (StaticObject) java_lang_invoke_MemberName_getSignature.call(self);
 
         if (defKlass == null) {
             return StaticObject.NULL;

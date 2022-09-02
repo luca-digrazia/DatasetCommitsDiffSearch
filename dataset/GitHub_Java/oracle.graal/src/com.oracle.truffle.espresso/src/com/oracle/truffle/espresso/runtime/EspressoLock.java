@@ -22,12 +22,14 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
-import com.oracle.truffle.espresso.impl.Stable;
-
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.espresso.impl.Stable;
+import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
 
 /**
  * Lock implementation for guest objects. Provides a similar interface to {@link Object} built-in
@@ -44,8 +46,17 @@ public interface EspressoLock extends Lock {
      * The current thread must own this object's monitor.
      * <p>
      * Analogous to the {@link Object#wait(long)} method for built-in monitor locks.
+     *
+     * @param timeout the maximum time to wait in milliseconds. {@code false} if the waiting time
+     *            detectably elapsed before return from the method, else {@code true}
+     * @throws IllegalArgumentException if the value of timeout is negative.
+     * @throws IllegalMonitorStateException if the current thread is not the owner of the object's
+     *             monitor.
+     * @throws InterruptedException if any thread interrupted the current thread before or while the
+     *             current thread was waiting for a notification. The <i>interrupted status</i> of
+     *             the current thread is cleared when this exception is thrown.
      */
-    void await(long timeout) throws InterruptedException;
+    boolean await(long timeout) throws InterruptedException;
 
     /**
      * Wakes up one waiting thread.
@@ -80,8 +91,19 @@ public interface EspressoLock extends Lock {
     boolean isHeldByCurrentThread();
 
     /**
+     * Returns the thread that currently owns this lock, or {@code null} if not owned. When this
+     * method is called by a thread that is not the owner, the return value reflects a best-effort
+     * approximation of current lock status. For example, the owner may be momentarily {@code null}
+     * even if there are threads trying to acquire the lock but have not yet done so.
+     *
+     * @return the owner, or {@code null} if not owned
+     */
+    Thread getOwnerThread();
+
+    /**
      * Creates a new {@code EspressoLock} instance.
      */
+    @TruffleBoundary // ReentrantLock.<init> blacklisted by SVM
     static EspressoLock create() {
         return new EspressoLockImpl();
     }
@@ -93,6 +115,7 @@ final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
 
     @Stable private volatile Condition waitCondition;
 
+    @SuppressFBWarnings(value = "JLM_JSR166_LOCK_MONITORENTER", justification = "Espresso runtime method.")
     private Condition getWaitCondition() {
         Condition cond = waitCondition;
         if (cond == null) {
@@ -106,16 +129,18 @@ final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
         return cond;
     }
 
+    @SuppressFBWarnings(value = "WA_AWAIT_NOT_IN_LOOP", justification = "Espresso runtime method.")
     @Override
-    public void await(long timeout) throws InterruptedException {
+    public boolean await(long timeout) throws InterruptedException {
         if (timeout == 0) {
             // Wait without timeout, NOT equivalent to await(0L, TimeUnit.MILLISECONDS);
             getWaitCondition().await();
         } else if (timeout > 0) {
-            getWaitCondition().await(timeout, TimeUnit.MILLISECONDS);
+            return getWaitCondition().await(timeout, TimeUnit.MILLISECONDS);
         } else {
             throw new IllegalArgumentException();
         }
+        return false;
     }
 
     @Override
@@ -126,6 +151,12 @@ final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
     @Override
     public void signalAll() {
         getWaitCondition().signalAll();
+    }
+
+    @Override
+    @TruffleBoundary // ReentrantLock.getOwner blacklisted by SVM
+    public Thread getOwnerThread() {
+        return getOwner();
     }
 
     @Override
