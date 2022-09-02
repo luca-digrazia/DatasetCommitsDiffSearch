@@ -89,7 +89,7 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
                 interop.writeMember(location.base, identifier, convertOutgoing.execute(value, location.type, writeType));
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Cannot write member '%s'.", identifier);
+                throw new LLVMPolyglotException(this, "Can not write member '%s'.", identifier);
             } catch (UnknownIdentifierException ex) {
                 exception.enter();
                 throw new LLVMPolyglotException(this, "Member '%s' not found.", identifier);
@@ -141,7 +141,7 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
                 throw new LLVMPolyglotException(this, "Invalid array index %d.", idx);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Cannot write array element %d.", idx);
+                throw new LLVMPolyglotException(this, "Can not write array element %d.", idx);
             } catch (UnsupportedTypeException ex) {
                 exception.enter();
                 throw new LLVMPolyglotException(this, "Wrong type writing to array element %d.", idx);
@@ -211,15 +211,10 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
             }
         }
 
-        /**
-         * @param value
-         * @param outgoingType
-         * @param type
-         * @see #execute(Object, LLVMInteropType.Value, ForeignToLLVMType)
-         */
         @Specialization(limit = "3", guards = {"typeMismatch(outgoingType, cachedType)", "cachedType == type"})
+        @SuppressWarnings("unused")
         Object doUnknownType(Object value, LLVMInteropType.Value outgoingType, ForeignToLLVMType type,
-                        @Cached("type") @SuppressWarnings("unused") ForeignToLLVMType cachedType,
+                        @Cached("type") ForeignToLLVMType cachedType,
                         @Cached(parameters = "type") LLVMDataEscapeNode dataEscape) {
             return dataEscape.executeWithTarget(value);
         }
