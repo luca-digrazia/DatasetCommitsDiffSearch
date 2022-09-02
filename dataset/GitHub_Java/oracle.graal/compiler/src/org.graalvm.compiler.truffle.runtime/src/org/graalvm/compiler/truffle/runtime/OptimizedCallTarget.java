@@ -451,8 +451,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                         !getOptionValue(PolyglotCompilerOptions.CompilationExceptionsAreThrown);
         boolean mayBeAsynchronous = allowBackgroundCompilation && getOptionValue(PolyglotCompilerOptions.BackgroundCompilation);
         runtime().finishCompilation(this, task, mayBeAsynchronous);
-        // not async compile and compilation successful
-        return !mayBeAsynchronous && isValid();
+        return !mayBeAsynchronous;
     }
 
     private boolean needsCompile(boolean isLastTierCompilation) {
