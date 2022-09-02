@@ -241,7 +241,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         }
 
         public BackgroundCompileQueue createBackgroundCompileQueue(@SuppressWarnings("unused") SubstrateTruffleRuntime runtime) {
-            return new BackgroundCompileQueue(runtime);
+            return new BackgroundCompileQueue();
         }
 
         public CompilableTruffleAST asCompilableTruffleAST(JavaConstant constant) {

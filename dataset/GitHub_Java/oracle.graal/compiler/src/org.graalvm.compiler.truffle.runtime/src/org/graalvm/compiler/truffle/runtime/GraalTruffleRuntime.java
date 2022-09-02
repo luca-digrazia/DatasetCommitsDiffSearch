@@ -420,12 +420,27 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     /** Accessor for non-public state in {@link FrameDescriptor}. */
     public void markFrameMaterializeCalled(FrameDescriptor descriptor) {
-        GraalRuntimeAccessor.FRAME.markMaterializeCalled(descriptor);
+        try {
+            getTvmci().markFrameMaterializeCalled(descriptor);
+        } catch (Throwable ex) {
+            /*
+             * Backward compatibility: do nothing on old Truffle version where the field in
+             * FrameDescriptor does not exist.
+             */
+        }
     }
 
     /** Accessor for non-public state in {@link FrameDescriptor}. */
     public boolean getFrameMaterializeCalled(FrameDescriptor descriptor) {
-        return GraalRuntimeAccessor.FRAME.getMaterializeCalled(descriptor);
+        try {
+            return getTvmci().getFrameMaterializeCalled(descriptor);
+        } catch (Throwable ex) {
+            /*
+             * Backward compatibility: be conservative on old Truffle version where the field in
+             * FrameDescriptor does not exist.
+             */
+            return true;
+        }
     }
 
     @Override
@@ -532,7 +547,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                     skipFrames--;
                 }
             } else if (frame.isMethod(methods.callDirectMethod) || frame.isMethod(methods.callIndirectMethod) || frame.isMethod(methods.callInlinedMethod) ||
-                            frame.isMethod(methods.callInlinedCallMethod)) {
+                            frame.isMethod(methods.inlinedPERoot) || frame.isMethod(methods.callInlinedCallMethod)) {
                 callNodeFrame = frame;
             }
             return null;
@@ -564,7 +579,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             return capability.cast(tvmci);
         } else if (capability == LayoutFactory.class) {
             LayoutFactory layoutFactory = loadObjectLayoutFactory();
-            GraalRuntimeAccessor.JDK.exportTo(layoutFactory.getClass());
+            CompilerRuntimeAccessor.jdkServicesAccessor().exportTo(layoutFactory.getClass());
             return capability.cast(layoutFactory);
         } else if (capability == TVMCI.Test.class) {
             return capability.cast(getTestTvmci());
@@ -595,14 +610,14 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     public final OptimizedCallTarget createClonedCallTarget(RootNode rootNode, OptimizedCallTarget source) {
         CompilerAsserts.neverPartOfCompilation();
         OptimizedCallTarget target = createOptimizedCallTarget(source, rootNode);
-        GraalRuntimeAccessor.INSTRUMENT.onLoad(target.getRootNode());
+        tvmci.onLoad(target.getRootNode());
         return target;
     }
 
     public final OptimizedCallTarget createOSRCallTarget(RootNode rootNode) {
         CompilerAsserts.neverPartOfCompilation();
         OptimizedCallTarget target = createOptimizedCallTarget(null, rootNode);
-        GraalRuntimeAccessor.INSTRUMENT.onLoad(target.getRootNode());
+        tvmci.onLoad(target.getRootNode());
         return target;
     }
 
@@ -903,6 +918,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     protected static final class CallMethods {
         public final ResolvedJavaMethod callDirectMethod;
         public final ResolvedJavaMethod callInlinedMethod;
+        public final ResolvedJavaMethod inlinedPERoot;
         public final ResolvedJavaMethod callIndirectMethod;
         public final ResolvedJavaMethod callTargetMethod;
         public final ResolvedJavaMethod callOSRMethod;
@@ -914,9 +930,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             this.callIndirectMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_INDIRECT);
             this.callInlinedMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_INLINED);
             this.callInlinedCallMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_INLINED_CALL);
+            this.inlinedPERoot = metaAccess.lookupJavaMethod(GraalFrameInstance.INLINED_PE_ROOT);
             this.callTargetMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_TARGET_METHOD);
             this.callOSRMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_OSR_METHOD);
-            this.anyFrameMethod = new ResolvedJavaMethod[]{callDirectMethod, callIndirectMethod, callInlinedMethod, callTargetMethod, callOSRMethod, callInlinedCallMethod};
+            this.anyFrameMethod = new ResolvedJavaMethod[]{callDirectMethod, callIndirectMethod, callInlinedMethod, inlinedPERoot, callTargetMethod, callOSRMethod, callInlinedCallMethod};
         }
 
         public static CallMethods lookup(MetaAccessProvider metaAccess) {
