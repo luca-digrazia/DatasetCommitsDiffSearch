@@ -1223,8 +1223,7 @@ public final class StaticObject implements TruffleObject {
     RuntimeException throwException(@Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
         checkNotForeign();
         if (isException()) {
-            Meta meta = getKlass().getMeta();
-            throw meta.throwException(this);
+            throw Meta.throwException(this);
         }
         error.enter();
         throw UnsupportedMessageException.create();
@@ -1761,7 +1760,7 @@ public final class StaticObject implements TruffleObject {
             if (bytecodeNode != null) {
                 bytecodeNode.enterImplicitExceptionProfile();
             }
-            throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+            throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
     }
 
@@ -1772,7 +1771,7 @@ public final class StaticObject implements TruffleObject {
             if (bytecodeNode != null) {
                 bytecodeNode.enterImplicitExceptionProfile();
             }
-            throw meta.throwException(meta.java_lang_ArrayStoreException);
+            throw Meta.throwException(meta.java_lang_ArrayStoreException);
         }
     }
 
@@ -1797,7 +1796,7 @@ public final class StaticObject implements TruffleObject {
             if (bytecodeNode != null) {
                 bytecodeNode.enterImplicitExceptionProfile();
             }
-            throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+            throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
     }
 
@@ -1814,7 +1813,7 @@ public final class StaticObject implements TruffleObject {
             if (bytecodeNode != null) {
                 bytecodeNode.enterImplicitExceptionProfile();
             }
-            throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+            throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
     }
 
