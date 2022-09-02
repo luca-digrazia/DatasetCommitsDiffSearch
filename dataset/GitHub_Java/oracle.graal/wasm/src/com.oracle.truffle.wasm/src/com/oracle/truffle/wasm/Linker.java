@@ -70,7 +70,6 @@ public class Linker {
                 linkMemories(module);
                 module.setLinked();
             }
-            linked = true;
         }
     }
 
