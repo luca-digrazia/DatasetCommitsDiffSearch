@@ -456,17 +456,15 @@ public final class RegexParser {
         return characterClass;
     }
 
-    private void createOptionalBranch(QuantifiableTerm term, Quantifier quantifier, boolean copy, boolean unroll, int recurse, boolean emptyGuard) throws RegexSyntaxException {
+    private void createOptionalBranch(QuantifiableTerm term, Quantifier quantifier, boolean copy, boolean unroll, int recurse) throws RegexSyntaxException {
         addTerm(copy ? copyVisitor.copy(term) : term);
         curTerm.setExpandedQuantifier(false);
         ((QuantifiableTerm) curTerm).setQuantifier(null);
-        curTerm.setEmptyGuard(emptyGuard);
-        // While the empty guard might have been turned off for the first optional expansion in
-        // Ruby, we want the empty guard to be present on all subsequent expansions.
-        createOptional(term, quantifier, true, unroll, recurse - 1, true);
+        curTerm.setEmptyGuard(true);
+        createOptional(term, quantifier, true, unroll, recurse - 1);
     }
 
-    private void createOptional(QuantifiableTerm term, Quantifier quantifier, boolean copy, boolean unroll, int recurse, boolean emptyGuard) throws RegexSyntaxException {
+    private void createOptional(QuantifiableTerm term, Quantifier quantifier, boolean copy, boolean unroll, int recurse) throws RegexSyntaxException {
         if (recurse < 0) {
             return;
         }
@@ -481,13 +479,13 @@ public final class RegexParser {
             curGroup.setEnclosedCaptureGroupsHigh(term.asGroup().getEnclosedCaptureGroupsHigh());
         }
         if (quantifier.isGreedy()) {
-            createOptionalBranch(term, quantifier, copy, unroll, recurse, emptyGuard);
+            createOptionalBranch(term, quantifier, copy, unroll, recurse);
             addSequence();
             curSequence.setExpandedQuantifier(true);
         } else {
             curSequence.setExpandedQuantifier(true);
             addSequence();
-            createOptionalBranch(term, quantifier, copy, unroll, recurse, emptyGuard);
+            createOptionalBranch(term, quantifier, copy, unroll, recurse);
         }
         popGroup(null, false);
     }
@@ -520,11 +518,7 @@ public final class RegexParser {
             toExpand.getParent().asSequence().replace(toExpand.getSeqIndex(), createGroup(null, false, false, false, null));
         }
         // unroll optional part ( x{0,3} -> (x(x(x|)|)|) )
-        // In Ruby, the first optional expansion of the term does not have an empty guard. The
-        // expansion might capture an empty string inside a capture group and we need to
-        // preserve that capture in Ruby.
-        createOptional(toExpand, quantifier, unroll && quantifier.getMin() > 0, unroll, !unroll || quantifier.isInfiniteLoop() ? 0 : (quantifier.getMax() - quantifier.getMin()) - 1,
-                        source.getOptions().getFlavor() != RubyFlavor.INSTANCE);
+        createOptional(toExpand, quantifier, unroll && quantifier.getMin() > 0, unroll, !unroll || quantifier.isInfiniteLoop() ? 0 : (quantifier.getMax() - quantifier.getMin()) - 1);
         if (!unroll || quantifier.isInfiniteLoop()) {
             ((Group) curTerm).setLoop(true);
         }
