@@ -83,7 +83,7 @@ import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.InlineKind;
-import org.graalvm.compiler.truffle.common.TruffleInliningData;
+import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 import org.graalvm.compiler.truffle.common.TruffleSourceLanguagePosition;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl.CancellableTruffleCompilationTask;
 import org.graalvm.compiler.truffle.compiler.nodes.TruffleAssumption;
@@ -294,22 +294,25 @@ public abstract class PartialEvaluator {
         public final OptionValues options;
         public final DebugContext debug;
         public final CompilableTruffleAST compilable;
+        public final TruffleMetaAccessProvider inliningPlan;
         public final CompilationIdentifier compilationId;
         public final SpeculationLog log;
         public final CancellableTruffleCompilationTask task;
         public final StructuredGraph graph;
         final HighTierContext highTierContext;
 
-        public Request(OptionValues options, DebugContext debug, CompilableTruffleAST compilable, ResolvedJavaMethod method,
+        public Request(OptionValues options, DebugContext debug, CompilableTruffleAST compilable, ResolvedJavaMethod method, TruffleMetaAccessProvider inliningPlan,
                         CompilationIdentifier compilationId, SpeculationLog log, CancellableTruffleCompilationTask task) {
             Objects.requireNonNull(options);
             Objects.requireNonNull(debug);
             Objects.requireNonNull(compilable);
+            Objects.requireNonNull(inliningPlan);
             Objects.requireNonNull(compilationId);
             Objects.requireNonNull(task);
             this.options = options;
             this.debug = debug;
             this.compilable = compilable;
+            this.inliningPlan = inliningPlan;
             this.compilationId = compilationId;
             this.log = log;
             this.task = task;
@@ -459,9 +462,9 @@ public abstract class PartialEvaluator {
 
     private static final class TruffleSourceLanguagePositionProvider implements SourceLanguagePositionProvider {
 
-        private TruffleInliningData inliningPlan;
+        private TruffleMetaAccessProvider inliningPlan;
 
-        private TruffleSourceLanguagePositionProvider(TruffleInliningData inliningPlan) {
+        private TruffleSourceLanguagePositionProvider(TruffleMetaAccessProvider inliningPlan) {
             this.inliningPlan = inliningPlan;
         }
 
@@ -537,7 +540,7 @@ public abstract class PartialEvaluator {
                         inlineInvokePlugins,
                         new InterceptReceiverPlugin(request.compilable),
                         nodePlugins,
-                        new TruffleSourceLanguagePositionProvider(request.task.inliningData()),
+                        new TruffleSourceLanguagePositionProvider(request.inliningPlan),
                         graphCache);
         decoder.decode(request.graph.method(), request.graph.isSubstitution(), request.graph.trackNodeSourcePosition());
     }

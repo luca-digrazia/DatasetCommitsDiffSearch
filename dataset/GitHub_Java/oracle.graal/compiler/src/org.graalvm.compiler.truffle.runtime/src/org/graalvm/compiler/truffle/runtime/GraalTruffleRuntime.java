@@ -57,7 +57,7 @@ import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleDebugContext;
 import org.graalvm.compiler.truffle.common.TruffleDebugJavaMethod;
-import org.graalvm.compiler.truffle.common.TruffleInliningData;
+import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 import org.graalvm.compiler.truffle.common.TruffleOutputGroup;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExceptionAction;
@@ -183,7 +183,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     @Override
-    public TruffleInliningData createInliningPlan() {
+    public TruffleMetaAccessProvider createInliningPlan() {
         return new TruffleInlining();
     }
 
@@ -700,16 +700,16 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 if (debug == null) {
                     debug = compiler.openDebugContext(optionsMap, compilation);
                 }
+                TruffleInlining inlining = new TruffleInlining();
                 listeners.onCompilationStarted(callTarget, task.tier());
                 compilationStarted = true;
                 try {
-                    compiler.doCompile(debug, compilation, optionsMap, task, listeners.isEmpty() ? null : listeners);
+                    compiler.doCompile(debug, compilation, optionsMap, inlining, task, listeners.isEmpty() ? null : listeners);
                 } finally {
                     if (initialDebug == null) {
                         debug.close();
                     }
                 }
-                TruffleInlining inlining = (TruffleInlining) task.inliningData();
                 truffleDump(callTarget, compiler, compilation, optionsMap, inlining);
                 inlining.dequeueTargets();
             }
