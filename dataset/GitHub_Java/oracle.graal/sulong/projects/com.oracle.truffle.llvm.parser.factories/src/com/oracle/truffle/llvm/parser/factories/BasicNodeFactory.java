@@ -1721,7 +1721,7 @@ public class BasicNodeFactory implements NodeFactory {
 
         LLVMInlineAssemblyRootNode assemblyRoot;
         try {
-            assemblyRoot = InlineAssemblyParser.parseInlineAssembly(context.getLanguage(), asmExpression, asmFlags, argTypes, retType, retTypes, retOffsets, this);
+            assemblyRoot = InlineAssemblyParser.parseInlineAssembly(context.getLanguage(), asmExpression, asmFlags, argTypes, retType, retTypes, retOffsets);
         } catch (AsmParseException e) {
             assemblyRoot = getLazyUnsupportedInlineRootNode(asmExpression, e);
         }
