@@ -43,21 +43,33 @@ package com.oracle.truffle.nfi;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.nfi.spi.NFIBackend;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.nfi.NFILanguage.Context;
+import com.oracle.truffle.nfi.types.NativeSource;
+import com.oracle.truffle.nfi.types.Parser;
 
 @TruffleLanguage.Registration(id = "nfi", name = "TruffleNFI", version = "0.1", characterMimeTypes = NFILanguage.MIME_TYPE, internal = true)
-public class NFILanguage extends TruffleLanguage<NFIContext> {
+public class NFILanguage extends TruffleLanguage<Context> {
 
     public static final String MIME_TYPE = "application/x-native";
 
-    @Override
-    protected NFIContext createContext(Env env) {
-        return new NFIContext(env);
+    static class Context {
+
+        Env env;
+
+        Context(Env env) {
+            this.env = env;
+        }
     }
 
     @Override
-    protected boolean patchContext(NFIContext context, Env newEnv) {
-        context.patch(newEnv);
+    protected Context createContext(Env env) {
+        return new Context(env);
+    }
+
+    @Override
+    protected boolean patchContext(Context context, Env newEnv) {
+        context.env = newEnv;
         return true;
     }
 
@@ -66,21 +78,26 @@ public class NFILanguage extends TruffleLanguage<NFIContext> {
         CharSequence nfiSource = request.getSource().getCharacters();
         NativeSource source = Parser.parseNFISource(nfiSource);
 
+        String mimeType;
         String backendId;
         if (source.isDefaultBackend()) {
-            backendId = "native";
+            mimeType = "trufflenfi/native";
+            backendId = "nfi/native";
         } else {
-            backendId = source.getNFIBackendId();
+            mimeType = "trufflenfi/" + source.getNFIBackendId();
+            backendId = Source.findLanguage(mimeType);
+            if (backendId == null) {
+                backendId = source.getNFIBackendId();
+            }
         }
 
-        NFIBackend backend = getCurrentContext(NFILanguage.class).getBackend(backendId);
-        CallTarget loadLibrary = backend.parse(source.getLibraryDescriptor());
-        return Truffle.getRuntime().createCallTarget(new NFIRootNode(this, loadLibrary, source));
+        Source backendSource = Source.newBuilder(backendId, source.getLibraryDescriptor(), "<nfi-impl>").mimeType(mimeType).build();
+        return Truffle.getRuntime().createCallTarget(new NFIRootNode(this, backendSource, source));
     }
 
     @Override
     protected boolean isObjectOfLanguage(Object object) {
-        return object instanceof NFILibrary || object instanceof NFISymbol;
+        return object instanceof NFILibrary;
     }
 
     @Override
