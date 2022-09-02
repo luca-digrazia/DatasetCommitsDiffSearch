@@ -20,19 +20,18 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso.runtime;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.LongUnaryOperator;
+package com.oracle.truffle.espresso.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 class EspressoThreadManager implements ContextAccess {
 
@@ -47,7 +46,7 @@ class EspressoThreadManager implements ContextAccess {
         this.context = context;
     }
 
-    private static final int DEFAULT_THREAD_ARRAY_SIZE = 8;
+    public static int DEFAULT_THREAD_ARRAY_SIZE = 8;
 
     private final Set<StaticObject> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
@@ -96,21 +95,8 @@ class EspressoThreadManager implements ContextAccess {
         activeThreads.add(self);
     }
 
-    final AtomicLong createdThreadCount = new AtomicLong();
-    final AtomicLong peakThreadCount = new AtomicLong();
-
     public void registerThread(Thread host, StaticObject guest) {
         activeThreads.add(guest);
-
-        // Update java.lang.management counters.
-        createdThreadCount.incrementAndGet();
-        peakThreadCount.updateAndGet(new LongUnaryOperator() {
-            @Override
-            public long applyAsLong(long oldPeak) {
-                return Math.max(oldPeak, activeThreads.size());
-            }
-        });
-
         if (finalizerThreadId == -1) {
             if (getMeta().FinalizerThread.isAssignableFrom(guest.getKlass())) {
                 synchronized (threadLock) {
