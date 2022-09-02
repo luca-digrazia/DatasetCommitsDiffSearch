@@ -54,10 +54,12 @@ import org.graalvm.compiler.core.common.spi.LIRKindTool;
 import org.graalvm.compiler.core.common.type.RawPointerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LabelRef;
 import org.graalvm.compiler.lir.StandardOp;
+import org.graalvm.compiler.lir.SwitchStrategy;
 import org.graalvm.compiler.lir.Variable;
 import org.graalvm.compiler.lir.VirtualStackSlot;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
@@ -118,6 +120,7 @@ import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMValueRef;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.code.RegisterAttributes;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
@@ -532,39 +535,11 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
         return SubstrateOptions.SpawnIsolates.getValue() && kind.isReference(0) && !kind.isCompressedReference(0);
     }
 
-    @Override
-    public boolean canInlineConstant(Constant constant) {
-        /* Forces constants to be emitted as LLVM constants */
-        return false;
-    }
-
-    @Override
-    public boolean mayEmbedConstantLoad(Constant constant) {
-        /* Forces constants to be emitted as LLVM constants */
-        return false;
-    }
-
-    @Override
-    public <K extends ValueKind<K>> K toRegisterKind(K kind) {
-        /* Registers are handled by LLVM. */
-        throw unimplemented("only needed when emitting LIR constants");
-    }
-
-    @Override
-    public void emitMoveConstant(AllocatableValue dst, Constant src) {
-        throw unimplemented("the LLVM backend doesn't need to move constants");
-    }
-
     /* Values */
 
     @Override
     public Variable newVariable(ValueKind<?> kind) {
         return new LLVMVariable(kind);
-    }
-
-    @Override
-    public AllocatableValue asAllocatable(Value value) {
-        return (AllocatableValue) value;
     }
 
     @Override
@@ -1095,37 +1070,84 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
 
     @Override
     public LIRGenerationResult getResult() {
-        throw unimplemented("the LLVM backend doesn't produce an LIRGenerationResult");
+        throw unimplemented();
+    }
+
+    @Override
+    public boolean hasBlockEnd(AbstractBlockBase<?> block) {
+        throw unimplemented();
     }
 
     @Override
     public MoveFactory getMoveFactory() {
-        throw unimplemented("the LLVM backend doesn't use LIR moves");
+        throw unimplemented();
     }
 
     @Override
     public MoveFactory getSpillMoveFactory() {
-        throw unimplemented("the LLVM backend doesn't use LIR moves");
+        return null;
+    }
+
+    @Override
+    public BlockScope getBlockScope(AbstractBlockBase<?> block) {
+        throw unimplemented();
+    }
+
+    @Override
+    public boolean canInlineConstant(Constant constant) {
+        return false;
+    }
+
+    @Override
+    public boolean mayEmbedConstantLoad(Constant constant) {
+        return false;
+    }
+
+    @Override
+    public <K extends ValueKind<K>> K toRegisterKind(K kind) {
+        /* Registers are handled by LLVM. */
+        throw unimplemented();
     }
 
     @Override
     public void emitNullCheck(Value address, LIRFrameState state) {
-        throw unimplemented("the LLVM backend doesn't support deoptimization");
+        throw unimplemented();
     }
 
     @Override
     public void emitDeoptimize(Value actionAndReason, Value failedSpeculation, LIRFrameState state) {
-        throw unimplemented("the LLVM backend doesn't support deoptimization");
+        throw unimplemented();
     }
 
     @Override
-    public void emitFarReturn(AllocatableValue result, Value sp, Value ip, boolean fromMethodWithCalleeSavedRegisters) {
-        throw unimplemented("the LLVM backend delegates exception handling to libunwind");
+    public RegisterAttributes attributes(Register register) {
+        throw unimplemented();
+    }
+
+    @Override
+    public void emitFarReturn(AllocatableValue result, Value sp, Value setjmpBuffer, boolean fromMethodWithCalleeSavedRegisters) {
+        /* Exception unwinding is handled by libunwind */
+        throw unimplemented();
+    }
+
+    @Override
+    public void emitMoveConstant(AllocatableValue dst, Constant src) {
+        throw unimplemented();
     }
 
     @Override
     public void emitUnwind(Value operand) {
-        throw shouldNotReachHere("handled by lowering");
+        throw unimplemented();
+    }
+
+    @Override
+    public void beforeRegisterAllocation() {
+        throw unimplemented();
+    }
+
+    @Override
+    public void emitIncomingValues(Value[] params) {
+        throw unimplemented();
     }
 
     @Override
@@ -1137,52 +1159,105 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
 
     @Override
     public void emitInstructionSynchronizationBarrier() {
-        throw unimplemented("the LLVM backend doesn't support instruction synchronization");
+        /*
+         * No-op - for now this is not needed for LLVM backend.
+         */
+    }
+
+    @Override
+    public AllocatableValue asAllocatable(Value value) {
+        return (AllocatableValue) value;
+    }
+
+    @Override
+    public Value loadNonConst(Value value) {
+        throw unimplemented();
+    }
+
+    @Override
+    public boolean needOnlyOopMaps() {
+        return false;
+    }
+
+    @Override
+    public AllocatableValue resultOperandFor(JavaKind javaKind, ValueKind<?> valueKind) {
+        throw unimplemented();
     }
 
     @Override
     public <I extends LIRInstruction> I append(I op) {
-        throw unimplemented("the LLVM backend doesn't support LIR instructions");
+        throw unimplemented();
+    }
+
+    @Override
+    public void setSourcePosition(NodeSourcePosition position) {
+        throw unimplemented();
+    }
+
+    @Override
+    public void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
+                    double trueDestinationProbability) {
+        throw unimplemented();
+    }
+
+    @Override
+    public void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpKind, double overflowProbability) {
+        throw unimplemented();
+    }
+
+    @Override
+    public void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueSuccessorProbability) {
+        throw unimplemented();
+    }
+
+    @Override
+    public void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value) {
+        throw unimplemented();
+    }
+
+    @Override
+    public void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget) {
+        throw unimplemented();
     }
 
     @Override
     public void emitSpeculationFence() {
-        throw unimplemented("the LLVM backend doesn't support speculative execution attack mitigation");
+        throw unimplemented();
     }
 
     @Override
     public LIRInstruction createBenchmarkCounter(String name, String group, Value increment) {
-        throw unimplemented("the LLVM backend doesn't support diagnostic operations");
+        throw unimplemented();
     }
 
     @Override
     public LIRInstruction createMultiBenchmarkCounter(String[] names, String[] groups, Value[] increments) {
-        throw unimplemented("the LLVM backend doesn't support diagnostic operations");
+        throw unimplemented();
     }
 
     @Override
     public StandardOp.ZapRegistersOp createZapRegisters(Register[] zappedRegisters, JavaConstant[] zapValues) {
-        throw unimplemented("the LLVM backend doesn't support diagnostic operations");
+        throw unimplemented();
     }
 
     @Override
     public StandardOp.ZapRegistersOp createZapRegisters(Register[] zappedRegisters) {
-        throw unimplemented("the LLVM backend doesn't support diagnostic operations");
+        throw unimplemented();
     }
 
     @Override
     public StandardOp.ZapRegistersOp createZapRegisters() {
-        throw unimplemented("the LLVM backend doesn't support diagnostic operations");
+        throw unimplemented();
     }
 
     @Override
     public LIRInstruction createZapArgumentSpace(StackSlot[] zappedStack, JavaConstant[] zapValues) {
-        throw unimplemented("the LLVM backend doesn't support diagnostic operations");
+        throw unimplemented();
     }
 
     @Override
     public LIRInstruction zapArgumentSpace() {
-        throw unimplemented("the LLVM backend doesn't support diagnostic operations");
+        throw unimplemented();
     }
 
     /* Arithmetic */

@@ -38,11 +38,9 @@ import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
 import org.graalvm.compiler.lir.phases.LIRSuites;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.cfg.Block;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.phases.BasePhase;
+import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.common.AddressLoweringPhase;
 import org.graalvm.compiler.phases.util.Providers;
 
@@ -71,7 +69,7 @@ public class SubstrateLLVMBackend extends SubstrateBackend {
     }
 
     @Override
-    public BasePhase<CoreProviders> newAddressLoweringPhase(CodeCacheProvider codeCache) {
+    public Phase newAddressLoweringPhase(CodeCacheProvider codeCache) {
         return new AddressLoweringPhase(new LLVMAddressLowering());
     }
 
@@ -114,7 +112,7 @@ public class SubstrateLLVMBackend extends SubstrateBackend {
     private void emitLLVM(StructuredGraph graph, CompilationResult result) {
         DebugContext debug = graph.getDebug();
         try (DebugContext.Scope ds = debug.scope("EmitLLVM"); DebugCloseable a = EmitLLVM.start(debug)) {
-            assert graph.isAfterStage(StageFlag.VALUE_PROXY_REMOVAL);
+            assert !graph.hasValueProxies();
 
             ResolvedJavaMethod method = graph.method();
             LLVMGenerator generator = new LLVMGenerator(getProviders(), result, method, LLVMOptions.IncludeLLVMDebugInfo.getValue());

@@ -36,24 +36,18 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ForkJoinPool;
-import java.util.function.Function;
-import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import com.oracle.graal.pointsto.BigBang;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.graal.pointsto.util.CompletionExecutor;
-import com.oracle.graal.pointsto.util.CompletionExecutor.DebugContextRunnable;
 import com.oracle.graal.pointsto.util.Timer;
 import com.oracle.graal.pointsto.util.Timer.StopTimer;
 import com.oracle.objectfile.ObjectFile;
@@ -71,6 +65,8 @@ import com.oracle.svm.core.graal.llvm.util.LLVMToolchain;
 import com.oracle.svm.core.graal.llvm.util.LLVMToolchain.RunFailureException;
 import com.oracle.svm.core.heap.SubstrateReferenceMap;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicInteger;
+import com.oracle.svm.core.option.HostedOptionValues;
+import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.image.NativeBootImage.NativeTextSectionImpl;
 import com.oracle.svm.hosted.image.NativeImageCodeCache;
 import com.oracle.svm.hosted.image.NativeImageHeap;
@@ -112,29 +108,28 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
 
     @Override
     @SuppressWarnings({"unused", "try"})
-    public void layoutMethods(DebugContext debug, String imageName, BigBang bb, ForkJoinPool threadPool) {
+    public void layoutMethods(DebugContext debug, String imageName) {
         try (Indent indent = debug.logAndIndent("layout methods")) {
-            BatchExecutor executor = new BatchExecutor(bb, threadPool);
             try (StopTimer t = new Timer(imageName, "(bitcode)").start()) {
-                writeBitcode(executor);
+                writeBitcode();
             }
             int numBatches;
             try (StopTimer t = new Timer(imageName, "(prelink)").start()) {
-                numBatches = createBitcodeBatches(executor, debug);
+                numBatches = createBitcodeBatches(debug);
             }
             try (StopTimer t = new Timer(imageName, "(llvm)").start()) {
-                compileBitcodeBatches(executor, debug, numBatches);
+                compileBitcodeBatches(debug, numBatches);
             }
             try (StopTimer t = new Timer(imageName, "(postlink)").start()) {
-                linkCompiledBatches(executor, debug, numBatches);
+                linkCompiledBatches(debug, numBatches);
             }
         }
     }
 
-    private void writeBitcode(BatchExecutor executor) {
+    private void writeBitcode() {
         methodIndex = new HostedMethod[compilations.size()];
         AtomicInteger num = new AtomicInteger(-1);
-        executor.forEach(compilations.entrySet(), entry -> (debugContext) -> {
+        compilations.entrySet().parallelStream().forEach(entry -> {
             int id = num.incrementAndGet();
             methodIndex[id] = entry.getKey();
 
@@ -146,8 +141,8 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         });
     }
 
-    private int createBitcodeBatches(BatchExecutor executor, DebugContext debug) {
-
+    private int createBitcodeBatches(DebugContext debug) {
+        int maxThreads = NativeImageOptions.getMaximumNumberOfConcurrentThreads(ImageSingletons.lookup(HostedOptionValues.class));
         Integer parallelismLevel = LLVMOptions.LLVMBatchesPerThread.getValue();
         int numBatches;
         switch (parallelismLevel) {
@@ -158,7 +153,7 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
                 numBatches = 1;
                 break;
             default:
-                numBatches = executor.executor.getExecutorService().getParallelism() * parallelismLevel;
+                numBatches = maxThreads * parallelismLevel;
         }
 
         batchSize = methodIndex.length / numBatches + ((methodIndex.length % numBatches == 0) ? 0 : 1);
@@ -167,20 +162,21 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
             /* Avoid empty batches with small batch sizes */
             numBatches -= (numBatches * batchSize - methodIndex.length) / batchSize;
 
-            executor.forEach(numBatches, batchId -> (debugContext) -> {
-                List<String> batchInputs = IntStream.range(getBatchStart(batchId), getBatchEnd(batchId)).mapToObj(this::getBitcodeFilename)
-                                .collect(Collectors.toList());
-                llvmLink(debug, getBatchBitcodeFilename(batchId), batchInputs);
-            });
+            IntStream.range(0, numBatches).parallel()
+                            .forEach(batchId -> {
+                                List<String> batchInputs = IntStream.range(getBatchStart(batchId), getBatchEnd(batchId)).mapToObj(this::getBitcodeFilename)
+                                                .collect(Collectors.toList());
+                                llvmLink(debug, getBatchBitcodeFilename(batchId), batchInputs);
+                            });
         }
 
         return numBatches;
     }
 
-    private void compileBitcodeBatches(BatchExecutor executor, DebugContext debug, int numBatches) {
+    private void compileBitcodeBatches(DebugContext debug, int numBatches) {
         stackMapDumper.startDumpingFunctions();
 
-        executor.forEach(numBatches, batchId -> (debugContext) -> {
+        IntStream.range(0, numBatches).parallel().forEach(batchId -> {
             llvmOptimize(debug, getBatchOptimizedFilename(batchId), getBatchBitcodeFilename(batchId));
             llvmCompile(debug, getBatchCompiledFilename(batchId), getBatchOptimizedFilename(batchId));
 
@@ -189,13 +185,13 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         });
     }
 
-    private void linkCompiledBatches(BatchExecutor executor, DebugContext debug, int numBatches) {
+    private void linkCompiledBatches(DebugContext debug, int numBatches) {
         List<String> compiledBatches = IntStream.range(0, numBatches).mapToObj(this::getBatchCompiledFilename).collect(Collectors.toList());
         nativeLink(debug, getLinkedFilename(), compiledBatches);
 
         LLVMTextSectionInfo textSectionInfo = objectFileReader.parseCode(getLinkedPath());
 
-        executor.forEach(compilations.entrySet(), entry -> (debugContext) -> {
+        compilations.entrySet().parallelStream().forEach(entry -> {
             HostedMethod method = entry.getKey();
             int offset = textSectionInfo.getOffset(SubstrateUtil.uniqueShortName(method));
             int nextFunctionStartOffset = textSectionInfo.getNextOffset(offset);
@@ -433,41 +429,6 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
     @Override
     public List<ObjectFile.Symbol> getGlobalSymbols(ObjectFile objectFile) {
         return globalSymbols;
-    }
-
-    private static final class BatchExecutor {
-        private CompletionExecutor executor;
-
-        private BatchExecutor(BigBang bb, ForkJoinPool threadPool) {
-            this.executor = new CompletionExecutor(bb, threadPool);
-            executor.init();
-        }
-
-        private void forEach(int num, IntFunction<DebugContextRunnable> callback) {
-            try {
-                executor.start();
-                for (int i = 0; i < num; ++i) {
-                    executor.execute(callback.apply(i));
-                }
-                executor.complete();
-                executor.init();
-            } catch (InterruptedException e) {
-                throw new GraalError(e);
-            }
-        }
-
-        private <T> void forEach(Set<T> set, Function<T, DebugContextRunnable> callback) {
-            try {
-                executor.start();
-                for (T elem : set) {
-                    executor.execute(callback.apply(elem));
-                }
-                executor.complete();
-                executor.init();
-            } catch (InterruptedException e) {
-                throw new GraalError(e);
-            }
-        }
     }
 
     private StackMapDumper getStackMapDumper(boolean enable) {
