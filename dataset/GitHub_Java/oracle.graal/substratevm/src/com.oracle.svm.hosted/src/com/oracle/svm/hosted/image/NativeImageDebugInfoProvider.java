@@ -92,7 +92,6 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
         private final ResolvedJavaType javaType;
         private final CompilationResult compilation;
         private Path fullFilePath;
-        private final Path cachePath;
 
         NativeImageDebugCodeInfo(HostedMethod method, CompilationResult compilation) {
             this.method = method;
@@ -100,9 +99,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
             Class<?> clazz = declaringClass.getJavaClass();
             this.javaType = declaringClass.getWrapped();
             this.compilation = compilation;
-            SourceManager sourceManager = ImageSingletons.lookup(SourceManager.class);
-            fullFilePath = sourceManager.findAndCacheSource(javaType, clazz);
-            this.cachePath = sourceManager.getCachePathForSource(javaType);
+            fullFilePath = ImageSingletons.lookup(SourceManager.class).findAndCacheSource(javaType, clazz);
         }
 
         @SuppressWarnings("try")
@@ -132,11 +129,6 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
                 return fullFilePath.getParent();
             }
             return null;
-        }
-
-        @Override
-        public Path cachePath() {
-            return cachePath;
         }
 
         @Override
@@ -230,7 +222,6 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
         private final ResolvedJavaMethod method;
         private final int lo;
         private final int hi;
-        private Path cachePath;
         private Path fullFilePath;
 
         NativeImageDebugLineInfo(SourceMapping sourceMapping) {
@@ -240,7 +231,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
             this.method = position.getMethod();
             this.lo = sourceMapping.getStartOffset();
             this.hi = sourceMapping.getEndOffset();
-            computeFullFilePathAndCachePath();
+            computeFullFilePath();
         }
 
         @Override
@@ -260,11 +251,6 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
                 return fullFilePath.getParent();
             }
             return null;
-        }
-
-        @Override
-        public Path cachePath() {
-            return cachePath;
         }
 
         @Override
@@ -296,7 +282,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
             return -1;
         }
 
-        private void computeFullFilePathAndCachePath() {
+        private void computeFullFilePath() {
             ResolvedJavaType declaringClass = method.getDeclaringClass();
             Class<?> clazz = null;
             if (declaringClass instanceof OriginalClassProvider) {
@@ -313,7 +299,6 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
                 declaringClass = ((AnalysisType) declaringClass).getWrapped();
             }
             fullFilePath = ImageSingletons.lookup(SourceManager.class).findAndCacheSource(declaringClass, clazz);
-            cachePath = ImageSingletons.lookup(SourceManager.class).getCachePathForSource(declaringClass);
         }
 
     }
