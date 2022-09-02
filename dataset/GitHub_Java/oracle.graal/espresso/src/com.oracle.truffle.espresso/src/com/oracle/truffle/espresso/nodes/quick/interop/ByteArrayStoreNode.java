@@ -86,8 +86,7 @@ public abstract class ByteArrayStoreNode extends QuickNode {
     void doBufferLike(StaticObject array, int index, byte value,
                    @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                   @Cached BranchProfile outOfBoundsProfile,
-                   @Cached BranchProfile readOnlyProfile) {
+                   @Cached BranchProfile outOfBoundsProfile) {
         try {
             interop.writeBufferByte(array.rawForeignObject(), index, value);
         } catch (InvalidBufferOffsetException e) {
@@ -95,9 +94,8 @@ public abstract class ByteArrayStoreNode extends QuickNode {
             Meta meta = context.getMeta();
             throw meta.throwExceptionWithMessage(meta.java_lang_ArrayIndexOutOfBoundsException, e.getMessage());
         } catch (UnsupportedMessageException e) {
-            readOnlyProfile.enter();
-            Meta meta = context.getMeta();
-            throw meta.throwExceptionWithMessage(meta.java_lang_ArrayStoreException, e.getMessage());
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere(e);
         }
     }
 
