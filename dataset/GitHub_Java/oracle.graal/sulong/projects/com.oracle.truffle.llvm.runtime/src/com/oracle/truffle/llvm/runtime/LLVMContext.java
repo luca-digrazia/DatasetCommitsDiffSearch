@@ -226,7 +226,7 @@ public final class LLVMContext {
             this.stackPointer = rootFrame.findFrameSlot(LLVMStack.FRAME_ID);
 
             LLVMFunctionDescriptor initContextDescriptor = ctx.globalScope.getFunction("__sulong_init_context");
-            RootCallTarget initContextFunction = initContextDescriptor.getLLVMIRFunctionSlowPath();
+            RootCallTarget initContextFunction = initContextDescriptor.getLLVMIRFunction();
             this.initContext = DirectCallNode.create(initContextFunction);
         }
 
@@ -372,7 +372,7 @@ public final class LLVMContext {
         // - _exit(), _Exit(), or abort(): no cleanup necessary
         if (cleanupNecessary) {
             try {
-                RootCallTarget disposeContext = globalScope.getFunction("__sulong_dispose_context").getLLVMIRFunctionSlowPath();
+                RootCallTarget disposeContext = globalScope.getFunction("__sulong_dispose_context").getLLVMIRFunction();
                 try (StackPointer stackPointer = threadingStack.getStack().newFrame()) {
                     disposeContext.call(stackPointer);
                 }

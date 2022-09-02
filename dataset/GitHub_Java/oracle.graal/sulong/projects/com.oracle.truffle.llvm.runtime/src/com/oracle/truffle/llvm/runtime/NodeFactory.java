@@ -202,6 +202,12 @@ public interface NodeFactory extends InteropNodeFactory {
 
     LLVMExpressionNode createVarArgCompoundValue(int length, int alignment, LLVMExpressionNode parameterNode);
 
+    LLVMDebugValue.Builder createDebugDeclarationBuilder();
+
+    LLVMDebugValue.Builder createDebugValueBuilder();
+
+    LLVMStatementNode createDebugTrap();
+
     LLVMMemMoveNode createMemMove();
 
     LLVMMemSetNode createMemSet();
