@@ -58,14 +58,14 @@ public abstract class BinaryStreamParser {
     }
 
     @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
-    public static long peekSignedInt32AndLength(byte[] data, int initialOffset) {
+    public static int peekSignedInt32(byte[] data, int initialOffset) {
         int result = 0;
         int shift = 0;
-        int currentOffset = initialOffset;
+        int offset = initialOffset;
         byte b;
         do {
-            b = peek1(data, currentOffset);
-            currentOffset++;
+            b = peek1(data, offset);
+            offset++;
             result |= ((b & 0x7F) << shift);
             shift += 7;
         } while ((b & 0x80) != 0);
@@ -73,17 +73,17 @@ public abstract class BinaryStreamParser {
         if ((shift < 32) && (b & 0x40) != 0) {
             result |= (~0 << shift);
         }
-        return (((long) (currentOffset - initialOffset)) << 32) | (((long) result) & 0xffff_ffffL);
+        return result;
     }
 
     @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
     public static int peekUnsignedInt32(byte[] data, int initialOffset, boolean checkValid) {
         int result = 0;
         int shift = 0;
-        int currentOffset = initialOffset;
+        int offset = initialOffset;
         do {
-            byte b = peek1(data, currentOffset);
-            currentOffset++;
+            byte b = peek1(data, offset);
+            offset++;
             result |= (b & 0x7F) << shift;
             if ((b & 0x80) == 0) {
                 break;
@@ -121,13 +121,13 @@ public abstract class BinaryStreamParser {
     public static long peekSignedInt64(byte[] data, int initialOffset) {
         long result = 0;
         int shift = 0;
-        int currentOffset = initialOffset;
+        int offset = initialOffset;
         byte b;
         do {
-            b = peek1(data, currentOffset);
+            b = peek1(data, offset);
             result |= ((b & 0x7FL) << shift);
             shift += 7;
-            currentOffset++;
+            offset++;
         } while ((b & 0x80) != 0 && shift < 70);
 
         if ((shift < 64) && (b & 0x40) != 0) {
@@ -180,10 +180,6 @@ public abstract class BinaryStreamParser {
         if (offset < 0 || offset >= data.length) {
             throw WasmException.format(Failure.UNSPECIFIED_MALFORMED, "The binary is truncated at: %d", offset);
         }
-        return data[offset];
-    }
-
-    public static byte rawPeek1(byte[] data, int offset) {
         return data[offset];
     }
 
@@ -282,12 +278,12 @@ public abstract class BinaryStreamParser {
 
     @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
     public static byte peekLeb128Length(byte[] data, int initialOffset) {
-        int currentOffset = initialOffset;
+        int offset = initialOffset;
         byte length = 0;
         byte b;
         do {
-            b = data[currentOffset];
-            currentOffset++;
+            b = data[offset];
+            offset++;
             length++;
         } while ((b & 0x80) != 0 && length < 12);
 

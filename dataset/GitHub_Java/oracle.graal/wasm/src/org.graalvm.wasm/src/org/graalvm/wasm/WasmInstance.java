@@ -63,8 +63,8 @@ import static com.oracle.truffle.api.CompilerDirectives.transferToInterpreter;
 @SuppressWarnings("static-method")
 public final class WasmInstance extends RuntimeState implements TruffleObject {
 
-    public WasmInstance(WasmContext context, WasmModule module) {
-        super(context, module);
+    public WasmInstance(WasmModule module) {
+        super(module);
     }
 
     public String name() {
@@ -72,8 +72,8 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
     }
 
     /**
-     * Try to infer the entry function for this instance. Not part of the spec, for testing purpose
-     * only.
+     * Try to infer the entry function for this instance. Not part from the spec, for testing
+     * purpose only.
      *
      * @return exported function named {@code _main}, exported function named {@code _start}, start
      *         function or {@code null} in this order.
@@ -94,7 +94,7 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
     }
 
     private WasmFunctionInstance functionInstance(WasmFunction function) {
-        return new WasmFunctionInstance(contextUid(), function, target(function.index()));
+        return new WasmFunctionInstance(function, target(function.index()));
     }
 
     private void ensureLinked() {
@@ -117,9 +117,9 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         }
         final Integer globalIndex = symbolTable.exportedGlobals().get(member);
         if (globalIndex != null) {
-            return readGlobal(this, symbolTable, globalIndex);
+            readGlobal(this, symbolTable, globalIndex);
         }
-        if (symbolTable.exportedMemoryNames().contains(member)) {
+        if (member.equals(symbolTable.exportedMemory())) {
             return memory();
         }
         throw UnknownIdentifierException.create(member);
@@ -155,7 +155,7 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         final SymbolTable symbolTable = symbolTable();
         try {
             return symbolTable.exportedFunctions().containsKey(member) || symbolTable.exportedGlobals().containsKey(member) ||
-                            symbolTable.exportedTableNames().contains(member);
+                            member.equals(symbolTable.exportedMemory());
         } catch (NumberFormatException exc) {
             return false;
         }
@@ -170,7 +170,11 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         if (index == null) {
             return false;
         }
-        return symbolTable.globalMutability(index) == GlobalModifier.MUTABLE;
+        final boolean mutable = symbolTable.globalMutability(index) == GlobalModifier.MUTABLE;
+        if (!mutable) {
+            return false;
+        }
+        return true;
     }
 
     @ExportMessage
@@ -241,7 +245,11 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         @ExportMessage
         @TruffleBoundary
         long getArraySize() {
-            return exportedFunctions.size() + exportedGlobals.size() + symbolTable.exportedMemoryNames().size();
+            return exportedFunctions.size() + exportedGlobals.size() + memoriesSize();
+        }
+
+        private int memoriesSize() {
+            return (symbolTable.exportedMemory() != null ? 1 : 0);
         }
 
         @ExportMessage

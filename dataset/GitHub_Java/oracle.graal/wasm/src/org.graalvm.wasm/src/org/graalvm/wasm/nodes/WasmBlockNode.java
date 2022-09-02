@@ -268,20 +268,24 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private final int startOffset;
     @CompilationFinal private final byte returnTypeId;
     @CompilationFinal private final int initialStackPointer;
+    @CompilationFinal private final int initialByteConstantOffset;
     @CompilationFinal private final int initialIntConstantOffset;
+    @CompilationFinal private final int initialLongConstantOffset;
     @CompilationFinal private final int initialBranchTableOffset;
     @CompilationFinal private final int initialProfileOffset;
     @CompilationFinal private int profileCount;
     @CompilationFinal private ContextReference<WasmContext> rawContextReference;
     @Children private Node[] children;
 
-    public WasmBlockNode(WasmInstance wasmInstance, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialIntConstantOffset,
-                    int initialBranchTableOffset, int initialProfileOffset) {
+    public WasmBlockNode(WasmInstance wasmInstance, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int initialIntConstantOffset,
+                    int initialLongConstantOffset, int initialBranchTableOffset, int initialProfileOffset) {
         super(wasmInstance, codeEntry, -1);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
         this.initialStackPointer = initialStackPointer;
+        this.initialByteConstantOffset = initialByteConstantOffset;
         this.initialIntConstantOffset = initialIntConstantOffset;
+        this.initialLongConstantOffset = initialLongConstantOffset;
         this.initialBranchTableOffset = initialBranchTableOffset;
         this.initialProfileOffset = initialProfileOffset;
     }
@@ -295,9 +299,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @SuppressWarnings("hiding")
-    public void initialize(Node[] children, int byteLength, int intConstantLength, int branchTableLength, int profileCount) {
+    public void initialize(Node[] children, int byteLength, int byteConstantLength,
+                    int intConstantLength, int longConstantLength, int branchTableLength, int profileCount) {
         initialize(byteLength);
+        this.byteConstantLength = byteConstantLength;
         this.intConstantLength = intConstantLength;
+        this.longConstantLength = longConstantLength;
         this.branchTableLength = branchTableLength;
         this.profileCount = profileCount;
         this.children = children;
@@ -2761,19 +2768,19 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         return returnTypeId;
     }
 
-    private static int unsignedIntConstant(byte[] data, int offset) {
+    private int unsignedIntConstant(byte[] data, int offset) {
         return BinaryStreamParser.peekUnsignedInt32(data, offset, false);
     }
 
-    private static int signedIntConstant(byte[] data, int offset) {
+    private int signedIntConstant(byte[] data, int offset) {
         return BinaryStreamParser.peekSignedInt32(data, offset);
     }
 
-    private static long signedLongConstant(byte[] data, int offset) {
+    public long signedLongConstant(byte[] data, int offset) {
         return BinaryStreamParser.peekSignedInt64(data, offset);
     }
 
-    private static int offsetDelta(byte[] data, int offset) {
+    private int offsetDelta(byte[] data, int offset) {
         return peekLeb128Length(data, offset);
     }
 
