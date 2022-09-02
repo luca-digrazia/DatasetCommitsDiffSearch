@@ -121,6 +121,7 @@ import com.oracle.truffle.espresso.substitutions.InjectProfile;
 import com.oracle.truffle.espresso.substitutions.SubstitutionProfiler;
 import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Class;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Object;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_System;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread.State;
@@ -332,7 +333,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     // SVM windows has System.currentTimeMillis() BlackListed.
-    @TruffleBoundary(allowInlining = true)
+    @TruffleBoundary
     public static long JVM_CurrentTimeMillis(@SuppressWarnings("unused") StaticObject ignored) {
         return System.currentTimeMillis();
     }
@@ -363,7 +364,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     public static @Host(Object.class) StaticObject JVM_Clone(@Host(Object.class) StaticObject self,
-                    @GuestCall DirectCallNode java_lang_ref_Finalizer_register,
                     @InjectMeta Meta meta, @InjectProfile SubstitutionProfiler profiler) {
         assert StaticObject.notNull(self);
         if (self.isArray()) {
@@ -404,8 +404,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         // If the original object is finalizable, so is the copy.
         assert self.getKlass() instanceof ObjectKlass;
         if (((ObjectKlass) self.getKlass()).hasFinalizer()) {
-            profiler.profile(2);
-            java_lang_ref_Finalizer_register.call(clone);
+            Target_java_lang_Object.registerFinalizer(clone, meta);
         }
 
         return clone;
@@ -445,10 +444,11 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notifyAll is just forwarded from the guest.")
     public void JVM_MonitorNotifyAll(@Host(Object.class) StaticObject self, @InjectProfile SubstitutionProfiler profiler) {
         try {
-            InterpreterToVM.monitorNotifyAll(self.getLock());
+            self.getLock().signalAll();
         } catch (IllegalMonitorStateException e) {
             profiler.profile(0);
             throw Meta.throwException(getMeta().java_lang_IllegalMonitorStateException);
@@ -457,10 +457,11 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .notify is just forwarded from the guest.")
     public void JVM_MonitorNotify(@Host(Object.class) StaticObject self, @InjectProfile SubstitutionProfiler profiler) {
         try {
-            InterpreterToVM.monitorNotify(self.getLock());
+            self.getLock().signal();
         } catch (IllegalMonitorStateException e) {
             profiler.profile(0);
             throw Meta.throwException(getMeta().java_lang_IllegalMonitorStateException);
@@ -469,6 +470,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     @SuppressFBWarnings(value = {"IMSE"}, justification = "Not dubious, .wait is just forwarded from the guest.")
     public void JVM_MonitorWait(@Host(Object.class) StaticObject self, long timeout, @InjectProfile SubstitutionProfiler profiler) {
 
@@ -482,7 +484,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                 Target_java_lang_Thread.incrementThreadCounter(currentThread, getMeta().HIDDEN_THREAD_WAITED_COUNT);
             }
             context.getJDWPListener().monitorWait(self, timeout);
-            boolean timedOut = !InterpreterToVM.monitorWait(self.getLock(), timeout);
+            boolean timedOut = !self.getLock().await(timeout);
             context.getJDWPListener().monitorWaited(self, timedOut);
         } catch (InterruptedException e) {
             profiler.profile(0);
@@ -568,6 +570,7 @@ public final class VM extends NativeEnv implements ContextAccess {
      */
     @SuppressWarnings("unused")
     @VmImpl
+    @TruffleBoundary
     public int GetEnv(@Pointer TruffleObject vmPtr_, @Pointer TruffleObject envPtr, int version) {
         // TODO(peterssen): Check the thread is attached, and that the VM pointer matches.
         assert interopAsPointer(getJavaVM()) == interopAsPointer(vmPtr_);
@@ -648,6 +651,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     public @Host(StackTraceElement.class) StaticObject JVM_GetStackTraceElement(@Host(Throwable.class) StaticObject self, int index,
                     @GuestCall DirectCallNode java_lang_StackTraceElement_init, @InjectProfile SubstitutionProfiler profiler) {
         Meta meta = getMeta();
@@ -754,6 +758,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     public @Host(Class.class) StaticObject JVM_DefineClass(@Pointer TruffleObject namePtr, @Host(ClassLoader.class) StaticObject loader, @Pointer TruffleObject bufPtr, int len,
                     @Host(ProtectionDomain.class) StaticObject pd, @InjectProfile SubstitutionProfiler profiler) {
         String name = interopPointerToString(namePtr);
@@ -896,20 +901,20 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
-    @TruffleBoundary(allowInlining = true)
+    @TruffleBoundary
     public static long JVM_TotalMemory() {
         // TODO(peterssen): What to report here?
         return Runtime.getRuntime().totalMemory();
     }
 
     @VmImpl
-    @TruffleBoundary(allowInlining = true)
+    @TruffleBoundary
     public static long JVM_MaxMemory() {
         return Runtime.getRuntime().maxMemory();
     }
 
     @VmImpl
-    @TruffleBoundary(allowInlining = true)
+    @TruffleBoundary
     public static void JVM_GC() {
         System.gc();
     }
@@ -1271,12 +1276,12 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     @SuppressWarnings("unused")
     public @Host(Object.class) StaticObject JVM_DoPrivileged(@Host(Class.class) StaticObject cls,
                     @Host(typeName = "PrivilegedAction OR PrivilegedActionException") StaticObject action,
                     @Host(AccessControlContext.class) StaticObject context,
                     boolean wrapException,
-                    @GuestCall DirectCallNode java_security_PrivilegedActionException_init_Exception,
                     @InjectProfile SubstitutionProfiler profiler) {
         if (StaticObject.isNull(action)) {
             profiler.profile(0);
@@ -1311,7 +1316,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                             !getMeta().java_lang_RuntimeException.isAssignableFrom(e.getExceptionObject().getKlass())) {
                 profiler.profile(3);
                 StaticObject wrapper = getMeta().java_security_PrivilegedActionException.allocateInstance();
-                java_security_PrivilegedActionException_init_Exception.call(wrapper, e.getExceptionObject());
+                getMeta().java_security_PrivilegedActionException_init_Exception.invokeDirect(wrapper, e.getExceptionObject());
                 throw Meta.throwException(wrapper);
             }
             profiler.profile(4);
@@ -1324,6 +1329,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     @SuppressWarnings("unused")
     public @Host(Object.class) StaticObject JVM_GetStackAccessControlContext(@Host(Class.class) StaticObject cls) {
         ArrayList<StaticObject> domains = new ArrayList<>();
@@ -1422,6 +1428,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     public @Host(Class.class) StaticObject JVM_FindClassFromBootLoader(@Pointer TruffleObject namePtr) {
         String name = interopPointerToString(namePtr);
         if (name == null) {
@@ -1655,6 +1662,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     public @Host(String.class) StaticObject JVM_GetSystemPackage(@Host(String.class) StaticObject name) {
         String hostPkgName = Meta.toHostString(name);
         if (hostPkgName.endsWith("/")) {
@@ -1666,6 +1674,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
+    @TruffleBoundary
     public @Host(String[].class) StaticObject JVM_GetSystemPackages() {
         String[] packages = getRegistries().getBootClassRegistry().getPackages();
         StaticObject[] array = new StaticObject[packages.length];
@@ -1677,7 +1686,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
-    @TruffleBoundary(allowInlining = true)
+    @TruffleBoundary
     public static long JVM_FreeMemory() {
         return Runtime.getRuntime().freeMemory();
     }
@@ -1703,7 +1712,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
-    @TruffleBoundary(allowInlining = true)
+    @TruffleBoundary
     public static int JVM_ActiveProcessorCount() {
         return Runtime.getRuntime().availableProcessors();
     }
@@ -1994,6 +2003,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @JniImpl
     @VmImpl
+    @TruffleBoundary
     public int GetThreadInfo(@Host(long[].class) StaticObject ids, int maxDepth, @Host(Object[].class) StaticObject infoArray, @InjectProfile SubstitutionProfiler profiler) {
         Meta meta = getMeta();
         if (StaticObject.isNull(ids) || StaticObject.isNull(infoArray)) {
@@ -2170,6 +2180,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @JniImpl
     @VmImpl
+    @TruffleBoundary
     public long GetLongAttribute(@SuppressWarnings("unused") @Host(Object.class) StaticObject obj,
                     /* jmmLongAttribute */ int att) {
         switch (att) {
