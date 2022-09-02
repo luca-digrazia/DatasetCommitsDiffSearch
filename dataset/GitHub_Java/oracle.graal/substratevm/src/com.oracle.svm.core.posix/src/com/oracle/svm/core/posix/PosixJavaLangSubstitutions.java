@@ -34,15 +34,14 @@ import java.util.concurrent.Executor;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.posix.headers.Unistd;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.graalvm.nativeimage.hosted.ClassInitialization;
 import org.graalvm.nativeimage.impl.InternalPlatform;
-import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.LibCHelper;
@@ -70,7 +69,7 @@ class PosixJavaLangSubstituteFeature implements Feature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.lang.UNIXProcess"), "required for substitutions");
+        ClassInitialization.rerun(access.findClassByName("java.lang.UNIXProcess"));
     }
 }
 
@@ -357,7 +356,7 @@ final class Target_java_lang_Shutdown {
 }
 
 @TargetClass(java.lang.Runtime.class)
-@Platforms({Platform.DARWIN.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 @SuppressWarnings({"static-method"})
 final class Target_java_lang_Runtime {
 

@@ -27,6 +27,7 @@ package com.oracle.svm.hosted;
 // Checkstyle: allow reflection
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.security.Provider;
 import java.security.Provider.Service;
@@ -39,17 +40,15 @@ import java.util.function.Function;
 
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.hosted.ClassInitialization;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
-import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.jni.JNIRuntimeAccess;
-import com.oracle.svm.util.ReflectionUtil;
 
 import sun.security.jca.Providers;
 import sun.security.provider.NativePRNG;
@@ -98,29 +97,29 @@ public class SecurityServicesFeature implements Feature {
          * initializers execution to runtime because the SecureRandom classes are needed by the
          * native image generator too, e.g., by Files.createTempDirectory().
          */
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(NativePRNG.class, "for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(NativePRNG.Blocking.class, "for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(NativePRNG.NonBlocking.class, "for substitutions");
+        ClassInitialization.rerun(NativePRNG.class);
+        ClassInitialization.rerun(NativePRNG.Blocking.class);
+        ClassInitialization.rerun(NativePRNG.NonBlocking.class);
 
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.security.provider.SeedGenerator"), "for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.security.provider.SecureRandom$SeederHolder"), "for substitutions");
+        ClassInitialization.rerun(access.findClassByName("sun.security.provider.SeedGenerator"));
+        ClassInitialization.rerun(access.findClassByName("sun.security.provider.SecureRandom$SeederHolder"));
 
-        if (JavaVersionUtil.JAVA_SPEC > 8) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.security.provider.FileInputStreamPool"), "for substitutions");
+        if (!JavaVersionUtil.Java8OrEarlier) {
+            ClassInitialization.rerun(access.findClassByName("sun.security.provider.FileInputStreamPool"));
         }
 
         /* java.util.UUID$Holder has a static final SecureRandom field. */
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("java.util.UUID$Holder"), "for substitutions");
+        ClassInitialization.rerun(access.findClassByName("java.util.UUID$Holder"));
 
         /*
          * The classes bellow have a static final SecureRandom field. Note that if the classes are
          * not found as reachable by the analysis registering them form class initialization rerun
          * doesn't have any effect.
          */
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.security.jca.JCAUtil$CachedSecureRandomHolder"), "for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("com.sun.crypto.provider.SunJCE$SecureRandomHolder"), "for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.security.krb5.Confounder"), "for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(javax.net.ssl.SSLContext.class, "for substitutions");
+        ClassInitialization.rerun(access.findClassByName("sun.security.jca.JCAUtil$CachedSecureRandomHolder"));
+        ClassInitialization.rerun(access.findClassByName("com.sun.crypto.provider.SunJCE$SecureRandomHolder"));
+        ClassInitialization.rerun(access.findClassByName("sun.security.krb5.Confounder"));
+        ClassInitialization.rerun(javax.net.ssl.SSLContext.class);
 
         if (SubstrateOptions.EnableAllSecurityServices.getValue()) {
             /* Prepare SunEC native library access. */
@@ -186,23 +185,25 @@ public class SecurityServicesFeature implements Feature {
             registerForReflection(javaKeyStoreJks);
             trace("Class registered for reflection: " + javaKeyStoreJks);
 
-            /* Register the x509 certificate extension classes for reflection. */
-
-            /*
-             * The OIDInfo class which represents the values in the map is not visible. Get the list
-             * of extension names through reflection, i.e., the keys in the map, and use the
-             * OIDMap.getClass(name) API to get the extension classes.
-             */
-            Map<String, Object> map = ReflectionUtil.readStaticField(OIDMap.class, "nameMap");
-            for (String name : map.keySet()) {
-                try {
+            try {
+                /* Register the x509 certificate extension classes for reflection. */
+                trace("Registering X.509 certificate extensions...");
+                Field extensionMapField = OIDMap.class.getDeclaredField("nameMap");
+                extensionMapField.setAccessible(true);
+                /*
+                 * The OIDInfo class which represents the values in the map is not visible. Get the
+                 * list of extension names through reflection, i.e., the keys in the map, and use
+                 * the OIDMap.getClass(name) API to get the extension classes.
+                 */
+                Map<String, Object> map = (Map<String, Object>) extensionMapField.get(null);
+                for (String name : map.keySet()) {
                     Class<?> extensionClass = OIDMap.getClass(name);
                     assert sun.security.x509.Extension.class.isAssignableFrom(extensionClass);
                     registerForReflection(extensionClass);
                     trace("Class registered for reflection: " + extensionClass);
-                } catch (CertificateException e) {
-                    throw VMError.shouldNotReachHere(e);
                 }
+            } catch (NoSuchFieldException | CertificateException | IllegalAccessException e) {
+                VMError.shouldNotReachHere(e);
             }
         }
     }
@@ -213,38 +214,51 @@ public class SecurityServicesFeature implements Feature {
      */
     @SuppressWarnings("unchecked")
     private static Function<String, Class<?>> getConsParamClassAccessor(BeforeAnalysisAccess access) {
-        Map<String, /* EngineDescription */ Object> knownEngines = ReflectionUtil.readStaticField(Provider.class, "knownEngines");
-        Field consParamClassNameField = ReflectionUtil.lookupField(access.findClassByName("java.security.Provider$EngineDescription"), "constructorParameterClassName");
+        try {
+            Field knownEnginesField = Provider.class.getDeclaredField("knownEngines");
+            knownEnginesField.setAccessible(true);
 
-        /*
-         * The returned lambda captures the value of the Provider.knownEngines map retrieved above
-         * and it uses it to find the parameterClass corresponding to the serviceType parameter.
-         */
-        return (serviceType) -> {
-            try {
-                /*
-                 * Access the Provider.knownEngines map and extract the EngineDescription
-                 * corresponding to the serviceType. From the EngineDescription object extract the
-                 * value of the constructorParameterClassName field then, if the class name is not
-                 * null, get the corresponding Class<?> object and return it.
-                 */
-                /* EngineDescription */Object engineDescription = knownEngines.get(serviceType);
-                String constrParamClassName = (String) consParamClassNameField.get(engineDescription);
-                if (constrParamClassName != null) {
-                    return access.findClassByName(constrParamClassName);
+            Class<?> engineDescriptionClass = access.findClassByName("java.security.Provider$EngineDescription");
+            Field consParamClassNameField = engineDescriptionClass.getDeclaredField("constructorParameterClassName");
+            consParamClassNameField.setAccessible(true);
+            Map<String, /* EngineDescription */ Object> knownEngines = (Map<String, Object>) knownEnginesField.get(null);
+
+            /*
+             * The returned lambda captures the value of the Provider.knownEngines map retrieved
+             * above and it uses it to find the parameterClass corresponding to the serviceType
+             * parameter.
+             */
+            return (serviceType) -> {
+                try {
+                    /*
+                     * Access the Provider.knownEngines map and extract the EngineDescription
+                     * corresponding to the serviceType. From the EngineDescription object extract
+                     * the value of the constructorParameterClassName field then, if the class name
+                     * is not null, get the corresponding Class<?> object and return it.
+                     */
+                    /* EngineDescription */Object engineDescription = knownEngines.get(serviceType);
+                    String constrParamClassName = (String) consParamClassNameField.get(engineDescription);
+                    if (constrParamClassName != null) {
+                        return access.findClassByName(constrParamClassName);
+                    }
+                } catch (IllegalAccessException e) {
+                    VMError.shouldNotReachHere(e);
                 }
-            } catch (IllegalAccessException e) {
-                VMError.shouldNotReachHere(e);
-            }
-            return null;
-        };
+                return null;
+            };
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw VMError.shouldNotReachHere(e);
+        }
     }
 
     private static void register(Provider provider) {
         registerForReflection(provider.getClass());
 
         try {
-            Method getVerificationResult = ReflectionUtil.lookupMethod(Class.forName("javax.crypto.JceSecurity"), "getVerificationResult", Provider.class);
+            // Checkstyle: stop
+            Method getVerificationResult = Class.forName("javax.crypto.JceSecurity").getDeclaredMethod("getVerificationResult", Provider.class);
+            // Checkstyle: resume
+            getVerificationResult.setAccessible(true);
             /*
              * Trigger initialization of JceSecurity.verificationResults used by
              * JceSecurity.canUseProvider() at runtime to check whether a provider is properly
@@ -252,8 +266,8 @@ public class SecurityServicesFeature implements Feature {
              * support. See also Target_javax_crypto_JceSecurity.
              */
             getVerificationResult.invoke(null, provider);
-        } catch (ReflectiveOperationException ex) {
-            throw VMError.shouldNotReachHere(ex);
+        } catch (NoSuchMethodException | ClassNotFoundException | IllegalAccessException | InvocationTargetException e) {
+            VMError.shouldNotReachHere(e);
         }
 
     }

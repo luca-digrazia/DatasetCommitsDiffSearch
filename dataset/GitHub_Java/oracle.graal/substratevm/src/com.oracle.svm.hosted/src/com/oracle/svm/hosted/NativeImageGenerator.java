@@ -124,6 +124,7 @@ import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.struct.RawStructure;
+import org.graalvm.nativeimage.hosted.ClassInitialization;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.Feature.OnAnalysisExitAccess;
 import org.graalvm.nativeimage.impl.CConstantValueSupport;
@@ -1490,31 +1491,32 @@ public class NativeImageGenerator {
     @SuppressWarnings("try")
     private void processNativeLibraryImports(NativeLibraries nativeLibs, MetaAccessProvider metaAccess, ClassInitializationSupport classInitializationSupport) {
         for (Method method : loader.findAnnotatedMethods(CConstant.class)) {
-            classInitializationSupport.eager(method.getDeclaringClass(), "classes with " + CConstant.class.getSimpleName() + " annotations are always initialized");
+            ClassInitialization.eager(method.getDeclaringClass());
             nativeLibs.loadJavaMethod(metaAccess.lookupJavaMethod(method));
         }
         for (Method method : loader.findAnnotatedMethods(CFunction.class)) {
             nativeLibs.loadJavaMethod(metaAccess.lookupJavaMethod(method));
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(CStruct.class)) {
-            classInitializationSupport.eager(clazz, "classes annotated with " + CStruct.class.getSimpleName() + " are always initialized");
+            ClassInitialization.eager(clazz);
             nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(RawStructure.class)) {
-            classInitializationSupport.eager(clazz, "classes annotated with " + RawStructure.class.getSimpleName() + " are always initialized");
+            ClassInitialization.eager(clazz);
             nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(CPointerTo.class)) {
-            classInitializationSupport.eager(clazz, "classes annotated with " + CPointerTo.class.getSimpleName() + " are always initialized");
+            ClassInitialization.eager(clazz);
             nativeLibs.loadJavaType(metaAccess.lookupJavaType(clazz));
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(CEnum.class)) {
+            ClassInitialization.eager(clazz);
             ResolvedJavaType type = metaAccess.lookupJavaType(clazz);
-            classInitializationSupport.eager(clazz, "classes annotated with " + CEnum.class.getSimpleName() + " are always initialized");
+            classInitializationSupport.forceInitializeHosted(clazz, "classes annotated with CEnum are always initialized");
             nativeLibs.loadJavaType(type);
         }
         for (Class<?> clazz : loader.findAnnotatedClasses(CContext.class)) {
-            classInitializationSupport.eager(clazz, "classes annotated with " + CContext.class.getSimpleName() + " are always initialized");
+            ClassInitialization.eager(clazz);
         }
         for (CLibrary library : loader.findAnnotations(CLibrary.class)) {
             nativeLibs.addLibrary(library.value());

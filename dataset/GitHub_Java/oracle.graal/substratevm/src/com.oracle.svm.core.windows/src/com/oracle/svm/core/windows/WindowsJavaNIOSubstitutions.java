@@ -30,20 +30,19 @@ import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.spi.FileSystemProvider;
 
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CLibrary;
+import org.graalvm.nativeimage.hosted.ClassInitialization;
 import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.jni.JNIRuntimeAccess;
 
@@ -54,11 +53,11 @@ class WindowsJavaNIOSubstituteFeature implements Feature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.nio.fs.WindowsNativeDispatcher"), "required for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.nio.fs.WindowsSecurity"), "required for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.nio.ch.ServerSocketChannelImpl"), "required for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.nio.ch.IOUtil"), "required for substitutions");
-        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.nio.ch.FileChannelImpl"), "required for substitutions");
+        ClassInitialization.rerun(access.findClassByName("sun.nio.fs.WindowsNativeDispatcher"));
+        ClassInitialization.rerun(access.findClassByName("sun.nio.fs.WindowsSecurity"));
+        ClassInitialization.rerun(access.findClassByName("sun.nio.ch.ServerSocketChannelImpl"));
+        ClassInitialization.rerun(access.findClassByName("sun.nio.ch.IOUtil"));
+        ClassInitialization.rerun(access.findClassByName("sun.nio.ch.FileChannelImpl"));
     }
 
     @Override
@@ -159,7 +158,7 @@ public final class WindowsJavaNIOSubstitutions {
         static FileSystem getDefault() {
             if (Util_Target_java_nio_file_FileSystems.defaultFilesystem == null) {
                 Target_sun_nio_fs_WindowsFileSystemProvider provider = new Target_sun_nio_fs_WindowsFileSystemProvider();
-                Util_Target_java_nio_file_FileSystems.defaultProvider = SubstrateUtil.cast(provider, FileSystemProvider.class);
+                Util_Target_java_nio_file_FileSystems.defaultProvider = KnownIntrinsics.unsafeCast(provider, FileSystemProvider.class);
                 Util_Target_java_nio_file_FileSystems.defaultFilesystem = provider.getFileSystem(uri);
             }
             return Util_Target_java_nio_file_FileSystems.defaultFilesystem;

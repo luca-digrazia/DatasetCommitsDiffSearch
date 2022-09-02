@@ -26,12 +26,11 @@ package com.oracle.svm.core.posix;
 
 import java.io.IOException;
 
-import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.RuntimeClassInitialization;
+import org.graalvm.nativeimage.hosted.ClassInitialization;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Substitute;
@@ -51,7 +50,7 @@ class JavaLangSubstitutionsJDK9OrLaterFeature implements Feature {
     public void duringSetup(DuringSetupAccess access) {
         Class<?> processHandleImplClass = access.findClassByName("java.lang.ProcessHandleImpl");
         VMError.guarantee(processHandleImplClass != null);
-        RuntimeClassInitialization.rerunClassInitialization(processHandleImplClass);
+        ClassInitialization.rerun(processHandleImplClass);
     }
 }
 
@@ -61,12 +60,13 @@ final class Target_java_lang_ProcessImpl {
 
     @SuppressWarnings({"static-method"})
     @Substitute
-    private int forkAndExec(
-                    int mode,
+    private int forkAndExec(int mode,
                     byte[] helperpath,
                     byte[] prog,
-                    byte[] argBlock, int argc,
-                    byte[] envBlock, int envc,
+                    byte[] argBlock,
+                    int argc,
+                    byte[] envBlock,
+                    int envc,
                     byte[] dir,
                     int[] fds,
                     boolean redirectErrorStream)

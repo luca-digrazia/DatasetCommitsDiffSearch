@@ -24,10 +24,10 @@
  */
 package com.oracle.svm.hosted.classinitialization;
 
-import static com.oracle.svm.hosted.classinitialization.InitKind.DELAY;
-import static com.oracle.svm.hosted.classinitialization.InitKind.EAGER;
-import static com.oracle.svm.hosted.classinitialization.InitKind.RERUN;
-import static com.oracle.svm.hosted.classinitialization.InitKind.SEPARATOR;
+import static com.oracle.svm.hosted.classinitialization.ClassInitializationSupport.InitKind.DELAY;
+import static com.oracle.svm.hosted.classinitialization.ClassInitializationSupport.InitKind.EAGER;
+import static com.oracle.svm.hosted.classinitialization.ClassInitializationSupport.InitKind.RERUN;
+import static com.oracle.svm.hosted.classinitialization.ClassInitializationSupport.InitKind.SEPARATOR;
 
 import java.lang.reflect.Modifier;
 import java.nio.file.Paths;
@@ -114,13 +114,15 @@ public class ClassInitializationFeature implements Feature {
             }
         }
 
-        @APIOption(name = "initialize-at-run-time", valueTransformer = InitializationValueDelay.class, defaultValue = "", //
-                        customHelp = "A comma-separated list of packages and classes (and implicitly all of their subclasses) that must be initialized at runtime and not during image building. An empty string designates all packages.")//
-        @APIOption(name = "initialize-at-build-time", valueTransformer = InitializationValueEager.class, defaultValue = "", //
+        @APIOption(name = "delay-class-initialization", valueTransformer = InitializationValueDelay.class, defaultValue = "", //
+                        customHelp = "A comma-separated list of packages and classes (and implicitly all of their subclasses) that are initialized at runtime and not during image building. An empty string designates all packages.")//
+        @APIOption(name = "rerun-class-initialization", valueTransformer = InitializationValueRerun.class, defaultValue = "", //
+                        customHelp = "A comma-separated list of packages and classes (and implicitly all of their subclasses) that are initialized both at runtime and during image building. An empty string designates all packages.")//
+        @APIOption(name = "eager-class-initialization", valueTransformer = InitializationValueEager.class, defaultValue = "", //
                         customHelp = "A comma-separated list of packages and classes  (and implicitly all of their superclasses) that are initialized during image generation. An empty string designates all packages.")//
-        @APIOption(name = "delay-class-initialization-to-runtime", valueTransformer = InitializationValueDelay.class, deprecated = "Use --initialize-at-run-time.", //
+        @APIOption(name = "delay-class-initialization-to-runtime", valueTransformer = InitializationValueDelay.class, deprecated = "Use --delay-class-initialization.", //
                         defaultValue = "", customHelp = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized at runtime and not during image building")//
-        @APIOption(name = "rerun-class-initialization-at-runtime", valueTransformer = InitializationValueRerun.class, deprecated = "Currently there is no replacement for this option. Use --delay-class-initialization.", //
+        @APIOption(name = "rerun-class-initialization-at-runtime", valueTransformer = InitializationValueRerun.class, deprecated = "Use --rerun-class-initialization.", //
                         defaultValue = "", customHelp = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized both at runtime and during image building")//
         @Option(help = "A comma-separated list of classes appended with their initialization strategy (':delay', ':rerun', or ':eager')", type = OptionType.User)//
         public static final HostedOptionKey<String[]> ClassInitialization = new HostedOptionKey<>(new String[0]);
@@ -129,17 +131,39 @@ public class ClassInitializationFeature implements Feature {
         public static final HostedOptionKey<Boolean> PrintClassInitialization = new HostedOptionKey<>(false);
     }
 
-    public static void processClassInitializationOptions(ClassInitializationSupport initializationSupport) {
+    public static void processClassInitializationOptions(FeatureImpl.AfterRegistrationAccessImpl access, ClassInitializationSupport initializationSupport) {
         String[] initializationInfo = Options.ClassInitialization.getValue();
+        Package[] pkgs = access.getImageClassLoader().getPackages();
         for (String infos : initializationInfo) {
             for (String info : infos.split(",")) {
-                boolean noMatches = Arrays.stream(InitKind.values()).noneMatch(v -> info.endsWith(v.suffix()));
+                boolean noMatches = Arrays.stream(ClassInitializationSupport.InitKind.values()).noneMatch(v -> info.endsWith(v.suffix()));
                 if (noMatches) {
                     throw UserError.abort("Element in class initialization configuration must end in " + DELAY.suffix() + ", " + RERUN.suffix() + ", or " + EAGER.suffix() + ". Found: " + info);
                 }
 
-                Pair<String, InitKind> elementType = InitKind.strip(info);
-                elementType.getRight().stringConsumer(initializationSupport).accept(elementType.getLeft());
+                Pair<String, ClassInitializationSupport.InitKind> elementType = ClassInitializationSupport.InitKind.strip(info);
+
+                /* check for setting the whole hierarchy */
+                if (elementType.getLeft().isEmpty()) {
+                    elementType.getRight().stringConsumer(initializationSupport).accept(elementType.getLeft());
+                } else {
+                    /* check if class exists */
+                    String classOrPackageName = elementType.getLeft();
+                    Class<?> clazz = access.findClassByName(classOrPackageName);
+                    if (clazz != null) {
+                        elementType.getRight().classConsumer(initializationSupport).accept(clazz);
+                    }
+
+                    /* check if package with prefix exists */
+                    boolean pkgFound = Arrays.stream(pkgs).anyMatch(
+                                    p -> p.getName().startsWith(classOrPackageName) && (p.getName().length() == classOrPackageName.length() || p.getName().charAt(classOrPackageName.length()) == '.'));
+                    if (pkgFound) {
+                        elementType.getRight().stringConsumer(initializationSupport).accept(classOrPackageName);
+                    }
+                    if (!pkgFound && clazz == null) {
+                        throw UserError.abort("Could not find class or package called " + classOrPackageName + " that is configured for " + elementType.getRight() + " class initialization.");
+                    }
+                }
             }
         }
     }
@@ -199,7 +223,7 @@ public class ClassInitializationFeature implements Feature {
     @SuppressWarnings("try")
     public void beforeCompilation(BeforeCompilationAccess access) {
         String imageName = ((FeatureImpl.BeforeCompilationAccessImpl) access).getUniverse().getBigBang().getHostVM().getImageName();
-        try (Timer.StopTimer ignored = new Timer(imageName, "(clinit)").start()) {
+        try (Timer.StopTimer t = new Timer(imageName, "(class-initialization)").start()) {
             classInitializationSupport.setUnsupportedFeatures(null);
 
             String path = Paths.get(Paths.get(SubstrateOptions.Path.getValue()).toString(), "reports").toAbsolutePath().toString();
@@ -212,10 +236,10 @@ public class ClassInitializationFeature implements Feature {
             Set<AnalysisType> provenSafe = initializeSafeDelayedClasses(initGraph);
 
             if (Options.PrintClassInitialization.getValue()) {
-                List<ClassOrPackageConfig> allConfigs = classInitializationSupport.getClassInitializationConfiguration();
-                allConfigs.sort(Comparator.comparing(ClassOrPackageConfig::getName));
+                List<ClassInitializationSupport.ClassOrPackageConfig> allConfigs = classInitializationSupport.getClassInitializationConfiguration();
+                allConfigs.sort(Comparator.comparing(ClassInitializationSupport.ClassOrPackageConfig::getName));
                 ReportUtils.report("initializer configuration", path, "initializer_configuration", "txt", writer -> {
-                    for (ClassOrPackageConfig config : allConfigs) {
+                    for (ClassInitializationSupport.ClassOrPackageConfig config : allConfigs) {
                         writer.append(config.getName()).append(" -> ").append(config.getKind().toString()).append(" reasons: ")
                                         .append(String.join(" and ", config.getReasons())).append(System.lineSeparator());
                     }
@@ -248,7 +272,7 @@ public class ClassInitializationFeature implements Feature {
      * that belong to it.
      */
     private void reportMethodInitializationInfo(String path) {
-        for (InitKind kind : InitKind.values()) {
+        for (ClassInitializationSupport.InitKind kind : ClassInitializationSupport.InitKind.values()) {
             Set<Class<?>> classes = classInitializationSupport.classesWithKind(kind);
             ReportUtils.report(classes.size() + " classes of type " + kind, path, kind.toString().toLowerCase() + "_classes", "txt",
                             writer -> classes.stream()
