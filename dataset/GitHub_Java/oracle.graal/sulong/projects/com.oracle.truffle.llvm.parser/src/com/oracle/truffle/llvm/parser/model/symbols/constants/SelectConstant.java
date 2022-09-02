@@ -29,57 +29,57 @@
  */
 package com.oracle.truffle.llvm.parser.model.symbols.constants;
 
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.SymbolTable;
 import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
-import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class SelectConstant extends AbstractConstant {
 
-    private Constant condition;
+    private SymbolImpl condition;
 
-    private Constant trueValue;
-    private Constant falseValue;
+    private SymbolImpl trueValue;
+    private SymbolImpl falseValue;
 
     private SelectConstant(Type type) {
         super(type);
     }
 
+    public SymbolImpl getCondition() {
+        return condition;
+    }
+
+    public SymbolImpl getTrueValue() {
+        return trueValue;
+    }
+
+    public SymbolImpl getFalseValue() {
+        return falseValue;
+    }
+
     @Override
     public void replace(SymbolImpl original, SymbolImpl replacement) {
         if (condition == original) {
-            condition = (Constant) replacement;
+            condition = replacement;
         }
         if (falseValue == original) {
-            falseValue = (Constant) replacement;
+            falseValue = replacement;
         }
         if (trueValue == original) {
-            trueValue = (Constant) replacement;
+            trueValue = replacement;
         }
     }
 
     public static SelectConstant fromSymbols(SymbolTable symbols, Type type, int condition, int trueValue, int falseValue) {
         final SelectConstant constant = new SelectConstant(type);
-        constant.condition = (Constant) symbols.getForwardReferenced(condition, constant);
-        constant.trueValue = (Constant) symbols.getForwardReferenced(trueValue, constant);
-        constant.falseValue = (Constant) symbols.getForwardReferenced(falseValue, constant);
+        constant.condition = symbols.getForwardReferenced(condition, constant);
+        constant.trueValue = symbols.getForwardReferenced(trueValue, constant);
+        constant.falseValue = symbols.getForwardReferenced(falseValue, constant);
         return constant;
     }
 
     @Override
     public void accept(SymbolVisitor visitor) {
         visitor.visit(this);
-    }
-
-    @Override
-    public LLVMExpressionNode createNode(LLVMParserRuntime runtime, DataLayout dataLayout, GetStackSpaceFactory stackFactory) {
-        LLVMExpressionNode conditionNode = condition.createNode(runtime, dataLayout, stackFactory);
-        LLVMExpressionNode trueValueNode = trueValue.createNode(runtime, dataLayout, stackFactory);
-        LLVMExpressionNode falseValueNode = falseValue.createNode(runtime, dataLayout, stackFactory);
-        return runtime.getNodeFactory().createSelect(getType(), conditionNode, trueValueNode, falseValueNode);
     }
 }
