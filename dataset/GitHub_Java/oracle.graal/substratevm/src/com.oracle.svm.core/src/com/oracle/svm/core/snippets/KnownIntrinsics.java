@@ -27,7 +27,6 @@ package com.oracle.svm.core.snippets;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.Pointer;
 
-import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.hub.DynamicHub;
 
 /**
@@ -53,6 +52,16 @@ public class KnownIntrinsics {
     public static native DynamicHub readHub(Object obj);
 
     /**
+     * Installs the object header and zeros the rest of the object.
+     */
+    public static native Object formatObject(Pointer memory, Class<?> hub, boolean rememberedSet);
+
+    /**
+     * Installs the array header and zeros the rest of the object.
+     */
+    public static native Object formatArray(Pointer memory, Class<?> hub, int length, boolean rememberedSet, boolean unaligned);
+
+    /**
      * Narrow down the range of values to exclude 0 as the possible pointer value.
      *
      * @param pointer that we are narrowing to non-null
@@ -66,18 +75,17 @@ public class KnownIntrinsics {
     public static native Pointer readStackPointer();
 
     /**
+     * Returns the value of the native instruction pointer.
+     */
+    public static native CodePointer readInstructionPointer();
+
+    /**
      * Returns the value of the native stack pointer for the physical caller frame.
-     *
-     * The caller of this method must be annotated with {@link NeverInline} to ensure that the
-     * physical caller frame is deterministic.
      */
     public static native Pointer readCallerStackPointer();
 
     /**
      * Returns the value of the native instruction pointer for the physical caller frame.
-     *
-     * The caller of this method must be annotated with {@link NeverInline} to ensure that the
-     * physical caller frame is deterministic.
      */
     public static native CodePointer readReturnAddress();
 
@@ -89,7 +97,7 @@ public class KnownIntrinsics {
      * Note that this is very dangerous. You have to know what you are doing. The parameters are not
      * checked for correctness in any way.
      */
-    public static native void farReturn(Object result, Pointer sp, CodePointer ip, boolean fromMethodWithCalleeSavedRegisters);
+    public static native void farReturn(Object result, Pointer sp, CodePointer ip);
 
     /**
      * For deoptimization testing only. Performs a deoptimization in a regular method, but is a

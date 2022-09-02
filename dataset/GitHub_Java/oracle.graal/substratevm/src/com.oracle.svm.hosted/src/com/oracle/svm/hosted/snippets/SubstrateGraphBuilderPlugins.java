@@ -73,11 +73,10 @@ import org.graalvm.compiler.word.WordCastNode;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.hosted.RuntimeReflection;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.struct.SizeOf;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
-import org.graalvm.util.DirectAnnotationAccess;
 import org.graalvm.word.LocationIdentity;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
@@ -89,7 +88,6 @@ import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionLoadNode;
 import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionStoreNode;
 import com.oracle.graal.pointsto.nodes.ConvertUnknownValueNode;
 import com.oracle.svm.core.FrameAccess;
-import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.jdk.SubstrateArraysCopyOfNode;
 import com.oracle.svm.core.graal.jdk.SubstrateObjectCloneNode;
@@ -99,6 +97,7 @@ import com.oracle.svm.core.graal.nodes.FormatObjectNode;
 import com.oracle.svm.core.graal.nodes.NewPinnedArrayNode;
 import com.oracle.svm.core.graal.nodes.NewPinnedInstanceNode;
 import com.oracle.svm.core.graal.nodes.ReadCallerStackPointerNode;
+import com.oracle.svm.core.graal.nodes.ReadInstructionPointerNode;
 import com.oracle.svm.core.graal.nodes.ReadRegisterFixedNode;
 import com.oracle.svm.core.graal.nodes.ReadReturnAddressNode;
 import com.oracle.svm.core.graal.nodes.ReadStackPointerNode;
@@ -118,7 +117,6 @@ import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FallbackFeature;
 import com.oracle.svm.hosted.GraalEdgeUnsafePartition;
 import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
@@ -237,9 +235,7 @@ public class SubstrateGraphBuilderPlugins {
         if (interfaces != null) {
             /* The interfaces array can be empty. The java.lang.reflect.Proxy API allows it. */
             ImageSingletons.lookup(DynamicProxyRegistry.class).addProxyClass(interfaces);
-            if (ImageSingletons.contains(FallbackFeature.class)) {
-                ImageSingletons.lookup(FallbackFeature.class).addAutoProxyInvoke(b.getMethod(), b.bci());
-            }
+            ImageSingletons.lookup(FallbackFeature.class).addAutoProxyInvoke(b.getMethod(), b.bci());
             if (Options.DynamicProxyTracing.getValue()) {
                 System.out.println("Successfully determined constant value for interfaces argument of call to " + targetMethod.format("%H.%n(%p)") +
                                 " reached from " + b.getGraph().method().format("%H.%n(%p)") + ". " + "Registered proxy class for " + Arrays.toString(interfaces) + ".");
@@ -561,10 +557,16 @@ public class SubstrateGraphBuilderPlugins {
                 return true;
             }
         });
+        r.register0("readInstructionPointer", new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                b.addPush(JavaKind.Object, new ReadInstructionPointerNode());
+                return true;
+            }
+        });
         r.register0("readCallerStackPointer", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                checkNeverInline(b);
                 b.addPush(JavaKind.Object, new ReadCallerStackPointerNode());
                 return true;
             }
@@ -572,7 +574,6 @@ public class SubstrateGraphBuilderPlugins {
         r.register0("readReturnAddress", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                checkNeverInline(b);
                 b.addPush(JavaKind.Object, new ReadReturnAddressNode());
                 return true;
             }
@@ -624,13 +625,6 @@ public class SubstrateGraphBuilderPlugins {
                 return true;
             }
         });
-    }
-
-    private static void checkNeverInline(GraphBuilderContext b) {
-        if (!DirectAnnotationAccess.isAnnotationPresent(b.getMethod(), NeverInline.class)) {
-            throw VMError.shouldNotReachHere("Accessing the stack pointer or instruction pointer of the caller frame is only safe and deterministic if the method is not inlined. " +
-                            "Therefore, the method " + b.getMethod().format("%H.%n(%p)") + " must be annoated with @" + NeverInline.class.getSimpleName());
-        }
     }
 
     private static IntegerStamp nonZeroWord() {

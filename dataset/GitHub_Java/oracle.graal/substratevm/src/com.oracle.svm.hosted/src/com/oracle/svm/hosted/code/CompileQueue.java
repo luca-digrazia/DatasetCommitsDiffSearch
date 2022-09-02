@@ -95,6 +95,7 @@ import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.LowTierContext;
 import org.graalvm.compiler.phases.tiers.MidTierContext;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.util.GraphOrder;
 import org.graalvm.compiler.phases.util.Providers;
@@ -165,14 +166,11 @@ public class CompileQueue {
     protected CompletionExecutor executor;
     private final ConcurrentMap<HostedMethod, CompileTask> compilations;
     protected final RuntimeConfiguration runtimeConfig;
-    private Suites regularSuites = null;
-    private Suites deoptTargetSuites = null;
-    private LIRSuites regularLIRSuites = null;
-    private LIRSuites deoptTargetLIRSuites = null;
+    private final Suites regularSuites;
+    private final Suites deoptTargetSuites;
+    private final LIRSuites regularLIRSuites;
+    private final LIRSuites deoptTargetLIRSuites;
     private final ConcurrentMap<Constant, DataSection.Data> dataCache;
-
-    private SnippetReflectionProvider snippetReflection;
-    private final FeatureHandler featureHandler;
 
     private volatile boolean inliningProgress;
 
@@ -318,18 +316,23 @@ public class CompileQueue {
         this.deoptimizeAll = deoptimizeAll;
         this.dataCache = new ConcurrentHashMap<>();
         this.executor = new CompletionExecutor(universe.getBigBang(), executorService);
-        this.featureHandler = featureHandler;
-        this.snippetReflection = snippetReflection;
+
+        regularSuites = NativeImageGenerator.createSuites(featureHandler, runtimeConfig, snippetReflection, true, !universe.isPostParseCanonicalized());
+        deoptTargetSuites = NativeImageGenerator.createSuites(featureHandler, runtimeConfig, snippetReflection, true, !universe.isPostParseCanonicalized());
+        removeDeoptTargetOptimizations(deoptTargetSuites);
+        regularLIRSuites = NativeImageGenerator.createLIRSuites(featureHandler, runtimeConfig.getProviders(), true);
+        deoptTargetLIRSuites = NativeImageGenerator.createLIRSuites(featureHandler, runtimeConfig.getProviders(), true);
+        removeDeoptTargetOptimizations(deoptTargetLIRSuites);
 
         // let aotjs override the replacements registration
-        callForReplacements(debug, runtimeConfig);
+        callForReplacements(debug, featureHandler, runtimeConfig, snippetReflection);
     }
 
     public static OptimisticOptimizations getOptimisticOpts() {
         return OptimisticOptimizations.ALL.remove(OptimisticOptimizations.Optimization.UseLoopLimitChecks);
     }
 
-    protected void callForReplacements(DebugContext debug, @SuppressWarnings("hiding") RuntimeConfiguration runtimeConfig) {
+    protected void callForReplacements(DebugContext debug, FeatureHandler featureHandler, @SuppressWarnings("hiding") RuntimeConfiguration runtimeConfig, SnippetReflectionProvider snippetReflection) {
         NativeImageGenerator.registerReplacements(debug, featureHandler, runtimeConfig, runtimeConfig.getProviders(), snippetReflection, true, true);
     }
 
@@ -355,9 +358,6 @@ public class CompileQueue {
                     inlineTrivialMethods(debug);
                 }
             }
-
-            assert suitesNotCreated();
-            createSuites();
             try (StopTimer t = new Timer(imageName, "(compile)").start()) {
                 compileAll();
             }
@@ -367,19 +367,6 @@ public class CompileQueue {
         if (NativeImageOptions.PrintMethodHistogram.getValue()) {
             printMethodHistogram();
         }
-    }
-
-    private boolean suitesNotCreated() {
-        return regularSuites == null && deoptTargetLIRSuites == null && regularLIRSuites == null && deoptTargetSuites == null;
-    }
-
-    private void createSuites() {
-        regularSuites = NativeImageGenerator.createSuites(featureHandler, runtimeConfig, snippetReflection, true, !universe.isPostParseCanonicalized());
-        deoptTargetSuites = NativeImageGenerator.createSuites(featureHandler, runtimeConfig, snippetReflection, true, !universe.isPostParseCanonicalized());
-        removeDeoptTargetOptimizations(deoptTargetSuites);
-        regularLIRSuites = NativeImageGenerator.createLIRSuites(featureHandler, runtimeConfig.getProviders(), true);
-        deoptTargetLIRSuites = NativeImageGenerator.createLIRSuites(featureHandler, runtimeConfig.getProviders(), true);
-        removeDeoptTargetOptimizations(deoptTargetLIRSuites);
     }
 
     public static PhaseSuite<HighTierContext> afterParseCanonicalization() {
@@ -526,21 +513,19 @@ public class CompileQueue {
 
     @SuppressWarnings("try")
     private void inlineTrivialMethods(DebugContext debug) throws InterruptedException {
-        executor.init();
         PhaseSuite<HighTierContext> afterParseSuite = afterParseCanonicalization();
         for (HostedMethod method : universe.getMethods()) {
             try (DebugContext.Scope s = debug.scope("InlineTrivial", method.compilationInfo.getGraph(), method, this)) {
                 if (method.compilationInfo.getGraph() != null) {
                     HostedProviders providers = (HostedProviders) runtimeConfig.lookupBackend(method).getProviders();
                     if (!universe.isPostParseCanonicalized()) {
-                        executor.execute((DebugContext newDebug) -> {
-                            method.compilationInfo.getGraph().resetDebug(newDebug);
-                            afterParseSuite.apply(method.compilationInfo.getGraph(), new HighTierContext(providers, afterParseSuite, getOptimisticOpts()));
+                        method.compilationInfo.getGraph().resetDebug(debug);
+                        afterParseSuite.apply(method.compilationInfo.getGraph(), new HighTierContext(providers, afterParseSuite, getOptimisticOpts()));
 
-                            /* Check that graph is in good shape after parsing. */
-                            assert GraphOrder.assertSchedulableGraph(method.compilationInfo.getGraph());
-                        });
+                        /* Check that graph is in good shape after parsing. */
+                        assert GraphOrder.assertSchedulableGraph(method.compilationInfo.getGraph());
                     }
+
                     checkTrivial(method);
                 }
             } catch (Throwable e) {
@@ -548,9 +533,6 @@ public class CompileQueue {
             }
         }
 
-        executor.start();
-        executor.complete();
-        executor.shutdown();
         universe.setPostParseCanonicalized();
 
         int round = 0;
@@ -599,7 +581,7 @@ public class CompileQueue {
 
                     if (inlined) {
                         Providers providers = runtimeConfig.lookupBackend(method).getProviders();
-                        new CanonicalizerPhase().apply(graph, providers);
+                        new CanonicalizerPhase().apply(graph, new PhaseContext(providers));
 
                         /*
                          * Publish the new graph, it can be picked up immediately by other threads

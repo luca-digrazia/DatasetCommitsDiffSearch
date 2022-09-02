@@ -53,10 +53,10 @@ import java.util.function.Consumer;
 
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
@@ -71,11 +71,11 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
+import sun.misc.Unsafe;
 
 /*
  * This file contains JDK fields that need to be intercepted because their value in the hosted environment is not
@@ -299,6 +299,7 @@ final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_LockedUpda
 @AutomaticFeature
 class AtomicFieldUpdaterFeature implements Feature {
 
+    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     private final ConcurrentMap<Object, Boolean> processedUpdaters = new ConcurrentHashMap<>();
     private Consumer<Field> markAsUnsafeAccessed;
 
@@ -334,20 +335,30 @@ class AtomicFieldUpdaterFeature implements Feature {
     private void processFieldUpdater(Object updater) {
         VMError.guarantee(markAsUnsafeAccessed != null, "New atomic field updater found after static analysis");
 
-        Class<?> updaterClass = updater.getClass();
-        Class<?> tclass = ReflectionUtil.readField(updaterClass, "tclass", updater);
-        long searchOffset = ReflectionUtil.readField(updaterClass, "offset", updater);
-        // search the declared fields for a field with a matching offset
-        for (Field f : tclass.getDeclaredFields()) {
-            if (!Modifier.isStatic(f.getModifiers())) {
-                long fieldOffset = GraalUnsafeAccess.getUnsafe().objectFieldOffset(f);
-                if (fieldOffset == searchOffset) {
-                    markAsUnsafeAccessed.accept(f);
-                    return;
+        try {
+            Class<?> updaterClass = updater.getClass();
+
+            Field tclassField = updaterClass.getDeclaredField("tclass");
+            Field offsetField = updaterClass.getDeclaredField("offset");
+            tclassField.setAccessible(true);
+            offsetField.setAccessible(true);
+
+            Class<?> tclass = (Class<?>) tclassField.get(updater);
+            long searchOffset = offsetField.getLong(updater);
+            // search the declared fields for a field with a matching offset
+            for (Field f : tclass.getDeclaredFields()) {
+                if (!Modifier.isStatic(f.getModifiers())) {
+                    long fieldOffset = UNSAFE.objectFieldOffset(f);
+                    if (fieldOffset == searchOffset) {
+                        markAsUnsafeAccessed.accept(f);
+                        return;
+                    }
                 }
             }
+            throw VMError.shouldNotReachHere("unknown field offset class: " + tclass + ", offset = " + searchOffset);
+        } catch (NoSuchFieldException | IllegalAccessException ex) {
+            throw VMError.shouldNotReachHere(ex);
         }
-        throw VMError.shouldNotReachHere("unknown field offset class: " + tclass + ", offset = " + searchOffset);
     }
 }
 
@@ -369,7 +380,7 @@ final class Target_java_util_concurrent_ForkJoinPool {
     }
 
     @Alias //
-    @TargetElement(onlyWith = JDK11OrLater.class) //
+    @TargetElement(onlyWith = JDK9OrLater.class) //
     @SuppressWarnings("unused") //
     private Target_java_util_concurrent_ForkJoinPool(byte forCommonPoolOnly) {
     }
@@ -397,7 +408,7 @@ final class Target_java_util_concurrent_ForkJoinPool {
     static /* final */ int commonParallelism;
 
     @Alias //
-    @TargetElement(onlyWith = JDK11OrLater.class) //
+    @TargetElement(onlyWith = JDK9OrLater.class) //
     static /* final */ int COMMON_PARALLELISM;
 
     /**
@@ -424,10 +435,10 @@ final class Target_java_util_concurrent_ForkJoinPool {
         /** Ensure that the common pool variables are initialized. */
         protected static void ensureCommonPoolIsInitialized() {
             if (injectedCommon.get() == null) {
-                if (JavaVersionUtil.JAVA_SPEC <= 8) {
+                if (JavaVersionUtil.Java8OrEarlier) {
                     initializeCommonPool_JDK8OrEarlier();
                 } else {
-                    initializeCommonPool_JDK11OrLater();
+                    initializeCommonPool_JDK9OrLater();
                 }
             }
         }
@@ -462,7 +473,7 @@ final class Target_java_util_concurrent_ForkJoinPool {
             commonParallelism = actualPool.getParallelism();
         }
 
-        protected static void initializeCommonPool_JDK11OrLater() {
+        protected static void initializeCommonPool_JDK9OrLater() {
             /* "common" and "commonParallelism" have to be set together. */
             /*
              * TODO: This should be a simplified version of ForkJoinPool(byte), , without the
@@ -471,7 +482,7 @@ final class Target_java_util_concurrent_ForkJoinPool {
              * Among the problems is that the public ForkJoinPool constructor that takes a
              * `parallelism` argument now throws an `IllegalArgumentException` if passed a `0`.
              */
-            throw VMError.unsupportedFeature("Target_java_util_concurrent_ForkJoinPool.CommonInjector.initializeCommonPool_JDK11OrLater()");
+            throw VMError.unsupportedFeature("Target_java_util_concurrent_ForkJoinPool.CommonInjector.initializeCommonPool_JDK9OrLater()");
         }
     }
 }
@@ -526,29 +537,35 @@ class ExchangerABASEComputer implements RecomputeFieldValue.CustomFieldValueComp
 
     @Override
     public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
-        ObjectLayout layout = ImageSingletons.lookup(ObjectLayout.class);
+        try {
+            ObjectLayout layout = ImageSingletons.lookup(ObjectLayout.class);
 
-        /*
-         * ASHIFT is a hard-coded constant in the original implementation, so there is no need to
-         * recompute it. It is a private field, so we need reflection to access it.
-         */
-        int ashift = ReflectionUtil.readStaticField(java.util.concurrent.Exchanger.class, "ASHIFT");
+            /*
+             * ASHIFT is a hard-coded constant in the original implementation, so there is no need
+             * to recompute it. It is a private field, so we need reflection to access it.
+             */
+            Field ashiftField = java.util.concurrent.Exchanger.class.getDeclaredField("ASHIFT");
+            ashiftField.setAccessible(true);
+            int ashift = ashiftField.getInt(null);
 
-        /*
-         * The original implementation uses Node[].class, but we know that all Object arrays have
-         * the same kind and layout. The kind denotes the element type of the array.
-         */
-        JavaKind ak = JavaKind.Object;
+            /*
+             * The original implementation uses Node[].class, but we know that all Object arrays
+             * have the same kind and layout. The kind denotes the element type of the array.
+             */
+            JavaKind ak = JavaKind.Object;
 
-        // ABASE absorbs padding in front of element 0
-        int abase = layout.getArrayBaseOffset(ak) + (1 << ashift);
-        /* Sanity check. */
-        final int s = layout.getArrayIndexScale(ak);
-        if ((s & (s - 1)) != 0 || s > (1 << ashift)) {
-            throw VMError.shouldNotReachHere("Unsupported array scale");
+            // ABASE absorbs padding in front of element 0
+            int abase = layout.getArrayBaseOffset(ak) + (1 << ashift);
+            /* Sanity check. */
+            final int s = layout.getArrayIndexScale(ak);
+            if ((s & (s - 1)) != 0 || s > (1 << ashift)) {
+                throw VMError.shouldNotReachHere("Unsupported array scale");
+            }
+
+            return abase;
+        } catch (IllegalArgumentException | IllegalAccessException | NoSuchFieldException ex) {
+            throw VMError.shouldNotReachHere(ex);
         }
-
-        return abase;
     }
 }
 
