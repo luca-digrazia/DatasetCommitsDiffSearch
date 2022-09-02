@@ -6,9 +6,10 @@ import static com.oracle.truffle.espresso.verifier.MethodVerifier.Int;
 import static com.oracle.truffle.espresso.verifier.MethodVerifier.Invalid;
 import static com.oracle.truffle.espresso.verifier.MethodVerifier.Long;
 import static com.oracle.truffle.espresso.verifier.MethodVerifier.Null;
+import static com.oracle.truffle.espresso.verifier.MethodVerifier.ReturnAddress;
 import static com.oracle.truffle.espresso.verifier.MethodVerifier.isType2;
 
-import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 
 class StackFrame {
     final Operand[] stack;
@@ -134,14 +135,8 @@ class Stack {
     Operand popRef(Operand kind) {
         procSize(-(isType2(kind) ? 2 : 1));
         Operand op = stack[--top];
-        if (!op.isReference()) {
-            throw new VerifyError("Popped " + op + " when a reference was expected!");
-        }
         if (!op.compliesWith(kind)) {
-            if (!kind.isReference() || kind.isArrayType() || !kind.getKlass().isInterface()) {
-                // a class not implementing an interface is a ClassFormatError at *Runtime*
-                throw new VerifyError("Type check error: " + op + " cannot be merged into " + kind);
-            }
+            throw new VerifyError("Type check error: " + op + " cannot be merged into " + kind);
         }
         return op;
     }
@@ -182,22 +177,21 @@ class Stack {
     Operand popObjOrRA() {
         procSize(-1);
         Operand op = stack[--top];
-        if (!(op.isReference() || op.isReturnAddress())) {
-            throw new VerifyError(op + " on stack, required: Reference or ReturnAddress");
+        if (!(op.isReference() || op == ReturnAddress)) {
+            throw new VerifyError(op + " on stack, required: A or ReturnAddress");
         }
         return op;
     }
 
-    Operand pop(Operand k) {
+    void pop(Operand k) {
         if (!k.getKind().isStackInt() || k == Int) {
             procSize((isType2(k) ? -2 : -1));
             Operand op = stack[--top];
             if (!(op.compliesWith(k))) {
                 throw new VerifyError(stack[top] + " on stack, required: " + k);
             }
-            return op;
         } else {
-            return pop(Int);
+            pop(Int);
         }
     }
 
@@ -378,22 +372,6 @@ class Stack {
         return init;
     }
 }
-//
-// abstract class Locals {
-// abstract Operand[] extract();
-//
-// abstract Operand load(int index, Operand expected);
-//
-// abstract Operand loadRef(int index);
-//
-// abstract ReturnAddressOperand loadReturnAddress(int index);
-//
-// abstract void store(int index, Operand op);
-//
-// abstract int mergeInto(StackFrame frame);
-//
-// abstract void initUninit(UninitReferenceOperand toInit, Operand stackOp);
-// }
 
 class Locals {
     Operand[] registers;
@@ -406,7 +384,7 @@ class Locals {
         this.registers = new Operand[mv.getMaxLocals()];
         int index = 0;
         if (!mv.isStatic()) {
-            if (mv.getMethodName() == Symbol.Name.INIT) {
+            if (mv.getMethodName() == Name.INIT) {
                 registers[index++] = new UninitReferenceOperand(mv.getThisKlass(), mv.getThisKlass());
             } else {
                 registers[index++] = new ReferenceOperand(mv.getThisKlass(), mv.getThisKlass());
@@ -457,14 +435,6 @@ class Locals {
         return op;
     }
 
-    ReturnAddressOperand loadReturnAddress(int index) {
-        Operand op = registers[index];
-        if (!op.isReturnAddress()) {
-            throw new VerifyError("Incompatible register type. Expected a ReturnAddress, found: " + op);
-        }
-        return (ReturnAddressOperand) op;
-    }
-
     void store(int index, Operand op) {
         registers[index] = op;
         if (isType2(op)) {
@@ -492,105 +462,3 @@ class Locals {
         }
     }
 }
-//
-// class SubroutineLocals extends Locals {
-// final Locals locals;
-// Operand[] registers;
-//
-// SubroutineLocals(Locals l, int maxLocals) {
-// this.locals = l;
-// this.registers = new Operand[maxLocals];
-// }
-//
-// @Override
-// Operand[] extract() {
-// Operand[] res = new Operand[registers.length];
-// for (int i = 0; i < registers.length; i++) {
-// if (registers[i] != null) {
-// res[i] = registers[i];
-// } else {
-// res[i] = locals.load(i, Invalid);
-// }
-// }
-// return res;
-// }
-//
-// @Override
-// Operand load(int index, Operand expected) {
-// Operand op = registers[index];
-// if (op != null) {
-// if (!op.compliesWith(expected)) {
-// throw new VerifyError("Incompatible register type. Expected: " + expected + ", found: " + op);
-// }
-// if (isType2(expected)) {
-// if (registers[index + 1] != Invalid) {
-// throw new VerifyError("Loading corrupted long primitive from locals!");
-// }
-// }
-// return op;
-// }
-// return locals.load(index, expected);
-// }
-//
-// @Override
-// Operand loadRef(int index) {
-// Operand op = registers[index];
-// if (op != null) {
-// if (!op.isReference()) {
-// throw new VerifyError("Incompatible register type. Expected a reference, found: " + op);
-// }
-// return op;
-// }
-// return locals.loadRef(index);
-// }
-//
-// @Override
-// ReturnAddressOperand loadReturnAddress(int index) {
-// Operand op = registers[index];
-// if (op != null) {
-// if (!op.isReturnAddress()) {
-// throw new VerifyError("Incompatible register type. Expected a ReturnAddress, found: " + op);
-// }
-// return (ReturnAddressOperand) op;
-// }
-// return locals.loadReturnAddress(index);
-// }
-//
-// @Override
-// void store(int index, Operand op) {
-// registers[index] = op;
-// if (isType2(op)) {
-// registers[index + 1] = Invalid;
-// }
-// }
-//
-// @Override
-// int mergeInto(StackFrame frame) {
-// assert registers.length == frame.locals.length;
-// Operand[] frameLocals = frame.locals;
-//
-// for (int i = 0; i < registers.length; i++) {
-// Operand op = registers[i];
-// if (op == null) {
-// op = locals.load(i, Invalid);
-// }
-// if (!op.compliesWith(frameLocals[i])) {
-// return i;
-// }
-// }
-// return -1;
-// }
-//
-// @Override
-// void initUninit(UninitReferenceOperand toInit, Operand stackOp) {
-// for (int i = 0; i < registers.length; i++) {
-// Operand op = registers[i];
-// if (op == null) {
-// op = locals.load(i, Invalid);
-// }
-// if ((op.isUninit() && ((UninitReferenceOperand) op).newBCI == toInit.newBCI)) {
-// registers[i] = stackOp;
-// }
-// }
-// }
-// }

@@ -513,9 +513,8 @@ public final class ObjectKlass extends Klass {
             for (Method m : declaredMethods) {
                 try {
                     MethodVerifier.verify(m);
-                } catch (VerifyError | ClassFormatError | IncompatibleClassChangeError | NoClassDefFoundError e) {
-                    setErroneous();
-                    throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
+                } catch (Throwable e) {
+                    throw e;
                 }
             }
         }

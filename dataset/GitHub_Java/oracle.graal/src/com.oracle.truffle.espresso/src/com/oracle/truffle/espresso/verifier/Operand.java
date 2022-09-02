@@ -166,7 +166,7 @@ class ReferenceOperand extends Operand {
         if (other.isNull()) {
             return this;
         }
-        Klass result = getKlass().findLeastCommonAncestor(other.getKlass());
+        Klass result = getKlass().findLeastCommonSupertype(other.getKlass());
         return result == null ? null : new ReferenceOperand(result, thisKlass);
     }
 
