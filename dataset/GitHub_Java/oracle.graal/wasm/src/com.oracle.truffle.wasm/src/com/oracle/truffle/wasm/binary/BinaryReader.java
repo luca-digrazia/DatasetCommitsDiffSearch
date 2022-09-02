@@ -597,7 +597,7 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertLessEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.get");
+                    Assert.assertLess(localIndex, codeEntry.numLocals(), "Invalid local index for local.get");
                     state.push();
                     break;
                 }
@@ -606,7 +606,7 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertLessEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.set");
+                    Assert.assertLess(localIndex, codeEntry.numLocals(), "Invalid local index for local.set");
                     // Assert there is a value on the top of the stack.
                     Assert.assertLarger(state.stackSize(), 0, "local.set requires at least one element in the stack");
                     state.pop();
@@ -617,7 +617,7 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(localIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertLessEqual(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee");
+                    Assert.assertLess(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee");
                     // Assert there is a value on the top of the stack.
                     Assert.assertLarger(state.stackSize(), 0, "local.tee requires at least one element in the stack");
                     break;
@@ -626,7 +626,7 @@ public class BinaryReader extends BinaryStreamReader {
                     int globalIndex = readLocalIndex(bytesConsumed);
                     state.saveNumericLiteral(globalIndex);
                     state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertLessEqual(globalIndex, wasmModule.globals().size(), "Invalid global index for global.get");
+                    Assert.assertLess(globalIndex, wasmModule.globals().size(), "Invalid global index for global.get");
                     state.push();
                     break;
                 }
@@ -635,7 +635,7 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(globalIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertLessEqual(globalIndex, wasmModule.globals().size(), "Invalid global index for global.set");
+                    Assert.assertLess(globalIndex, wasmModule.globals().size(), "Invalid global index for global.set");
                     // Assert there is a value on the top of the stack.
                     Assert.assertLarger(state.stackSize(), 0, "global.set requires at least one element in the stack");
                     state.pop();
