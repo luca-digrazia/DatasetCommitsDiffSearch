@@ -385,9 +385,9 @@ public class CompileQueue {
         PhaseSuite<HighTierContext> phaseSuite = new PhaseSuite<>();
         phaseSuite.appendPhase(new DeadStoreRemovalPhase());
         phaseSuite.appendPhase(new DevirtualizeCallsPhase());
-        phaseSuite.appendPhase(CanonicalizerPhase.create());
+        phaseSuite.appendPhase(new CanonicalizerPhase());
         phaseSuite.appendPhase(new StrengthenStampsPhase());
-        phaseSuite.appendPhase(CanonicalizerPhase.create());
+        phaseSuite.appendPhase(new CanonicalizerPhase());
         return phaseSuite;
     }
 
@@ -598,7 +598,7 @@ public class CompileQueue {
 
                     if (inlined) {
                         Providers providers = runtimeConfig.lookupBackend(method).getProviders();
-                        CanonicalizerPhase.create().apply(graph, providers);
+                        new CanonicalizerPhase().apply(graph, providers);
 
                         /*
                          * Publish the new graph, it can be picked up immediately by other threads
@@ -719,7 +719,7 @@ public class CompileQueue {
             if (plugin != null && !plugin.inlineOnly()) {
                 Bytecode code = new ResolvedJavaMethodBytecode(method);
                 // DebugContext debug = new DebugContext(options, providers.getSnippetReflection());
-                graph = new SubstrateIntrinsicGraphBuilder(getCustomizedOptions(debug), debug, providers, code).buildGraph(plugin);
+                graph = new SubstrateIntrinsicGraphBuilder(debug.getOptions(), debug, providers, code).buildGraph(plugin);
             }
         }
         if (graph == null && method.isNative() && NativeImageOptions.ReportUnsupportedElementsAtRuntime.getValue()) {
@@ -727,7 +727,7 @@ public class CompileQueue {
         }
         if (graph == null) {
             needParsing = true;
-            graph = new StructuredGraph.Builder(getCustomizedOptions(debug), debug).method(method).build();
+            graph = new StructuredGraph.Builder(debug.getOptions(), debug).method(method).build();
         }
 
         try (DebugContext.Scope s = debug.scope("Parsing", graph, method, this)) {
@@ -771,10 +771,6 @@ public class CompileQueue {
         } catch (Throwable e) {
             throw debug.handle(e);
         }
-    }
-
-    protected OptionValues getCustomizedOptions(DebugContext debug) {
-        return debug.getOptions();
     }
 
     protected GraphBuilderConfiguration createHostedGraphBuilderConfiguration(HostedProviders providers, HostedMethod method) {
@@ -1117,7 +1113,6 @@ public class CompileQueue {
                             className.contains("com/oracle/svm/core/thread/JavaThreads") ||
                             className.contains("com/oracle/svm/core/heap/") ||
                             className.contains("com/oracle/svm/core/genscavenge/") ||
-                            className.contains("com/oracle/svm/core/thread/VMOperationControl") ||
                             className.contains("debug/internal/DebugValueMap") && method.getName().equals("registerTopLevel")) {
                 return false;
             }
