@@ -47,6 +47,7 @@ import java.lang.ref.WeakReference;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -364,9 +365,9 @@ public class LoggingTest {
     @Test
     public void testParametersPrimitive() {
         final Object[] expected = new Object[]{1, 1L, null, 1.1, 1.1d, "test", 't', null, true};
-        AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, TruffleLogger[]>() {
+        AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, Collection<TruffleLogger>>() {
             @Override
-            public boolean test(final LoggingContext context, final TruffleLogger[] loggers) {
+            public boolean test(final LoggingContext context, final Collection<TruffleLogger> loggers) {
                 for (TruffleLogger logger : loggers) {
                     logger.log(Level.WARNING, "Parameters", Arrays.copyOf(expected, expected.length));
                 }
@@ -388,9 +389,9 @@ public class LoggingTest {
 
     @Test
     public void testParametersObjects() {
-        AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, TruffleLogger[]>() {
+        AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, Collection<TruffleLogger>>() {
             @Override
-            public boolean test(final LoggingContext context, final TruffleLogger[] loggers) {
+            public boolean test(final LoggingContext context, final Collection<TruffleLogger> loggers) {
                 for (TruffleLogger logger : loggers) {
                     logger.log(Level.WARNING, "Parameters", new LoggingLanguageObject("passed"));
                 }
@@ -412,9 +413,9 @@ public class LoggingTest {
 
     @Test
     public void testInnerContextLogging() {
-        AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, TruffleLogger[]>() {
+        AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, Collection<TruffleLogger>>() {
             @Override
-            public boolean test(final LoggingContext context, final TruffleLogger[] loggers) {
+            public boolean test(final LoggingContext context, final Collection<TruffleLogger> loggers) {
                 TruffleContext tc = context.getEnv().newContextBuilder().build();
                 final Object prev = tc.enter();
                 try {
@@ -826,11 +827,10 @@ public class LoggingTest {
         try (Engine eng = newEngineBuilder().options(createLoggingOptions(LoggingLanguageFirst.ID, null, Level.FINE.toString(), ProxyInstrument.ID, null, Level.FINE.toString())).logHandler(
                         engineHandler).build()) {
             AtomicReference<TruffleLogger> loggerRef = new AtomicReference<>();
-            LoggingLanguageFirst.action = new BiPredicate<LoggingContext, TruffleLogger[]>() {
+            LoggingLanguageFirst.action = new BiPredicate<LoggingContext, Collection<TruffleLogger>>() {
                 @Override
-                public boolean test(LoggingContext ctx, TruffleLogger[] loggers) {
-                    Assert.assertTrue(loggers.length > 0);
-                    loggerRef.set(loggers[0]);
+                public boolean test(LoggingContext ctx, Collection<TruffleLogger> loggers) {
+                    loggerRef.set(loggers.iterator().next());
                     return true;
                 }
             };
@@ -919,9 +919,9 @@ public class LoggingTest {
     public void testInvalidId() {
         Context.Builder builder = newContextBuilder();
         TestHandler handler = new TestHandler();
-        LoggingLanguageFirst.action = new BiPredicate<LoggingContext, TruffleLogger[]>() {
+        LoggingLanguageFirst.action = new BiPredicate<LoggingContext, Collection<TruffleLogger>>() {
             @Override
-            public boolean test(LoggingContext ctx, TruffleLogger[] defaultLoggers) {
+            public boolean test(LoggingContext ctx, Collection<TruffleLogger> defaultLoggers) {
                 try {
                     TruffleLogger.getLogger("LoggingTest-Invalid-Id");
                     Assert.fail("Expected IllegalArgumentException");
@@ -956,10 +956,10 @@ public class LoggingTest {
     }
 
     private static void testLogToStream(Context.Builder contextBuilder, CloseableByteArrayOutputStream stream, boolean expectStreamClosed) {
-        AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, TruffleLogger[]>() {
+        AbstractLoggingLanguage.action = new BiPredicate<LoggingContext, Collection<TruffleLogger>>() {
             @Override
             @CompilerDirectives.TruffleBoundary
-            public boolean test(final LoggingContext context, final TruffleLogger[] loggers) {
+            public boolean test(final LoggingContext context, final Collection<TruffleLogger> loggers) {
                 TruffleLogger.getLogger(LoggingLanguageFirst.ID).warning(LoggingLanguageFirst.ID);
                 TruffleLogger.getLogger(LoggingLanguageFirst.ID, "package.class").warning(LoggingLanguageFirst.ID + "::package.class");
                 return false;
@@ -1218,15 +1218,17 @@ public class LoggingTest {
     public abstract static class AbstractLoggingLanguage extends TruffleLanguage<LoggingContext> {
         static final String[] LOGGER_NAMES = {"a", "a.a", "a.b", "a.a.a", "b", "b.a", "b.a.a.a"};
         static final Level[] LOGGER_LEVELS = {Level.FINEST, Level.FINER, Level.FINE, Level.INFO, Level.SEVERE, Level.WARNING};
-        static BiPredicate<LoggingContext, TruffleLogger[]> action;
-        private final TruffleLogger[] allLoggers;
+        static BiPredicate<LoggingContext, Collection<TruffleLogger>> action;
+        private final Collection<TruffleLogger> allLoggers;
+        private final TruffleLogger[] allLoggersArray;
 
         AbstractLoggingLanguage(final String id) {
             final ArrayList<TruffleLogger> loggers = new ArrayList<>(LOGGER_NAMES.length);
             for (String loggerName : LOGGER_NAMES) {
                 loggers.add(TruffleLogger.getLogger(id, loggerName));
             }
-            allLoggers = loggers.toArray(new TruffleLogger[0]);
+            allLoggersArray = loggers.toArray(new TruffleLogger[0]);
+            allLoggers = Arrays.asList(allLoggersArray);
         }
 
         @Override
@@ -1255,7 +1257,7 @@ public class LoggingTest {
 
         private void doLog() {
             for (Level level : LOGGER_LEVELS) {
-                for (TruffleLogger logger : allLoggers) {
+                for (TruffleLogger logger : allLoggersArray) {
                     logger.log(level, logger.getName());
                 }
             }
@@ -1377,7 +1379,7 @@ public class LoggingTest {
         }
     }
 
-    private static final class LookupInstrumentAction implements BiPredicate<LoggingContext, TruffleLogger[]> {
+    private static final class LookupInstrumentAction implements BiPredicate<LoggingContext, Collection<TruffleLogger>> {
 
         private final boolean performDefaultLogging;
 
@@ -1386,7 +1388,7 @@ public class LoggingTest {
         }
 
         @Override
-        public boolean test(LoggingContext ctx, TruffleLogger[] loggers) {
+        public boolean test(LoggingContext ctx, Collection<TruffleLogger> loggers) {
             TruffleLanguage.Env env = ctx.getEnv();
             InstrumentInfo instrumentInfo = env.getInstruments().get(ProxyInstrument.ID);
             env.lookup(instrumentInfo, ProxyInstrument.Initialize.class);
