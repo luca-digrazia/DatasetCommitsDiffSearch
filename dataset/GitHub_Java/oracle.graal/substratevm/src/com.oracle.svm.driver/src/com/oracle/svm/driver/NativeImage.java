@@ -45,6 +45,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1256,10 +1257,11 @@ public class NativeImage {
 
         int exitStatus = 1;
         try {
+            Path argsFile = null;
             Path[] argsFileBox = new Path[1];
             if (config.useJavaModules()) {
                 /* For Java > 8 we use an argument file to pass the options to the builder */
-                Path argsFile = Files.createTempFile("native-image", "args");
+                argsFile = Files.createTempFile("native-image", "args");
                 argsFileBox[0] = argsFile;
                 Runtime.getRuntime().addShutdownHook(new Thread() {
                     @Override
@@ -1269,6 +1271,8 @@ public class NativeImage {
                         }
                     }
                 });                
+                argsFile = Files.createTempFile("native-image", "args");
+                argsFile.toFile().deleteOnExit();
                 Files.write(argsFile, (Iterable<String>) command.stream().skip(1).map(NativeImage::quoteFileArg)::iterator);
                 List<String> atCommand = new ArrayList<>();
                 atCommand.add(command.get(0));
@@ -1279,8 +1283,9 @@ public class NativeImage {
             pb.command(command);
             Process p = pb.inheritIO().start();
             exitStatus = p.waitFor();
-            if (exitStatus != 0 && isVerbose()) {
+            if (exitStatus != 0 && isVerbose() && argsFile != null) {
                 argsFileBox[0] = null;
+                showMessage("Argument file: " + argsFile);
             }
         } catch (IOException | InterruptedException e) {
             throw showError(e.getMessage());
