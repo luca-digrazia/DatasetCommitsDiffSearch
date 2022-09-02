@@ -29,12 +29,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ref.ReferenceQueue;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,7 +38,7 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso._native.NativeAccessProvider;
+import com.oracle.truffle.espresso._native.NFIIsolatedNativeAccess;
 import com.oracle.truffle.espresso._native.NativeAccess;
 import org.graalvm.polyglot.Engine;
 
@@ -158,6 +154,7 @@ public final class EspressoContext {
     public final boolean EnableManagement;
     public final EspressoOptions.VerifyMode Verify;
     public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
+    public final boolean IsolatedNamespace;
     public final boolean Polyglot;
     public final boolean ExitHost;
     private final String multiThreadingDisabled;
@@ -257,6 +254,10 @@ public final class EspressoContext {
         this.multiThreadingDisabled = multiThreadingDisabledReason;
         this.NativeAccessAllowed = env.isNativeAccessAllowed();
         this.Polyglot = env.getOptions().get(EspressoOptions.Polyglot);
+
+        // Isolated (native) namespaces via dlmopen is only supported on Linux.
+        this.IsolatedNamespace = env.getOptions().get(EspressoOptions.UseTruffleNFIIsolatedNamespace) && OS.getCurrent() == OS.Linux;
+
     }
 
     private static Set<String> knownSingleThreadedLanguages(TruffleLanguage.Env env) {
@@ -397,7 +398,8 @@ public final class EspressoContext {
 
             // Spawn JNI first, then the VM.
             try (DebugCloseable vmInit = VM_INIT.scope(timers)) {
-                this.nativeAccess = spawnNativeAccess();
+                // TODO(peterssen): Use ServiceLoader.
+                this.nativeAccess = new NFIIsolatedNativeAccess(this);
                 this.vm = VM.create(getJNI()); // Mokapot is loaded
                 vm.attachThread(Thread.currentThread());
             }
@@ -493,35 +495,6 @@ public final class EspressoContext {
             long elapsedNanos = initDoneTimeNanos - initStartTimeNanos;
             getLogger().log(Level.FINE, "VM booted in {0} ms", TimeUnit.NANOSECONDS.toMillis(elapsedNanos));
         }
-    }
-
-    private NativeAccess spawnNativeAccess() {
-        String nativeBackend;
-        if (getEnv().getOptions().hasBeenSet(EspressoOptions.NativeBackend)) {
-            nativeBackend = getEnv().getOptions().get(EspressoOptions.NativeBackend);
-        } else {
-            if (EspressoOptions.RUNNING_ON_SVM) {
-                nativeBackend = "nfi-native";
-            } else {
-                if (OS.getCurrent() == OS.Linux) {
-                    nativeBackend = "nfi-dlmopen";
-                } else {
-                    nativeBackend = "nfi-sulong";
-                }
-            }
-        }
-
-
-        List<String> available = new ArrayList<>();
-        ServiceLoader<NativeAccessProvider> loader = ServiceLoader.load(NativeAccessProvider.class);
-        for (NativeAccessProvider provider : loader) {
-            available.add(provider.id());
-            if (nativeBackend.equals(provider.id())) {
-                getLogger().fine("Native backend: " + nativeBackend);
-                return provider.create(this);
-            }
-        }
-        throw abort("Cannot find native backend '" + nativeBackend + "'. Available backends: " + available);
     }
 
     private void initializeAgents() {
