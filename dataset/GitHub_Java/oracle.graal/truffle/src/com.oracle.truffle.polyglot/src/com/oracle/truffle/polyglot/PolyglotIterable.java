@@ -54,7 +54,6 @@ import com.oracle.truffle.polyglot.PolyglotIterableFactory.CacheFactory.GetItera
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Iterator;
-import java.util.Objects;
 
 class PolyglotIterable<T> implements Iterable<T>, HostWrapper {
 
@@ -168,7 +167,7 @@ class PolyglotIterable<T> implements Iterable<T>, HostWrapper {
                     return false;
                 }
                 Key other = (Key) obj;
-                return receiverClass == other.receiverClass && valueClass == other.valueClass && Objects.equals(valueType, other.valueType);
+                return valueType == other.valueType && valueClass == other.valueClass && receiverClass == other.receiverClass;
             }
         }
 

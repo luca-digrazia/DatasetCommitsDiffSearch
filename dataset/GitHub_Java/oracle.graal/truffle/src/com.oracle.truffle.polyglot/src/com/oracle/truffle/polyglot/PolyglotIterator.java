@@ -58,7 +58,6 @@ import java.lang.reflect.Type;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import java.util.Objects;
 
 class PolyglotIterator<T> implements Iterator<T>, HostWrapper {
 
@@ -215,7 +214,7 @@ class PolyglotIterator<T> implements Iterator<T>, HostWrapper {
                     return false;
                 }
                 Key other = (Key) obj;
-                return receiverClass == other.receiverClass && valueClass == other.valueClass && Objects.equals(valueType, other.valueType);
+                return valueType == other.valueType && valueClass == other.valueClass && receiverClass == other.receiverClass;
             }
         }
 
