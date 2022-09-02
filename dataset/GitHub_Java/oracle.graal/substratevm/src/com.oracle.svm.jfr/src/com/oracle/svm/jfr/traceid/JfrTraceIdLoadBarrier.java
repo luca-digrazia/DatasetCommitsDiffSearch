@@ -27,76 +27,113 @@ package com.oracle.svm.jfr.traceid;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.heap.Heap;
-import com.oracle.svm.core.jdk.UninterruptibleUtils;
-import com.oracle.svm.core.thread.VMOperation;
 
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 import java.util.function.Consumer;
 
 public class JfrTraceIdLoadBarrier {
-    private static final UninterruptibleUtils.AtomicInteger classCount0 = new UninterruptibleUtils.AtomicInteger(0);
-    private static final UninterruptibleUtils.AtomicInteger classCount1 = new UninterruptibleUtils.AtomicInteger(0);
+    private static Class<?>[] allClasses;
+    private static int classCount0;
+    private static int classCount1;
 
-    @Uninterruptible(reason = "Epoch may not change")
     private static boolean isNotTagged(long value) {
-        long thisEpochBit = JfrTraceIdEpoch.getInstance().thisEpochBit();
+        long thisEpochBit = JfrTraceIdEpoch.thisEpochBit();
         return ((value & ((thisEpochBit << JfrTraceId.META_SHIFT) | thisEpochBit)) != thisEpochBit);
     }
 
-    @Uninterruptible(reason = "Epoch may not change")
-    private static boolean shouldTag(Class<?> obj) {
+    private static boolean shouldTag(Object obj) {
         assert obj != null;
         return isNotTagged(JfrTraceId.getTraceIdRaw(obj));
     }
 
-    @Uninterruptible(reason = "Epoch may not change")
-    public static void clear() {
-        clearClassCount(JfrTraceIdEpoch.getInstance().previousEpoch());
+    private static long setUsedAndGet(Object obj) {
+        assert obj != null;
+        if (shouldTag(obj)) {
+            JfrTraceId.setUsedThisEpoch(obj);
+            JfrTraceIdEpoch.setChangedTag();
+        }
+        assert JfrTraceId.isUsedThisEpoch(obj);
+        return JfrTraceId.getTraceId(obj);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static void clear() {
+        clearClassCount(JfrTraceIdEpoch.previousEpoch());
+    }
+
     private static void clearClassCount(boolean epoch) {
         if (epoch) {
-            classCount1.set(0);
+            classCount1 = 0;
         } else {
-            classCount0.set(0);
+            classCount0 = 0;
         }
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     private static void increaseClassCount(boolean epoch) {
         if (epoch) {
-            classCount1.incrementAndGet();
+            classCount1++;
         } else {
-            classCount0.incrementAndGet();
+            classCount0++;
         }
     }
 
-    public static int classCount(boolean epoch) {
-        assert VMOperation.isInProgressAtSafepoint();
-        return epoch ? classCount1.get() : classCount0.get();
+    @Uninterruptible(reason = "Called by uninterruptible code")
+    public static long classCount(boolean epoch) {
+        return epoch ? classCount1 : classCount0;
     }
 
-    @Uninterruptible(reason = "Epoch must not change while in this method.")
+    @Uninterruptible(reason = "Called by uninterruptible code")
     public static long load(Class<?> clazz) {
         assert clazz != null;
         if (shouldTag(clazz)) {
             JfrTraceId.setUsedThisEpoch(clazz);
-            increaseClassCount(JfrTraceIdEpoch.getInstance().currentEpoch());
-            JfrTraceIdEpoch.getInstance().setChangedTag();
+            increaseClassCount(JfrTraceIdEpoch.currentEpoch());
+            JfrTraceIdEpoch.setChangedTag();
         }
         assert JfrTraceId.isUsedThisEpoch(clazz);
         return JfrTraceId.getTraceId(clazz);
     }
 
+    @Uninterruptible(reason = "Called by uninterruptible code")
+    public static long load(ClassLoader classLoader) {
+        assert classLoader != null;
+        return setUsedAndGet(classLoader);
+    }
+
+    @Uninterruptible(reason = "Called by uninterruptible code")
+    public static long load(Package pkg) {
+        assert pkg != null;
+        return setUsedAndGet(pkg);
+    }
+
+    @Uninterruptible(reason = "Called by uninterruptible code")
+    public static long load(Module module) {
+        assert module != null;
+        return setUsedAndGet(module);
+    }
+
+    public static boolean initialize() {
+        classCount0 = 0;
+        classCount1 = 0;
+        allClasses = new Class<?>[Heap.getHeap().getClassCount()];
+        List<Class<?>> classes = Heap.getHeap().getClassList();
+        int idx = 0;
+        for (Class<?> clazz : classes) {
+            allClasses[idx++] = clazz;
+        }
+        return true;
+    }
+
     // Note: Using Consumer<Class<?>> directly drags in other implementations which are not uninterruptible.
     public interface ClassConsumer extends Consumer<Class<?>> {}
 
+    @Uninterruptible(reason = "Called by uninterruptible code")
     public static void doClasses(ClassConsumer kc, boolean epoch) {
-        assert VMOperation.isInProgressAtSafepoint();
         long predicate = JfrTraceId.TRANSIENT_BIT;
         predicate |= epoch ? JfrTraceIdEpoch.EPOCH_1_BIT : JfrTraceIdEpoch.EPOCH_0_BIT;
         int usedClassCount = 0;
-        for (Class<?> clazz : Heap.getHeap().getClassList()) {
+        for (Class<?> clazz : allClasses) {
             if (JfrTraceId.predicate(clazz, predicate)) {
                 kc.accept(clazz);
                 usedClassCount++;
