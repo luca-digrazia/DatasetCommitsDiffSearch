@@ -54,24 +54,22 @@ import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
 
+import com.oracle.truffle.api.object.dsl.Layout;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
-import com.oracle.truffle.dsl.processor.RefectiveTypes;
-import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.object.dsl.processor.model.LayoutModel;
 
-@SupportedAnnotationTypes(RefectiveTypes.Layout_Name)
+@SupportedAnnotationTypes("com.oracle.truffle.api.object.dsl.Layout")
 public class LayoutProcessor extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnvironment) {
-        ProcessorContext context = ProcessorContext.enter(processingEnv);
+        ProcessorContext.setThreadLocalInstance(new ProcessorContext(processingEnv, null));
         try {
-            RefectiveTypes types = context.getTypes();
-            for (Element element : roundEnvironment.getElementsAnnotatedWith(ElementUtils.castTypeElement(types.Layout))) {
+            for (Element element : roundEnvironment.getElementsAnnotatedWith(Layout.class)) {
                 processLayout((TypeElement) element);
             }
         } finally {
-            ProcessorContext.leave();
+            ProcessorContext.setThreadLocalInstance(null);
         }
         return true;
     }

@@ -119,7 +119,6 @@ public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> {
         context.initialized = true;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     protected void disposeContext(LanguageContext context) {
         if (context.initialized) {
@@ -129,7 +128,7 @@ public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> {
             assertSame(context, new RootNode(this) {
                 @Override
                 public Object execute(VirtualFrame frame) {
-                    return lookupContextReference(LanguageSPITestLanguage.class).get();
+                    return getContextSupplier(LanguageSPITestLanguage.class).get();
                 }
             }.execute(null));
         }
