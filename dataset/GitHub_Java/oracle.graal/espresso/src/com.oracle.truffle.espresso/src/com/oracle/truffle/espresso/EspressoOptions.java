@@ -446,4 +446,6 @@ public final class EspressoOptions {
         String value = System.getProperty(name);
         return value == null ? defaultValue : value.equalsIgnoreCase("true");
     }
+
+    public static final String INCEPTION_NAME = System.getProperty("espresso.inception.name", "#");
 }

@@ -100,10 +100,9 @@ final class NFIIsolatedNativeAccess extends NFINativeAccess {
 
     private TruffleObject rtldDefault() {
         TruffleObject edenRtldDefault = lookupAndBindSymbol(edenLibrary, "eden_RTLD_DEFAULT", NativeSignature.create(NativeType.POINTER));
+        assert InteropLibrary.getUncached().isPointer(edenRtldDefault);
         try {
-            TruffleObject result = (TruffleObject) InteropLibrary.getUncached().execute(edenRtldDefault);
-            assert InteropLibrary.getUncached().isPointer(result);
-            return result;
+            return (TruffleObject) InteropLibrary.getUncached().execute(edenRtldDefault);
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
