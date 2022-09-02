@@ -53,14 +53,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         return getMethodNode().getMethod();
     }
 
-    public final boolean shouldSplit() {
-        return getMethodNode().shouldSplit();
-    }
-
-    public final EspressoRootNode split() {
-        return create(getFrameDescriptor(), getMethodNode().split());
-    }
-
     @Override
     public final EspressoContext getContext() {
         return getMethodNode().getContext();
@@ -93,6 +85,14 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
 
     public final boolean isBytecodeNode() {
         return getMethodNode() instanceof BytecodeNode;
+    }
+
+    public final BytecodeNode getBytecodeNode() {
+        if (isBytecodeNode()) {
+            return (BytecodeNode) getMethodNode();
+        } else {
+            return null;
+        }
     }
 
     private EspressoMethodNode getMethodNode() {
@@ -133,7 +133,11 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
             // monitor accesses until Espresso has its own monitor handling.
             //
             // synchronized (monitor) {
-            InterpreterToVM.monitorEnter(monitor);
+            if (isBytecodeNode()) {
+                ((BytecodeNode) getMethodNode()).synchronizedMethodMonitorEnter(frame, monitor);
+            } else {
+                InterpreterToVM.monitorEnter(monitor);
+            }
             Object result;
             try {
                 result = methodNode.execute(frame);
@@ -141,6 +145,15 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
                 InterpreterToVM.monitorExit(monitor);
             }
             return result;
+        }
+
+        private EspressoMethodNode getMethodNode() {
+            Node child = methodNode;
+            if (child instanceof WrapperNode) {
+                child = ((WrapperNode) child).getDelegateNode();
+            }
+            assert !(child instanceof WrapperNode);
+            return (EspressoMethodNode) child;
         }
     }
 

@@ -33,6 +33,7 @@ public final class ErrorCodes {
     public static final int INVALID_METHODID = 23;
     public static final int INVALID_FIELDID = 25;
     public static final int INVALID_FRAMEID = 30;
+    public static final int OPAQUE_FRAME = 32;
     public static final int INVALID_SLOT = 35;
     public static final int NOT_IMPLEMENTED = 99;
     public static final int ABSENT_INFORMATION = 101;
@@ -42,5 +43,6 @@ public final class ErrorCodes {
     public static final int INVALID_CLASS_LOADER = 507;
     public static final int INVALID_ARRAY = 508;
 
-    private ErrorCodes() {}
+    private ErrorCodes() {
+    }
 }

@@ -22,9 +22,9 @@
  */
 package com.oracle.truffle.espresso.jdwp.api;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.espresso.jdwp.impl.MonitorInfo;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -226,11 +226,10 @@ public interface JDWPContext {
     /**
      * Determines if a thread is valid. A valid thread is an active thread.
      *
-     * @param guestThread the guest thread
-     * @param checkTerminated include a check if the thread has exited
+     * @param thread
      * @return true if thread is valid, false otherwise
      */
-    boolean isValidThread(Object guestThread, boolean checkTerminated);
+    boolean isValidThread(Object thread);
 
     /**
      * Determines if the thread group is valid.
@@ -395,19 +394,19 @@ public interface JDWPContext {
      * Determines if a caller has more same-line method invocations.
      *
      * @param callerRoot the root node of the caller frame
-     * @param materializedFrame the frame to read the current bci from
+     * @param frameInstance the frame instance to read the current bci from
      * @return true if the caller method has further method invocations on the current line
      */
-    boolean moreMethodCallsOnLine(RootNode callerRoot, MaterializedFrame materializedFrame);
+    boolean moreMethodCallsOnLine(RootNode callerRoot, FrameInstance frameInstance);
 
     /**
      * Returns the current BCI or -1 if the BCI cannot be read.
      *
      * @param root the root node, representing the method/function
-     * @param materializedFrame the frame to read the bci from
+     * @param frameInstance the frame instance to read the bci from
      * @return the BCI or -1
      */
-    long readBCIFromFrame(RootNode root, MaterializedFrame materializedFrame);
+    long readBCIFromFrame(RootNode root, FrameInstance frameInstance);
 
     /**
      * Returns a {@link CallFrame} representation of the location of
@@ -426,12 +425,20 @@ public interface JDWPContext {
     Object getMonitorOwnerThread(Object monitor);
 
     /**
-     * Returns all owned guest-language monitor object of the input call frames.
+     * Returns monitor information for the given monitor.
      *
-     * @param callFrames the current call frames
+     * @param monitor the monitor object
+     * @return the monitor info
+     */
+    MonitorInfo getMonitorInfo(Object monitor);
+
+    /**
+     * Returns all owned guest-language monitor object of the input guest thread.
+     *
+     * @param guestThread the guest thread
      * @return the owned monitor objects
      */
-    MonitorStackInfo[] getOwnedMonitors(CallFrame[] callFrames);
+    Object[] getOwnedMonitors(Object guestThread);
 
     /**
      * Returns the current contended monitor for the guest thread, or <code>null</code> if there are
@@ -443,19 +450,10 @@ public interface JDWPContext {
     Object getCurrentContendedMonitor(Object guestThread);
 
     /**
-     * Forces an early return on the top-most frame with the given return value. All monitors held
-     * on the current top frame are released before the early return.
+     * Forces an early return on the top-most frame with the given return value.
      *
      * @param returnValue the value to return
-     * @param topFrame the current top frame
      * @return {@code true} if the early return can be performed or {@code false} otherwise
      */
-    boolean forceEarlyReturn(Object returnValue, CallFrame topFrame);
-
-    /**
-     * Returns the language class associated with the implementing class of this interface.
-     *
-     * @return the Truffle language class
-     */
-    Class<? extends TruffleLanguage<?>> getLanguageClass();
+    boolean forceEarlyReturn(Object returnValue);
 }

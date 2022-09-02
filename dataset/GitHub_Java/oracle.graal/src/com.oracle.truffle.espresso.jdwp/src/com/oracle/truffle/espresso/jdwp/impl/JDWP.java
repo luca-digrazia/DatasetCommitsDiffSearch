@@ -31,11 +31,9 @@ import com.oracle.truffle.espresso.jdwp.api.LineNumberTableRef;
 import com.oracle.truffle.espresso.jdwp.api.LocalRef;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.MonitorStackInfo;
 import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -50,6 +48,8 @@ final class JDWP {
 
     private static final boolean CAN_REDEFINE_CLASSES = false;
     private static final boolean CAN_GET_INSTANCE_INFO = false;
+    private static final boolean CAN_GET_MONITOR_FRAME_INFO = false;
+    private static final boolean CAN_GET_MONITOR_INFO = false;
 
     private static final int ACC_SYNTHETIC = 0x00001000;
     private static final int JDWP_SYNTHETIC = 0xF0000000;
@@ -255,7 +255,7 @@ final class JDWP {
                 reply.writeBoolean(true); // canGetSyntheticAttribute
                 reply.writeBoolean(true); // canGetOwnedMonitorInfo
                 reply.writeBoolean(true); // canGetCurrentContendedMonitor
-                reply.writeBoolean(true); // canGetMonitorInfo
+                reply.writeBoolean(CAN_GET_MONITOR_INFO); // canGetMonitorInfo
                 return new CommandResult(reply);
             }
         }
@@ -335,7 +335,7 @@ final class JDWP {
                 reply.writeBoolean(true); // canGetSyntheticAttribute
                 reply.writeBoolean(true); // canGetOwnedMonitorInfo
                 reply.writeBoolean(true); // canGetCurrentContendedMonitor
-                reply.writeBoolean(true); // canGetMonitorInfo
+                reply.writeBoolean(CAN_GET_MONITOR_INFO); // canGetMonitorInfo
                 reply.writeBoolean(CAN_REDEFINE_CLASSES); // canRedefineClasses
                 reply.writeBoolean(false); // canAddMethod
                 reply.writeBoolean(false); // canUnrestrictedlyRedefineClasses
@@ -346,7 +346,7 @@ final class JDWP {
                 reply.writeBoolean(false); // canSetDefaultStratum
                 reply.writeBoolean(CAN_GET_INSTANCE_INFO); // canGetInstanceInfo
                 reply.writeBoolean(true); // canRequestMonitorEvents
-                reply.writeBoolean(true); // canGetMonitorFrameInfo
+                reply.writeBoolean(CAN_GET_MONITOR_FRAME_INFO); // canGetMonitorFrameInfo
                 reply.writeBoolean(false); // canUseSourceNameFilters
                 reply.writeBoolean(true); // canGetConstantPool
                 reply.writeBoolean(true); // canForceEarlyReturn
@@ -978,7 +978,7 @@ final class JDWP {
                     return new CommandResult(reply);
                 }
 
-                Object thread = verifyThread(input.readLong(), reply, context, true);
+                Object thread = verifyThread(input.readLong(), reply, context);
                 if (thread == null) {
                     return new CommandResult(reply);
                 }
@@ -1037,7 +1037,7 @@ final class JDWP {
                     return new CommandResult(reply);
                 }
 
-                Object thread = verifyThread(input.readLong(), reply, context, true);
+                Object thread = verifyThread(input.readLong(), reply, context);
                 if (thread == null) {
                     return new CommandResult(reply);
                 }
@@ -1132,7 +1132,7 @@ final class JDWP {
                     return new CommandResult(reply);
                 }
 
-                Object thread = verifyThread(input.readLong(), reply, context, true);
+                Object thread = verifyThread(input.readLong(), reply, context);
                 if (thread == null) {
                     return new CommandResult(reply);
                 }
@@ -1514,6 +1514,11 @@ final class JDWP {
             static CommandResult createReply(Packet packet, DebuggerController controller) {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
+                if (!CAN_GET_MONITOR_INFO) {
+                    reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
+                    return new CommandResult(reply);
+                }
+
                 PacketStream input = new PacketStream(packet);
 
                 JDWPContext context = controller.getContext();
@@ -1531,28 +1536,22 @@ final class JDWP {
                     reply.writeInt(0);
                     reply.writeInt(0);
                 } else {
-                    MonitorInfo info = controller.getEventListener().getMonitorInfo(monitorOwnerThread, object);
+                    MonitorInfo info = context.getMonitorInfo(object);
 
                     if (info == null) {
                         reply.errorCode(ErrorCodes.INVALID_OBJECT);
                         return new CommandResult(reply);
                     }
 
-                    reply.writeLong(context.getIds().getIdAsLong(monitorOwnerThread));
-                    reply.writeInt(info.getEntryCount());
-
-                    ArrayList<Object> waiters = new ArrayList<>();
-                    for (Object activeThread : context.getAllGuestThreads()) {
-                        if (activeThread == monitorOwnerThread) {
-                            continue;
-                        }
-                        Object contendedMonitor = context.getCurrentContendedMonitor(activeThread);
-                        if (contendedMonitor != null && contendedMonitor == object) {
-                            waiters.add(activeThread);
-                        }
+                    Object ownerThread = info.getOwnerThread();
+                    if (ownerThread == null) {
+                        reply.writeLong(0);
+                    } else {
+                        reply.writeLong(context.getIds().getIdAsLong(ownerThread));
                     }
-
-                    reply.writeInt(waiters.size());
+                    reply.writeInt(info.getEntryCount());
+                    Object[] waiters = info.getWaiters();
+                    reply.writeInt(waiters.length);
 
                     for (Object waiter : waiters) {
                         reply.writeLong(context.getIds().getIdAsLong(waiter));
@@ -1577,7 +1576,7 @@ final class JDWP {
                 long objectId = input.readLong();
                 long threadId = input.readLong();
 
-                Object thread = verifyThread(threadId, reply, context, true);
+                Object thread = verifyThread(threadId, reply, context);
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -1731,7 +1730,7 @@ final class JDWP {
     static class ThreadReference {
         public static final int ID = 11;
 
-        private static final long SUSPEND_TIMEOUT = 400;
+        private static final long SUSPEND_TIMEOUT = 200;
 
         static class NAME {
             public static final int ID = 1;
@@ -1741,7 +1740,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context, false);
+                Object thread = verifyThread(threadId, reply, context);
 
                 if (thread == null) {
                     JDWPLogger.log("null thread discovered with ID: %s", JDWPLogger.LogLevel.THREAD, threadId);
@@ -1767,7 +1766,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, controller.getContext(), false);
+                Object thread = verifyThread(threadId, reply, controller.getContext());
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -1788,7 +1787,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, controller.getContext(), false);
+                Object thread = verifyThread(threadId, reply, controller.getContext());
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -1811,6 +1810,12 @@ final class JDWP {
             public static final int JVMTI_THREAD_STATE_WAITING = 0x0080;
             public static final int JVMTI_THREAD_STATE_WAITING_INDEFINITELY = 0x0010;
             public static final int JVMTI_THREAD_STATE_WAITING_WITH_TIMEOUT = 0x0020;
+            public static final int JVMTI_THREAD_STATE_SLEEPING = 0x0040;
+            public static final int JVMTI_THREAD_STATE_IN_OBJECT_WAIT = 0x0100;
+            public static final int JVMTI_THREAD_STATE_PARKED = 0x0200;
+            public static final int JVMTI_THREAD_STATE_SUSPENDED = 0x100000;
+            public static final int JVMTI_THREAD_STATE_INTERRUPTED = 0x200000;
+            public static final int JVMTI_THREAD_STATE_IN_NATIVE = 0x400000;
 
             public static final int JVMTI_JAVA_LANG_THREAD_STATE_MASK = JVMTI_THREAD_STATE_TERMINATED |
                             JVMTI_THREAD_STATE_ALIVE |
@@ -1826,7 +1831,7 @@ final class JDWP {
                 JDWPContext context = controller.getContext();
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context, false);
+                Object thread = verifyThread(threadId, reply, context);
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -1873,7 +1878,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context, false);
+                Object thread = verifyThread(threadId, reply, context);
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -1893,7 +1898,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, controller.getContext(), true);
+                Object thread = verifyThread(threadId, reply, controller.getContext());
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -1952,7 +1957,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, controller.getContext(), true);
+                Object thread = verifyThread(threadId, reply, controller.getContext());
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -1979,43 +1984,23 @@ final class JDWP {
         static class OWNED_MONITORS {
             public static final int ID = 8;
 
-            static CommandResult createReply(Packet packet, DebuggerController controller) {
+            static CommandResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                JDWPContext context = controller.getContext();
 
-                Object thread = verifyThread(input.readLong(), reply, context, true);
+                Object thread = verifyThread(input.readLong(), reply, context);
 
                 if (thread == null) {
                     reply.errorCode(ErrorCodes.INVALID_THREAD);
                     return new CommandResult(reply);
                 }
 
-                SuspendedInfo info = controller.getSuspendedInfo(thread);
-
-                if (info == null) {
-                    reply.errorCode(ErrorCodes.THREAD_NOT_SUSPENDED);
-                    return new CommandResult(reply);
-                }
-
-                if (info instanceof UnknownSuspendedInfo) {
-                    info = awaitSuspendedInfo(controller, thread, info);
-                    if (info instanceof UnknownSuspendedInfo) {
-                        // still no known suspension state
-                        reply.errorCode(ErrorCodes.THREAD_NOT_SUSPENDED);
-                        return new CommandResult(reply);
-                    }
-                }
-
-                CallFrame[] callFrames = info.getStackFrames();
-
-                MonitorStackInfo[] ownedMonitors = context.getOwnedMonitors(callFrames);
+                Object[] ownedMonitors = context.getOwnedMonitors(thread);
                 reply.writeInt(ownedMonitors.length);
 
-                for (MonitorStackInfo monitorStackInfo : ownedMonitors) {
-                    Object monitor = monitorStackInfo.getMonitor();
-                    reply.writeByte(context.getTag(monitor));
-                    reply.writeLong(context.getIds().getIdAsLong(monitor));
+                for (Object ownedMonitor : ownedMonitors) {
+                    reply.writeByte(context.getTag(ownedMonitor));
+                    reply.writeLong(context.getIds().getIdAsLong(ownedMonitor));
                 }
                 return new CommandResult(reply);
             }
@@ -2028,7 +2013,7 @@ final class JDWP {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                Object thread = verifyThread(input.readLong(), reply, context, true);
+                Object thread = verifyThread(input.readLong(), reply, context);
 
                 if (thread == null) {
                     reply.errorCode(ErrorCodes.INVALID_THREAD);
@@ -2055,7 +2040,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context, false);
+                Object thread = verifyThread(threadId, reply, context);
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -2078,7 +2063,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context, false);
+                Object thread = verifyThread(threadId, reply, context);
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -2098,7 +2083,7 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, controller.getContext(), false);
+                Object thread = verifyThread(threadId, reply, controller.getContext());
 
                 if (thread == null) {
                     return new CommandResult(reply);
@@ -2115,35 +2100,16 @@ final class JDWP {
         static class OWNED_MONITORS_STACK_DEPTH_INFO {
             public static final int ID = 13;
 
-            static CommandResult createReply(Packet packet, DebuggerController controller) {
+            static CommandResult createReply(Packet packet) {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                JDWPContext context = controller.getContext();
 
-                PacketStream input = new PacketStream(packet);
-                Object thread = verifyThread(input.readLong(), reply, context, true);
-
-                if (thread == null) {
+                if (!CAN_GET_MONITOR_FRAME_INFO) {
+                    // tracked by: /browse/GR-20413
+                    reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
                     return new CommandResult(reply);
+                } else {
+                    throw new RuntimeException("Not implemented!");
                 }
-
-                SuspendedInfo suspendedInfo = controller.getSuspendedInfo(thread);
-
-                if (suspendedInfo instanceof UnknownSuspendedInfo) {
-                    suspendedInfo = awaitSuspendedInfo(controller, thread, suspendedInfo);
-                    if (suspendedInfo instanceof UnknownSuspendedInfo) {
-                        reply.errorCode(ErrorCodes.THREAD_NOT_SUSPENDED);
-                        return new CommandResult(reply);
-                    }
-                }
-
-                MonitorStackInfo[] ownedMonitorInfos = context.getOwnedMonitors(suspendedInfo.getStackFrames());
-                reply.writeInt(ownedMonitorInfos.length);
-                for (MonitorStackInfo ownedMonitorInfo : ownedMonitorInfos) {
-                    reply.writeByte(context.getTag(ownedMonitorInfo.getMonitor()));
-                    reply.writeLong(context.getIds().getIdAsLong(ownedMonitorInfo.getMonitor()));
-                    reply.writeInt(ownedMonitorInfo.getStackDepth());
-                }
-                return new CommandResult(reply);
             }
         }
 
@@ -2155,39 +2121,19 @@ final class JDWP {
 
                 PacketStream input = new PacketStream(packet);
 
-                Object thread = verifyThread(input.readLong(), reply, controller.getContext(), true);
+                Object thread = verifyThread(input.readLong(), reply, controller.getContext());
 
                 if (thread == null) {
                     reply.errorCode(ErrorCodes.INVALID_THREAD);
                     return new CommandResult(reply);
                 }
 
-                SuspendedInfo info = controller.getSuspendedInfo(thread);
-
-                if (info == null) {
-                    reply.errorCode(ErrorCodes.THREAD_NOT_SUSPENDED);
-                    return new CommandResult(reply);
-                }
-
-                if (info instanceof UnknownSuspendedInfo) {
-                    info = awaitSuspendedInfo(controller, thread, info);
-                    if (info instanceof UnknownSuspendedInfo) {
-                        // still no known suspension state
-                        reply.errorCode(ErrorCodes.THREAD_NOT_SUSPENDED);
-                        return new CommandResult(reply);
-                    }
-                }
-
-                final SuspendedInfo suspendedInfo = info;
-
                 Object returnValue = readValue(input, controller.getContext());
 
                 ThreadJob<Boolean> job = new ThreadJob<>(thread, new Callable<Boolean>() {
                     @Override
                     public Boolean call() {
-                        // make sure to release all monitors held on the current frame
-                        CallFrame topFrame = suspendedInfo.getStackFrames().length > 0 ? suspendedInfo.getStackFrames()[0] : null;
-                        return controller.getContext().forceEarlyReturn(returnValue, topFrame);
+                        return controller.getContext().forceEarlyReturn(returnValue);
                     }
                 });
                 controller.postJobForThread(job);
@@ -2485,7 +2431,7 @@ final class JDWP {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                if (verifyThread(input.readLong(), reply, context, true) == null) {
+                if (verifyThread(input.readLong(), reply, context) == null) {
                     return new CommandResult(reply);
                 }
 
@@ -2540,7 +2486,7 @@ final class JDWP {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                if (verifyThread(input.readLong(), reply, context, true) == null) {
+                if (verifyThread(input.readLong(), reply, context) == null) {
                     return new CommandResult(reply);
                 }
 
@@ -2580,7 +2526,7 @@ final class JDWP {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                if (verifyThread(input.readLong(), reply, context, true) == null) {
+                if (verifyThread(input.readLong(), reply, context) == null) {
                     return new CommandResult(reply);
                 }
                 long frameId = input.readLong();
@@ -2868,10 +2814,15 @@ final class JDWP {
         return method;
     }
 
-    private static Object verifyThread(long threadId, PacketStream reply, JDWPContext context, boolean checkTerminated) {
+    private static Object verifyThread(long threadId, PacketStream reply, JDWPContext context) {
         Object thread = context.getIds().fromId((int) threadId);
 
-        if (thread == context.getNullObject() || !context.isValidThread(thread, checkTerminated)) {
+        if (thread == context.getNullObject()) {
+            reply.errorCode(ErrorCodes.INVALID_OBJECT);
+            return null;
+        }
+
+        if (!context.isValidThread(thread)) {
             reply.errorCode(ErrorCodes.INVALID_THREAD);
             return null;
         }

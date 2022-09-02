@@ -277,7 +277,6 @@ import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
@@ -348,7 +347,6 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
     private final BranchProfile unbalancedMonitorProfile = BranchProfile.create();
 
-    // Only accessed if instrumentation is not null
     private final ThreadLocal<Object> earlyReturns = new ThreadLocal<>();
 
     @TruffleBoundary
@@ -607,8 +605,9 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                     statementIndex = nextStatementIndex;
 
                     // check for early returns
-                    Object earlyReturnValue = getAndRemoveEarlyReturnValue();
+                    Object earlyReturnValue = earlyReturns.get();
                     if (earlyReturnValue != null) {
+                        earlyReturns.remove();
                         return notifyReturn(frame, statementIndex, exitMethodEarlyAndReturn(earlyReturnValue));
                     }
                 }
@@ -1201,18 +1200,8 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         return (MonitorStack) frameResult;
     }
 
-    @TruffleBoundary
     public void forceEarlyReturn(Object returnValue) {
         earlyReturns.set(returnValue);
-    }
-
-    @TruffleBoundary
-    private Object getAndRemoveEarlyReturnValue() {
-        Object earlyReturnValue = earlyReturns.get();
-        if (earlyReturnValue != null) {
-            earlyReturns.remove();
-        }
-        return earlyReturnValue;
     }
 
     private static final class MonitorStack {
@@ -1869,7 +1858,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         for (int i = 0; i < allocatedDimensions; ++i) {
             dimensions[i] = peekInt(frame, top - allocatedDimensions + i);
         }
-        putObject(frame, top - allocatedDimensions, getInterpreterToVM().newMultiArray(((ArrayKlass) klass).getComponentType(), dimensions));
+        putObject(frame, top - allocatedDimensions, getInterpreterToVM().newMultiArray(klass.getComponentType(), dimensions));
         return -allocatedDimensions; // Does not include the created (pushed) array.
     }
 
