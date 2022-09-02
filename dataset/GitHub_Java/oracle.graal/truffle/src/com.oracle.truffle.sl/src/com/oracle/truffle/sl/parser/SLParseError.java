@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,19 +41,24 @@
 
 package com.oracle.truffle.sl.parser;
 
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.interop.ExceptionType;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
-public class SLParseError extends RuntimeException implements TruffleException {
+@ExportLibrary(InteropLibrary.class)
+public class SLParseError extends AbstractTruffleException {
 
     public static final long serialVersionUID = 1L;
     private final Source source;
     private final int line;
     private final int column;
     private final int length;
-    private volatile Node node;
 
     public SLParseError(Source source, int line, int column, int length, String message) {
         super(message);
@@ -63,22 +68,28 @@ public class SLParseError extends RuntimeException implements TruffleException {
         this.length = length;
     }
 
-    @Override
-    public Node getLocation() {
-        Node n = node;
-        if (n == null) {
-            n = node = new Node() {
-                @Override
-                public SourceSection getSourceSection() {
-                    return source.createSection(line, column, length);
-                }
-            };
-        }
-        return n;
+    /**
+     * Note that any subclass of {@link AbstractTruffleException} must always return
+     * <code>true</code> for {@link InteropLibrary#isException(Object)}. That is why it is correct
+     * to export {@link #getExceptionType()} without implementing
+     * {@link InteropLibrary#isException(Object)}.
+     */
+    @ExportMessage
+    ExceptionType getExceptionType() {
+        return ExceptionType.PARSE_ERROR;
     }
 
-    @Override
-    public boolean isSyntaxError() {
-        return true;
+    @ExportMessage
+    boolean hasSourceLocation() {
+        return source != null;
+    }
+
+    @ExportMessage(name = "getSourceLocation")
+    @TruffleBoundary
+    SourceSection getSourceSection() throws UnsupportedMessageException {
+        if (source == null) {
+            throw UnsupportedMessageException.create();
+        }
+        return source.createSection(line, column, length);
     }
 }
