@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,35 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.core.common.spi;
+package com.oracle.svm.core.c.libc;
 
-import jdk.vm.ci.code.CodeCacheProvider;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
 
-/**
- * A set of providers which are required for LIR and/or code generation. Some may not be present
- * (i.e., null).
- */
-public interface CodeGenProviders {
+public class BionicLibc implements LibCBase {
 
-    MetaAccessProvider getMetaAccess();
+    @Override
+    public String getJDKStaticLibsPath() {
+        return LibCBase.PATH_DEFAULT;
+    }
 
-    CodeCacheProvider getCodeCache();
+    @Override
+    public void prepare(Path directory) {
+    }
 
-    ForeignCallsProvider getForeignCalls();
+    @Override
+    public List<String> getAdditionalQueryCodeCompilerOptions() {
+        return Collections.emptyList();
+    }
 
-    ConstantReflectionProvider getConstantReflection();
+    @Override
+    public List<String> getCCompilerOptions() {
+        return Collections.emptyList();
+    }
 
-    MetaAccessExtensionProvider getMetaAccessExtensionProvider();
+    @Override
+    public boolean hasIsolatedNamespaces() {
+        return false;
+    }
 }

@@ -40,7 +40,6 @@ import org.graalvm.compiler.hotspot.meta.AddressLoweringHotSpotSuitesProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotConstantFieldProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotGraphBuilderPlugins;
-import org.graalvm.compiler.hotspot.meta.HotSpotHostForeignCallsProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotLoweringProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotMetaAccessExtensionProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotPlatformConfigurationProvider;
@@ -58,6 +57,7 @@ import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.common.AddressLoweringPhase;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
+import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.sparc.SPARCGraphBuilderPlugins;
 import org.graalvm.compiler.serviceprovider.ServiceProvider;
 
@@ -101,12 +101,12 @@ public class SPARCHotSpotBackendFactory extends HotSpotBackendFactory {
         HotSpotConstantFieldProvider constantFieldProvider = createConstantFieldProvider(config, metaAccess);
         Value[] nativeABICallerSaveRegisters = createNativeABICallerSaveRegisters(config, codeCache.getRegisterConfig());
         HotSpotWordTypes wordTypes = createWordTypes(metaAccess, target);
-        HotSpotHostForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(jvmciRuntime, runtime, metaAccess, codeCache, wordTypes, nativeABICallerSaveRegisters);
+        HotSpotForeignCallsProvider foreignCalls = new SPARCHotSpotForeignCallsProvider(jvmciRuntime, runtime, metaAccess, codeCache, wordTypes, nativeABICallerSaveRegisters);
         HotSpotStampProvider stampProvider = createStampProvider();
         HotSpotPlatformConfigurationProvider platformConfigurationProvider = createConfigInfoProvider(config, metaAccess);
         HotSpotMetaAccessExtensionProvider metaAccessExtensionProvider = createMetaAccessExtensionProvider();
         LoweringProvider lowerer = createLowerer(runtime, metaAccess, foreignCalls, registers, constantReflection, platformConfigurationProvider, metaAccessExtensionProvider, target);
-        HotSpotProviders p = new HotSpotProviders(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, null, stampProvider, platformConfigurationProvider,
+        Providers p = new Providers(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, null, stampProvider, platformConfigurationProvider,
                         metaAccessExtensionProvider);
         HotSpotSnippetReflectionProvider snippetReflection = createSnippetReflection(runtime, constantReflection, wordTypes);
         BytecodeProvider bytecodeProvider = createBytecodeProvider(metaAccess, snippetReflection);
@@ -116,7 +116,7 @@ public class SPARCHotSpotBackendFactory extends HotSpotBackendFactory {
         replacements.setGraphBuilderPlugins(plugins);
         HotSpotSuitesProvider suites = createSuites(config, runtime, compilerConfiguration, plugins, replacements);
         HotSpotProviders providers = new HotSpotProviders(metaAccess, codeCache, constantReflection, constantFieldProvider, foreignCalls, lowerer, replacements, suites, registers,
-                        snippetReflection, wordTypes, plugins, platformConfigurationProvider, metaAccessExtensionProvider, config);
+                        snippetReflection, wordTypes, plugins, platformConfigurationProvider, metaAccessExtensionProvider);
         replacements.setProviders(providers);
         replacements.maybeInitializeEncoder(options);
 
@@ -128,7 +128,7 @@ public class SPARCHotSpotBackendFactory extends HotSpotBackendFactory {
                     GraalHotSpotVMConfig config,
                     HotSpotMetaAccessProvider metaAccess,
                     HotSpotConstantReflectionProvider constantReflection,
-                    HotSpotHostForeignCallsProvider foreignCalls,
+                    HotSpotForeignCallsProvider foreignCalls,
                     HotSpotSnippetReflectionProvider snippetReflection,
                     HotSpotReplacementsImpl replacements,
                     HotSpotWordTypes wordTypes,
