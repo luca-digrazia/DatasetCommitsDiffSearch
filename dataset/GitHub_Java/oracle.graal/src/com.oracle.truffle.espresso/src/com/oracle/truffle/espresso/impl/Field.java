@@ -138,7 +138,7 @@ public final class Field implements ModifiersProvider {
         return typeKlassCache;
     }
 
-    public Attribute getAttribute(Symbol<Name> attrName) {
+    Attribute getAttribute(Symbol<Name> attrName) {
         return linkedField.getAttribute(attrName);
     }
 }
