@@ -28,10 +28,6 @@ import java.util.function.Supplier;
 
 import org.graalvm.polyglot.PolyglotException;
 
-/**
- * The espresso guest main thread. Implements two functional interfaces to avoid reflection in
- * Espresso's code.
- */
 public final class CallbackThreadWithClosingPayload extends Thread implements
                 Consumer<Supplier<Thread>>,
                 Supplier<Runnable> {
@@ -67,8 +63,8 @@ public final class CallbackThreadWithClosingPayload extends Thread implements
 
     @Override
     public final void run() {
+        // Initialize Context and run main().
         try {
-            // Initialize Context and run main().
             super.run();
         } catch (PolyglotException e) {
             if (!e.isExit()) {
