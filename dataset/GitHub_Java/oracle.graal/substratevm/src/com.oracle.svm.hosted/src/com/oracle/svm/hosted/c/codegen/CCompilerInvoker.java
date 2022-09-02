@@ -57,7 +57,6 @@ import com.oracle.svm.hosted.c.util.FileUtils;
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.sparc.SPARC;
 
 public abstract class CCompilerInvoker {
 
@@ -66,12 +65,8 @@ public abstract class CCompilerInvoker {
 
     protected CCompilerInvoker(Path tempDirectory) {
         this.tempDirectory = tempDirectory;
-        try {
-            this.compilerInfo = getCCompilerInfo();
-        } catch (UserError.UserException err) {
-            throw addSkipCheckingInfo(err);
-        }
-        if (this.compilerInfo == null) {
+        this.compilerInfo = getCCompilerInfo();
+        if (compilerInfo == null) {
             UserError.abort(String.format("Unable to detect supported %s native software development toolchain.", OS.getCurrent().name()));
         }
     }
@@ -88,23 +83,6 @@ public abstract class CCompilerInvoker {
             default:
                 throw UserError.abort("No CCompilerInvoker for operating system " + hostOS.name());
         }
-    }
-
-    public void verifyCompiler() {
-        if (!SubstrateOptions.SkipToolchainCheck.getValue()) {
-            try {
-                verify();
-            } catch (UserError.UserException err) {
-                throw addSkipCheckingInfo(err);
-            }
-        }
-    }
-
-    private static UserError.UserException addSkipCheckingInfo(UserError.UserException err) {
-        List<String> messages = new ArrayList<>();
-        err.getMessages().forEach(messages::add);
-        messages.add("To prevent native-toolchain checking provide command-line option " + SubstrateOptionsParser.commandArgument(SubstrateOptions.SkipToolchainCheck, "+"));
-        return UserError.abort(messages);
     }
 
     private static class WindowsCCompilerInvoker extends CCompilerInvoker {
@@ -176,7 +154,7 @@ public abstract class CCompilerInvoker {
         }
 
         @Override
-        protected void verify() {
+        public void verifyCompiler() {
             if (JavaVersionUtil.JAVA_SPEC >= 11) {
                 if (compilerInfo.versionMajor < 19) {
                     UserError.abort("Java " + JavaVersionUtil.JAVA_SPEC +
@@ -225,10 +203,15 @@ public abstract class CCompilerInvoker {
         }
 
         @Override
-        protected void verify() {
+        public void verifyCompiler() {
             Class<? extends Architecture> substrateTargetArch = ImageSingletons.lookup(SubstrateTargetDescription.class).arch.getClass();
-            if (guessArchitecture(compilerInfo.targetArch) != substrateTargetArch) {
-                UserError.abort(String.format("Native toolchain (%s) and native-image target architecture (%s) mismatch.", compilerInfo.targetArch, substrateTargetArch));
+            Class<? extends Architecture> guessed = guessArchitecture(compilerInfo.targetArch);
+            if (guessed == null) {
+                UserError.abort(String.format("Native toolchain (%s) has no matching native-image target architecture.", compilerInfo.targetArch));
+            }
+            if (guessed != substrateTargetArch) {
+                UserError.abort(String.format("Native toolchain (%s) implies native-image target architecture %s but configured native-image target architecture is %s.",
+                                compilerInfo.targetArch, guessed, substrateTargetArch));
             }
         }
 
@@ -267,7 +250,7 @@ public abstract class CCompilerInvoker {
         }
 
         @Override
-        protected void verify() {
+        public void verifyCompiler() {
             if (guessArchitecture(compilerInfo.targetArch) != AMD64.class) {
                 UserError.abort(String.format("Native-image building on Darwin currently only supports target architecture: %s (%s unsupported)",
                                 AMD64.class.getSimpleName(), compilerInfo.targetArch));
@@ -316,13 +299,10 @@ public abstract class CCompilerInvoker {
         }
     }
 
-    protected abstract void verify();
+    public abstract void verifyCompiler();
 
-    private CompilerInfo getCCompilerInfo() {
+    public CompilerInfo getCCompilerInfo() {
         Path compilerPath = getCCompilerPath().toAbsolutePath();
-        if (SubstrateOptions.SkipToolchainCheck.getValue()) {
-            return new CompilerInfo(compilerPath, null, getClass().getSimpleName(), null, 0, 0, 0, null);
-        }
         List<String> compilerCommand = createCompilerCommand(compilerPath, getVersionInfoOptions(), null);
         ProcessBuilder pb = new ProcessBuilder()
                         .command(compilerCommand)
@@ -368,6 +348,7 @@ public abstract class CCompilerInvoker {
         return new String[]{arch, vendor, os};
     }
 
+    @SuppressWarnings({"unchecked", "fallthrough"})
     protected static Class<? extends Architecture> guessArchitecture(String archStr) {
         switch (archStr) {
             case "x86_64":
@@ -375,8 +356,6 @@ public abstract class CCompilerInvoker {
                 return AMD64.class;
             case "aarch64":
                 return AArch64.class;
-            case "sparc64":
-                return SPARC.class;
             case "i686":
             case "80x86": /* Windows notation */
                 /* Graal does not support 32-bit architectures */
