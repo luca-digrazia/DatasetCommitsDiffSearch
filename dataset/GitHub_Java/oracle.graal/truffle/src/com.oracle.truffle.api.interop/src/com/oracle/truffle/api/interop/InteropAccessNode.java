@@ -44,6 +44,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -171,21 +172,23 @@ abstract class InteropAccessNode extends Node {
         return true;
     }
 
-    protected final CallTarget createMessageTarget(ForeignAccess fa) {
+    protected CallTarget createMessageTarget(ForeignAccess fa) {
         CallTarget ct = null;
         if (fa != null) {
             ct = fa.access(message);
         }
         if (ct == null) {
-            return Truffle.getRuntime().createCallTarget(new RootNode(null) {
-                @Override
-                public Object execute(VirtualFrame frame) {
-                    throw UnsupportedMessageException.raise(message);
-                }
-            });
+            return targetThatThrows;
         }
         return ct;
     }
+
+    private final RootCallTarget targetThatThrows = Truffle.getRuntime().createCallTarget(new RootNode(null) {
+        @Override
+        public Object execute(VirtualFrame frame) {
+            throw UnsupportedMessageException.raise(message);
+        }
+    });
 
     protected static boolean acceptCached(TruffleObject receiver, ForeignAccess foreignAccess, DirectCallNode canHandleCall) {
         if (canHandleCall != null) {

@@ -68,9 +68,9 @@ import com.oracle.truffle.api.nodes.RootNode;
 final class DefaultScope {
 
     static Iterable<Scope> topScope(Object global) {
-        Object globalObject;
+        TruffleObject globalObject;
         if (global != null && InteropLibrary.getFactory().getUncached().hasMembers(global)) {
-            globalObject = global;
+            globalObject = (TruffleObject) global;
         } else {
             globalObject = new EmptyGlobalBindings();
         }

@@ -382,18 +382,12 @@ final class HostObject implements TruffleObject {
         @SuppressWarnings("unchecked")
         static void doArray(HostObject receiver, long index, Object value,
                         @Shared("toHost") @Cached ToHostNode toHostNode,
-                        @Cached ArraySet arraySet) throws InvalidArrayIndexException, UnsupportedTypeException {
+                        @Cached ArraySet arraySet) throws InvalidArrayIndexException {
             if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             Object obj = receiver.obj;
-            Object javaValue;
-            try {
-                javaValue = toHostNode.execute(value, obj.getClass().getComponentType(), null, receiver.languageContext);
-            } catch (ClassCastException | NullPointerException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
+            final Object javaValue = toHostNode.execute(value, obj.getClass().getComponentType(), null, receiver.languageContext);
             try {
                 arraySet.execute(obj, (int) index, javaValue);
             } catch (ArrayIndexOutOfBoundsException e) {
@@ -404,17 +398,11 @@ final class HostObject implements TruffleObject {
         @Specialization(guards = {"receiver.isList()"})
         @SuppressWarnings("unchecked")
         static void doList(HostObject receiver, long index, Object value,
-                        @Shared("toHost") @Cached ToHostNode toHostNode) throws InvalidArrayIndexException, UnsupportedTypeException {
+                        @Shared("toHost") @Cached ToHostNode toHostNode) throws InvalidArrayIndexException {
             if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
-            Object javaValue;
-            try {
-                javaValue = toHostNode.execute(value, Object.class, null, receiver.languageContext);
-            } catch (ClassCastException | NullPointerException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
+            final Object javaValue = toHostNode.execute(value, Object.class, null, receiver.languageContext);
             try {
                 List<Object> list = ((List<Object>) receiver.obj);
                 setList(list, index, javaValue);
@@ -1114,14 +1102,8 @@ final class HostObject implements TruffleObject {
         static void doCached(HostFieldDesc field, HostObject object, Object rawValue,
                         @Cached("field") HostFieldDesc cachedField,
                         @Cached ToHostNode toHost) throws UnsupportedTypeException, UnknownIdentifierException {
-            Object value;
-            try {
-                value = toHost.execute(rawValue, cachedField.getType(), cachedField.getGenericType(), object.languageContext);
-            } catch (ClassCastException | NullPointerException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedTypeException.create(new Object[]{rawValue}, e.getMessage());
-            }
-            cachedField.set(object.obj, value);
+            Object val = toHost.execute(rawValue, cachedField.getType(), cachedField.getGenericType(), object.languageContext);
+            cachedField.set(object.obj, val);
         }
 
         @Specialization(replaces = "doCached")

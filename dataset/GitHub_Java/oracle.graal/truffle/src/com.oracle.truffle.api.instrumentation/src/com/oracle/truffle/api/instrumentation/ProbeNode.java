@@ -57,6 +57,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.InstrumentationHandler.AccessorInstrumentHandler;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.EngineInstrumenter;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.InstrumentClientInstrumenter;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -180,7 +181,7 @@ public final class ProbeNode extends Node {
         if (result == null) {
             return true;
         }
-        InstrumentAccessor.interopAccess().checkInteropType(result);
+        AccessorInstrumentHandler.interopAccess().checkInteropType(result);
         return true;
     }
 
@@ -636,15 +637,16 @@ public final class ProbeNode extends Node {
             // Terminates guest language execution immediately
             throw (ThreadDeath) t;
         }
-        final Object currentVm = InstrumentAccessor.engineAccess().getCurrentVM();
-        if (b.getInstrumenter() instanceof EngineInstrumenter || (currentVm != null && InstrumentAccessor.engineAccess().isInstrumentExceptionsAreThrown(currentVm))) {
+        final Object currentVm = AccessorInstrumentHandler.engineAccess().getCurrentVM();
+        if (b.getInstrumenter() instanceof EngineInstrumenter || (currentVm != null && AccessorInstrumentHandler.engineAccess().isInstrumentExceptionsAreThrown(currentVm))) {
             throw sthrow(RuntimeException.class, t);
         }
         // Exception is a failure in (non-language) instrumentation code; log and continue
         InstrumentClientInstrumenter instrumenter = (InstrumentClientInstrumenter) b.getInstrumenter();
+        Class<?> instrumentClass = instrumenter.getInstrumentClass();
 
         String message = String.format("Event %s failed for instrument class %s and listener/factory %s.", //
-                        eventName, instrumenter.getInstrumentClassName(), b.getElement());
+                        eventName, instrumentClass.getName(), b.getElement());
 
         Exception exception = new Exception(message, t);
         PrintStream stream = new PrintStream(instrumenter.getEnv().err());
@@ -658,7 +660,7 @@ public final class ProbeNode extends Node {
     }
 
     private static boolean checkInteropType(Object value, EventBinding.Source<?> binding) {
-        if (value != null && value != UNWIND_ACTION_REENTER && value != UNWIND_ACTION_IGNORED && !InstrumentAccessor.ACCESSOR.isTruffleObject(value)) {
+        if (value != null && value != UNWIND_ACTION_REENTER && value != UNWIND_ACTION_IGNORED && !InstrumentationHandler.ACCESSOR.isTruffleObject(value)) {
             Class<?> clazz = value.getClass();
             if (!(clazz == Byte.class ||
                             clazz == Short.class ||
@@ -1044,8 +1046,7 @@ public final class ProbeNode extends Node {
                     setSeenUnwind();
                 }
                 unwind = (UnwindException) exception;
-                assert unwind.getBinding() != null : String.format("UnwindException[binding: %s, thrownFromBindingCalled: %b, hasPreferredBindingSet: %b]",
-                                unwind.getBinding(), unwind.isThrownFromBinding(), unwind.hasPreferredBinding());
+                assert unwind.getBinding() != null;
             }
             if (next != null) {
                 try {

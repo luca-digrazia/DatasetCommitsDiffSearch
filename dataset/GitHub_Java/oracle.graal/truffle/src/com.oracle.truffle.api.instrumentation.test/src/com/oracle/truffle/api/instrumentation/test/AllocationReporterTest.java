@@ -638,7 +638,7 @@ public class AllocationReporterTest {
             });
         }
 
-        private static AllocNode parse(String code) {
+        private AllocNode parse(String code) {
             String[] allocations = code.split("\\s");
             LinkedList<FutureNode> futures = new LinkedList<>();
             FutureNode parent = new FutureNode(null, null);
@@ -652,11 +652,11 @@ public class AllocationReporterTest {
                     continue;
                 }
                 if (last != null) {
-                    parent.addChild(last.toNode());
+                    parent.addChild(last.toNode(getContextReference()));
                     last = null;
                 }
                 if ("}".equals(allocCommand)) {
-                    AllocNode node = parent.toNode();
+                    AllocNode node = parent.toNode(getContextReference());
                     futures.removeLast(); // the "parent" removed
                     parent = futures.getLast();
                     parent.addChild(node);
@@ -673,9 +673,9 @@ public class AllocationReporterTest {
                 }
             }
             if (last != null) {
-                parent.addChild(last.toNode());
+                parent.addChild(last.toNode(getContextReference()));
             }
-            return futures.removeLast().toNode();
+            return futures.removeLast().toNode(getContextReference());
         }
 
         private static AllocValue parseValue(String allocCommand) {
@@ -740,12 +740,11 @@ public class AllocationReporterTest {
                 children.add(node);
             }
 
-            AllocNode toNode() {
-                AllocationReporter reporter = getCurrentContext().getEnv().lookup(AllocationReporter.class);
+            AllocNode toNode(ContextReference<LanguageContext> contextRef) {
                 if (children == null) {
-                    return new AllocNode(oldValue, newValue, reporter);
+                    return new AllocNode(oldValue, newValue, contextRef);
                 } else {
-                    return new AllocNode(oldValue, newValue, reporter, children.toArray(new AllocNode[children.size()]));
+                    return new AllocNode(oldValue, newValue, contextRef, children.toArray(new AllocNode[children.size()]));
                 }
             }
         }
@@ -757,15 +756,15 @@ public class AllocationReporterTest {
             @Children private final AllocNode[] children;
             private final AllocationReporter reporter;
 
-            AllocNode(AllocValue oldValue, AllocValue newValue, AllocationReporter reporter) {
-                this(oldValue, newValue, reporter, null);
+            AllocNode(AllocValue oldValue, AllocValue newValue, ContextReference<LanguageContext> contextRef) {
+                this(oldValue, newValue, contextRef, null);
             }
 
-            AllocNode(AllocValue oldValue, AllocValue newValue, AllocationReporter reporter, AllocNode[] children) {
+            AllocNode(AllocValue oldValue, AllocValue newValue, ContextReference<LanguageContext> contextRef, AllocNode[] children) {
                 this.oldValue = oldValue;
                 this.newValue = newValue;
                 this.children = children;
-                this.reporter = reporter;
+                this.reporter = contextRef.get().getEnv().lookup(AllocationReporter.class);
             }
 
             public Object execute(VirtualFrame frame) {

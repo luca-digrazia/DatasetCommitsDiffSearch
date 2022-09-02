@@ -63,6 +63,7 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.polyglot.PolyglotLanguageContext.ToGuestValueNode;
 import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.ContainsKeyNodeGen;
 import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.EntrySetNodeGen;
@@ -434,6 +435,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements HostWrapper {
             static final int LIMIT = 5;
 
             final Cache cache;
+            private final ConditionProfile condition = ConditionProfile.createBinaryProfile();
 
             PolyglotMapNode(Cache cache) {
                 this.cache = cache;
@@ -455,7 +457,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements HostWrapper {
             }
 
             protected final boolean isArrayKey(Object key) {
-                return cache.numberKey && cache.keyClass.isInstance(key) && key instanceof Number;
+                return condition.profile(cache.keyClass.isInstance(key) && key instanceof Number);
             }
 
             protected abstract String getOperationName();
@@ -748,7 +750,8 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements HostWrapper {
             }
 
             @Override
-            protected Object executeImpl(PolyglotLanguageContext languageContext, Object receiver, Object[] args) {
+            protected Object executeImpl(PolyglotLanguageContext languageContext, Object originalReceiver, Object[] args) {
+                TruffleObject receiver = (TruffleObject) originalReceiver;
                 return apply.execute(languageContext, receiver, args[ARGUMENT_OFFSET], Object.class, Object.class);
             }
         }

@@ -670,12 +670,7 @@ public class FlatNodeGenFactory {
                 builder.startStaticCall(context.getType(Arrays.class), "asList");
                 for (CacheExpression cache : specialization.getCaches()) {
                     builder.startGroup();
-                    if (cache.isAlwaysInitialized() && cache.isCachedLibrary()) {
-                        builder.staticReference(createLibraryConstant(libraryConstants, cache.getParameter().getType()));
-                        builder.startCall(".getUncached").end();
-                    } else {
-                        builder.tree(createCacheReference(frameState, specialization, cache));
-                    }
+                    builder.tree(createCacheReference(frameState, specialization, cache));
                     builder.end();
                 }
                 builder.end();
@@ -685,6 +680,7 @@ public class FlatNodeGenFactory {
                     if (specialization.getMaximumNumberOfInstances() > 1) {
                         builder.startStatement().string(name, " = ", name, ".next_").end();
                     }
+
                     builder.end(); // cache while or if
                 }
 

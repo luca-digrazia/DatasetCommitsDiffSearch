@@ -47,7 +47,6 @@ import java.util.List;
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /**
  * Represents a single static message of a library. Message are specified as public methods in
@@ -257,7 +256,6 @@ public abstract class Message {
      * @param messageName the simple name of this message.
      * @since 1.0
      */
-    @TruffleBoundary
     public static Message resolve(Class<? extends Library> libraryClass, String messageName) {
         return LibraryFactory.resolveMessage(libraryClass, messageName, true);
     }
@@ -274,7 +272,6 @@ public abstract class Message {
      *            <code>null</code> if the message was not found.
      * @since 1.0
      */
-    @TruffleBoundary
     public static Message resolve(Class<? extends Library> libraryClass, String messageName, boolean fail) {
         return LibraryFactory.resolveMessage(libraryClass, messageName, fail);
     }

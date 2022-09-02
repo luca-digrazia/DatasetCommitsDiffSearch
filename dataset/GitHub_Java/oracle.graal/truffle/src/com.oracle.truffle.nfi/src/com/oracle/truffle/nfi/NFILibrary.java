@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.nfi;
 
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.ArityException;
@@ -57,6 +55,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @ExportLibrary(InteropLibrary.class)
 final class NFILibrary implements TruffleObject {
@@ -93,7 +92,7 @@ final class NFILibrary implements TruffleObject {
     @ExportMessage
     @TruffleBoundary
     Keys getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-        return new Keys(symbols.keySet().toArray());
+        return new Keys(symbols.keySet());
     }
 
     @ExportMessage(limit = "3")
@@ -117,7 +116,7 @@ final class NFILibrary implements TruffleObject {
     @SuppressWarnings("static-method")
     @ExportMessage
     boolean isMemberInvocable(@SuppressWarnings("unused") String symbol) {
-        return true; // avoid expensive truffle boundary
+        return true; // avoid expensive truffleboundary
     }
 
     @ExportMessage
@@ -132,31 +131,13 @@ final class NFILibrary implements TruffleObject {
         return executables.execute(preBound, args);
     }
 
-    @ExportMessage
-    @SuppressWarnings("unused")
-    static boolean hasLanguage(NFILibrary lib) {
-        return true;
-    }
-
-    @ExportMessage
-    @SuppressWarnings("unused")
-    static Class<? extends TruffleLanguage<?>> getLanguage(NFILibrary receiver) {
-        return NFILanguage.class;
-    }
-
-    @ExportMessage
-    @SuppressWarnings("unused")
-    static Object toDisplayString(NFILibrary receiver, boolean allowSideEffects) {
-        return "Native Library";
-    }
-
     @ExportLibrary(InteropLibrary.class)
     static final class Keys implements TruffleObject {
 
-        @CompilationFinal(dimensions = 1) private final Object[] keys;
+        private final Object[] keys;
 
-        Keys(Object... keys) {
-            this.keys = keys;
+        private Keys(Set<String> keySet) {
+            this.keys = keySet.toArray();
         }
 
         @SuppressWarnings("static-method")
@@ -183,21 +164,6 @@ final class NFILibrary implements TruffleObject {
                 throw InvalidArrayIndexException.create(idx);
             }
             return keys[(int) idx];
-        }
-
-        @ExportMessage
-        static boolean hasLanguage(@SuppressWarnings("unused") Keys receiver) {
-            return true;
-        }
-
-        @ExportMessage
-        static Class<? extends TruffleLanguage<?>> getLanguage(@SuppressWarnings("unused") Keys receiver) {
-            return NFILanguage.class;
-        }
-
-        @ExportMessage
-        static Object toDisplayString(@SuppressWarnings("unused") Keys receiver, @SuppressWarnings("unused") boolean allowSideEffects) {
-            return "Native Members";
         }
     }
 }
