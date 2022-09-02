@@ -340,12 +340,7 @@ public final class ReflectionPlugins {
         if (targetMethod.isStatic()) {
             receiverValue = null;
         } else {
-            /*
-             * Calling receiver.get(true) can add a null check guard, i.e., modifying the graph in
-             * the process. It is an error for invocation plugins that do not replace the call to
-             * modify the graph.
-             */
-            receiverValue = unbox(b, receiver.get(false), JavaKind.Object);
+            receiverValue = unbox(b, receiver.get(), JavaKind.Object);
             if (receiverValue == null || receiverValue == NULL_MARKER) {
                 return false;
             }

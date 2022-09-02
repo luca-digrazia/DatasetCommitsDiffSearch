@@ -289,14 +289,14 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
      * Returns true if this method is ever used as the target of a call site.
      */
     public boolean isInvoked() {
-        return isIntrinsicMethod || isRootMethod() || isInvoked;
+        return isIntrinsicMethod || isEntryPoint() || isInvoked;
     }
 
     /**
      * Returns true if the method body can ever be executed.
      */
     public boolean isImplementationInvoked() {
-        return !Modifier.isAbstract(getModifiers()) && (isIntrinsicMethod || isRootMethod() || isImplementationInvoked);
+        return !Modifier.isAbstract(getModifiers()) && (isIntrinsicMethod || isEntryPoint() || isImplementationInvoked);
     }
 
     @Override

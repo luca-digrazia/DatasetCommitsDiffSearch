@@ -380,27 +380,12 @@ public final class SVMHost implements HostVM {
         boolean isRecord = RecordSupport.singleton().isRecord(javaClass);
         boolean assertionStatus = RuntimeAssertionsSupport.singleton().desiredAssertionStatus(javaClass);
 
-        final DynamicHub dynamicHub = new DynamicHub(javaClass, className, computeHubType(type), computeReferenceType(type),
-                        isLocalClass(javaClass), isAnonymousClass(javaClass), superHub, componentHub, sourceFileName,
-                        modifiers, hubClassLoader, isHidden, isRecord, nestHost, assertionStatus);
+        final DynamicHub dynamicHub = new DynamicHub(javaClass, className, computeHubType(type), computeReferenceType(type), type.isLocal(), isAnonymousClass(javaClass), superHub, componentHub,
+                        sourceFileName, modifiers, hubClassLoader, isHidden, isRecord, nestHost, assertionStatus);
         if (JavaVersionUtil.JAVA_SPEC > 8) {
             ModuleAccess.extractAndSetModule(dynamicHub, javaClass);
         }
         return dynamicHub;
-    }
-
-    private static Object isLocalClass(Class<?> javaClass) {
-        try {
-            return javaClass.isLocalClass();
-        } catch (InternalError e) {
-            return e;
-        } catch (LinkageError e) {
-            if (NativeImageOptions.AllowIncompleteClasspath.getValue()) {
-                return e;
-            } else {
-                return unsupportedMethod(javaClass, "isLocalClass");
-            }
-        }
     }
 
     /**
@@ -416,17 +401,13 @@ public final class SVMHost implements HostVM {
             if (NativeImageOptions.AllowIncompleteClasspath.getValue()) {
                 return e;
             } else {
-                return unsupportedMethod(javaClass, "isAnonymousClass");
+                String message = "Discovered a type for which isAnonymousClass can't be called: " + javaClass.getTypeName() +
+                                ". To avoid this issue at build time use the " +
+                                SubstrateOptionsParser.commandArgument(NativeImageOptions.AllowIncompleteClasspath, "+") +
+                                " option. The LinkageError will then be reported at run time when this method is called for the first time.";
+                throw new UnsupportedFeatureException(message);
             }
         }
-    }
-
-    private static Object unsupportedMethod(Class<?> javaClass, String methodName) {
-        String message = "Discovered a type for which " + methodName + " can't be called: " + javaClass.getTypeName() +
-                        ". To avoid this issue at build time use the " +
-                        SubstrateOptionsParser.commandArgument(NativeImageOptions.AllowIncompleteClasspath, "+") +
-                        " option. The LinkageError will then be reported at run time when this method is called for the first time.";
-        throw new UnsupportedFeatureException(message);
     }
 
     public static boolean isUnknownClass(ResolvedJavaType resolvedJavaType) {
