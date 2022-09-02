@@ -1,25 +1,3 @@
-/*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.truffle.espresso.impl;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -76,7 +54,7 @@ class InterfaceTables {
         // Adds all the miranda methods to thisKlass' declared methods
         thisKlass.setMirandas(mirandas);
         if (superKlass == null) {
-            fixMirandas(mirandas, tmpTables, thisKlass);
+            fixMirandas(mirandas, tmpTables);
             return new CreationResult(tmpTables.toArray(new Method[0][]), tmpKlassTable.toArray(Klass.EMPTY_ARRAY));
         }
         // Inherit superklass' interfaces
@@ -91,35 +69,20 @@ class InterfaceTables {
                 tmpTables.add(curItable);
                 tmpKlassTable.add(superKlass.getiKlassTable()[n_itable]);
             } else {
-                mergeTables(tmpTables.get(dupePos), superKlassITable[n_itable], mirandas, tmpTables, thisKlass);
+                mergeTables(tmpTables.get(dupePos), superKlassITable[n_itable], mirandas);
             }
         }
-        fixMirandas(mirandas, tmpTables, thisKlass);
+        fixMirandas(mirandas, tmpTables);
         return new CreationResult(tmpTables.toArray(new Method[0][]), tmpKlassTable.toArray(Klass.EMPTY_ARRAY));
     }
 
-    /**
-     * We are trying to implement the same interface a second time through our superKlass ! Usually,
-     * our already constructed table *should* contain the implementation we actually want. In some
-     * rare case, though, we have to correct our mirandas to use the method in our supeKlass.
-     *
-     * This happens in the very specific case of: - The two methods are implemented in two different
-     * interfaces - The two methods appear as default in our itable and in our superKlass' table -
-     * The superKlass implementation originates from a subInteface of our own implementation.
-     *
-     * In that case, we will need to patch our miranda declaredMethods to use the one from our
-     * superKlass, and fix it in other itables. Note: The tables need to be consistent in order to
-     * correctly merge !
-     */
-    private static void mergeTables(Method[] currentTable, Method[] toMergeIn, ArrayList<Miranda> mirandas, ArrayList<Method[]> tmpTables, ObjectKlass thisKlass) {
+    private static void mergeTables(Method[] currentTable, Method[] toMergeIn, ArrayList<Miranda> mirandas) {
         assert (currentTable.length == toMergeIn.length);
-        fixMirandas(mirandas, tmpTables, thisKlass);
-        for (int i = 0; i < currentTable.length; i++) {
+        for(int i = 0; i < currentTable.length; i++) {
             Method m1 = currentTable[i];
             Method m2 = toMergeIn[i];
             assert (m1.getName() == m2.getName());
             if (checkDefaultConflict(m1, m2)) {
-                // No need to proxy method, same ITable index.
                 Method result = resolveMaximallySpecific(m1, m2);
                 if (result == m2) {
                     currentTable[i] = result;
@@ -129,10 +92,6 @@ class InterfaceTables {
         }
     }
 
-    /**
-     * We found a method that needs patching from merging two itables. Find it in the miranda, and
-     * set it up in order for the call to fixMirandas to do the work.
-     */
     private static void lookupAndSetFixMirandas(Method method, ArrayList<Miranda> mirandas) {
         Symbol<Symbol.Name> methodName = method.getName();
         Symbol<Symbol.Signature> methodSig = method.getRawSignature();
@@ -140,12 +99,12 @@ class InterfaceTables {
             Method m = miranda.method;
             if (m.getName() == methodName && m.getRawSignature() == methodSig) {
                 miranda.method = method;
-                miranda.setToPatch();
                 miranda.setFix(true);
             }
         }
     }
 
+    // TODO(garcia) this.
     private static Method resolveMaximallySpecific(Method m1, Method m2) {
         return (m1.getDeclaringKlass().isAssignableFrom(m2.getDeclaringKlass())) ? m2 : m1;
     }
@@ -166,7 +125,7 @@ class InterfaceTables {
         tmpKlass.add(interfKlass);
         for (ObjectKlass superinterf : superInterfaces) {
             int pos = 0;
-            for (Klass curIKlass : superinterf.getiKlassTable()) {
+            for (Klass curIKlass: superinterf.getiKlassTable()) {
                 int tableDupePos = dupePos(curIKlass, tmpKlass);
                 if (tableDupePos == -1) {
                     tmpTables.add(lookupOverride(superinterf.getItable()[pos], interfKlass, null));
@@ -179,10 +138,6 @@ class InterfaceTables {
         return new CreationResult(tmpTables.toArray(new Method[0][]), tmpKlass.toArray(Klass.EMPTY_ARRAY));
     }
 
-    /**
-     * Checks in the currently building table for potentially duplicate tables for interface
-     * interfKlass, and return the index if the conflict, or -1 if there is no such duplicate..
-     */
     private static int dupePos(Klass interfKlass, ArrayList<Klass> tmpKlass) {
         int pos = 0;
         for (Klass klass : tmpKlass) {
@@ -194,27 +149,16 @@ class InterfaceTables {
         return -1;
     }
 
-    /**
-     * Should be called before copying superInterface. Given one of our interfaces, inherit all its
-     * itables. Merge the dupe ones.
-     */
-    private static void fillSuperInterfaceTables(ObjectKlass superInterface, ObjectKlass thisKlass, ArrayList<Miranda> mirandas, ArrayList<Method[]> tmpTables, ArrayList<Klass> tmpKlassTable) {
+    // Should be called before copying superInterface.
+    private static void fillSuperInterfaceTables(ObjectKlass superInterface, ObjectKlass thisKlass, ArrayList<Miranda> mirandas, ArrayList<Method[]> tmpITable, ArrayList<Klass> tmpKlassTable) {
         Method[][] superTable = superInterface.getItable();
         Klass[] superInterfKlassTable = superInterface.getiKlassTable();
         for (int i = 0; i < superTable.length; i++) {
-            int dupePos = (dupePos(superInterfKlassTable[i], tmpKlassTable));
-            if (dupePos == -1) {
-                tmpTables.add(inherit(superTable[i], thisKlass, mirandas, i));
-                tmpKlassTable.add(superInterfKlassTable[i]);
-            } else {
-                mergeTables(tmpTables.get(dupePos), superTable[i], mirandas, tmpTables, thisKlass);
-            }
+            tmpITable.add(inherit(superTable[i], thisKlass, mirandas, i));
+            tmpKlassTable.add(superInterfKlassTable[i]);
         }
     }
 
-    /**
-     * Sets up a given interface itable.
-     */
     private static Method[] createBaseITable(Method[] declaredMethods) {
         int i = 0;
         for (Method m : declaredMethods) {
@@ -223,10 +167,6 @@ class InterfaceTables {
         return declaredMethods;
     }
 
-    /**
-     * We are given an Itable to construct. If there is no conflict, all is good, and we can even
-     * use the original table. If not, we need to copy it, and update it to fit our Klass.
-     */
     private static Method[] lookupOverride(Method[] curItable, ObjectKlass thisKlass, ArrayList<Miranda> mirandas) {
         for (int i = 0; i < curItable.length; i++) {
             Method im = curItable[i];
@@ -251,10 +191,6 @@ class InterfaceTables {
         return curItable;
     }
 
-    /**
-     * Performs method lookup, but instead of returning the method, return its position. Useful for
-     * patching the declaredMethod.
-     */
     private static int lookupIndexDeclaredMethod(Method method, Method[] declaredMethods) {
         Symbol<Symbol.Name> name = method.getName();
         Symbol<Symbol.Signature> sig = method.getRawSignature();
@@ -267,9 +203,6 @@ class InterfaceTables {
         return -1;
     }
 
-    /**
-     * Perform the first two easy parts of the conflict check as described in @mergeConflict.
-     */
     private static boolean checkDefaultConflict(Method m1, Method m2) {
         return m1.getDeclaringKlass() != m2.getDeclaringKlass() && m1.isDefault() && m2.isDefault();
     }
@@ -312,17 +245,6 @@ class InterfaceTables {
         return res;
     }
 
-    /**
-     * When setting up our own new superInterface. Every non-implemented interface method must be
-     * documented and collected, as it may be called through invokevirtual. We call such method
-     * mirandas. A class may not implement an interface method for either of two reasons: - The
-     * class is abstract - There is a default implementation of this method somewhere in the
-     * interface hierarchy.
-     *
-     * All appearances of mirandas throughout the tables are documented in order to fix them once we
-     * find an implementation during later research. This means that the tables are inconsistent
-     * when building, but are fixed at the end, thanks to our trace of mirandas.
-     */
     private static Method[] inherit(Method[] interfTable, ObjectKlass thisKlass, ArrayList<Miranda> mirandas, int n_itable) {
         Method[] res = Arrays.copyOf(interfTable, interfTable.length);
         for (int i = 0; i < res.length; i++) {
@@ -330,6 +252,7 @@ class InterfaceTables {
             // Lookup does not check inside interfaces' declared method. Exploit this to detect
             // mirandas.
             Method m = thisKlass.lookupMethod(im.getName(), im.getRawSignature());
+//            if (m != null && (m.hasCode() || thisKlass.isAbstract())) {
             if (canSetProxy(m, im, thisKlass)) {
                 Method proxy = new Method(m);
                 proxy.setITableIndex(i);
@@ -348,8 +271,7 @@ class InterfaceTables {
                 if (mirandaMethod == null) {
                     // Yet unseen Miranda method
                     if (im.hasCode()) {
-                        // This was an unseen default method. Will need fixing if another one that
-                        // is more specific appears.
+                        // This was an unseen default method
                         mirandaMethod = new Miranda(new Method(im), n_itable, i, false);
                     } else {
                         // This is a *still* unimplemented method. Further searching could prove us
@@ -358,17 +280,9 @@ class InterfaceTables {
                     }
                     mirandas.add(mirandaMethod);
                 } else {
-                    // We already have seen a default implementation. Check for default conflict.
-                    if (checkDefaultConflict(mirandaMethod.method, im)) {
-                        Method result = resolveMaximallySpecific(mirandaMethod.method, im);
-                        if (result == im) {
-                            mirandaMethod.method = new Method(im);
-                            mirandaMethod.setFix(true);
-                        }
-                    } else {
-                        res[i] = new Method(mirandaMethod.method);
-                        res[i].setITableIndex(i);
-                    }
+                    // We already have seen a default implementation. Use it.
+                    res[i] = new Method(mirandaMethod.method);
+                    res[i].setITableIndex(i);
                 }
             }
         }
@@ -385,10 +299,6 @@ class InterfaceTables {
         return (m.hasCode() || thisKlass.isAbstract());
     }
 
-    /**
-     * lookup miranda table for a potential implementation. If we find one, but is abstract while
-     * the method we use is concrete, we change the method inside the miranda instance.
-     */
     private static Miranda lookupMirandaWithOverride(Method im, ArrayList<Miranda> mirandas, int itable, int index) {
         Symbol<Symbol.Name> methodName = im.getName();
         Symbol<Symbol.Signature> methodSig = im.getRawSignature();
@@ -410,18 +320,16 @@ class InterfaceTables {
         return null;
     }
 
-    // Fix yet unimplemented (or less specific) methods that have found a default(or more specific)
-    // one in a later interface
-    private static void fixMirandas(ArrayList<Miranda> mirandas, ArrayList<Method[]> tmpITTable, ObjectKlass thisKlass) {
+    // Fix yet unimplemented methods that have found a default one in a later interface
+    private static void fixMirandas(ArrayList<Miranda> mirandas, ArrayList<Method[]> tmpITTable) {
         for (Miranda miranda : mirandas) {
             if (miranda.toFix && miranda.method.hasCode()) {
                 for (int i = 0; i < miranda.length(); i++) {
+                    // When called, this is false only for non-default interface methods in
+                    // abstract klasses that does not provide an implementation.
                     Method toPut = new Method(miranda.method);
                     toPut.setITableIndex(miranda.itablesIndex.get(i));
                     tmpITTable.get(miranda.n_itables.get(i))[miranda.itablesIndex.get(i)] = new Method(miranda.method);
-                }
-                if (miranda.toPatch) {
-                    thisKlass.getDeclaredMethods()[miranda.declaredMethodPos] = miranda.method;
                 }
                 miranda.setFix(false);
             }
@@ -433,8 +341,6 @@ class InterfaceTables {
         final ArrayList<Integer> n_itables;
         final ArrayList<Integer> itablesIndex;
         boolean toFix;
-        boolean toPatch = false;
-        int declaredMethodPos = -1;
 
         Miranda(Method method, int n_itable, int itableIndex, boolean toFix) {
             this.method = method;
@@ -456,14 +362,6 @@ class InterfaceTables {
 
         void setFix(boolean toFix) {
             this.toFix = toFix;
-        }
-
-        void setToPatch() {
-            this.toPatch = true;
-        }
-
-        void setDeclaredMethodPos(int pos) {
-            this.declaredMethodPos = pos;
         }
     }
 }
