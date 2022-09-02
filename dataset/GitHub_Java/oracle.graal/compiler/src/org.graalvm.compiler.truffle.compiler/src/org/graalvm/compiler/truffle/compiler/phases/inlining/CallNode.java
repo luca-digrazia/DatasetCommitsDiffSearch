@@ -379,6 +379,10 @@ public final class CallNode extends Node implements Comparable<CallNode> {
         }
     }
 
+    public void updateTracingInfo(TruffleInliningPlan inliningPlan, int i, int i1) {
+
+    }
+
     public int callCount() {
         int sum = 0;
         for (CallNode child : children) {

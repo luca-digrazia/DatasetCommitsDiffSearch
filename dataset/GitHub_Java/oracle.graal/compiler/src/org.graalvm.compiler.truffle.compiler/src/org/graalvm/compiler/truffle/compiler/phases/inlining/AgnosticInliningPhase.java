@@ -35,7 +35,6 @@ import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
-import org.graalvm.options.OptionValues;
 
 public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
 
@@ -82,17 +81,10 @@ public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
             policy.run(tree);
             tree.dumpBasic("After Inline");
             tree.collectTargetsToDequeue(request.inliningPlan);
-            maybeUpdateTracingInfo(tree);
+            tree.updateTracingInfo(request.inliningPlan);
         }
         tree.finalizeGraph();
         tree.trace();
-    }
-
-    private void maybeUpdateTracingInfo(CallTree tree) {
-        final OptionValues options = request.options;
-        if (options.get(PolyglotCompilerOptions.TraceCompilation) || options.get(PolyglotCompilerOptions.TraceCompilationDetails)) {
-            tree.updateTracingInfo(request.inliningPlan);
-        }
     }
 
     private Boolean optionsAllowInlining() {
