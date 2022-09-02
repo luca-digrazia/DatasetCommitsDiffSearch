@@ -264,12 +264,8 @@ public final class TRegexBacktrackingNFAExecutorLocals extends TRegexExecutorLoc
         return stack()[offsetIP()] = pc;
     }
 
-    public int getCaptureGroupBoundary(int boundary) {
-        return stack()[offsetCaptureGroups() + boundary];
-    }
-
-    public void setCaptureGroupBoundary(int boundary, int index) {
-        stack()[offsetCaptureGroups() + boundary] = index;
+    public int getCaptureGroupBoundary(int index) {
+        return stack()[offsetCaptureGroups() + index];
     }
 
     public int getCaptureGroupStart(int groupNumber) {
@@ -305,9 +301,12 @@ public final class TRegexBacktrackingNFAExecutorLocals extends TRegexExecutorLoc
         return stack()[offsetZeroWidthQuantifierIndex(q)];
     }
 
-    public boolean isResultUnmodifiedByZeroWidthQuantifier(Quantifier q) {
+    public boolean isResultUnmodifiedByZeroWidthQuantifier(Quantifier q, PureNFATransition transition, int index) {
+        int[] buffer = new int[result.length];
+        System.arraycopy(stack(), offsetCaptureGroups(), buffer, 0, result.length);
+        transition.getGroupBoundaries().applyExploded(buffer, 0, index);
         for (int i = 0; i < result.length; i++) {
-            if (stack()[offsetZeroWidthQuantifierCG(q) + i] != stack()[offsetCaptureGroups() + i]) {
+            if (stack()[offsetZeroWidthQuantifierCG(q) + i] != buffer[i]) {
                 return false;
             }
         }
