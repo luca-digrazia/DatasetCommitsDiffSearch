@@ -122,11 +122,14 @@ public abstract class CCompilerInvoker {
         }
 
         @Override
-        protected CompilerInfo createCompilerInfo(Path compilerPath, Scanner outerScanner) {
-            try (Scanner scanner = new Scanner(outerScanner.nextLine())) {
+        protected CompilerInfo createCompilerInfo(Path compilerPath, Scanner scanner) {
+            try {
                 String targetArch = null;
                 /* For cl.exe the first line holds all necessary information */
-                if (scanner.hasNext("\u7528\u4E8E")) {
+                // Checkstyle: stop
+                String forToken = "用于";
+                // Checkstyle: resume
+                if (scanner.hasNext(forToken)) {
                     /* Simplified-Chinese has targetArch first */
                     scanner.next();
                     targetArch = scanner.next();
@@ -142,11 +145,9 @@ public abstract class CCompilerInvoker {
                 int minor0 = scanner.nextInt();
                 int minor1 = scanner.nextInt();
                 if (targetArch == null) {
-                    scanner.reset();
-                    while (scanner.hasNext()) {
-                        /* targetArch is last token in line */
-                        targetArch = scanner.next();
-                    }
+                    scanner.reset(); /* back to default delimiters */
+                    scanner.next();
+                    targetArch = scanner.next();
                 }
                 return new CompilerInfo(compilerPath, "microsoft", "C/C++ Optimizing Compiler", "cl", major, minor0, minor1, targetArch);
             } catch (NoSuchElementException e) {
