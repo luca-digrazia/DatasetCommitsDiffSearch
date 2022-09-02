@@ -34,6 +34,7 @@ public class JDKInitializationFeature implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
 
+        RuntimeClassInitialization.initializeAtBuildTime("com.sun.crypto.provider", "Core JDK classes are initialized at build time");
         RuntimeClassInitialization.initializeAtBuildTime("com.sun.java.util.jar.pack", "Core JDK classes are initialized at build time");
         RuntimeClassInitialization.initializeAtBuildTime("com.sun.management", "Core JDK classes are initialized at build time");
         RuntimeClassInitialization.initializeAtBuildTime("com.sun.naming.internal", "Core JDK classes are initialized at build time");
@@ -52,6 +53,7 @@ public class JDKInitializationFeature implements Feature {
         RuntimeClassInitialization.initializeAtBuildTime("java.util", "Core JDK classes are initialized at build time");
 
         RuntimeClassInitialization.initializeAtBuildTime("javax.annotation.processing", "Core JDK classes are initialized at build time");
+        RuntimeClassInitialization.initializeAtBuildTime("javax.crypto", "Core JDK classes are initialized at build time");
         RuntimeClassInitialization.initializeAtBuildTime("javax.lang.model", "Core JDK classes are initialized at build time");
         RuntimeClassInitialization.initializeAtBuildTime("javax.management", "Core JDK classes are initialized at build time");
         RuntimeClassInitialization.initializeAtBuildTime("javax.naming", "Core JDK classes are initialized at build time");
