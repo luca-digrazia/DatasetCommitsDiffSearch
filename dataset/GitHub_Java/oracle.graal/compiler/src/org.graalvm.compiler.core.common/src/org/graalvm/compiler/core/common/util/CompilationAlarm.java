@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,6 +24,7 @@
  */
 package org.graalvm.compiler.core.common.util;
 
+import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
@@ -34,7 +37,9 @@ public final class CompilationAlarm implements AutoCloseable {
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Time limit in seconds before a compilation expires (0 to disable the limit).", type = OptionType.Debug)
+        @Option(help = "Time limit in seconds before a compilation expires (0 to disable the limit). " +
+                       "A non-zero value for this option is doubled if assertions are enabled and quadrupled if DetailedAsserts is true.",
+                type = OptionType.Debug)
         public static final OptionKey<Integer> CompilationExpirationPeriod = new OptionKey<>(300);
         // @formatter:on
     }
@@ -94,6 +99,12 @@ public final class CompilationAlarm implements AutoCloseable {
      */
     public static CompilationAlarm trackCompilationPeriod(OptionValues options) {
         int period = Options.CompilationExpirationPeriod.getValue(options);
+        if (Assertions.assertionsEnabled()) {
+            period *= 2;
+        }
+        if (Assertions.detailedAssertionsEnabled(options)) {
+            period *= 2;
+        }
         if (period > 0) {
             CompilationAlarm current = currentAlarm.get();
             if (current == null) {
@@ -105,4 +116,5 @@ public final class CompilationAlarm implements AutoCloseable {
         }
         return null;
     }
+
 }
