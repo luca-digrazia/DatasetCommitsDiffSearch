@@ -1,63 +1,81 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.polyglot;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
+import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
+
+import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Properties;
+import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import java.io.PrintStream;
+import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
+import com.oracle.truffle.polyglot.EngineAccessor.AbstractClassLoaderSupplier;
+import com.oracle.truffle.polyglot.EngineAccessor.StrongClassLoaderSupplier;
 
-//TODO (chumer): maybe this class should share some code with LanguageCache?
 final class InstrumentCache {
 
-    private static final boolean JDK8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
-
+    private static final String DEBUGGER_CLASS = "com.oracle.truffle.api.debug.impl.DebuggerInstrument";
+    private static final String DEBUGGER_PROVIDER = "com.oracle.truffle.api.debug.impl.DebuggerInstrumentProvider";
     private static final List<InstrumentCache> nativeImageCache = TruffleOptions.AOT ? new ArrayList<>() : null;
-    private static List<InstrumentCache> runtimeCache;
+    private static Map<List<AbstractClassLoaderSupplier>, List<InstrumentCache>> runtimeCaches = new HashMap<>();
 
-    private Class<? extends TruffleInstrument> instrumentClass;
     private final String className;
     private final String id;
     private final String name;
     private final String version;
     private final boolean internal;
-    private final ClassLoader loader;
     private final Set<String> services;
+    private final TruffleInstrument.Provider provider;
 
     /**
      * Initializes state for native image generation.
@@ -68,7 +86,7 @@ final class InstrumentCache {
      */
     @SuppressWarnings("unused")
     private static void initializeNativeImageState(ClassLoader imageClassLoader) {
-        nativeImageCache.addAll(doLoad(Collections.singletonList(imageClassLoader)));
+        nativeImageCache.addAll(doLoad(Arrays.asList(new StrongClassLoaderSupplier(imageClassLoader))));
     }
 
     /**
@@ -79,101 +97,68 @@ final class InstrumentCache {
     @SuppressWarnings("unused")
     private static void resetNativeImageState() {
         nativeImageCache.clear();
-        runtimeCache = null;
+        runtimeCaches.clear();
     }
 
-    private InstrumentCache(String prefix, Properties info, ClassLoader loader) {
-        this.loader = loader;
-        this.className = info.getProperty(prefix + "className");
-        this.name = info.getProperty(prefix + "name");
-        this.version = info.getProperty(prefix + "version");
-        this.internal = Boolean.valueOf(info.getProperty(prefix + "internal"));
-        String loadedId = info.getProperty(prefix + "id");
-        if (loadedId.equals("")) {
-            /* use class name default id */
-            int lastIndex = className.lastIndexOf('$');
-            if (lastIndex == -1) {
-                lastIndex = className.lastIndexOf('.');
-            }
-            this.id = className.substring(lastIndex + 1, className.length());
-        } else {
-            this.id = loadedId;
-        }
-        int servicesCounter = 0;
-        this.services = new TreeSet<>();
-        for (;;) {
-            String nth = prefix + "service" + servicesCounter++;
-            String serviceName = info.getProperty(nth);
-            if (serviceName == null) {
-                break;
-            }
-            this.services.add(serviceName);
-        }
-        if (TruffleOptions.AOT) {
-            loadClass();
-        }
+    private InstrumentCache(String id, String name, String version, String className, boolean internal, Set<String> services,
+                    TruffleInstrument.Provider provider) {
+        this.id = id;
+        this.name = name;
+        this.version = version;
+        this.className = className;
+        this.internal = internal;
+        this.services = services;
+        this.provider = provider;
     }
 
     public boolean isInternal() {
         return internal;
     }
 
-    static List<InstrumentCache> load(Collection<ClassLoader> loaders) {
+    static List<InstrumentCache> load() {
         if (TruffleOptions.AOT) {
             return nativeImageCache;
         }
-        if (runtimeCache != null) {
-            return runtimeCache;
+        synchronized (InstrumentCache.class) {
+            List<AbstractClassLoaderSupplier> classLoaders = EngineAccessor.locatorOrDefaultLoaders();
+            List<InstrumentCache> cache = runtimeCaches.get(classLoaders);
+            if (cache == null) {
+                cache = doLoad(classLoaders);
+                runtimeCaches.put(classLoaders, cache);
+            }
+            return cache;
         }
-        return doLoad(loaders);
     }
 
-    private static List<InstrumentCache> doLoad(Collection<ClassLoader> loaders) {
+    static List<InstrumentCache> doLoad(List<AbstractClassLoaderSupplier> suppliers) {
         List<InstrumentCache> list = new ArrayList<>();
         Set<String> classNamesUsed = new HashSet<>();
-        for (ClassLoader loader : loaders) {
-            loadForOne(loader, list, classNamesUsed);
-        }
-        if (!JDK8OrEarlier) {
-            loadForOne(ModuleResourceLocator.createLoader(), list, classNamesUsed);
-        }
-        return runtimeCache = list;
-    }
-
-    private static void loadForOne(ClassLoader loader, List<InstrumentCache> list, Set<String> classNamesUsed) {
-        if (loader == null) {
-            return;
-        }
-        Enumeration<URL> en;
-        try {
-            en = loader.getResources("META-INF/truffle/instrument");
-        } catch (IOException ex) {
-            throw new IllegalStateException("Cannot read list of Truffle instruments", ex);
-        }
-        while (en.hasMoreElements()) {
-            URL u = en.nextElement();
-            Properties p;
-            try {
-                p = new Properties();
-                try (InputStream is = u.openStream()) {
-                    p.load(is);
-                }
-            } catch (IOException ex) {
-                PrintStream out = System.err;
-                out.println("Cannot process " + u + " as language definition");
-                ex.printStackTrace();
+        for (Supplier<ClassLoader> supplier : suppliers) {
+            ClassLoader loader = supplier.get();
+            if (loader == null || !isValidLoader(loader)) {
                 continue;
             }
-            for (int cnt = 1;; cnt++) {
-                String prefix = "instrument" + cnt + ".";
-                String className = p.getProperty(prefix + "className");
-                if (className == null) {
-                    break;
-                }
-                // we don't want multiple instruments with the same class name
-                if (!classNamesUsed.contains(className)) {
-                    classNamesUsed.add(className);
-                    list.add(new InstrumentCache(prefix, p, loader));
+            exportTruffle(loader);
+            for (TruffleInstrument.Provider provider : ServiceLoader.load(TruffleInstrument.Provider.class, loader)) {
+                loadInstrumentImpl(provider, list, classNamesUsed);
+            }
+
+            /*
+             * Make sure the builtin debugger instrument is loaded if the service loader does not
+             * pick them up. This may happen on JDK 11 if the loader delegates to the platform class
+             * loader and does see the Truffle module only through the special named module behavior
+             * for the platform class loader. However, while truffle classes are visible, Java
+             * services are not enumerated from there. This is a workaround, that goes around this
+             * problem by hardcoding instruments that are included in the Truffle module. The
+             * behavior is actually beneficial as this also avoids languages to be picked up from
+             * the application classpath.
+             */
+            if (!classNamesUsed.contains(DEBUGGER_CLASS)) {
+                try {
+                    loadInstrumentImpl((TruffleInstrument.Provider) loader.loadClass(DEBUGGER_PROVIDER).getConstructor().newInstance(), list,
+                                    classNamesUsed);
+                } catch (Exception e) {
+                    throw shouldNotReachHere("Failed to discover debugger instrument.", e);
                 }
             }
         }
@@ -183,6 +168,57 @@ final class InstrumentCache {
                 return o1.getId().compareTo(o2.getId());
             }
         });
+        return list;
+    }
+
+    private static void loadInstrumentImpl(TruffleInstrument.Provider provider, List<? super InstrumentCache> list, Set<? super String> classNamesUsed) {
+        Registration reg = provider.getClass().getAnnotation(Registration.class);
+        if (reg == null) {
+            PrintStream out = System.err;
+            out.println("Provider " + provider.getClass() + " is missing @Registration annotation.");
+            return;
+        }
+        String className = provider.getInstrumentClassName();
+        String name = reg.name();
+        String id = reg.id();
+        if (id == null || id.isEmpty()) {
+            /* use class name default id */
+            int lastIndex = className.lastIndexOf('$');
+            if (lastIndex == -1) {
+                lastIndex = className.lastIndexOf('.');
+            }
+            id = className.substring(lastIndex + 1);
+        }
+        String version = reg.version();
+        boolean internal = reg.internal();
+        Set<String> servicesClassNames = new TreeSet<>();
+        for (String service : provider.getServicesClassNames()) {
+            servicesClassNames.add(service);
+        }
+        // we don't want multiple instruments with the same class name
+        if (!classNamesUsed.contains(className)) {
+            classNamesUsed.add(className);
+            list.add(new InstrumentCache(id, name, version, className, internal, servicesClassNames, provider));
+        }
+    }
+
+    private static boolean isValidLoader(ClassLoader loader) {
+        try {
+            Class<?> truffleInstrumentClassAsSeenByLoader = Class.forName(TruffleInstrument.class.getName(), true, loader);
+            return truffleInstrumentClassAsSeenByLoader == TruffleInstrument.class;
+        } catch (ClassNotFoundException ex) {
+            return false;
+        }
+    }
+
+    private static void exportTruffle(ClassLoader loader) {
+        if (!TruffleOptions.AOT) {
+            // In JDK 9+, the Truffle API packages must be dynamically exported to
+            // a Truffle instrument since the Truffle API module descriptor only
+            // exports the packages to modules known at build time (such as the
+            // Graal module).
+            EngineAccessor.JDKSERVICES.exportTo(loader, null);
+        }
     }
 
     String getId() {
@@ -201,11 +237,8 @@ final class InstrumentCache {
         return version;
     }
 
-    Class<?> getInstrumentationClass() {
-        if (!TruffleOptions.AOT && instrumentClass == null) {
-            loadClass();
-        }
-        return instrumentClass;
+    TruffleInstrument loadInstrument() {
+        return provider.create();
     }
 
     boolean supportsService(Class<?> clazz) {
@@ -215,13 +248,4 @@ final class InstrumentCache {
     String[] services() {
         return services.toArray(new String[0]);
     }
-
-    private void loadClass() {
-        try {
-            instrumentClass = Class.forName(className, true, loader).asSubclass(TruffleInstrument.class);
-        } catch (Exception ex) {
-            throw new IllegalStateException("Cannot initialize " + getName() + " instrument with implementation " + className, ex);
-        }
-    }
-
 }
