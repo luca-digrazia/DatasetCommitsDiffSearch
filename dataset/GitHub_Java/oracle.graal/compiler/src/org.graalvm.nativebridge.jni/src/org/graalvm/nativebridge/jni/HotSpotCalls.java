@@ -258,8 +258,7 @@ public final class HotSpotCalls {
     }
 
     private static void traceCall(JNIEnv env, JClass clazz, JNIMethod method) {
-        // The tracing performs JNI calls to obtain name of the HotSpot entry point class.
-        // This call must not be traced to prevent endless recursion.
+        // Do not trace tracing.
         if (!inTrace.get()) {
             inTrace.set(true);
             try {
@@ -342,7 +341,7 @@ public final class HotSpotCalls {
         if (!HotSpotCalls.class.getName().equals(frame.getClassName())) {
             return false;
         }
-        return HOT_SPOT_CALL_NAMES.contains(frame.getMethodName());
+        return HotSpotCallNames.contains(frame.getMethodName());
     }
 
     /**
@@ -356,7 +355,7 @@ public final class HotSpotCalls {
     /**
      * Names of the methods in this class annotated by {@link HotSpotCall}.
      */
-    private static final Set<String> HOT_SPOT_CALL_NAMES;
+    private static final Set<String> HotSpotCallNames;
     static {
         Map<String, Method> entryPoints = new HashMap<>();
         Map<String, Method> others = new HashMap<>();
@@ -379,6 +378,6 @@ public final class HotSpotCalls {
                                 " must have unique name: " + e.getValue() + " and " + existing);
             }
         }
-        HOT_SPOT_CALL_NAMES = Collections.unmodifiableSet(entryPoints.keySet());
+        HotSpotCallNames = Collections.unmodifiableSet(entryPoints.keySet());
     }
 }
