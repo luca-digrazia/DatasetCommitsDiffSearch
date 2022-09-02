@@ -114,7 +114,6 @@ public abstract class BigBang {
      * Processing queue.
      */
     private final CompletionExecutor executor;
-    private final Runnable heartbeatCallback;
 
     private ConcurrentMap<AbstractUnsafeLoadTypeFlow, Boolean> unsafeLoads;
     private ConcurrentMap<AbstractUnsafeStoreTypeFlow, Boolean> unsafeStores;
@@ -125,7 +124,7 @@ public abstract class BigBang {
     public final Timer typeFlowTimer;
     public final Timer checkObjectsTimer;
 
-    public BigBang(OptionValues options, AnalysisUniverse universe, HostedProviders providers, HostVM hostVM, ForkJoinPool executorService, Runnable heartbeatCallback,
+    public BigBang(OptionValues options, AnalysisUniverse universe, HostedProviders providers, HostVM hostVM, ForkJoinPool executorService,
                     UnsupportedFeatures unsupportedFeatures) {
         this.options = options;
         this.debugHandlerFactories = Collections.singletonList(new GraalDebugHandlersFactory(providers.getSnippetReflection()));
@@ -160,13 +159,8 @@ public abstract class BigBang {
         unsafeStores = new ConcurrentHashMap<>();
 
         timing = PointstoOptions.ProfileAnalysisOperations.getValue(options) ? new AnalysisTiming() : null;
-        executor = new CompletionExecutor(this, executorService, heartbeatCallback);
+        executor = new CompletionExecutor(this, executorService);
         executor.init(timing);
-        this.heartbeatCallback = heartbeatCallback;
-    }
-
-    public Runnable getHeartbeatCallback() {
-        return heartbeatCallback;
     }
 
     public boolean trackTypeFlowInputs() {
@@ -567,6 +561,10 @@ public abstract class BigBang {
             } while (executor.getPostedOperations() != 0 || numTypes != universe.getTypes().size());
 
             universe.setAnalysisDataValid(this, true);
+
+            if (PointstoOptions.ReportUnsupportedFeaturesDuringAnalysis.getValue(options)) {
+                unsupportedFeatures.report(this);
+            }
 
             return didSomeWork;
         }

@@ -159,8 +159,8 @@ public final class NativeLibraries {
                         return false;
                     }
                     String lib = libName.substring(libPrefix.length(), libName.length() - libSuffix.length());
-                    return PlatformNativeLibrarySupport.builtInLibraries.contains(lib);
-                }).count() == PlatformNativeLibrarySupport.builtInLibraries.size()) {
+                    return PlatformNativeLibrarySupport.defaultBuiltInLibraries.contains(lib);
+                }).count() == PlatformNativeLibrarySupport.defaultBuiltInLibraries.size()) {
                     staticLibsDir = jdkLibDir;
                 }
             }
@@ -239,27 +239,6 @@ public final class NativeLibraries {
     }
 
     public Collection<Path> getStaticLibraries() {
-        Map<Path, Path> allStaticLibs = getAllStaticLibs();
-        List<Path> staticLibs = new ArrayList<>();
-        for (String staticLibraryName : staticLibraries) {
-            Path libraryPath = getStaticLibraryPath(allStaticLibs, staticLibraryName);
-            if (libraryPath == null) {
-                continue;
-            }
-            staticLibs.add(libraryPath);
-        }
-        return staticLibs;
-    }
-
-    public Path getStaticLibraryPath(String staticLibraryName) {
-        return getStaticLibraryPath(getAllStaticLibs(), staticLibraryName);
-    }
-
-    private Path getStaticLibraryPath(Map<Path, Path> allStaticLibs, String staticLibraryName) {
-        return allStaticLibs.get(Paths.get(libPrefix + staticLibraryName + libSuffix));
-    }
-
-    private Map<Path, Path> getAllStaticLibs() {
         Map<Path, Path> allStaticLibs = new LinkedHashMap<>();
         for (String libraryPath : getLibraryPaths()) {
             try {
@@ -271,7 +250,15 @@ public final class NativeLibraries {
                 UserError.abort("Invalid library path " + libraryPath, e);
             }
         }
-        return allStaticLibs;
+        List<Path> staticLibs = new ArrayList<>();
+        for (String staticLibraryName : staticLibraries) {
+            Path libraryPath = allStaticLibs.get(Paths.get(libPrefix + staticLibraryName + libSuffix));
+            if (libraryPath == null) {
+                continue;
+            }
+            staticLibs.add(libraryPath);
+        }
+        return staticLibs;
     }
 
     public Collection<String> getLibraryPaths() {
