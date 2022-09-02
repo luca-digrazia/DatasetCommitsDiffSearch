@@ -88,7 +88,7 @@ public class HotSpotCompiledCodeBuilder {
 
         ResolvedJavaMethod[] methods = compResult.getMethods();
 
-        List<CodeAnnotation> annotations = compResult.getCodeAnnotations();
+        List<CodeAnnotation> annotations = compResult.getAnnotations();
         Comment[] comments = new Comment[annotations.size()];
         if (!annotations.isEmpty()) {
             for (int i = 0; i < comments.length; i++) {
@@ -280,14 +280,14 @@ public class HotSpotCompiledCodeBuilder {
                         }
                     }
                 }
-                assert !siteListIterator.hasNext() || (site != null && site.pcOffset >= source.getStartOffset());
+                assert !siteListIterator.hasNext() || site.pcOffset >= source.getStartOffset();
                 if (site != null && source.getStartOffset() <= site.pcOffset && site.pcOffset <= source.getEndOffset()) {
                     // Conflicting source mapping, skip it.
                     continue;
                 } else {
                     // Since the sites are sorted there can not be any more sites in this interval.
                 }
-                assert !siteListIterator.hasNext() || (site != null && site.pcOffset > source.getEndOffset());
+                assert !siteListIterator.hasNext() || site.pcOffset > source.getEndOffset();
                 // Good source mapping. Create an infopoint and add it to the list.
                 NodeSourcePosition sourcePosition = source.getSourcePosition();
                 assert sourcePosition.verify();

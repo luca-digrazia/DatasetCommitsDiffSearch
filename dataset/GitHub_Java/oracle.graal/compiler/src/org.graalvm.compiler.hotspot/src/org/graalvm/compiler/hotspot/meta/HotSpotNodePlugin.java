@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,9 +27,8 @@ package org.graalvm.compiler.hotspot.meta;
 import static jdk.vm.ci.meta.DeoptimizationAction.None;
 import static jdk.vm.ci.meta.DeoptimizationReason.TransferToInterpreter;
 import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
-import static org.graalvm.compiler.hotspot.meta.HotSpotNodePlugin.Options.HotSpotPostOnExceptions;
 
-import java.util.function.Supplier;
+import java.lang.reflect.Field;
 
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -41,7 +40,6 @@ import org.graalvm.compiler.hotspot.word.HotSpotWordTypes;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -58,10 +56,6 @@ import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.nodes.util.ConstantFoldUtil;
-import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.compiler.word.WordOperationPlugin;
 import org.graalvm.word.LocationIdentity;
@@ -89,12 +83,6 @@ import sun.misc.Unsafe;
  * </ul>
  */
 public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
-    public static class Options {
-        @Option(help = "Emit deopts for exception throws", type = OptionType.Expert)//
-        public static final OptionKey<Boolean> HotSpotPostOnExceptions = new OptionKey<>(false);
-    }
-
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     protected final WordOperationPlugin wordOperationPlugin;
     private final GraalHotSpotVMConfig config;
     private final HotSpotWordTypes wordTypes;
@@ -221,42 +209,55 @@ public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
     }
 
     @Override
-    public FixedWithNextNode instrumentExceptionDispatch(StructuredGraph graph, FixedWithNextNode afterExceptionLoaded, Supplier<FrameState> frameStateFunction) {
+    public FixedWithNextNode instrumentExceptionDispatch(StructuredGraph graph, FixedWithNextNode afterExceptionLoaded) {
         CompilationIdentifier id = graph.compilationId();
-        if (id instanceof HotSpotCompilationIdentifier &&
-                        config.jvmciCompileStateCanPostOnExceptionsOffset != Integer.MIN_VALUE &&
-                        config.javaThreadShouldPostOnExceptionsFlagOffset != Integer.MIN_VALUE) {
-            boolean canPostOnExceptions = HotSpotPostOnExceptions.getValue(graph.getOptions());
+        if (id instanceof HotSpotCompilationIdentifier) {
             HotSpotCompilationRequest request = ((HotSpotCompilationIdentifier) id).getRequest();
             if (request != null) {
                 long compileState = request.getJvmciEnv();
-                if (compileState != 0) {
+                if (compileState != 0 &&
+                                config.jvmciCompileStateCanPostOnExceptionsOffset != Integer.MIN_VALUE &&
+                                config.javaThreadShouldPostOnExceptionsFlagOffset != Integer.MIN_VALUE) {
                     long canPostOnExceptionsOffset = compileState + config.jvmciCompileStateCanPostOnExceptionsOffset;
-                    canPostOnExceptions = UNSAFE.getByte(canPostOnExceptionsOffset) != 0;
+                    boolean canPostOnExceptions = UNSAFE.getByte(canPostOnExceptionsOffset) != 0;
+                    if (canPostOnExceptions) {
+                        // If the exception capability is set, then generate code
+                        // to check the JavaThread.should_post_on_exceptions flag to see
+                        // if we actually need to report exception events for the current
+                        // thread. If not, take the fast path otherwise deoptimize.
+                        CurrentJavaThreadNode thread = graph.unique(new CurrentJavaThreadNode(wordTypes.getWordKind()));
+                        ValueNode offset = graph.unique(ConstantNode.forLong(config.javaThreadShouldPostOnExceptionsFlagOffset));
+                        AddressNode address = graph.unique(new OffsetAddressNode(thread, offset));
+                        ReadNode shouldPostException = graph.add(new ReadNode(address, JAVA_THREAD_SHOULD_POST_ON_EXCEPTIONS_FLAG_LOCATION, StampFactory.intValue(), BarrierType.NONE));
+                        afterExceptionLoaded.setNext(shouldPostException);
+                        ValueNode zero = graph.unique(ConstantNode.forInt(0));
+                        LogicNode cond = graph.unique(new IntegerEqualsNode(shouldPostException, zero));
+                        FixedGuardNode check = graph.add(new FixedGuardNode(cond, TransferToInterpreter, None, false));
+                        shouldPostException.setNext(check);
+                        return check;
+                    }
                 }
-            }
-            if (canPostOnExceptions) {
-                // If the exception capability is set, then generate code
-                // to check the JavaThread.should_post_on_exceptions flag to see
-                // if we actually need to report exception events for the current
-                // thread. If not, take the fast path otherwise deoptimize.
-                CurrentJavaThreadNode thread = graph.unique(new CurrentJavaThreadNode(wordTypes.getWordKind()));
-                ValueNode offset = graph.unique(ConstantNode.forLong(config.javaThreadShouldPostOnExceptionsFlagOffset));
-                AddressNode address = graph.unique(new OffsetAddressNode(thread, offset));
-                ReadNode shouldPostException = graph.add(new ReadNode(address, JAVA_THREAD_SHOULD_POST_ON_EXCEPTIONS_FLAG_LOCATION, StampFactory.intValue(), BarrierType.NONE));
-                afterExceptionLoaded.setNext(shouldPostException);
-                ValueNode zero = graph.unique(ConstantNode.forInt(0));
-                LogicNode cond = graph.unique(new IntegerEqualsNode(shouldPostException, zero));
-                FixedGuardNode check = graph.add(new FixedGuardNode(cond, TransferToInterpreter, None, false));
-                FrameState fs = frameStateFunction.get();
-                assert fs.stackSize() == 1 && fs.rethrowException() : "expected rethrow exception FrameState";
-                check.setStateBefore(fs);
-                shouldPostException.setNext(check);
-                return check;
             }
         }
         return afterExceptionLoaded;
     }
 
     private static final LocationIdentity JAVA_THREAD_SHOULD_POST_ON_EXCEPTIONS_FLAG_LOCATION = NamedLocationIdentity.mutable("JavaThread::_should_post_on_exceptions_flag");
+    private static final Unsafe UNSAFE = initUnsafe();
+
+    private static Unsafe initUnsafe() {
+        try {
+            // Fast path when we are trusted.
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            // Slow path when we are not trusted.
+            try {
+                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(Unsafe.class);
+            } catch (Exception e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
+        }
+    }
 }
