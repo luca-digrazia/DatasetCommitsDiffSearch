@@ -106,11 +106,6 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
             return unwindSuccessor;
         }
 
-        @Override
-        public int[] getSuccessors() {
-            return new int[]{normalSuccessor, unwindSuccessor};
-        }
-
         @Specialization
         public void doInvoke(VirtualFrame frame, Object function) {
             Object[] argValues = prepareArguments(frame);

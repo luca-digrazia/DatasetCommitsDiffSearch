@@ -96,10 +96,5 @@ public abstract class LLVMBrUnconditionalNode extends LLVMControlFlowNode {
         public void doCondition() {
             // nothing to do, since this branch is unconditional
         }
-
-        @Override
-        public final int[] getSuccessors() {
-            return new int[]{getSuccessor()};
-        }
     }
 }

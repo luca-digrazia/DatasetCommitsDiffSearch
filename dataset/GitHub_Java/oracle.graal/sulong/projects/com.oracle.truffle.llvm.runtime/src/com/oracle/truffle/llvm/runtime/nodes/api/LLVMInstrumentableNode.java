@@ -79,7 +79,7 @@ public abstract class LLVMInstrumentableNode extends LLVMNode implements Instrum
 
     @Override
     public final boolean isInstrumentable() {
-        return getSourceLocation() != null;
+        return getSourceSection() != null;
     }
 
     /**
