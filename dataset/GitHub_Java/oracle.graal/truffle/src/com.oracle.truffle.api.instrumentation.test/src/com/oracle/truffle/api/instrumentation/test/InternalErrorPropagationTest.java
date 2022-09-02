@@ -40,6 +40,8 @@
  */
 package com.oracle.truffle.api.instrumentation.test;
 
+import java.util.function.Consumer;
+
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.junit.Assert;
@@ -155,21 +157,14 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
         }
     }
 
-    @FunctionalInterface
-    interface EventListener {
-
-        void accept(TruffleContext c);
-
-    }
-
     static class TestListener implements ContextsListener {
 
-        EventListener onLanguageContextInitialized;
-        EventListener onLanguageContextFinalized;
-        EventListener onLanguageContextDisposed;
-        EventListener onLanguageContextCreated;
-        EventListener onContextCreated;
-        EventListener onContextClosed;
+        Consumer<TruffleContext> onLanguageContextInitialized;
+        Consumer<TruffleContext> onLanguageContextFinalized;
+        Consumer<TruffleContext> onLanguageContextDisposed;
+        Consumer<TruffleContext> onLanguageContextCreated;
+        Consumer<TruffleContext> onContextCreated;
+        Consumer<TruffleContext> onContextClosed;
 
         public void onLanguageContextInitialized(TruffleContext c, LanguageInfo l) {
             if (onLanguageContextInitialized != null) {
