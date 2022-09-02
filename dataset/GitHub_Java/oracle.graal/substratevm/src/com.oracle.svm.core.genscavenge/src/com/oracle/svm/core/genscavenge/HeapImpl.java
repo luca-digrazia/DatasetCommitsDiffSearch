@@ -102,8 +102,8 @@ public class HeapImpl extends Heap {
     public HeapImpl(FeatureAccess access) {
         this.youngGeneration = new YoungGeneration("YoungGeneration");
         this.oldGeneration = new OldGeneration("OldGeneration");
-        this.objectHeaderImpl = new ObjectHeaderImpl();
         this.gcImpl = new GCImpl(access);
+        this.objectHeaderImpl = new ObjectHeaderImpl();
         this.heapPolicy = new HeapPolicy(access);
         this.pinHead = new AtomicReference<>();
         /* Pre-allocate verifiers for use during collection. */
@@ -137,13 +137,6 @@ public class HeapImpl extends Heap {
     @Override
     public boolean isInImageHeap(Object object) {
         return objectHeaderImpl.isNonHeapAllocated(object);
-    }
-
-    @Override
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public boolean isInImageHeap(Pointer pointer) {
-        return NativeImageInfo.isInReadOnlyPrimitivePartition(pointer) || NativeImageInfo.isInReadOnlyReferencePartition(pointer) ||
-                        NativeImageInfo.isInWritablePrimitivePartition(pointer) || NativeImageInfo.isInWritableReferencePartition(pointer);
     }
 
     @Override

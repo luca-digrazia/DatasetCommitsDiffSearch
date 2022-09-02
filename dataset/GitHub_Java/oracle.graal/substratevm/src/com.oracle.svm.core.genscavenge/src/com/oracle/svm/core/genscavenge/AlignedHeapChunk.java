@@ -181,7 +181,7 @@ public class AlignedHeapChunk extends HeapChunk {
         return getEnclosingAlignedHeapChunkFromPointer(ptr);
     }
 
-    static AlignedHeader getEnclosingAlignedHeapChunkFromPointer(Pointer ptr) {
+    private static AlignedHeader getEnclosingAlignedHeapChunkFromPointer(Pointer ptr) {
         final Pointer result = PointerUtils.roundDown(ptr, HeapPolicy.getAlignedHeapChunkAlignment());
         return (AlignedHeader) result;
     }

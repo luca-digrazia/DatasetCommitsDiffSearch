@@ -38,7 +38,6 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MemoryWalker;
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.config.ConfigurationValues;
@@ -172,7 +171,7 @@ public class UnalignedHeapChunk extends HeapChunk {
     }
 
     /** Map from a Pointer to an object to the enclosing chunk. */
-    static UnalignedHeader getEnclosingUnalignedHeapChunkFromPointer(Pointer objPointer) {
+    private static UnalignedHeader getEnclosingUnalignedHeapChunkFromPointer(Pointer objPointer) {
         // This only works because there is only one object in an unaligned chunk.
         // Where does the object start in an unaligned chunk?
         final UnsignedWord startOffset = getObjectStartOffset();
@@ -467,7 +466,7 @@ public class UnalignedHeapChunk extends HeapChunk {
 class UnalignedHeapChunkMemoryWalkerAccessFeature implements Feature {
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return SubstrateOptions.UseCardRememberedSetHeap.getValue();
+        return HeapOptions.UseCardRememberedSetHeap.getValue();
     }
 
     @Override

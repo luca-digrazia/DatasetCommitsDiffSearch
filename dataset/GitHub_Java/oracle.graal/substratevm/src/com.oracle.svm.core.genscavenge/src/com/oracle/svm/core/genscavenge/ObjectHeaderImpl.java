@@ -164,7 +164,7 @@ public class ObjectHeaderImpl extends ObjectHeader {
     }
 
     @Override
-    public int getReservedBitsMask() {
+    public int getReservedBits() {
         assert MASK_HEADER_BITS.rawValue() == ALL_RESERVED_BITS;
         assert CLEAR_HEADER_BITS.rawValue() == ~ALL_RESERVED_BITS;
         return ALL_RESERVED_BITS;
@@ -229,9 +229,8 @@ public class ObjectHeaderImpl extends ObjectHeader {
         return KnownIntrinsics.readHub(o);
     }
 
-    @Override
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public DynamicHub dynamicHubFromObjectHeader(UnsignedWord header) {
+    private static DynamicHub dynamicHubFromObjectHeader(UnsignedWord header) {
         // Turn the Unsigned header into a Pointer, and then to an Object of type DynamicHub.
         final UnsignedWord pointerBits = clearBits(header);
         final Object objectValue;
@@ -250,16 +249,16 @@ public class ObjectHeaderImpl extends ObjectHeader {
     public void initializeHeaderOfNewObject(Pointer objectPointer, DynamicHub hub, HeapKind heapKind) {
         assert heapKind == HeapKind.Unmanaged;
         // headers in unmanaged memory don't need any GC-specific bits set
-        Word objectHeader = encodeAsObjectHeader(hub, false, false);
-        initializeHeaderOfNewObject(objectPointer, objectHeader);
+        initializeHeaderOfNewObject(objectPointer, hub, false, false);
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public void initializeHeaderOfNewObject(Pointer objectPointer, Word encodedHub) {
+    public void initializeHeaderOfNewObject(Pointer objectPointer, DynamicHub hub, boolean rememberedSet, boolean unaligned) {
+        WordBase header = formatHub(hub, rememberedSet, unaligned);
         if (getReferenceSize() == Integer.BYTES) {
-            objectPointer.writeInt(getHubOffset(), (int) encodedHub.rawValue(), LocationIdentity.INIT_LOCATION);
+            objectPointer.writeInt(getHubOffset(), (int) header.rawValue(), LocationIdentity.INIT_LOCATION);
         } else {
-            objectPointer.writeWord(getHubOffset(), encodedHub, LocationIdentity.INIT_LOCATION);
+            objectPointer.writeWord(getHubOffset(), header, LocationIdentity.INIT_LOCATION);
         }
     }
 
@@ -271,13 +270,8 @@ public class ObjectHeaderImpl extends ObjectHeader {
         }
     }
 
-    @Override
-    public Word encodeAsTLABObjectHeader(DynamicHub hub) {
-        return encodeAsObjectHeader(hub, false, false);
-    }
-
     @Uninterruptible(reason = "Called from uninterruptible code.")
-    public Word encodeAsObjectHeader(DynamicHub hub, boolean rememberedSet, boolean unaligned) {
+    private static WordBase formatHub(DynamicHub hub, boolean rememberedSet, boolean unaligned) {
         /*
          * All DynamicHub instances are in the native image heap and therefore do not move, so we
          * can convert the hub to a Pointer without any precautions.
@@ -323,9 +317,9 @@ public class ObjectHeaderImpl extends ObjectHeader {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     @Override
-    public long encodeAsImageHeapObjectHeader(long heapBaseRelativeAddress) {
-        assert (heapBaseRelativeAddress & MASK_HEADER_BITS.rawValue()) == 0 : "Object header bits must be zero";
-        return (heapBaseRelativeAddress | BOOT_IMAGE.rawValue());
+    public long getHeaderForImageHeapObject(long value) {
+        assert (value & MASK_HEADER_BITS.rawValue()) == 0 : "Object header bits must be zero";
+        return (value | BOOT_IMAGE.rawValue());
     }
 
     public boolean isBootImageCarefully(Object o) {
@@ -333,19 +327,12 @@ public class ObjectHeaderImpl extends ObjectHeader {
         return isBootImageHeaderBits(headerBits);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     protected boolean isBootImage(Object o) {
         final UnsignedWord headerBits = readHeaderBitsFromObject(o);
         return isBootImageHeaderBits(headerBits);
     }
 
-    public boolean isBootImageHeader(UnsignedWord header) {
-        final UnsignedWord headerBits = ObjectHeaderImpl.getHeaderBitsFromHeader(header);
-        return isBootImageHeaderBits(headerBits);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private static boolean isBootImageHeaderBits(UnsignedWord headerBits) {
+    protected boolean isBootImageHeaderBits(UnsignedWord headerBits) {
         return headerBitsEqual(headerBits, BOOT_IMAGE);
     }
 
@@ -537,7 +524,6 @@ public class ObjectHeaderImpl extends ObjectHeader {
         return result;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     protected static UnsignedWord readHeaderBitsFromObject(Object o) {
         final UnsignedWord header = readHeaderFromObject(o);
         return ObjectHeaderImpl.getHeaderBitsFromHeader(header);
@@ -569,7 +555,6 @@ public class ObjectHeaderImpl extends ObjectHeader {
     }
 
     /** Test if an object header has the specified bits. */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     private static boolean headerBitsEqual(UnsignedWord headerBits, UnsignedWord specifiedBits) {
         return headerBits.equal(specifiedBits);
     }
@@ -677,7 +662,7 @@ public class ObjectHeaderImpl extends ObjectHeader {
         } else {
             headerBitsClassification = -1;
         }
-        final DynamicHub hub = ObjectHeaderImpl.getObjectHeaderImpl().dynamicHubFromObjectHeader(header);
+        final DynamicHub hub = dynamicHubFromObjectHeader(header);
         final int hubClassification = HeapVerifierImpl.classifyObject(hub);
         return ((1000 * hubClassification) + headerBitsClassification);
     }
