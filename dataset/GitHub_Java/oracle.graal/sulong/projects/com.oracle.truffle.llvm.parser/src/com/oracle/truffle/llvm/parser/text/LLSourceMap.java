@@ -42,6 +42,7 @@ import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
 
 final class LLSourceMap {
@@ -137,7 +138,7 @@ final class LLSourceMap {
                 if (actualSymbol != null && actualSymbol.isGlobalVariable()) {
                     globalScope.addGlobal(actualSymbol.asGlobalVariable());
                 } else {
-                    LLVMGlobal global = LLVMGlobal.createUnavailable(globalName);
+                    LLVMGlobal global = LLVMGlobal.create(globalName + " (unavailable)", PointerType.VOID, null, true, -1, -1);
                     globalScope.addGlobal(global);
                 }
             }

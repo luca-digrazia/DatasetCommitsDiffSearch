@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,17 +29,13 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug;
 
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.utilities.AssumedValue;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.debug.LLDBSupport;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMDebugGlobalVariable;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugTypeConstants;
@@ -60,10 +56,9 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
-@GenerateUncached
 public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebugValue.Builder {
 
-    protected abstract LLVMDebugValue executeWithTarget(Object target);
+    public abstract LLVMDebugValue executeWithTarget(Object target);
 
     @Override
     public LLVMDebugValue build(Object irValue) {
@@ -222,11 +217,12 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
     }
 
     @Specialization
-    protected LLVMDebugValue fromGlobal(LLVMDebugGlobalVariable value, @CachedContext(LLVMLanguage.class) LLVMContext context) {
+    protected LLVMDebugValue fromGlobal(LLVMDebugGlobalVariable value) {
         LLVMGlobal global = value.getDescriptor();
-        AssumedValue<LLVMPointer>[] globals = context.findSymbolTable(global.getBitcodeID(false));
-        int index = global.getSymbolIndex(false);
-        Object target = globals[index].get();
+        LLVMContext context = value.getContext();
+        LLVMPointer[] globals = context.findGlobal(global.getID());
+        int index = global.getIndex();
+        Object target = globals[index];
 
         if (LLVMManagedPointer.isInstance(target)) {
             final LLVMManagedPointer managedPointer = LLVMManagedPointer.cast(target);
@@ -239,7 +235,7 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
             // since we have removed AssumedValue<Object> being stored in a global
             return executeWithTarget(target);
         }
-        return new LLDBGlobalConstant(global);
+        return new LLDBGlobalConstant(global, context);
     }
 
     @Fallback

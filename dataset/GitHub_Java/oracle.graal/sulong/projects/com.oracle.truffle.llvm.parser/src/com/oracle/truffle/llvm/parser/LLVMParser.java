@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -47,7 +47,7 @@ import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMAlias;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.Function;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LazyLLVMIRFunction;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
@@ -76,16 +76,15 @@ public final class LLVMParser {
         List<GlobalVariable> externalGlobals = new ArrayList<>();
         List<GlobalVariable> definedGlobals = new ArrayList<>();
         List<FunctionSymbol> externalFunctions = new ArrayList<>();
-        List<FunctionSymbol> definedFunctions = new ArrayList<>();
         List<String> importedSymbols = new ArrayList<>();
 
         defineGlobals(module.getGlobalVariables(), definedGlobals, externalGlobals, importedSymbols);
-        defineFunctions(module, definedFunctions, externalFunctions, importedSymbols, targetDataLayout);
+        defineFunctions(module, externalFunctions, importedSymbols, targetDataLayout);
         defineAliases(module.getAliases(), importedSymbols);
 
         LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, StackManager.createRootFrame(), GetStackSpaceFactory.createAllocaFactory(), targetDataLayout);
         createDebugInfo(module, symbolResolver);
-        return new LLVMParserResult(runtime, definedFunctions, externalFunctions, definedGlobals, externalGlobals, importedSymbols, targetDataLayout);
+        return new LLVMParserResult(runtime, externalFunctions, definedGlobals, externalGlobals, importedSymbols, targetDataLayout);
     }
 
     private void defineGlobals(List<GlobalVariable> globals, List<GlobalVariable> definedGlobals, List<GlobalVariable> externalGlobals, List<String> importedSymbols) {
@@ -100,14 +99,13 @@ public final class LLVMParser {
         }
     }
 
-    private void defineFunctions(ModelModule model, List<FunctionSymbol> definedFunctions, List<FunctionSymbol> externalFunctions, List<String> importedSymbols, DataLayout dataLayout) {
+    private void defineFunctions(ModelModule model, List<FunctionSymbol> externalFunctions, List<String> importedSymbols, DataLayout dataLayout) {
         for (FunctionDefinition function : model.getDefinedFunctions()) {
             if (function.isExternal()) {
                 externalFunctions.add(function);
                 importedSymbols.add(function.getName());
             } else {
                 defineFunction(function, model, importedSymbols, dataLayout);
-                definedFunctions.add(function);
             }
         }
 
@@ -127,7 +125,7 @@ public final class LLVMParser {
     private void defineGlobal(GlobalVariable global, List<String> importedSymbols) {
         assert !global.isExternal();
         // handle the file scope
-        LLVMGlobal descriptor = LLVMGlobal.create(global.getName(), global.getType(), global.getSourceSymbol(), global.isReadOnly(), global.getIndex(), runtime.getBitcodeID());
+        LLVMGlobal descriptor = LLVMGlobal.create(global.getName(), global.getType(), global.getSourceSymbol(), global.isReadOnly(), global.getIndex(), runtime.getID());
         descriptor.define(global.getType(), library);
         runtime.getFileScope().register(descriptor);
 
@@ -135,6 +133,7 @@ public final class LLVMParser {
         if (global.isExported()) {
             LLVMSymbol exportedDescriptor = runtime.getGlobalScope().get(global.getName());
             if (exportedDescriptor == null) {
+                // TODO (PLi): working on the scope for global -- differ from define and declare.
                 runtime.getGlobalScope().register(descriptor);
             } else if (exportedDescriptor.isGlobalVariable()) {
                 importedSymbols.add(global.getName());
@@ -152,7 +151,7 @@ public final class LLVMParser {
         LazyToTruffleConverterImpl lazyConverter = new LazyToTruffleConverterImpl(runtime, functionDefinition, source, model.getFunctionParser(functionDefinition),
                         model.getFunctionProcessor(), dataLayout);
         Function function = new LazyLLVMIRFunction(lazyConverter);
-        LLVMFunction descriptor = LLVMFunction.create(functionSymbol.getName(), library, function, functionSymbol.getType(), runtime.getBitcodeID(), functionSymbol.getIndex());
+        LLVMFunctionDescriptor descriptor = context.createFunctionDescriptor(functionSymbol.getName(), functionSymbol.getType(), function, library);
         runtime.getFileScope().register(descriptor);
 
         // handle the global scope

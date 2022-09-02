@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -52,24 +52,14 @@ public final class LLVMGlobal implements LLVMSymbol {
     @CompilationFinal private boolean interopTypeCached;
     @CompilationFinal private LLVMInteropType interopType;
 
-    private final int globalIndex;
-    private final int moduleId;
+    private final int index;
+    private final int id;
 
     public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id) {
-        if (index < 0) {
-            throw new AssertionError("Invalid index for LLVM global: " + index);
-        }
-        if (id < 0) {
-            throw new AssertionError("Invalid index for LLVM global: " + id);
-        }
         return new LLVMGlobal(name, type, sourceSymbol, readOnly, index, id);
     }
 
-    public static LLVMGlobal createUnavailable(String name) {
-        return new LLVMGlobal(name + " (unavailable)", PointerType.VOID, null, true, -1, -1);
-    }
-
-    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int globalIndex, int moduleId) {
+    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id) {
         this.name = name;
         this.type = type;
         this.sourceSymbol = sourceSymbol;
@@ -78,20 +68,18 @@ public final class LLVMGlobal implements LLVMSymbol {
         this.library = null;
         this.interopTypeCached = false;
         this.interopType = null;
-        this.globalIndex = globalIndex;
-        this.moduleId = moduleId;
-    }
-
-    public boolean isAvailable() {
-        return moduleId >= 0;
+        this.index = index;
+        this.id = id;
     }
 
     public int getIndex() {
-        return globalIndex;
+        assert index >= 0;
+        return index;
     }
 
     public int getID() {
-        return moduleId;
+        assert id >= 0;
+        return id;
     }
 
     @Override

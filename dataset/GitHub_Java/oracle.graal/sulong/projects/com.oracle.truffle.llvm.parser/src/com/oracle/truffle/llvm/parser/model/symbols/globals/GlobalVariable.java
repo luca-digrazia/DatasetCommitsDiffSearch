@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.parser.model.symbols.globals;
 import com.oracle.truffle.llvm.parser.model.SymbolTable;
 import com.oracle.truffle.llvm.parser.model.enums.Linkage;
 import com.oracle.truffle.llvm.parser.model.enums.Visibility;
-import com.oracle.truffle.llvm.parser.model.visitors.ModelVisitor;
 import com.oracle.truffle.llvm.parser.model.visitors.SymbolVisitor;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 
@@ -40,14 +39,15 @@ public final class GlobalVariable extends GlobalValueSymbol {
 
     private final boolean isReadOnly;
 
-    private GlobalVariable(boolean isReadOnly, PointerType type, int align, Linkage linkage, Visibility visibility, SymbolTable symbolTable, int value) {
-        super(type, align, linkage, visibility, symbolTable, value);
-        this.isReadOnly = isReadOnly;
-    }
+    private final int align;
 
-    @Override
-    public void accept(ModelVisitor visitor) {
-        visitor.visit(this);
+    private final int index;
+
+    private GlobalVariable(boolean isReadOnly, PointerType type, int align, Linkage linkage, Visibility visibility, SymbolTable symbolTable, int value, int index) {
+        super(type, linkage, visibility, symbolTable, value);
+        this.isReadOnly = isReadOnly;
+        this.align = align;
+        this.index = index;
     }
 
     @Override
@@ -55,11 +55,17 @@ public final class GlobalVariable extends GlobalValueSymbol {
         visitor.visit(this);
     }
 
+    public int getAlign() {
+        return align;
+    }
+
     public boolean isReadOnly() {
         return isReadOnly;
     }
 
-    public static GlobalVariable create(boolean isReadOnly, PointerType type, int align, long linkage, long visibility, SymbolTable symbolTable, int value) {
-        return new GlobalVariable(isReadOnly, type, align, Linkage.decode(linkage), Visibility.decode(visibility), symbolTable, value);
+    public int getIndex() { return index;}
+
+    public static GlobalVariable create(boolean isReadOnly, PointerType type, int align, long linkage, long visibility, SymbolTable symbolTable, int value, int index) {
+        return new GlobalVariable(isReadOnly, type, align, Linkage.decode(linkage), Visibility.decode(visibility), symbolTable, value, index);
     }
 }
