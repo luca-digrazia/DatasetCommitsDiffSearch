@@ -82,7 +82,7 @@ public class CopyingImageHeapProvider implements ImageHeapProvider {
     }
 
     @Override
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     public boolean canUnmapInsteadOfTearDown(PointerBase heapBase) {
         return true;
     }
