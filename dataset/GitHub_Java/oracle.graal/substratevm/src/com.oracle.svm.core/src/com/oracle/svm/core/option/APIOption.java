@@ -143,7 +143,7 @@ public @interface APIOption {
         }
     }
 
-    final class NullGroup implements APIOptionGroup {
+    public static final class NullGroup implements APIOptionGroup {
         @Override
         public String name() {
             return null;
