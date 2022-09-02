@@ -40,59 +40,38 @@
  */
 package com.oracle.truffle.regex.tregex.nodes.dfa;
 
-import java.util.Arrays;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.regex.tregex.nodesplitter.DFANodeSplit;
+import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.regex.tregex.util.json.Json;
-import com.oracle.truffle.regex.tregex.util.json.JsonValue;
+public abstract class DFAAbstractStateNode extends Node implements JsonConvertible {
 
-/**
- * This state node is responsible for selecting a DFA's initial state based on the index the search
- * starts from. Successors are entry points in case we start matching at the beginning of the input
- * string, followed by entry points in case we do not start matching at the beginning of the input
- * string. If possible matches must start at the beginning of the input string, entry points may be
- * -1.
- */
-public class DFAInitialStateNode extends DFAAbstractStateNode {
+    static final int FS_RESULT_NO_SUCCESSOR = -1;
 
-    private final boolean searching;
-    private final boolean genericCG;
+    private final short id;
+    @CompilationFinal(dimensions = 1) protected final short[] successors;
 
-    public DFAInitialStateNode(short[] successors, boolean searching, boolean genericCG) {
-        super((short) 0, successors);
-        this.searching = searching;
-        this.genericCG = genericCG;
-    }
-
-    private DFAInitialStateNode(DFAInitialStateNode copy) {
-        this(Arrays.copyOf(copy.successors, copy.successors.length), copy.searching, copy.genericCG);
-    }
-
-    public int getPrefixLength() {
-        return (successors.length / 2) - 1;
-    }
-
-    public boolean hasUnAnchoredEntry() {
-        return successors[successors.length / 2] != -1;
+    DFAAbstractStateNode(short id, short[] successors) {
+        this.id = id;
+        this.successors = successors;
     }
 
     /**
-     * Creates a node split copy of this initial state as described in {@link DFAAbstractStateNode},
-     * but ignores copyID, since having two initial states in a DFA is not supported. Therefore,
-     * this method should be used for replacing the original initial state with the copy.
+     * Creates a copy of this state node, where all attributes are copied shallowly, except for the
+     * {@link #successors} array, which is deep-copied, and the node ID, which is replaced by the
+     * parameter copyID. Used by {@link DFANodeSplit}.
      *
      * @param copyID new ID for the copy.
-     * @return a node split copy of this initial state as described in {@link DFAAbstractStateNode},
-     *         ignoring copyID.
+     * @return an "almost shallow" copy of this node.
      */
-    @Override
-    public DFAAbstractStateNode createNodeSplitCopy(short copyID) {
-        return new DFAInitialStateNode(this);
+    public abstract DFAAbstractStateNode createNodeSplitCopy(short copyID);
+
+    public final short getId() {
+        return id;
     }
 
-    @TruffleBoundary
-    @Override
-    public JsonValue toJson() {
-        return Json.obj();
+    public final short[] getSuccessors() {
+        return successors;
     }
 }

@@ -275,8 +275,8 @@ public class DFAStateNode extends DFAAbstractStateNode {
         return allTransitionsInOneTreeMatcher;
     }
 
-    boolean canDoIndexOf() {
-        return hasLoopToSelf() && loopOptimizationNode != null;
+    boolean canDoIndexOf(TRegexDFAExecutorNode executor) {
+        return executor.isForward() && hasLoopToSelf() && loopOptimizationNode != null;
     }
 
     void beforeFindSuccessor(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor) {
@@ -295,9 +295,12 @@ public class DFAStateNode extends DFAAbstractStateNode {
         checkFinalState(locals, executor);
     }
 
-    boolean sameResultAsRegularMatchers(int c, boolean compactString, int allTransitionsMatcherResult) {
+    boolean sameResultAsRegularMatchers(TRegexDFAExecutorNode executor, int c, boolean compactString, int allTransitionsMatcherResult) {
         CompilerAsserts.neverPartOfCompilation();
-        return allTransitionsMatcherResult == matchers.match(c, compactString);
+        if (executor.isRegressionTestMode()) {
+            return allTransitionsMatcherResult == matchers.match(c, compactString);
+        }
+        return true;
     }
 
     private void checkFinalState(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor) {
@@ -312,9 +315,15 @@ public class DFAStateNode extends DFAAbstractStateNode {
 
     /**
      * Gets called if {@link TRegexExecutorNode#getMaxIndex(TRegexExecutorLocals)} is reached (!
-     * {@link TRegexExecutorNode#inputHasNext(TRegexExecutorLocals)}).
+     * {@link TRegexExecutorNode#inputHasNext(TRegexExecutorLocals)}). In
+     * {@link BackwardDFAStateNode}, execution may still continue here, which is why this method can
+     * return a successor index.
+     *
+     * @param locals a virtual frame as described by {@link TRegexDFAExecutorProperties}.
+     * @param executor this node's parent {@link TRegexDFAExecutorNode}.
+     * @return a successor index.
      */
-    void atEnd(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor) {
+    int atEnd(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor) {
         CompilerAsserts.partialEvaluationConstant(this);
         boolean anchored = isAnchoredFinalState() && executor.inputAtEnd(locals);
         if (isFinalState() || anchored) {
@@ -327,6 +336,7 @@ public class DFAStateNode extends DFAAbstractStateNode {
                 }
             }
         }
+        return FS_RESULT_NO_SUCCESSOR;
     }
 
     void successorFound(TRegexDFAExecutorLocals locals, @SuppressWarnings("unused") TRegexDFAExecutorNode executor, int i) {

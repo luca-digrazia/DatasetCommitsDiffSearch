@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,48 +44,43 @@ import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.nodes.input.InputIndexOfStringNode;
+import com.oracle.truffle.regex.tregex.parser.ast.InnerLiteral;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 
 public final class DFAFindInnerLiteralStateNode extends DFAAbstractStateNode {
 
-    private final String literal;
-    private final String mask;
+    private final InnerLiteral innerLiteral;
     @Child private InputIndexOfStringNode indexOfNode = InputIndexOfStringNode.create();
     @Child private TRegexDFAExecutorNode prefixMatcher;
 
-    public DFAFindInnerLiteralStateNode(short id, short[] successors, String literal, String mask, TRegexDFAExecutorNode prefixMatcher) {
+    public DFAFindInnerLiteralStateNode(short id, short[] successors, InnerLiteral innerLiteral, TRegexDFAExecutorNode prefixMatcher) {
         super(id, successors);
         assert successors.length == 1;
-        this.literal = literal;
-        this.mask = mask;
+        this.innerLiteral = innerLiteral;
         this.prefixMatcher = prefixMatcher;
+    }
+
+    public InnerLiteral getInnerLiteral() {
+        return innerLiteral;
     }
 
     @Override
     public DFAAbstractStateNode createNodeSplitCopy(short copyID) {
-        return new DFAFindInnerLiteralStateNode(copyID, Arrays.copyOf(getSuccessors(), getSuccessors().length), literal, mask, prefixMatcher);
+        return new DFAFindInnerLiteralStateNode(copyID, Arrays.copyOf(getSuccessors(), getSuccessors().length), innerLiteral, prefixMatcher);
     }
 
-    @Override
-    public void executeFindSuccessor(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor, boolean compactString) {
-        while (true) {
-            if (!executor.hasNext(locals)) {
-                locals.setSuccessorIndex(FS_RESULT_NO_SUCCESSOR);
-                return;
-            }
-            locals.setIndex(indexOfNode.execute(locals.getInput(), locals.getIndex(), locals.getCurMaxIndex(), literal, mask));
-            if (locals.getIndex() < 0) {
-                locals.setSuccessorIndex(FS_RESULT_NO_SUCCESSOR);
-                return;
-            }
-            if ((prefixMatcher == null || (int) prefixMatcher.execute(locals.toBackwardLocals(executor.getPrefixLength()), compactString) != TRegexDFAExecutorNode.NO_MATCH)) {
-                locals.setIndex(locals.getIndex() + literal.length());
-                locals.setSuccessorIndex(0);
-                return;
-            }
-            executor.advance(locals);
-        }
+    public boolean hasPrefixMatcher() {
+        return prefixMatcher != null;
+    }
+
+    int executeInnerLiteralSearch(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor) {
+        return indexOfNode.execute(locals.getInput(), locals.getIndex(), executor.getMaxIndex(locals), innerLiteral.getLiteral().content(), innerLiteral.getMaskContent());
+    }
+
+    boolean prefixMatcherMatches(TRegexDFAExecutorLocals locals, boolean compactString) {
+        Object result = prefixMatcher.execute(locals.toInnerLiteralBackwardLocals(), compactString);
+        return prefixMatcher.isSimpleCG() ? result != null : (int) result != TRegexDFAExecutorNode.NO_MATCH;
     }
 
     @TruffleBoundary
@@ -95,7 +90,6 @@ public final class DFAFindInnerLiteralStateNode extends DFAAbstractStateNode {
                         Json.prop("anchoredFinalState", false),
                         Json.prop("finalState", false),
                         Json.prop("loopToSelf", false),
-                        Json.prop("transitions", Json.array(Json.obj(Json.prop("matcher", "innerLiteral(" + literal + ")"), Json.prop("target", successors[0])))));
+                        Json.prop("transitions", Json.array(Json.obj(Json.prop("matcher", "innerLiteral(" + innerLiteral.getLiteral() + ")"), Json.prop("target", successors[0])))));
     }
-
 }
