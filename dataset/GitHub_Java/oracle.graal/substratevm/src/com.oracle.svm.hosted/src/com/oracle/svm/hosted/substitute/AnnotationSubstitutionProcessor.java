@@ -50,7 +50,6 @@ import org.graalvm.nativeimage.Platforms;
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.infrastructure.SubstitutionProcessor;
 import com.oracle.graal.pointsto.meta.AnalysisField;
-import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AnnotateOriginal;
 import com.oracle.svm.core.annotate.Delete;
@@ -95,7 +94,6 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
     private final Map<Object, Delete> deleteAnnotations;
     private final Map<ResolvedJavaType, ResolvedJavaType> typeSubstitutions;
     private final Map<ResolvedJavaMethod, ResolvedJavaMethod> methodSubstitutions;
-    private final Map<ResolvedJavaMethod, ResolvedJavaMethod> polymorphicMethodSubstitutions;
     private final Map<ResolvedJavaField, ResolvedJavaField> fieldSubstitutions;
     private ClassInitializationSupport classInitializationSupport;
 
@@ -107,7 +105,6 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         deleteAnnotations = new HashMap<>();
         typeSubstitutions = new HashMap<>();
         methodSubstitutions = new HashMap<>();
-        polymorphicMethodSubstitutions = new HashMap<>();
         fieldSubstitutions = new HashMap<>();
     }
 
@@ -189,23 +186,6 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         if (substitution != null) {
             return substitution;
         }
-        for (ResolvedJavaMethod baseMethod : polymorphicMethodSubstitutions.keySet()) {
-            if (method.getDeclaringClass().equals(baseMethod.getDeclaringClass()) && method.getName().equals(baseMethod.getName())) {
-                SubstitutionMethod substitutionBaseMethod = (SubstitutionMethod) polymorphicMethodSubstitutions.get(baseMethod);
-                if (method.isVarArgs()) {
-                    /*
-                     * The only version of the polymorphic method that has varargs is the base one.
-                     */
-                    return substitutionBaseMethod;
-                }
-
-                PolymorphicSignatureWrapperMethod wrapperMethod = new PolymorphicSignatureWrapperMethod(substitutionBaseMethod, method);
-                SubstitutionMethod substitutionMethod = new SubstitutionMethod(method, wrapperMethod);
-                register(methodSubstitutions, wrapperMethod, method, substitutionMethod);
-
-                return substitutionMethod;
-            }
-        }
         return method;
     }
 
@@ -231,8 +211,6 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
 
                 switch (cvField.getRecomputeValueKind()) {
                     case FieldOffset:
-                        AnalysisType targetFieldDeclaringType = bb.getMetaAccess().lookupJavaType(cvField.getTargetField().getDeclaringClass());
-                        targetFieldDeclaringType.registerAsReachable();
                         AnalysisField targetField = bb.getMetaAccess().lookupJavaField(cvField.getTargetField());
                         targetField.registerAsAccessed();
                         targetField.registerAsUnsafeAccessed(bb.getUniverse());
@@ -357,9 +335,6 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
             registerAsDeleted(annotated, original, deleteAnnotation);
         } else if (substituteAnnotation != null) {
             SubstitutionMethod substitution = new SubstitutionMethod(original, annotated);
-            if (substituteAnnotation.polymorphicSignature()) {
-                register(polymorphicMethodSubstitutions, annotated, original, substitution);
-            }
             register(methodSubstitutions, annotated, original, substitution);
         } else if (annotateOriginalAnnotation != null) {
             AnnotatedMethod substitution = new AnnotatedMethod(original, annotated);
@@ -608,9 +583,6 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
             /* Optional target that is not present, so nothing to do. */
         } else if (substituteAnnotation != null) {
             SubstitutionMethod substitution = new SubstitutionMethod(original, annotated, true);
-            if (substituteAnnotation.polymorphicSignature()) {
-                register(polymorphicMethodSubstitutions, annotated, original, substitution);
-            }
             register(methodSubstitutions, annotated, original, substitution);
         } else if (keepOriginalAnnotation != null) {
             register(methodSubstitutions, annotated, original, original);
