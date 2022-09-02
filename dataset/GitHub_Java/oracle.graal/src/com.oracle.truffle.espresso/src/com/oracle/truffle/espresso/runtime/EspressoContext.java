@@ -34,7 +34,6 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.instrumentation.AllocationReporter;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.espresso.EspressoBindings;
 import org.graalvm.polyglot.Engine;
@@ -95,10 +94,6 @@ public final class EspressoContext {
     // region Debug
     private final TimerCollection timers;
     // endregion Debug
-
-    // region Profiling
-    private AllocationReporter allocationReporter;
-    // endregion Profiling
 
     // region Runtime
     private final StringTable strings;
@@ -212,7 +207,6 @@ public final class EspressoContext {
         this.shutdownManager = new EspressoShutdownHandler(this, threadManager, referenceDrainer);
 
         this.timers = TimerCollection.create(env.getOptions().get(EspressoOptions.EnableTimers));
-        this.allocationReporter = env.lookup(AllocationReporter.class);
 
         // null if not specified
         this.JDWPOptions = env.getOptions().get(EspressoOptions.JDWPOptions);
@@ -531,14 +525,6 @@ public final class EspressoContext {
 
     public EspressoException getOutOfMemory() {
         return outOfMemory;
-    }
-
-    public <T> T trackAllocation(T object) {
-        if (allocationReporter != null) {
-            allocationReporter.onEnter(null, 0, AllocationReporter.SIZE_UNKNOWN);
-            allocationReporter.onReturnValue(object, 0, AllocationReporter.SIZE_UNKNOWN);
-        }
-        return object;
     }
 
     public void prepareDispose() {
