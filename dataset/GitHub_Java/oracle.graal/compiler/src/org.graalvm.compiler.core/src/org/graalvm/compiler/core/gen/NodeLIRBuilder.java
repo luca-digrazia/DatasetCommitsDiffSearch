@@ -28,8 +28,8 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isLegal;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static org.graalvm.compiler.core.common.GraalOptions.MatchExpressions;
-import static org.graalvm.compiler.core.common.SpectrePHTMitigations.AllTargets;
-import static org.graalvm.compiler.core.common.SpectrePHTMitigations.Options.SpectrePHTBarriers;
+import static org.graalvm.compiler.core.common.SpeculativeExecutionAttacksMitigations.AllTargets;
+import static org.graalvm.compiler.core.common.SpeculativeExecutionAttacksMitigations.Options.MitigateSpeculativeExecutionAttacks;
 import static org.graalvm.compiler.core.match.ComplexMatchValue.INTERIOR_MATCH;
 import static org.graalvm.compiler.debug.DebugOptions.LogVerbose;
 import static org.graalvm.compiler.lir.LIR.verifyBlock;
@@ -82,7 +82,6 @@ import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.FullInfopointNode;
 import org.graalvm.compiler.nodes.IfNode;
-import org.graalvm.compiler.nodes.ImplicitNullCheckNode;
 import org.graalvm.compiler.nodes.IndirectCallTargetNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
@@ -340,7 +339,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
     public void doBlockPrologue(@SuppressWarnings("unused") Block block, @SuppressWarnings("unused") OptionValues options) {
 
-        if (SpectrePHTBarriers.getValue(options) == AllTargets) {
+        if (MitigateSpeculativeExecutionAttacks.getValue(options) == AllTargets) {
             boolean hasControlSplitPredecessor = false;
             for (Block b : block.getPredecessors()) {
                 if (b.getSuccessorCount() > 1) {
@@ -782,12 +781,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
             return new LIRFrameState(null, null, null);
         }
         assert state != null : "Deopt node=" + deopt + " needs a state ";
-        if (deopt instanceof ImplicitNullCheckNode) {
-            ImplicitNullCheckNode implicitNullCheck = (ImplicitNullCheckNode) deopt;
-            return getDebugInfoBuilder().build(deopt, state, exceptionEdge, implicitNullCheck.getDeoptReasonAndAction(), implicitNullCheck.getDeoptSpeculation());
-        } else {
-            return getDebugInfoBuilder().build(deopt, state, exceptionEdge, null, null);
-        }
+        return getDebugInfoBuilder().build(deopt, state, exceptionEdge);
     }
 
     @Override

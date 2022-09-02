@@ -45,7 +45,6 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeMap;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.VirtualState;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
@@ -243,7 +242,7 @@ public class MatchContext {
     private static boolean sideEffectFree(Node node) {
         // The order of evaluation of these nodes controlled by data dependence so they
         // don't interfere with this match.
-        return node instanceof VirtualObjectNode || node instanceof FloatingNode || node instanceof VirtualState;
+        return node instanceof VirtualObjectNode || node instanceof FloatingNode;
     }
 
     private void findLatePosition() {

@@ -263,13 +263,11 @@ public final class StaticObject implements TruffleObject {
         // This is consistent with Truffle interop, see GR-22718 for more details.
         if (klass == meta.java_lang_Integer) {
             int content = getIntField(meta.java_lang_Integer_value);
-            float floatContent = content;
-            return floatContent == content && (int) floatContent == content;
+            return (float) content == content;
         }
         if (klass == meta.java_lang_Long) {
             long content = getLongField(meta.java_lang_Long_value);
-            float floatContent = content;
-            return floatContent == content && (long) floatContent == content;
+            return (float) content == content;
         }
         if (klass == meta.java_lang_Double) {
             double content = getDoubleField(meta.java_lang_Double_value);
@@ -290,8 +288,7 @@ public final class StaticObject implements TruffleObject {
         }
         if (klass == meta.java_lang_Long) {
             long content = getLongField(meta.java_lang_Long_value);
-            double doubleContent = content;
-            return doubleContent == content && (long) doubleContent == content;
+            return (double) content == content;
         }
         if (klass == meta.java_lang_Float) {
             float content = getFloatField(meta.java_lang_Float_value);
