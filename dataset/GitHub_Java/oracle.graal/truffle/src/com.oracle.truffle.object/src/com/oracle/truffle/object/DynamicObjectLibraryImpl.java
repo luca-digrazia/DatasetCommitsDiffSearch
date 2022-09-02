@@ -378,7 +378,6 @@ abstract class DynamicObjectLibraryImpl {
     }
 
     static RemovePlan prepareRemove(ShapeImpl shapeBefore, ShapeImpl shapeAfter) {
-        assert !shapeBefore.isShared();
         LayoutStrategy strategy = shapeBefore.getLayout().getStrategy();
         List<Move> moves = new ArrayList<>();
         boolean canMoveInPlace = shapeAfter.getObjectArrayCapacity() <= shapeBefore.getObjectArrayCapacity() &&
@@ -447,8 +446,14 @@ abstract class DynamicObjectLibraryImpl {
         }
 
         void clear(DynamicObject obj) {
-            // clear location to avoid memory leak
-            fromLoc.clear(obj);
+            if (fromLoc instanceof CoreLocations.ObjectLocation) {
+                // clear location to avoid memory leak
+                try {
+                    fromLoc.setInternal(obj, null, false);
+                } catch (IncompatibleLocationException e) {
+                    throw shouldNotHappen(e);
+                }
+            }
         }
 
         @Override
