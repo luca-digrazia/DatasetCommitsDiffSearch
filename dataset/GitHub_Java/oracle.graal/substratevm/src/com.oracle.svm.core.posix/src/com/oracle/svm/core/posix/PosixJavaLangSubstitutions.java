@@ -146,7 +146,7 @@ final class Target_java_lang_ProcessEnvironment {
         int count = 0;
         for (int i = 0; environ.read(i).isNonNull(); i++) {
             /* Ignore corrupted environment variables */
-            if (SubstrateUtil.strchr(environ.read(i), '=').isNonNull()) {
+            if (SubstrateUtil.strchr(environ.read(i), (int) '=').isNonNull()) {
                 count++;
             }
         }
@@ -155,7 +155,7 @@ final class Target_java_lang_ProcessEnvironment {
         int j = 0;
         for (int i = 0; environ.read(i).isNonNull(); i++) {
             CCharPointer varBeg = environ.read(i);
-            CCharPointer varEnd = SubstrateUtil.strchr(varBeg, '=');
+            CCharPointer varEnd = SubstrateUtil.strchr(varBeg, (int) '=');
             /* Ignore corrupted environment variables */
             if (varEnd.isNonNull()) {
                 CCharPointer valBeg = varEnd.addressOf(1);
