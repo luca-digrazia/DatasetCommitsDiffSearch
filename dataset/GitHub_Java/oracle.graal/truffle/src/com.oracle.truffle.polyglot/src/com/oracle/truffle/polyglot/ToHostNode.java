@@ -215,11 +215,6 @@ abstract class ToHostNode extends Node {
 
         if (targetType == Value.class && languageContext != null) {
             convertedValue = value instanceof Value ? value : languageContext.asValue(value);
-        } else if (interop.isNull(value)) {
-            if (targetType.isPrimitive()) {
-                throw HostInteropErrors.nullCoercion(languageContext, value, targetType);
-            }
-            return null;
         } else if (value instanceof TruffleObject) {
             convertedValue = asJavaObject((TruffleObject) value, targetType, genericType, allowsImplementation, languageContext);
         } else if (targetType.isAssignableFrom(value.getClass())) {
@@ -420,9 +415,13 @@ abstract class ToHostNode extends Node {
     @TruffleBoundary
     private static <T> T asJavaObject(Object value, Class<T> targetType, Type genericType, boolean allowsImplementation, PolyglotLanguageContext languageContext) {
         InteropLibrary interop = InteropLibrary.getFactory().getUncached(value);
-        assert !interop.isNull(value); // already handled
         Object obj;
-        if (HostObject.isJavaInstance(targetType, value)) {
+        if (interop.isNull(value)) {
+            if (targetType.isPrimitive()) {
+                throw HostInteropErrors.nullCoercion(languageContext, value, targetType);
+            }
+            return null;
+        } else if (HostObject.isJavaInstance(targetType, value)) {
             obj = HostObject.valueOf(value);
         } else if (targetType == Object.class) {
             obj = convertToObject(value, languageContext, interop);
