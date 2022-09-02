@@ -42,7 +42,6 @@ import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
-import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode;
@@ -107,7 +106,7 @@ public final class LoadModulesNode extends LLVMRootNode {
     @Children DirectCallNode[] dependencies;
     final CallTarget[] callTargets;
     final List<Object> dependenciesSource;
-    final LLVMParserRuntime parserRuntime;
+    final LLVMParserResult parserResult;
     final LLVMLanguage language;
     private boolean hasInitialised;
     @CompilerDirectives.CompilationFinal private CachedMainFunction main;
@@ -135,7 +134,7 @@ public final class LoadModulesNode extends LLVMRootNode {
         this.sourceName = name;
         this.source = source;
         this.bitcodeID = parserResult.getRuntime().getBitcodeID();
-        this.parserRuntime = parserResult.getRuntime();
+        this.parserResult = parserResult;
         this.dependenciesSource = dependenciesSource;
         this.language = language;
         this.callTargets = new CallTarget[dependenciesSource.size()];
@@ -143,10 +142,11 @@ public final class LoadModulesNode extends LLVMRootNode {
         this.hasInitialised = false;
         this.initContext = null;
         String moduleName = parserResult.getRuntime().getLibraryName();
-        this.initSymbols = new InitializeSymbolsNode(parserResult, lazyParsing, isInternalSulongLibrary, moduleName);
-        this.initScopes = new InitializeScopeNode(parserRuntime);
+        this.initSymbols = new InitializeSymbolsNode(parserResult, parserResult.getRuntime().getNodeFactory(), lazyParsing,
+                        isInternalSulongLibrary, moduleName);
+        this.initScopes = new InitializeScopeNode(parserResult);
         this.initExternals = new InitializeExternalNode(parserResult);
-        this.initGlobals = new InitializeGlobalNode(parserResult, moduleName);
+        this.initGlobals = new InitializeGlobalNode(rootFrame, parserResult, moduleName);
         this.initOverwrite = new InitializeOverwriteNode(parserResult);
         this.initModules = new InitializeModuleNode(language, parserResult, moduleName);
         this.indirectCall = IndirectCallNode.create();
@@ -198,7 +198,7 @@ public final class LoadModulesNode extends LLVMRootNode {
                         throw new IllegalStateException("Unknown dependency.");
                     }
                 }
-                LLVMFunction mainFunction = findMainFunction();
+                LLVMFunction mainFunction = findMainFunction(parserResult);
                 if (mainFunction != null) {
                     main = new CachedMainFunction(mainFunction);
                 } else {
@@ -263,7 +263,7 @@ public final class LoadModulesNode extends LLVMRootNode {
                     visited.set(bitcodeID);
                     addIDToLocalScope(localScope, bitcodeID);
                     initScopes.execute(context, localScope);
-                    resultScope.addMissingEntries(parserRuntime.getFileScope());
+                    resultScope.addMissingEntries(parserResult.getRuntime().getFileScope());
                     for (CallTarget callTarget : callTargets) {
                         if (callTarget != null) {
                             queAdd(que, callTarget);
@@ -466,9 +466,9 @@ public final class LoadModulesNode extends LLVMRootNode {
     /**
      * Retrieves the function for the main method.
      */
-    private LLVMFunction findMainFunction() {
+    private static LLVMFunction findMainFunction(LLVMParserResult parserResult) {
         // check if the freshly parsed code exports a main method
-        LLVMScope fileScope = parserRuntime.getFileScope();
+        LLVMScope fileScope = parserResult.getRuntime().getFileScope();
         LLVMSymbol mainSymbol = fileScope.get(MAIN_METHOD_NAME);
 
         if (mainSymbol != null && mainSymbol.isFunction()) {
