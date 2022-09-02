@@ -30,12 +30,10 @@
 package com.oracle.truffle.wasm.predefined.emscripten;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.WasmCodeEntry;
-import com.oracle.truffle.wasm.WasmLanguage;
-import com.oracle.truffle.wasm.memory.WasmMemory;
+import com.oracle.truffle.wasm.binary.WasmCodeEntry;
+import com.oracle.truffle.wasm.binary.WasmLanguage;
+import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
-
-import static com.oracle.truffle.wasm.WasmTracing.trace;
 
 public class EmscriptenMemcpyBig extends WasmPredefinedRootNode {
     public EmscriptenMemcpyBig(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {

@@ -27,20 +27,26 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 package com.oracle.truffle.wasm.binary;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.profiles.ConditionProfile;
+import com.oracle.truffle.wasm.binary.constants.TargetOffset;
 
 public class WasmIfNode extends WasmNode {
+    private static final TruffleLogger logger = TruffleLogger.getLogger("wasm");
+
     @CompilationFinal private final byte returnTypeId;
     @CompilationFinal private final int initialStackPointer;
-    @Child WasmNode trueBranch;
-    @Child WasmNode falseBranch;
+    @Child private WasmNode trueBranch;
+    @Child private WasmNode falseBranch;
 
-    public WasmIfNode(WasmCodeEntry codeEntry, int byteLength, byte returnTypeId, int initialStackPointer, WasmNode trueBranch, WasmNode falseBranch) {
-        super(codeEntry, byteLength);
+    private final ConditionProfile condition = ConditionProfile.createCountingProfile();
+
+    public WasmIfNode(WasmModule wasmModule, WasmCodeEntry codeEntry, WasmNode trueBranch, WasmNode falseBranch, int byteLength, byte returnTypeId, int initialStackPointer, int byteConstantLength, int numericLiteralLength) {
+        super(wasmModule, codeEntry, byteLength, byteConstantLength, numericLiteralLength);
         this.returnTypeId = returnTypeId;
         this.initialStackPointer = initialStackPointer;
         this.trueBranch = trueBranch;
@@ -48,13 +54,14 @@ public class WasmIfNode extends WasmNode {
     }
 
     @Override
-    public void execute(VirtualFrame frame) {
+    public TargetOffset execute(WasmContext context, VirtualFrame frame) {
         int stackPointer = initialStackPointer - 1;
-        int condition = popInt(frame, stackPointer);
-        if (condition != 0) {
-            trueBranch.execute(frame);
+        if (condition.profile(popInt(frame, stackPointer) != 0)) {
+            trace("taking if branch");
+            return trueBranch.execute(context, frame);
         } else {
-            falseBranch.execute(frame);
+            trace("taking else branch");
+            return falseBranch.execute(context, frame);
         }
     }
 
@@ -63,4 +70,13 @@ public class WasmIfNode extends WasmNode {
         return returnTypeId;
     }
 
+    @Override
+    public int intConstantLength() {
+        return trueBranch.intConstantLength() + falseBranch.intConstantLength();
+    }
+
+    @Override
+    public int branchTableLength() {
+        return trueBranch.branchTableLength() + falseBranch.branchTableLength();
+    }
 }

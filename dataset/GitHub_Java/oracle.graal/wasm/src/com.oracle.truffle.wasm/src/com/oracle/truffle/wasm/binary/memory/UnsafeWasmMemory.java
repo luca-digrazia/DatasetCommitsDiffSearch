@@ -31,15 +31,18 @@ package com.oracle.truffle.wasm.binary.memory;
 
 import java.lang.reflect.Field;
 
-import com.oracle.truffle.wasm.binary.Assert;
+import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.wasm.binary.WasmTracing;
+import com.oracle.truffle.wasm.binary.exception.WasmException;
 import sun.misc.Unsafe;
 
-public class UnsafeWasmMemory implements WasmMemory {
+public class UnsafeWasmMemory extends WasmMemory implements WasmTracing {
     private final Unsafe unsafe;
-    private final long start;
-    private final long memorySize;
+    private long startAddress;
+    private long pageSize;
+    private final long maxPageSize;
 
-    public UnsafeWasmMemory(long memorySize) {
+    public UnsafeWasmMemory(long initPageSize, long maxPageSize) {
         try {
             Field f = Unsafe.class.getDeclaredField("theUnsafe");
             f.setAccessible(true);
@@ -47,129 +50,241 @@ public class UnsafeWasmMemory implements WasmMemory {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        this.memorySize = memorySize;
-        this.start = unsafe.allocateMemory(memorySize);
+        this.pageSize = initPageSize;
+        this.maxPageSize = maxPageSize;
+        long byteSize = byteSize();
+        this.startAddress = unsafe.allocateMemory(byteSize);
+        unsafe.setMemory(startAddress, byteSize, (byte) 0);
     }
 
     @Override
-    public boolean validateAddress(long address, int size) {
-        return !(address + size > memorySize);
+    public void validateAddress(long address, int offset) {
+        trace("validating memory address: 0x%016X (%d)", address, address);
+        if (address < 0 || address + offset >= this.byteSize()) {
+            throw new WasmException("Requested memory address out-of-bounds");
+        }
+    }
+
+    @Override
+    public void copy(long src, long dst, long n) {
+        trace("memcopy from = %d, to = %d, n = %d", src, dst, n);
+        unsafe.copyMemory(startAddress + src, startAddress + dst, n);
+    }
+
+    @Override
+    public void clear() {
+        unsafe.setMemory(startAddress, byteSize(), (byte) 0);
+    }
+
+    @Override
+    public long pageSize() {
+        return pageSize;
+    }
+
+    @Override
+    public long byteSize() {
+        return pageSize * PAGE_SIZE;
+    }
+
+    @Override
+    public long maxPageSize() {
+        return maxPageSize;
+    }
+
+    @Override
+    public boolean grow(long extraPageSize) {
+        if (extraPageSize < 0) {
+            throw new WasmException("Extra size cannot be negative.");
+        }
+        long targetSize = byteSize() + extraPageSize * PAGE_SIZE;
+        if (maxPageSize >= 0 && targetSize > maxPageSize * PAGE_SIZE) {
+            // Cannot grow the memory beyond maxPageSize bytes.
+            return false;
+        }
+        if (targetSize * PAGE_SIZE == byteSize()) {
+            return true;
+        }
+        long updatedStartAddress = unsafe.allocateMemory(targetSize);
+        unsafe.copyMemory(startAddress, updatedStartAddress, byteSize());
+        unsafe.setMemory(updatedStartAddress + byteSize(), targetSize - byteSize(), (byte) 0);
+        unsafe.freeMemory(startAddress);
+        startAddress = updatedStartAddress;
+        pageSize += extraPageSize;
+        return true;
     }
 
     @Override
     public int load_i32(long address) {
-        return unsafe.getInt(start + address);
+        trace("load.i32 address = %d", address);
+        int value = unsafe.getInt(startAddress + address);
+        trace("load.i32 value = 0x%08X (%d)", value, value);
+        return value;
     }
 
     @Override
     public long load_i64(long address) {
-        return unsafe.getLong(start + address);
+        trace("load.i64 address = %d", address);
+        long value = unsafe.getLong(startAddress + address);
+        trace("load.i64 value = 0x%016X (%d)", value, value);
+        return value;
     }
 
     @Override
     public float load_f32(long address) {
-        return unsafe.getFloat(start + address);
+        trace("load.f32 address = %d", address);
+        float value = unsafe.getFloat(startAddress + address);
+        trace("load.f32 address = %d, value = 0x%08X (%f)", address, Float.floatToRawIntBits(value), value);
+        return value;
     }
 
     @Override
     public double load_f64(long address) {
-        return unsafe.getDouble(start + address);
+        trace("load.f64 address = %d", address);
+        double value = unsafe.getDouble(startAddress + address);
+        trace("load.f64 address = %d, value = 0x%016X (%f)", address, Double.doubleToRawLongBits(value), value);
+        return value;
     }
 
     @Override
     public int load_i32_8s(long address) {
-        return unsafe.getByte(start + address);
+        trace("load.i32_8s address = %d", address);
+        int value = unsafe.getByte(startAddress + address);
+        trace("load.i32_8s value = 0x%02X (%d)", value, value);
+        return value;
     }
 
     @Override
     public int load_i32_8u(long address) {
-        return 0x0000_00ff & unsafe.getByte(start + address);
+        trace("load.i32_8u address = %d", address);
+        int value = 0x0000_00ff & unsafe.getByte(startAddress + address);
+        trace("load.i32_8u value = 0x%02X (%d)", value, value);
+        return value;
     }
 
     @Override
     public int load_i32_16s(long address) {
-        return unsafe.getShort(start + address);
+        trace("load.i32_16s address = %d", address);
+        int value = unsafe.getShort(startAddress + address);
+        trace("load.i32_16s value = 0x%04X (%d)", value, value);
+        return value;
     }
 
     @Override
     public int load_i32_16u(long address) {
-        return 0x0000_ffff & unsafe.getShort(start + address);
+        trace("load.i32_16u address = %d", address);
+        int value = 0x0000_ffff & unsafe.getShort(startAddress + address);
+        trace("load.i32_16u value = 0x%04X (%d)", value, value);
+        return value;
     }
 
     @Override
     public long load_i64_8s(long address) {
-        return unsafe.getByte(start + address);
+        trace("load.i64_8s address = %d", address);
+        long value = unsafe.getByte(startAddress + address);
+        trace("load.i64_8s value = 0x%02X (%d)", value, value);
+        return value;
     }
 
     @Override
     public long load_i64_8u(long address) {
-        return 0x0000_00ffL & unsafe.getByte(start + address);
+        trace("load.i64_8u address = %d", address);
+        long value = 0x0000_0000_0000_00ffL & unsafe.getByte(startAddress + address);
+        trace("load.i64_8u value = 0x%02X (%d)", value, value);
+        return value;
     }
 
     @Override
     public long load_i64_16s(long address) {
-        return unsafe.getShort(start + address);
+        trace("load.i64_16s address = %d", address);
+        long value = unsafe.getShort(startAddress + address);
+        trace("load.i64_16s value = 0x%04X (%d)", value, value);
+        return value;
     }
 
     @Override
     public long load_i64_16u(long address) {
-        return 0x0000_ffffL & unsafe.getShort(start + address);
+        trace("load.i64_16u address = %d", address);
+        long value = 0x0000_0000_0000_ffffL & unsafe.getShort(startAddress + address);
+        trace("load.i64_16u value = 0x%04X (%d)", value, value);
+        return value;
     }
 
     @Override
     public long load_i64_32s(long address) {
-        return unsafe.getInt(start + address);
+        trace("load.i64_32s address = %d", address);
+        long value = unsafe.getInt(startAddress + address);
+        trace("load.i64_32s value = 0x%08X (%d)", value, value);
+        return value;
     }
 
     @Override
     public long load_i64_32u(long address) {
-        return 0x0000_0000_ffff_ffffL & unsafe.getInt(start + address);
+        trace("load.i64_32u address = %d", address);
+        long value = 0x0000_0000_ffff_ffffL & unsafe.getInt(startAddress + address);
+        trace("load.i64_32u value = 0x%08X (%d)", value, value);
+        return value;
     }
 
     @Override
     public void store_i32(long address, int value) {
-        unsafe.putInt(start + address, value);
+        trace("store.i32 address = %d, value = 0x%08X (%d)", address, value, value);
+        unsafe.putInt(startAddress + address, value);
     }
 
     @Override
     public void store_i64(long address, long value) {
-        unsafe.putLong(start + address, value);
+        trace("store.i64 address = %d, value = 0x%016X (%d)", address, value, value);
+        unsafe.putLong(startAddress + address, value);
 
     }
 
     @Override
     public void store_f32(long address, float value) {
-        unsafe.putFloat(start + address, value);
+        trace("store.f32 address = %d, value = 0x%08X (%f)", address, Float.floatToRawIntBits(value), value);
+        unsafe.putFloat(startAddress + address, value);
 
     }
 
     @Override
     public void store_f64(long address, double value) {
-        unsafe.putDouble(start + address, value);
+        trace("store.f64 address = %d, value = 0x%016X (%f)", address, Double.doubleToRawLongBits(value), value);
+        unsafe.putDouble(startAddress + address, value);
     }
 
     @Override
-    public void store_i32_8(long address, int value) {
-        unsafe.putByte(start + address, (byte) value);
+    public void store_i32_8(long address, byte value) {
+        trace("store.i32_8 address = %d, value = 0x%02X (%d)", address, value, value);
+        unsafe.putByte(startAddress + address, value);
     }
 
     @Override
-    public void store_i32_16(long address, int value) {
-        unsafe.putShort(start + address, (short) value);
+    public void store_i32_16(long address, short value) {
+        trace("store.i32_16 address = %d, value = 0x%04X (%d)", address, value, value);
+        unsafe.putShort(startAddress + address, value);
     }
 
     @Override
-    public void store_i64_8(long address, long value) {
-        unsafe.putByte(start + address, (byte) value);
+    public void store_i64_8(long address, byte value) {
+        trace("store.i64_8 address = %d, value = 0x%02X (%d)", address, value, value);
+        unsafe.putByte(startAddress + address, value);
     }
 
     @Override
-    public void store_i64_16(long address, long value) {
-        unsafe.putShort(start + address, (short) value);
+    public void store_i64_16(long address, short value) {
+        trace("store.i64_16 address = %d, value = 0x%04X (%d)", address, value, value);
+        unsafe.putShort(startAddress + address, value);
     }
 
     @Override
-    public void store_i64_32(long address, long value) {
-        unsafe.putInt(start + address, (int) value);
+    public void store_i64_32(long address, int value) {
+        trace("store.i64_32 address = %d, value = 0x%08X (%d)", address, value, value);
+        unsafe.putInt(startAddress + address, value);
+    }
+
+    @Override
+    public WasmMemory duplicate() {
+        final UnsafeWasmMemory other = new UnsafeWasmMemory(pageSize, maxPageSize);
+        unsafe.copyMemory(this.startAddress, other.startAddress, this.byteSize());
+        return other;
     }
 }
