@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,28 +29,36 @@ import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
 import static org.graalvm.compiler.hotspot.meta.HotSpotAOTProfilingPlugin.Options.TieredAOT;
 
+import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
-
-import jdk.tools.jaotc.binformat.BinaryContainer;
-import jdk.tools.jaotc.Options.Option;
+import java.util.StringTokenizer;
+import java.util.stream.Stream;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.runtime.GraalJVMCICompiler;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Activation;
+import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.hotspot.CompilerConfigurationFactory;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalCompilerFactory;
 import org.graalvm.compiler.hotspot.HotSpotGraalOptionValues;
-import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
+import org.graalvm.compiler.hotspot.HotSpotGraalRuntime;
+import org.graalvm.compiler.hotspot.HotSpotGraalRuntime.HotSpotGC;
 import org.graalvm.compiler.hotspot.HotSpotHostBackend;
+import org.graalvm.compiler.hotspot.HotSpotMarkId;
 import org.graalvm.compiler.hotspot.meta.HotSpotInvokeDynamicPlugin;
 import org.graalvm.compiler.java.GraphBuilderPhase;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.PhaseSuite;
@@ -56,6 +66,8 @@ import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.runtime.RuntimeProvider;
 
+import jdk.tools.jaotc.Options.Option;
+import jdk.tools.jaotc.binformat.BinaryContainer;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.runtime.JVMCI;
@@ -77,8 +89,31 @@ public final class Main {
 
     public static void main(String[] args) throws Exception {
         Main t = new Main();
-        final int exitCode = t.run(args);
+        final int exitCode = t.run(parse(args));
         System.exit(exitCode);
+    }
+
+    /**
+     * Expands '@file' in command line arguments by replacing '@file' with the content of 'file'
+     * parsed by StringTokenizer. '@' character can be quoted as '@@'.
+     */
+    private static String[] parse(String[] args) throws IOException {
+        List<String> result = new ArrayList<>();
+        for (String arg : args) {
+            if (arg.length() > 1 && arg.charAt(0) == '@') {
+                String v = arg.substring(1);
+                if (v.charAt(0) == '@') {
+                    result.add(v);
+                } else {
+                    try (Stream<String> file = Files.lines(Paths.get(v))) {
+                        file.map(StringTokenizer::new).map(Collections::list).flatMap(l -> l.stream().map(o -> (String) o)).forEachOrdered(result::add);
+                    }
+                }
+            } else {
+                result.add(arg);
+            }
+        }
+        return result.toArray(String[]::new);
     }
 
     private int run(String[] args) {
@@ -135,14 +170,23 @@ public final class Main {
                 printer.printInfo(classesToCompile.size() + " classes found");
             }
 
-            OptionValues graalOptions = HotSpotGraalOptionValues.HOTSPOT_OPTIONS;
+            OptionValues graalOptions = HotSpotGraalOptionValues.defaultOptions();
             // Setting -Dgraal.TieredAOT overrides --compile-for-tiered
             if (!TieredAOT.hasBeenSet(graalOptions)) {
                 graalOptions = new OptionValues(graalOptions, TieredAOT, options.tiered);
             }
             graalOptions = new OptionValues(graalOptions, GeneratePIC, true, ImmutableCode, true);
             GraalJVMCICompiler graalCompiler = HotSpotGraalCompilerFactory.createCompiler("JAOTC", JVMCI.getRuntime(), graalOptions, CompilerConfigurationFactory.selectFactory(null, graalOptions));
-            HotSpotGraalRuntimeProvider runtime = (HotSpotGraalRuntimeProvider) graalCompiler.getGraalRuntime();
+            HotSpotGraalRuntime runtime = (HotSpotGraalRuntime) graalCompiler.getGraalRuntime();
+            GraalHotSpotVMConfig graalHotSpotVMConfig = runtime.getVMConfig();
+
+            if (graalHotSpotVMConfig.verifyOops) {
+                if (!HotSpotMarkId.VERIFY_OOPS.isAvailable() || !HotSpotMarkId.VERIFY_OOP_COUNT_ADDRESS.isAvailable()) {
+                    System.err.println("Running jaotc with -XX:+VerifyOops is not supported by this JDK");
+                    return false;
+                }
+            }
+
             HotSpotHostBackend backend = (HotSpotHostBackend) runtime.getCapability(RuntimeProvider.class).getHostBackend();
             MetaAccessProvider metaAccess = backend.getProviders().getMetaAccess();
             filters = new GraalFilters(metaAccess);
@@ -163,12 +207,22 @@ public final class Main {
             AOTDynamicTypeStore dynoStore = new AOTDynamicTypeStore();
             AOTCompiledClass.setDynamicTypeStore(dynoStore);
 
-            AOTBackend aotBackend = new AOTBackend(this, graalOptions, backend, new HotSpotInvokeDynamicPlugin(dynoStore));
+            // AOTBackend aotBackend = new AOTBackend(this, graalOptions, backend, new
+            // HotSpotInvokeDynamicPlugin(dynoStore));
+            // Temporary workaround until JDK-8223533 is fixed.
+            // Disable invokedynamic support.
+            var indyPlugin = new HotSpotInvokeDynamicPlugin(dynoStore) {
+                @Override
+                public boolean supportsDynamicInvoke(GraphBuilderContext builder, int index, int opcode) {
+                    return false;
+                }
+            };
+
+            AOTBackend aotBackend = new AOTBackend(this, graalOptions, backend, indyPlugin);
             SnippetReflectionProvider snippetReflection = aotBackend.getProviders().getSnippetReflection();
             AOTCompiler compiler = new AOTCompiler(this, graalOptions, aotBackend, options.threads);
             classes = compiler.compileClasses(classes);
 
-            GraalHotSpotVMConfig graalHotSpotVMConfig = runtime.getVMConfig();
             PhaseSuite<HighTierContext> graphBuilderSuite = aotBackend.getGraphBuilderSuite();
             ListIterator<BasePhase<? super HighTierContext>> iterator = graphBuilderSuite.findPhase(GraphBuilderPhase.class);
             GraphBuilderConfiguration graphBuilderConfig = ((GraphBuilderPhase) iterator.previous()).getGraphBuilderConfig();
@@ -181,10 +235,20 @@ public final class Main {
                 System.gc();
             }
 
-            BinaryContainer binaryContainer = new BinaryContainer(graalOptions, graalHotSpotVMConfig, graphBuilderConfig, JVM_VERSION);
+            HotSpotGC graalGC = runtime.getGarbageCollector();
+            // Prior to JDK 14, the Graal HotSpotGC enum order matched the JDK CollectedHeap enum
+            // order, so using the ordinal value worked fine. In JDK 14, CMS was removed on the
+            // JDK side, so we need a symbolic lookup of the JDK value.
+            int def = graalGC.ordinal() + 1;
+            // The GC names are spelled the same in both enums, so no clever remapping is needed
+            // here.
+            String name = "CollectedHeap::" + graalGC.name();
+            int gc = graalHotSpotVMConfig.getConstant(name, Integer.class, def, true);
+
+            BinaryContainer binaryContainer = new BinaryContainer(graalOptions, graalHotSpotVMConfig, graphBuilderConfig, gc, JVM_VERSION);
             DataBuilder dataBuilder = new DataBuilder(this, backend, classes, binaryContainer);
 
-            try (DebugContext debug = DebugContext.create(graalOptions, new GraalDebugHandlersFactory(snippetReflection)); Activation a = debug.activate()) {
+            try (DebugContext debug = new Builder(graalOptions, new GraalDebugHandlersFactory(snippetReflection)).build(); Activation a = debug.activate()) {
                 dataBuilder.prepareData(debug);
             }
 

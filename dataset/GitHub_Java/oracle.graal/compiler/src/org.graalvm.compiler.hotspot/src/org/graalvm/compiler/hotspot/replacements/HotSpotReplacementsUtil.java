@@ -193,7 +193,7 @@ public class HotSpotReplacementsUtil {
         return config.useG1GC;
     }
 
-    public static boolean verifyOops() {
+    public static boolean verifyOops(@InjectedParameter GraalHotSpotVMConfig config) {
         return GraalHotSpotVMConfigNode.verifyOops();
     }
 
@@ -725,7 +725,7 @@ public class HotSpotReplacementsUtil {
     }
 
     public static Object verifyOop(Object object) {
-        if (verifyOops()) {
+        if (verifyOops(INJECTED_VMCONFIG)) {
             verifyOopStub(VERIFY_OOP, object);
         }
         return object;
