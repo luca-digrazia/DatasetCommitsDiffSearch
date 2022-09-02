@@ -40,21 +40,19 @@
  */
 package org.graalvm.wasm.memory;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.memory.ByteArraySupport;
+import com.oracle.truffle.api.nodes.Node;
+import org.graalvm.wasm.constants.Sizes;
+import org.graalvm.wasm.exception.Failure;
+import org.graalvm.wasm.exception.WasmException;
+
 import static java.lang.Integer.compareUnsigned;
 import static java.lang.StrictMath.addExact;
 import static java.lang.StrictMath.multiplyExact;
 import static org.graalvm.wasm.constants.Sizes.MAX_MEMORY_DECLARATION_SIZE;
 import static org.graalvm.wasm.constants.Sizes.MAX_MEMORY_INSTANCE_SIZE;
 import static org.graalvm.wasm.constants.Sizes.MEMORY_PAGE_SIZE;
-
-import org.graalvm.wasm.constants.Sizes;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
-
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.memory.ByteArraySupport;
-import com.oracle.truffle.api.nodes.Node;
 
 public final class ByteArrayWasmMemory extends WasmMemory {
     /**
@@ -94,7 +92,6 @@ public final class ByteArrayWasmMemory extends WasmMemory {
         try {
             this.buffer = new byte[initialSize * MEMORY_PAGE_SIZE];
         } catch (OutOfMemoryError error) {
-            CompilerDirectives.transferToInterpreter();
             throw WasmException.create(Failure.MEMORY_ALLOCATION_FAILED);
         }
     }
