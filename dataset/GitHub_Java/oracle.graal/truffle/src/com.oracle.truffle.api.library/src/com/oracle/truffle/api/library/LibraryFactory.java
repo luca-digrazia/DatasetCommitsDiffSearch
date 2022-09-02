@@ -71,19 +71,6 @@ public abstract class LibraryFactory<T extends Library> {
         LIBRARIES = new ConcurrentHashMap<>();
     }
 
-    /**
-     * Resets the state for native image generation.
-     *
-     * NOTE: this method is called reflectively by downstream projects.
-     */
-    @SuppressWarnings("unused")
-    private static void resetNativeImageState() {
-        assert TruffleOptions.AOT : "Only supported during image generation";
-        LIBRARIES.clear();
-        ResolvedDispatch.CACHE.clear();
-        ResolvedDispatch.REGISTRY.clear();
-    }
-
     private final Class<T> libraryClass;
     private final List<Message> messages;
     private final ConcurrentHashMap<Class<?>, LibraryExport<T>> exportCache = new ConcurrentHashMap<>();
@@ -373,21 +360,34 @@ public abstract class LibraryFactory<T extends Library> {
     static LibraryFactory<?> loadGeneratedClass(Class<?> libraryClass) {
         if (Library.class.isAssignableFrom(libraryClass)) {
             String generatedClassName = libraryClass.getPackage().getName() + "." + libraryClass.getSimpleName() + "Gen";
+            Class<?> loadedClass;
             try {
-                Class.forName(generatedClassName, true, libraryClass.getClassLoader());
+                loadedClass = Class.forName(generatedClassName, true, libraryClass.getClassLoader());
             } catch (ClassNotFoundException e) {
                 return null;
             }
             LibraryFactory<?> lib = LIBRARIES.get(libraryClass);
             if (lib == null) {
                 // maybe still initializing?
-                return null;
+                boolean isLibrary = LibraryFactory.class.isAssignableFrom(loadedClass);
+                if (isLibrary) {
+                    throw new AssertionError("Recursive initialization detected. Library cannot use itself in a static initializer.");
+                }
             } else {
                 lib.ensureInitialized();
             }
             return lib;
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    static LibraryFactory<?> resolveLibraryByName(String name, boolean fail) {
+        try {
+            return resolveImpl((Class<? extends Library>) Class.forName(name), fail);
+        } catch (ClassNotFoundException e) {
+            return null;
+        }
     }
 
     static Message resolveMessage(Class<? extends Library> library, String message, boolean fail) {
@@ -406,6 +406,19 @@ public abstract class LibraryFactory<T extends Library> {
             throw new IllegalArgumentException(String.format("Unknown message '%s' for library '%s' specified.", message, lib.getLibraryClass().getName()));
         }
         return foundMessage;
+    }
+
+    static Message resolveMessage(String library, String message, boolean fail) {
+        Objects.requireNonNull(message);
+        LibraryFactory<?> lib = resolveLibraryByName(library, fail);
+        if (lib == null) {
+            if (fail) {
+                throw new IllegalArgumentException(String.format("Unknown library '%s' specified.", library));
+            }
+            return null;
+        } else {
+            return resolveLibraryMessage(lib, message, fail);
+        }
     }
 
     /**

@@ -51,10 +51,11 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 /**
  * Represents a single static message of a library. Message are specified as public methods in
  * {@link Library library} subclasses. Messages may be resolved dynamically by calling
- * {@link #resolve(Class, String)} with a known library class. Message instances provide meta-data
- * about the simple and qualified name of the message, return type, receiver type, parameter types
- * and library name. Message instances are used to invoke library messages or implement library
- * messages reflectively using the {@link ReflectionLibrary reflection library}.
+ * {@link #resolve(Class, String)} with a known library class or with
+ * {@link #resolve(String, String)} with both library class and message as string. Message instances
+ * provide meta-data about the simple and qualified name of the message, return type, receiver type,
+ * parameter types and library name. Message instances are used to invoke library messages or
+ * implement library messages reflectively using the {@link ReflectionLibrary reflection library}.
  * <p>
  * Message instances are globally unique and can safely be compared by identity. In other words, if
  * the same message is {@link #resolve(Class, String) resolved} twice the same instance will be
@@ -232,6 +233,39 @@ public abstract class Message {
         }
         b.append(")");
         return b.toString();
+    }
+
+    /**
+     * Resolves a message globally for a given library name and message name. The library name
+     * corresponds to the {@link Class#getName() name} of the library class and the message name
+     * corresponds to the method name of the library message. The returned message always returns
+     * the same instance for a combination of library name and message. The provided library and
+     * message name must not be <code>null</code>. If the library or message is invalid or not found
+     * an {@link IllegalArgumentException} is thrown.
+     *
+     * @param libraryName the name of the library this message is contained in.
+     * @param messageName the simple name of this message.
+     * @since 1.0
+     */
+    public static Message resolve(String libraryName, String messageName) {
+        return LibraryFactory.resolveMessage(libraryName, messageName, true);
+    }
+
+    /**
+     * Resolves a message globally for a given library name and message name. The library name
+     * corresponds to the {@link Class#getName() name} of the library class and the message name
+     * corresponds to the method name of the library message. The returned message always returns
+     * the same instance for a combination of library name and message. If the library or message is
+     * invalid or not found <code>null</code> is returned.
+     *
+     * @param libraryName the name of the library this message is contained in.
+     * @param messageName the simple name of this message.
+     * @param fail whether to fail with an {@link IllegalArgumentException} or return
+     *            <code>null</code> if the message was not found.
+     * @since 1.0
+     */
+    public static Message resolve(String libraryName, String messageName, boolean fail) {
+        return LibraryFactory.resolveMessage(libraryName, messageName, fail);
     }
 
     /**
