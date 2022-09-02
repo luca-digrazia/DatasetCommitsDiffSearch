@@ -1042,11 +1042,11 @@ public class CompileQueue {
         GraalConfiguration.instance().removeDeoptTargetOptimizations(suites);
 
         PhaseSuite<HighTierContext> highTier = suites.getHighTier();
-        highTier.removePhase(PartialEscapePhase.class);
-        highTier.removePhase(ReadEliminationPhase.class);
-        highTier.removePhase(BoxNodeOptimizationPhase.class);
+        VMError.guarantee(highTier.removePhase(PartialEscapePhase.class));
+        VMError.guarantee(highTier.removePhase(ReadEliminationPhase.class));
+        VMError.guarantee(highTier.removePhase(BoxNodeOptimizationPhase.class));
         PhaseSuite<MidTierContext> midTier = suites.getMidTier();
-        midTier.removePhase(FloatingReadPhase.class);
+        VMError.guarantee(midTier.removePhase(FloatingReadPhase.class));
         PhaseSuite<LowTierContext> lowTier = suites.getLowTier();
         ((FixReadsPhase) lowTier.findPhase(FixReadsPhase.class).previous()).setReplaceInputsWithConstants(false);
     }
