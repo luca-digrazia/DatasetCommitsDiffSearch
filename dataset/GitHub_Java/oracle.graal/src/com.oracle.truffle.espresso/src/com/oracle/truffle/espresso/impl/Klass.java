@@ -47,7 +47,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
-import com.oracle.truffle.espresso.jdwp.api.JDWPConstantPool;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -819,12 +818,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     @Override
     public int getMinorVersion() {
         return 0;
-    }
-
-    @Override
-    public JDWPConstantPool getJDWPConstantPool() {
-        ConstantPool pool = getConstantPool();
-        return new JDWPConstantPool(pool.length(), pool.getRawBytes());
     }
 
     // endregion jdwp-specific
