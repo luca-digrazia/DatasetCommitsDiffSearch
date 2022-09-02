@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -2008,21 +2008,6 @@ public class ValueAPITest {
         BooleanAndDelegate o = new BooleanAndDelegate(new TestArray(new String[0]));
         Value v = context.asValue(o);
         ValueAssert.assertValue(v, Trait.ARRAY_ELEMENTS, Trait.BOOLEAN);
-    }
-
-    @Test
-    public void testBadNarrowingConversions() {
-        final long[] BAD_INDICES = {-1L << 32, -1L << 32 + 1, 1L << 32, 1L << 32 + 1, Long.MIN_VALUE, Long.MAX_VALUE};
-        for (long index : BAD_INDICES) {
-            Value list = context.asValue(new ArrayList<>(Arrays.asList(1, 2, 3)));
-            AbstractPolyglotTest.assertFails(() -> list.getArrayElement(index), ArrayIndexOutOfBoundsException.class);
-            AbstractPolyglotTest.assertFails(() -> list.setArrayElement(index, 42), ArrayIndexOutOfBoundsException.class);
-            AbstractPolyglotTest.assertFails(() -> list.removeArrayElement(index), ArrayIndexOutOfBoundsException.class);
-
-            Value array = context.asValue(new int[]{1, 2, 3});
-            AbstractPolyglotTest.assertFails(() -> array.getArrayElement(index), ArrayIndexOutOfBoundsException.class);
-            AbstractPolyglotTest.assertFails(() -> array.setArrayElement(index, 42), ArrayIndexOutOfBoundsException.class);
-        }
     }
 
 }
