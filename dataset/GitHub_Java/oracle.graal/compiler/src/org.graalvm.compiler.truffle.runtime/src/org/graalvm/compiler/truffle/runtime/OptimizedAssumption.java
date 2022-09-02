@@ -74,18 +74,13 @@ public final class OptimizedAssumption extends AbstractAssumption implements For
         }
 
         synchronized OptimizedAssumptionDependency awaitDependency() {
-            boolean interrupted = false;
             while (dependency == null && weakDependency == null) {
                 try {
                     this.wait();
                 } catch (InterruptedException e) {
-                    interrupted = true;
+                    Thread.currentThread().interrupt();
                 }
             }
-            if (interrupted) {
-                Thread.currentThread().interrupt();
-            }
-
             if (dependency != null) {
                 return dependency;
             }
