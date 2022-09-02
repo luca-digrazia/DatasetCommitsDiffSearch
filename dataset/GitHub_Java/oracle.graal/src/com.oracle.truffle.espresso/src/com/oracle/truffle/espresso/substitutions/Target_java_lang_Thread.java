@@ -130,7 +130,7 @@ public final class Target_java_lang_Thread {
             self.setHiddenField(meta.HIDDEN_HOST_THREAD, hostThread);
             context.putHost2Guest(hostThread, self);
             context.registerThread(hostThread);
-// System.err.println("Starting thread: " + self.getKlass());
+            System.err.println("Starting thread: " + self.getKlass());
             hostThread.setDaemon(self.getBooleanField(meta.Thread_daemon));
             self.setIntField(meta.Thread_state, State.RUNNABLE.value);
             hostThread.start();
@@ -215,46 +215,21 @@ public final class Target_java_lang_Thread {
         hostThread.interrupt();
     }
 
-    @SuppressWarnings({"unused", "deprecation"})
+    @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
     public static void resume0(@Host(Object.class) StaticObject self) {
-        if (EspressoOptions.RUNNING_ON_SVM) {
-            /* nop */
-        } else {
-            Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-            if (hostThread == null) {
-                return;
-            }
-            hostThread.resume();
-        }
+        /* nop */
     }
 
-    @SuppressWarnings({"unused", "deprecation"})
+    @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
     public static void suspend0(@Host(Object.class) StaticObject self) {
-        if (EspressoOptions.RUNNING_ON_SVM) {
-            /* nop */
-        } else {
-            Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-            if (hostThread == null) {
-                return;
-            }
-            hostThread.suspend();
-        }
+        /* nop */
     }
 
-    @SuppressWarnings({"unused", "deprecation"})
+    @SuppressWarnings({"unused"})
     @Substitution(hasReceiver = true)
     public static void stop0(@Host(Object.class) StaticObject self, Object unused) {
-        if (EspressoOptions.RUNNING_ON_SVM) {
-            /* nop */
-        } else {
-
-            Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-            if (hostThread == null) {
-                return;
-            }
-            hostThread.stop();
-        }
+        /* nop */
     }
 }
