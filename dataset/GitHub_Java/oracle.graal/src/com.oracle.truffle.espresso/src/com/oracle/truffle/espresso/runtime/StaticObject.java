@@ -118,12 +118,11 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    public String asString() {
+    public String asString() throws UnsupportedMessageException {
         if (isEspressoObject()) {
             return Meta.toHostString(this);
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().asString(rawInteropObject());
     }
 
     @ExportMessage
@@ -134,8 +133,7 @@ public final class StaticObject implements TruffleObject {
             }
             return klass == klass.getMeta().java_lang_Boolean;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().isBoolean(rawInteropObject());
     }
 
     @ExportMessage
@@ -146,8 +144,7 @@ public final class StaticObject implements TruffleObject {
             }
             return (boolean) klass.getMeta().java_lang_Boolean_value.get(this);
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().asBoolean(rawInteropObject());
     }
 
     @ExportMessage
@@ -160,8 +157,7 @@ public final class StaticObject implements TruffleObject {
             return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Long || klass == meta.java_lang_Float ||
                             klass == meta.java_lang_Double;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().isNumber(rawInteropObject());
     }
 
     @ExportMessage
@@ -197,8 +193,7 @@ public final class StaticObject implements TruffleObject {
             }
             return false;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().fitsInByte(rawInteropObject());
     }
 
     @ExportMessage
@@ -230,8 +225,7 @@ public final class StaticObject implements TruffleObject {
             }
             return false;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().fitsInShort(rawInteropObject());
     }
 
     @ExportMessage
@@ -259,8 +253,7 @@ public final class StaticObject implements TruffleObject {
             }
             return false;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().fitsInInt(rawInteropObject());
     }
 
     @ExportMessage
@@ -284,8 +277,8 @@ public final class StaticObject implements TruffleObject {
             }
             return false;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().fitsInLong(rawInteropObject());
+
     }
 
     @ExportMessage
@@ -299,8 +292,7 @@ public final class StaticObject implements TruffleObject {
             }
 
             Meta meta = klass.getMeta();
-            // We might lose precision when we convert an int or a long to a float, however, we
-            // still
+            // We might lose precision when we convert an int or a long to a float, however, we still
             // perform the conversion.
             // This is consistent with Truffle interop, see GR-22718 for more details.
             if (klass == meta.java_lang_Integer) {
@@ -319,8 +311,7 @@ public final class StaticObject implements TruffleObject {
             }
             return false;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().fitsInFloat(rawInteropObject());
     }
 
     @ExportMessage
@@ -345,8 +336,7 @@ public final class StaticObject implements TruffleObject {
             }
             return false;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().fitsInDouble(rawInteropObject());
     }
 
     private Number readNumberValue() throws UnsupportedMessageException {
@@ -383,8 +373,7 @@ public final class StaticObject implements TruffleObject {
             }
             return readNumberValue().byteValue();
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().asByte(rawInteropObject());
     }
 
     @ExportMessage
@@ -396,8 +385,7 @@ public final class StaticObject implements TruffleObject {
             }
             return readNumberValue().shortValue();
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().asShort(rawInteropObject());
     }
 
     @ExportMessage
@@ -409,8 +397,7 @@ public final class StaticObject implements TruffleObject {
             }
             return readNumberValue().intValue();
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().asInt(rawInteropObject());
     }
 
     @ExportMessage
@@ -422,8 +409,7 @@ public final class StaticObject implements TruffleObject {
             }
             return readNumberValue().longValue();
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().asLong(this);
     }
 
     @ExportMessage
@@ -435,8 +421,7 @@ public final class StaticObject implements TruffleObject {
             }
             return readNumberValue().floatValue();
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().asFloat(rawInteropObject());
     }
 
     @ExportMessage
@@ -448,30 +433,21 @@ public final class StaticObject implements TruffleObject {
             }
             return readNumberValue().doubleValue();
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().asDouble(rawInteropObject());
     }
 
     @ExportMessage
     long getArraySize(@Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (!isArray()) {
-                error.enter();
-                throw UnsupportedMessageException.create();
-            }
-            return length();
+        if (!isArray()) {
+            error.enter();
+            throw UnsupportedMessageException.create();
         }
-        error.enter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return length();
     }
 
     @ExportMessage
-    boolean hasArrayElements(@Shared("error") @Cached BranchProfile error) {
-        if (isEspressoObject()) {
-            return isArray();
-        }
-        error.enter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+    boolean hasArrayElements() {
+        return isArray();
     }
 
     @ExportMessage
@@ -856,23 +832,15 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isArrayElementReadable(long index) {
-        if (isEspressoObject()) {
-            if (isArray()) {
-                return index >= 0 && index < length();
-            }
-            return false;
+        if (isArray()) {
+            return index >= 0 && index < length();
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return false;
     }
 
     @ExportMessage
     boolean isArrayElementModifiable(long index) {
-        if (isEspressoObject()) {
-            return isPrimitiveArray(this) && index >= 0 && index < length();
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return isPrimitiveArray(this) && index >= 0 && index < length();
     }
 
     @SuppressWarnings({"unused", "static-method"})
@@ -929,7 +897,7 @@ public final class StaticObject implements TruffleObject {
     public static final String CLASS_TO_STATIC = "static";
 
     @ExportMessage
-    Object readMember(String member) throws UnknownIdentifierException {
+    Object readMember(String member) throws UnknownIdentifierException, UnsupportedMessageException {
         if (isEspressoObject()) {
             if (notNull(this)) {
                 // Class<T>.static == Klass<T>
@@ -947,8 +915,7 @@ public final class StaticObject implements TruffleObject {
             }
             throw UnknownIdentifierException.create(member);
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().readMember(rawInteropObject(), member);
     }
 
     @ExportMessage
@@ -956,31 +923,28 @@ public final class StaticObject implements TruffleObject {
         if (isEspressoObject()) {
             return notNull(this);
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().hasMembers(rawInteropObject());
     }
 
     @ExportMessage
     boolean isMemberReadable(String member) {
-        if (isEspressoObject()) {
+        if(isEspressoObject()) {
             return notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class //
-                            && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
+                    && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().isMemberReadable(rawInteropObject(), member);
     }
 
     private static final KeysArray CLASS_MEMBERS = new KeysArray(new String[]{CLASS_TO_STATIC, STATIC_TO_CLASS});
 
     @ExportMessage
-    Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+    Object getMembers(@SuppressWarnings("unused") boolean includeInternal) throws UnsupportedMessageException {
         if (isEspressoObject()) {
             return (notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class)
-                            ? CLASS_MEMBERS // .static and .class
-                            : KeysArray.EMPTY;
+                    ? CLASS_MEMBERS // .static and .class
+                    : KeysArray.EMPTY;
         }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        return InteropLibrary.getUncached().getMembers(rawInteropObject(), includeInternal);
     }
 
     // endregion Interop
