@@ -691,9 +691,4 @@ public final class ObjectKlass extends Klass {
     public int[][] getLeftoverHoles() {
         return leftoverHoles;
     }
-
-    @Override
-    public void unsafeSetVerified() {
-        setVerificationStatus(VERIFIED);
-    }
 }
