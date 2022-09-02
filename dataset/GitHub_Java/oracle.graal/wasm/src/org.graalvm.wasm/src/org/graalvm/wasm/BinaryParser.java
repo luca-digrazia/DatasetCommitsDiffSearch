@@ -1004,7 +1004,7 @@ public class BinaryParser extends BinaryStreamParser {
 
     private void readElementSection(WasmContext context) {
         int numElements = readVectorLength();
-        for (int elemSegmentId = 0; elemSegmentId != numElements; ++elemSegmentId) {
+        for (int i = 0; i != numElements; ++i) {
             int tableIndex = readUnsignedInt32();
             // At the moment, WebAssembly only supports one table instance, thus the only valid
             // table index is 0.
@@ -1016,10 +1016,10 @@ public class BinaryParser extends BinaryStreamParser {
 
             // Read the offset expression.
             byte instruction = read1();
-            int elemOffset = 0;
+            int elementOffset = 0;
             switch (instruction) {
                 case Instructions.I32_CONST: {
-                    elemOffset = readSignedInt32();
+                    elementOffset = readSignedInt32();
                     readEnd();
                     // int[] contents = readElemContents();
                     // module.symbolTable().initializeTableWithFunctions(context, elementOffset, contents);
@@ -1039,7 +1039,7 @@ public class BinaryParser extends BinaryStreamParser {
             }
 
             // Copy the contents, or schedule a linker task for this.
-            int segmentLength = readVectorLength();
+            int segmentLength = readUnsignedInt32();
             final SymbolTable symbolTable = module.symbolTable();
             final Table table = symbolTable.table();
             if (table != null) {
@@ -1047,9 +1047,6 @@ public class BinaryParser extends BinaryStreamParser {
                 // and we do not try to execute the element segments in order,
                 // as we do with data sections and the memory.
                 // Instead, if any table element is written more than once, we report an error.
-                // Thus, the order in which the element sections are loaded is not important
-                // (also, I did not notice the toolchains overriding the same element slots,
-                // or anything in the spec about that).
                 table.ensureSizeAtLeast(offset + segmentLength);
                 for (int index = 0; index != segmentLength; ++index) {
                     final int functionIndex = readFunctionIndex();
@@ -1063,7 +1060,7 @@ public class BinaryParser extends BinaryStreamParser {
                     final WasmFunction function = symbolTable.function(functionIndex);
                     elements[index] = function;
                 }
-                context.linker().resolveElemSegment(module, elemSegmentId, elemOffset, segmentLength, elements);
+                throw new WasmException("Table not resolved.");
             }
         }
     }
@@ -1093,7 +1090,7 @@ public class BinaryParser extends BinaryStreamParser {
                     int tableIndex = readTableIndex();
                     Assert.assertTrue(module.symbolTable().tableExists(), "No table was imported or declared, so cannot export a table");
                     Assert.assertIntEqual(tableIndex, 0, "Cannot export table index different than zero (only one table per module allowed)");
-                    module.symbolTable().exportTable(context, exportName);
+                    module.symbolTable().exportTable(exportName);
                     break;
                 }
                 case ExportIdentifier.MEMORY: {
