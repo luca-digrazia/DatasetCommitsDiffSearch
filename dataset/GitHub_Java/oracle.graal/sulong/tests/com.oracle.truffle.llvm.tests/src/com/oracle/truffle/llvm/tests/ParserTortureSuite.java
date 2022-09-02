@@ -32,19 +32,19 @@ package com.oracle.truffle.llvm.tests;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.stream.Stream;
 
 import org.graalvm.polyglot.Context;
 import org.junit.AfterClass;
+import org.junit.AssumptionViolatedException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.tests.options.TestOptions;
 
 @RunWith(Parameterized.class)
 public final class ParserTortureSuite extends GccSuiteBase {
@@ -54,7 +54,7 @@ public final class ParserTortureSuite extends GccSuiteBase {
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
-        return TestCaseCollector.collectTestCases(ParserTortureSuite.class, Paths.get(TestOptions.getTestDistribution(TEST_DISTRIBUTION)), CommonTestUtils.isSulong);
+        return ExternalTestCaseCollector.collectTestCases(ParserTortureSuite.class, TEST_DISTRIBUTION);
     }
 
     @Test
