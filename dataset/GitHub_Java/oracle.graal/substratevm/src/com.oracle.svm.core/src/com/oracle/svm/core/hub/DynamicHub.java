@@ -211,7 +211,8 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      * @see Class#getComponentType()
      */
     @Substitute //
-    private final DynamicHub componentType;
+    @TargetElement(name = "componentType") //
+    private final DynamicHub componentHub;
 
     /**
      * The hub for an array of this type, or null if the array type has been determined as
@@ -361,7 +362,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         this.isLocalClass = isLocalClass;
         this.isAnonymousClass = isAnonymousClass;
         this.superHub = superType;
-        this.componentType = componentHub;
+        this.componentHub = componentHub;
         this.sourceFileName = sourceFileName;
         this.modifiers = modifiers;
         this.classLoader = classLoader;
@@ -570,7 +571,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     public DynamicHub getComponentHub() {
-        return componentType;
+        return componentHub;
     }
 
     public DynamicHub getArrayHub() {
@@ -648,7 +649,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     private Object getComponentType() {
-        return componentType;
+        return componentHub;
     }
 
     @Substitute
@@ -1404,7 +1405,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @TargetElement(onlyWith = JDK15OrLater.class)
     @Override
     public DynamicHub componentType() {
-        return componentType;
+        return componentHub;
     }
 
     @Substitute
