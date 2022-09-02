@@ -929,9 +929,7 @@ public class SnippetTemplate {
 
             assert checkAllVarargPlaceholdersAreDeleted(parameterCount, placeholders);
 
-            if (((StructuredGraph) replacee.graph()).isAfterFloatingReadPhase()) {
-                new FloatingReadPhase(true, true).apply(snippetCopy);
-            }
+            new FloatingReadPhase(true, true).apply(snippetCopy);
 
             if (!guardsStage.requiresValueProxies()) {
                 new RemoveValueProxyPhase().apply(snippetCopy);
@@ -1792,7 +1790,7 @@ public class SnippetTemplate {
             } else if (args.info.isVarargsParameter(i)) {
                 assert args.values[i] instanceof Varargs;
                 Varargs varargs = (Varargs) args.values[i];
-                assert checkVarargs(metaAccess, method, signature, i - offset, args.info.getParameterName(i), varargs);
+                assert checkVarargs(metaAccess, method, signature, i, args.info.getParameterName(i), varargs);
             }
         }
         return true;
