@@ -180,11 +180,8 @@ public final class AArch64ZeroMemoryOp extends AArch64LIRInstruction {
                     masm.add(64, size, size, 8);
                 }
             } else {
-                if (isUnaligned) {
-                    // After aligning base, we may have size less than 8. Need to check again.
-                    masm.cmp(64, size, 8);
-                    masm.branchConditionally(ConditionFlag.LT, tail);
-                }
+                masm.cmp(64, size, 8);
+                masm.branchConditionally(ConditionFlag.LT, tail);
 
                 Label mainCheck = new Label();
                 masm.tbz(base, 3, mainCheck);
