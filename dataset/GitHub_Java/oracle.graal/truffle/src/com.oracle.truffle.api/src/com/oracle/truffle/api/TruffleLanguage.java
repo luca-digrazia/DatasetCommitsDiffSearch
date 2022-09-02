@@ -485,13 +485,6 @@ public abstract class TruffleLanguage<C> {
          * @since 19.3.0
          */
         List<FileTypeDetector> createFileTypeDetectors();
-
-        /**
-         * Returns the class names of provided services.
-         *
-         * @since 19.3.0
-         */
-        Collection<String> getServicesClassNames();
     }
 
     /**
@@ -535,7 +528,7 @@ public abstract class TruffleLanguage<C> {
      * here-in provided <code>env</code> and adjust itself according to parameters provided by the
      * <code>env</code> object.
      * <p>
-     * The context created by this method is accessible using {@link #getCurrentContext(Class)}. An
+     * The context created by this method is accessible using {@link #getContextReference()}. An
      * {@link IllegalStateException} is thrown if the context is tried to be accessed while the
      * createContext method is executed.
      * <p>
@@ -589,11 +582,6 @@ public abstract class TruffleLanguage<C> {
      * While finalization code is run, other language contexts may become initialized. In such a
      * case, the finalization order may be non-deterministic and/or not respect the order specified
      * by language dependencies.
-     * <p>
-     * All threads {@link Env#createThread(Runnable) created} by a language must be stopped after
-     * finalizeContext was called. The languages are responsible for fulfilling that contract,
-     * otherwise an {@link AssertionError} is thrown. It is recommended to join all threads that
-     * were disposed.
      *
      * @see Registration#dependentLanguages() for specifying language dependencies.
      * @param context the context created by
@@ -652,6 +640,10 @@ public abstract class TruffleLanguage<C> {
      * language dependencies}. By default internal languages are disposed last, otherwise the
      * default order is unspecified but deterministic. During disposal no other language must be
      * accessed using the {@link Env language environment}.
+     * <p>
+     * All threads {@link Env#createThread(Runnable) created} by a language must be stopped after
+     * dispose was called. The languages are responsible for fulfilling that contract otherwise an
+     * {@link AssertionError} is thrown. It is recommended to join all threads that were disposed.
      *
      * @param context the context created by
      *            {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env)}
@@ -1217,20 +1209,20 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * @deprecated in 19.3 as this method is inefficient in many situations. The most efficient
-     *             context lookup can be achieved knowing the current AST in which it is used. As
-     *             this method does not know the current {@link Node node} it must be unnecessarily
-     *             conservative about the lookup and therefore inefficient. More efficient context
-     *             reference versions are available for fast-paths by calling
-     *             {@link Node#lookupContextReference(Class)} or for slow-paths
-     *             {@link TruffleLanguage#getCurrentContext(Class)}. Truffle DSL has support for
-     *             context lookup with {@link com.oracle.truffle.api.dsl.CachedContext
-     *             CachedContext} that uses the most efficient lookup automatically.
+     * Creates a reference to the current context to be stored in an AST. The current context can be
+     * accessed using the {@link ContextReference#get()} method of the returned reference. If a
+     * context reference is created in the language class constructor an
+     * {@link IllegalStateException} is thrown. The exception is also thrown if the reference is
+     * tried to be created or accessed outside of the execution of an engine.
+     * <p>
+     * The returned reference identity is undefined. It might either return always the same instance
+     * or a new reference for each invocation of the method. Please note that the current context
+     * might vary between {@link RootNode#execute(VirtualFrame) executions} if resources or code is
+     * shared between multiple contexts.
      *
      * @since 0.25
      */
     @SuppressWarnings("unchecked")
-    @Deprecated
     public final ContextReference<C> getContextReference() {
         if (reference == null) {
             throw new IllegalStateException("TruffleLanguage instance is not initialized. Cannot get the current context reference.");
