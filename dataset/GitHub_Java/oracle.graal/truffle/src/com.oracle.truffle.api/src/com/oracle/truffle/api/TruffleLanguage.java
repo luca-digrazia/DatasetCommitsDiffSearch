@@ -48,11 +48,8 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.nio.file.FileSystemNotFoundException;
-import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.FileAttribute;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -494,7 +491,7 @@ public abstract class TruffleLanguage<C> {
      * here-in provided <code>env</code> and adjust itself according to parameters provided by the
      * <code>env</code> object.
      * <p>
-     * The context created by this method is accessible using {@link #getCurrentContext(Class)}. An
+     * The context created by this method is accessible using {@link #getContextReference()}. An
      * {@link IllegalStateException} is thrown if the context is tried to be accessed while the
      * createContext method is executed.
      * <p>
@@ -940,8 +937,7 @@ public abstract class TruffleLanguage<C> {
      * languages that deny access from multiple threads at the same time, multiple threads may be
      * initialized if they are used sequentially. This method will be invoked before the context is
      * {@link #initializeContext(Object) initialized} for the thread the context will be initialized
-     * with. If the thread is stored in the context it must be referenced using
-     * {@link WeakReference} to avoid leaking thread objects.
+     * with.
      * <p>
      * The {@link Thread#currentThread() current thread} may differ from the initialized thread.
      * <p>
@@ -960,12 +956,12 @@ public abstract class TruffleLanguage<C> {
      * Invoked the last time code will be executed for this thread and context. This allows the
      * language to perform cleanup actions for each thread and context. Threads might be disposed
      * before after or while a context is disposed. The {@link Thread#currentThread() current
-     * thread} may differ from the disposed thread. Disposal of threads is only guaranteed for
-     * threads that were created by guest languages, so called {@link Env#createThread(Runnable)
-     * polyglot threads}. Other threads, created by the embedder, may be collected by the garbage
-     * collector before they can be disposed and may therefore not be disposed.
+     * thread} may differ from the disposed thread.
+     * <p>
      *
-     * @see #initializeThread(Object, Thread) For usage details.
+     * <b>Example multi-threaded language implementation: </b>
+     * {@link TruffleLanguageSnippets.MultiThreadedLanguage#initializeThread}
+     *
      * @since 0.28
      */
     @SuppressWarnings("unused")
@@ -1175,20 +1171,20 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * @deprecated in 19.3 as this method is inefficient in many situations. The most efficient
-     *             context lookup can be achieved knowing the current AST in which it is used. As
-     *             this method does not know the current {@link Node node} it must be unnecessarily
-     *             conservative about the lookup and therefore inefficient. More efficient context
-     *             reference versions are available for fast-paths by calling
-     *             {@link Node#lookupContextReference(Class)} or for slow-paths
-     *             {@link TruffleLanguage#getCurrentContext(Class)}. Truffle DSL has support for
-     *             context lookup with {@link com.oracle.truffle.api.dsl.CachedContext
-     *             CachedContext} that uses the most efficient lookup automatically.
+     * Creates a reference to the current context to be stored in an AST. The current context can be
+     * accessed using the {@link ContextReference#get()} method of the returned reference. If a
+     * context reference is created in the language class constructor an
+     * {@link IllegalStateException} is thrown. The exception is also thrown if the reference is
+     * tried to be created or accessed outside of the execution of an engine.
+     * <p>
+     * The returned reference identity is undefined. It might either return always the same instance
+     * or a new reference for each invocation of the method. Please note that the current context
+     * might vary between {@link RootNode#execute(VirtualFrame) executions} if resources or code is
+     * shared between multiple contexts.
      *
      * @since 0.25
      */
     @SuppressWarnings("unchecked")
-    @Deprecated
     public final ContextReference<C> getContextReference() {
         if (reference == null) {
             throw new IllegalStateException("TruffleLanguage instance is not initialized. Cannot get the current context reference.");
@@ -1471,7 +1467,6 @@ public abstract class TruffleLanguage<C> {
          * @see #isPolyglotBindingsAccessAllowed()
          * @since 0.32
          */
-        @TruffleBoundary
         public Object getPolyglotBindings() {
             if (!isPolyglotBindingsAccessAllowed()) {
                 throw new SecurityException("Polyglot bindings are not accessible for this language. Use --polyglot or allowPolyglotAccess when building the context.");
@@ -2383,81 +2378,6 @@ public abstract class TruffleLanguage<C> {
         @TruffleBoundary
         public Map<String, String> getEnvironment() {
             return LanguageAccessor.engineAccess().getProcessEnvironment(vmObject);
-        }
-
-        /**
-         * Creates a new empty file in the specified or default temporary directory, using the given
-         * prefix and suffix to generate its name.
-         * <p>
-         * This method provides only part of a temporary file facility. To arrange for a file
-         * created by this method to be deleted automatically the resulting file must be opened
-         * using the {@link StandardOpenOption#DELETE_ON_CLOSE DELETE_ON_CLOSE} option. In this case
-         * the file is deleted when the appropriate {@code close} method is invoked. Alternatively,
-         * a {@link Runtime#addShutdownHook shutdown hook} may be used to delete the file
-         * automatically.
-         *
-         * @param dir the directory in which the file should be created or {@code null} for a
-         *            default temporary directory
-         * @param prefix the prefix to generate the file's name or {@code null}
-         * @param suffix the suffix to generate the file's name or {@code null} in which case
-         *            "{@code .tmp}" is used
-         * @param attrs the optional attributes to set atomically when creating the file
-         * @return the {@link TruffleFile} representing the newly created file that did not exist
-         *         before this method was invoked
-         * @throws IOException in case of IO error
-         * @throws IllegalArgumentException if the prefix or suffix cannot be used to generate a
-         *             valid file name
-         * @throws UnsupportedOperationException if the attributes contain an attribute which cannot
-         *             be set atomically or {@link FileSystem} does not support default temporary
-         *             directory
-         * @throws SecurityException if the {@link FileSystem} denied the operation
-         * @since 19.3.0
-         */
-        @TruffleBoundary
-        public TruffleFile createTempFile(TruffleFile dir, String prefix, String suffix, FileAttribute<?>... attrs) throws IOException {
-            try {
-                TruffleFile useDir = dir == null ? new TruffleFile(fileSystemContext, fileSystemContext.fileSystem.getTempDirectory()) : dir;
-                return TruffleFile.createTempFile(useDir, prefix, suffix, false, attrs);
-            } catch (UnsupportedOperationException | IllegalArgumentException | IOException | SecurityException e) {
-                throw e;
-            } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystemContext.fileSystem);
-            }
-        }
-
-        /**
-         * Creates a new directory in the specified or default temporary directory, using the given
-         * prefix to generate its name.
-         * <p>
-         * This method provides only part of a temporary file facility. A
-         * {@link Runtime#addShutdownHook shutdown hook} may be used to delete the directory
-         * automatically.
-         *
-         * @param dir the directory in which the directory should be created or {@code null} for a
-         *            default temporary directory
-         * @param prefix the prefix to generate the directory's name or {@code null}
-         * @param attrs the optional attributes to set atomically when creating the directory
-         * @return the {@link TruffleFile} representing the newly created directory that did not
-         *         exist before this method was invoked
-         * @throws IOException in case of IO error
-         * @throws IllegalArgumentException if the prefix cannot be used to generate a valid file
-         *             name
-         * @throws UnsupportedOperationException if the attributes contain an attribute which cannot
-         *             be set atomically or {@link FileSystem} does not support default temporary
-         *             directory
-         * @throws SecurityException if the {@link FileSystem} denied the operation
-         * @since 19.3.0
-         */
-        @TruffleBoundary
-        public TruffleFile createTempDirectory(TruffleFile dir, String prefix, FileAttribute<?>... attrs) throws IOException {
-            try {
-                TruffleFile useDir = dir == null ? new TruffleFile(fileSystemContext, fileSystemContext.fileSystem.getTempDirectory()) : dir;
-                return TruffleFile.createTempFile(useDir, prefix, null, true, attrs);
-            } catch (UnsupportedOperationException | IllegalArgumentException | IOException | SecurityException e) {
-                throw e;
-            } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystemContext.fileSystem);
-            }
         }
 
         @SuppressWarnings("rawtypes")

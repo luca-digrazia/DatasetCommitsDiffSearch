@@ -624,14 +624,13 @@ public class VirtualizedFileSystemTest {
         final Context ctx = cfg.getContext();
         final Path path = cfg.getPath();
         final boolean canRead = cfg.canRead();
-        final boolean canWrite = cfg.canWrite();
         languageAction = (Env env) -> {
             final TruffleFile root = cfg.resolve(env, path.toString());
             try {
                 final TruffleFile file = root.resolve(FOLDER_EXISTING).resolve(FILE_EXISTING);
                 final boolean writable = file.isWritable();
                 Assert.assertTrue(cfg.formatErrorMessage("Expected SecurityException"), canRead);
-                Assert.assertEquals(cfg.formatErrorMessage("Is writable"), canWrite, writable);
+                Assert.assertTrue(cfg.formatErrorMessage("Is writable"), writable);
             } catch (SecurityException se) {
                 Assert.assertFalse(cfg.formatErrorMessage("Unexpected SecurityException"), canRead);
             }
@@ -760,17 +759,13 @@ public class VirtualizedFileSystemTest {
     public void testToRelativeUri() {
         final Context ctx = cfg.getContext();
         final Path userDir = cfg.getUserDir();
-        List<? extends Path> rootDirectories = getRootDirectories();
-        if (rootDirectories.isEmpty()) {
-            throw new IllegalStateException("No root directory.");
-        }
         languageAction = (Env env) -> {
             TruffleFile relativeFile = cfg.resolve(env, FILE_EXISTING);
             URI uri = relativeFile.toRelativeUri();
             Assert.assertFalse(uri.isAbsolute());
             URI expectedUri = userDir.toUri().relativize(userDir.resolve(FILE_EXISTING).toUri());
             Assert.assertEquals(cfg.formatErrorMessage("Relative URI"), expectedUri, uri);
-            final TruffleFile absoluteFile = cfg.resolve(env, rootDirectories.get(0).toString()).resolve(FOLDER_EXISTING).resolve(FILE_EXISTING);
+            final TruffleFile absoluteFile = cfg.resolve(env, "/").resolve(FOLDER_EXISTING).resolve(FILE_EXISTING);
             uri = absoluteFile.toUri();
             Assert.assertTrue(uri.isAbsolute());
             Assert.assertEquals(cfg.formatErrorMessage("Absolute URI"), Paths.get("/").resolve(FOLDER_EXISTING).resolve(FILE_EXISTING).toUri(), uri);
@@ -1650,18 +1645,6 @@ public class VirtualizedFileSystemTest {
         return (perms & mode) == perms;
     }
 
-    static List<? extends Path> getRootDirectories() {
-        List<Path> result = new ArrayList<>();
-        if (OSUtils.isUnix()) {
-            result.add(Paths.get("/"));
-        } else {
-            for (Path root : Paths.get("").getFileSystem().getRootDirectories()) {
-                result.add(root);
-            }
-        }
-        return result;
-    }
-
     public static final class Configuration implements Closeable {
         private final String name;
         private final Context ctx;
@@ -2195,9 +2178,6 @@ public class VirtualizedFileSystemTest {
         @Override
         public void checkAccess(Path path, Set<? extends AccessMode> modes, LinkOption... linkOptions) throws IOException {
             checkRead(path);
-            if (modes.contains(AccessMode.WRITE) && !writePredicate.test(path)) {
-                throw new IOException();
-            }
             super.checkAccess(path, modes, linkOptions);
         }
 
