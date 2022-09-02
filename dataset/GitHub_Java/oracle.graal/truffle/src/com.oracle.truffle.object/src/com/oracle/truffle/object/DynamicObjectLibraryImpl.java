@@ -1246,7 +1246,6 @@ abstract class DynamicObjectLibraryImpl {
                         return false;
                     } else {
                         LocationImpl location = getLocation(newProperty);
-                        boolean guardCondition = object.getShape() == oldShape;
                         if (location.canStore(value)) {
                             Shape newShape = c.newShape;
                             if (newShape != oldShape) {
@@ -1255,7 +1254,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.set(object, value, guardCondition);
+                                location.set(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1288,7 +1287,6 @@ abstract class DynamicObjectLibraryImpl {
                     } else {
                         LocationImpl location = getLocation(newProperty);
                         Shape newShape = c.newShape;
-                        boolean guardCondition = object.getShape() == oldShape;
                         if (location.isIntLocation()) {
                             if (newShape != oldShape) {
                                 ACCESS.growAndSetShape(object, oldShape, newShape);
@@ -1296,7 +1294,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.setInt(object, value, guardCondition);
+                                location.setInt(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1309,7 +1307,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.setLong(object, value, guardCondition);
+                                location.setLong(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1322,7 +1320,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.setDouble(object, value, guardCondition);
+                                location.setDouble(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1335,7 +1333,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.set(object, value, guardCondition);
+                                location.set(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1365,7 +1363,6 @@ abstract class DynamicObjectLibraryImpl {
                         return false;
                     } else {
                         LocationImpl location = getLocation(newProperty);
-                        boolean guardCondition = object.getShape() == oldShape;
                         if (location.isLongLocation()) {
                             Shape newShape = c.newShape;
                             if (newShape != oldShape) {
@@ -1374,7 +1371,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.setLong(object, value, guardCondition);
+                                location.setLong(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1388,7 +1385,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.set(object, value, guardCondition);
+                                location.set(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1418,7 +1415,6 @@ abstract class DynamicObjectLibraryImpl {
                         return false;
                     } else {
                         LocationImpl location = getLocation(newProperty);
-                        boolean guardCondition = object.getShape() == oldShape;
                         if (location.isDoubleLocation()) {
                             Shape newShape = c.newShape;
                             if (newShape != oldShape) {
@@ -1427,7 +1423,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.setDouble(object, value, guardCondition);
+                                location.setDouble(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1441,7 +1437,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.set(object, value, guardCondition);
+                                location.set(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
@@ -1471,7 +1467,6 @@ abstract class DynamicObjectLibraryImpl {
                         return false;
                     } else {
                         LocationImpl location = getLocation(newProperty);
-                        boolean guardCondition = object.getShape() == oldShape;
                         if (location.canStore(value)) {
                             Shape newShape = c.newShape;
                             if (newShape != oldShape) {
@@ -1480,7 +1475,7 @@ abstract class DynamicObjectLibraryImpl {
                                 continue;
                             }
                             try {
-                                location.set(object, value, guardCondition);
+                                location.set(object, value, object.getShape() == oldShape);
                             } catch (IncompatibleLocationException | FinalLocationException e) {
                                 throw shouldNotHappen(e);
                             }
