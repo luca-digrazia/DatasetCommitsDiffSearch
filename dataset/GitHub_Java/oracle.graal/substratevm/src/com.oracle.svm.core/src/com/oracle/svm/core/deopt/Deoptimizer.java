@@ -32,7 +32,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.Array;
 import java.nio.ByteOrder;
-import java.util.Objects;
 
 import org.graalvm.compiler.core.common.util.TypeConversion;
 import org.graalvm.compiler.options.Option;
@@ -42,8 +41,6 @@ import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
@@ -65,7 +62,6 @@ import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.code.FrameInfoQueryResult;
 import com.oracle.svm.core.code.FrameInfoQueryResult.ValueInfo;
 import com.oracle.svm.core.code.FrameInfoQueryResult.ValueType;
-import com.oracle.svm.core.code.UntetheredCodeInfo;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.deopt.DeoptimizedFrame.VirtualFrame;
@@ -79,7 +75,6 @@ import com.oracle.svm.core.log.StringBuilderLog;
 import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.option.RuntimeOptionKey;
-import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.JavaStackWalker;
 import com.oracle.svm.core.stack.StackFrameVisitor;
@@ -267,9 +262,7 @@ public final class Deoptimizer {
      */
     @NeverInline("deoptimize must have a separate stack frame")
     public static void deoptimizeAll() {
-        JavaVMOperation.enqueueBlockingSafepoint("Deoptimizer.deoptimizeInRange", () -> {
-            deoptimizeInRange((CodePointer) WordFactory.zero(), (CodePointer) WordFactory.zero(), true);
-        });
+        deoptimizeInRange((CodePointer) WordFactory.zero(), (CodePointer) WordFactory.zero(), true);
     }
 
     /**
@@ -280,9 +273,10 @@ public final class Deoptimizer {
      */
     @NeverInline("deoptimize must have a separate stack frame")
     public static void deoptimizeInRange(CodePointer fromIp, CodePointer toIp, boolean deoptAll) {
-        VMOperation.guaranteeInProgressAtSafepoint("Deoptimization requires a safepoint.");
         /* Captures "fromIp", "toIp", and "deoptAll" for the VMOperation. */
-        deoptimizeInRangeOperation(fromIp, toIp, deoptAll);
+        JavaVMOperation.enqueueBlockingSafepoint("Deoptimizer.deoptimizeInRange", () -> {
+            deoptimizeInRangeOperation(fromIp, toIp, deoptAll);
+        });
     }
 
     /** Deoptimize a specific method on all thread stacks. */
@@ -292,11 +286,9 @@ public final class Deoptimizer {
     private static void deoptimizeInRangeOperation(CodePointer fromIp, CodePointer toIp, boolean deoptAll) {
         VMOperation.guaranteeInProgress("Deoptimizer.deoptimizeInRangeOperation, but not in VMOperation.");
         /* Handle my own thread specially, because I do not have a JavaFrameAnchor. */
-        Pointer sp = KnownIntrinsics.readCallerStackPointer();
-
         StackFrameVisitor currentThreadDeoptVisitor = getStackFrameVisitor((Pointer) fromIp, (Pointer) toIp, deoptAll, CurrentIsolate.getCurrentThread());
+        Pointer sp = KnownIntrinsics.readCallerStackPointer();
         JavaStackWalker.walkCurrentThread(sp, currentThreadDeoptVisitor);
-
         /* If I am multi-threaded, deoptimize this method on all the other stacks. */
         if (SubstrateOptions.MultiThreaded.getValue()) {
             for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
@@ -345,27 +337,7 @@ public final class Deoptimizer {
     private static void deoptimizeFrameOperation(Pointer sourceSp, boolean ignoreNonDeoptimizable, SpeculationReason speculation, IsolateThread currentThread) {
         VMOperation.guaranteeInProgress("doDeoptimizeFrame");
         CodePointer returnAddress = FrameAccess.singleton().readReturnAddress(sourceSp);
-        deoptimizeFrame(sourceSp, ignoreNonDeoptimizable, speculation, currentThread, returnAddress);
-    }
-
-    @Uninterruptible(reason = "Prevent the GC from freeing the CodeInfo object.")
-    private static void deoptimizeFrame(Pointer sourceSp, boolean ignoreNonDeoptimizable, SpeculationReason speculation, IsolateThread currentThread, CodePointer returnAddress) {
-        UntetheredCodeInfo untetheredInfo = CodeInfoTable.lookupCodeInfo(returnAddress);
-        Object tether = CodeInfoAccess.acquireTether(untetheredInfo);
-        try {
-            CodeInfo info = CodeInfoAccess.convert(untetheredInfo, tether);
-            deoptimize(sourceSp, ignoreNonDeoptimizable, speculation, currentThread, returnAddress, info);
-        } finally {
-            CodeInfoAccess.releaseTether(untetheredInfo, tether);
-        }
-    }
-
-    @Uninterruptible(reason = "Pass the now protected CodeInfo object to interruptible code.", calleeMustBe = false)
-    private static void deoptimize(Pointer sourceSp, boolean ignoreNonDeoptimizable, SpeculationReason speculation, IsolateThread currentThread, CodePointer returnAddress, CodeInfo info) {
-        deoptimize0(sourceSp, ignoreNonDeoptimizable, speculation, currentThread, returnAddress, info);
-    }
-
-    private static void deoptimize0(Pointer sourceSp, boolean ignoreNonDeoptimizable, SpeculationReason speculation, IsolateThread currentThread, CodePointer returnAddress, CodeInfo info) {
+        CodeInfo info = CodeInfoTable.lookupCodeInfo(returnAddress);
         CodeInfoQueryResult queryResult = CodeInfoTable.lookupCodeInfoQueryResult(info, returnAddress);
         Deoptimizer deoptimizer = new Deoptimizer(sourceSp, queryResult);
         DeoptimizedFrame sourceFrame = deoptimizer.deoptSourceFrame(returnAddress, ignoreNonDeoptimizable, currentThread);
@@ -724,7 +696,7 @@ public final class Deoptimizer {
 
         installDeoptimizedFrame(sourceSp, deoptimizedFrame);
 
-        if (isTraceDeoptimization()) {
+        if (Options.TraceDeoptimization.getValue()) {
             printDeoptimizedFrame(Log.log(), sourceSp, deoptimizedFrame, frameInfo, false);
         }
         logDeoptSourceFrameOperation(sourceSp, deoptimizedFrame, frameInfo);
@@ -1231,33 +1203,5 @@ public final class Deoptimizer {
         private Pointer addressOfFrameArray0() {
             return Word.objectToUntrackedPointer(frameBuffer).add(arrayBaseOffset);
         }
-    }
-
-    static boolean isTraceDeoptimization() {
-        if (Deoptimizer.Options.TraceDeoptimization.hasBeenSet(RuntimeOptionValues.singleton())) {
-            return Deoptimizer.Options.TraceDeoptimization.getValue();
-        }
-        if (ImageSingletons.contains(TraceDeoptimizationSupplier.class)) {
-            return ImageSingletons.lookup(TraceDeoptimizationSupplier.class).traceDeoptimization();
-        }
-        return false;
-    }
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public static void registerTraceDeoptimizationSupplier(TraceDeoptimizationSupplier traceDeoptimizationSupplier) {
-        Objects.requireNonNull(traceDeoptimizationSupplier, "TraceDeoptimizationSupplier must be non null.");
-        ImageSingletons.add(TraceDeoptimizationSupplier.class, traceDeoptimizationSupplier);
-    }
-
-    /**
-     * An interface to allow a custom enabling of deoptimization tracing. The implementation should
-     * be registered using
-     * {@link #registerTraceDeoptimizationSupplier(com.oracle.svm.core.deopt.Deoptimizer.TraceDeoptimizationSupplier)
-     * registerTraceDeoptimizationSupplier} in an image building time. When the
-     * {@link Deoptimizer.Options#TraceDeoptimization} option is not set the registered
-     * implementation is used to check if the deoptimization tracing should be enabled.
-     */
-    public interface TraceDeoptimizationSupplier {
-        boolean traceDeoptimization();
     }
 }
