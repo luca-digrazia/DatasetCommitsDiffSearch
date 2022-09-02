@@ -35,7 +35,6 @@ import com.oracle.svm.core.heap.FeebleReferenceList;
 import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
-import com.oracle.svm.core.util.VMError;
 
 public class DiscoverableReferenceProcessing {
 
@@ -55,7 +54,7 @@ public class DiscoverableReferenceProcessing {
              * stack to the constructor so the DiscoveredReference does not need to be put on the
              * discovered list.
              */
-            if (dr.isDiscoverableReferenceInitialized()) {
+            if (dr.isInitialized()) {
                 /* Add this DiscoverableReference to the discovered list. */
                 if (trace.isEnabled()) {
                     trace.string("  referent: ").hex(DiscoverableReference.TestingBackDoor.getReferentPointer(dr));
@@ -247,37 +246,12 @@ public class DiscoverableReferenceProcessing {
                 trace.string("  dr: ").object(dr).newline();
                 if (dr instanceof FeebleReference<?>) {
                     final FeebleReference<?> fr = (FeebleReference<?>) dr;
-                    /*
-                     * For GR-14335: Rather than getting a NullPointerException, print out some
-                     * values.
-                     */
-                    if (fr.hasList()) {
-                        final FeebleReferenceList<?> frList = fr.getList();
-                        if (frList != null) {
-                            trace.string("  frList: ").object(frList).newline();
-                            frList.push(fr);
-                        } else {
-                            trace.string("  frList is null").newline();
-                        }
+                    final FeebleReferenceList<?> frList = fr.getList();
+                    if (frList != null) {
+                        trace.string("  frList: ").object(frList).newline();
+                        frList.push(fr);
                     } else {
-                        /*
-                         * GR-14335: The DiscoverableReference should be initialized, but the
-                         * FeebleReference has an `AtomicReference list` field containing `null`,
-                         * not even a list field that points to a `null`. This should not be
-                         * possible, but I see it when the VM crashes. Before crashing the VM print
-                         * out some values.
-                         */
-                        final Log failureLog = Log.log().string("[DiscoverableReferenceProcessing.Scatterer.distributeReferences:").indent(true);
-                        failureLog.string("  dr: ").object(dr)
-                                        .string("  .referent (should be null): ").hex(dr.getReferentPointer())
-                                        .string("  .isDiscovered (should be true): ").bool(dr.getIsDiscovered())
-                                        .string("  .isDiscoverableReferenceInitialized (should be true): ").bool(dr.isDiscoverableReferenceInitialized())
-                                        .newline();
-                        failureLog.string("  fr: ").object(fr)
-                                        .string("  .isFeebleReferenceInitialized (should be true): ").bool(fr.isFeeblReferenceInitialized())
-                                        .string("  .hasList (should be true): ").bool(fr.hasList());
-                        failureLog.string("]").indent(false);
-                        throw VMError.shouldNotReachHere("DiscoverableReferenceProcessing.Scatterer.distributeReferences: FeebleReference with null list");
+                        trace.string("  frList is null").newline();
                     }
                 }
             }

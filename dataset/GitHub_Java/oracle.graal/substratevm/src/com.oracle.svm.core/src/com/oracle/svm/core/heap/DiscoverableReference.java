@@ -90,8 +90,8 @@ public class DiscoverableReference {
      * unininterruptible, so the collector either sees an uninitialized instance or fully
      * initialized instance.
      */
-    public boolean isDiscoverableReferenceInitialized() {
-        return discoverableReferenceInitialized;
+    public boolean isInitialized() {
+        return initialized;
     }
 
     /** Read access to the referent, as an Object. */
@@ -156,7 +156,7 @@ public class DiscoverableReference {
         this.rawReferent = referent;
         this.next = null;
         this.isDiscovered = false;
-        this.discoverableReferenceInitialized = true;
+        this.initialized = true;
     }
 
     /*
@@ -203,7 +203,7 @@ public class DiscoverableReference {
     private DiscoverableReference next;
 
     /** Has the constructor of this instance run? */
-    private final boolean discoverableReferenceInitialized;
+    private final boolean initialized;
 
     /** For testing and debugging. */
     public static final class TestingBackDoor {

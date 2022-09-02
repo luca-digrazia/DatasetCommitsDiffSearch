@@ -90,12 +90,6 @@ public class FeebleReference<T> extends DiscoverableReference {
      * Access methods.
      */
 
-    /* For GR-14335 */
-    @Uninterruptible(reason = "Called from uninterruptible code.")
-    public boolean hasList() {
-        return (list != null);
-    }
-
     @Uninterruptible(reason = "Called from uninterruptible code.")
     public FeebleReferenceList<T> getList() {
         return list.get();
@@ -104,11 +98,6 @@ public class FeebleReference<T> extends DiscoverableReference {
     /** Clears the list, returning the previous value, which might be null. */
     public FeebleReferenceList<T> clearList() {
         return list.getAndSet(null);
-    }
-
-    /** For GR-14335. */
-    public boolean isFeeblReferenceInitialized() {
-        return feebleReferenceInitialized;
     }
 
     /*
@@ -144,7 +133,6 @@ public class FeebleReference<T> extends DiscoverableReference {
         super(referent);
         this.list = list;
         FeebleReferenceList.clean(this);
-        this.feebleReferenceInitialized = true;
     }
 
     /** Narrow a FeebleReference<?> to a FeebleReference<S>. */
@@ -161,7 +149,7 @@ public class FeebleReference<T> extends DiscoverableReference {
      * The list to which this FeebleReference is added when the referent is unreachable. This is
      * initialized and then becomes null when the FeebleReference is put on its list.
      */
-    private final AtomicReference<FeebleReferenceList<T>> list;
+    private AtomicReference<FeebleReferenceList<T>> list;
 
     /*
      * Instance state for FeebleReferenceList.
@@ -173,7 +161,4 @@ public class FeebleReference<T> extends DiscoverableReference {
      * If this field points to this instance, then this instance is not on any list.
      */
     private FeebleReference<? extends T> next;
-
-    /** For GR-14355: Whether this instance has been initialized. */
-    private final boolean feebleReferenceInitialized;
 }
