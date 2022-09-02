@@ -50,8 +50,7 @@ public final class InvokeStaticNode extends QuickNode {
         this.method = method.getMethodVersion();
         this.callsDoPrivileged = method.getMeta().java_security_AccessController.equals(method.getDeclaringKlass()) &&
                         Name.doPrivileged.equals(method.getName());
-        this.resultAt = top - Signatures.slotsForParameters(method.getParsedSignature()); // no
-                                                                                          // receiver
+        this.resultAt = top - Signatures.slotsForParameters(method.getParsedSignature()); // no receiver
     }
 
     @Override
@@ -86,7 +85,7 @@ public final class InvokeStaticNode extends QuickNode {
     }
 
     @Override
-    public boolean producedForeignObject(Object[] refs) {
+    public boolean producedForeignObject(long[] primitives, Object[] refs) {
         return method.getMethod().getReturnKind().isObject() && BytecodeNode.peekObject(refs, getResultAt()).isForeignObject();
     }
 

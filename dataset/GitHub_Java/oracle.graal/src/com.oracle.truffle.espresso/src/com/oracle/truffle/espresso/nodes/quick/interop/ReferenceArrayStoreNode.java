@@ -23,17 +23,15 @@
 
 package com.oracle.truffle.espresso.nodes.quick.interop;
 
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
-import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -47,11 +45,10 @@ public abstract class ReferenceArrayStoreNode extends QuickNode {
     }
 
     @Override
-    public final int execute(VirtualFrame frame) {
-        BytecodeNode root = getBytecodesNode();
-        StaticObject array = nullCheck(root.peekAndReleaseObject(frame, top - 3));
-        int index = root.peekInt(frame, top - 2);
-        StaticObject value = root.peekObject(frame, top - 1);
+    public final int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
+        StaticObject array = nullCheck(BytecodeNode.popObject(refs, top - 3));
+        int index = BytecodeNode.popInt(primitives, top - 2);
+        StaticObject value = BytecodeNode.popObject(refs, top - 1);
         executeStore(array, index, value);
         return Bytecodes.stackEffectOf(Bytecodes.AASTORE);
     }
@@ -61,17 +58,10 @@ public abstract class ReferenceArrayStoreNode extends QuickNode {
     @Specialization(guards = "array.isForeignObject()")
     void doForeign(StaticObject array, int index, StaticObject value,
                     @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        try {
-            Object unwrappedValue = value.isForeignObject() ? value.rawForeignObject() : value;
-            interop.writeArrayElement(array.rawForeignObject(), index, unwrappedValue);
-        } catch (UnsupportedMessageException e) {
-            throw Meta.throwExceptionWithMessage(context.getMeta().java_lang_IllegalArgumentException, "Array access on a non-array foreign object");
-        } catch (UnsupportedTypeException e) {
-            throw Meta.throwExceptionWithMessage(context.getMeta().java_lang_ClassCastException, "Could not cast the object to the type of the foreign array elements");
-        } catch (InvalidArrayIndexException e) {
-            throw Meta.throwExceptionWithMessage(context.getMeta().java_lang_ArrayIndexOutOfBoundsException, e.getMessage());
-        }
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile exceptionProfile) {
+        Object unwrappedValue = value.isForeignObject() ? value.rawForeignObject() : value;
+        ForeignArrayUtils.writeForeignArrayElement(array, index, unwrappedValue, interop, context.getMeta(), exceptionProfile);
     }
 
     @Specialization(guards = "array.isEspressoObject()")
@@ -80,7 +70,7 @@ public abstract class ReferenceArrayStoreNode extends QuickNode {
     }
 
     @Override
-    public boolean producedForeignObject(VirtualFrame frame) {
+    public boolean producedForeignObject(long[] primitives, Object[] refs) {
         return false;
     }
 }

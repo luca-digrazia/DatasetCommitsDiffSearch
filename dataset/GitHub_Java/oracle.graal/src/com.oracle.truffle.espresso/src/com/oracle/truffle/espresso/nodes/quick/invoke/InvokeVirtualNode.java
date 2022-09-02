@@ -61,7 +61,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
         // vtable lookup.
         MethodVersion target = methodLookup(receiver, resolutionSeed);
         if (!target.getMethod().hasCode()) {
-            enterExceptionProfile();
+            CompilerDirectives.transferToInterpreter();
             Meta meta = receiver.getKlass().getMeta();
             throw Meta.throwException(meta.java_lang_AbstractMethodError);
         }
@@ -104,7 +104,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
     }
 
     @Override
-    public final boolean producedForeignObject(Object[] refs) {
+    public final boolean producedForeignObject(long[] primitives, Object[] refs) {
         return resolutionSeed.getReturnKind().isObject() && BytecodeNode.peekObject(refs, getResultAt()).isForeignObject();
     }
 

@@ -22,8 +22,7 @@
  */
 package com.oracle.truffle.espresso.nodes.helper;
 
-import static com.oracle.truffle.espresso.nodes.quick.QuickNode.nullCheck;
-
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -33,6 +32,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -45,18 +45,14 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 public abstract class AbstractSetFieldNode extends Node {
     final Field field;
     final String fieldName;
-    private final boolean isStatic;
-    private final int slotCount;
     static final int CACHED_LIBRARY_LIMIT = 3;
 
     AbstractSetFieldNode(Field field) {
         this.field = field;
         this.fieldName = field.getNameAsString();
-        this.slotCount = field.getKind().getSlotCount();
-        this.isStatic = field.isStatic();
     }
 
-    public abstract void setField(VirtualFrame frame, BytecodeNode root, int top);
+    public abstract void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex);
 
     public static AbstractSetFieldNode create(Field f) {
         // @formatter:off
@@ -76,23 +72,19 @@ public abstract class AbstractSetFieldNode extends Node {
         // @formatter:on
     }
 
-    StaticObject getReceiver(VirtualFrame frame, BytecodeNode root, int top) {
-        return isStatic
-                        ? field.getDeclaringKlass().tryInitializeAndGetStatics()
-                        : nullCheck(root.peekObject(frame, top - 1 - slotCount));
-    }
-
     protected void setForeignField(StaticObject receiver, Object fieldValue,
                     InteropLibrary interopLibrary,
-                    EspressoContext context) {
+                    EspressoContext context, BranchProfile error) {
         assert field.getDeclaringKlass().isAssignableFrom(receiver.getKlass());
         assert receiver.isForeignObject();
         assert !(fieldValue instanceof StaticObject) || !((StaticObject) fieldValue).isForeignObject();
         try {
             interopLibrary.writeMember(receiver.rawForeignObject(), fieldName, fieldValue);
         } catch (UnsupportedMessageException | UnknownIdentifierException e) {
+            error.enter();
             throw Meta.throwExceptionWithMessage(context.getMeta().java_lang_NoSuchFieldError, "Foreign object has no writable field " + fieldName);
         } catch (UnsupportedTypeException e) {
+            error.enter();
             throw Meta.throwExceptionWithMessage(context.getMeta().java_lang_ClassCastException,
                             "Could not cast the value to the actual type of the foreign field " + fieldName);
         }
@@ -106,9 +98,9 @@ abstract class IntSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        int value = root.peekInt(frame, top - 1);
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        int value = BytecodeNode.popInt(primitives, top - 1);
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -121,9 +113,10 @@ abstract class IntSetFieldNode extends AbstractSetFieldNode {
 
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, int fieldValue,
-                   @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                   @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue, interopLibrary, context);
+                    @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue, interopLibrary, context, error);
     }
 }
 
@@ -134,9 +127,9 @@ abstract class BooleanSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        boolean value = root.peekInt(frame, top - 1) != 0;
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        boolean value = BytecodeNode.popInt(primitives, top - 1) != 0;
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -150,8 +143,9 @@ abstract class BooleanSetFieldNode extends AbstractSetFieldNode {
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, boolean fieldValue,
                     @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue, interopLibrary, context);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue, interopLibrary, context, error);
     }
 }
 
@@ -162,9 +156,9 @@ abstract class CharSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        char value = (char) root.peekInt(frame, top - 1);
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        char value = (char) BytecodeNode.popInt(primitives, top - 1);
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -178,8 +172,9 @@ abstract class CharSetFieldNode extends AbstractSetFieldNode {
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, char fieldValue,
                     @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue, interopLibrary, context);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue, interopLibrary, context, error);
     }
 }
 
@@ -190,9 +185,9 @@ abstract class ShortSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        short value = (short) root.peekInt(frame, top - 1);
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        short value = (short) BytecodeNode.popInt(primitives, top - 1);
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -206,8 +201,9 @@ abstract class ShortSetFieldNode extends AbstractSetFieldNode {
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, short fieldValue,
                     @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue, interopLibrary, context);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue, interopLibrary, context, error);
     }
 }
 
@@ -218,9 +214,9 @@ abstract class ByteSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        byte value = (byte) root.peekInt(frame, top - 1);
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        byte value = (byte) BytecodeNode.popInt(primitives, top - 1);
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -234,8 +230,9 @@ abstract class ByteSetFieldNode extends AbstractSetFieldNode {
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, byte fieldValue,
                     @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue, interopLibrary, context);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue, interopLibrary, context, error);
     }
 }
 
@@ -246,9 +243,9 @@ abstract class LongSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        long value = root.peekLong(frame, top - 1);
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        long value = BytecodeNode.popLong(primitives, top - 1);
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -262,8 +259,9 @@ abstract class LongSetFieldNode extends AbstractSetFieldNode {
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, long fieldValue,
                     @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue, interopLibrary, context);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue, interopLibrary, context, error);
     }
 }
 
@@ -274,9 +272,9 @@ abstract class FloatSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        float value = root.peekFloat(frame, top - 1);
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        float value = BytecodeNode.popFloat(primitives, top - 1);
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -290,8 +288,9 @@ abstract class FloatSetFieldNode extends AbstractSetFieldNode {
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, float fieldValue,
                     @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue, interopLibrary, context);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue, interopLibrary, context, error);
     }
 }
 
@@ -302,9 +301,9 @@ abstract class DoubleSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        double value = root.peekDouble(frame, top - 1);
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        double value = BytecodeNode.popDouble(primitives, top - 1);
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -318,8 +317,9 @@ abstract class DoubleSetFieldNode extends AbstractSetFieldNode {
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, double fieldValue,
                     @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue, interopLibrary, context);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue, interopLibrary, context, error);
     }
 }
 
@@ -330,9 +330,9 @@ abstract class ObjectSetFieldNode extends AbstractSetFieldNode {
     }
 
     @Override
-    public void setField(VirtualFrame frame, BytecodeNode root, int top) {
-        StaticObject value = root.peekAndReleaseObject(frame, top - 1);
-        StaticObject receiver = getReceiver(frame, root, top);
+    public void setField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int top, int statementIndex) {
+        StaticObject value = BytecodeNode.popObject(refs, top - 1);
+        root.notifyFieldModification(frame, statementIndex, field, receiver, value);
         executeSetField(receiver, value);
     }
 
@@ -346,7 +346,8 @@ abstract class ObjectSetFieldNode extends AbstractSetFieldNode {
     @Specialization(guards = {"receiver.isForeignObject()"}, limit = "CACHED_LIBRARY_LIMIT")
     void doForeign(StaticObject receiver, StaticObject fieldValue,
                     @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
-        setForeignField(receiver, fieldValue.isForeignObject() ? fieldValue.rawForeignObject() : fieldValue, interopLibrary, context);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile error) {
+        setForeignField(receiver, fieldValue.isForeignObject() ? fieldValue.rawForeignObject() : fieldValue, interopLibrary, context, error);
     }
 }

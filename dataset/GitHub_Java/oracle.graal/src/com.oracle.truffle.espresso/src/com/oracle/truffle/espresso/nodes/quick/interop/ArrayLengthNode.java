@@ -23,13 +23,16 @@
 
 package com.oracle.truffle.espresso.nodes.quick.interop;
 
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
@@ -38,26 +41,35 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 public abstract class ArrayLengthNode extends QuickNode {
+    protected static final int LIMIT = 3;
+
     protected ArrayLengthNode(int top, int callerBCI) {
         super(top, callerBCI);
     }
 
     @Override
-    public final int execute(VirtualFrame frame) {
-        BytecodeNode root = getBytecodesNode();
-        StaticObject array = root.peekAndReleaseObject(frame, top - 1);
-        root.putInt(frame, top - 1, executeGetLength(array));
-        return 0;
+    public final int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
+        StaticObject array = nullCheck(BytecodeNode.popObject(refs, top - 1));
+        BytecodeNode.putInt(primitives, top - 1, executeGetLength(array));
+        return Bytecodes.stackEffectOf(Bytecodes.ARRAYLENGTH);
     }
 
     abstract int executeGetLength(StaticObject array);
 
-    @Specialization(guards = "array.isForeignObject()", limit = "3")
-    int doForeign(StaticObject array, @CachedLibrary("array.rawForeignObject()") InteropLibrary interop, @CachedContext(EspressoLanguage.class) EspressoContext context) {
+    @Specialization(guards = "array.isForeignObject()")
+    int doForeign(StaticObject array,
+                    @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
+                    @CachedContext(EspressoLanguage.class) EspressoContext context,
+                    @Cached BranchProfile exceptionProfile) {
         try {
-            // TODO: error report?
-            return (int) interop.getArraySize(array.rawForeignObject());
+            long arrayLength = interop.getArraySize(array.rawForeignObject());
+            if (arrayLength > Integer.MAX_VALUE) {
+                exceptionProfile.enter();
+                throw Meta.throwExceptionWithMessage(context.getMeta().java_lang_ClassCastException, "The foreign array length does not fit in int");
+            }
+            return (int) arrayLength;
         } catch (UnsupportedMessageException e) {
+            exceptionProfile.enter();
             throw Meta.throwExceptionWithMessage(context.getMeta().java_lang_IllegalArgumentException, "Called 'length' on a non-array object");
         }
     }
@@ -68,7 +80,7 @@ public abstract class ArrayLengthNode extends QuickNode {
     }
 
     @Override
-    public boolean producedForeignObject(VirtualFrame frame) {
+    public final boolean producedForeignObject(long[] primitives, Object[] refs) {
         return false;
     }
 }
