@@ -309,7 +309,7 @@ public final class LLVMScanner {
 
         private final long value;
 
-        ConstantAbbreviatedRecord(long value) {
+        public ConstantAbbreviatedRecord(long value) {
             this.value = value;
         }
 
@@ -323,7 +323,7 @@ public final class LLVMScanner {
 
         private final int width;
 
-        FixedAbbreviatedRecord(int width) {
+        public FixedAbbreviatedRecord(int width) {
             this.width = width;
         }
 
@@ -337,7 +337,7 @@ public final class LLVMScanner {
 
         private final int width;
 
-        VBRAbbreviatedRecord(int width) {
+        public VBRAbbreviatedRecord(int width) {
             this.width = width;
         }
 
@@ -381,7 +381,7 @@ public final class LLVMScanner {
 
         private final AbbreviatedRecord elementScanner;
 
-        ArrayAbbreviatedRecord(AbbreviatedRecord elementScanner) {
+        public ArrayAbbreviatedRecord(AbbreviatedRecord elementScanner) {
             this.elementScanner = elementScanner;
         }
 
