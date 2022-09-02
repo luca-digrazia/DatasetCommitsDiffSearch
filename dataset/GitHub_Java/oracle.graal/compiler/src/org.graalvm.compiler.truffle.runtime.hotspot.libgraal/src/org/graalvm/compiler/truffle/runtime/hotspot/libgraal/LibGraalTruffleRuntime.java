@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,18 +25,21 @@
 package org.graalvm.compiler.truffle.runtime.hotspot.libgraal;
 
 import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
-
-import java.io.ByteArrayInputStream;
-import java.util.HashMap;
-import java.util.Map;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilerIdleDelay;
+import static org.graalvm.libgraal.LibGraalScope.getIsolateThread;
 
 import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompiler;
-import org.graalvm.compiler.truffle.common.hotspot.libgraal.OptionsEncoder;
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.hotspot.AbstractHotSpotTruffleRuntime;
+import org.graalvm.libgraal.LibGraal;
+import org.graalvm.libgraal.LibGraalObject;
+import org.graalvm.libgraal.LibGraalScope;
+import org.graalvm.libgraal.LibGraalScope.DetachAction;
+import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.TruffleRuntime;
 
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
@@ -44,101 +47,88 @@ import jdk.vm.ci.meta.MetaAccessProvider;
  * A {@link TruffleRuntime} that uses libgraal for compilation.
  */
 final class LibGraalTruffleRuntime extends AbstractHotSpotTruffleRuntime {
-    private static final String GRAAL_OPTION_PROPERTY_PREFIX = "graal.";
 
     /**
-     * Gets the id for the SVM isolate thread associated with the current thread. This method
-     * attaches the current thread to an SVM isolate thread first if necessary.
-     *
-     * @throws UnsatisfiedLinkError if libgraal is not {@linkplain #isAvailable() available}
+     * Handle to a HSTruffleCompilerRuntime object in an libgraal heap.
      */
-    static long getIsolateThreadId() {
-        return CURRENT_ISOLATE_THREAD.get();
-    }
-
-    private static final ThreadLocal<Long> CURRENT_ISOLATE_THREAD = new ThreadLocal<Long>() {
-        @Override
-        protected Long initialValue() {
-            if (initializationError != null) {
-                throw initializationError;
-            }
-            long isolateThread = HotSpotToSVMCalls.attachThread(isolateId);
-            return isolateThread;
+    static final class Handle extends LibGraalObject {
+        Handle(long handle) {
+            super(handle);
         }
-    };
-
-    /**
-     * Determines if libgraal can be linked.
-     */
-    static boolean isAvailable() {
-        return isolateId != 0L;
     }
 
-    static final long isolateId = initializeLibgraal();
-    private static UnsatisfiedLinkError initializationError;
-
-    private final long handle;
-
+    @SuppressWarnings("try")
     LibGraalTruffleRuntime() {
-        HotSpotJVMCIRuntime runtime = HotSpotJVMCIRuntime.runtime();
-        MetaAccessProvider metaAccess = runtime.getHostJVMCIBackend().getMetaAccess();
-        HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) metaAccess.lookupJavaType(getClass());
-        long classLoaderDelegate = runtime.translate(type);
-        Map<String, Object> graalProperties = new HashMap<>();
-        for (Map.Entry<Object, Object> e : System.getProperties().entrySet()) {
-            String key = (String) e.getKey();
-            if (key.startsWith(GRAAL_OPTION_PROPERTY_PREFIX)) {
-                graalProperties.put(key.substring(GRAAL_OPTION_PROPERTY_PREFIX.length()), e.getValue());
-            }
+        try (LibGraalScope scope = new LibGraalScope(DetachAction.DETACH_RUNTIME_AND_RELEASE)) {
+            runtime().registerNativeMethods(TruffleToLibGraalCalls.class);
         }
-        byte[] encodedGraalProperties = OptionsEncoder.encode(graalProperties);
-        handle = HotSpotToSVMCalls.initializeRuntime(getIsolateThreadId(), this, classLoaderDelegate, encodedGraalProperties);
     }
 
+    long handle() {
+        try (LibGraalScope scope = new LibGraalScope()) {
+            return scope.getIsolate().getSingleton(Handle.class, () -> {
+                MetaAccessProvider metaAccess = runtime().getHostJVMCIBackend().getMetaAccess();
+                HotSpotResolvedJavaType type = (HotSpotResolvedJavaType) metaAccess.lookupJavaType(getClass());
+                long classLoaderDelegate = LibGraal.translate(type);
+                return new Handle(TruffleToLibGraalCalls.initializeRuntime(getIsolateThread(), LibGraalTruffleRuntime.this, classLoaderDelegate));
+            }).getHandle();
+        }
+    }
+
+    @SuppressWarnings("try")
     @Override
     public HotSpotTruffleCompiler newTruffleCompiler() {
-        return new SVMHotSpotTruffleCompiler(HotSpotToSVMCalls.initializeCompiler(getIsolateThreadId(), handle));
+        return new LibGraalHotSpotTruffleCompiler(this);
     }
 
+    @SuppressWarnings("try")
     @Override
     protected String initLazyCompilerConfigurationName() {
-        return HotSpotToSVMCalls.getCompilerConfigurationFactoryName(getIsolateThreadId());
-    }
-
-    /**
-     * Gets the isolate pointer for calls of libraal methods. This relies on SVM writes the
-     * {@code Isolate*} to {@code JNIInvokeInterface_.reserved0}.
-     *
-     * @throws UnsatisfiedLinkError if libgraal is not available
-     */
-    private static long initializeLibgraal() {
-        try {
-            long[] nativeInterface = runtime().registerNativeMethods(HotSpotToSVMCalls.class);
-            return nativeInterface[1];
-        } catch (UnsatisfiedLinkError e) {
-            initializationError = e;
-            return 0L;
+        try (LibGraalScope scope = new LibGraalScope(DetachAction.DETACH_RUNTIME_AND_RELEASE)) {
+            return TruffleToLibGraalCalls.getCompilerConfigurationFactoryName(getIsolateThread(), handle());
         }
     }
 
     @Override
-    protected Map<String, Object> createInitialOptions() {
-        byte[] serializedOptions = HotSpotToSVMCalls.getInitialOptions(getIsolateThreadId(), handle);
-        return OptionsEncoder.decode(new ByteArrayInputStream(serializedOptions));
+    protected AutoCloseable openCompilerThreadScope() {
+        return new LibGraalScope(DetachAction.DETACH_RUNTIME_AND_RELEASE);
     }
 
     @Override
-    public void log(String message) {
-        HotSpotToSVMCalls.log(getIsolateThreadId(), message);
+    protected long getCompilerIdleDelay(OptimizedCallTarget callTarget) {
+        OptionValues options = callTarget.engine.getEngineOptions();
+        /*
+         * Libgraal compiler idle time is set to 0 to avoid that the libgraal isolate is shut down.
+         * We are collecting statistics if any of the flags are used.
+         */
+        if (!options.get(PolyglotCompilerOptions.MethodExpansionStatistics).isEmpty() || !options.get(PolyglotCompilerOptions.NodeExpansionStatistics).isEmpty() ||
+                        options.get(PolyglotCompilerOptions.InstrumentBranches) || options.get(PolyglotCompilerOptions.InstrumentBoundaries)) {
+            return 0L;
+        }
+        return callTarget.getOptionValue(CompilerIdleDelay);
     }
 
-    /**
-     * Clears JNI GlobalReferences to HotSpot objects held by object on SVM heap. NOTE: This method
-     * is called reflectively by Truffle tests.
-     */
+    @SuppressWarnings("try")
+    @Override
+    protected boolean isPrintGraphEnabled() {
+        try (LibGraalScope scope = new LibGraalScope(DetachAction.DETACH_RUNTIME_AND_RELEASE)) {
+            return TruffleToLibGraalCalls.isPrintGraphEnabled(getIsolateThread(), handle());
+        }
+    }
+
     @SuppressWarnings("unused")
-    private static void cleanNativeReferences() {
-        SVMObject.cleanHandles();
-        HotSpotToSVMCalls.cleanReferences(getIsolateThreadId());
+    @Override
+    public int enterLibGraalScope() {
+        final LibGraalScope scope = new LibGraalScope();
+        return scope.getDepth();
+    }
+
+    @Override
+    public void exitLibGraalScope(int expectedDepth) {
+        LibGraalScope s = LibGraalScope.current();
+        if (s.getDepth() != expectedDepth) {
+            throw new IllegalStateException("The current nesting depth " + s.getDepth() + " is not equal to the expected depth " + expectedDepth);
+        }
+        s.close();
     }
 }
