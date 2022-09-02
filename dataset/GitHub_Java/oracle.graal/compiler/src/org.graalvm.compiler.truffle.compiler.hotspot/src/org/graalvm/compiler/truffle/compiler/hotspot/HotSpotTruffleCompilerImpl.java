@@ -111,9 +111,9 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
     private final HotSpotGraalRuntimeProvider hotspotGraalRuntime;
 
     public static HotSpotTruffleCompilerImpl create(final TruffleCompilerRuntime runtime) {
-        OptionValues options = TruffleCompilerOptions.getOptions();
-        HotSpotGraalRuntimeProvider hotspotGraalRuntime = (HotSpotGraalRuntimeProvider) getCompiler(options).getGraalRuntime();
+        HotSpotGraalRuntimeProvider hotspotGraalRuntime = (HotSpotGraalRuntimeProvider) getCompiler().getGraalRuntime();
         Backend backend = hotspotGraalRuntime.getHostBackend();
+        OptionValues options = TruffleCompilerOptions.getOptions();
         Suites suites = backend.getSuites().getDefaultSuites(options);
         LIRSuites lirSuites = backend.getSuites().getDefaultLIRSuites(options);
         GraphBuilderPhase phase = (GraphBuilderPhase) backend.getSuites().getDefaultGraphBuilderSuite().findPhase(GraphBuilderPhase.class).previous();
@@ -133,7 +133,8 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
         return new HotSpotTruffleCompilerImpl(hotspotGraalRuntime, runtime, plugins, suites, lirSuites, backend, firstTierSuites, firstTierLirSuites, firstTierProviders, snippetReflection);
     }
 
-    private static GraalJVMCICompiler getCompiler(OptionValues options) {
+    private static GraalJVMCICompiler getCompiler() {
+        final OptionValues options = TruffleCompilerOptions.getOptions();
         if (!Options.TruffleCompilerConfiguration.hasBeenSet(options)) {
             JVMCICompiler compiler = JVMCI.getRuntime().getCompiler();
             if (compiler instanceof GraalJVMCICompiler) {
@@ -266,7 +267,7 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
     private CompilationResult compileTruffleCallBoundaryMethod(ResolvedJavaMethod javaMethod, CompilationIdentifier compilationId, DebugContext debug) {
         Suites newSuites = this.lastTierSuites.copy();
         removeInliningPhase(newSuites);
-        OptionValues options = debug.getOptions();
+        OptionValues options = TruffleCompilerOptions.getOptions();
         StructuredGraph graph = new StructuredGraph.Builder(options, debug, AllowAssumptions.NO).method(javaMethod).compilationId(compilationId).build();
 
         Plugins plugins = new Plugins(new InvocationPlugins());

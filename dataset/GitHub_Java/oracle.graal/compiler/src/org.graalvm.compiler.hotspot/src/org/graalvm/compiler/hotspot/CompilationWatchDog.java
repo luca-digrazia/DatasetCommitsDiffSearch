@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -308,7 +308,7 @@ class CompilationWatchDog implements Runnable, AutoCloseable {
                 int nonFatalIdenticalCompilationSnapshots = Options.NonFatalIdenticalCompilationSnapshots.getValue(options);
                 watchDog = new CompilationWatchDog(currentThread, startDelayMilliseconds, stackTraceIntervalMilliseconds, nonFatalIdenticalCompilationSnapshots);
                 WATCH_DOGS.set(watchDog);
-                GraalServiceThread thread = new GraalServiceThread(CompilationWatchDog.class.getSimpleName(), watchDog);
+                GraalServiceThread thread = new GraalServiceThread(watchDog);
                 thread.setName(thread.getId() + " " + watchDog.toString());
                 thread.setPriority(Thread.MAX_PRIORITY);
                 thread.setDaemon(true);

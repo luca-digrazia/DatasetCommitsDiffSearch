@@ -29,8 +29,6 @@ import java.util.Objects;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 import jdk.vm.ci.hotspot.HotSpotMetaData;
 import jdk.vm.ci.hotspot.HotSpotObjectConstantScope;
-import jdk.vm.ci.hotspot.HotSpotSpeculationLog;
-import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.services.Services;
 
 /**
@@ -60,9 +58,5 @@ public class HotSpotGraalServices {
         } else {
             System.exit(status);
         }
-    }
-
-    public static SpeculationLog newHotSpotSpeculationLog(long cachedFailedSpeculationsAddress) {
-        return new HotSpotSpeculationLog(cachedFailedSpeculationsAddress);
     }
 }

@@ -25,8 +25,6 @@
 package org.graalvm.compiler.hotspot;
 
 import jdk.vm.ci.hotspot.HotSpotMetaData;
-import jdk.vm.ci.hotspot.HotSpotSpeculationLog;
-import jdk.vm.ci.meta.SpeculationLog;
 
 /**
  * JDK 13 version of {@code HotSpotGraalServices}.
@@ -52,9 +50,5 @@ public class HotSpotGraalServices {
 
     public static void exit(int status) {
         System.exit(status);
-    }
-
-    public static SpeculationLog newHotSpotSpeculationLog(long cachedFailedSpeculationsAddress) {
-        return new HotSpotSpeculationLog(cachedFailedSpeculationsAddress);
     }
 }

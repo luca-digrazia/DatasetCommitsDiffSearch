@@ -24,10 +24,7 @@
  */
 package org.graalvm.compiler.hotspot;
 
-import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
-
 import jdk.vm.ci.hotspot.HotSpotMetaData;
-import jdk.vm.ci.meta.SpeculationLog;
 
 /**
  * JDK 12 version of {@code HotSpotGraalServices}.
@@ -51,9 +48,5 @@ public class HotSpotGraalServices {
 
     public static void exit(int status) {
         System.exit(status);
-    }
-
-    public static SpeculationLog newHotSpotSpeculationLog(long cachedFailedSpeculationsAddress) {
-        throw shouldNotReachHere();
     }
 }

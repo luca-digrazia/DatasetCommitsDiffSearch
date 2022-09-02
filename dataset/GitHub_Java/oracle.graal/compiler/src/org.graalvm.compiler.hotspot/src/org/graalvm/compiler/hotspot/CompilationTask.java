@@ -103,7 +103,7 @@ public class CompilationTask {
 
         @Override
         public String toString() {
-            return getMethod().format("%H.%n(%p) @ " + getEntryBCI());
+            return getMethod().format("%H.%n(%p)");
         }
 
         @Override
