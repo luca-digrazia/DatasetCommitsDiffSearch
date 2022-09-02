@@ -249,10 +249,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
                 EngineData engineData = callTarget.engine;
                 profilingEnabled = engineData.profilingEnabled;
                 TruffleCompiler compiler = newTruffleCompiler();
-                String[] warnings = compiler.initialize(TruffleRuntimeOptions.getOptionsForCompiler(callTarget));
-                for (String warning : warnings) {
-                    callTarget.log(warning);
-                }
+                compiler.initialize(TruffleRuntimeOptions.getOptionsForCompiler(callTarget));
                 truffleCompiler = compiler;
                 traceTransferToInterpreter = engineData.traceTransferToInterpreter;
                 truffleCompilerInitialized = true;
@@ -497,6 +494,9 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
 
                 if (target instanceof OptimizedCallTarget) {
                     OptimizedCallTarget callTarget = ((OptimizedCallTarget) target);
+                    if (callTarget.isValid()) {
+                        builder.append(" <opt>");
+                    }
                     if (callTarget.getSourceCallTarget() != null) {
                         builder.append(" <split-" + Integer.toHexString(callTarget.hashCode()) + ">");
                     }
