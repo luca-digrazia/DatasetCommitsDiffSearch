@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,12 +28,15 @@ import java.util.LinkedList;
 import java.util.Objects;
 import java.util.WeakHashMap;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
 /**
  * Manages a collection of weak references associated to handles.
  */
 public class WeakHandles<T> {
 
-    private static final int DEFAULT_INITIAL_CAPACITY = 32;
+    private static final int DEFAULT_INITIAL_CAPACITY = 16;
 
     private final WeakHashMap<T, Integer> map;
     private final LinkedList<Integer> freeList = new LinkedList<>();
@@ -65,6 +68,7 @@ public class WeakHandles<T> {
      * 
      * @return new or existing handle, provided handles are guanteed to be > 0
      */
+    @TruffleBoundary
     public synchronized int handlify(T object) {
         Objects.requireNonNull(object);
         Integer handle = map.get(object);
@@ -80,11 +84,12 @@ public class WeakHandles<T> {
      * @param index handle, must be > 0 and fit in an integer
      * @return the object associated with the handle or null if was collected
      */
+    @SuppressWarnings("unchecked")
     public T getObject(long index) {
         if (index <= 0) {
             throw new IllegalArgumentException("index");
         }
-        WeakReference<T> weakRef = handles[Math.toIntExact(index)];
+        WeakReference<T> weakRef = CompilerDirectives.castExact(handles[Math.toIntExact(index)], WeakReference.class);
         return weakRef != null
                         ? weakRef.get()
                         : null;
@@ -96,6 +101,7 @@ public class WeakHandles<T> {
      * @return The handle associated with the given object or -1 if the object doesn't have a handle
      *         or the object was collected. A valid handle is guaranteed to be != 0.
      */
+    @TruffleBoundary
     public synchronized long getIndex(T object) {
         Integer index = map.get(Objects.requireNonNull(object));
         return index != null
@@ -103,6 +109,7 @@ public class WeakHandles<T> {
                         : -1;
     }
 
+    @TruffleBoundary
     private int getFreeSlot() {
         if (!freeList.isEmpty()) {
             return freeList.removeFirst();
@@ -118,6 +125,7 @@ public class WeakHandles<T> {
                         : freeList.removeFirst();
     }
 
+    @TruffleBoundary
     private synchronized int addHandle(T object) {
         Objects.requireNonNull(object);
         int index = getFreeSlot();

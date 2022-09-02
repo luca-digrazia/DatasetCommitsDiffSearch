@@ -23,80 +23,76 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.impl.ModuleTable.moduleLock;
-
 import java.util.ArrayList;
+import java.util.concurrent.locks.ReadWriteLock;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 
-public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleTable.ModuleEntry> {
-    public static final Object packageLock = moduleLock;
-
-    @Override
-    public Object getLock() {
-        return packageLock;
+public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEntry> {
+    public PackageTable(ReadWriteLock lock) {
+        super(lock);
     }
 
     @Override
-    public PackageEntry createEntry(Symbol<Name> name, ModuleTable.ModuleEntry appendix) {
+    protected PackageEntry createEntry(Symbol<Name> name, ModuleEntry appendix) {
         return new PackageEntry(name, appendix);
     }
 
-    public static class PackageEntry implements EntryTable.NamedEntry {
+    public static class PackageEntry extends EntryTable.NamedEntry {
 
         @Override
         public Symbol<Name> getName() {
             return name;
         }
 
-        public PackageEntry(Symbol<Name> name, ModuleTable.ModuleEntry module) {
-            this.name = name;
+        public PackageEntry(Symbol<Name> name, ModuleEntry module) {
+            super(name);
             this.module = module;
         }
 
-        private final Symbol<Name> name;
-        private final ModuleTable.ModuleEntry module;
-        private ArrayList<ModuleTable.ModuleEntry> exports = null;
-        private boolean isUnqualifiedExports = false;
+        private final ModuleEntry module;
+        private ArrayList<ModuleEntry> exports = null;
+        private boolean isUnqualifiedExported = false;
         private boolean isExportedAllUnnamed = false;
 
-        public void addExports(ModuleTable.ModuleEntry module) {
-            if (isUnqualifiedExports()) {
+        public void addExports(ModuleEntry m) {
+            if (isUnqualifiedExported()) {
                 return;
             }
-            synchronized (packageLock) {
-                if (module == null) {
+            synchronized (this) {
+                if (m == null) {
                     setUnqualifiedExports();
                 }
                 if (exports == null) {
                     exports = new ArrayList<>();
                 }
-                if (!exports.contains(module)) {
-                    exports.add(module);
+                if (!contains(m)) {
+                    exports.add(m);
                 }
             }
         }
 
-        public boolean isQualifiedExportTo(ModuleTable.ModuleEntry m) {
+        public boolean isQualifiedExportTo(ModuleEntry m) {
             if (isExportedAllUnnamed() && !m.isNamed()) {
                 return true;
             }
-            if (isUnqualifiedExports() || exports == null) {
+            if (isUnqualifiedExported() || exports == null) {
                 return false;
             }
-            return exports.contains(m);
+            return contains(m);
         }
 
-        public boolean isUnqualifiedExports() {
-            return module().isOpen() || isUnqualifiedExports;
+        public boolean isUnqualifiedExported() {
+            return module().isOpen() || isUnqualifiedExported;
         }
 
         public void setUnqualifiedExports() {
-            if (isUnqualifiedExports()) {
+            if (isUnqualifiedExported()) {
                 return;
             }
-            isUnqualifiedExports = true;
+            isUnqualifiedExported = true;
             isExportedAllUnnamed = true;
             exports = null;
         }
@@ -109,22 +105,17 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleTa
             if (isExportedAllUnnamed()) {
                 return;
             }
-            synchronized (packageLock) {
+            synchronized (this) {
                 isExportedAllUnnamed = true;
             }
         }
 
-        public ModuleTable.ModuleEntry module() {
-            return module;
+        public boolean contains(ModuleEntry m) {
+            return exports.contains(m);
         }
 
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof PackageEntry)) {
-                return false;
-            }
-            PackageEntry pkg = (PackageEntry) obj;
-            return this.name == pkg.name;
+        public ModuleEntry module() {
+            return module;
         }
     }
 }

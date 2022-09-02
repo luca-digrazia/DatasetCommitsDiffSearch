@@ -246,7 +246,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
             return true;
         }
         EspressoContext context = accessingKlass.getContext();
-        if (context.modulesEnabled()) {
+        if (context.getJavaVersion() >= 9) {
             if (klass.sameRuntimePackage(accessingKlass)) {
                 return true;
             }
@@ -292,7 +292,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         // TODO: obtain packageTo table read lock.
         /*
          * Once readability is established, if module_to exports T unqualifiedly, (to all modules),
-         * then whether module_from is in the unnamed module or not does not matter, access is
+         * than whether module_from is in the unnamed module or not does not matter, access is
          * allowed.
          */
         if (packageTo.isUnqualifiedExported()) {
