@@ -997,9 +997,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 // called from shutdown hook, at least flush the logging handler
                 logHandler.flush();
             }
-            if (this.runtimeData != null) {
-                EngineAccessor.ACCESSOR.onEngineClosed(this.runtimeData);
-            }
         }
     }
 
