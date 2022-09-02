@@ -67,7 +67,6 @@ import org.graalvm.compiler.hotspot.HotSpotCodeCacheListener;
 import org.graalvm.compiler.hotspot.HotSpotGraalCompiler;
 import org.graalvm.compiler.hotspot.HotSpotGraalManagementRegistration;
 import org.graalvm.compiler.hotspot.HotSpotGraalOptionValues;
-import org.graalvm.compiler.hotspot.HotSpotGraalRuntime;
 import org.graalvm.compiler.hotspot.HotSpotReplacementsImpl;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.nodes.graphbuilderconf.GeneratedPluginFactory;
@@ -140,12 +139,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.services.Services;
-import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.serviceprovider.IsolateUtil;
-import org.graalvm.libgraal.jni.JNI;
-import org.graalvm.libgraal.jni.JNIExceptionWrapper;
-import org.graalvm.libgraal.jni.JNIUtil;
-import org.graalvm.nativeimage.StackValue;
 
 public final class LibGraalFeature implements com.oracle.svm.core.graal.GraalFeature {
 
@@ -600,23 +593,8 @@ final class Target_org_graalvm_compiler_hotspot_HotSpotGraalRuntime {
     }
 
     @Substitute
-    private static void shutdownLibGraal(HotSpotGraalRuntime runtime) {
-        long offset = runtime.getVMConfig().jniEnvironmentOffset;
-        long javaThreadAddr = HotSpotJVMCIRuntime.runtime().getCurrentJavaThread();
-        JNI.JNIEnv env = (JNI.JNIEnv) WordFactory.unsigned(javaThreadAddr).add(WordFactory.unsigned(offset));
-        try {
-            JNI.JClass libGraalIsolateClass = JNIUtil.findClass(env, JNIUtil.getJVMCIClassLoader(env),
-                            JNIUtil.getBinaryName("org.graalvm.libgraal.LibGraalIsolate"), true);
-            JNI.JMethodID unregisterMethod = JNIUtil.findMethod(env, libGraalIsolateClass, true, "unregister", "(J)V");
-            JNI.JValue args = StackValue.get(JNI.JValue.class);
-            args.setLong(IsolateUtil.getIsolateID());
-            env.getFunctions().getCallStaticVoidMethodA().call(env, libGraalIsolateClass, unregisterMethod, args);
-            JNIExceptionWrapper.wrapAndThrowPendingJNIException(env);
-        } catch (Throwable t) {
-            t.printStackTrace(TTY.out);
-        } finally {
-            VMRuntime.shutdown();
-        }
+    private static void shutdownLibGraal() {
+        VMRuntime.shutdown();
     }
 }
 

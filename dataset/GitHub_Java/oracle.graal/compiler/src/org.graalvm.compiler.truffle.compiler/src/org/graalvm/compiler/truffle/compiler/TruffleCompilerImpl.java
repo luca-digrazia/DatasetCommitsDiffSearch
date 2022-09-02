@@ -210,27 +210,22 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
     protected abstract DebugContext createDebugContext(OptionValues options, CompilationIdentifier compilationId, CompilableTruffleAST compilable, PrintStream logStream);
 
     @Override
-    @SuppressWarnings("try")
     public final TruffleCompilation openCompilation(CompilableTruffleAST compilable) {
-        try (TTY.Filter ttyFilter = new TTY.Filter(new LogStream(new PolyglotLoggerPrintStream(compilable)))) {
-            return createCompilationIdentifier(compilable);
-        }
+        return createCompilationIdentifier(compilable);
     }
 
-    @Override
     @SuppressWarnings("try")
+    @Override
     public final TruffleDebugContext openDebugContext(Map<String, Object> options, TruffleCompilation compilation) {
-        try (TTY.Filter ttyFilter = compilation == null ? null : new TTY.Filter(new LogStream(new PolyglotLoggerPrintStream(compilation.getCompilable())))) {
-            final DebugContext debugContext;
-            if (compilation == null) {
-                debugContext = new Builder(TruffleCompilerOptions.getOptions()).build();
-            } else {
-                TruffleCompilationIdentifier ident = asTruffleCompilationIdentifier(compilation);
-                CompilableTruffleAST compilable = ident.getCompilable();
-                debugContext = createDebugContext(TruffleCompilerOptions.getOptions(), ident, compilable, DebugContext.getDefaultLogStream());
-            }
-            return new TruffleDebugContextImpl(debugContext);
+        final DebugContext debugContext;
+        if (compilation == null) {
+            debugContext = new Builder(TruffleCompilerOptions.getOptions()).build();
+        } else {
+            TruffleCompilationIdentifier ident = asTruffleCompilationIdentifier(compilation);
+            CompilableTruffleAST compilable = ident.getCompilable();
+            debugContext = createDebugContext(TruffleCompilerOptions.getOptions(), ident, compilable, DebugContext.getDefaultLogStream());
         }
+        return new TruffleDebugContextImpl(debugContext);
     }
 
     private static TruffleCompilationIdentifier asTruffleCompilationIdentifier(TruffleCompilation compilation) {
@@ -277,24 +272,21 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
     }
 
     @Override
-    @SuppressWarnings("try")
     public void initialize(Map<String, Object> optionsMap, CompilableTruffleAST compilable, boolean firstInitialization) {
         if (!initialized) {
             synchronized (this) {
                 if (!initialized) {
-                	try (TTY.Filter ttyFilter = new TTY.Filter(new LogStream(new PolyglotLoggerPrintStream(compilable)))) {
-                        final org.graalvm.options.OptionValues options = TruffleCompilerOptions.getOptionsForCompiler(optionsMap);
-                        partialEvaluator.initialize(options);
-                        if (firstInitialization) {
-                            TruffleCompilerOptions.checkDeprecation(compilable);
-                        }
-                        initialized = true;
+                    final org.graalvm.options.OptionValues options = TruffleCompilerOptions.getOptionsForCompiler(optionsMap);
+                    partialEvaluator.initialize(options);
+                    if (firstInitialization) {
+                        TruffleCompilerOptions.checkDeprecation(compilable);
+                    }
+                    initialized = true;
 
-                        if (!FirstTierUseEconomy.getValue(options)) {
-                            firstTierSuites = lastTierSuites;
-                            firstTierLirSuites = lastTierLirSuites;
-                            firstTierProviders = lastTierProviders;
-                        }
+                    if (!FirstTierUseEconomy.getValue(options)) {
+                        firstTierSuites = lastTierSuites;
+                        firstTierLirSuites = lastTierLirSuites;
+                        firstTierProviders = lastTierProviders;
                     }
                 }
             }

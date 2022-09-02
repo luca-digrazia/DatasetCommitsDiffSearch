@@ -57,6 +57,7 @@ public @interface TruffleToLibGraal {
         GetDataPatchesCount,
         GetDumpChannel,
         GetExceptionHandlersCount,
+        GetExecutionID,
         GetGraphDumpDirectory,
         GetInfopoints,
         GetInfopointsCount,
@@ -69,6 +70,7 @@ public @interface TruffleToLibGraal {
         GetTotalFrameSize,
         GetTruffleCompilationId,
         GetTruffleCompilationTruffleAST,
+        GetVersionProperties,
         InitializeCompiler,
         InitializeRuntime,
         InstallTruffleCallBoundaryMethods,
@@ -79,8 +81,6 @@ public @interface TruffleToLibGraal {
         OpenDebugContext,
         OpenDebugContextScope,
         PendingTransferToInterpreterOffset,
-        Shutdown,
-        TtyWriteByte,
-        TtyWriteBytes;
+        Shutdown;
     }
 }
