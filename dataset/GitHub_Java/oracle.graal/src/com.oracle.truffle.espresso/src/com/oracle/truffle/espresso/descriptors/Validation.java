@@ -20,9 +20,6 @@ public final class Validation {
         if (bytes.length() == 0) {
             return false;
         }
-        if (bytes.byteAt(0) == '(') { // maybe a signature
-            return false;
-        }
         for (int i = 0; i < bytes.length(); ++i) {
             char ch = (char) bytes.byteAt(i);
             if (ch == '.' || ch == ';' || ch == '[' || ch == '/') {
@@ -168,7 +165,7 @@ public final class Validation {
         if (bytes.length() < 3) { // shortest descriptor e.g. ()V
             return false;
         }
-        if (bytes.byteAt(0) != '(') { // not a signature
+        if (bytes.byteAt(0) != '(') {
             return false;
         }
         int index = 1;
