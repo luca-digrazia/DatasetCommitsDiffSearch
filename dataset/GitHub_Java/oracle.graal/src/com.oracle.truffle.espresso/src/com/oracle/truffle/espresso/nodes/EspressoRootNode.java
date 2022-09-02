@@ -66,7 +66,7 @@ public final class EspressoRootNode extends RootNode implements ContextAccess {
         try {
             return childNode.execute(frame);
         } catch (EspressoException e) {
-            if (!(isBytecodeNode()) && e.isUnwinding(getMeta())) {
+            if (!(isBytecodeNode())) {
                 e.addStackFrame(method, -2, getMeta());
             }
             throw e;
