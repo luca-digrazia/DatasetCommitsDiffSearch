@@ -194,6 +194,10 @@ public class LayoutGenerator {
             stream.println("import com.oracle.truffle.api.object.IncompatibleLocationException;");
         }
 
+        if (layout.getSuperLayout() == null) {
+            stream.println("import com.oracle.truffle.api.object.Layout;");
+        }
+
         if (layout.hasFinalInstanceProperties() || layout.hasNonNullableInstanceProperties()) {
             stream.println("import com.oracle.truffle.api.object.LocationModifier;");
         }
@@ -335,10 +339,10 @@ public class LayoutGenerator {
 
     private void generateAllocator(final PrintStream stream) {
         if (layout.getSuperLayout() == null) {
-            stream.print("    protected static final com.oracle.truffle.api.object.Layout LAYOUT = com.oracle.truffle.api.object.Layout.newLayout()");
+            stream.print("    protected static final Layout LAYOUT = Layout.newLayout()");
 
             for (VariableElement implicitCast : layout.getImplicitCasts()) {
-                stream.print(".addAllowedImplicitCast(com.oracle.truffle.api.object.Layout.ImplicitCast.");
+                stream.print(".addAllowedImplicitCast(Layout.ImplicitCast.");
                 stream.print(implicitCast.getSimpleName().toString());
                 stream.print(")");
             }
