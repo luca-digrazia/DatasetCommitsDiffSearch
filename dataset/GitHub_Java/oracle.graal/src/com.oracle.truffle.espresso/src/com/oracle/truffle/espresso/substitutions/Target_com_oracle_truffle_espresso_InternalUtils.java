@@ -46,9 +46,4 @@ public class Target_com_oracle_truffle_espresso_InternalUtils {
             return total;
         }
     }
-
-    @Substitution
-    public static boolean inEspresso() {
-        return true;
-    }
 }
