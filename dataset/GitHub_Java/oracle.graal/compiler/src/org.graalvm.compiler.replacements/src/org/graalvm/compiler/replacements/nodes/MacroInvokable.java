@@ -90,11 +90,6 @@ public interface MacroInvokable extends Invokable, Lowerable {
         return true;
     }
 
-    /**
-     * Replaces this node with an invoke of the {@linkplain #getTargetMethod() target method}.
-     *
-     * @return the newly create {@link Invoke}
-     */
     Invoke replaceWithInvoke();
 
     /**
