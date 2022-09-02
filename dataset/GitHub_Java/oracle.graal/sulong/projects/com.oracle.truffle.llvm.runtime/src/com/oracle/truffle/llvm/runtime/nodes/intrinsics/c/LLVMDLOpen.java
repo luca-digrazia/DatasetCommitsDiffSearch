@@ -47,7 +47,6 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMReadStringNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -105,24 +104,15 @@ public abstract class LLVMDLOpen extends LLVMIntrinsic {
         if (sysContextExt.isGlobalDLOpenFlagSet(flag)) {
             globalOrLocal = RTLDFlags.RTLD_GLOBAL;
         }
-        try {
-            return LLVMManagedPointer.create(new LLVMDLHandler(loadLibrary(ctx, globalOrLocal, flag, file, readStr)));
-        } catch (RuntimeException e) {
-            ctx.setDLError(1);
-            return LLVMNativePointer.createNull();
-        }
+        return LLVMManagedPointer.create(new LLVMDLHandler(loadLibrary(ctx, globalOrLocal, flag, file, readStr)));
+
     }
 
     @TruffleBoundary
     protected Object loadLibrary(LLVMContext ctx, RTLDFlags globalOrLocal, int flag, Object file, LLVMReadStringNode readStr) {
         String filename = readStr.executeWithTarget(file);
         Path path = Paths.get(filename);
-        TruffleFile truffleFile;
-        if (filename.contains("/")) {
-            truffleFile = ctx.getEnv().getInternalTruffleFile(path.toUri());
-        } else {
-            truffleFile = ctx.getMainLibraryLocator().locate(ctx, filename, "<source library>");
-        }
+        TruffleFile truffleFile = ctx.getEnv().getInternalTruffleFile(path.toUri());
         try {
             Source source = Source.newBuilder("llvm", truffleFile).build();
             CallTarget callTarget = ctx.getEnv().parsePublic(source, String.valueOf(flag));
@@ -132,4 +122,5 @@ public abstract class LLVMDLOpen extends LLVMIntrinsic {
             throw new IllegalStateException(e);
         }
     }
+
 }

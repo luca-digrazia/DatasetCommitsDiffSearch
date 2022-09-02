@@ -123,7 +123,7 @@ public final class LLVMContext {
     private final LLVMFunctionPointerRegistry functionPointerRegistry;
 
     // we are not able to clean up ThreadLocals properly, so we are using maps instead
-    private final Map<Thread, LLVMPointer> tls = new ConcurrentHashMap<>();
+    private final Map<Thread, Object> tls = new ConcurrentHashMap<>();
 
     // The symbol table for storing the symbols of each bitcode library.
     // These two fields contain the same value, but have different CompilationFinal annotations:
@@ -138,9 +138,6 @@ public final class LLVMContext {
     private final LLVMNativePointer sigDfl;
     private final LLVMNativePointer sigIgn;
     private final LLVMNativePointer sigErr;
-
-    private LibraryLocator mainLibraryLocator;
-    private SulongLibrary mainLibrary;
 
     // dlerror state
     private int currentDLError;
@@ -312,24 +309,6 @@ public final class LLVMContext {
     ContextExtension getContextExtension(int index) {
         CompilerAsserts.partialEvaluationConstant(index);
         return contextExtensions[index];
-    }
-
-    public LibraryLocator getMainLibraryLocator() {
-        return mainLibraryLocator;
-    }
-
-    public void setMainLibraryLocator(LibraryLocator libraryLocator) {
-        this.mainLibraryLocator = libraryLocator;
-    }
-
-    public SulongLibrary getMainLibrary() {
-        return mainLibrary;
-    }
-
-    public void setMainLibrary(SulongLibrary mainLibrary) {
-        if (mainLibrary == null) {
-            this.mainLibrary = mainLibrary;
-        }
     }
 
     public <T extends ContextExtension> T getContextExtension(Class<T> type) {
@@ -752,8 +731,8 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public LLVMPointer getThreadLocalStorage() {
-        LLVMPointer value = tls.get(Thread.currentThread());
+    public Object getThreadLocalStorage() {
+        Object value = tls.get(Thread.currentThread());
         if (value != null) {
             return value;
         }
@@ -761,13 +740,8 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public void setThreadLocalStorage(LLVMPointer value) {
+    public void setThreadLocalStorage(Object value) {
         tls.put(Thread.currentThread(), value);
-    }
-
-    @TruffleBoundary
-    public void setThreadLocalStorage(LLVMPointer value, Thread thread) {
-        tls.put(thread, value);
     }
 
     @TruffleBoundary

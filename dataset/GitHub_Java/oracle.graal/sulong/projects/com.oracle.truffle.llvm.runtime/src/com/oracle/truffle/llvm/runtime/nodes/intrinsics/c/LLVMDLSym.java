@@ -40,8 +40,6 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen.LLVMDLHandler;
@@ -54,10 +52,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 @NodeChild(type = LLVMExpressionNode.class)
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMDLSym extends LLVMIntrinsic {
-
-    // Linx Mac
-    // RTLD_NEXT ((void *) -1l) ((void *) -1)
-    // RTLD_DEFAULT ((void *) 0) ((void *) -2)
 
     @Specialization(guards = "isLLVMLibrary(libraryHandle)", limit = "2")
     protected Object doOp(LLVMManagedPointer libraryHandle,
@@ -81,21 +75,6 @@ public abstract class LLVMDLSym extends LLVMIntrinsic {
                     @SuppressWarnings("unused") LLVMPointer symbol,
                     @SuppressWarnings("unused") @Cached() LLVMReadStringNode readStr) {
         return LLVMNativePointer.createNull();
-    }
-
-    @Specialization(guards = "(isRtldDefault(libraryHandle))")
-    protected Object doDefaultHandle(@SuppressWarnings("unused") LLVMNativePointer libraryHandle,
-                    @SuppressWarnings("unused") LLVMPointer symbolName,
-                    @SuppressWarnings("unused") @Cached() LLVMReadStringNode readStr,
-                    @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-        String name = readStr.executeWithTarget(symbolName);
-        LLVMSymbol symbol = ctx.getGlobalScope().get(name);
-        return ctx.getSymbol(symbol);
-    }
-
-    protected boolean isRtldDefault(LLVMNativePointer libraryHandle) {
-        PlatformCapability<?> sysContextExt = LLVMLanguage.getLanguage().getCapability(PlatformCapability.class);
-        return sysContextExt.isDefaultDLSymFlagSet(libraryHandle.asNative());
     }
 
     protected Object getLibrary(LLVMManagedPointer pointer) {
