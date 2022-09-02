@@ -227,9 +227,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
         assert target == providers.getCodeCache().getTarget();
         instanceofSnippets = new InstanceOfSnippets.Templates(options, factories, runtime, providers, target);
-        if (allocationSnippets == null) {
-            allocationSnippets = new HotSpotAllocationSnippets.Templates(new HotSpotAllocationSnippets(config, providers.getRegisters()), options, factories, runtime, providers, target, config);
-        }
+        allocationSnippets = new HotSpotAllocationSnippets.Templates(options, factories, runtime, providers, target, config);
         monitorSnippets = new MonitorSnippets.Templates(options, factories, runtime, providers, target, config.useFastLocking);
         g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, factories, runtime, providers, target, config);
         serialWriteBarrierSnippets = new HotSpotSerialWriteBarrierSnippets.Templates(options, factories, runtime, providers, target);
@@ -249,14 +247,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             // AOT only introduced in JDK 9
             profileSnippets = new ProfileSnippets.Templates(options, factories, providers, target);
         }
-    }
-
-    public HotSpotAllocationSnippets.Templates getAllocationSnippets() {
-        return allocationSnippets;
-    }
-
-    public void setAllocationSnippets(HotSpotAllocationSnippets.Templates allocationSnippets) {
-        this.allocationSnippets = allocationSnippets;
     }
 
     public ArrayCopySnippets.Templates getArraycopySnippets() {
@@ -322,7 +312,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 }
             } else if (n instanceof NewInstanceNode) {
                 if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                    getAllocationSnippets().lower((NewInstanceNode) n, tool);
+                    allocationSnippets.lower((NewInstanceNode) n, tool);
                 }
             } else if (n instanceof DynamicNewInstanceNode) {
                 DynamicNewInstanceNode newInstanceNode = (DynamicNewInstanceNode) n;
@@ -332,11 +322,11 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                     newInstanceNode.setClassClass(classClass);
                 }
                 if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                    getAllocationSnippets().lower(newInstanceNode, tool);
+                    allocationSnippets.lower(newInstanceNode, tool);
                 }
             } else if (n instanceof NewArrayNode) {
                 if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                    getAllocationSnippets().lower((NewArrayNode) n, tool);
+                    allocationSnippets.lower((NewArrayNode) n, tool);
                 }
             } else if (n instanceof DynamicNewArrayNode) {
                 DynamicNewArrayNode dynamicNewArrayNode = (DynamicNewArrayNode) n;
@@ -346,11 +336,11 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                     dynamicNewArrayNode.setVoidClass(voidClass);
                 }
                 if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                    getAllocationSnippets().lower(dynamicNewArrayNode, tool);
+                    allocationSnippets.lower(dynamicNewArrayNode, tool);
                 }
             } else if (n instanceof VerifyHeapNode) {
                 if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                    getAllocationSnippets().lower((VerifyHeapNode) n, tool);
+                    allocationSnippets.lower((VerifyHeapNode) n, tool);
                 }
             } else if (n instanceof MonitorEnterNode) {
                 if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
@@ -382,7 +372,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                 g1WriteBarrierSnippets.lower((G1ArrayRangePostWriteBarrier) n, tool);
             } else if (n instanceof NewMultiArrayNode) {
                 if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                    getAllocationSnippets().lower((NewMultiArrayNode) n, tool);
+                    allocationSnippets.lower((NewMultiArrayNode) n, tool);
                 }
             } else if (n instanceof LoadExceptionObjectNode) {
                 exceptionObjectSnippets.lower((LoadExceptionObjectNode) n, registers, tool);
@@ -428,7 +418,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             } else if (n instanceof ProfileNode) {
                 profileSnippets.lower((ProfileNode) n, tool);
             } else if (n instanceof KlassBeingInitializedCheckNode) {
-                getAllocationSnippets().lower((KlassBeingInitializedCheckNode) n, tool);
+                allocationSnippets.lower((KlassBeingInitializedCheckNode) n, tool);
             } else if (n instanceof FastNotifyNode) {
                 if (JavaVersionUtil.JAVA_SPEC < 11) {
                     throw GraalError.shouldNotReachHere("FastNotify is not support prior to 11");
