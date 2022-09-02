@@ -26,11 +26,10 @@ package org.graalvm.compiler.replacements;
 
 import static org.graalvm.compiler.nodes.util.ConstantReflectionUtil.loadByteArrayConstant;
 import static org.graalvm.compiler.nodes.util.ConstantReflectionUtil.loadCharArrayConstant;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.byteArrayBaseOffset;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.charArrayBaseOffset;
 import static org.graalvm.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 import static org.graalvm.compiler.serviceprovider.GraalUnsafeAccess.getUnsafe;
 
+import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.Snippet.ConstantParameter;
@@ -70,7 +69,7 @@ public class ConstantStringIndexOfSnippets implements Snippets {
             args.add("source", stringIndexOf.getArgument(0));
             args.add("sourceOffset", stringIndexOf.getArgument(1));
             args.add("sourceCount", stringIndexOf.getArgument(2));
-            args.add("target", stringIndexOf.getArgument(3));
+            args.addConst("target", stringIndexOf.getArgument(3));
             args.add("targetOffset", stringIndexOf.getArgument(4));
             args.add("targetCount", stringIndexOf.getArgument(5));
             args.add("origFromIndex", stringIndexOf.getArgument(6));
@@ -86,7 +85,7 @@ public class ConstantStringIndexOfSnippets implements Snippets {
             Arguments args = new Arguments(latin1IndexOfConstant, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("source", latin1IndexOf.getArgument(0));
             args.add("sourceCount", latin1IndexOf.getArgument(1));
-            args.add("target", latin1IndexOf.getArgument(2));
+            args.addConst("target", latin1IndexOf.getArgument(2));
             args.add("targetCount", latin1IndexOf.getArgument(3));
             args.add("origFromIndex", latin1IndexOf.getArgument(4));
             JavaConstant targetArg = latin1IndexOf.getArgument(2).asJavaConstant();
@@ -102,7 +101,7 @@ public class ConstantStringIndexOfSnippets implements Snippets {
             Arguments args = new Arguments(utf16IndexOfConstant, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("source", utf16IndexOf.getArgument(0));
             args.add("sourceCount", utf16IndexOf.getArgument(1));
-            args.add("target", utf16IndexOf.getArgument(2));
+            args.addConst("target", utf16IndexOf.getArgument(2));
             args.add("targetCount", utf16IndexOf.getArgument(3));
             args.add("origFromIndex", utf16IndexOf.getArgument(4));
             JavaConstant targetArg = utf16IndexOf.getArgument(2).asJavaConstant();
@@ -192,12 +191,22 @@ public class ConstantStringIndexOfSnippets implements Snippets {
         return cache;
     }
 
+    @Fold
+    static int byteArrayBaseOffset(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayBaseOffset(JavaKind.Byte);
+    }
+
+    @Fold
+    static int charArrayBaseOffset(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayBaseOffset(JavaKind.Char);
+    }
+
     /** Marker value for the {@link InjectedParameter} injected parameter. */
     static final MetaAccessProvider INJECTED = null;
 
     @Snippet
     public static int indexOfConstant(char[] source, int sourceOffset, int sourceCount,
-                    char[] target, int targetOffset, int targetCount,
+                    @ConstantParameter char[] target, int targetOffset, int targetCount,
                     int origFromIndex, @ConstantParameter int md2, @ConstantParameter long cache) {
         int fromIndex = origFromIndex;
         if (fromIndex >= sourceCount) {
@@ -255,7 +264,7 @@ public class ConstantStringIndexOfSnippets implements Snippets {
 
     @Snippet
     public static int utf16IndexOfConstant(byte[] source, int sourceCount,
-                    byte[] target, int targetCount,
+                    @ConstantParameter byte[] target, int targetCount,
                     int origFromIndex, @ConstantParameter int md2, @ConstantParameter long cache) {
         int fromIndex = origFromIndex;
         if (fromIndex >= sourceCount) {
@@ -313,7 +322,7 @@ public class ConstantStringIndexOfSnippets implements Snippets {
 
     @Snippet
     public static int latin1IndexOfConstant(byte[] source, int sourceCount,
-                    byte[] target, int targetCount,
+                    @ConstantParameter byte[] target, int targetCount,
                     int origFromIndex, @ConstantParameter int md2, @ConstantParameter long cache) {
         int fromIndex = origFromIndex;
         if (fromIndex >= sourceCount) {
