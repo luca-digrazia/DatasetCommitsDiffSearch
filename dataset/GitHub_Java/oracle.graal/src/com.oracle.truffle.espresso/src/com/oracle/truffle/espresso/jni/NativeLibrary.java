@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,62 +22,79 @@
  */
 package com.oracle.truffle.espresso.jni;
 
+import java.nio.file.Path;
+import java.util.logging.Level;
+
+import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
+import org.graalvm.options.OptionValues;
+
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
-public class NativeLibrary {
+public final class NativeLibrary {
 
-    public static TruffleObject loadLibrary(String lib) {
-        if (lib.endsWith("libzip.so")) {
-            JniEnv.touch();
+    @TruffleBoundary
+    public static @Pointer TruffleObject loadLibrary(Path lib) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("load(RTLD_LAZY");
+        OptionValues options = EspressoLanguage.getCurrentContext().getEnv().getOptions();
+        if (options.get(EspressoOptions.UseTruffleNFIIsolatedNamespace)) {
+            sb.append("|ISOLATED_NAMESPACE");
         }
-        Source source = Source.newBuilder("nfi", String.format("with dlmopen load(RTLD_LAZY) '%s'", lib), "loadLibrary").build();
-        CallTarget target = EspressoLanguage.getCurrentContext().getEnv().parse(source);
-        return (TruffleObject) target.call();
+        sb.append(")");
+        sb.append(" '").append(lib).append("'");
+        Source source = Source.newBuilder("nfi", sb.toString(), "loadLibrary").build();
+        CallTarget target = EspressoLanguage.getCurrentContext().getEnv().parseInternal(source);
+        try {
+            return (TruffleObject) target.call();
+        } catch (IllegalArgumentException e) {
+            EspressoLanguage.getCurrentContext().getLogger().log(Level.SEVERE, "TruffleNFI native library isolation is not supported.", e);
+            throw EspressoError.shouldNotReachHere(e);
+        } catch (AbstractTruffleException e) {
+            // TODO(peterssen): Remove assert once GR-27045 reaches a definitive consensus.
+            assert "com.oracle.truffle.nfi.impl.NFIUnsatisfiedLinkError".equals(e.getClass().getName());
+            // We treat AbstractTruffleException as if it were an UnsatisfiedLinkError.
+            TruffleLogger.getLogger(EspressoLanguage.ID, NativeLibrary.class).fine(e.getMessage());
+            return null;
+        }
     }
 
-    private static long load(String name) {
-        TruffleObject lib = null;
+    public static @Pointer TruffleObject lookup(TruffleObject library, String method) throws UnknownIdentifierException {
         try {
-            lib = loadLibrary(name);
-        } catch (UnsatisfiedLinkError e) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(UnsatisfiedLinkError.class);
-        }
-        return EspressoLanguage.getCurrentContext().addNativeLibrary(lib);
-    }
-
-    public static TruffleObject lookup(TruffleObject library, String method) {
-        try {
-            return (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(), library, method);
-        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+            return (TruffleObject) InteropLibrary.getFactory().getUncached().readMember(library, method);
+        } catch (UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere("Cannot find " + method);
         }
     }
 
-    public static TruffleObject bind(TruffleObject symbol, String signature) {
+    public static @Pointer TruffleObject bind(@Pointer TruffleObject symbol, String signature) {
         try {
-            return (TruffleObject) ForeignAccess.sendInvoke(Message.INVOKE.createNode(), symbol, "bind", signature);
+            return (TruffleObject) InteropLibrary.getFactory().getUncached().invokeMember(symbol, "bind", signature);
         } catch (UnsupportedTypeException | ArityException | UnknownIdentifierException | UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere("Cannot bind " + signature);
         }
     }
 
-    public static TruffleObject lookupAndBind(TruffleObject library, String method, String signature) {
+    public static @Pointer TruffleObject lookupAndBind(@Pointer TruffleObject library, String method, String signature) throws UnknownIdentifierException {
         try {
-            TruffleObject symbol = (TruffleObject) ForeignAccess.sendRead(Message.READ.createNode(), library, method);
-            return (TruffleObject) ForeignAccess.sendInvoke(Message.INVOKE.createNode(), symbol, "bind", signature);
-        } catch (UnsupportedTypeException | ArityException | UnknownIdentifierException | UnsupportedMessageException e) {
+            TruffleObject symbol = (TruffleObject) InteropLibrary.getFactory().getUncached().readMember(library, method);
+            if (InteropLibrary.getFactory().getUncached().isNull(symbol)) {
+                throw UnknownIdentifierException.create(method);
+            }
+            return (TruffleObject) InteropLibrary.getFactory().getUncached().invokeMember(symbol, "bind", signature);
+        } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere("Cannot bind " + method);
         }
     }
-
 }
