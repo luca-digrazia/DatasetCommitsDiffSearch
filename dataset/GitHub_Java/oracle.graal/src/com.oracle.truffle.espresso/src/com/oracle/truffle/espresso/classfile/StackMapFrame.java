@@ -5,6 +5,7 @@
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
  * published by the Free Software Foundation.
+ *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
  * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
@@ -22,10 +23,13 @@
 
 package com.oracle.truffle.espresso.classfile;
 
-import com.oracle.truffle.espresso.meta.EspressoError;
-
 import static com.oracle.truffle.espresso.classfile.Constants.CHOP_BOUND;
 import static com.oracle.truffle.espresso.classfile.Constants.SAME_FRAME_BOUND;
+
+import java.io.PrintStream;
+
+import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.meta.EspressoError;
 
 public abstract class StackMapFrame {
     protected final int frameType;
@@ -51,15 +55,21 @@ public abstract class StackMapFrame {
     }
 
     public VerificationTypeInfo[] getLocals() {
-        throw EspressoError.shouldNotReachHere("Asking for stack of incompatible stackMap frame");
+        throw EspressoError.shouldNotReachHere("Asking for locals of incompatible stackMap frame");
     }
 
-    abstract int getOffset();
+    public abstract int getOffset();
+
+    @SuppressWarnings("unused")
+    public void print(Klass klass, PrintStream out) {
+        out.println("        " + this.getClass().getSimpleName() + " {");
+        out.println("            Offset: " + getOffset());
+    }
 }
 
-class SameFrame extends StackMapFrame {
+final class SameFrame extends StackMapFrame {
 
-    public SameFrame(int frameType) {
+    SameFrame(int frameType) {
         super(frameType);
     }
 
@@ -67,12 +77,19 @@ class SameFrame extends StackMapFrame {
     public int getOffset() {
         return frameType;
     }
+
+    @Override
+    public void print(Klass klass, PrintStream out) {
+        out.println("        " + this.getClass().getSimpleName() + " {");
+        out.println("            Offset: " + getOffset());
+        out.println("        }");
+    }
 }
 
-class SameLocals1StackItemFrame extends StackMapFrame {
+final class SameLocals1StackItemFrame extends StackMapFrame {
     private final VerificationTypeInfo stackItem;
 
-    public SameLocals1StackItemFrame(int frameType, VerificationTypeInfo stackItem) {
+    SameLocals1StackItemFrame(int frameType, VerificationTypeInfo stackItem) {
         super(frameType);
         this.stackItem = stackItem;
     }
@@ -87,13 +104,20 @@ class SameLocals1StackItemFrame extends StackMapFrame {
         return stackItem;
     }
 
+    @Override
+    public void print(Klass klass, PrintStream out) {
+        super.print(klass, out);
+        out.println("            Stack: " + stackItem.toString(klass));
+        out.println("        }");
+    }
+
 }
 
-class SameLocals1StackItemFrameExtended extends StackMapFrame {
+final class SameLocals1StackItemFrameExtended extends StackMapFrame {
     private final int offsetDelta;
     private final VerificationTypeInfo stackItem;
 
-    public SameLocals1StackItemFrameExtended(int frameType, int offsetDelta, VerificationTypeInfo stackItem) {
+    SameLocals1StackItemFrameExtended(int frameType, int offsetDelta, VerificationTypeInfo stackItem) {
         super(frameType);
         this.offsetDelta = offsetDelta;
         this.stackItem = stackItem;
@@ -108,12 +132,19 @@ class SameLocals1StackItemFrameExtended extends StackMapFrame {
     public VerificationTypeInfo getStackItem() {
         return stackItem;
     }
+
+    @Override
+    public void print(Klass klass, PrintStream out) {
+        super.print(klass, out);
+        out.println("            Stack: " + stackItem.toString(klass));
+        out.println("        }");
+    }
 }
 
-class ChopFrame extends StackMapFrame {
+final class ChopFrame extends StackMapFrame {
     private final int offsetDelta;
 
-    public ChopFrame(int frameType, int offsetDelta) {
+    ChopFrame(int frameType, int offsetDelta) {
         super(frameType);
         this.offsetDelta = offsetDelta;
     }
@@ -127,12 +158,19 @@ class ChopFrame extends StackMapFrame {
     public int getChopped() {
         return CHOP_BOUND - frameType;
     }
+
+    @Override
+    public void print(Klass klass, PrintStream out) {
+        super.print(klass, out);
+        out.println("            cut locals: " + getChopped());
+        out.println("        }");
+    }
 }
 
-class SameFrameExtended extends StackMapFrame {
+final class SameFrameExtended extends StackMapFrame {
     private final int offsetDelta;
 
-    public SameFrameExtended(int frameType, int offsetDelta) {
+    SameFrameExtended(int frameType, int offsetDelta) {
         super(frameType);
         this.offsetDelta = offsetDelta;
     }
@@ -141,13 +179,19 @@ class SameFrameExtended extends StackMapFrame {
     public int getOffset() {
         return offsetDelta;
     }
+
+    @Override
+    public void print(Klass klass, PrintStream out) {
+        super.print(klass, out);
+        out.println("        }");
+    }
 }
 
-class AppendFrame extends StackMapFrame {
+final class AppendFrame extends StackMapFrame {
     private final int offsetDelta;
     private final VerificationTypeInfo[] newLocals;
 
-    public AppendFrame(int frameType, int offsetDelta, VerificationTypeInfo[] newLocals) {
+    AppendFrame(int frameType, int offsetDelta, VerificationTypeInfo[] newLocals) {
         super(frameType);
         this.offsetDelta = offsetDelta;
         this.newLocals = newLocals;
@@ -163,14 +207,25 @@ class AppendFrame extends StackMapFrame {
         return newLocals;
     }
 
+    @Override
+    public void print(Klass klass, PrintStream out) {
+        super.print(klass, out);
+        out.println("            Add Locals: [");
+        for (VerificationTypeInfo vti : newLocals) {
+            out.println("                " + vti.toString(klass));
+        }
+        out.println("            ]");
+        out.println("        }");
+    }
+
 }
 
-class FullFrame extends StackMapFrame {
+final class FullFrame extends StackMapFrame {
     private final int offsetDelta;
     private final VerificationTypeInfo[] locals;
     private final VerificationTypeInfo[] stack;
 
-    public FullFrame(int frameType, int offsetDelta, VerificationTypeInfo[] locals, VerificationTypeInfo[] stack) {
+    FullFrame(int frameType, int offsetDelta, VerificationTypeInfo[] locals, VerificationTypeInfo[] stack) {
         super(frameType);
         this.offsetDelta = offsetDelta;
         this.locals = locals;
@@ -190,5 +245,21 @@ class FullFrame extends StackMapFrame {
     @Override
     public VerificationTypeInfo[] getStack() {
         return stack;
+    }
+
+    @Override
+    public void print(Klass klass, PrintStream out) {
+        super.print(klass, out);
+        out.println("            Locals: [");
+        for (VerificationTypeInfo vti : locals) {
+            out.println("                " + vti.toString(klass));
+        }
+        out.println("            ]");
+        out.println("            Stack: [");
+        for (VerificationTypeInfo vti : stack) {
+            out.println("                " + vti.toString(klass));
+        }
+        out.println("            ]");
+        out.println("        }");
     }
 }

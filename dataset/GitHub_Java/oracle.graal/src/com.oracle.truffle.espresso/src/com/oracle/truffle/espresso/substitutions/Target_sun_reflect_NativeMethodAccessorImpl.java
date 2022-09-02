@@ -22,6 +22,8 @@
  */
 package com.oracle.truffle.espresso.substitutions;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -38,7 +40,7 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
  * This substitution is merely for performance reasons, to avoid the deep-dive to native. libjava
  * hardwires {@link #invoke0} to JVM_InvokeMethod in libjvm.
  */
-@EspressoSubstitutions(nameProvider = Target_sun_reflect_NativeMethodAccessorImpl.SharedNativeMetohdAccessorImpl.class)
+@EspressoSubstitutions
 public final class Target_sun_reflect_NativeMethodAccessorImpl {
 
     /**
@@ -218,9 +220,12 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
      *         method. exception ExceptionInInitializerError if the initialization provoked by this
      *         method fails.
      */
+    @TruffleBoundary
     @Substitution
     public static @Host(Object.class) StaticObject invoke0(@Host(java.lang.reflect.Method.class) StaticObject guestMethod, @Host(Object.class) StaticObject receiver,
-                    @Host(Object[].class) StaticObject args, @InjectMeta Meta meta) {
+                    @Host(Object[].class) StaticObject args) {
+        // TODO(tg): inject meta
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         StaticObject curMethod = guestMethod;
 
         Method reflectedMethod = null;
@@ -346,21 +351,5 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
         // Result is not void nor primitive, pass through.
         return (StaticObject) result;
     }
-
-    public static class SharedNativeMetohdAccessorImpl extends SubstitutionNamesProvider {
-        private static String[] NAMES = new String[]{
-                        TARGET_SUN_REFLECT_NATIVEMETHODACCESSORIMPL,
-                        TARGET_JDK_INTERNAL_REFLECT_NATIVEMETHODACCESSORIMPL
-        };
-        public static SubstitutionNamesProvider INSTANCE = new SharedNativeMetohdAccessorImpl();
-
-        @Override
-        public String[] substitutionClassNames() {
-            return NAMES;
-        }
-    }
-
-    private static final String TARGET_SUN_REFLECT_NATIVEMETHODACCESSORIMPL = "Target_sun_reflect_NativeMethodAccessorImpl";
-    private static final String TARGET_JDK_INTERNAL_REFLECT_NATIVEMETHODACCESSORIMPL = "Target_jdk_internal_reflect_NativeMethodAccessorImpl";
 
 }

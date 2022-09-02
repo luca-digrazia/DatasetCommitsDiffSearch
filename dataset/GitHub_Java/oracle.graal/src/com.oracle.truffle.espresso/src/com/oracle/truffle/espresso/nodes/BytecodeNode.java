@@ -247,6 +247,7 @@ import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.instrumentation.Tag;
+import com.oracle.truffle.api.nodes.CustomNodeCount;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -259,7 +260,6 @@ import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.bytecode.MapperBCI;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.attributes.BootstrapMethodsAttribute;
-import com.oracle.truffle.espresso.classfile.attributes.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
 import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
 import com.oracle.truffle.espresso.classfile.constantpool.DoubleConstant;
@@ -281,7 +281,6 @@ import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
@@ -320,7 +319,7 @@ import com.oracle.truffle.object.DebugCounter;
  * bytecode is first processed/executed without growing or shrinking the stack and only then the
  * {@code top} of the stack index is adjusted depending on the bytecode stack offset.
  */
-public final class BytecodeNode extends EspressoMethodNode {
+public final class BytecodeNode extends EspressoMethodNode implements CustomNodeCount {
 
     private static final DebugCounter EXECUTED_BYTECODES_COUNT = DebugCounter.create("Executed bytecodes");
     private static final DebugCounter QUICKENED_BYTECODES = DebugCounter.create("Quickened bytecodes");
@@ -349,21 +348,20 @@ public final class BytecodeNode extends EspressoMethodNode {
     @Child private volatile InstrumentationSupport instrumentation;
 
     @TruffleBoundary
-    public BytecodeNode(MethodVersion method, FrameDescriptor frameDescriptor, FrameSlot bciSlot) {
+    public BytecodeNode(Method method, FrameDescriptor frameDescriptor, FrameSlot bciSlot) {
         super(method);
         CompilerAsserts.neverPartOfCompilation();
-        CodeAttribute codeAttribute = method.getCodeAttribute();
-        this.bs = new BytecodeStream(codeAttribute.getCode());
+        this.bs = new BytecodeStream(method.getCode());
         FrameSlot[] slots = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
 
-        this.locals = Arrays.copyOfRange(slots, 0, codeAttribute.getMaxLocals());
-        this.stackSlots = Arrays.copyOfRange(slots, codeAttribute.getMaxLocals(), codeAttribute.getMaxLocals() + codeAttribute.getMaxStack());
+        this.locals = Arrays.copyOfRange(slots, 0, method.getMaxLocals());
+        this.stackSlots = Arrays.copyOfRange(slots, method.getMaxLocals(), method.getMaxLocals() + method.getMaxStackSize());
         this.bciSlot = bciSlot;
         this.stackOverflowErrorInfo = getMethod().getSOEHandlerInfo();
     }
 
     public BytecodeNode(BytecodeNode copy) {
-        this(copy.getMethodVersion(), copy.getRootNode().getFrameDescriptor(), copy.bciSlot);
+        this(copy.getMethod(), copy.getRootNode().getFrameDescriptor(), copy.bciSlot);
         getContext().getLogger().log(Level.FINE, "Copying node for {}", getMethod());
     }
 
@@ -372,9 +370,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         if (s == null) {
             return null;
         }
-
-        LineNumberTableAttribute table = getMethodVersion().getLineNumberTableAttribute();
-
+        LineNumberTableAttribute table = getMethod().getLineNumberTable();
         if (table == LineNumberTableAttribute.EMPTY) {
             return null;
         }
@@ -1163,7 +1159,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                 info = this.instrumentation;
                 // double checked locking
                 if (info == null) {
-                    this.instrumentation = info = insert(new InstrumentationSupport(getMethodVersion()));
+                    this.instrumentation = info = insert(new InstrumentationSupport(getMethod()));
                     // the debug info contains instrumentable nodes so we need to notify for
                     // instrumentation updates.
                     notifyInserted(info);
@@ -1396,7 +1392,7 @@ public final class BytecodeNode extends EspressoMethodNode {
     }
 
     protected RuntimeConstantPool getConstantPool() {
-        return getMethodVersion().getPool();
+        return getMethod().getRuntimeConstantPool();
     }
 
     @TruffleBoundary
@@ -1418,7 +1414,7 @@ public final class BytecodeNode extends EspressoMethodNode {
     private void patchBci(int bci, byte opcode, char nodeIndex) {
         CompilerAsserts.neverPartOfCompilation();
         assert Bytecodes.isQuickened(opcode);
-        byte[] code = getMethodVersion().getCodeAttribute().getCode();
+        byte[] code = getMethod().getCode();
 
         int oldBC = code[bci];
         assert Bytecodes.lengthOf(oldBC) >= 3 : "cannot patch slim bc";
@@ -2225,19 +2221,24 @@ public final class BytecodeNode extends EspressoMethodNode {
         return result;
     }
 
+    @Override
+    public int customNodeCount() {
+        int codeSize = getMethod().getCodeSize();
+        return 2 * codeSize + 1;
+    }
+
     static final class InstrumentationSupport extends Node {
 
         @Children private final EspressoInstrumentableNode[] statementNodes;
         @Child private MapperBCI hookBCIToNodeIndex;
 
         private final EspressoContext context;
-        private final MethodVersion method;
+        private final Method method;
 
-        InstrumentationSupport(MethodVersion method) {
-            this.context = method.getMethod().getContext();
+        InstrumentationSupport(Method method) {
+            this.context = method.getContext();
+            LineNumberTableAttribute table = method.getLineNumberTable();
             this.method = method;
-
-            LineNumberTableAttribute table = method.getLineNumberTableAttribute();
 
             if (table != LineNumberTableAttribute.EMPTY) {
                 LineNumberTableAttribute.Entry[] entries = table.getEntries();

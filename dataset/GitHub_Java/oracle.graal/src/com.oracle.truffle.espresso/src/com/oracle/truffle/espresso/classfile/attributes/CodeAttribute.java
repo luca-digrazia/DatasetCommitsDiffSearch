@@ -161,8 +161,4 @@ public final class CodeAttribute extends Attribute {
         }
     }
 
-    public void onRedefine() {
-        // make sure to reset patched bytecode for the code array
-        System.arraycopy(originalCode, 0, code, 0, originalCode.length);
-    }
 }

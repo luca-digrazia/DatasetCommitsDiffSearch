@@ -35,6 +35,7 @@ import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.classfile.attributes.Local;
 import com.oracle.truffle.espresso.classfile.constantpool.Utf8Constant;
@@ -172,7 +173,17 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
                 }
             }
         }
-        Scope scope = Scope.newBuilder(SCOPE_NAME, EspressoScope.createVariables(liveLocals, frame)).node(scopeNode).build();
+        Object variables = EspressoScope.createVariables(liveLocals, frame);
+        Object receiver = null;
+        if (!method.isStatic()) {
+            // get the receiver/'this'
+            try {
+                receiver = InteropLibrary.getFactory().getUncached().readMember(variables, "0");
+            } catch (Exception e) {
+                // wasn't able to get 'this'. Defer handling to lookup location
+            }
+        }
+        Scope scope = Scope.newBuilder(SCOPE_NAME, variables).node(scopeNode).receiver("0", receiver).build();
         return Collections.singletonList(scope);
     }
 

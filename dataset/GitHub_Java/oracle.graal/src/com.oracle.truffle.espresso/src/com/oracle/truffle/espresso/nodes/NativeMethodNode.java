@@ -35,7 +35,7 @@ import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.impl.Method.MethodVersion;
+import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -51,7 +51,7 @@ public final class NativeMethodNode extends EspressoMethodNode {
 
     private static final DebugCounter NATIVE_METHOD_CALLS = DebugCounter.create("Native method calls");
 
-    public NativeMethodNode(TruffleObject boundNative, MethodVersion method, boolean isJni) {
+    public NativeMethodNode(TruffleObject boundNative, Method method, boolean isJni) {
         super(method);
         this.boundNative = boundNative;
         this.executeNative = InteropLibrary.getFactory().create(boundNative);
@@ -97,11 +97,7 @@ public final class NativeMethodNode extends EspressoMethodNode {
     }
 
     @Override
-    void initializeBody(VirtualFrame frame) {
-    }
-
-    @Override
-    public Object executeBody(VirtualFrame frame) {
+    public Object execute(VirtualFrame frame) {
         final JniEnv env = getContext().getJNI();
 
         int nativeFrame = env.getHandles().pushFrame();
