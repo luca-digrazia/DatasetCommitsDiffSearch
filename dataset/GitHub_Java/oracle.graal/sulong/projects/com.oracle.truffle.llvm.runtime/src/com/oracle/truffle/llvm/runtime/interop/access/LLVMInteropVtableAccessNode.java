@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.runtime.interop.access;
 
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
@@ -36,10 +38,8 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignReadNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @GenerateUncached
@@ -51,20 +51,14 @@ public abstract class LLVMInteropVtableAccessNode extends LLVMNode {
     }
 
     @Specialization
-    Object doPointer(LLVMPointer vtablePointer, long virtualIndex, Object[] arguments, @CachedLibrary(limit = "5") InteropLibrary interop)
+    @GenerateAOT.Exclude
+    Object doPointer(LLVMPointer vtablePointer, long virtualIndex, Object[] arguments,
+                    @Cached LLVMForeignReadNode read,
+                    @CachedLibrary(limit = "5") InteropLibrary interop)
                     throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
-        LLVMMemory memory = LLVMLanguage.getLanguage().getLLVMMemory();
-        // 'target' calculation
-        LLVMPointer vtableElementPointer = vtablePointer.increment(virtualIndex);
-        final long methodAddress = memory.getI64(this, LLVMNativePointer.cast(vtableElementPointer));
-        LLVMPointer methodPointer = LLVMNativePointer.create(methodAddress);
-
-        // direct calculation (TODO replace later by 'target' calculation)
-        long vtableAddress = LLVMNativePointer.cast(vtablePointer).asNative();
-        final long methodAddressByLong = memory.getI64(null, vtableAddress + virtualIndex * 8);
-        LLVMPointer methodPointerByLong = LLVMNativePointer.create(methodAddressByLong);
-
-        return interop.execute(methodPointerByLong, arguments);
+        LLVMPointer vtableElementPointer = vtablePointer.increment(virtualIndex * LLVMNode.ADDRESS_SIZE_IN_BYTES);
+        final LLVMInteropType type = LLVMInteropType.ValueKind.POINTER.type;
+        return interop.execute(read.execute(vtableElementPointer, type), arguments);
     }
 
 }

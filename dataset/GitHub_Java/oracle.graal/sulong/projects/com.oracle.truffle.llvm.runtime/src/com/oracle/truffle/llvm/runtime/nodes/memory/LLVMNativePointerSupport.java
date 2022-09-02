@@ -44,8 +44,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public final class LLVMNativePointerSupport extends LLVMNode {
 
-    private static LLVMNativePointerSupport UNCACHED = new LLVMNativePointerSupport(true);
-
     @Child private InternalLibrary delegate;
 
     private LLVMNativePointerSupport(boolean uncached) {
@@ -57,7 +55,7 @@ public final class LLVMNativePointerSupport extends LLVMNode {
     }
 
     public static LLVMNativePointerSupport getUncached() {
-        return UNCACHED;
+        return new LLVMNativePointerSupport(true);
     }
 
     public LLVMNativeLibrary getLibrary() {

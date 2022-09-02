@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,45 +30,82 @@
 package com.oracle.truffle.llvm.runtime.interop.access;
 
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Method;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @GenerateUncached
 public abstract class LLVMInteropMethodInvokeNode extends LLVMNode {
     abstract Object execute(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type, Method method, long virtualIndex, Object[] argumentsWithSelf)
-                    throws UnsupportedTypeException, ArityException, UnsupportedMessageException;
+                    throws UnsupportedTypeException, ArityException, UnsupportedMessageException, UnknownIdentifierException;
 
     public static LLVMInteropMethodInvokeNode create() {
         return LLVMInteropMethodInvokeNodeGen.create();
     }
 
-    @SuppressWarnings("unused")
-    @Specialization(guards = "virtualIndex>=0")
-    Object doVirtualCall(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type, Method method, long virtualIndex, Object[] arguments)
-                    throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
-        LLVMMemory memory = LLVMLanguage.getLanguage().getLLVMMemory();
-
-        final long vtableAddress = memory.getI64(null, LLVMNativePointer.cast(receiver).asNative());
-        final long methodOffset = virtualIndex * 8;
-        // 8 -> anywhere to get the size automatically instead of hardcoded?
-        final long methodAddress = memory.getI64(null, vtableAddress + methodOffset);
-        LLVMPointer methodPointer = LLVMNativePointer.create(methodAddress);
-        return InteropLibrary.getUncached(methodPointer).execute(methodPointer, arguments);
+    static boolean isVirtual(long virtualIndex) {
+        return virtualIndex >= 0;
     }
 
-    @SuppressWarnings("unused")
-    @Specialization(guards = "virtualIndex<0")
-    Object doNonvirtualCall(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type, Method method, long virtualIndex, Object[] arguments, @Cached LLVMInteropNonvirtualCallNode call)
+    /**
+     * @param methodName
+     * @param type
+     * @param method
+     * @param typeHash
+     */
+    @ExplodeLoop
+    @Specialization(guards = {"isVirtual(virtualIndex)", "type==typeHash"})
+    @GenerateAOT.Exclude
+    Object doVirtualCallCached(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type,
+                    Method method, long virtualIndex, Object[] arguments,
+                    @CachedLibrary(limit = "5") InteropLibrary interop,
+                    @Cached(value = "type") LLVMInteropType.Clazz typeHash,
+                    @Cached(value = "type.getVtableAccessNames()", allowUncached = true, dimensions = 1) String[] vtableHelpNames,
+                    @Cached LLVMInteropVtableAccessNode vtableAccessNode)
+                    throws UnsupportedTypeException, ArityException, UnsupportedMessageException,
+                    UnknownIdentifierException {
+        Object curReceiver = receiver;
+        for (String name : vtableHelpNames) {
+            curReceiver = interop.readMember(curReceiver, name);
+        }
+        return vtableAccessNode.execute(curReceiver, virtualIndex, arguments);
+    }
+
+    /**
+     * @param methodName
+     * @param method
+     */
+    @ExplodeLoop
+    @Specialization(guards = "isVirtual(virtualIndex)", replaces = "doVirtualCallCached")
+    @GenerateAOT.Exclude
+    Object doVirtualCall(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type, Method method, long virtualIndex, Object[] arguments,
+                    @CachedLibrary(limit = "5") InteropLibrary interop,
+                    @Cached LLVMInteropVtableAccessNode vtableAccessNode)
+                    throws UnsupportedTypeException, ArityException, UnsupportedMessageException, UnknownIdentifierException {
+        String[] vtableAccessNames = type.getVtableAccessNames();
+        Object curReceiver = receiver;
+        for (String name : vtableAccessNames) {
+            curReceiver = interop.readMember(curReceiver, name);
+        }
+        return vtableAccessNode.execute(curReceiver, virtualIndex, arguments);
+    }
+
+    /**
+     * @param virtualIndex
+     */
+    @Specialization(guards = "!isVirtual(virtualIndex)")
+    Object doNonvirtualCall(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type, Method method, long virtualIndex, Object[] arguments,
+                    @Cached LLVMInteropNonvirtualCallNode call)
                     throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
         return call.execute(receiver, type, methodName, method, arguments);
     }
