@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -75,7 +75,6 @@ import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.RegisterValue;
-import jdk.vm.ci.code.ValueUtil;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -385,45 +384,31 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
                 bExt = arithmeticLIRGen.emitSignExtend(b, compareBytes * 8, 64);
             }
 
-            /*
-             * The AArch64 comparison instruction can treat register 31 as the stack pointer
-             * register (sp) for the left operand, but not for the right operand.
-             */
-            boolean aIsStackPointer = ValueUtil.isRegister(aExt) && ValueUtil.asRegister(aExt).equals(AArch64.sp);
-            boolean bIsStackPointer = ValueUtil.isRegister(bExt) && ValueUtil.asRegister(bExt).equals(AArch64.sp);
-
-            if (aIsStackPointer && bIsStackPointer) {
-                /*
-                 * both a and b are sp, but this cannot be encoded in an AArch64 comparison. Hence,
-                 * sp must be moved to a register.
-                 */
-                left = right = emitMove(aExt);
-                mirrored = false;
-            } else if (bIsStackPointer || (isCompareConstant(aExt) && !isCompareConstant(bExt))) {
-                left = bExt;
+            if (LIRValueUtil.isVariable(bExt)) {
+                left = load(bExt);
                 right = loadNonConst(aExt);
                 mirrored = true;
             } else {
-                left = aExt;
+                left = load(aExt);
                 right = loadNonConst(bExt);
                 mirrored = false;
             }
-            append(new AArch64Compare.CompareOp(loadReg(left), loadNonCompareConst(right)));
+            append(new AArch64Compare.CompareOp(left, loadNonCompareConst(right)));
         } else if (kind.isSIMD()) {
             if (AArch64Compare.FloatCompareOp.isFloatCmpConstant(a, condition, unorderedIsTrue)) {
-                left = b;
+                left = load(b);
                 right = a;
                 mirrored = true;
             } else if (AArch64Compare.FloatCompareOp.isFloatCmpConstant(b, condition, unorderedIsTrue)) {
-                left = a;
+                left = load(a);
                 right = b;
                 mirrored = false;
             } else {
-                left = a;
+                left = load(a);
                 right = loadReg(b);
                 mirrored = false;
             }
-            append(new AArch64Compare.FloatCompareOp(loadReg(left), right, condition, unorderedIsTrue));
+            append(new AArch64Compare.FloatCompareOp(left, asAllocatable(right), condition, unorderedIsTrue));
         } else {
             throw GraalError.shouldNotReachHere();
         }
