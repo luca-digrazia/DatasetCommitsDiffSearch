@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -62,6 +62,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 
 public final class InteropDateTimeTest extends InteropLibraryBaseTest {
 
+    @ExportLibrary(InteropLibrary.class)
     static class Defaults implements TruffleObject {
 
     }
@@ -84,91 +85,51 @@ public final class InteropDateTimeTest extends InteropLibraryBaseTest {
 
     @ExportLibrary(InteropLibrary.class)
     @SuppressWarnings("static-method")
-    static class CombinationTest implements TruffleObject {
+    static class InvalidCombinationTest implements TruffleObject {
 
-        private final boolean hasDate;
-        private final boolean hasTime;
-        private final boolean hasTimeZone;
-        private final boolean hasFixedOffset;
+        final boolean missingTime;
 
-        CombinationTest(boolean hasDate, boolean hasTime, boolean hasTimeZone, boolean hasFixedOffset) {
-            this.hasDate = hasDate;
-            this.hasTime = hasTime;
-            this.hasTimeZone = hasTimeZone;
-            this.hasFixedOffset = hasFixedOffset;
+        InvalidCombinationTest(boolean missingTime) {
+            this.missingTime = missingTime;
         }
 
         @ExportMessage
         final boolean isDate() {
-            return hasDate;
+            return missingTime;
         }
 
         @ExportMessage
         final boolean isTime() {
-            return hasTime;
+            return !missingTime;
         }
 
         @ExportMessage
         final boolean isTimeZone() {
-            return hasTimeZone;
+            return true;
         }
 
         @ExportMessage
         @TruffleBoundary
-        final ZoneId asTimeZone() throws UnsupportedMessageException {
-            if (!hasTimeZone) {
-                throw UnsupportedMessageException.create();
-            }
-            if (hasFixedOffset) {
-                return ZoneId.of("+04:00");
-            } else {
-                return ZoneId.of("US/Pacific");
-            }
+        final ZoneId asTimeZone() {
+            return ZoneId.of("UTC");
         }
 
         @ExportMessage
         @TruffleBoundary
-        final LocalDate asDate() throws UnsupportedMessageException {
-            if (!hasDate) {
-                throw UnsupportedMessageException.create();
-            }
+        final LocalDate asDate() {
             return LocalDate.now();
         }
 
         @ExportMessage
-        @TruffleBoundary
         final LocalTime asTime() throws UnsupportedMessageException {
-            if (!hasTime) {
-                throw UnsupportedMessageException.create();
-            }
-            return LocalTime.now();
+            throw UnsupportedMessageException.create();
         }
     }
 
     @Test
-    public void testCombinations() throws InteropException {
-        boolean hasDate = true;
-        do {
-            boolean hasTime = true;
-            do {
-                boolean hasTimeZone = true;
-                do {
-                    boolean hasFixedOffset = hasTimeZone;
-                    do {
-                        Object o = new CombinationTest(hasDate, hasTime, hasTimeZone, hasFixedOffset);
-                        if (hasDate && !hasTime && hasTimeZone || !hasDate && hasTime && hasTimeZone && !hasFixedOffset) {
-                            testInvalidCombination(o);
-                        } else {
-                            testValidCombination(o, hasDate, hasTime, hasTimeZone);
-                        }
-                        hasFixedOffset = !hasFixedOffset;
-                    } while (!hasFixedOffset);
-                    hasTimeZone = !hasTimeZone;
-                } while (!hasTimeZone);
-                hasTime = !hasTime;
-            } while (!hasTime);
-            hasDate = !hasDate;
-        } while (!hasDate);
+    public void testInvalidCombination() {
+        testInvalidCombination(new InvalidCombinationTest(true));
+        testInvalidCombination(new InvalidCombinationTest(false));
     }
 
     private void testInvalidCombination(Object o) {
@@ -180,28 +141,6 @@ public final class InteropDateTimeTest extends InteropLibraryBaseTest {
         assertFails(() -> library.asDate(o), AssertionError.class);
         assertFails(() -> library.asTimeZone(o), AssertionError.class);
         assertFails(() -> library.asTime(o), AssertionError.class);
-    }
-
-    private void testValidCombination(Object o, boolean hasDate, boolean hasTime, boolean hasTimeZone) throws InteropException {
-        InteropLibrary library = createLibrary(InteropLibrary.class, o);
-        assertEquals(hasDate, library.isDate(o));
-        assertEquals(hasTime, library.isTime(o));
-        assertEquals(hasTimeZone, library.isTimeZone(o));
-        if (hasDate) {
-            library.asDate(o);
-        } else {
-            assertFails(() -> library.asDate(o), UnsupportedMessageException.class);
-        }
-        if (hasTime) {
-            library.asTime(o);
-        } else {
-            assertFails(() -> library.asTime(o), UnsupportedMessageException.class);
-        }
-        if (hasTimeZone) {
-            library.asTimeZone(o);
-        } else {
-            assertFails(() -> library.asTimeZone(o), UnsupportedMessageException.class);
-        }
     }
 
     @ExportLibrary(InteropLibrary.class)
