@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,26 +25,27 @@
 
 package jdk.tools.jaotc;
 
+import static jdk.tools.jaotc.AOTCompiledClass.getType;
+import static jdk.tools.jaotc.AOTCompiledClass.metadataName;
+
 import java.util.ArrayList;
 import java.util.List;
+
+import org.graalvm.compiler.code.CompilationResult;
+import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
+import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
+import org.graalvm.compiler.hotspot.HotSpotGraalServices;
 
 import jdk.tools.jaotc.binformat.BinaryContainer;
 import jdk.tools.jaotc.binformat.ByteContainer;
 import jdk.tools.jaotc.binformat.GotSymbol;
 import jdk.tools.jaotc.utils.NativeOrderOutputStream;
-import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-
-
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.site.DataPatch;
 import jdk.vm.ci.code.site.Infopoint;
 import jdk.vm.ci.code.site.Mark;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.hotspot.HotSpotMetaData;
-
-import static jdk.tools.jaotc.AOTCompiledClass.getType;
-import static jdk.tools.jaotc.AOTCompiledClass.metadataName;
 
 final class MetadataBuilder {
 
@@ -79,6 +82,7 @@ final class MetadataBuilder {
     private void createMethodMetadata(AOTCompiledClass compiledClass) {
         HotSpotGraalRuntimeProvider runtime = dataBuilder.getBackend().getRuntime();
         ByteContainer methodMetadataContainer = binaryContainer.getMethodMetadataContainer();
+        GraalHotSpotVMConfig graalHotSpotVMConfig = runtime.getVMConfig();
 
         // For each of the compiled java methods, create records holding information about them.
         for (CompiledMethodInfo methodInfo : compiledClass.getCompiledMethods()) {
@@ -96,6 +100,9 @@ final class MetadataBuilder {
             byte[] scopeDesc = metaData.scopesDescBytes();
             byte[] relocationInfo = metaData.relocBytes();
             byte[] oopMapInfo = metaData.oopMaps();
+            // this may be null as the field does not exist before JDK 13
+            byte[] implicitExceptionBytes = HotSpotGraalServices.getImplicitExceptionBytes(metaData);
+            byte[] exceptionBytes = metaData.exceptionBytes();
 
             // create a global symbol at this position for this method
             NativeOrderOutputStream metadataStream = new NativeOrderOutputStream();
@@ -109,6 +116,7 @@ final class MetadataBuilder {
             int verifiedEntry = co.verifiedEntry();
             int exceptionHandler = co.exceptionHandler();
             int deoptHandler = co.deoptHandler();
+            int deoptMHHandler = co.deoptMHHandler();
             int frameSize = methodInfo.getCompilationResult().getTotalFrameSize();
             StackSlot deoptRescueSlot = methodInfo.getCompilationResult().getCustomStackArea();
             int origPcOffset = deoptRescueSlot != null ? deoptRescueSlot.getOffset(frameSize) : -1;
@@ -129,8 +137,12 @@ final class MetadataBuilder {
                                putInt(unverifiedEntry).
                                putInt(verifiedEntry).
                                putInt(exceptionHandler).
-                               putInt(deoptHandler).
-                               putInt(stubsOffset).
+                               putInt(deoptHandler);
+                // If the JDK does not support DEOPT_MH_HANDLER_ENTRY, then do not output the new field.
+                if (graalHotSpotVMConfig.supportsMethodHandleDeoptimizationEntry()) {
+                    metadataStream.putInt(deoptMHHandler);
+                }
+                metadataStream.putInt(stubsOffset).
                                putInt(frameSize).
                                putInt(origPcOffset).
                                putInt(unsafeAccess);
@@ -140,6 +152,10 @@ final class MetadataBuilder {
                 NativeOrderOutputStream.PatchableInt scopeOffset = metadataStream.patchableInt();
                 NativeOrderOutputStream.PatchableInt relocationOffset = metadataStream.patchableInt();
                 NativeOrderOutputStream.PatchableInt exceptionOffset = metadataStream.patchableInt();
+                NativeOrderOutputStream.PatchableInt implictTableOffset = null;
+                if (implicitExceptionBytes != null) {
+                    implictTableOffset = metadataStream.patchableInt();
+                }
                 NativeOrderOutputStream.PatchableInt oopMapOffset = metadataStream.patchableInt();
                 metadataStream.align(8);
 
@@ -153,7 +169,12 @@ final class MetadataBuilder {
                 metadataStream.put(relocationInfo).align(8);
 
                 exceptionOffset.set(metadataStream.position());
-                metadataStream.put(metaData.exceptionBytes()).align(8);
+                metadataStream.put(exceptionBytes).align(8);
+
+                if (implicitExceptionBytes != null) {
+                    implictTableOffset.set(metadataStream.position());
+                    metadataStream.put(implicitExceptionBytes).align(8);
+                }
 
                 // oopmaps should be last
                 oopMapOffset.set(metadataStream.position());
@@ -222,7 +243,7 @@ final class MetadataBuilder {
                 infopointProcessor.process(methodInfo, infoPoint);
             }
 
-            for (Mark mark : compilationResult.getMarks()) {
+            for (CompilationResult.CodeMark mark : compilationResult.getMarks()) {
                 markProcessor.process(methodInfo, mark);
             }
 
