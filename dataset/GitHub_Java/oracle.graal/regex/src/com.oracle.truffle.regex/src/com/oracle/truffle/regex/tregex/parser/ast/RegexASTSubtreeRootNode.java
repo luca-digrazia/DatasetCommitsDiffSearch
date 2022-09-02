@@ -84,11 +84,6 @@ public abstract class RegexASTSubtreeRootNode extends Term implements RegexASTVi
         this.subTreeId = subTreeId;
     }
 
-    /**
-     * Returns {@code true} iff this subtree is the root of the entire regular expression.
-     */
-    public abstract boolean isRoot();
-
     @Override
     public abstract RegexASTSubtreeRootNode copy(RegexAST ast, boolean recursive);
 
@@ -128,7 +123,7 @@ public abstract class RegexASTSubtreeRootNode extends Term implements RegexASTVi
         matchFound.setParent(this);
     }
 
-    public Term getAnchoredInitialState() {
+    public RegexASTNode getAnchoredInitialState() {
         return anchoredInitialState;
     }
 
@@ -138,7 +133,7 @@ public abstract class RegexASTSubtreeRootNode extends Term implements RegexASTVi
         anchoredInitialState.setNext(group);
     }
 
-    public Term getUnAnchoredInitialState() {
+    public RegexASTNode getUnAnchoredInitialState() {
         return unAnchoredInitialState;
     }
 
@@ -148,7 +143,7 @@ public abstract class RegexASTSubtreeRootNode extends Term implements RegexASTVi
         unAnchoredInitialState.setNext(group);
     }
 
-    public Term getAnchoredFinalState() {
+    public RegexASTNode getAnchoredFinalState() {
         return anchoredFinalState;
     }
 

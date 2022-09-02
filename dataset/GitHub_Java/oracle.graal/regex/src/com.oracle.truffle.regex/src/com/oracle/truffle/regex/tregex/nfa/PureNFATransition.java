@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,12 +40,11 @@
  */
 package com.oracle.truffle.regex.tregex.nfa;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.automaton.AbstractTransition;
+import com.oracle.truffle.regex.tregex.automaton.StateSet;
 import com.oracle.truffle.regex.tregex.parser.ast.GroupBoundaries;
-import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
-import com.oracle.truffle.regex.tregex.util.json.Json;
-import com.oracle.truffle.regex.tregex.util.json.JsonValue;
+import com.oracle.truffle.regex.tregex.parser.ast.LookAheadAssertion;
+import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
 
 /**
  * Represents a transition of a {@link PureNFA}.
@@ -56,17 +55,20 @@ public class PureNFATransition implements AbstractTransition<PureNFAState, PureN
     private final PureNFAState source;
     private final PureNFAState target;
     private final GroupBoundaries groupBoundaries;
-    private final boolean caretGuard;
-    private final boolean dollarGuard;
+    private final StateSet<LookAheadAssertion> traversedLookAheads;
+    private final StateSet<LookBehindAssertion> traversedLookBehinds;
     private final QuantifierGuard[] quantifierGuards;
 
-    public PureNFATransition(short id, PureNFAState source, PureNFAState target, GroupBoundaries groupBoundaries, boolean caretGuard, boolean dollarGuard, QuantifierGuard[] quantifierGuards) {
+    public PureNFATransition(short id, PureNFAState source, PureNFAState target, GroupBoundaries groupBoundaries,
+                    StateSet<LookAheadAssertion> traversedLookAheads,
+                    StateSet<LookBehindAssertion> traversedLookBehinds,
+                    QuantifierGuard[] quantifierGuards) {
         this.id = id;
         this.source = source;
         this.target = target;
-        this.caretGuard = caretGuard;
         this.groupBoundaries = groupBoundaries;
-        this.dollarGuard = dollarGuard;
+        this.traversedLookAheads = traversedLookAheads;
+        this.traversedLookBehinds = traversedLookBehinds;
         this.quantifierGuards = quantifierGuards;
     }
 
@@ -92,24 +94,28 @@ public class PureNFATransition implements AbstractTransition<PureNFAState, PureN
         return groupBoundaries;
     }
 
-    public boolean hasCaretGuard() {
-        return caretGuard;
+    /**
+     * Set of {@link LookAheadAssertion}s traversed by this transition. All
+     * {@link LookAheadAssertion}s contained in this set must match in order for this transition to
+     * be valid.<br>
+     * Example: in the expression {@code /a(?=b)[a-z]/} , {@link #getTraversedLookAheads()} of the
+     * transition from {@code a} to {@code [a-z]} will contain the look-ahead assertion
+     * {@code (?=b)}, so the regex matcher must check {@code (?=b)} before continuing to
+     * {@code [a-z]}.
+     */
+    public StateSet<LookAheadAssertion> getTraversedLookAheads() {
+        return traversedLookAheads;
     }
 
-    public boolean hasDollarGuard() {
-        return dollarGuard;
+    /**
+     * Set of {@link LookBehindAssertion}s traversed by this transition, analoguous to
+     * {@link #getTraversedLookAheads()}.
+     */
+    public StateSet<LookBehindAssertion> getTraversedLookBehinds() {
+        return traversedLookBehinds;
     }
 
     public QuantifierGuard[] getQuantifierGuards() {
         return quantifierGuards;
-    }
-
-    @TruffleBoundary
-    public JsonValue toJson(RegexAST ast) {
-        return Json.obj(Json.prop("id", id),
-                        Json.prop("source", source.getId()),
-                        Json.prop("target", target.getId()),
-                        Json.prop("groupBoundaries", groupBoundaries),
-                        Json.prop("sourceSections", groupBoundaries.indexUpdateSourceSectionsToJson(ast)));
     }
 }
