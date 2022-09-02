@@ -1,17 +1,40 @@
+/*
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.truffle.espresso.descriptors;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Objects;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.impl.Stable;
-import com.oracle.truffle.espresso.jni.Utf8;
+import com.oracle.truffle.espresso.jni.ModifiedUtf8;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
 /**
  * A <tt>ByteSequence</tt> is a readable sequence of <code>byte</code> values. This interface
- * provides uniform, read-only access to different kinds of <code>byte</code> sequences.
+ * provides uniform, read-only access to different kinds of <code>byte</code> sequences. Implements
+ * a slice "view" over a byte array.
  */
 // TODO(peterssen): Should not be public.
 public abstract class ByteSequence {
@@ -20,6 +43,8 @@ public abstract class ByteSequence {
 
     @Stable @CompilationFinal(dimensions = 1) //
     protected final byte[] value;
+
+    public static final ByteSequence EMPTY = ByteSequence.create("");
 
     ByteSequence(final byte[] underlyingBytes, int hashCode) {
         this.value = Objects.requireNonNull(underlyingBytes);
@@ -42,21 +67,25 @@ public abstract class ByteSequence {
     }
 
     public static ByteSequence wrap(final byte[] underlyingBytes, int offset, int length) {
+        if ((length > 0 && offset >= underlyingBytes.length) || offset + (long) length > underlyingBytes.length || length < 0 || offset < 0) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("ByteSequence illegal bounds: offset: " + offset + " length: " + length + " bytes length: " + underlyingBytes.length);
+        }
         return new ByteSequence(underlyingBytes, hashOfRange(underlyingBytes, offset, length)) {
             @Override
-            public final int length() {
+            public int length() {
                 return length;
             }
 
             @Override
-            public final int offset() {
+            public int offset() {
                 return offset;
             }
         };
     }
 
     public static ByteSequence create(String str) {
-        final byte[] bytes = Utf8.fromJavaString(str);
+        final byte[] bytes = ModifiedUtf8.fromJavaString(str);
         return ByteSequence.wrap(bytes, 0, bytes.length);
     }
 
@@ -102,12 +131,55 @@ public abstract class ByteSequence {
         return wrap(getUnderlyingBytes(), offset() + offset, length);
     }
 
+    public final boolean contentEquals(ByteSequence other) {
+        if (length() != other.length()) {
+            return false;
+        }
+        for (int i = 0; i < length(); ++i) {
+            if (byteAt(i) != other.byteAt(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public final boolean contentStartsWith(ByteSequence other) {
+        if (length() < other.length()) {
+            return false;
+        }
+        for (int i = 0; i < other.length(); ++i) {
+            if (byteAt(i) != other.byteAt(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     public String toString() {
         try {
-            return Utf8.toJavaString(getUnderlyingBytes(), offset(), length());
+            return ModifiedUtf8.toJavaString(getUnderlyingBytes(), offset(), length());
         } catch (IOException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
+    }
+
+    public int lastIndexOf(byte b) {
+        for (int i = length() - 1; i >= 0; i--) {
+            if (byteAt(i) == b) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Writes this sequence into the destination byte array.
+     *
+     * @param dest the destination
+     * @param index index in the destination array to start writing the sequence
+     */
+    public void writeTo(byte[] dest, int index) {
+        System.arraycopy(getUnderlyingBytes(), offset(), dest, index, length());
     }
 }
