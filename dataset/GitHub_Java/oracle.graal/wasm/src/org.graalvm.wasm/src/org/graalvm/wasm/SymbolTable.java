@@ -704,6 +704,10 @@ public abstract class SymbolTable {
         return importedTableDescriptor;
     }
 
+    void setImportedTable(ImportDescriptor descriptor) {
+        importedTableDescriptor = descriptor;
+    }
+
     public String exportedTable() {
         return exportedTable;
     }
@@ -712,11 +716,7 @@ public abstract class SymbolTable {
         checkNotParsed();
         validateSingleMemory();
         memory = new MemoryInfo(initSize, maxSize);
-        module().addLinkAction((context, instance) -> {
-            final int memoryIndex = context.memories().allocateMemory(memory);
-            final WasmMemory memory = context.memories().memory(memoryIndex);
-            instance.setMemory(memory);
-        });
+        module().addLinkAction((context, instance) -> context.memories().allocateMemory(memory));
     }
 
     public void importMemory(String moduleName, String memoryName, int initSize, int maxSize) {

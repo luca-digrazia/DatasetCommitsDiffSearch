@@ -174,7 +174,7 @@ public class Linker {
     public void resetModuleState(WasmContext context, WasmInstance instance, byte[] data, boolean zeroMemory) {
         final BinaryParser reader = new BinaryParser(language, instance.module(), data);
         reader.resetGlobalState(context, instance);
-        reader.resetMemoryState(context, instance, zeroMemory);
+        reader.resetMemoryState(instance, zeroMemory);
     }
 
     void resolveGlobalImport(WasmContext context, WasmInstance instance, ImportDescriptor importDescriptor, int globalIndex, byte valueType, byte mutability) {
@@ -208,7 +208,6 @@ public class Linker {
             }
 
             int address = importedInstance.globalAddress(exportedGlobalIndex);
-            System.out.println("Yo! " + globalIndex + " -> " + address);
             instance.setGlobalAddress(globalIndex, address);
         };
         final ImportGlobalSym importGlobalSym = new ImportGlobalSym(instance.name(), importDescriptor);

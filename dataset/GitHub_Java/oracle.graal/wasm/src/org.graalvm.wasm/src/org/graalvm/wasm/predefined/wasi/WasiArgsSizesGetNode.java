@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,22 +40,22 @@
  */
 package org.graalvm.wasm.predefined.wasi;
 
+import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.WasmModule;
-import org.graalvm.wasm.WasmVoidResult;
+import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
+import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 
-public class WasiArgsSizesGetNode extends WasmPredefinedRootNode {
-    WasiArgsSizesGetNode(WasmLanguage language, WasmModule module) {
+public class WasiArgsSizesGetNode extends WasmBuiltinRootNode {
+    public WasiArgsSizesGetNode(WasmLanguage language, WasmInstance module) {
         super(language, module);
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
-        WasmMemory memory = module.symbolTable().memory();
+    public Object executeWithContext(VirtualFrame frame, WasmContext context) {
+        WasmMemory memory = instance.memory();
         int argcAddress = (int) frame.getArguments()[0];
         int argvBufSizeAddress = (int) frame.getArguments()[1];
 
@@ -66,14 +66,14 @@ public class WasiArgsSizesGetNode extends WasmPredefinedRootNode {
             argvBufSize += argument.length() + 1;
         }
 
-        memory.store_i32(argcAddress, argc);
-        memory.store_i32(argvBufSizeAddress, argvBufSize);
+        memory.store_i32(this, argcAddress, argc);
+        memory.store_i32(this, argvBufSizeAddress, argvBufSize);
 
-        return WasmVoidResult.getInstance();
+        return 0;
     }
 
     @Override
-    public String predefinedNodeName() {
+    public String builtinNodeName() {
         return "__wasi_args_sizes_get";
     }
 }
