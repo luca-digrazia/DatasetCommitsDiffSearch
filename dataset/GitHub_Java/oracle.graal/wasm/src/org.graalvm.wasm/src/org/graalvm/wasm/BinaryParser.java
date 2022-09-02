@@ -156,7 +156,7 @@ public class BinaryParser extends BinaryStreamParser {
                     skipCodeSection();
                     break;
                 case Section.DATA:
-                    readDataSection(null, null);
+                    readDataSection(null);
                     break;
                 default:
                     Assert.fail("invalid section ID: " + sectionID);
@@ -1134,7 +1134,7 @@ public class BinaryParser extends BinaryStreamParser {
         }
     }
 
-    private void readDataSection(WasmContext linkedContext, WasmInstance linkedInstance) {
+    private void readDataSection(WasmInstance linkedInstance) {
         int numDataSegments = readVectorLength();
         for (int dataSegmentId = 0; dataSegmentId != numDataSegments; ++dataSegmentId) {
             int memIndex = readUnsignedInt32();
@@ -1166,11 +1166,6 @@ public class BinaryParser extends BinaryStreamParser {
             int byteLength = readVectorLength();
 
             if (linkedInstance != null) {
-                if (offsetGlobalIndex != -1) {
-                    int offsetGlobalAddress = linkedInstance.globalAddress(offsetGlobalIndex);
-                    offsetAddress = linkedContext.globals().loadAsInt(offsetGlobalAddress);
-                }
-
                 // Reading of the data segment is called after linking, so initialize the memory
                 // directly.
                 final WasmMemory memory = linkedInstance.memory();
@@ -1498,13 +1493,13 @@ public class BinaryParser extends BinaryStreamParser {
         }
     }
 
-    void resetMemoryState(WasmContext context, WasmInstance instance, boolean zeroMemory) {
+    void resetMemoryState(WasmInstance instance, boolean zeroMemory) {
         final WasmMemory memory = instance.memory();
         if (memory != null && zeroMemory) {
             memory.clear();
         }
         if (tryJumpToSection(Section.DATA)) {
-            readDataSection(context, instance);
+            readDataSection(instance);
         }
     }
 }
