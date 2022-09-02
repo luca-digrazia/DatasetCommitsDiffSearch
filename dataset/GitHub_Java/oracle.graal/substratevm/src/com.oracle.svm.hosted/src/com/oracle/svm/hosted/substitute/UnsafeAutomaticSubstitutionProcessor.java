@@ -74,7 +74,6 @@ import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.graal.pointsto.infrastructure.SubstitutionProcessor;
 import com.oracle.graal.pointsto.meta.AnalysisType;
-import com.oracle.svm.core.ParsingReason;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
@@ -256,7 +255,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         plugins.appendInlineInvokePlugin(inlineInvokePlugin);
         plugins.setClassInitializationPlugin(new NoClassInitializationPlugin());
 
-        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions, plugins.getInvocationPlugins(), hostVM, null, ParsingReason.UnsafeSubstitutionAnalysis);
+        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions, plugins.getInvocationPlugins(), hostVM, null, false, false);
 
         /*
          * Analyzing certain classes leads to false errors. We disable reporting for those classes
