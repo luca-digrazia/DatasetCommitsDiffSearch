@@ -560,9 +560,7 @@ public final class HeapImpl extends Heap {
 
     @Fold
     public static boolean usesImageHeapRememberedSets() {
-        return HeapOptions.ChunkedImageHeapLayout.getValue() &&
-                        CommittedMemoryProvider.get().guaranteesHeapPreferredAddressSpaceAlignment() &&
-                        HeapPolicyOptions.MaxSurvivorSpaces.getValue() != 0; // unsupported/untested
+        return HeapOptions.ChunkedImageHeapLayout.getValue() && CommittedMemoryProvider.get().guaranteesHeapPreferredAddressSpaceAlignment();
     }
 
     @Fold

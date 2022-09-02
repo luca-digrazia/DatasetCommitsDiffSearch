@@ -54,11 +54,10 @@ public abstract class ObjectHeader {
      */
     public abstract int getReservedBitsMask();
 
+    @Platforms(Platform.HOSTED_ONLY.class)
     public abstract long encodeAsImageHeapObjectHeader(ImageHeapObject obj, long hubOffsetFromHeapBase);
 
     public abstract Word encodeAsTLABObjectHeader(DynamicHub hub);
-
-    public abstract Word encodeAsUnmanagedObjectHeader(DynamicHub hub);
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public abstract DynamicHub dynamicHubFromObjectHeader(UnsignedWord header);
@@ -71,5 +70,10 @@ public abstract class ObjectHeader {
     public abstract DynamicHub readDynamicHubFromPointer(Pointer ptr);
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public abstract void initializeHeaderOfNewObject(Pointer objectPointer, Word objectHeader, boolean isArray);
+    public abstract void initializeHeaderOfNewObject(Pointer objectPointer, DynamicHub hub, HeapKind heapKind, boolean isArray);
+
+    public enum HeapKind {
+        Unmanaged,
+        ImageHeap,
+    }
 }
