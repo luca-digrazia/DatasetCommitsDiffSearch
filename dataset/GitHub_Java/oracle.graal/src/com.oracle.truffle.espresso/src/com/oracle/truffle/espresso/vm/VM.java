@@ -108,6 +108,7 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
+import com.oracle.truffle.espresso.runtime.BootClassPathType;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
@@ -203,7 +204,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         /* verifyLibrary = */ loadLibraryInternal(bootLibraryPath, "verify", false);
         TruffleObject libJava = loadLibraryInternal(bootLibraryPath, "java");
 
-        if (getContext().getVmProperties().bootClassPathType().getJavaVersion() > 8) {
+        if (getContext().getVmProperties().bootClassPathType() != BootClassPathType.RT_JAR) {
             return libJava;
         }
 

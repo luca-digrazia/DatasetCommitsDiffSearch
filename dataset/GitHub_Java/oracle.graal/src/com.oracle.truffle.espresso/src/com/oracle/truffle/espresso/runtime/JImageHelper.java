@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.runtime;
 
 import java.io.File;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.TruffleObject;
 
 /**
@@ -32,9 +33,10 @@ import com.oracle.truffle.api.interop.TruffleObject;
  */
 public class JImageHelper implements ModulesReaderHelper {
 
-    // pointer to native JImageFile
-    private final TruffleObject jimage;
     private final JImageLibrary library;
+
+    // pointer to native JImageFile
+    @CompilerDirectives.CompilationFinal private TruffleObject jimage;
 
     JImageHelper(File file, EspressoContext context) {
         this.library = context.jimageLibrary();

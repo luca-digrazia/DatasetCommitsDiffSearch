@@ -28,9 +28,6 @@ import static com.oracle.truffle.espresso.jni.NativeLibrary.lookupAndBind;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.CharBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.StandardCharsets;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.ArityException;
@@ -65,8 +62,6 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
 
     // Library pointer
     private final TruffleObject jimageLibrary;
-
-    private static CharsetEncoder encoder = StandardCharsets.UTF_8.newEncoder();
 
     // Function pointers
 
@@ -132,7 +127,7 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
         TruffleObject sizePtr = byteBufferPointer(sizeBuffer);
         TruffleObject moduleNamePtr = getNativeString(moduleName);
         TruffleObject versionPtr = getNativeString("11.0");
-        TruffleObject namePtr = getNativeString(name);
+        TruffleObject namePtr = getNativeString(name.substring(0, name.lastIndexOf(".class")));
 
         // Do the call
         long location = (long) execute(findResource, jimage, moduleNamePtr, versionPtr, namePtr, sizePtr);
@@ -164,21 +159,13 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
     }
 
     private static TruffleObject getNativeString(String name) {
-        try {
-            char[] chars = name.toCharArray();
-            // Add one for zero termination.
-            ByteBuffer rawChars = allocateDirect(name.length() + 1, JavaKind.Char);
-            CharBuffer charBuffer = rawChars.asCharBuffer();
-            charBuffer.put(chars);
-            charBuffer.put((char) 0);
-            charBuffer.flip();
-            rawChars = encoder.encode(charBuffer);
-            ByteBuffer directEncoded = allocateDirect(rawChars.limit());
-            directEncoded.put(rawChars);
-            return byteBufferPointer(directEncoded);
-        } catch (CharacterCodingException e) {
-            throw EspressoError.shouldNotReachHere();
-        }
+        char[] chars = name.toCharArray();
+        // Add one for zero termination.
+        ByteBuffer bb = allocateDirect(chars.length + 1, JavaKind.Char);
+        CharBuffer region = bb.asCharBuffer();
+        region.put(chars);
+        region.put((char) 0);
+        return byteBufferPointer(bb);
     }
 
     @Override

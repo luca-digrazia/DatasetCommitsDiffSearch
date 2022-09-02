@@ -23,21 +23,30 @@
 
 package com.oracle.truffle.espresso.runtime;
 
-import java.io.File;
+public enum BootClassPathType {
+    RT_JAR(8, false, false),
+    IMAGE(11, true, false),
+    EXPLODED(11, true, true);
 
-public interface ModulesReaderHelper {
-    void close();
+    private final int javaVersion;
+    private final boolean isModule;
+    private final boolean isExplodedModule;
 
-    byte[] getClassBytes(String moduleName, String name);
+    BootClassPathType(int javaVersion, boolean isModule, boolean isExplodedModule) {
+        this.javaVersion = javaVersion;
+        this.isModule = isModule;
+        this.isExplodedModule = isExplodedModule;
+    }
 
-    String packageToModule(String packageName);
+    public int getJavaVersion() {
+        return javaVersion;
+    }
 
-    String JAVA_BASE = "java.base";
+    public boolean isModule() {
+        return isModule;
+    }
 
-    static ModulesReaderHelper create(File file, EspressoContext context) {
-        if (file.isDirectory()) {
-            return new ExplodedModulesHelper(file, context);
-        }
-        return new JImageHelper(file, context);
+    public boolean isExplodedModule() {
+        return isExplodedModule;
     }
 }

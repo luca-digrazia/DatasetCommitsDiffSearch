@@ -289,8 +289,7 @@ public final class Classpath {
     public static Entry createEntry(String name) {
         final File pathFile = new File(name);
         EspressoContext context = EspressoLanguage.getCurrentContext();
-        if (pathFile.getName().equals(EspressoProperties.BOOT_MODULES_NAME) &&
-                        context.getVmProperties().bootClassPathType().isModule()) {
+        if (context.getVmProperties().bootClassPathType().isModule()) {
             return new Modules(pathFile, context);
         }
         if (pathFile.isDirectory()) {
