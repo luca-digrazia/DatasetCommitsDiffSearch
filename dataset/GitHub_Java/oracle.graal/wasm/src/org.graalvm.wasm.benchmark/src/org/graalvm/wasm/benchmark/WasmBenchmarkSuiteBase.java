@@ -54,9 +54,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Objects;
-
-import static org.graalvm.wasm.utils.SystemProperties.DISABLE_COMPILATION_FLAG;
 
 @Warmup(iterations = 6)
 @Measurement(iterations = 8)
@@ -81,10 +78,6 @@ public abstract class WasmBenchmarkSuiteBase {
         public void setup() throws IOException, InterruptedException {
             final Context.Builder contextBuilder = Context.newBuilder("wasm");
             contextBuilder.option("wasm.Builtins", "testutil,env:emscripten,memory");
-            if (!Objects.isNull(DISABLE_COMPILATION_FLAG)) {
-                contextBuilder.allowExperimentalOptions(true);
-                contextBuilder.option("engine.Compilation", "false");
-            }
             context = contextBuilder.build();
             benchmarkCase = WasmCase.loadBenchmarkCase(benchmarkResource());
             benchmarkCase.getSources().forEach(context::eval);
@@ -145,14 +138,6 @@ public abstract class WasmBenchmarkSuiteBase {
 
         public void run() {
             this.result = benchmarkRun.execute();
-        }
-
-        public Value benchmarkRun() {
-            return benchmarkRun;
-        }
-
-        public void setResult(Value result) {
-            this.result = result;
         }
     }
 }
