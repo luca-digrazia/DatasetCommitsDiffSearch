@@ -57,16 +57,13 @@ import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyHashMap;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Function;
 
 import static org.junit.Assert.assertEquals;
@@ -123,11 +120,9 @@ public class HashTest extends AbstractPolyglotTest {
             if ((i & 1) == 0) {
                 Object expectedValue = i;
                 assertExisting(hash, key, interop);
-                assertEquals(expectedValue, interop.readHashValue(hash, key));
                 assertEquals(expectedValue, interop.readHashValueOrDefault(hash, key, "failure"));
             } else {
                 assertNonExisting(hash, key, interop);
-                assertEquals("failure", interop.readHashValueOrDefault(hash, key, "failure"));
             }
         }
         Map<Object, Integer> expected = new HashMap<>();
@@ -154,8 +149,6 @@ public class HashTest extends AbstractPolyglotTest {
             expected2.put(key, newValue);
         }
         assertTrue(expected.isEmpty());
-        Set<Object> expectedKeys = new HashSet<>(expected2.keySet());
-        Collection<Integer> expectedValues = new ArrayList<>(expected2.values());
         iterator = interop.getHashEntriesIterator(hash);
         while (interop.hasIteratorNextElement(iterator)) {
             Object entry = interop.getIteratorNextElement(iterator);
@@ -165,18 +158,6 @@ public class HashTest extends AbstractPolyglotTest {
             assertEquals(expectedValue, value);
         }
         assertTrue(expected2.isEmpty());
-        iterator = interop.getHashKeysIterator(hash);
-        while (interop.hasIteratorNextElement(iterator)) {
-            Object key = interop.getIteratorNextElement(iterator);
-            assertTrue(expectedKeys.remove(key));
-        }
-        assertTrue(expectedKeys.isEmpty());
-        iterator = interop.getHashValuesIterator(hash);
-        while (interop.hasIteratorNextElement(iterator)) {
-            Object value = interop.getIteratorNextElement(iterator);
-            assertTrue(expectedValues.remove(value));
-        }
-        assertTrue(expectedValues.isEmpty());
 
         for (int i = 0; i < count; i += inc) {
             Object key = keyFactory.create(i);
@@ -230,10 +211,8 @@ public class HashTest extends AbstractPolyglotTest {
                 Object expectedValue = i;
                 assertTrue(hash.hasHashEntry(key));
                 assertEquals(expectedValue, hash.getHashValue(key).asInt());
-                assertEquals(expectedValue, hash.getHashValueOrDefault(key, -1).asInt());
             } else {
                 assertFalse(hash.hasHashEntry(key));
-                assertEquals(-1, hash.getHashValueOrDefault(key, -1).asInt());
             }
         }
         Map<Object, Integer> expected = new HashMap<>();
@@ -260,8 +239,6 @@ public class HashTest extends AbstractPolyglotTest {
             expected2.put(key, newValue);
         }
         assertTrue(expected.isEmpty());
-        Set<Object> expectedKeys = new HashSet<>(expected2.keySet());
-        Collection<Integer> expectedValues = new ArrayList<>(expected2.values());
         iterator = hash.getHashEntriesIterator();
         while (iterator.hasIteratorNextElement()) {
             Value entry = iterator.getIteratorNextElement();
@@ -271,18 +248,6 @@ public class HashTest extends AbstractPolyglotTest {
             assertEquals(expectedValue, value);
         }
         assertTrue(expected2.isEmpty());
-        iterator = hash.getHashKeysIterator();
-        while (iterator.hasIteratorNextElement()) {
-            Object key = keyFactory.unbox(iterator.getIteratorNextElement());
-            assertTrue(expectedKeys.remove(key));
-        }
-        assertTrue(expectedKeys.isEmpty());
-        iterator = hash.getHashValuesIterator();
-        while (iterator.hasIteratorNextElement()) {
-            int value = iterator.getIteratorNextElement().asInt();
-            assertTrue(expectedValues.remove(value));
-        }
-        assertTrue(expectedValues.isEmpty());
         for (int i = 0; i < count; i += inc) {
             Object key = keyFactory.create(i);
             hash.removeHashEntry(key);
@@ -539,7 +504,7 @@ public class HashTest extends AbstractPolyglotTest {
             return size;
         }
 
-        @ExportMessage(name = "isHashEntryReadable")
+        @ExportMessage(name = "isHashValueReadable")
         @ExportMessage(name = "isHashEntryModifiable")
         @ExportMessage(name = "isHashEntryRemovable")
         boolean isHashEntryExisting(Object key) {
