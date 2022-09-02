@@ -100,16 +100,14 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         private AArch64Address address;
         private Register result;
         private int sizeInBytes;
-        private boolean isStore;
-        private boolean isFP;
         private int position;
+        private boolean isStore;
 
-        AArch64MemoryEncoding(int sizeInBytes, Register result, AArch64Address address, boolean isStore, boolean isFP, int position) {
+        AArch64MemoryEncoding(int sizeInBytes, Register result, AArch64Address address, boolean isStore, int position) {
             this.sizeInBytes = sizeInBytes;
             this.result = result;
             this.address = address;
             this.isStore = isStore;
-            this.isFP = isFP;
             this.position = position;
             AArch64Address.AddressingMode addressingMode = address.getAddressingMode();
             assert addressingMode == IMMEDIATE_UNSIGNED_SCALED || addressingMode == IMMEDIATE_SIGNED_UNSCALED : "Invalid address mode" +
@@ -248,7 +246,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         loadAddress(dst, address, 8);
     }
 
-    private boolean tryMerge(int sizeInBytes, Register rt, AArch64Address address, boolean isStore, boolean isFP) {
+    private boolean tryMerge(int sizeInBytes, Register rt, AArch64Address address, boolean isStore) {
         isImmLoadStoreMerged = false;
         if (lastImmLoadStoreEncoding == null) {
             return false;
@@ -267,12 +265,12 @@ public class AArch64MacroAssembler extends AArch64Assembler {
             return false;
         }
 
-        if (isStore != lastImmLoadStoreEncoding.isStore || isFP != lastImmLoadStoreEncoding.isFP) {
+        if (isStore != lastImmLoadStoreEncoding.isStore) {
             return false;
         }
 
-        // Only merge ldr/str with the same size of 32, 64, or 128 (for FP) bits
-        if (sizeInBytes != lastImmLoadStoreEncoding.sizeInBytes || (sizeInBytes != 4 && sizeInBytes != 8 && (!isFP || sizeInBytes != 16))) {
+        // Only merge ldr/str with the same size of 32bits or 64bits.
+        if (sizeInBytes != lastImmLoadStoreEncoding.sizeInBytes || (sizeInBytes != 4 && sizeInBytes != 8)) {
             return false;
         }
 
@@ -301,11 +299,8 @@ public class AArch64MacroAssembler extends AArch64Assembler {
             return false;
         }
 
-        /*
-         * Offset must be in ldp/stp instruction's range. Remember that ldp/stp has 7 bits reserved
-         * for the offset and hence can represent the values [-64, 63].
-         */
-        int offset = Math.min(curOffset, preOffset);
+        // Offset must be in ldp/stp instruction's range.
+        int offset = curOffset > preOffset ? preOffset : curOffset;
         int minOffset = -64 * sizeInBytes;
         int maxOffset = 63 * sizeInBytes;
         if (offset < minOffset || offset > maxOffset) {
@@ -333,12 +328,9 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         }
 
         // Merge two ldrs/strs to ldp/stp.
-        Register rt1;
-        Register rt2;
-        if (preOffset < curOffset) {
-            rt1 = preRt;
-            rt2 = curRt;
-        } else {
+        Register rt1 = preRt;
+        Register rt2 = curRt;
+        if (curOffset < preOffset) {
             rt1 = curRt;
             rt2 = preRt;
         }
@@ -346,7 +338,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         int size = sizeInBytes * Byte.SIZE;
         AArch64Address pairAddress = AArch64Address.createImmediateAddress(size, AArch64Address.AddressingMode.IMMEDIATE_PAIR_SIGNED_SCALED, curBase, offset);
         Instruction instruction = isStore ? STP : LDP;
-        insertLdpStp(lastPosition, size, instruction, isFP, rt1, rt2, pairAddress);
+        insertLdpStp(lastPosition, size, instruction, rt1, rt2, pairAddress);
         lastImmLoadStoreEncoding = null;
         isImmLoadStoreMerged = true;
         return true;
@@ -356,9 +348,9 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * Try to merge two continuous ldr/str to one ldp/stp. If this current ldr/str is not merged,
      * save it as the last ldr/str.
      */
-    private boolean tryMergeLoadStore(int srcSize, Register rt, AArch64Address address, boolean isStore, boolean isFP) {
+    private boolean tryMergeLoadStore(int srcSize, Register rt, AArch64Address address, boolean isStore) {
         int sizeInBytes = srcSize / Byte.SIZE;
-        if (tryMerge(sizeInBytes, rt, address, isStore, isFP)) {
+        if (tryMerge(sizeInBytes, rt, address, isStore)) {
             return true;
         }
 
@@ -372,7 +364,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                     return false;
                 }
             }
-            lastImmLoadStoreEncoding = new AArch64MemoryEncoding(sizeInBytes, rt, address, isStore, isFP, position());
+            lastImmLoadStoreEncoding = new AArch64MemoryEncoding(sizeInBytes, rt, address, isStore, position());
         }
         return false;
     }
@@ -731,12 +723,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * In addition, if requested, tries to merge two adjacent loads into one ldp.
      */
     private void ldr(int srcSize, Register rt, AArch64Address address, boolean tryMerge) {
-        if (!tryMerge) {
-            /* Need to reset state information normally generated during tryMergeLoadStore. */
-            isImmLoadStoreMerged = false;
-            lastImmLoadStoreEncoding = null;
-            super.ldr(srcSize, rt, address);
-        } else if (!tryMergeLoadStore(srcSize, rt, address, false, false)) {
+        if (!(tryMerge && tryMergeLoadStore(srcSize, rt, address, false))) {
             super.ldr(srcSize, rt, address);
         }
     }
@@ -751,39 +738,8 @@ public class AArch64MacroAssembler extends AArch64Assembler {
     @Override
     public void str(int destSize, Register rt, AArch64Address address) {
         // Try to merge two adjacent stores into one stp.
-        if (!tryMergeLoadStore(destSize, rt, address, true, false)) {
+        if (!tryMergeLoadStore(destSize, rt, address, true)) {
             super.str(destSize, rt, address);
-        }
-    }
-
-    /* Load-Store Single FP register (5.7.1.1) */
-    /**
-     * Floating point load.
-     *
-     * @param size number of bits read from memory into rt. Must be 8, 16, 32, 64 or 128.
-     * @param rt floating point register. May not be null.
-     * @param address all addressing modes allowed. May not be null.
-     */
-    @Override
-    public void fldr(int size, Register rt, AArch64Address address) {
-        // Try to merge two adjacent loads into one fldp.
-        if (!(tryMergeLoadStore(size, rt, address, false, true))) {
-            super.fldr(size, rt, address);
-        }
-    }
-
-    /**
-     * Floating point store.
-     *
-     * @param size number of bits read from memory into rt. Must be 32 or 64.
-     * @param rt floating point register. May not be null.
-     * @param address all addressing modes allowed. May not be null.
-     */
-    @Override
-    public void fstr(int size, Register rt, AArch64Address address) {
-        // Try to merge two adjacent stores into one fstp.
-        if (!(tryMergeLoadStore(size, rt, address, true, true))) {
-            super.fstr(size, rt, address);
         }
     }
 
@@ -824,7 +780,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
     }
 
     /**
-     * Conditional move. dst = src1 if condition else src2.
+     * Conditional select. dst = src1 if condition else src2.
      *
      * @param size register size. Has to be 32 or 64.
      * @param result general purpose register. May not be null or the stackpointer.
@@ -832,7 +788,8 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * @param falseValue general purpose register. May not be null or the stackpointer.
      * @param cond any condition flag. May not be null.
      */
-    public void cmov(int size, Register result, Register trueValue, Register falseValue, ConditionFlag cond) {
+    @Override
+    public void csel(int size, Register result, Register trueValue, Register falseValue, ConditionFlag cond) {
         super.csel(size, result, trueValue, falseValue, cond);
     }
 
@@ -1633,6 +1590,18 @@ public class AArch64MacroAssembler extends AArch64Assembler {
     }
 
     /**
+     * dst = src1 & ~(src2) and sets condition flags.
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst general purpose register. May not be null or stackpointer.
+     * @param src1 general purpose register. May not be null or stackpointer.
+     * @param src2 general purpose register. May not be null or stackpointer.
+     */
+    public void bics(int size, Register dst, Register src1, Register src2) {
+        super.bics(size, dst, src1, src2, ShiftType.LSL, 0);
+    }
+
+    /**
      * dst = src1 ^ ~(shiftType(src2, imm)).
      *
      * @param size register size. Has to be 32 or 64.
@@ -1763,7 +1732,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
     }
 
     /**
-     * Conditional move. dst = src1 if condition else src2.
+     * Conditional select. dst = src1 if condition else src2.
      *
      * @param size register size.
      * @param result floating point register. May not be null.
@@ -1771,7 +1740,8 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * @param falseValue floating point register. May not be null.
      * @param condition every condition allowed. May not be null.
      */
-    public void fcmov(int size, Register result, Register trueValue, Register falseValue, ConditionFlag condition) {
+    @Override
+    public void fcsel(int size, Register result, Register trueValue, Register falseValue, ConditionFlag condition) {
         super.fcsel(size, result, trueValue, falseValue, condition);
     }
 
@@ -1853,7 +1823,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                     mov(64, dst, temp1);
                     mov(temp1, 0x80000000);
                     // Develop 0 (EQ), or 0x80000000 (NE)
-                    cmov(32, temp1, temp1, zr, ConditionFlag.NE);
+                    csel(32, temp1, temp1, zr, ConditionFlag.NE);
                     cmp(32, temp1, 1);
                     // 0x80000000 - 1 => VS
                     break;
@@ -1867,7 +1837,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                     // NE => overflow
                     mov(temp1, 0x80000000);
                     // Develop 0 (EQ), or 0x80000000 (NE)
-                    cmov(32, temp1, temp1, zr, ConditionFlag.NE);
+                    csel(32, temp1, temp1, zr, ConditionFlag.NE);
                     cmp(32, temp1, 1);
                     // 0x80000000 - 1 => VS
                     break;
