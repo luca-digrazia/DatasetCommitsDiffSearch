@@ -614,17 +614,13 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private native String getSimpleName0();
 
     @KeepOriginal
-    @TargetElement(name="getCanonicalName", onlyWith = JDK8OrEarlier.class)
-    private native String getCanonicalNameJDK8OrEarlier();
+    private native String getCanonicalName();
 
     @Substitute
-    @TargetElement(name="getCanonicalName", onlyWith = JDK9OrLater.class)
-    private String getCanonicalNameJDK9OrLater() {
-        return getCanonicalName0();
+    @TargetElement(onlyWith = JDK9OrLater.class)
+    private String getCanonicalName0() {
+        throw VMError.unsupportedFeature("JDK9OrLater: DynamicHub.getCanonicalName0()");
     }
-
-    @KeepOriginal
-    private native String getCanonicalName0();
 
     @KeepOriginal
     @Override
@@ -700,13 +696,8 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     public Object newInstance() throws Throwable {
         final Constructor<?> nullaryConstructor = rd.nullaryConstructor;
         if (nullaryConstructor == null) {
-            if (JavaVersionUtil.Java8OrEarlier) {
-                throw new InstantiationException("Type `" + this.getCanonicalNameJDK8OrEarlier() +
-                        "` can not be instantiated reflectively as it does not have a no-parameter constructor or the no-parameter constructor has not been added explicitly to the native image.");
-            } else {
-                throw new InstantiationException("Type `" + this.getCanonicalNameJDK9OrLater() +
-                        "` can not be instantiated reflectively as it does not have a no-parameter constructor or the no-parameter constructor has not been added explicitly to the native image.");
-            }
+            throw new InstantiationException("Type `" + this.getCanonicalName() +
+                            "` can not be instantiated reflectively as it does not have a no-parameter constructor or the no-parameter constructor has not been added explicitly to the native image.");
         }
         try {
             return nullaryConstructor.newInstance((Object[]) null);
