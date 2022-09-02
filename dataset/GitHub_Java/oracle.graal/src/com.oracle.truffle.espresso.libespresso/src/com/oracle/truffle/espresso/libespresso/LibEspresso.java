@@ -22,10 +22,10 @@
  */
 package com.oracle.truffle.espresso.libespresso;
 
-import java.io.PrintStream;
-
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
+import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 import org.graalvm.word.WordFactory;
@@ -38,12 +38,14 @@ import com.oracle.truffle.espresso.libespresso.jniapi.JNIJavaVMInitArgs;
 import com.oracle.truffle.espresso.libespresso.jniapi.JNIJavaVMPointer;
 import com.oracle.truffle.espresso.libespresso.jniapi.JNIVersion;
 
+import java.io.PrintStream;
+
 public class LibEspresso {
     private static final PrintStream STDERR = System.err;
 
     @CEntryPoint(name = "Espresso_CreateJavaVM")
-    static int createJavaVM(@SuppressWarnings("unused") IsolateThread thread, JNIJavaVMPointer javaVMPointer, JNIEnvironmentPointer penv, JNIJavaVMInitArgs args) {
-        if (args.getVersion() < JNIVersion.JNI_VERSION_1_2() || args.getVersion() > JNIVersion.JNI_VERSION_10) {
+    static int createJavaVM(IsolateThread thread, JNIJavaVMPointer javaVMPointer, JNIEnvironmentPointer penv, JNIJavaVMInitArgs args) {
+        if (args.getVersion() < JNIVersion.JNI_VERSION_1_2() || args.getVersion() > JNIVersion.JNI_VERSION_10()) {
             return JNIErrors.JNI_EVERSION();
         }
         // TODO use Launcher infra to parse graalvm specific options
