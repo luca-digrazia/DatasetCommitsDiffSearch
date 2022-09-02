@@ -34,7 +34,6 @@ import java.util.Arrays;
 import java.util.Formatter;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -138,30 +137,10 @@ public final class SubprocessUtil {
     }
 
     /**
-     * Detects whether a Java agent matching {@code agentPredicate} is specified in the VM
-     * arguments.
-     *
-     * @param agentPredicate a predicate that is given the value of a {@code -javaagent} VM argument
-     */
-    public static boolean isJavaAgentAttached(Predicate<String> agentPredicate) {
-        return SubprocessUtil.getVMCommandLine().stream().//
-                        filter(args -> args.startsWith("-javaagent:")).//
-                        map(s -> s.substring("-javaagent:".length())).//
-                        anyMatch(agentPredicate);
-    }
-
-    /**
-     * Detects whether a Java agent is specified in the VM arguments.
+     * Detects whether a java agent is attached.
      */
     public static boolean isJavaAgentAttached() {
-        return isJavaAgentAttached(javaAgentValue -> true);
-    }
-
-    /**
-     * Detects whether the JaCoCo Java agent is specified in the VM arguments.
-     */
-    public static boolean isJaCoCoAttached() {
-        return isJavaAgentAttached(s -> s.toLowerCase().contains("jacoco"));
+        return SubprocessUtil.getVMCommandLine().stream().anyMatch(args -> args.startsWith("-javaagent"));
     }
 
     /**

@@ -39,6 +39,7 @@ import java.util.regex.Pattern;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.test.SubprocessUtil;
 import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
 import org.junit.Assert;
@@ -54,8 +55,10 @@ public class HsErrLogTest extends GraalCompilerTest {
     @Test
     public void test1() throws IOException, InterruptedException {
         List<String> args = new ArrayList<>();
-        if (Java8OrEarlier) {
+        if (JavaVersionUtil.JAVA_SPEC <= 8) {
             args.add("-XX:-UseJVMCIClassLoader");
+        } else {
+            args.add("--add-exports=jdk.internal.vm.compiler/org.graalvm.compiler.api.directives=ALL-UNNAMED");
         }
         args.add("-XX:+UseJVMCICompiler");
         args.add("-XX:CompileOnly=" + Crasher.class.getName() + "::tryCrash");
@@ -89,7 +92,7 @@ public class HsErrLogTest extends GraalCompilerTest {
             }
         }
 
-        Assert.fail("Could not find " + re.pattern());
+        Assert.fail(String.format("Could not find %s%n%s", re.pattern(), proc));
     }
 
     private static void checkHsErr(File hsErrPath) {
