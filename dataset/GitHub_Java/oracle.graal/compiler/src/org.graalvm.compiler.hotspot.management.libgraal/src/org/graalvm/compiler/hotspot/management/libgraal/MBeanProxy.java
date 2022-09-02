@@ -97,13 +97,12 @@ class MBeanProxy<T extends DynamicMBean> {
     private static LibGraalMemoryPoolMBean memPoolBean;
 
     /**
-     * MBeans to un-register on HotSpot side when isolate is closed. The first addition to the list
-     * registers a shutdown hook to do the un-registration. Upon unregistration, this field is set
-     * to {@code null}.
+     * MBeans to un-register on HotSpot side when isolate is closed. The first add to the list
+     * registers a shutdown hook performing the un-registration.
      *
      * Access is synchronized on {@code MBeanProxy.class}.
      */
-    private static List<MBeanProxy<?>> mBeansToUnregisterOnIsolateClose = new LinkedList<>();
+    private static final List<MBeanProxy<?>> mBeansToUnregisterOnIsolateClose = new LinkedList<>();
 
     /**
      * Lifecycle state.
@@ -510,13 +509,11 @@ class MBeanProxy<T extends DynamicMBean> {
 
         @Override
         public void run() {
-            List<MBeanProxy<?>> toUnregister;
             synchronized (MBeanProxy.class) {
                 state = MBeanProxy.State.CLOSED;
-                toUnregister = mBeansToUnregisterOnIsolateClose;
-                mBeansToUnregisterOnIsolateClose = null;
+                unregister(mBeansToUnregisterOnIsolateClose);
+                mBeansToUnregisterOnIsolateClose.clear();
             }
-            unregister(toUnregister);
         }
     }
 }

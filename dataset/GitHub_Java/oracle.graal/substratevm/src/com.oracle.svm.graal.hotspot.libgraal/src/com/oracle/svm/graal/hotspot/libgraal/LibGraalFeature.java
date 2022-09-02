@@ -28,13 +28,20 @@ import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
 import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.JAVA_SPEC;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.annotation.Annotation;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -69,11 +76,9 @@ import org.graalvm.compiler.hotspot.HotSpotGraalManagementRegistration;
 import org.graalvm.compiler.hotspot.HotSpotGraalOptionValues;
 import org.graalvm.compiler.hotspot.HotSpotReplacementsImpl;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
-import org.graalvm.compiler.nodes.graphbuilderconf.GeneratedPluginFactory;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.MethodSubstitutionPlugin;
 import org.graalvm.compiler.nodes.spi.SnippetParameterInfo;
-import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionDescriptorsMap;
@@ -90,14 +95,10 @@ import org.graalvm.compiler.truffle.compiler.substitutions.TruffleInvocationPlug
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.libgraal.LibGraal;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.VMRuntime;
-import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
 import org.graalvm.word.Pointer;
-import org.graalvm.word.WordFactory;
 
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
@@ -113,9 +114,7 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
-import com.oracle.svm.core.log.FunctionPointerLogHandler;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.RuntimeOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.option.XOptions;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
@@ -141,15 +140,6 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.services.Services;
 
 public final class LibGraalFeature implements com.oracle.svm.core.graal.GraalFeature {
-
-    static class Options {
-        // @formatter:off
-        @Option(help = "Converts an exception triggered by the CrashAt option into a fatal error " +
-                       "if a non-null pointer was passed in the _fatal option to JNI_CreateJavaVM. " +
-                       "This option exists for the purpose of testing fatal error handling in libgraal.")
-        static final RuntimeOptionKey<Boolean> CrashAtIsFatal = new RuntimeOptionKey<>(false);
-        // @formatter:on
-    }
 
     private HotSpotReplacementsImpl hotSpotSubstrateReplacements;
 
@@ -446,15 +436,11 @@ public final class LibGraalFeature implements com.oracle.svm.core.graal.GraalFea
             String archPackage = "." + osArch + ".";
 
             final Field servicesCacheField = ReflectionUtil.lookupField(Services.class, "servicesCache");
-            Map<Class<?>, List<?>> servicesCache = (Map<Class<?>, List<?>>) servicesCacheField.get(null);
-            filterArchitectureServices(archPackage, servicesCache);
-            servicesCache.remove(GeneratedPluginFactory.class);
+            filterArchitectureServices(archPackage, (Map<Class<?>, List<?>>) servicesCacheField.get(null));
 
             if (JAVA_SPEC > 8) {
                 final Field graalServicesCacheField = ReflectionUtil.lookupField(GraalServices.class, "servicesCache");
-                Map<Class<?>, List<?>> graalServicesCache = (Map<Class<?>, List<?>>) graalServicesCacheField.get(null);
-                filterArchitectureServices(archPackage, graalServicesCache);
-                graalServicesCache.remove(GeneratedPluginFactory.class);
+                filterArchitectureServices(archPackage, (Map<Class<?>, List<?>>) graalServicesCacheField.get(null));
             }
 
             Field cachedHotSpotJVMCIBackendFactoriesField = ReflectionUtil.lookupField(HotSpotJVMCIRuntime.class, "cachedHotSpotJVMCIBackendFactories");
@@ -472,7 +458,7 @@ public final class LibGraalFeature implements com.oracle.svm.core.graal.GraalFea
         // Mark all the Node classes as allocated so they are available during graph decoding.
         EncodedSnippets encodedSnippets = HotSpotReplacementsImpl.getEncodedSnippets(impl.getBigBang().getOptions());
         for (NodeClass<?> nodeClass : encodedSnippets.getSnippetNodeClasses()) {
-            impl.getMetaAccess().lookupJavaType(nodeClass.getClazz()).registerAsInHeap();
+            impl.getMetaAccess().lookupJavaType(nodeClass.getClazz()).registerAsAllocated(null);
         }
     }
 
@@ -497,7 +483,13 @@ public final class LibGraalFeature implements com.oracle.svm.core.graal.GraalFea
     public void afterCompilation(AfterCompilationAccess access) {
         FeatureImpl.AfterCompilationAccessImpl accessImpl = (FeatureImpl.AfterCompilationAccessImpl) access;
         EncodedSnippets encodedSnippets = HotSpotReplacementsImpl.getEncodedSnippets(accessImpl.getUniverse().getBigBang().getOptions());
-        encodedSnippets.visitImmutable(access::registerAsImmutable);
+
+        // These fields are all immutable but the snippet object table isn't since symbolic JVMCI
+        // references are converted into real references during decoding.
+        access.registerAsImmutable(encodedSnippets.getOriginalMethods());
+        access.registerAsImmutable(encodedSnippets.getSnippetEncoding());
+        access.registerAsImmutable(encodedSnippets.getSnippetNodeClasses());
+        access.registerAsImmutable(encodedSnippets.getSnippetStartOffsets());
     }
 
     /**
@@ -580,7 +572,7 @@ final class Target_org_graalvm_compiler_hotspot_HotSpotGraalRuntime {
         @Override
         public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
             try {
-                Class<?> clazz = Thread.currentThread().getContextClassLoader().loadClass("org.graalvm.compiler.hotspot.management.libgraal.LibGraalHotSpotGraalManagement$Factory");
+                Class<?> clazz = Thread.currentThread().getContextClassLoader().loadClass("org.graalvm.compiler.hotspot.management.libgraal.HotSpotGraalManagement$Factory");
                 Constructor<?> constructor = clazz.getDeclaredConstructor();
                 constructor.setAccessible(true);
                 return constructor.newInstance();
@@ -604,15 +596,6 @@ final class Target_org_graalvm_compiler_hotspot_HotSpotTTYStreamProvider {
     @Substitute
     private static Pointer getBarrierPointer() {
         return LibGraalEntryPoints.LOG_FILE_BARRIER.get();
-    }
-}
-
-@TargetClass(className = "org.graalvm.compiler.hotspot.management.libgraal.MBeanProxy", onlyWith = LibGraalFeature.IsEnabled.class)
-final class Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy {
-
-    @Substitute
-    private static Pointer getDefineClassesStatePointer() {
-        return LibGraalEntryPoints.MANAGEMENT_BARRIER.get();
     }
 }
 
@@ -695,24 +678,114 @@ final class Target_org_graalvm_compiler_core_GraalServiceThread {
     }
 }
 
-@TargetClass(className = "org.graalvm.compiler.core.GraalCompiler", onlyWith = LibGraalFeature.IsEnabled.class)
-final class Target_org_graalvm_compiler_core_GraalCompiler {
-    @SuppressWarnings("unused")
-    @Substitute()
-    private static void notifyCrash(String crashMessage) {
-        if (LibGraalFeature.Options.CrashAtIsFatal.getValue()) {
-            LogHandler handler = ImageSingletons.lookup(LogHandler.class);
-            if (handler instanceof FunctionPointerLogHandler) {
-                FunctionPointerLogHandler fpHandler = (FunctionPointerLogHandler) handler;
-                if (fpHandler.getFatalErrorFunctionPointer().isNonNull()) {
-                    try (CCharPointerHolder holder = CTypeConversion.toCString(crashMessage)) {
-                        handler.log(holder.get(), WordFactory.unsigned(crashMessage.getBytes().length));
-                    }
-                    handler.fatalError();
-                }
+@TargetClass(className = "org.graalvm.compiler.hotspot.management.libgraal.MBeanProxy", onlyWith = {LibGraalFeature.IsEnabled.class,
+                Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.IsEnabled.class})
+final class Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy {
+
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface ClassData {
+        String value();
+    }
+
+    // @formatter:off
+    // Checkstyle: stop
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassNameComputer.class, isFinal = true)
+    private static String HS_BEAN_CLASS_NAME;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassDataComputer.class, isFinal = true)
+    private static byte[] HS_BEAN_CLASS;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean$Factory")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassNameComputer.class, isFinal = true)
+    private static String HS_BEAN_FACTORY_CLASS_NAME;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean$Factory")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassDataComputer.class, isFinal = true)
+    private static byte[] HS_BEAN_FACTORY_CLASS;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean$PushBackIterator")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassNameComputer.class, isFinal = true)
+    private static String HS_PUSHBACK_ITER_CLASS_NAME;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean$PushBackIterator")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassDataComputer.class, isFinal = true)
+    private static byte[] HS_PUSHBACK_ITER_CLASS;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.HotSpotToSVMCalls")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassNameComputer.class, isFinal = true)
+    private static String HS_SVM_CALLS_CLASS_NAME;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.HotSpotToSVMCalls")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassDataComputer.class, isFinal = true)
+    private static byte[] HS_SVM_CALLS_CLASS;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMToHotSpotEntryPoints")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassNameComputer.class, isFinal = true)
+    private static String SVM_HS_ENTRYPOINTS_CLASS_NAME;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMToHotSpotEntryPoints")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassDataComputer.class, isFinal = true)
+    private static byte[] SVM_HS_ENTRYPOINTS_CLASS;
+    // Checkstyle: resume
+    // @formatter:on
+
+    static final class ClassDataComputer implements RecomputeFieldValue.CustomFieldValueComputer {
+        @Override
+        public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
+            ClassData classData = annotated.getAnnotation(ClassData.class);
+            if (classData == null || classData.value() == null) {
+                throw UserError.abort("ClassData must be given");
             }
-            // If changing this message, update the test for it in mx_vm_gate.py
-            System.out.println("CrashAtIsFatal: no fatalError function pointer installed");
+            URL url = Thread.currentThread().getContextClassLoader().getResource(classData.value().replace('.', '/') + ".class");
+            if (url == null) {
+                throw UserError.abort("Cannot find %s class", classData.value());
+            }
+            try (InputStream in = url.openStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[4096];
+                int len;
+                while ((len = in.read(buffer)) > 0) {
+                    out.write(buffer, 0, len);
+                }
+                return out.toByteArray();
+            } catch (IOException ioe) {
+                throw UserError.abort("Cannot load %s class due to: %s", classData.value(), ioe.getMessage());
+            }
+        }
+    }
+
+    static final class ClassNameComputer implements RecomputeFieldValue.CustomFieldValueComputer {
+        @Override
+        public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
+            ClassData classData = annotated.getAnnotation(ClassData.class);
+            if (classData == null || classData.value() == null) {
+                throw UserError.abort("ClassData must be given");
+            }
+            return classData.value().replace('.', '/');
+        }
+    }
+
+    static final class IsEnabled implements BooleanSupplier {
+        @Override
+        public boolean getAsBoolean() {
+            try {
+                Class.forName("org.graalvm.compiler.hotspot.management.libgraal.MBeanProxy", false, Thread.currentThread().getContextClassLoader());
+                return true;
+            } catch (ReflectiveOperationException e) {
+                return false;
+            }
         }
     }
 }
