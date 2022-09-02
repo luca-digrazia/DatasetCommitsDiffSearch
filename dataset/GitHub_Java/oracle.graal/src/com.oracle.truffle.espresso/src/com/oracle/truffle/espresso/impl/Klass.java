@@ -36,7 +36,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.function.IntFunction;
 
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import org.graalvm.collections.EconomicSet;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -556,12 +555,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      * {@link Class#getDeclaredMethods()} in terms of returned methods.
      */
     public abstract Method[] getDeclaredMethods();
-
-    /**
-     * Returns an array reflecting all the methods declared by this type. This method is similar to
-     * {@link Class#getDeclaredMethods()} in terms of returned methods.
-     */
-    public abstract MethodRef[] getDeclaredMethodRefs();
 
     /**
      * Returns an array reflecting all the fields declared by this type. This method is similar to
