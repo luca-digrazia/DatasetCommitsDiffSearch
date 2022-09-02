@@ -43,9 +43,9 @@ public abstract class ClassInfo {
         StringBuilder methods = new StringBuilder();
         StringBuilder fields = new StringBuilder();
         StringBuilder enclosing = new StringBuilder();
-        Symbol<Symbol.Name> name = klass.getName();
+        String name = klass.getNameAsString();
 
-        Matcher matcher = InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(name.toString());
+        Matcher matcher = InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(name);
         if (matcher.matches()) {
             // fingerprints are only relevant for inner classes
             hierarchy.append(klass.getSuperClass().getTypeAsString()).append(";");
@@ -70,6 +70,7 @@ public abstract class ClassInfo {
         }
         // find all currently loaded direct inner classes and create class infos
         ArrayList<ImmutableClassInfo> inners = new ArrayList<>(1);
+
         Set<ObjectKlass> loadedInnerClasses = innerClassRedefiner.findLoadedInnerClasses(klass);
         for (Klass inner : loadedInnerClasses) {
             matcher = InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(inner.getNameAsString());
@@ -84,14 +85,14 @@ public abstract class ClassInfo {
 
     public static HotSwapClassInfo create(RedefineInfo redefineInfo, EspressoContext context) {
         ObjectKlass klass = (ObjectKlass) redefineInfo.getKlass();
-        return create(klass, klass.getName(), redefineInfo.getClassBytes(), klass.getDefiningClassLoader(), context);
+        return create(klass, klass.getNameAsString(), redefineInfo.getClassBytes(), klass.getDefiningClassLoader(), context);
     }
 
-    public static HotSwapClassInfo create(Symbol<Symbol.Name> name, byte[] bytes, StaticObject definingLoader, EspressoContext context) {
+    public static HotSwapClassInfo create(String name, byte[] bytes, StaticObject definingLoader, EspressoContext context) {
         return create(null, name, bytes, definingLoader, context);
     }
 
-    public static HotSwapClassInfo create(ObjectKlass klass, Symbol<Symbol.Name> name, byte[] bytes, StaticObject definingLoader, EspressoContext context) {
+    public static HotSwapClassInfo create(ObjectKlass klass, String name, byte[] bytes, StaticObject definingLoader, EspressoContext context) {
         ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), "L" + name + ";", null, context);
 
         StringBuilder hierarchy = new StringBuilder();
@@ -99,7 +100,7 @@ public abstract class ClassInfo {
         StringBuilder fields = new StringBuilder();
         StringBuilder enclosing = new StringBuilder();
 
-        Matcher matcher = InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(name.toString());
+        Matcher matcher = InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(name);
         if (matcher.matches()) {
             // fingerprints are only relevant for inner classes
             hierarchy.append(parserKlass.getSuperKlass().toString()).append(";");
@@ -128,8 +129,8 @@ public abstract class ClassInfo {
 
     public static ImmutableClassInfo copyFrom(HotSwapClassInfo info) {
         ArrayList<ImmutableClassInfo> inners = new ArrayList<>();
-        for (HotSwapClassInfo innerClass : info.getHotSwapInnerClasses()) {
-            inners.add(copyFrom(innerClass));
+        for (ClassInfo innerClass : info.getInnerClasses()) {
+            inners.add(copyFrom((HotSwapClassInfo) innerClass));
         }
         return new ImmutableClassInfo(info.getKlass(), info.getName(), info.getClassLoader(), info.finalClassFingerprint, info.finalMethodFingerprint, info.finalFieldFingerprint,
                         info.finalEnclosingMethodFingerprint, inners, info.getBytes());
@@ -145,7 +146,7 @@ public abstract class ClassInfo {
 
     public abstract ArrayList<? extends ClassInfo> getInnerClasses();
 
-    public abstract Symbol<Symbol.Name> getName();
+    public abstract String getName();
 
     public abstract StaticObject getClassLoader();
 
