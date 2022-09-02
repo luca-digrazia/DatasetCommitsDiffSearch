@@ -217,19 +217,8 @@ public class TypeInitializerGraph {
      * Invoke becomes unsafe if it calls other unsafe methods.
      */
     private boolean isInvokeUnsafeIterative(InvokeTypeFlow i) {
-        /*
-         * Note that even though (for now) we only process invokes that can be statically bound, we
-         * cannot just take the target method of the type flow: the static analysis can
-         * de-virtualize the target method to a method overridden in a subclass. So we must look at
-         * the actual callees of the type flow, even though we know that there is at most one callee
-         * returned.
-         */
-        for (AnalysisMethod callee : i.getCallees()) {
-            if (methodSafety.get(callee) == Safety.UNSAFE) {
-                return true;
-            }
-        }
-        return false;
+        assert i.getTargetMethod() != null : "All methods can be statically bound.";
+        return methodSafety.get(i.getTargetMethod()) == Safety.UNSAFE;
     }
 
     private void addInitializer(AnalysisType t) {
