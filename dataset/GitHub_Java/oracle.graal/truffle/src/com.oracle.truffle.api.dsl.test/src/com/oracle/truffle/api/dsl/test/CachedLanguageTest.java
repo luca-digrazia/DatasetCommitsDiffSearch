@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,31 +43,29 @@ package com.oracle.truffle.api.dsl.test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
-import java.util.function.Supplier;
-
 import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
-import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Introspectable;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.dsl.test.CachedContextTest.CachedContextTestLanguage;
-import com.oracle.truffle.api.dsl.test.CachedContextTest.CachedContextTestLibrary;
+import com.oracle.truffle.api.dsl.test.CachedLanguageTestFactory.CachedWithFallbackNodeGen;
 import com.oracle.truffle.api.dsl.test.CachedLanguageTestFactory.Valid1NodeGen;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
+import com.oracle.truffle.api.test.AbstractLibraryTest;
 
 @SuppressWarnings("unused")
-public class CachedLanguageTest extends AbstractPolyglotTest {
+public class CachedLanguageTest extends AbstractLibraryTest {
 
     @Test
     public void testCachedLanguage() {
@@ -127,15 +125,54 @@ public class CachedLanguageTest extends AbstractPolyglotTest {
             return env;
         }
 
-        @Override
-        protected boolean isObjectOfLanguage(Object object) {
-            return false;
-        }
-
         public static CachedLanguageTestLanguage getCurrentLanguage() {
             return CachedLanguageTestLanguage.getCurrentLanguage(CachedLanguageTestLanguage.class);
         }
 
+    }
+
+    @Test
+    public void testCacheWithFallback() {
+        CachedWithFallback node;
+        setupEnv();
+        context.initialize(TEST_LANGUAGE);
+
+        node = adoptNode(CachedWithFallbackNodeGen.create()).get();
+        assertEquals("s0", node.execute(""));
+        assertEquals("s0", node.execute(""));
+        node.guard = false;
+        assertEquals("fallback", node.execute(""));
+
+        node = adoptNode(CachedWithFallbackNodeGen.create()).get();
+        node.guard = false;
+        assertEquals("fallback", node.execute(""));
+        node.guard = true;
+        assertEquals("s0", node.execute(""));
+        assertEquals("s0", node.execute(""));
+    }
+
+    @SuppressWarnings("static-method")
+    abstract static class CachedWithFallback extends Node {
+
+        boolean guard = true;
+
+        public abstract String execute(Object o);
+
+        boolean isGuard(Object o) {
+            return guard;
+        }
+
+        @Specialization(guards = {"language == cachedLanguage", "isGuard(o)"}, limit = "1")
+        String s0(String o,
+                        @CachedLanguage CachedLanguageTestLanguage language,
+                        @Cached("language") CachedLanguageTestLanguage cachedLanguage) {
+            return "s0";
+        }
+
+        @Fallback
+        String fallback(Object o) {
+            return "fallback";
+        }
     }
 
     /*
@@ -148,10 +185,6 @@ public class CachedLanguageTest extends AbstractPolyglotTest {
             return env;
         }
 
-        @Override
-        protected boolean isObjectOfLanguage(Object object) {
-            return false;
-        }
     }
 
     abstract static class CachedLanguageError1Node extends Node {
@@ -228,9 +261,9 @@ public class CachedLanguageTest extends AbstractPolyglotTest {
     @GenerateLibrary
     public abstract static class CachedLanguageTestLibrary extends Library {
 
-        public abstract Object m0(Object receiver);
+        public abstract CachedLanguageTestLanguage m0(Object receiver);
 
-        public abstract Object m1(Object receiver);
+        public abstract CachedLanguageTestLanguage m1(Object receiver);
     }
 
     @ExportLibrary(CachedLanguageTestLibrary.class)
@@ -238,14 +271,31 @@ public class CachedLanguageTest extends AbstractPolyglotTest {
     static class CachedLanguageLibraryReceiver {
 
         @ExportMessage
-        final Object m0(@CachedLanguage CachedLanguageTestLanguage env) {
-            return "m0";
+        final CachedLanguageTestLanguage m0(@CachedLanguage CachedLanguageTestLanguage env) {
+            return env;
         }
 
         @ExportMessage
-        final Object m1(@CachedLanguage LanguageReference<CachedLanguageTestLanguage> env) {
-            return "m1";
+        final CachedLanguageTestLanguage m1(@CachedLanguage LanguageReference<CachedLanguageTestLanguage> env) {
+            return env.get();
         }
+    }
+
+    @Test
+    public void testCachedLanguageReceiver() {
+        setupEnv();
+        context.initialize(TEST_LANGUAGE);
+        CachedLanguageLibraryReceiver receiver = new CachedLanguageLibraryReceiver();
+
+        CachedLanguageTestLibrary cached = createCached(CachedLanguageTestLibrary.class, receiver);
+
+        assertSame(CachedLanguageTestLanguage.getCurrentLanguage(), cached.m0(receiver));
+        assertSame(CachedLanguageTestLanguage.getCurrentLanguage(), cached.m1(receiver));
+
+        CachedLanguageTestLibrary uncached = getUncached(CachedLanguageTestLibrary.class, receiver);
+
+        assertSame(CachedLanguageTestLanguage.getCurrentLanguage(), uncached.m0(receiver));
+        assertSame(CachedLanguageTestLanguage.getCurrentLanguage(), uncached.m1(receiver));
     }
 
 }
