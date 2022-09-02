@@ -36,7 +36,7 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.wasm.nodes.WasmIndirectCallNode;
 
 @ExportLibrary(InteropLibrary.class)
 public class WasmFunction implements TruffleObject {
@@ -71,15 +71,15 @@ public class WasmFunction implements TruffleObject {
     }
 
     public byte argumentTypeAt(int argumentIndex) {
-        return symbolTable.functionTypeArgumentTypeAt(typeIndex, argumentIndex);
+        return symbolTable.getFunctionTypeArgumentTypeAt(typeIndex, argumentIndex);
     }
 
     public byte returnType() {
-        return symbolTable.functionTypeReturnType(typeIndex);
+        return symbolTable.getFunctionTypeReturnType(typeIndex);
     }
 
     public int returnTypeLength() {
-        return symbolTable.functionTypeReturnTypeLength(typeIndex);
+        return symbolTable.getFunctionTypeReturnTypeLength(typeIndex);
     }
 
     public void setCallTarget(CallTarget callTarget) {
@@ -107,8 +107,8 @@ public class WasmFunction implements TruffleObject {
     }
 
     @ExportMessage
-    Object execute(Object[] arguments, @Cached IndirectCallNode callNode) {
-        return callNode.call(resolveCallTarget(), arguments);
+    Object execute(Object[] arguments, @Cached WasmIndirectCallNode callNode) {
+        return callNode.execute(this, arguments);
     }
 
     public WasmCodeEntry codeEntry() {
