@@ -200,6 +200,10 @@ public final class ProbeNode extends Node {
         }
     }
 
+    public ProbeNode copyUninitialized() {
+        return new ProbeNode(handler, context.getInstrumentedSourceSection());
+    }
+
     /**
      * Should get invoked before the node is invoked.
      *
