@@ -82,7 +82,6 @@ public class BinaryParser extends BinaryStreamParser {
     private WasmLanguage language;
     private WasmModule module;
     private byte[] bytesConsumed;
-    private int[] limitsResult;
 
     /**
      * Modules may import, as well as define their own functions. Function IDs are shared among
@@ -99,7 +98,6 @@ public class BinaryParser extends BinaryStreamParser {
         this.language = language;
         this.module = module;
         this.bytesConsumed = new byte[1];
-        this.limitsResult = new int[2];
         this.moduleFunctionIndex = 0;
     }
 
@@ -201,13 +199,13 @@ public class BinaryParser extends BinaryStreamParser {
                 case ImportIdentifier.TABLE: {
                     byte elemType = readElemType();
                     Assert.assertIntEqual(elemType, ReferenceTypes.FUNCREF, "Invalid element type for table import");
-                    readTableLimits(limitsResult);
-                    module.symbolTable().importTable(context, moduleName, memberName, limitsResult[0], limitsResult[1]);
+                    int[] limits = readTableLimits();
+                    module.symbolTable().importTable(context, moduleName, memberName, limits[0], limits[1]);
                     break;
                 }
                 case ImportIdentifier.MEMORY: {
-                    readMemoryLimits(limitsResult);
-                    module.symbolTable().importMemory(context, moduleName, memberName, limitsResult[0], limitsResult[1]);
+                    int[] limits = readTableLimits();
+                    module.symbolTable().importMemory(context, moduleName, memberName, limits[0], limits[1]);
                     break;
                 }
                 case ImportIdentifier.GLOBAL: {
@@ -241,8 +239,8 @@ public class BinaryParser extends BinaryStreamParser {
         for (byte tableIndex = 0; tableIndex != numTables; ++tableIndex) {
             byte elemType = readElemType();
             Assert.assertIntEqual(elemType, ReferenceTypes.FUNCREF, "Invalid element type for table");
-            readTableLimits(limitsResult);
-            module.symbolTable().allocateTable(context, limitsResult[0], limitsResult[1]);
+            int[] limits = readTableLimits();
+            module.symbolTable().allocateTable(context, limits[0], limits[1]);
         }
     }
 
@@ -253,8 +251,8 @@ public class BinaryParser extends BinaryStreamParser {
         // module.
         // this loop should be executed at most once.
         for (int i = 0; i != numMemories; ++i) {
-            readMemoryLimits(limitsResult);
-            module.symbolTable().allocateMemory(context, limitsResult[0], limitsResult[1]);
+            int[] limits = readMemoryLimits();
+            module.symbolTable().allocateMemory(context, limits[0], limits[1]);
         }
     }
 
@@ -1285,25 +1283,26 @@ public class BinaryParser extends BinaryStreamParser {
         return read1();
     }
 
-    private void readTableLimits(int[] out) {
-        readLimits(TABLE_MAX_SIZE, "initial table size", "max table size", out);
+    private int[] readTableLimits() {
+        return readLimits(TABLE_MAX_SIZE, "initial table size", "max table size");
     }
 
-    private void readMemoryLimits(int[] out) {
-        readLimits(MEMORY_MAX_PAGES, "initial memory size", "max memory size", out);
+    private int[] readMemoryLimits() {
+        return readLimits(MEMORY_MAX_PAGES, "initial memory size", "max memory size");
     }
 
-    private void readLimits(long k, String minName, String maxName, int[] out) {
+    private int[] readLimits(long k, String minName, String maxName) {
         byte limitsPrefix = readLimitsPrefix();
+        int[] result = new int[2];
         switch (limitsPrefix) {
             case LimitsPrefix.NO_MAX: {
-                out[0] = readUnsignedInt32();
-                out[1] = -1;
+                result[0] = readUnsignedInt32();
+                result[1] = -1;
                 break;
             }
             case LimitsPrefix.WITH_MAX: {
-                out[0] = readUnsignedInt32();
-                out[1] = readUnsignedInt32();
+                result[0] = readUnsignedInt32();
+                result[1] = readUnsignedInt32();
                 break;
             }
             default:
@@ -1311,13 +1310,15 @@ public class BinaryParser extends BinaryStreamParser {
         }
 
         // Convert min and max to longs to avoid checking bounds on overflowed values.
-        long longMin = out[0] & 0xFFFFFFFFL;
-        long longMax = out[1] & 0xFFFFFFFFL;
+        long longMin = result[0] & 0xFFFFFFFFL;
+        long longMax = result[1] & 0xFFFFFFFFL;
         Assert.assertLongLessOrEqual(longMin, k, "Invalid " + minName);
-        if (out[1] != -1) {
+        if (result[1] != -1) {
             Assert.assertLongLessOrEqual(longMax, k, "Invalid " + maxName);
             Assert.assertLongLessOrEqual(longMin, longMax, "Invalid " + minName);
         }
+
+        return result;
     }
 
     private byte readLimitsPrefix() {
@@ -1366,11 +1367,11 @@ public class BinaryParser extends BinaryStreamParser {
                     }
                     case ImportIdentifier.TABLE: {
                         readElemType();
-                        readTableLimits(limitsResult);
+                        readTableLimits();
                         break;
                     }
                     case ImportIdentifier.MEMORY: {
-                        readMemoryLimits(limitsResult);
+                        readMemoryLimits();
                         break;
                     }
                     case ImportIdentifier.GLOBAL: {
