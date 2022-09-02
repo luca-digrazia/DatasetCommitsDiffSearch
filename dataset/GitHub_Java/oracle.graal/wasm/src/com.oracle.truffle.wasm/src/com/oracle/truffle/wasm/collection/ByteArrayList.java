@@ -29,9 +29,7 @@
  */
 package com.oracle.truffle.wasm.collection;
 
-import java.util.Arrays;
-
-public final class ByteArrayList {
+public class ByteArrayList {
     private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
     private byte[] array;
@@ -79,18 +77,5 @@ public final class ByteArrayList {
         } else {
             return EMPTY_BYTE_ARRAY;
         }
-    }
-
-    public static byte[] concat(ByteArrayList... byteArrayLists) {
-        int totalSize = Arrays.stream(byteArrayLists).mapToInt(ByteArrayList::size).sum();
-        byte[] result = new byte[totalSize];
-        int resultOffset = 0;
-        for (ByteArrayList byteArrayList : byteArrayLists) {
-            if (byteArrayList.array != null) {
-                System.arraycopy(byteArrayList.array, 0, result, resultOffset, byteArrayList.offset);
-                resultOffset += byteArrayList.offset;
-            }
-        }
-        return result;
     }
 }
