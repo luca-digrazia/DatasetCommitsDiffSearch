@@ -205,23 +205,6 @@ public abstract class PartialEvaluator {
         throw new NoSuchMethodError(declaringClass.toJavaName() + "." + name + descriptor);
     }
 
-    static InlineInvokePlugin.InlineInfo asInlineInfo(ResolvedJavaMethod method) {
-        final TruffleCompilerRuntime.InlineKind inlineKind = TruffleCompilerRuntime.getRuntime().getInlineKind(method, true);
-        switch (inlineKind) {
-            case DO_NOT_INLINE_DEOPTIMIZE_ON_EXCEPTION:
-                return InlineInvokePlugin.InlineInfo.DO_NOT_INLINE_DEOPTIMIZE_ON_EXCEPTION;
-            case DO_NOT_INLINE_NO_EXCEPTION:
-                return InlineInvokePlugin.InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
-            case DO_NOT_INLINE_WITH_EXCEPTION:
-            case DO_NOT_INLINE_WITH_SPECULATIVE_EXCEPTION:
-                return InlineInvokePlugin.InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
-            case INLINE:
-                return InlineInvokePlugin.InlineInfo.createStandardInlineInfo(method);
-            default:
-                throw new IllegalArgumentException(String.valueOf(inlineKind));
-        }
-    }
-
     private static void removeInlineTokenNodes(StructuredGraph graph) {
         for (InlineDecisionNode node : graph.getNodes(InlineDecisionNode.TYPE)) {
             node.notInlined();
@@ -567,7 +550,7 @@ public abstract class PartialEvaluator {
                 AgnosticInliningPhase agnosticInlining = new AgnosticInliningPhase(this, request);
                 agnosticInlining.apply(request.graph, providers);
             } else {
-                final PEInliningPlanInvokePlugin plugin = new PEInliningPlanInvokePlugin(this, request.options, request.compilable, request.inliningPlan, request.graph);
+                final PEInliningPlanInvokePlugin plugin = new PEInliningPlanInvokePlugin(this, request.options, request.inliningPlan, request.graph);
                 doGraphPE(request, plugin, EconomicMap.create());
             }
             removeInlineTokenNodes(request.graph);
@@ -584,6 +567,7 @@ public abstract class PartialEvaluator {
         if (cfg.instrumentBoundaries) {
             new InstrumentTruffleBoundariesPhase(request.options, snippetReflection, getInstrumentation(), cfg.instrumentBoundariesPerInlineSite).apply(request.graph, request.highTierContext);
         }
+        request.graph.maybeCompress();
     }
 
     private static final SpeculationReasonGroup TRUFFLE_BOUNDARY_EXCEPTION_SPECULATIONS = new SpeculationReasonGroup("TruffleBoundaryWithoutException", ResolvedJavaMethod.class);
