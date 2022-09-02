@@ -42,7 +42,10 @@ public class JniImplProcessor extends IntrinsicsProcessor {
     // region Various String constants.
 
     private static final String SUBSTITUTION_PACKAGE = "com.oracle.truffle.espresso.jni";
+
     private static final String JNI_IMPL = SUBSTITUTION_PACKAGE + "." + "JniImpl";
+    private static final String NFI_TYPE = SUBSTITUTION_PACKAGE + "." + "NFIType";
+
     private static final String JNI_ENV = "JniEnv";
     private static final String ENV_NAME = "env";
     private static final String IMPORT_JNI_ENV = "import " + SUBSTITUTION_PACKAGE + "." + JNI_ENV + ";\n";
@@ -63,7 +66,8 @@ public class JniImplProcessor extends IntrinsicsProcessor {
         final String returnType;
         final boolean isStatic;
 
-        public JniHelper(String jniNativeSignature, List<Boolean> referenceTypes, String returnType, boolean isStatic) {
+        public JniHelper(EspressoProcessor processor, ExecutableElement method, String jniNativeSignature, List<Boolean> referenceTypes, String returnType, boolean isStatic) {
+            super(processor, method);
             this.jniNativeSignature = jniNativeSignature;
             this.referenceTypes = referenceTypes;
             this.returnType = returnType;
@@ -95,7 +99,7 @@ public class JniImplProcessor extends IntrinsicsProcessor {
                 // Check if we need to call an instance method
                 boolean isStatic = jniMethod.getModifiers().contains(Modifier.STATIC);
                 // Spawn helper
-                JniHelper helper = new JniHelper(jniNativeSignature, referenceTypes, returnType, isStatic);
+                JniHelper helper = new JniHelper(this, (ExecutableElement) method, jniNativeSignature, referenceTypes, returnType, isStatic);
                 // Create the contents of the source file
                 String classFile = spawnSubstitutor(
                                 className,
@@ -118,7 +122,14 @@ public class JniImplProcessor extends IntrinsicsProcessor {
     void processImpl(RoundEnvironment env) {
         // Set up the different annotations, along with their values, that we will need.
         this.jniImpl = processingEnv.getElementUtils().getTypeElement(JNI_IMPL);
-        initNfiType();
+        this.nfiType = processingEnv.getElementUtils().getTypeElement(NFI_TYPE);
+        for (Element e : nfiType.getEnclosedElements()) {
+            if (e.getKind() == ElementKind.METHOD) {
+                if (e.getSimpleName().contentEquals("value")) {
+                    this.nfiTypeValueElement = (ExecutableElement) e;
+                }
+            }
+        }
         for (Element e : env.getElementsAnnotatedWith(jniImpl)) {
             processElement(e);
         }
@@ -143,17 +154,16 @@ public class JniImplProcessor extends IntrinsicsProcessor {
     }
 
     @Override
-    String generateConstructor(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
+    String generateFactoryConstructorBody(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         JniHelper h = (JniHelper) helper;
-        str.append(TAB_1).append("private ").append(className).append("() {\n");
-        str.append(TAB_2).append("super(\n");
-        str.append(TAB_3).append(generateString(targetMethodName)).append(",\n");
-        str.append(TAB_3).append(generateString(h.jniNativeSignature)).append(",\n");
-        str.append(TAB_3).append(parameterTypeName.size()).append(",\n");
-        str.append(TAB_3).append(generateString(h.returnType)).append("\n");
-        str.append(TAB_2).append(");\n");
-        str.append(TAB_1).append("}\n");
+        str.append(TAB_3).append("super(\n");
+        str.append(TAB_4).append(generateString(targetMethodName)).append(",\n");
+        str.append(TAB_4).append(generateString(h.jniNativeSignature)).append(",\n");
+        str.append(TAB_4).append(parameterTypeName.size()).append(",\n");
+        str.append(TAB_4).append(generateString(h.returnType)).append("\n");
+        str.append(TAB_3).append(");\n");
+        str.append(TAB_2).append("}\n");
         return str.toString();
     }
 
@@ -169,21 +179,22 @@ public class JniImplProcessor extends IntrinsicsProcessor {
         }
         switch (h.returnType) {
             case "char":
-                str.append(TAB_2).append("return ").append("(short) ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic)).append(";\n");
+                str.append(TAB_2).append("return ").append("(short) ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");
                 break;
             case "boolean":
-                str.append(TAB_2).append("boolean b = ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic)).append(";\n");
+                str.append(TAB_2).append("boolean b = ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");
                 str.append(TAB_2).append("return b ? (byte) 1 : (byte) 0;\n");
                 break;
             case "void":
-                str.append(TAB_2).append(extractInvocation(className, targetMethodName, argIndex, h.isStatic)).append(";\n");
+                str.append(TAB_2).append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");
                 str.append(TAB_2).append("return ").append(STATIC_OBJECT_NULL).append(";\n");
                 break;
             case "StaticObject":
-                str.append(TAB_2).append("return ").append("(long) env.getHandles().createLocal(" + extractInvocation(className, targetMethodName, argIndex, h.isStatic) + ")").append(";\n");
+                str.append(TAB_2).append("return ").append(
+                                "(long) env.getHandles().createLocal(" + extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper) + ")").append(";\n");
                 break;
             default:
-                str.append(TAB_2).append("return ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic)).append(";\n");
+                str.append(TAB_2).append("return ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");
         }
         str.append(TAB_1).append("}\n");
         str.append("}");

@@ -27,7 +27,6 @@ import java.lang.reflect.Array;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -64,14 +63,13 @@ public final class Target_java_lang_reflect_Array {
      * @exception NegativeArraySizeException if the specified {@code length} is negative
      */
     @Substitution
-    public static Object newArray(@Host(Class.class) StaticObject componentType, int length) {
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+    public static Object newArray(@Host(Class.class) StaticObject componentType, int length, @InjectMeta Meta meta) {
         if (StaticObject.isNull(componentType)) {
             throw meta.throwNullPointerException();
         }
         Klass component = componentType.getMirrorKlass();
         if (component == meta._void || Types.getArrayDimensions(component.getType()) >= 255) {
-            throw meta.throwException(meta.java_lang_IllegalArgumentException);
+            throw Meta.throwException(meta.java_lang_IllegalArgumentException);
         }
 
         if (component.isPrimitive()) {
@@ -110,14 +108,13 @@ public final class Target_java_lang_reflect_Array {
      *                {@code dimensions} argument is negative.
      */
     @Substitution
-    public static @Host(Object.class) StaticObject multiNewArray(@Host(Class.class) StaticObject componentType, @Host(int[].class) StaticObject dimensionsArray) {
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+    public static @Host(Object.class) StaticObject multiNewArray(@Host(Class.class) StaticObject componentType, @Host(int[].class) StaticObject dimensionsArray, @InjectMeta Meta meta) {
         if (StaticObject.isNull(componentType) || StaticObject.isNull(dimensionsArray)) {
             throw meta.throwNullPointerException();
         }
         Klass component = componentType.getMirrorKlass();
         if (component == meta._void || StaticObject.isNull(dimensionsArray)) {
-            throw meta.throwException(meta.java_lang_IllegalArgumentException);
+            throw Meta.throwException(meta.java_lang_IllegalArgumentException);
         }
         final int[] dimensions = dimensionsArray.unwrap();
         int finalDimensions = dimensions.length;
@@ -125,11 +122,11 @@ public final class Target_java_lang_reflect_Array {
             finalDimensions += Types.getArrayDimensions(component.getType());
         }
         if (dimensions.length == 0 || finalDimensions > 255) {
-            throw meta.throwException(meta.java_lang_IllegalArgumentException);
+            throw Meta.throwException(meta.java_lang_IllegalArgumentException);
         }
         for (int d : dimensions) {
             if (d < 0) {
-                throw meta.throwException(meta.java_lang_NegativeArraySizeException);
+                throw Meta.throwException(meta.java_lang_NegativeArraySizeException);
             }
         }
         if (dimensions.length == 1) {
@@ -143,202 +140,200 @@ public final class Target_java_lang_reflect_Array {
 
     @Substitution
     @TruffleBoundary
-    public static boolean getBoolean(@Host(Object.class) StaticObject array, int index) {
-        checkNonNullArray(array);
+    public static boolean getBoolean(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             return Array.getBoolean(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static byte getByte(@Host(Object.class) StaticObject array, int index) {
-        checkNonNullArray(array);
+    public static byte getByte(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             return Array.getByte(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static char getChar(@Host(Object.class) StaticObject array, int index) {
-        checkNonNullArray(array);
+    public static char getChar(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             return Array.getChar(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static short getShort(@Host(Object.class) StaticObject array, int index) {
-        checkNonNullArray(array);
+    public static short getShort(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             return Array.getShort(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static int getInt(@Host(Object.class) StaticObject array, int index) {
-        checkNonNullArray(array);
+    public static int getInt(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             return Array.getInt(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static float getFloat(@Host(Object.class) StaticObject array, int index) {
-        checkNonNullArray(array);
+    public static float getFloat(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             return Array.getFloat(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static double getDouble(@Host(Object.class) StaticObject array, int index) {
-        checkNonNullArray(array);
+    public static double getDouble(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             return Array.getDouble(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static long getLong(@Host(Object.class) StaticObject array, int index) {
-        checkNonNullArray(array);
+    public static long getLong(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             return Array.getLong(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
-    private static EspressoException rethrowAsGuestException(RuntimeException e) {
+    private static EspressoException rethrowAsGuestException(RuntimeException e, Meta meta) {
         assert e instanceof NullPointerException || e instanceof ArrayIndexOutOfBoundsException || e instanceof IllegalArgumentException;
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         if (e instanceof NullPointerException) {
             throw meta.throwNullPointerException();
         }
         if (e instanceof ArrayIndexOutOfBoundsException) {
-            throw meta.throwExceptionWithMessage(meta.java_lang_ArrayIndexOutOfBoundsException, e.getMessage());
+            throw Meta.throwExceptionWithMessage(meta.java_lang_ArrayIndexOutOfBoundsException, e.getMessage());
         }
         if (e instanceof IllegalArgumentException) {
-            throw meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, e.getMessage());
+            throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, e.getMessage());
         }
         throw EspressoError.shouldNotReachHere(e);
     }
 
-    private static void checkNonNullArray(StaticObject array) {
+    private static void checkNonNullArray(StaticObject array, Meta meta) {
         if (StaticObject.isNull(array)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwNullPointerException();
+            throw meta.throwNullPointerException();
         }
         if (!(array.isArray())) {
-            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-            throw meta.throwException(meta.java_lang_IllegalArgumentException);
+            throw Meta.throwException(meta.java_lang_IllegalArgumentException);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static void setBoolean(@Host(Object.class) StaticObject array, int index, boolean value) {
-        checkNonNullArray(array);
+    public static void setBoolean(@Host(Object.class) StaticObject array, int index, boolean value, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             Array.setBoolean(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static void setByte(@Host(Object.class) StaticObject array, int index, byte value) {
-        checkNonNullArray(array);
+    public static void setByte(@Host(Object.class) StaticObject array, int index, byte value, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             Array.setByte(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static void setChar(@Host(Object.class) StaticObject array, int index, char value) {
-        checkNonNullArray(array);
+    public static void setChar(@Host(Object.class) StaticObject array, int index, char value, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             Array.setChar(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static void setShort(@Host(Object.class) StaticObject array, int index, short value) {
-        checkNonNullArray(array);
+    public static void setShort(@Host(Object.class) StaticObject array, int index, short value, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             Array.setShort(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static void setInt(@Host(Object.class) StaticObject array, int index, int value) {
-        checkNonNullArray(array);
+    public static void setInt(@Host(Object.class) StaticObject array, int index, int value, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             Array.setInt(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static void setFloat(@Host(Object.class) StaticObject array, int index, float value) {
-        checkNonNullArray(array);
+    public static void setFloat(@Host(Object.class) StaticObject array, int index, float value, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             Array.setFloat(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static void setDouble(@Host(Object.class) StaticObject array, int index, double value) {
-        checkNonNullArray(array);
+    public static void setDouble(@Host(Object.class) StaticObject array, int index, double value, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             Array.setDouble(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
     @Substitution
     @TruffleBoundary
-    public static void setLong(@Host(Object.class) StaticObject array, int index, long value) {
-        checkNonNullArray(array);
+    public static void setLong(@Host(Object.class) StaticObject array, int index, long value, @InjectMeta Meta meta) {
+        checkNonNullArray(array, meta);
         try {
             Array.setLong(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
-            throw rethrowAsGuestException(e);
+            throw rethrowAsGuestException(e, meta);
         }
     }
 
@@ -358,8 +353,7 @@ public final class Target_java_lang_reflect_Array {
      *                array
      */
     @Substitution
-    public static void set(@Host(Object.class) StaticObject array, int index, @Host(Object.class) StaticObject value) {
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+    public static void set(@Host(Object.class) StaticObject array, int index, @Host(Object.class) StaticObject value, @InjectMeta Meta meta) {
         InterpreterToVM vm = meta.getInterpreterToVM();
         if (StaticObject.isNull(array)) {
             throw meta.throwNullPointerException();
@@ -383,7 +377,7 @@ public final class Target_java_lang_reflect_Array {
             }
             // @formatter:on
         } else {
-            throw meta.throwException(meta.java_lang_IllegalArgumentException);
+            throw Meta.throwException(meta.java_lang_IllegalArgumentException);
         }
     }
 
@@ -401,8 +395,7 @@ public final class Target_java_lang_reflect_Array {
      *                array
      */
     @Substitution
-    public static @Host(Object.class) StaticObject get(@Host(Object.class) StaticObject array, int index) {
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+    public static @Host(Object.class) StaticObject get(@Host(Object.class) StaticObject array, int index, @InjectMeta Meta meta) {
         InterpreterToVM vm = meta.getInterpreterToVM();
         if (StaticObject.isNull(array)) {
             throw meta.throwNullPointerException();
@@ -425,7 +418,7 @@ public final class Target_java_lang_reflect_Array {
             }
             // @formatter:on
         } else {
-            throw meta.throwException(meta.java_lang_IllegalArgumentException);
+            throw Meta.throwException(meta.java_lang_IllegalArgumentException);
         }
     }
 
