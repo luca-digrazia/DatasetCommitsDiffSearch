@@ -721,8 +721,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     public @Host(Class.class) StaticObject JVM_FindLoadedClass(@Host(ClassLoader.class) StaticObject loader, @Host(String.class) StaticObject name) {
         Symbol<Type> type = getTypes().fromClassGetName(Meta.toHostString(name));
-        // HotSpot skips reflection (DelegatingClassLoader) class loaders.
-        Klass klass = getRegistries().findLoadedClass(type, nonReflectionClassLoader(loader));
+        Klass klass = getRegistries().findLoadedClass(type, loader);
         if (klass == null) {
             return StaticObject.NULL;
         }
