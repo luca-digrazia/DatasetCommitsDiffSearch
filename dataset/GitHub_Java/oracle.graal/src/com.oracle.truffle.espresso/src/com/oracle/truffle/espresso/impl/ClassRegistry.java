@@ -59,6 +59,7 @@ public abstract class ClassRegistry implements ContextAccess {
     static final ThreadLocal<TypeStack> stack = ThreadLocal.withInitial(TypeStack.supplier);
 
     static final class TypeStack {
+
         static final Supplier<TypeStack> supplier = new Supplier<TypeStack>() {
             @Override
             public TypeStack get() {
@@ -68,6 +69,7 @@ public abstract class ClassRegistry implements ContextAccess {
         Node head = null;
 
         static final class Node {
+
             Symbol<Type> entry;
             Node next;
 
@@ -75,6 +77,7 @@ public abstract class ClassRegistry implements ContextAccess {
                 this.entry = entry;
                 this.next = next;
             }
+
         }
 
         boolean isEmpty() {
@@ -107,6 +110,7 @@ public abstract class ClassRegistry implements ContextAccess {
 
         private TypeStack() {
         }
+
     }
 
     private final EspressoContext context;
@@ -115,6 +119,7 @@ public abstract class ClassRegistry implements ContextAccess {
 
     private ModuleEntry unnamed;
     private final PackageTable packages;
+
     private final ModuleTable modules;
 
     public ModuleEntry getUnnamedModule() {
@@ -242,8 +247,7 @@ public abstract class ClassRegistry implements ContextAccess {
     }
 
     public static boolean loaderIsBootOrPlatform(StaticObject loader, Meta meta) {
-        return StaticObject.isNull(loader) ||
-                        (meta.getJavaVersion().java9OrLater() && meta.jdk_internal_loader_ClassLoaders$PlatformClassLoader.isAssignableFrom(loader.getKlass()));
+        return StaticObject.isNull(loader) || meta.jdk_internal_loader_ClassLoaders$PlatformClassLoader.isAssignableFrom(loader.getKlass());
     }
 
     private ObjectKlass createAndPutKlass(Meta meta, ParserKlass parserKlass, Symbol<Type> type, Symbol<Type> superKlassType) {
@@ -290,12 +294,12 @@ public abstract class ClassRegistry implements ContextAccess {
 
         ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader());
 
-        if (superKlass != null && !Klass.checkAccess(klass.getDefiningClassLoader(), superKlass, klass)) {
+        if (superKlass != null && !Klass.checkAccess(superKlass, klass)) {
             throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, "class " + type + " cannot access its superclass " + superKlassType);
         }
 
         for (ObjectKlass interf : superInterfaces) {
-            if (interf != null && !Klass.checkAccess(klass.getDefiningClassLoader(), interf, klass)) {
+            if (interf != null && !Klass.checkAccess(interf, klass)) {
                 throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, "class " + type + " cannot access its superinterface " + interf.getType());
             }
         }
