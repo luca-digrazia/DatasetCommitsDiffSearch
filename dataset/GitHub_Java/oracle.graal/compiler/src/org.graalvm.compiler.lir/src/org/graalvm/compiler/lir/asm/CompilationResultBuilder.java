@@ -254,6 +254,10 @@ public class CompilationResultBuilder {
         compilationResult.addAnnotation(new CompilationResult.CodeComment(asm.position(), s));
     }
 
+    public void shiftCodePatch(int pos, int bytesToShift) {
+        compilationResult.shiftCodePatch(pos, bytesToShift);
+    }
+
     /**
      * Sets the {@linkplain CompilationResult#setTargetCode(byte[], int) code} and
      * {@linkplain CompilationResult#recordExceptionHandler(int, int) exception handler} fields of
@@ -579,7 +583,7 @@ public class CompilationResultBuilder {
                     if (codeAnnotation instanceof JumpTable) {
                         // Skip jump table. Here we assume the jump table is at the tail of the
                         // emitted code.
-                        int jumpTableStart = codeAnnotation.getPosition();
+                        int jumpTableStart = codeAnnotation.position;
                         if (jumpTableStart >= start && jumpTableStart < end) {
                             end = jumpTableStart;
                         }
