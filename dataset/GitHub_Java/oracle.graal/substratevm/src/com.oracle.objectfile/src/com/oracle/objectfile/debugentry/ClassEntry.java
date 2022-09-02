@@ -277,12 +277,4 @@ public class ClassEntry {
     public boolean includesDeoptTarget() {
         return includesDeoptTarget;
     }
-
-    public String getCachePath() {
-        if (fileEntry != null) {
-            return fileEntry.getCachePath();
-        } else {
-            return "";
-        }
-    }
 }
