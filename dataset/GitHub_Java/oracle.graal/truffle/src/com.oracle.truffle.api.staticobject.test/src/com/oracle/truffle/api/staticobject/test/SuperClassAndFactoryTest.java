@@ -41,79 +41,81 @@
 package com.oracle.truffle.api.staticobject.test;
 
 import com.oracle.truffle.api.staticobject.StaticShape;
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import org.junit.experimental.theories.DataPoints;
+import org.junit.experimental.theories.Theories;
+import org.junit.experimental.theories.Theory;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.util.regex.Pattern;
 
-@RunWith(Parameterized.class)
+@RunWith(Theories.class)
 public class SuperClassAndFactoryTest extends StaticObjectModelTest {
-    @Parameterized.Parameters(name = "{0}")
-    public static TestConfiguration[] data() {
-        return getTestConfigurations();
+    @DataPoints //
+    public static TestEnvironment[] environments;
+
+    @BeforeClass
+    public static void setup() {
+        environments = getTestEnvironments();
     }
 
-    @Parameterized.Parameter public TestConfiguration config;
-
-    @Test
-    public void correct() {
-        try (TestEnvironment te = new TestEnvironment(config)) {
-            StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
-            b.build(CustomStaticObject.class, CustomFactoryInterface.class);
+    @AfterClass
+    public static void teardown() {
+        for (TestEnvironment env : environments) {
+            env.close();
         }
     }
 
-    @Test
-    public void wrongFinalClone() {
-        try (TestEnvironment te = new TestEnvironment(config)) {
-            StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
-            try {
-                b.build(WrongCloneCustomStaticObject.class, WrongCloneFactoryInterface.class);
-                Assert.fail();
-            } catch (IllegalArgumentException e) {
-                Assert.assertTrue(e.getMessage().matches("'.*' implements Cloneable and declares a final '" + Pattern.quote("clone()") + "' method"));
-            }
+    @Theory
+    public void correct(TestEnvironment te) {
+        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+        b.build(CustomStaticObject.class, CustomFactoryInterface.class);
+    }
+
+    @Theory
+    public void wrongFinalClone(TestEnvironment te) {
+        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+        try {
+            b.build(WrongCloneCustomStaticObject.class, WrongCloneFactoryInterface.class);
+            Assert.fail();
+        } catch (IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().matches("'.*' implements Cloneable and declares a final '" + Pattern.quote("clone()") + "' method"));
         }
     }
 
-    @Test
-    public void wrongAbstractSuperClass() {
-        try (TestEnvironment te = new TestEnvironment(config)) {
-            StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
-            try {
-                b.build(WrongAbstractStaticObject.class, WrongAbstractFactoryInterface.class);
-                Assert.fail();
-            } catch (IllegalArgumentException e) {
-                Assert.assertEquals("'com.oracle.truffle.api.staticobject.test.SuperClassAndFactoryTest$WrongAbstractStaticObject' has abstract methods", e.getMessage());
-            }
+    @Theory
+    public void wrongAbstractSuperClass(TestEnvironment te) {
+        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+        try {
+            b.build(WrongAbstractStaticObject.class, WrongAbstractFactoryInterface.class);
+            Assert.fail();
+        } catch (IllegalArgumentException e) {
+            Assert.assertEquals("'com.oracle.truffle.api.staticobject.test.SuperClassAndFactoryTest$WrongAbstractStaticObject' has abstract methods", e.getMessage());
         }
     }
 
-    @Test
-    public void wrongFactoryArgs() {
-        try (TestEnvironment te = new TestEnvironment(config)) {
-            StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
-            try {
-                b.build(CustomStaticObject.class, WrongArgsFactoryInterface.class);
-                Assert.fail();
-            } catch (IllegalArgumentException e) {
-                Assert.assertTrue(e.getMessage().matches("Method '.*' does not match any constructor in '.*'"));
-            }
+    @Theory
+    public void wrongFactoryArgs(TestEnvironment te) {
+        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+        try {
+            b.build(CustomStaticObject.class, WrongArgsFactoryInterface.class);
+            Assert.fail();
+        } catch (IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().matches("Method '.*' does not match any constructor in '.*'"));
         }
     }
 
-    @Test
-    public void wrongFactoryReturnType() {
-        try (TestEnvironment te = new TestEnvironment(config)) {
-            StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
-            try {
-                b.build(CustomStaticObject.class, WrongReturnTypeFactoryInterface.class);
-                Assert.fail();
-            } catch (IllegalArgumentException e) {
-                Assert.assertTrue(e.getMessage().matches("The return type of '.*' is not assignable from '.*'"));
-            }
+    @Theory
+    public void wrongFactoryReturnType(TestEnvironment te) {
+        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+        try {
+            b.build(CustomStaticObject.class, WrongReturnTypeFactoryInterface.class);
+            Assert.fail();
+        } catch (IllegalArgumentException e) {
+            Assert.assertTrue(e.getMessage().matches("The return type of '.*' is not assignable from '.*'"));
         }
     }
 
@@ -164,5 +166,10 @@ public class SuperClassAndFactoryTest extends StaticObjectModelTest {
 
     public interface WrongReturnTypeFactoryInterface {
         String create(int i, Object o);
+    }
+
+    @Test
+    public void dummy() {
+        // to make sure this file is recognized as a test
     }
 }
