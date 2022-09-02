@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -1691,14 +1691,9 @@ public abstract class TruffleLanguage<C> {
          * uncaught exception if one of the initialized language contexts don't support execution on
          * this thread.
          * <p>
-         * The language that created and started the thread is responsible to stop and join it
-         * during the {@link TruffleLanguage#finalizeContext(Object) finalizeContext}, otherwise an
-         * {@link AssertionError} is thrown. It's not safe to use the
-         * {@link ExecutorService#awaitTermination(long, java.util.concurrent.TimeUnit)} to detect
-         * Thread termination as the polyglot thread may be cancelled before executing the executor
-         * worker.<br/>
-         * A typical implementation looks like:
-         * {@link TruffleLanguageSnippets.AsyncThreadLanguage#finalizeContext}
+         * The language that created and started the thread is responsible to complete all running
+         * or waiting threads when the context is {@link TruffleLanguage#disposeContext(Object)
+         * disposed}.
          * <p>
          * The {@link TruffleContext} can be either an inner context created by
          * {@link #newContextBuilder()}.{@link TruffleContext.Builder#build() build()}, or the

@@ -762,9 +762,7 @@ final class EngineAccessor extends Accessor {
                 PolyglotContextImpl innerContext = (PolyglotContextImpl) innerContextImpl;
                 threadContext = innerContext.getContext(threadContext.language);
             }
-            PolyglotThread newThread = new PolyglotThread(threadContext, runnable, group, stackSize);
-            threadContext.context.checkMultiThreadedAccess(newThread);
-            return newThread;
+            return new PolyglotThread(threadContext, runnable, group, stackSize);
         }
 
         @Override
@@ -832,13 +830,12 @@ final class EngineAccessor extends Accessor {
         public <T> T getOrCreateRuntimeData(Object polyglotEngine, BiFunction<OptionValues, Supplier<TruffleLogger>, T> constructor) {
             if (polyglotEngine == null) {
                 OptionValues engineOptionValues = PolyglotEngineImpl.getEngineOptionsWithNoEngine();
-                String defaultLogFile = System.getProperty(OptionValuesImpl.SYSTEM_PROPERTY_PREFIX + PolyglotEngineImpl.LOG_FILE_OPTION);
-                return constructor.apply(engineOptionValues, PolyglotLoggers.createEngineLoggerProvider(defaultLogFile));
+                return constructor.apply(engineOptionValues, PolyglotLoggers.createCompilerLoggerProvider(null));
             }
 
             final PolyglotEngineImpl engine = (PolyglotEngineImpl) polyglotEngine;
             if (engine.runtimeData == null) {
-                engine.runtimeData = constructor.apply(engine.engineOptionValues, engine.engineLoggerSupplier);
+                engine.runtimeData = constructor.apply(engine.engineOptionValues, PolyglotLoggers.createCompilerLoggerProvider(engine));
             }
             return (T) engine.runtimeData;
         }
