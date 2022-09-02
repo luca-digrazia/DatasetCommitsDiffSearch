@@ -40,7 +40,6 @@
  */
 package org.graalvm.wasm.predefined.testutil;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -48,7 +47,6 @@ import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmVoidResult;
 
-import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 /**
