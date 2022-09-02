@@ -439,7 +439,7 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         private CompletionExecutor executor;
 
         private BatchExecutor(BigBang bb, ForkJoinPool threadPool) {
-            this.executor = new CompletionExecutor(bb, threadPool, bb.getHeartbeatCallback());
+            this.executor = new CompletionExecutor(bb, threadPool);
             executor.init();
         }
 
