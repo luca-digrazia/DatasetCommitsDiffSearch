@@ -56,7 +56,6 @@ import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.PROXY_OBJEC
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.STRING;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.TIME;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.TIMEZONE;
-import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.META;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -288,27 +287,17 @@ public class ValueAPITest {
         assertTrue(context.asValue(new PrivateObject()).getMemberKeys().isEmpty());
 
         for (Object value : HOST_OBJECTS) {
-            List<Trait> expectedTraits = new ArrayList<>();
-            expectedTraits.add(MEMBERS);
-            expectedTraits.add(HOST_OBJECT);
-
-            if (value instanceof Supplier || value instanceof Function) {
-                expectedTraits.add(EXECUTABLE);
+            boolean functionalInterface = value instanceof Supplier || value instanceof Function;
+            boolean instantiable = value instanceof Class && value != Class.class;
+            if (functionalInterface) {
+                assertValue(context.asValue(value), MEMBERS, HOST_OBJECT, EXECUTABLE);
+            } else if (value instanceof List) {
+                assertValue(context.asValue(value), MEMBERS, HOST_OBJECT, ARRAY_ELEMENTS);
+            } else if (instantiable) {
+                assertValue(context.asValue(value), MEMBERS, HOST_OBJECT, INSTANTIABLE);
+            } else {
+                assertValue(context.asValue(value), MEMBERS, HOST_OBJECT);
             }
-
-            if (value instanceof List) {
-                expectedTraits.add(ARRAY_ELEMENTS);
-            }
-
-            if (value instanceof Class && value != Class.class) {
-                expectedTraits.add(INSTANTIABLE);
-            }
-
-            if (value instanceof Class) {
-                expectedTraits.add(META);
-            }
-
-            assertValue(context.asValue(value), expectedTraits.toArray(new Trait[0]));
         }
     }
 
@@ -1368,7 +1357,7 @@ public class ValueAPITest {
         Value value = context.asValue(new AmbiguousType());
         assertFails(() -> value.getMember("f").execute(1, 2), IllegalArgumentException.class,
                         "Invalid argument when executing 'com.oracle.truffle.api.test.polyglot.ValueAPITest$AmbiguousType." +
-                                        "f'(language: Java, type: Unknown). Multiple applicable overloads found for method name f " +
+                                        "f'(language: Java, type: Bound Method). Multiple applicable overloads found for method name f " +
                                         "(candidates: [Method[public java.lang.String com.oracle.truffle.api.test.polyglot.ValueAPITest$AmbiguousType." +
                                         "f(int,byte)], Method[public java.lang.String com.oracle.truffle.api.test.polyglot.ValueAPITest$AmbiguousType." +
                                         "f(byte,int)]], arguments: [1 (Integer), 2 (Integer)]) Provided arguments: " +
@@ -1403,7 +1392,6 @@ public class ValueAPITest {
         assertFails(() -> value.invokeMember("f", "2", "128"), IllegalArgumentException.class,
                         "Invalid argument when invoking 'f' on 'com.oracle.truffle.api.test.polyglot.ValueAPITest." +
                                         "InvocableType'(language: Java, type: com.oracle.truffle.api.test.polyglot.ValueAPITest$InvocableType). " +
-                                        "Cannot convert '2'(language: Java, type: java.lang.String) to Java type 'int': Invalid or lossy primitive coercion." +
                                         "Provided arguments: ['2'(language: Java, type: java.lang.String), '128'(language: Java, type: java.lang.String)].");
         assertEquals("1", value.invokeMember("f", 2, 3).asString());
 
@@ -1521,65 +1509,28 @@ public class ValueAPITest {
 
     }
 
-    @ExportLibrary(InteropLibrary.class)
-    @SuppressWarnings({"static-method", "unused"})
-    static final class TestObject implements TruffleObject {
-
-        @ExportMessage
-        boolean hasMembers() {
-            return true;
-        }
-
-        @ExportMessage
-        boolean hasArrayElements() {
-            return true;
-        }
-
-        @ExportMessage
-        boolean isExecutable() {
-            return true;
-        }
-
-        @ExportMessage
-        Object execute(Object[] arguments) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-
-        @ExportMessage
-        Object getMembers(boolean includeInternal) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-
-        @ExportMessage
-        Object readArrayElement(long index) throws InvalidArrayIndexException {
-            throw InvalidArrayIndexException.create(index);
-        }
-
-        @ExportMessage
-        long getArraySize() {
-            return 0L;
-        }
-
-        @ExportMessage
-        boolean isArrayElementReadable(long index) {
-            return false;
-        }
-
-    }
-
     @Test
     public void testValueContextPropagation() {
-        Object o = new TestObject();
+        ProxyLegacyInteropObject o = new ProxyLegacyInteropObject() {
+            @Override
+            public boolean hasKeys() {
+                return true;
+            }
 
+            @Override
+            public boolean isExecutable() {
+                return true;
+            }
+
+            @Override
+            public boolean hasSize() {
+                return true;
+            }
+        };
         ProxyLanguage.setDelegate(new ProxyLanguage() {
             @Override
             protected CallTarget parse(ParsingRequest request) throws Exception {
                 return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(o));
-            }
-
-            @Override
-            protected boolean isObjectOfLanguage(Object object) {
-                return object == o;
             }
 
             @Override
@@ -1690,7 +1641,24 @@ public class ValueAPITest {
         Context context1 = Context.create();
         Context context2 = Context.create();
         List<Object> nonSharables = new ArrayList<>();
-        Object interopObject = new TestObject();
+        ProxyLegacyInteropObject interopObject = new ProxyLegacyInteropObject() {
+
+            @Override
+            public boolean isExecutable() {
+                return true;
+            }
+
+            @Override
+            public boolean hasKeys() {
+                return true;
+            }
+
+            @Override
+            public boolean hasSize() {
+                return true;
+            }
+
+        };
         nonSharables.add(interopObject);
         Value v = context1.asValue(interopObject);
         nonSharables.add(v.as(Map.class));
@@ -1766,7 +1734,8 @@ public class ValueAPITest {
         }
 
         // special case for context less TruffleObject
-        Value contextLessValue = Value.asValue(new TestObject());
+        Value contextLessValue = Value.asValue(new ProxyLegacyInteropObject() {
+        });
         context1.getPolyglotBindings().putMember("foo", contextLessValue);
         context2.getPolyglotBindings().putMember("foo", contextLessValue);
 
@@ -1834,26 +1803,6 @@ public class ValueAPITest {
         PolyglotException polyglotException = exceptionValue.as(PolyglotException.class);
         assertNotNull(polyglotException);
         assertThat(polyglotException.getMessage(), containsString("expected"));
-    }
-
-    @Test
-    public void testMetaObject() {
-        Value v = context.asValue(OtherInterface0.class);
-        assertTrue(v.isMetaObject());
-        assertEquals(OtherInterface0.class.getTypeName(), v.getMetaQualifiedName());
-        assertEquals(OtherInterface0.class.getSimpleName(), v.getMetaSimpleName());
-        assertTrue(v.isMetaInstance(new OtherInterface0() {
-            @Override
-            public Object execute() {
-                return null;
-            }
-        }));
-        assertFalse(v.isMetaInstance(new OtherInterface1() {
-            @Override
-            public Object execute(Object s) {
-                return null;
-            }
-        }));
     }
 
     @ExportLibrary(InteropLibrary.class)
