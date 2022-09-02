@@ -114,11 +114,6 @@ final class PolyglotThread extends Thread {
         }
 
         @Override
-        protected boolean needsExceptionWrapping() {
-            return false;
-        }
-
-        @Override
         public boolean isInternal() {
             return true;
         }
