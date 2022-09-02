@@ -7,13 +7,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.oracle.truffle.espresso.descriptors.StaticSymbols;
 import org.graalvm.collections.EconomicMap;
 
-import com.oracle.truffle.espresso.descriptors.StaticSymbols;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -30,9 +31,7 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
  */
 public final class Substitutions implements ContextAccess {
 
-    public static void init() {
-        /* nop */
-    }
+    public static void init() {}
 
     private final EspressoContext context;
 

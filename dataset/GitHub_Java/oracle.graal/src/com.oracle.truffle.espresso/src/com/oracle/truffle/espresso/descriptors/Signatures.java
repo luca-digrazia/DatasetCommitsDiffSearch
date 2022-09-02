@@ -30,6 +30,7 @@ import java.util.function.Function;
 
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 
 /**
@@ -208,10 +209,10 @@ public final class Signatures {
     }
 
     @SafeVarargs
-    public static final Symbol<Type>[] makeParsedUncached(Symbol<Type> returnType, Symbol<Type>... parameterTypes) {
+    public final Symbol<Type>[] makeParsed(Symbol<Type> returnType, Symbol<Type>... parameterTypes) {
         final Symbol<Type>[] signature = Arrays.copyOf(parameterTypes, parameterTypes.length + 1);
         signature[signature.length - 1] = returnType;
-        return signature;
+        throw EspressoError.unimplemented();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes)"})
@@ -262,7 +263,6 @@ public final class Signatures {
         return signatureString;
     }
 
-    @SafeVarargs
     static byte[] buildSignatureBytes(Symbol<Type> returnType, Symbol<Type>... parameterTypes) {
         if (parameterTypes == null || parameterTypes.length == 0) {
             byte[] bytes = new byte[/* () */ 2 + returnType.length()];
@@ -293,6 +293,7 @@ public final class Signatures {
     }
 
     public Symbol<Type>[] parsed(Symbol<Signature> signature) {
+        // TODO(peterssen): Cache parsed signatures.
         return parsedSignatures.computeIfAbsent(signature, new Function<Symbol<Signature>, Symbol<Type>[]>() {
             @Override
             public Symbol<Type>[] apply(Symbol<Signature> key) {

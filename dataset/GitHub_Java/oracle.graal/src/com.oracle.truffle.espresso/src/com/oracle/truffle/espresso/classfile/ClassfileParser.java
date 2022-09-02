@@ -42,7 +42,6 @@ import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.BootstrapMethodsAttribute;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.object.DebugCounter;
 
 public final class ClassfileParser {
 

@@ -127,6 +127,10 @@ public final class ArrayKlass extends Klass {
 
     @Override
     public ConstantPool getConstantPool() {
-        return getElementalType().getConstantPool();
+        Klass elemental = getElementalType();
+        // TODO(peterssen): Array's elemental type cannot be null.
+        return elemental != null
+                        ? getElementalType().getConstantPool()
+                        : null;
     }
 }

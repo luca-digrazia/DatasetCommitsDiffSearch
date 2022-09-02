@@ -36,8 +36,6 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
-
 public interface InterfaceMethodRefConstant extends MethodRefConstant {
 
     @Override
@@ -124,7 +122,6 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
 
         @Override
         public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
-            resolveMethodCount.inc();
             EspressoContext context = pool.getContext();
             Symbol<Name> holderKlassName = getHolderKlassName(pool);
             Klass holderInterface = context.getRegistries().loadKlass(context.getTypes().fromName(holderKlassName), accessingKlass.getDefiningClassLoader());
