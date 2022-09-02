@@ -121,7 +121,7 @@ import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.LibraryFactory;
+import com.oracle.truffle.api.library.ResolvedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.Node.Children;
@@ -347,8 +347,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
         initializeUncachable(node, members);
 
         if (mode == ParseMode.DEFAULT) {
-            boolean emitWarnings = !Boolean.parseBoolean(System.getProperty("truffle.dsl.cacheSharingWarningsEnabled", "false"));
-            node.setSharedCaches(computeSharing(Arrays.asList(node), emitWarnings));
+            node.setSharedCaches(computeSharing(Arrays.asList(node)));
         } else {
             // sharing is computed by the ExportsParser
         }
@@ -362,7 +361,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
         return node;
     }
 
-    public static Map<CacheExpression, String> computeSharing(Collection<NodeData> nodes, boolean emitSharingWarnings) {
+    public static Map<CacheExpression, String> computeSharing(Collection<NodeData> nodes) {
         Map<SharableCache, Collection<CacheExpression>> groups = computeSharableCaches(nodes);
         // compute unnecessary sharing.
 
@@ -441,7 +440,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
                             }
                         }
                     } else if (expressions != null && expressions.size() > 1) {
-                        if (emitSharingWarnings && findAnnotationMirror(cache.getParameter().getVariableElement(), Exclusive.class) == null) {
+                        if (findAnnotationMirror(cache.getParameter().getVariableElement(), Exclusive.class) == null) {
                             StringBuilder sharedCaches = new StringBuilder();
                             Set<String> recommendedGroups = new LinkedHashSet<>();
                             for (CacheExpression cacheExpression : expressions) {
@@ -1932,13 +1931,13 @@ public final class NodeParser extends AbstractParser<NodeData> {
                         continue;
                     }
                     TypeMirror libraryType = context.getType(Library.class);
-                    DSLExpressionResolver cachedResolver = importStatics(resolver, context.getType(LibraryFactory.class));
+                    DSLExpressionResolver cachedResolver = importStatics(resolver, context.getType(ResolvedLibrary.class));
                     TypeMirror usedLibraryType = parameter.getType();
 
                     DSLExpression resolveCall = new DSLExpression.Call(null, "resolve", Arrays.asList(new DSLExpression.ClassLiteral(usedLibraryType)));
-                    DSLExpression defaultExpression = new DSLExpression.Call(resolveCall, "createCachedLimit",
+                    DSLExpression defaultExpression = new DSLExpression.Call(resolveCall, "createCachedDispatch",
                                     Arrays.asList(limitExpression));
-                    DSLExpression uncachedExpression = new DSLExpression.Call(resolveCall, "getUncached",
+                    DSLExpression uncachedExpression = new DSLExpression.Call(resolveCall, "getUncachedDispatch",
                                     Arrays.asList());
 
                     library.setDefaultExpression(resolveCachedExpression(cachedResolver, library, libraryType, defaultExpression, null));
@@ -2068,7 +2067,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
 
             TypeMirror usedLibraryType = parameterType;
             DSLExpression resolveCall = new DSLExpression.Call(null, "resolve", Arrays.asList(new DSLExpression.ClassLiteral(usedLibraryType)));
-            DSLExpressionResolver cachedResolver = importStatics(resolver, context.getType(LibraryFactory.class));
+            DSLExpressionResolver cachedResolver = importStatics(resolver, context.getType(ResolvedLibrary.class));
 
             DSLExpression defaultExpression = new DSLExpression.Call(resolveCall, "createCached",
                             Arrays.asList(receiverExpression));

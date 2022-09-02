@@ -93,7 +93,6 @@ import com.oracle.truffle.api.library.DynamicDispatchLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
-import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.dsl.processor.generator.GeneratorUtils;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
@@ -210,9 +209,9 @@ public class ExportsParser extends AbstractParser<ExportsData> {
             }
 
             if (receiverClass == null) {
-                receiverClass = exportLib.getReceiverType();
-            } else if (!typeEquals(exportLib.getReceiverType(), receiverClass)) {
-                exportLib.addError("All receiver classes must match for a declared java type. Found '%s' and '%s'.", getSimpleName(receiverClass), getSimpleName(exportLib.getReceiverType()));
+                receiverClass = exportLib.getReceiverClass();
+            } else if (!typeEquals(exportLib.getReceiverClass(), receiverClass)) {
+                exportLib.addError("All receiver classes must match for a declared java type. Found '%s' and '%s'.", getSimpleName(receiverClass), getSimpleName(exportLib.getReceiverClass()));
                 continue;
             }
 
@@ -359,10 +358,10 @@ public class ExportsParser extends AbstractParser<ExportsData> {
             AnnotationMirror exportAnnotationMirror = entry.getValue();
             String libraryId = entry.getKey();
             TypeMirror libraryMirror = getAnnotationValue(TypeMirror.class, exportAnnotationMirror, "value");
-            AnnotationValue receiverClassValue = getAnnotationValue(exportAnnotationMirror, "receiverType");
+            AnnotationValue receiverClassValue = getAnnotationValue(exportAnnotationMirror, "receiverClass");
             boolean explicitReceiver;
 
-            TypeMirror receiverClass = getAnnotationValue(TypeMirror.class, exportAnnotationMirror, "receiverType", false);
+            TypeMirror receiverClass = getAnnotationValue(TypeMirror.class, exportAnnotationMirror, "receiverClass", false);
             if (receiverClass == null) {
                 explicitReceiver = false;
                 receiverClass = type.asType();
@@ -378,7 +377,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
             model.getExportedLibraries().put(libraryId, lib);
 
             if (ElementUtils.isPrimitive(receiverClass)) {
-                lib.addError(exportAnnotationMirror, receiverClassValue, "Primitive receiver types are not supported yet.");
+                lib.addError(exportAnnotationMirror, receiverClassValue, "Primitive receiver classes are not supported yet.");
                 continue;
             }
 
@@ -419,7 +418,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
 
             if (explicitReceiver) {
                 if (!isSubtype(receiverClass, libraryData.getSignatureReceiverType())) {
-                    lib.addError(exportAnnotationMirror, receiverClassValue, "The export receiver type %s is not compatible with the library receiver type '%s' of library '%s'. ",
+                    lib.addError(exportAnnotationMirror, receiverClassValue, "The export receiver class %s is not compatible with the library receiver type '%s' of library '%s'. ",
                                     getSimpleName(receiverClass),
                                     getSimpleName(libraryData.getSignatureReceiverType()),
                                     getSimpleName(libraryData.getTemplateType().asType()));
@@ -456,20 +455,8 @@ public class ExportsParser extends AbstractParser<ExportsData> {
                                 DynamicDispatchLibrary.class.getSimpleName());
             } else if (explicitReceiver && !exportedLibrary.isDynamicDispatchTarget() && !exportedLibrary.isDefaultExport()) {
                 exportedLibrary.addError(exportedLibrary.getTemplateTypeAnnotation(), //
-                                getAnnotationValue(exportedLibrary.getTemplateTypeAnnotation(), "receiverType"),
-                                "Using explicit receiver types is only supported for default exports or types that export %s.%n" +
-                                                "To resolve this use one of the following strategies:%n" +
-                                                "  - Make the receiver type implicit by applying '@%s(%s.class)' to the receiver type '%s' instead.%n" +
-                                                "  - Declare a default export for the library '%s' with '@%s(%s.class)'%n" +
-                                                "  - Enable dynamic dispatch by annotating the receiver type with '@%s(%s.class)'.",
-                                DynamicDispatchLibrary.class.getSimpleName(),
-                                ExportLibrary.class.getSimpleName(),
-                                exportedLibrary.getLibrary().getTemplateType().getSimpleName().toString(),
-                                ElementUtils.getSimpleName(exportedLibrary.getExplicitReceiver()),
-                                exportedLibrary.getTemplateType().getSimpleName().toString(),
-                                DefaultExport.class.getSimpleName(),
-                                ElementUtils.getSimpleName(exportedLibrary.getTemplateType().asType()),
-                                ExportLibrary.class.getSimpleName(),
+                                getAnnotationValue(exportedLibrary.getTemplateTypeAnnotation(), "receiverClass"),
+                                "Using explicit receiver classes is only supported for default exports or receiver types that export %s.",
                                 DynamicDispatchLibrary.class.getSimpleName());
             }
         }
@@ -662,7 +649,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
                 fix.append(sep);
                 TypeMirror type;
                 if (sep.length() == 0) { // if receiver
-                    type = exportElement.getExport().getExportsLibrary().getReceiverType();
+                    type = exportElement.getExport().getExportsLibrary().getReceiverClass();
                 } else {
                     type = var.asType();
                 }
@@ -740,7 +727,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
                 realParameterCount++;
             }
         }
-        verifyMethodSignature(model.getTemplateType(), message, exportedElement, exportedMethod, exportsLibrary.getReceiverType(), realParameterCount, true);
+        verifyMethodSignature(model.getTemplateType(), message, exportedElement, exportedMethod, exportsLibrary.getReceiverClass(), realParameterCount, true);
         if (exportedElement.hasErrors()) {
             return;
         }
@@ -766,7 +753,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
 
             boolean isStatic = element.getModifiers().contains(Modifier.STATIC);
             if (!isStatic) {
-                element.getParameters().add(0, new CodeVariableElement(exportsLibrary.getReceiverType(), "this"));
+                element.getParameters().add(0, new CodeVariableElement(exportsLibrary.getReceiverClass(), "this"));
                 element.getModifiers().add(Modifier.STATIC);
             }
             type.add(element);
