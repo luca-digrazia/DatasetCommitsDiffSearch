@@ -71,39 +71,16 @@ public final class SulongLibrary implements TruffleObject {
 
     private final String name;
     private final LLVMScope scope;
+    @CompilerDirectives.CompilationFinal private CallTarget main;
+    private final LLVMFunction mainFunction;
     private final LLVMContext context;
-    final CachedMainFunction main;
 
-    public SulongLibrary(String name, LLVMScope scope, CachedMainFunction main, LLVMContext context) {
+    public SulongLibrary(String name, LLVMScope scope, LLVMFunction mainFunction, LLVMContext context) {
         this.name = name;
         this.scope = scope;
-        this.main = main;
+        this.main = null;
+        this.mainFunction = mainFunction;
         this.context = context;
-    }
-
-    public static final class CachedMainFunction {
-        private final LLVMFunction mainFunction;
-        private CallTarget mainCallTarget;
-
-        public CachedMainFunction(LLVMFunction mainFunction) {
-            this.mainFunction = mainFunction;
-        }
-
-        public CallTarget getMainCallTarget() {
-            if (mainCallTarget == null) {
-                mainCallTarget = createCallTarget();
-            }
-            return mainCallTarget;
-        }
-
-        @TruffleBoundary
-        private CallTarget createCallTarget() {
-            LLVMLanguage language = LLVMLanguage.getLanguage();
-            RootCallTarget startCallTarget = language.getStartFunctionCode().getLLVMIRFunctionSlowPath();
-            Path applicationPath = Paths.get(mainFunction.getStringPath());
-            RootNode rootNode = new LLVMGlobalRootNode(language, new FrameDescriptor(), mainFunction, startCallTarget, Objects.toString(applicationPath, ""));
-            return Truffle.getRuntime().createCallTarget(rootNode);
-        }
     }
 
     /**
@@ -111,7 +88,7 @@ public final class SulongLibrary implements TruffleObject {
      *
      * @param symbolName Function name.
      * @return Function descriptor for the function called {@code symbolName} and {@code null} if
-     *         the function cannot be found.
+     *         the function name cannot be found.
      */
     private LLVMFunctionDescriptor lookupFunctionDescriptor(String symbolName) {
         LLVMFunction function = scope.getFunction(symbolName);
@@ -121,7 +98,8 @@ public final class SulongLibrary implements TruffleObject {
         int index = function.getSymbolIndex(false);
         AssumedValue<LLVMPointer>[] symbols = context.findSymbolTable(function.getBitcodeID(false));
         LLVMPointer pointer = symbols[index].get();
-        return (LLVMFunctionDescriptor) LLVMManagedPointer.cast(pointer).getObject();
+        LLVMFunctionDescriptor functionDescriptor = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(pointer).getObject();
+        return functionDescriptor;
     }
 
     public String getName() {
@@ -198,9 +176,26 @@ public final class SulongLibrary implements TruffleObject {
         return lookup.execute(this, member) != null;
     }
 
+    /**
+     * Return true if the main function exists. If the main function exists, and the call target for
+     * the main method does not exists, then the main method will be lazily created.
+     * 
+     * @return true if the main function exists.
+     */
     @ExportMessage
     boolean isExecutable() {
-        return main != null;
+        if (mainFunction != null) {
+            if (main == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                RootCallTarget startCallTarget = context.getStartFunction().getFunctionCode().getLLVMIRFunctionSlowPath();
+                Path applicationPath = Paths.get(mainFunction.getStringPath());
+                RootNode rootNode = new LLVMGlobalRootNode(context.getLanguage(), new FrameDescriptor(), mainFunction, startCallTarget, Objects.toString(applicationPath, ""));
+                main = Truffle.getRuntime().createCallTarget(rootNode);
+            }
+            return true;
+        } else {
+            return false;
+        }
     }
 
     @ExportMessage
@@ -211,22 +206,29 @@ public final class SulongLibrary implements TruffleObject {
          * @param args
          * @see InteropLibrary#execute(Object, Object...)
          */
-        @Specialization(guards = {"library.main == cachedMain", "cachedMain != null"})
+        @Specialization(guards = "library == cachedLibrary")
         static Object doCached(SulongLibrary library, Object[] args,
-                        @Cached("library.main") @SuppressWarnings("unused") CachedMainFunction cachedMain,
-                        @Cached("create(cachedMain.getMainCallTarget())") DirectCallNode call) {
+                        @Cached("library") @SuppressWarnings("unused") SulongLibrary cachedLibrary,
+                        @Cached("createMainCall(cachedLibrary)") DirectCallNode call) {
             return call.call(args);
         }
 
-        @Specialization(replaces = "doCached", guards = "library.main != null")
-        static Object doGeneric(SulongLibrary library, Object[] args,
-                        @Cached("create()") IndirectCallNode call) {
-            return call.call(library.main.getMainCallTarget(), args);
+        static DirectCallNode createMainCall(SulongLibrary library) {
+            if (library.isExecutable()) {
+                return DirectCallNode.create(library.main);
+            }
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Cannot create main method for sulong library: " + library.getName());
         }
 
-        @Specialization(replaces = "doGeneric")
-        static Object doUnsupported(@SuppressWarnings("unused") SulongLibrary library, @SuppressWarnings("unused") Object[] args) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
+        @Specialization(replaces = "doCached")
+        static Object doGeneric(SulongLibrary library, Object[] args,
+                        @Cached("create()") IndirectCallNode call) {
+            if (library.isExecutable()) {
+                return call.call(library.main, args);
+            }
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("Cannot create main method for sulong library: " + library.getName());
         }
     }
 

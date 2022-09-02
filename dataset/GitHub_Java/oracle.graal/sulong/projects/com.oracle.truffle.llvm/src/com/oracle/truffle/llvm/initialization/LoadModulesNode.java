@@ -32,7 +32,7 @@ package com.oracle.truffle.llvm.initialization;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -51,7 +51,6 @@ import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.SulongLibrary;
-import com.oracle.truffle.llvm.runtime.SulongLibrary.CachedMainFunction;
 import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMRootNode;
@@ -91,7 +90,7 @@ public final class LoadModulesNode extends LLVMRootNode {
     final String sourceName;
     final int bitcodeID;
     final Source source;
-    @CompilerDirectives.CompilationFinal ContextReference<LLVMContext> ctxRef;
+    @CompilerDirectives.CompilationFinal TruffleLanguage.ContextReference<LLVMContext> ctxRef;
 
     @Child LLVMStatementNode initContext;
 
@@ -109,7 +108,7 @@ public final class LoadModulesNode extends LLVMRootNode {
     final LLVMParserResult parserResult;
     final LLVMLanguage language;
     private boolean hasInitialised;
-    @CompilerDirectives.CompilationFinal private CachedMainFunction main;
+    private LLVMFunction mainFunction;
 
     protected enum LLVMLoadingPhase {
         ALL,
@@ -141,6 +140,7 @@ public final class LoadModulesNode extends LLVMRootNode {
         this.dependencies = new DirectCallNode[dependenciesSource.size()];
         this.hasInitialised = false;
         this.initContext = null;
+        this.mainFunction = null;
         String moduleName = parserResult.getRuntime().getLibraryName();
         this.initSymbols = new InitializeSymbolsNode(parserResult, parserResult.getRuntime().getNodeFactory(), lazyParsing,
                         isInternalSulongLibrary, moduleName);
@@ -198,13 +198,7 @@ public final class LoadModulesNode extends LLVMRootNode {
                         throw new IllegalStateException("Unknown dependency.");
                     }
                 }
-                LLVMFunction mainFunction = findMainFunction(parserResult);
-                if (mainFunction != null) {
-                    main = new CachedMainFunction(mainFunction);
-                } else {
-                    main = null;
-                }
-
+                mainFunction = findMainFunction(parserResult);
                 initContext = this.insert(language.createInitializeContextNode());
                 hasInitialised = true;
             }
@@ -212,7 +206,7 @@ public final class LoadModulesNode extends LLVMRootNode {
             LLVMScope scope = loadModule(frame, context);
             // Only the root library (not a dependency) will scope a non-null scope.
             if (scope != null) {
-                return new SulongLibrary(sourceName, scope, main, context);
+                return new SulongLibrary(sourceName, scope, mainFunction, context);
             }
         }
         return null;
