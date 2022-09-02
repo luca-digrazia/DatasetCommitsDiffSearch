@@ -1598,12 +1598,16 @@ public final class TruffleFile {
 
     static TruffleFile createTempFile(TruffleFile targetDirectory, String prefix, String suffix, boolean dir, FileAttribute<?>... attrs) throws IOException {
         Objects.requireNonNull(targetDirectory, "TargetDirectory must be non null.");
-        String usePrefix = prefix != null ? prefix : "";
-        String useSuffix = suffix != null ? suffix : (dir ? "" : ".tmp");
+        if (prefix == null) {
+            prefix = "";
+        }
+        if (suffix == null) {
+            suffix = dir ? "" : ".tmp";
+        }
         while (true) {
             TruffleFile target;
             try {
-                target = createUniquePath(targetDirectory, usePrefix, useSuffix);
+                target = createUniquePath(targetDirectory, prefix, suffix);
                 if (!target.exists()) {
                     if (dir) {
                         target.createDirectory(attrs);
@@ -1613,7 +1617,7 @@ public final class TruffleFile {
                     return target;
                 }
             } catch (InvalidPathException e) {
-                throw new IllegalArgumentException("Prefix (" + usePrefix + ") or suffix (" + useSuffix + ") are not valid file name components");
+                throw new IllegalArgumentException("Prefix (" + prefix + ") or suffix (" + suffix + ") are not valid file name components");
             } catch (FileAlreadyExistsException e) {
                 // retry with different name
             }
