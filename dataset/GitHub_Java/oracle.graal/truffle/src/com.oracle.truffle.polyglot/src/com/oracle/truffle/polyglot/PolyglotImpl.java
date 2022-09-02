@@ -99,8 +99,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.polyglot.HostLanguage.HostContext;
-import org.graalvm.polyglot.HostAccess;
-import org.graalvm.polyglot.PolyglotAccess;
 
 /*
  * This class is exported to the Graal SDK. Keep that in mind when changing its class or package name.
@@ -178,8 +176,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
     @Override
     public Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> options, long timeout, TimeUnit timeoutUnit, boolean sandbox,
                     long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean allowExperimentalOptions, boolean boundEngine, MessageTransport messageInterceptor,
-                    Object logHandlerOrStream,
-                    HostAccess conf) {
+                    Object logHandlerOrStream) {
         if (TruffleOptions.AOT) {
             VMAccessor.SPI.initializeNativeImageTruffleLocator();
         }
@@ -471,11 +468,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public boolean isPolyglotAccessAllowed(Object vmObject) {
-            return ((PolyglotLanguageContext) vmObject).context.config.polyglotAccess == PolyglotAccess.ALL;
-        }
-
-        @Override
         public Object getVMFromLanguageObject(Object engineObject) {
             return getEngine(engineObject);
         }
@@ -485,7 +477,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             PolyglotLanguageContext sourceContext = (PolyglotLanguageContext) vmObject;
             PolyglotLanguage targetLanguage = sourceContext.context.engine.findLanguage(source.getLanguage(), source.getMimeType(), true);
             PolyglotLanguageContext targetContext = sourceContext.context.getContextInitialized(targetLanguage, sourceContext.language);
-            targetContext.checkAccess(sourceContext.getLanguageInstance().language);
             return targetContext.parseCached(sourceContext.language, source, argumentNames);
         }
 
@@ -553,11 +544,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
         @Override
         public Map<String, LanguageInfo> getLanguages(Object vmObject) {
-            if (vmObject instanceof PolyglotLanguageContext) {
-                return ((PolyglotLanguageContext) vmObject).getAccessibleLanguages();
-            } else {
-                return getEngine(vmObject).idToInternalLanguageInfo;
-            }
+            return getEngine(vmObject).idToInternalLanguageInfo;
         }
 
         @Override
@@ -722,7 +709,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         @Override
         public boolean isHostAccessAllowed(Object vmObject, Env env) {
             PolyglotLanguageContext context = (PolyglotLanguageContext) vmObject;
-            return context.context.config.hostLookupAllowed;
+            return context.context.config.hostAccessAllowed;
         }
 
         @Override
@@ -741,10 +728,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         @TruffleBoundary
         public void exportSymbol(Object vmObject, String symbolName, Object value) {
             PolyglotLanguageContext context = (PolyglotLanguageContext) vmObject;
-            if (!isGuestPrimitive(value) && !(value instanceof TruffleObject)) {
-                throw new IllegalArgumentException("Invalid exported value. Must be an interop value.");
-            }
-
             if (value == null) {
                 context.context.polyglotBindings.remove(symbolName);
             } else {
@@ -1163,7 +1146,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         }
 
         @Override
-        public Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> getFileTypeDetectorsSupplier(Object contextVMObject) {
+        public Supplier<Iterable<? extends TruffleFile.FileTypeDetector>> getFileTypeDetectorsSupplier(Object contextVMObject) {
             return ((PolyglotContextImpl) contextVMObject).engine.getFileTypeDetectorsSupplier();
         }
     }
