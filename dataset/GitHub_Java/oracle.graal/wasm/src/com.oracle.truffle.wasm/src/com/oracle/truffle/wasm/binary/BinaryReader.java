@@ -389,9 +389,6 @@ public class BinaryReader extends BinaryStreamReader {
                     state.push();
                     break;
                 case F32_EQ:
-                    state.pop();
-                    state.pop();
-                    state.push();
                     break;
                 case I32_CLZ:
                 case I32_CTZ:
