@@ -83,4 +83,12 @@ final class LibGraalTruffleRuntime extends AbstractHotSpotTruffleRuntime {
             return OptionsEncoder.decode(serializedOptions);
         }
     }
+
+    @SuppressWarnings("try")
+    @Override
+    public void log(String message) {
+        try (LibGraalScope scope = new LibGraalScope(HotSpotJVMCIRuntime.runtime())) {
+            HotSpotToSVMCalls.log(getIsolateThread(), message);
+        }
+    }
 }

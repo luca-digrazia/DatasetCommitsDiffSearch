@@ -32,7 +32,6 @@ import static org.graalvm.compiler.phases.OptimisticOptimizations.Optimization.R
 import static org.graalvm.compiler.phases.OptimisticOptimizations.Optimization.UseExceptionProbability;
 import static org.graalvm.compiler.phases.OptimisticOptimizations.Optimization.UseTypeCheckHints;
 import static org.graalvm.compiler.phases.OptimisticOptimizations.Optimization.UseTypeCheckedInlining;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExcludeAssertions;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -147,8 +146,12 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
         ResolvedJavaType[] skippedExceptionTypes = getSkippedExceptionTypes(runtime);
 
-        GraphBuilderConfiguration baseConfig = GraphBuilderConfiguration.getDefault(new Plugins(plugins));
-        this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes).withOmitAssertions(ExcludeAssertions.getDefaultValue()).withBytecodeExceptionMode(BytecodeExceptionMode.ExplicitOnly);
+        OptionValues optionValues = runtime.getOptions(OptionValues.class);
+        boolean needSourcePositions = TruffleCompilerOptions.TruffleEnableInfopoints.getValue(optionValues) ||
+                        TruffleCompilerOptions.TruffleInstrumentBranches.getValue(optionValues) || TruffleCompilerOptions.TruffleInstrumentBoundaries.getValue(optionValues);
+        GraphBuilderConfiguration baseConfig = GraphBuilderConfiguration.getDefault(new Plugins(plugins)).withNodeSourcePosition(needSourcePositions);
+        this.config = baseConfig.withSkippedExceptionTypes(skippedExceptionTypes).withOmitAssertions(TruffleCompilerOptions.TruffleExcludeAssertions.getValue(optionValues)).withBytecodeExceptionMode(
+                        BytecodeExceptionMode.ExplicitOnly);
 
         this.partialEvaluator = createPartialEvaluator();
         this.firstTierProviders = firstTierProviders;
@@ -269,7 +272,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
     }
 
     @Override
-    public void initialize(Map<String, Object> optionsMap) {
+    public void initialize() {
         if (!checkedDeprecatedOptionsUsage) {
             boolean doCheck = false;
             synchronized (this) {
@@ -282,7 +285,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
                 TruffleCompilerOptions.checkDeprecation();
             }
         }
-        partialEvaluator.initialize(TruffleCompilerOptions.getOptionsForCompiler(optionsMap));
     }
 
     private void actuallyCompile(org.graalvm.options.OptionValues options, TruffleInliningPlan inliningPlan, TruffleCompilationTask task, TruffleCompilerListener inListener,
@@ -338,11 +340,11 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
     @Override
     public void shutdown() {
-        InstrumentPhase.InstrumentationConfiguration cfg = partialEvaluator.instrumentationCfg;
-        if (cfg != null && (cfg.instrumentBoundaries || cfg.instrumentBranches)) {
-            InstrumentPhase.Instrumentation ins = this.partialEvaluator.instrumentation;
-            if (ins != null) {
-                ins.dumpAccessTable();
+        InstrumentPhase.Instrumentation ins = this.partialEvaluator.instrumentation;
+        if (ins != null) {
+            OptionValues options = TruffleCompilerOptions.getOptions();
+            if (TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleInstrumentBranches) || TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleInstrumentBoundaries)) {
+                ins.dumpAccessTable(options);
             }
         }
     }
