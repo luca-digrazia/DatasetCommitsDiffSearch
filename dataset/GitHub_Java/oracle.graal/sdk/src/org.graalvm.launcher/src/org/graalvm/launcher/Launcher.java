@@ -78,10 +78,10 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.logging.Level;
 
-import org.graalvm.nativeimage.ProcessProperties;
 import org.graalvm.nativeimage.RuntimeOptions;
 import org.graalvm.nativeimage.RuntimeOptions.OptionClass;
 import org.graalvm.nativeimage.VMRuntime;
+import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
@@ -97,6 +97,9 @@ public abstract class Launcher {
     private static final boolean SHELL_SCRIPT_LAUNCHER = Boolean.getBoolean("org.graalvm.launcher.shell");
 
     static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
+
+    // Temporary to help languages transition, see GR-13740
+    private static final boolean CHECK_EXPERIMENTAL_OPTIONS = Boolean.parseBoolean(System.getenv("GRAALVM_CHECK_EXPERIMENTAL_OPTIONS"));
 
     private Engine tempEngine;
 
@@ -779,7 +782,7 @@ public abstract class Launcher {
                 if (descriptor.isDeprecated()) {
                     warn("Option '" + descriptor.getName() + "' is deprecated and might be removed from future versions.");
                 }
-                if (!allowExperimentalOptions() && descriptor.getStability() == OptionStability.EXPERIMENTAL) {
+                if (CHECK_EXPERIMENTAL_OPTIONS && !allowExperimentalOptions() && descriptor.getStability() == OptionStability.EXPERIMENTAL) {
                     throw abort(String.format("Option '%s' is experimental and must be enabled via '--experimental-options'%n" +
                                     "Do not use experimental options in production environments.", arg));
                 }
@@ -1575,7 +1578,19 @@ public abstract class Launcher {
             for (String arg : command) {
                 argv[i++] = arg;
             }
-            ProcessProperties.exec(executable, argv);
+            if (execv(executable.toString(), argv) != 0) {
+                int errno = NativeInterface.errno();
+                StringBuilder sb = formatExec(executable, command);
+                sb.append(" failed! ").append(CTypeConversion.toJavaString(NativeInterface.strerror(errno)));
+                throw abort(sb.toString());
+            }
+        }
+
+        private int execv(String executable, String[] argv) {
+            try (CTypeConversion.CCharPointerHolder pathHolder = CTypeConversion.toCString(executable);
+                            CTypeConversion.CCharPointerPointerHolder argvHolder = CTypeConversion.toCStrings(argv)) {
+                return NativeInterface.execv(pathHolder.get(), argvHolder.get());
+            }
         }
 
         private StringBuilder formatExec(Path executable, List<String> command) {
