@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -75,6 +75,7 @@ import jdk.vm.ci.code.site.ConstantReference;
 import jdk.vm.ci.code.site.DataSectionReference;
 import jdk.vm.ci.code.site.Infopoint;
 import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.code.site.Mark;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.InvokeTarget;
 import jdk.vm.ci.meta.JavaConstant;
@@ -189,12 +190,6 @@ public class CompilationResultBuilder {
         return !uncompressedNullRegister.equals(Register.None) && JavaConstant.NULL_POINTER.equals(nullConstant);
     }
 
-    /**
-     * This flag indicates whether the assembler should emit a separate deoptimization handler for
-     * method handle invocations.
-     */
-    private boolean needsMHDeoptHandler = false;
-
     public CompilationResultBuilder(CodeCacheProvider codeCache,
                     ForeignCallsProvider foreignCalls,
                     FrameMap frameMap,
@@ -252,8 +247,8 @@ public class CompilationResultBuilder {
         compilationResult.setMaxInterpreterFrameSize(maxInterpreterFrameSize);
     }
 
-    public CompilationResult.CodeMark recordMark(CompilationResult.MarkId id) {
-        CompilationResult.CodeMark mark = compilationResult.recordMark(asm.position(), id);
+    public Mark recordMark(Object id) {
+        Mark mark = compilationResult.recordMark(asm.position(), id);
         if (currentCallContext != null) {
             currentCallContext.recordMark(mark);
         }
@@ -705,7 +700,7 @@ public class CompilationResultBuilder {
     private CallContext currentCallContext;
 
     public final class CallContext implements AutoCloseable {
-        private CompilationResult.CodeMark mark;
+        private Mark mark;
         private Call call;
 
         @Override
@@ -719,7 +714,7 @@ public class CompilationResultBuilder {
             this.call = c;
         }
 
-        void recordMark(CompilationResult.CodeMark m) {
+        void recordMark(Mark m) {
             assert this.mark == null : "Recording mark twice";
             this.mark = m;
         }
@@ -734,13 +729,5 @@ public class CompilationResultBuilder {
             currentCallContext = new CallContext();
         }
         return currentCallContext;
-    }
-
-    public void setNeedsMHDeoptHandler() {
-        this.needsMHDeoptHandler = true;
-    }
-
-    public boolean needsMHDeoptHandler() {
-        return needsMHDeoptHandler;
     }
 }

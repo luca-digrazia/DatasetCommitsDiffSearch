@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,8 +24,8 @@
  */
 package org.graalvm.compiler.hotspot.amd64;
 
-import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
+import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
@@ -66,11 +68,14 @@ final class AMD64IndirectCallOp extends IndirectCallOp {
     }
 
     @Override
+    @SuppressWarnings("try")
     public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-        crb.recordMark(config.MARKID_INLINE_INVOKE);
-        Register callReg = asRegister(targetAddress);
-        assert !callReg.equals(METHOD);
-        AMD64Call.indirectCall(crb, masm, callReg, callTarget, state);
+        try (CompilationResultBuilder.CallContext callContext = crb.openCallContext(false)) {
+            crb.recordMark(config.MARKID_INLINE_INVOKE);
+            Register callReg = asRegister(targetAddress);
+            assert !callReg.equals(METHOD);
+            AMD64Call.indirectCall(crb, masm, callReg, callTarget, state);
+        }
     }
 
     @Override
