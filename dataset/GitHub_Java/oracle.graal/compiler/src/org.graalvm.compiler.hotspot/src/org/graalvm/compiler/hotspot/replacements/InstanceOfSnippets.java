@@ -80,6 +80,7 @@ import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaTypeProfile;
 import jdk.vm.ci.meta.TriState;
@@ -227,8 +228,14 @@ public class InstanceOfSnippets implements Snippets {
     }
 
     @Snippet
-    public static Object isAssignableFrom(@NonNullParameter Class<?> thisClassNonNull, @NonNullParameter Class<?> otherClassNonNull, Object trueValue, Object falseValue,
-                    @ConstantParameter Counters counters) {
+    public static Object isAssignableFrom(@NonNullParameter Class<?> thisClassNonNull, Class<?> otherClass, Object trueValue, Object falseValue, @ConstantParameter Counters counters) {
+        if (BranchProbabilityNode.probability(BranchProbabilityNode.DEOPT_PROBABILITY, otherClass == null)) {
+            DeoptimizeNode.deopt(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
+            return false;
+        }
+        GuardingNode anchorNode = SnippetAnchorNode.anchor();
+        Class<?> otherClassNonNull = PiNode.piCastNonNullClass(otherClass, anchorNode);
+
         if (BranchProbabilityNode.probability(BranchProbabilityNode.NOT_LIKELY_PROBABILITY, thisClassNonNull == otherClassNonNull)) {
             return trueValue;
         }
@@ -335,9 +342,8 @@ public class InstanceOfSnippets implements Snippets {
                 ClassIsAssignableFromNode isAssignable = (ClassIsAssignableFromNode) replacer.instanceOf;
                 Arguments args = new Arguments(isAssignableFrom, isAssignable.graph().getGuardsStage(), tool.getLoweringStage());
                 assert ((ObjectStamp) isAssignable.getThisClass().stamp(NodeView.DEFAULT)).nonNull();
-                assert ((ObjectStamp) isAssignable.getOtherClass().stamp(NodeView.DEFAULT)).nonNull();
                 args.add("thisClassNonNull", isAssignable.getThisClass());
-                args.add("otherClassNonNull", isAssignable.getOtherClass());
+                args.add("otherClass", isAssignable.getOtherClass());
                 args.add("trueValue", replacer.trueValue);
                 args.add("falseValue", replacer.falseValue);
                 args.addConst("counters", counters);
