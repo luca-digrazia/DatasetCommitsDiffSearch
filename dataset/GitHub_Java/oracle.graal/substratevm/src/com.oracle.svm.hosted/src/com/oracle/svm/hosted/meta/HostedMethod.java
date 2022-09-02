@@ -65,8 +65,6 @@ import jdk.vm.ci.meta.SpeculationLog;
 
 public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvider, JavaMethodContext, Comparable<HostedMethod>, OriginalMethodProvider {
 
-    public static final String METHOD_NAME_DEOPT_SUFFIX = "**";
-
     public final AnalysisMethod wrapped;
 
     private final HostedType holder;
@@ -246,7 +244,7 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     @Override
     public String getName() {
         if (compilationInfo.isDeoptTarget()) {
-            return wrapped.getName() + METHOD_NAME_DEOPT_SUFFIX;
+            return wrapped.getName() + "**";
         }
         return wrapped.getName();
     }
