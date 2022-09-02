@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,7 +43,7 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValueNodeUtil;
 import org.graalvm.compiler.nodes.memory.MemoryAccess;
-import org.graalvm.compiler.nodes.memory.MemoryKill;
+import org.graalvm.compiler.nodes.memory.MemoryNode;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
@@ -62,7 +62,7 @@ import jdk.vm.ci.meta.Value;
 /**
  * Compares two arrays with the same length.
  */
-@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN, size = NodeSize.SIZE_128, allowedUsageTypes = {Memory})
+@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN, size = NodeSize.SIZE_128)
 public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLowerable, Canonicalizable, Virtualizable, MemoryAccess {
 
     public static final NodeClass<ArrayEqualsNode> TYPE = NodeClass.create(ArrayEqualsNode.class);
@@ -78,7 +78,7 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
     /** Length of both arrays. */
     @Input ValueNode length;
 
-    @OptionalInput(Memory) MemoryKill lastLocationAccess;
+    @OptionalInput(Memory) MemoryNode lastLocationAccess;
 
     public ArrayEqualsNode(ValueNode array1, ValueNode array2, ValueNode length, @ConstantNodeParameter JavaKind kind) {
         super(TYPE, StampFactory.forKind(JavaKind.Boolean));
@@ -118,13 +118,8 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
             ConstantNode c1 = (ConstantNode) a1;
             ConstantNode c2 = (ConstantNode) a2;
             if (c1.getStableDimension() >= 1 && c2.getStableDimension() >= 1) {
-                ConstantReflectionProvider constantReflection = tool.getConstantReflection();
-                Integer c1Length = constantReflection.readArrayLength(c1.asJavaConstant());
-                Integer c2Length = constantReflection.readArrayLength(c2.asJavaConstant());
-                if (c1Length != null && c2Length != null && c1Length.equals(c2Length)) {
-                    boolean ret = arrayEquals(constantReflection, c1.asJavaConstant(), c2.asJavaConstant(), length.asJavaConstant().asInt());
-                    return ConstantNode.forBoolean(ret);
-                }
+                boolean ret = arrayEquals(tool.getConstantReflection(), c1.asJavaConstant(), c2.asJavaConstant(), length.asJavaConstant().asInt());
+                return ConstantNode.forBoolean(ret);
             }
         }
         return this;
@@ -237,7 +232,12 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
                 return;
             }
         }
-        Value result = gen.getLIRGeneratorTool().emitArrayEquals(kind, gen.operand(array1), gen.operand(array2), gen.operand(length), false);
+
+        int constantLength = -1;
+        if (length.isConstant()) {
+            constantLength = length.asJavaConstant().asInt();
+        }
+        Value result = gen.getLIRGeneratorTool().emitArrayEquals(kind, gen.operand(array1), gen.operand(array2), gen.operand(length), constantLength, false);
         gen.setResult(this, result);
     }
 
@@ -247,14 +247,13 @@ public final class ArrayEqualsNode extends FixedWithNextNode implements LIRLower
     }
 
     @Override
-    public MemoryKill getLastLocationAccess() {
+    public MemoryNode getLastLocationAccess() {
         return lastLocationAccess;
     }
 
     @Override
-    public void setLastLocationAccess(MemoryKill lla) {
+    public void setLastLocationAccess(MemoryNode lla) {
         updateUsages(ValueNodeUtil.asNode(lastLocationAccess), ValueNodeUtil.asNode(lla));
         lastLocationAccess = lla;
     }
-
 }
