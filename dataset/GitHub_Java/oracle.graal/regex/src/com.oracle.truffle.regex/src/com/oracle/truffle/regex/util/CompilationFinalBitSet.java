@@ -1,42 +1,54 @@
 /*
- * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.regex.util;
-
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.regex.tregex.nfa.NFAStateTransition;
-import com.oracle.truffle.regex.tregex.util.DebugUtil;
 
 import java.util.Arrays;
 import java.util.PrimitiveIterator;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /**
  * Immutable Bit Set implementation, with a lot of code shamelessly ripped from
@@ -44,32 +56,73 @@ import java.util.stream.StreamSupport;
  */
 public class CompilationFinalBitSet implements Iterable<Integer> {
 
-    private static final int BYTE_RANGE = 256;
+    private static final CompilationFinalBitSet[] STATIC_INSTANCES = new CompilationFinalBitSet[16];
+
+    static {
+        for (int i = 0; i < STATIC_INSTANCES.length; i++) {
+            STATIC_INSTANCES[i] = new CompilationFinalBitSet(new long[]{i});
+        }
+    }
 
     private static int wordIndex(int i) {
         return i >> 6;
     }
 
     public static CompilationFinalBitSet valueOf(int... values) {
-        CompilationFinalBitSet bs = new CompilationFinalBitSet(BYTE_RANGE);
+        assert values.length > 0;
+        CompilationFinalBitSet bs = new CompilationFinalBitSet(values[values.length - 1]);
         for (int v : values) {
             bs.set(v);
         }
         return bs;
     }
 
+    public static long[] createBitSetArray(int nbits) {
+        return new long[wordIndex(nbits - 1) + 1];
+    }
+
     @CompilationFinal(dimensions = 1) private long[] words;
 
     public CompilationFinalBitSet(int nbits) {
-        this.words = new long[wordIndex(nbits - 1) + 1];
+        this.words = createBitSetArray(nbits);
     }
 
-    public CompilationFinalBitSet(long[] words) {
+    private CompilationFinalBitSet(long[] words) {
         this.words = words;
     }
 
     private CompilationFinalBitSet(CompilationFinalBitSet copy) {
         this.words = Arrays.copyOf(copy.words, copy.words.length);
+    }
+
+    public static CompilationFinalBitSet getEmptyInstance() {
+        return STATIC_INSTANCES[0];
+    }
+
+    /**
+     * Static shared instances for deduplication of common immutable bit sets.
+     *
+     * @param i The integer value of the static bit set's content, i.e. 0 is the empty bit set, 1
+     *            has words <code>{0x0..., 0x1}</code>, 2 has <code>{0x0..., 0x2}</code>, and so on.
+     */
+    public static CompilationFinalBitSet getStaticInstance(int i) {
+        return STATIC_INSTANCES[i];
+    }
+
+    public static int getNumberOfStaticInstances() {
+        return STATIC_INSTANCES.length;
+    }
+
+    public int getStaticCacheKey() {
+        for (int i = 1; i < words.length; i++) {
+            if (words[i] != 0) {
+                return -1;
+            }
+        }
+        if (words.length == 0) {
+            return 0;
+        }
+        return 0 <= words[0] && words[0] < STATIC_INSTANCES.length ? (int) words[0] : -1;
     }
 
     public CompilationFinalBitSet copy() {
@@ -114,9 +167,20 @@ public class CompilationFinalBitSet implements Iterable<Integer> {
     }
 
     public void setRange(int lo, int hi) {
-        for (int i = lo; i <= hi; i++) {
-            set(i);
+        int wordIndexLo = wordIndex(lo);
+        int wordIndexHi = wordIndex(hi);
+        ensureCapacity(wordIndexHi + 1);
+        long rangeLo = (~0L) << lo;
+        long rangeHi = (~0L) >>> (63 - (hi & 0x3f));
+        if (wordIndexLo == wordIndexHi) {
+            words[wordIndexLo] |= rangeLo & rangeHi;
+            return;
         }
+        words[wordIndexLo] |= rangeLo;
+        for (int i = wordIndexLo + 1; i < wordIndexHi; i++) {
+            words[i] = ~0L;
+        }
+        words[wordIndexHi] |= rangeHi;
     }
 
     public void clear() {
@@ -167,9 +231,47 @@ public class CompilationFinalBitSet implements Iterable<Integer> {
         return true;
     }
 
+    public boolean contains(CompilationFinalBitSet other) {
+        for (int i = 0; i < other.words.length; i++) {
+            if (i >= words.length) {
+                if (other.words[i] != 0) {
+                    return false;
+                }
+            } else if ((words[i] & other.words[i]) != other.words[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     public boolean equals(Object obj) {
-        return obj == this || (obj instanceof CompilationFinalBitSet && Arrays.equals(words, ((CompilationFinalBitSet) obj).words));
+        if (obj == this) {
+            return true;
+        }
+        if (!(obj instanceof CompilationFinalBitSet)) {
+            return false;
+        }
+        CompilationFinalBitSet o = (CompilationFinalBitSet) obj;
+        if (words.length == o.words.length) {
+            return Arrays.equals(words, o.words);
+        }
+        for (int i = 0; i < Math.min(words.length, o.words.length); i++) {
+            if (words[i] != o.words[i]) {
+                return false;
+            }
+        }
+        for (int i = words.length; i < o.words.length; i++) {
+            if (words[i] != 0) {
+                return false;
+            }
+        }
+        for (int i = o.words.length; i < words.length; i++) {
+            if (o.words[i] != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -194,50 +296,27 @@ public class CompilationFinalBitSet implements Iterable<Integer> {
         private int last;
 
         private CompilationFinalBitSetIterator() {
-            curWord = words[0];
+            if (hasNext()) {
+                curWord = words[0];
+            }
             findNext();
         }
 
         private void findNext() {
-            while (true) {
-                if ((curWord & 0xffff_ffffL) == 0) {
-                    curWord >>>= 32;
-                    bitIndex += 32;
-                }
-                if ((curWord & 0xffffL) == 0) {
-                    curWord >>>= 16;
-                    bitIndex += 16;
-                }
-                if ((curWord & 0xffL) == 0) {
-                    curWord >>>= 8;
-                    bitIndex += 8;
-                }
-                if ((curWord & 0xfL) == 0) {
-                    curWord >>>= 4;
-                    bitIndex += 4;
-                }
-                if ((curWord & 0x3L) == 0) {
-                    curWord >>>= 2;
-                    bitIndex += 2;
-                }
-                if ((curWord & 0x1L) == 0) {
-                    curWord >>>= 1;
-                    bitIndex += 1;
-                }
-                if ((curWord & 0x1L) == 1) {
-                    // Found the next bit
-                    return;
+            while (curWord == 0) {
+                wordIndex++;
+                bitIndex = 0;
+                if (hasNext()) {
+                    curWord = words[wordIndex];
                 } else {
-                    wordIndex++;
-                    bitIndex = 0;
-                    if (wordIndex < words.length) {
-                        curWord = words[wordIndex];
-                    } else {
-                        // Reached the end
-                        return;
-                    }
+                    return;
                 }
             }
+            assert hasNext();
+            assert curWord != 0;
+            int trailingZeros = Long.numberOfTrailingZeros(curWord);
+            curWord >>>= trailingZeros;
+            bitIndex += trailingZeros;
         }
 
         @Override
@@ -276,24 +355,32 @@ public class CompilationFinalBitSet implements Iterable<Integer> {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("[ ");
-        int b = 0;
-        while (b < BYTE_RANGE) {
-            if (get(b)) {
-                sb.append(DebugUtil.charToString(b));
-                int seq = 0;
-                while (b + 1 < BYTE_RANGE && get(b + 1)) {
-                    b++;
-                    seq++;
-                }
-                if (seq > 0) { // ABC -> [A-C]
-                    sb.append('-');
-                    sb.append(DebugUtil.charToString(b));
-                }
-                sb.append(" ");
+        int last = -2;
+        int rangeBegin = -2;
+        for (int b : this) {
+            if (b != last + 1) {
+                appendRange(sb, rangeBegin, last);
+                rangeBegin = b;
             }
-            b++;
+            last = b;
         }
+        appendRange(sb, rangeBegin, last);
         sb.append(']');
         return sb.toString();
+    }
+
+    @TruffleBoundary
+    private static void appendRange(StringBuilder sb, int rangeBegin, int last) {
+        if (rangeBegin >= 0 && rangeBegin < last) {
+            sb.append(String.format("%02x", rangeBegin));
+            if (rangeBegin + 1 < last) {
+                sb.append("-");
+            } else {
+                sb.append(" ");
+            }
+        }
+        if (last >= 0) {
+            sb.append(String.format("%02x ", last));
+        }
     }
 }
