@@ -25,18 +25,15 @@
 package com.oracle.svm.core.c.libc;
 
 // Checkstyle: stop
-
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Method;
+// Checkstyle: resume
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 
-import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.util.GuardedAnnotationAccess;
-
-// Checkstyle: resume
 
 public interface LibCBase {
 
@@ -50,12 +47,6 @@ public interface LibCBase {
         LibCBase currentLibC = ImageSingletons.lookup(LibCBase.class);
         Libc targetLibC = GuardedAnnotationAccess.getAnnotation(element, Libc.class);
         return targetLibC != null && Arrays.asList(targetLibC.value()).contains(currentLibC.getClass());
-    }
-
-    @Fold
-    static boolean targetLibCIs(Class<? extends LibCBase> libCBase) {
-        LibCBase currentLibC = ImageSingletons.lookup(LibCBase.class);
-        return currentLibC.getClass() == libCBase;
     }
 
     /**
@@ -105,5 +96,7 @@ public interface LibCBase {
         return ImageSingletons.lookup(LibCBase.class);
     }
 
-    boolean hasIsolatedNamespaces();
+    default boolean isLibC(Class<? extends LibCBase> libC) {
+        return getClass().equals(libC);
+    }
 }

@@ -44,7 +44,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.debug.DebugContext;
@@ -107,7 +106,6 @@ public final class NativeLibraries {
     private final LinkedHashSet<CLibrary> annotated;
     private final List<String> libraries;
     private final DependencyGraph dependencyGraph;
-    private final List<String> jniStaticLibraries;
     private final LinkedHashSet<String> libraryPaths;
 
     private final List<CInterfaceError> errors;
@@ -160,11 +158,14 @@ public final class NativeLibraries {
             allDependencies = new ConcurrentHashMap<>();
         }
 
-        public void add(String library, Collection<String> dependencies) {
+        public void add(String library, String... dependencies) {
             UserError.guarantee(library != null, "The library name must be not null and not empty");
 
             Dependency libraryDependency = putWhenAbsent(library, new Dependency(library, new HashSet<>()));
             Set<Dependency> collectedDependencies = libraryDependency.getDependencies();
+            if (dependencies == null) {
+                return;
+            }
 
             for (String dependency : dependencies) {
                 collectedDependencies.add(putWhenAbsent(
@@ -253,7 +254,6 @@ public final class NativeLibraries {
          */
         libraries = Collections.synchronizedList(new ArrayList<>());
         dependencyGraph = new DependencyGraph();
-        jniStaticLibraries = Collections.synchronizedList(new ArrayList<>());
 
         libraryPaths = initCLibraryPath();
 
@@ -373,20 +373,16 @@ public final class NativeLibraries {
         annotated.add(library);
     }
 
-    public void addStaticJniLibrary(String library, String... dependencies) {
-        jniStaticLibraries.add(library);
-        List<String> allDeps = new ArrayList<>(Arrays.asList(dependencies));
-        /* "jvm" is a basic dependence for static JNI libs */
-        allDeps.add("jvm");
-        dependencyGraph.add(library, allDeps);
+    public void addLibrary(String library, boolean requireStatic) {
+        addLibrary(library, requireStatic, null);
     }
 
-    public void addDynamicNonJniLibrary(String library) {
-        libraries.add(library);
-    }
-
-    public void addStaticNonJniLibrary(String library, String... dependencies) {
-        dependencyGraph.add(library, Arrays.asList(dependencies));
+    public void addLibrary(String library, boolean requireStatic, String[] dependencies) {
+        if (requireStatic) {
+            dependencyGraph.add(library, dependencies);
+        } else {
+            libraries.add(library);
+        }
     }
 
     public Collection<String> getLibraries() {
@@ -419,8 +415,9 @@ public final class NativeLibraries {
     private Map<Path, Path> getAllStaticLibs() {
         Map<Path, Path> allStaticLibs = new LinkedHashMap<>();
         for (String libraryPath : getLibraryPaths()) {
-            try (Stream<Path> paths = Files.list(Paths.get(libraryPath))) {
-                paths.filter(Files::isRegularFile)
+            try {
+                Files.list(Paths.get(libraryPath))
+                                .filter(Files::isRegularFile)
                                 .filter(path -> path.getFileName().toString().endsWith(libSuffix))
                                 .forEachOrdered(candidate -> allStaticLibs.put(candidate.getFileName(), candidate));
             } catch (IOException e) {
@@ -561,17 +558,9 @@ public final class NativeLibraries {
             return false;
         }
         for (CLibrary lib : annotated) {
-            if (lib.requireStatic()) {
-                addStaticNonJniLibrary(lib.value(), lib.dependsOn());
-            } else {
-                addDynamicNonJniLibrary(lib.value());
-            }
+            addLibrary(lib.value(), lib.requireStatic(), lib.dependsOn());
         }
         annotated.clear();
         return true;
-    }
-
-    public List<String> getJniStaticLibraries() {
-        return jniStaticLibraries;
     }
 }

@@ -28,7 +28,6 @@ import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -48,7 +47,6 @@ import com.oracle.svm.hosted.c.info.NativeCodeInfo;
 import com.oracle.svm.hosted.c.query.QueryResultParser;
 import com.oracle.svm.hosted.c.query.RawStructureLayoutPlanner;
 import com.oracle.svm.hosted.c.query.SizeAndSignednessVerifier;
-import org.graalvm.nativeimage.Platform;
 
 /**
  * Processes native library information for one C Library header file (one { NativeCodeContext }).
@@ -59,7 +57,6 @@ public class CAnnotationProcessor {
     private final NativeLibraries nativeLibs;
     private CCompilerInvoker compilerInvoker;
     private Path tempDirectory;
-    private Path queryCodeDirectory;
 
     private NativeCodeInfo codeInfo;
     private QueryCodeWriter writer;
@@ -67,19 +64,12 @@ public class CAnnotationProcessor {
     public CAnnotationProcessor(NativeLibraries nativeLibs, NativeCodeContext codeCtx) {
         this.nativeLibs = nativeLibs;
         this.codeCtx = codeCtx;
-
-        if (ImageSingletons.contains(CCompilerInvoker.class)) {
-            this.compilerInvoker = ImageSingletons.lookup(CCompilerInvoker.class);
-            this.queryCodeDirectory = compilerInvoker.tempDirectory;
-            this.tempDirectory = compilerInvoker.tempDirectory;
-        } else {
+        if (!ImageSingletons.contains(CCompilerInvoker.class)) {
             assert CAnnotationProcessorCache.Options.UseCAPCache.getValue();
+            return;
         }
-
-        if (CAnnotationProcessorCache.Options.QueryCodeDir.hasBeenSet()) {
-            String queryCodeDir = CAnnotationProcessorCache.Options.QueryCodeDir.getValue();
-            this.queryCodeDirectory = FileSystems.getDefault().getPath(queryCodeDir).toAbsolutePath();
-        }
+        this.compilerInvoker = ImageSingletons.lookup(CCompilerInvoker.class);
+        this.tempDirectory = compilerInvoker.tempDirectory;
     }
 
     public NativeCodeInfo process(CAnnotationProcessorCache cache) {
@@ -96,17 +86,12 @@ public class CAnnotationProcessor {
              * Generate C source file (the "Query") that will produce the information needed (e.g.,
              * size of struct/union and offsets to their fields, value of enum/macros etc.).
              */
-            writer = new QueryCodeWriter(queryCodeDirectory);
+            writer = new QueryCodeWriter(tempDirectory);
             Path queryFile = writer.write(codeInfo);
             if (nativeLibs.getErrors().size() > 0) {
                 return codeInfo;
             }
             assert Files.exists(queryFile);
-
-            if (CAnnotationProcessorCache.Options.ExitAfterQueryCodeGeneration.getValue()) {
-                // Only output query code and exit
-                return codeInfo;
-            }
 
             Path binary = compileQueryCode(queryFile);
             if (nativeLibs.getErrors().size() > 0) {
@@ -154,12 +139,10 @@ public class CAnnotationProcessor {
             throw VMError.shouldNotReachHere(queryFile + " invalid queryFile");
         }
         String fileName = fileNamePath.toString();
-        Path binary = tempDirectory.resolve(compilerInvoker.asExecutableName(fileName.substring(0, fileName.lastIndexOf("."))));
+        Path binary = queryFile.resolveSibling(compilerInvoker.asExecutableName(fileName.substring(0, fileName.lastIndexOf("."))));
         ArrayList<String> options = new ArrayList<>();
         options.addAll(codeCtx.getDirectives().getOptions());
-        if (Platform.includedIn(Platform.LINUX.class)) {
-            options.addAll(LibCBase.singleton().getAdditionalQueryCodeCompilerOptions());
-        }
+        options.addAll(LibCBase.singleton().getAdditionalQueryCodeCompilerOptions());
         compilerInvoker.compileAndParseError(options, queryFile, binary, this::reportCompilerError, nativeLibs.debug);
         return binary;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -63,13 +63,9 @@ public final class PosixTruffleNFIFeature implements Feature {
 
 final class PosixTruffleNFISupport extends TruffleNFISupport {
 
-    private static final int ISOLATED_NAMESPACE_FLAG = 0x10000;
-    private static final int ISOLATED_NAMESPACE_NOT_SUPPORTED_FLAG = 0;
-
-    static int isolatedNamespaceFlag;
+    static final int ISOLATED_NAMESPACE_FLAG = 0x10000;
 
     static void initialize() {
-        isolatedNamespaceFlag = LibCBase.singleton().hasIsolatedNamespaces() ? ISOLATED_NAMESPACE_FLAG : ISOLATED_NAMESPACE_NOT_SUPPORTED_FLAG;
         ImageSingletons.add(TruffleNFISupport.class, new PosixTruffleNFISupport());
     }
 
@@ -103,7 +99,7 @@ final class PosixTruffleNFISupport extends TruffleNFISupport {
      * A single linking namespace is created lazily and registered on the NFI context instance.
      */
     private static PointerBase loadLibraryInNamespace(long nativeContext, String name, int mode) {
-        assert (mode & isolatedNamespaceFlag) == 0;
+        assert (mode & ISOLATED_NAMESPACE_FLAG) == 0;
         Target_com_oracle_truffle_nfi_impl_NFIContextLinux context = //
                         KnownIntrinsics.convertUnknownValue(getContext(nativeContext), Target_com_oracle_truffle_nfi_impl_NFIContextLinux.class);
 
@@ -142,8 +138,8 @@ final class PosixTruffleNFISupport extends TruffleNFISupport {
     @Override
     protected long loadLibraryImpl(long nativeContext, String name, int flags) {
         PointerBase handle;
-        if (Platform.includedIn(Platform.LINUX.class) && LibCBase.targetLibCIs(GLibc.class) && (flags & isolatedNamespaceFlag) != 0) {
-            handle = loadLibraryInNamespace(nativeContext, name, flags & ~isolatedNamespaceFlag);
+        if (Platform.includedIn(Platform.LINUX.class) && (flags & ISOLATED_NAMESPACE_FLAG) != 0 && LibCBase.singleton().isLibC(GLibc.class)) {
+            handle = loadLibraryInNamespace(nativeContext, name, flags & ~ISOLATED_NAMESPACE_FLAG);
         } else {
             handle = PosixUtils.dlopen(name, flags);
         }

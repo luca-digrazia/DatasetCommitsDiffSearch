@@ -254,7 +254,6 @@ import com.oracle.svm.hosted.meta.UniverseBuilder;
 import com.oracle.svm.hosted.option.HostedOptionProvider;
 import com.oracle.svm.hosted.phases.CInterfaceInvocationPlugin;
 import com.oracle.svm.hosted.phases.ConstantFoldLoadFieldPlugin;
-import com.oracle.svm.hosted.phases.EarlyConstantFoldLoadFieldPlugin;
 import com.oracle.svm.hosted.phases.InjectedAccessorsPlugin;
 import com.oracle.svm.hosted.phases.IntrinsifyMethodHandlesInvocationPlugin;
 import com.oracle.svm.hosted.phases.SubstrateClassInitializationPlugin;
@@ -680,7 +679,9 @@ public class NativeImageGenerator {
                 bigbang.getHostVM().getClassInitializationSupport().setConfigurationSealed(true);
             }
 
-            try (StopTimer t = bigbang.analysisTimer.start()) {
+            try (StopTimer t = new Timer(imageName, "analysis").start()) {
+
+                Timer processFeaturesTimer = new Timer(imageName, "(features)", false);
 
                 /*
                  * Iterate until analysis reaches a fixpoint.
@@ -709,7 +710,7 @@ public class NativeImageGenerator {
                         /*
                          * Allow features to change the universe.
                          */
-                        try (StopTimer t2 = bigbang.processFeaturesTimer.start()) {
+                        try (StopTimer t2 = processFeaturesTimer.start()) {
                             int numTypes = aUniverse.getTypes().size();
                             int numMethods = aUniverse.getMethods().size();
                             int numFields = aUniverse.getFields().size();
@@ -742,7 +743,7 @@ public class NativeImageGenerator {
 
                 bigbang.typeFlowTimer.print();
                 bigbang.checkObjectsTimer.print();
-                bigbang.processFeaturesTimer.print();
+                processFeaturesTimer.print();
 
                 /* report the unsupported features by throwing UnsupportedFeatureException */
                 bigbang.getUnsupportedFeatures().report(bigbang);
@@ -1104,7 +1105,6 @@ public class NativeImageGenerator {
         plugins.appendNodePlugin(new IntrinsifyMethodHandlesInvocationPlugin(analysis, providers, aUniverse, hUniverse));
         plugins.appendNodePlugin(new DeletedFieldsPlugin());
         plugins.appendNodePlugin(new InjectedAccessorsPlugin());
-        plugins.appendNodePlugin(new EarlyConstantFoldLoadFieldPlugin(providers.getMetaAccess()));
         plugins.appendNodePlugin(new ConstantFoldLoadFieldPlugin(classInitializationSupport));
         plugins.appendNodePlugin(new CInterfaceInvocationPlugin(providers.getMetaAccess(), providers.getWordTypes(), nativeLibs));
         plugins.appendNodePlugin(new LocalizationFeature.CharsetNodePlugin());
