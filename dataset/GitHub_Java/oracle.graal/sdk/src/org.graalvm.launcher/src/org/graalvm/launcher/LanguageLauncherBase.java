@@ -59,8 +59,8 @@ import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.PolyglotException;
 
 /**
- * Base implementation for polyglot-aware languages and tools. Prints additional language-related
- * help items, prints installed engine's options.
+ * Base implementation for polyglot-aware languages a tools. Prints additional language-related help
+ * items, prints installed engine's options.
  */
 public abstract class LanguageLauncherBase extends Launcher {
     private static Engine tempEngine;
@@ -191,10 +191,7 @@ public abstract class LanguageLauncherBase extends Launcher {
      */
     protected void printPolyglotVersions() {
         Engine engine = getTempEngine();
-        String mode = isAOT() ? "Native" : "JVM";
-        println(engine.getImplementationName() + " " + mode + " Polyglot Engine Version " + engine.getVersion());
-        println("Java Version " + System.getProperty("java.version"));
-        println("Java VM Version " + System.getProperty("java.vm.version"));
+        println("GraalVM Polyglot Engine Version " + engine.getVersion());
         Path graalVMHome = Engine.findHome();
         if (graalVMHome != null) {
             println("GraalVM Home " + graalVMHome);

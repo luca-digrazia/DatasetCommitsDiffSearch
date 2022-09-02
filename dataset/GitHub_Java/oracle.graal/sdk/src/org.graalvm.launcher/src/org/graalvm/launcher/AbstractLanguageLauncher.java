@@ -96,7 +96,7 @@ public abstract class AbstractLanguageLauncher extends LanguageLauncherBase {
 
         if (isAOT() && doNativeSetup && !IS_LIBPOLYGLOT) {
             assert nativeAccess != null;
-            maybeNativeExec(args, false, polyglotOptions);
+            nativeAccess.maybeExec(args, false, polyglotOptions, getDefaultVMType());
         }
 
         parseUnrecognizedOptions(getLanguageId(), polyglotOptions, unrecognizedArgs);
@@ -212,8 +212,7 @@ public abstract class AbstractLanguageLauncher extends LanguageLauncherBase {
 
     /**
      * The return value specifies what languages should be available by default when not using
-     * --polyglot. Note that TruffleLanguage.Registration#dependentLanguages() should be preferred
-     * in most cases.
+     * polyglot. E.g. Ruby needs llvm as well.
      *
      * @return an array of required language ids
      */
