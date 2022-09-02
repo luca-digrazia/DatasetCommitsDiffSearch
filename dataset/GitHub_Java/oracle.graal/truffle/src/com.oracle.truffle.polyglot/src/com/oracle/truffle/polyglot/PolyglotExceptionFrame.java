@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,6 +44,7 @@ import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractStackFrameImpl;
+import org.graalvm.polyglot.io.FileSystem;
 
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleStackTraceElement;
@@ -57,22 +58,18 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
     private final SourceSection sourceLocation;
     private final String rootName;
     private final boolean host;
+    private final PolyglotExceptionImpl source;
     private StackTraceElement stackTrace;
-    private final String formattedSource;
 
     private PolyglotExceptionFrame(PolyglotExceptionImpl source, PolyglotLanguage language,
                     SourceSection sourceLocation, String rootName, boolean isHost, StackTraceElement stackTrace) {
-        super(source.polyglot);
+        super(source.getImpl());
         this.language = language;
         this.sourceLocation = sourceLocation;
         this.rootName = rootName;
         this.host = isHost;
         this.stackTrace = stackTrace;
-        if (!isHostFrame()) {
-            this.formattedSource = formatSource(sourceLocation, source.getFileSystemContext(language));
-        } else {
-            this.formattedSource = null;
-        }
+        this.source = source;
     }
 
     @Override
@@ -122,8 +119,7 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
         } else {
             b.append(rootName);
             b.append("(");
-            assert formattedSource != null;
-            b.append(formattedSource);
+            b.append(formatSource(sourceLocation, source.getFileSystem()));
             b.append(")");
         }
         return b.toString();
@@ -134,7 +130,7 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
             return null;
         }
         RootNode targetRoot = frame.getTarget().getRootNode();
-        if (targetRoot.isInternal() && !exception.showInternalStackFrames) {
+        if (targetRoot.isInternal()) {
             return null;
         }
 
@@ -143,31 +139,28 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
             return null;
         }
 
-        PolyglotEngineImpl engine = exception.engine;
-        PolyglotLanguage language = null;
-        SourceSection location = null;
+        PolyglotEngineImpl engine = exception.getEngine();
+        PolyglotLanguage language = engine.idToLanguage.get(info.getId());
         String rootName = targetRoot.getName();
-        if (engine != null) {
-            language = engine.idToLanguage.get(info.getId());
 
-            Node callNode = frame.getLocation();
-            if (callNode != null) {
-                com.oracle.truffle.api.source.SourceSection section = callNode.getEncapsulatingSourceSection();
-                if (section != null) {
-                    Source source = engine.getAPIAccess().newSource(language.getId(), section.getSource());
-                    location = engine.getAPIAccess().newSourceSection(source, section);
-                } else {
-                    location = null;
-                }
+        SourceSection location;
+        Node callNode = frame.getLocation();
+        if (callNode != null) {
+            com.oracle.truffle.api.source.SourceSection section = callNode.getEncapsulatingSourceSection();
+            if (section != null) {
+                Source source = engine.getAPIAccess().newSource(language.getId(), section.getSource());
+                location = engine.getAPIAccess().newSourceSection(source, section);
             } else {
-                location = first ? exception.getSourceLocation() : null;
+                location = null;
             }
+        } else {
+            location = first ? exception.getSourceLocation() : null;
         }
         return new PolyglotExceptionFrame(exception, language, location, rootName, false, null);
     }
 
     static PolyglotExceptionFrame createHost(PolyglotExceptionImpl exception, StackTraceElement hostStack) {
-        PolyglotLanguage language = exception.engine != null ? exception.engine.hostLanguage : null;
+        PolyglotLanguage language = exception.getEngine().hostLanguage;
 
         // source section for the host language is currently null
         // we should potentially in the future create a source section for the host language
@@ -186,7 +179,7 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
         return b.toString();
     }
 
-    private static String formatSource(SourceSection sourceSection, Object fileSystemContext) {
+    private static String formatSource(SourceSection sourceSection, FileSystem fs) {
         if (sourceSection == null) {
             return "Unknown";
         }
@@ -200,10 +193,10 @@ final class PolyglotExceptionFrame extends AbstractStackFrameImpl {
         if (path == null) {
             b.append(source.getName());
         } else {
-            if (fileSystemContext != null) {
+            if (fs != null) {
                 try {
-                    TruffleFile pathAbsolute = EngineAccessor.LANGUAGE.getTruffleFile(path, fileSystemContext);
-                    TruffleFile pathBase = EngineAccessor.LANGUAGE.getTruffleFile("", fileSystemContext).getAbsoluteFile();
+                    TruffleFile pathAbsolute = VMAccessor.LANGUAGE.getTruffleFile(fs, path);
+                    TruffleFile pathBase = VMAccessor.LANGUAGE.getTruffleFile(fs, "").getAbsoluteFile();
                     TruffleFile pathRelative = pathBase.relativize(pathAbsolute);
                     b.append(pathRelative.getPath());
                 } catch (IllegalArgumentException | UnsupportedOperationException | SecurityException e) {
