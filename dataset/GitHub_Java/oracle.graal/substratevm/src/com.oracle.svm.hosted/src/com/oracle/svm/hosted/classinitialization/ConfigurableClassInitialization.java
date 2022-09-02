@@ -54,12 +54,15 @@ import com.oracle.svm.hosted.c.GraalAccess;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
+import sun.misc.Unsafe;
 
 /**
  * The core class for deciding whether a class should be initialized during image building or class
  * initialization should be delayed to runtime.
  */
 public class ConfigurableClassInitialization implements ClassInitializationSupport {
+
+    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
 
     /**
      * Setup for class initialization: configured through features and command line input. It
@@ -104,7 +107,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     @Override
     public void setConfigurationSealed(boolean sealed) {
         configurationSealed = sealed;
-        if (configurationSealed && ClassInitializationOptions.PrintClassInitialization.getValue()) {
+        if (configurationSealed && ClassInitializationFeature.Options.PrintClassInitialization.getValue()) {
             List<ClassOrPackageConfig> allConfigs = classInitializationConfiguration.allConfigs();
             allConfigs.sort(Comparator.comparing(ClassOrPackageConfig::getName));
             String path = Paths.get(Paths.get(SubstrateOptions.Path.getValue()).toString(), "reports").toAbsolutePath().toString();
@@ -170,7 +173,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
      */
     private InitKind ensureClassInitialized(Class<?> clazz, boolean allowErrors) {
         try {
-            GraalUnsafeAccess.ensureClassInitialized(clazz);
+            UNSAFE.ensureClassInitialized(clazz);
             return InitKind.BUILD_TIME;
         } catch (NoClassDefFoundError ex) {
             if (NativeImageOptions.AllowIncompleteClasspath.getValue()) {
@@ -211,7 +214,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     }
 
     private static String instructionsToInitializeAtRuntime(Class<?> clazz) {
-        return "Use the option " + SubstrateOptionsParser.commandArgument(ClassInitializationOptions.ClassInitialization, clazz.getTypeName(), "initialize-at-run-time") +
+        return "Use the option " + SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization, clazz.getTypeName(), "initialize-at-run-time") +
                         " to explicitly request delayed initialization of this class.";
     }
 
@@ -263,7 +266,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         setSubclassesAsRunTime(clazz);
         checkEagerInitialization(clazz);
 
-        if (!GraalUnsafeAccess.shouldBeInitialized(clazz)) {
+        if (!UNSAFE.shouldBeInitialized(clazz)) {
             throw UserError.abort("The class %1$s has already been initialized; it is too late to register %1$s for build-time initialization (%2$s). %3$s",
                             clazz.getTypeName(), reason,
                             classInitializationErrorMessage(clazz, "Try avoiding this conflict by avoiding to initialize the class that caused initialization of " + clazz.getTypeName() +
@@ -314,7 +317,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
             if (containsLambdaMetaFactory) {
                 return clazz.getTypeName() + " was initialized through a lambda (https://github.com/oracle/graal/issues/1218). Try marking " + clazz.getTypeName() +
                                 " for build-time initialization with " + SubstrateOptionsParser.commandArgument(
-                                                ClassInitializationOptions.ClassInitialization, clazz.getTypeName(), "initialize-at-build-time") +
+                                                ClassInitializationFeature.Options.ClassInitialization, clazz.getTypeName(), "initialize-at-build-time") +
                                 ".";
             } else if (culprit != null) {
                 return culprit + " caused initialization of this class with the following trace: \n" + classInitializationTrace(clazz);
@@ -345,7 +348,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
             if (containsLambdaMetaFactory) {
                 return " Object was instantiated through a lambda (https://github.com/oracle/graal/issues/1218). Try marking " + obj.getClass().getTypeName() +
                                 " for build-time initialization with " + SubstrateOptionsParser.commandArgument(
-                                                ClassInitializationOptions.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-build-time") +
+                                                ClassInitializationFeature.Options.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-build-time") +
                                 ".";
             } else if (culprit != null) {
                 return " Object has been initialized by the " + culprit + " class initializer with a trace: \n " + getTraceString(instantiatedObjects.get(obj)) + ". " + action;
@@ -383,7 +386,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         checkEagerInitialization(clazz);
 
         try {
-            GraalUnsafeAccess.ensureClassInitialized(clazz);
+            UNSAFE.ensureClassInitialized(clazz);
         } catch (Throwable ex) {
             throw UserError.abort(ex, "Class initialization failed for %s. The class is requested for re-running (reason: %s)", clazz.getTypeName(), reason);
         }
@@ -509,7 +512,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
          */
         Set<Class<?>> illegalyInitialized = new HashSet<>();
         for (Map.Entry<Class<?>, InitKind> entry : classInitKinds.entrySet()) {
-            if (entry.getValue().isRunTime() && !GraalUnsafeAccess.shouldBeInitialized(entry.getKey())) {
+            if (entry.getValue().isRunTime() && !UNSAFE.shouldBeInitialized(entry.getKey())) {
                 illegalyInitialized.add(entry.getKey());
             }
         }
@@ -522,7 +525,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
                 if (specifiedKind == null) {
                     detailedMessage.append(c.getTypeName()).append(" was unintentionally initialized at build time. ");
                     detailedMessage.append(classInitializationErrorMessage(c,
-                                    "Try marking this class for build-time initialization with " + SubstrateOptionsParser.commandArgument(ClassInitializationOptions.ClassInitialization,
+                                    "Try marking this class for build-time initialization with " + SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization,
                                                     c.getTypeName(), "initialize-at-build-time")))
                                     .append("\n");
                 } else {
@@ -574,7 +577,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         }
 
         /* Well, and enums that got initialized while annotations are parsed. */
-        if (clazz.isEnum() && !GraalUnsafeAccess.shouldBeInitialized(clazz)) {
+        if (clazz.isEnum() && !UNSAFE.shouldBeInitialized(clazz)) {
             if (memoize) {
                 forceInitializeHosted(clazz, "enums referred in annotations must be initialized", false);
             }

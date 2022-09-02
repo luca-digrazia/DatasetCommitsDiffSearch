@@ -201,7 +201,8 @@ import com.oracle.svm.core.heap.RestrictHeapAccessCallees;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.image.ImageHeapLayouter;
-import com.oracle.svm.core.jdk.localization.LocalizationFeature;
+import com.oracle.svm.core.jdk.LocalizationFeature;
+import com.oracle.svm.core.option.HostedOptionOverrideValues;
 import com.oracle.svm.core.option.HostedOptionValues;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.RuntimeOptionValues;
@@ -486,6 +487,7 @@ public class NativeImageGenerator {
                 ImageSingletons.add(BuildArtifacts.class, (type, artifact) -> buildArtifacts.computeIfAbsent(type, t -> new ArrayList<>()).add(artifact));
                 ImageSingletons.add(ClassLoaderQuery.class, new ClassLoaderQueryImpl(loader.getClassLoader()));
                 ImageSingletons.add(HostedOptionValues.class, new HostedOptionValues(optionProvider.getHostedValues()));
+                ImageSingletons.add(HostedOptionOverrideValues.class, new HostedOptionOverrideValues());
                 ImageSingletons.add(RuntimeOptionValues.class, new RuntimeOptionValues(optionProvider.getRuntimeValues(), allOptionNames));
                 watchdog = new DeadlockWatchdog();
                 try (TemporaryBuildDirectoryProviderImpl tempDirectoryProvider = new TemporaryBuildDirectoryProviderImpl()) {
@@ -500,11 +502,6 @@ public class NativeImageGenerator {
             ReportUtils.report("build artifacts", buildDir.resolve(imageName + ".build_artifacts.txt"),
                             writer -> buildArtifacts.forEach((artifactType, paths) -> {
                                 writer.println("[" + artifactType + "]");
-                                if (artifactType == ArtifactType.JDK_LIB_SHIM) {
-                                    writer.println("# Note that shim JDK libraries depend on this");
-                                    writer.println("# particular native image (including its name)");
-                                    writer.println("# and therefore cannot be used with others.");
-                                }
                                 paths.stream().map(buildDir::relativize).forEach(writer::println);
                                 writer.println();
                             }));
@@ -512,16 +509,14 @@ public class NativeImageGenerator {
             System.out.println("Interrupted!");
             throw new InterruptImageBuilding(e);
         } catch (ExecutionException e) {
-            rethrow(e.getCause());
+            if (e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            } else if (e.getCause() instanceof Error) {
+                throw (Error) e.getCause();
+            }
         } finally {
             shutdownBuildExecutor();
         }
-    }
-
-    /** A version of "sneaky throw" to relay exceptions. */
-    @SuppressWarnings("unchecked")
-    private static <T extends Throwable> void rethrow(Throwable t) throws T {
-        throw (T) t;
     }
 
     protected static void setSystemPropertiesForImageEarly() {

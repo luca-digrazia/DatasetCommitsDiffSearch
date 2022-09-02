@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.reflect.hosted;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -43,8 +42,6 @@ import com.oracle.svm.hosted.analysis.Inflation;
 import com.oracle.svm.hosted.config.ConfigurationParserUtils;
 import com.oracle.svm.hosted.snippets.ReflectionPlugins;
 import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
-import com.oracle.svm.reflect.helpers.ReflectionProxy;
-import com.oracle.svm.util.ModuleSupport;
 
 @AutomaticFeature
 public final class ReflectionFeature implements GraalFeature {
@@ -55,12 +52,6 @@ public final class ReflectionFeature implements GraalFeature {
     private ImageClassLoader loader;
     private AnalysisUniverse aUniverse;
     private int loadedConfigurations;
-
-    @Override
-    public void afterRegistration(AfterRegistrationAccess access) {
-        ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "jdk.internal.reflect", false);
-        ModuleSupport.openModuleByClass(ReflectionProxy.class, null);
-    }
 
     @Override
     public void duringSetup(DuringSetupAccess a) {
@@ -109,8 +100,8 @@ public final class ReflectionFeature implements GraalFeature {
     }
 
     @Override
-    public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, Plugins plugins, ParsingReason reason) {
-        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions,
-                        plugins.getClassInitializationPlugin(), plugins.getInvocationPlugins(), aUniverse, reason);
+    public void registerGraphBuilderPlugins(Providers providers, Plugins plugins, ParsingReason reason) {
+        ReflectionPlugins.registerInvocationPlugins(loader, providers.getSnippetReflection(), annotationSubstitutions, plugins.getClassInitializationPlugin(), plugins.getInvocationPlugins(),
+                        aUniverse, reason);
     }
 }

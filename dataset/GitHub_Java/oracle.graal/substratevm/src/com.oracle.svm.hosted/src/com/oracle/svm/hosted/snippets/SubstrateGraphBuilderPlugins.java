@@ -663,15 +663,13 @@ public class SubstrateGraphBuilderPlugins {
         r.register2("copyOf", Object[].class, int.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode original, ValueNode newLength) {
-                ValueNode nonNullOriginal = b.nullCheckedValue(original);
-
                 /* Get the class from the original node. */
-                GetClassNode originalArrayType = b.add(new GetClassNode(original.stamp(NodeView.DEFAULT), nonNullOriginal));
+                GetClassNode originalArrayType = b.add(new GetClassNode(original.stamp(NodeView.DEFAULT), b.nullCheckedValue(original)));
 
-                ValueNode originalLength = b.add(ArrayLengthNode.create(nonNullOriginal, b.getConstantReflection()));
-                Stamp stamp = b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp().join(nonNullOriginal.stamp(NodeView.DEFAULT));
+                ValueNode originalLength = b.add(ArrayLengthNode.create(original, b.getConstantReflection()));
+                Stamp stamp = b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp().join(original.stamp(NodeView.DEFAULT));
 
-                b.addPush(JavaKind.Object, new SubstrateArraysCopyOfWithExceptionNode(stamp, nonNullOriginal, originalLength, newLength, originalArrayType, b.bci()));
+                b.addPush(JavaKind.Object, new SubstrateArraysCopyOfWithExceptionNode(stamp, original, originalLength, newLength, originalArrayType, b.bci()));
                 return true;
             }
         });
@@ -687,9 +685,8 @@ public class SubstrateGraphBuilderPlugins {
                     stamp = b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp();
                 }
 
-                ValueNode nonNullOriginal = b.nullCheckedValue(original);
-                ValueNode originalLength = b.add(ArrayLengthNode.create(nonNullOriginal, b.getConstantReflection()));
-                b.addPush(JavaKind.Object, new SubstrateArraysCopyOfWithExceptionNode(stamp, nonNullOriginal, originalLength, newLength, newArrayType, b.bci()));
+                ValueNode originalLength = b.add(ArrayLengthNode.create(original, b.getConstantReflection()));
+                b.addPush(JavaKind.Object, new SubstrateArraysCopyOfWithExceptionNode(stamp, original, originalLength, newLength, newArrayType, b.bci()));
                 return true;
             }
         });
