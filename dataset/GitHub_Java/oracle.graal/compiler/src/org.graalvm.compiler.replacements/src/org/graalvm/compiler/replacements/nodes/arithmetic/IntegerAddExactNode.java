@@ -173,9 +173,4 @@ public final class IntegerAddExactNode extends AddNode implements GuardedNode, I
         updateUsagesInterface(this.guard, guard);
         this.guard = guard;
     }
-
-    @Override
-    protected boolean isExact() {
-        return true;
-    }
 }
