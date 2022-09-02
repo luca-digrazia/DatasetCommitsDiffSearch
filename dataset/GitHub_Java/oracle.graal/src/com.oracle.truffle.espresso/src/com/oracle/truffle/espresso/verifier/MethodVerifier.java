@@ -226,7 +226,6 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.SIPUSH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.SWAP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
-import static com.oracle.truffle.espresso.classfile.ClassfileParser.JAVA_6_VERSION;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.CLASS;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.INTERFACE_METHOD_REF;
 import static com.oracle.truffle.espresso.classfile.Constants.APPEND_FRAME_BOUND;
@@ -288,8 +287,6 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
  * given for lesser versions, they are ignored. No fallback for classfile v.50
  */
 public final class MethodVerifier implements ContextAccess {
-    private static final boolean FAILBACK = false;
-
     // Class info
     private final Klass thisKlass;
     private final RuntimeConstantPool pool;
@@ -455,7 +452,7 @@ public final class MethodVerifier implements ContextAccess {
      * @param m the Espresso method
      */
 
-    private MethodVerifier(CodeAttribute codeAttribute, Method m, boolean useStackMaps) {
+    private MethodVerifier(CodeAttribute codeAttribute, Method m) {
         // Extract info from codeAttribute
         this.code = new BytecodeStream(codeAttribute.getCode());
         this.maxStack = codeAttribute.getMaxStack();
@@ -464,7 +461,7 @@ public final class MethodVerifier implements ContextAccess {
         this.stackFrames = new StackFrame[code.endBCI()];
         this.stackMapTableAttribute = codeAttribute.getStackMapFrame();
         this.majorVersion = codeAttribute.getMajorVersion();
-        this.useStackMaps = useStackMaps;
+        this.useStackMaps = codeAttribute.useStackMaps();
 
         // Extract method info
         this.pool = m.getRuntimeConstantPool();
@@ -487,10 +484,6 @@ public final class MethodVerifier implements ContextAccess {
         returnOperand = kindToOperand(Signatures.returnType(sig));
     }
 
-    private MethodVerifier(CodeAttribute codeAttribute, Method m) {
-        this(codeAttribute, m, codeAttribute.useStackMaps());
-    }
-
     /**
      * Utility for ease of use in Espresso
      *
@@ -505,14 +498,7 @@ public final class MethodVerifier implements ContextAccess {
         if (codeAttribute == null) {
             return;
         }
-        try {
-            new MethodVerifier(codeAttribute, m).verify();
-        } catch (Error e) {
-            if (FAILBACK && codeAttribute.getMajorVersion() == JAVA_6_VERSION) {
-                new MethodVerifier(codeAttribute, m, false).verify();
-            }
-            throw e;
-        }
+        new MethodVerifier(codeAttribute, m).verify();
     }
 
     private void initVerifier() {
@@ -633,8 +619,8 @@ public final class MethodVerifier implements ContextAccess {
                 BCI--;
                 first = false;
             }
-            if (BCI < 0 || BCI >= stackFrames.length || BCIstates[BCI] == UNREACHABLE) {
-                throw new VerifyError("Invalid offset for Stack frame: " + BCI);
+            if (BCI < 0 || BCI >= stackFrames.length) {
+                throw new ClassFormatError("Invalid offset for Stack frame: " + BCI);
             }
             stackFrames[BCI] = frame;
             previous = frame;
@@ -783,14 +769,7 @@ public final class MethodVerifier implements ContextAccess {
             case ITEM_Object:
                 return spawnFromType(getTypes().fromName(pool.classAt(vti.getConstantPoolOffset()).getName(pool)));
             case ITEM_NewObject:
-                int newOffset = vti.getNewOffset();
-                if (newOffset < 0 || newOffset >= code.endBCI() || BCIstates[newOffset] == UNREACHABLE) {
-                    throw new ClassFormatError("Invalid BCI reference in stack map!");
-                }
-                if (code.currentBC(newOffset) != NEW) {
-                    throw new ClassFormatError("NewObject in stack map not referencing a NEW instruction! " + Bytecodes.nameOf(code.currentBC(newOffset)));
-                }
-                return new UninitReferenceOperand(getTypes().fromName(pool.classAt(code.readCPI(newOffset)).getName(pool)), thisKlass, newOffset);
+                return new UninitReferenceOperand(getTypes().fromName(pool.classAt(code.readCPI(vti.getNewOffset())).getName(pool)), thisKlass, vti.getNewOffset());
             default:
                 throw EspressoError.shouldNotReachHere("Unrecognized VerificationTypeInfo: " + vti);
         }
@@ -928,13 +907,13 @@ public final class MethodVerifier implements ContextAccess {
     }
 
     private void verifyReachability() {
-// int bci = 0;
-// while (bci < code.endBCI()) {
-// if (BCIstates[bci] == UNSEEN) {
-// throw new VerifyError("Unreachable BCI: " + bci);
-// }
-// bci = code.nextBCI(bci);
-// }
+        int bci = 0;
+        while (bci < code.endBCI()) {
+            if (BCIstates[bci] == UNSEEN) {
+                throw new VerifyError("Unreachable BCI: " + bci);
+            }
+            bci = code.nextBCI(bci);
+        }
     }
 
     private void branch(int BCI, Stack stack, Locals locals) {
@@ -956,7 +935,7 @@ public final class MethodVerifier implements ContextAccess {
 
     /**
      * Performs the verification loop, starting from BCI.
-     * <p>
+     * 
      * for each verified bytecode, three verifications are performed:
      * <p>
      * - Current stack and locals can merge into the stack frame corresponding to current bytecode.
@@ -965,7 +944,7 @@ public final class MethodVerifier implements ContextAccess {
      * - Current locals can merge into all current bytecode's exception handlers.
      * <p>
      * - Stack and Locals state are legal according to the bytecode.
-     *
+     * 
      * @param BCI The BCI at which we wish to start performing verification
      * @param stack_ the state of the stack at BCI
      * @param locals_ the state of the local variables at BCI
@@ -2181,7 +2160,7 @@ public final class MethodVerifier implements ContextAccess {
             for (int i = mergeIndex; i < mergedStack.length; i++) {
                 Operand stackOp = stack.stack[i];
                 Operand frameOp = stackMap.stack[i];
-                if (!stackOp.compliesWithInMerge(frameOp)) {
+                if (!stackOp.compliesWith(frameOp)) {
                     Operand result = stackOp.mergeWith(frameOp);
                     if (result == null) {
                         throw new VerifyError("Cannot merge " + stackOp + " with " + frameOp);
@@ -2206,7 +2185,7 @@ public final class MethodVerifier implements ContextAccess {
             for (int i = mergeIndex; i < mergedLocals.length; i++) {
                 Operand localsOp = locals.registers[i];
                 Operand frameOp = frameLocals[i];
-                if (!localsOp.compliesWithInMerge(frameOp)) {
+                if (!localsOp.compliesWith(frameOp)) {
                     Operand result = localsOp.mergeWith(frameOp);
                     if (result == null) {
                         // We can ALWAYS merge locals. just put Invalid if failure
