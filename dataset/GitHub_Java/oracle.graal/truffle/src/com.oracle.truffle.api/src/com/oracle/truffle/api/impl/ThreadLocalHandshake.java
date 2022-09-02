@@ -40,12 +40,11 @@
  */
 package com.oracle.truffle.api.impl;
 
-import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -101,7 +100,7 @@ public abstract class ThreadLocalHandshake {
             if (!t.isAlive()) {
                 throw new IllegalStateException("Thread no longer alive with pending handshake.");
             }
-            getThreadState(t).addHandshake(t, handshake);
+            getThreadState(t).putHandshake(t, handshake);
         }
         return handshake;
     }
@@ -123,9 +122,21 @@ public abstract class ThreadLocalHandshake {
 
     @TruffleBoundary
     protected final void processHandshake(Node location) {
+        Throwable ex = null;
         TruffleSafepointImpl s = getCurrent();
+        HandshakeEntry handshake = null;
         if (s.fastPendingSet) {
-            s.processHandshakes(location, s.takeHandshakes());
+            handshake = s.takeHandshake(location);
+        }
+        if (handshake != null) {
+            try {
+                ex = combineThrowable(ex, handshake.process(location));
+                if (ex != null) {
+                    throw sneakyThrow(ex);
+                }
+            } finally {
+                s.doneProcessing(handshake, location);
+            }
         }
     }
 
@@ -214,9 +225,6 @@ public abstract class ThreadLocalHandshake {
 
         void deactivateThread() {
             phaser.arriveAndDeregister();
-            if (phaser.getUnarrivedParties() == 0) {
-                onDone.accept(action);
-            }
         }
 
         @Override
@@ -252,10 +260,47 @@ public abstract class ThreadLocalHandshake {
     static final class HandshakeEntry {
 
         final Handshake<?> handshake;
+        final HandshakeEntry next;
+
+        private volatile HandshakeEntry prev;
+        boolean processed;
         boolean active = true;
 
-        HandshakeEntry(Handshake<?> handshake) {
+        HandshakeEntry(Handshake<?> handshake, HandshakeEntry next) {
             this.handshake = handshake;
+            if (next != null) {
+                next.prev = this;
+            }
+            this.next = next;
+        }
+
+        Throwable process(Node location) {
+            /*
+             * Retain schedule order and process next first. Schedule order is important for events
+             * that perform synchronization between multiple threads to avoid deadlocks.
+             *
+             * We use a prev pointer to avoid arbitrary deep recursive stacks processing handshakes.
+             */
+            HandshakeEntry current = this;
+            while (current.next != null) {
+                current = current.next;
+            }
+
+            assert current != null;
+            Throwable ex = null;
+            while (current != null) {
+                try {
+                    if (!current.processed && current.active) {
+                        current.processed = true;
+                        current.handshake.perform(location);
+                    }
+                } catch (Throwable e) {
+                    ex = combineThrowable(ex, e);
+                } finally {
+                    current = current.prev;
+                }
+            }
+            return ex;
         }
     }
 
@@ -277,53 +322,38 @@ public abstract class ThreadLocalHandshake {
          * lock.
          */
         private volatile boolean interrupted;
-
-        private final LinkedList<HandshakeEntry> handshakes = new LinkedList<>();
+        private HandshakeEntry handshakes;
+        private boolean hasSideEffects;
+        private boolean hasNonSideEffects;
+        private final ArrayDeque<HandshakeEntry> recursiveHandshakes = new ArrayDeque<>();
+        private final ArrayDeque<Node> recursiveLocations = new ArrayDeque<>();
 
         TruffleSafepointImpl(ThreadLocalHandshake handshake) {
             super(DefaultRuntimeAccessor.ENGINE);
             this.impl = handshake;
         }
 
-        void processHandshakes(Node location, List<HandshakeEntry> toProcess) {
-            if (toProcess == null) {
-                return;
-            }
-            Throwable ex = null;
-            for (HandshakeEntry current : toProcess) {
-                if (claimEntry(current)) {
-                    try {
-                        current.handshake.perform(location);
-                    } catch (Throwable e) {
-                        ex = combineThrowable(ex, e);
-                    }
-                }
-            }
-            if (fastPendingSet) {
-                resetPending();
-            }
-            if (ex != null) {
-                throw sneakyThrow(ex);
-            }
-        }
-
         public void deactivateThread(Handshake<?> handshake) {
             lock.lock();
             try {
-                HandshakeEntry current = lookupEntry(handshake);
-                if (current != null) {
-                    if (!current.active) {
-                        // already inactive
-                        return;
+                HandshakeEntry current = this.handshakes;
+                while (current != null) {
+                    if (current.handshake == handshake) {
+                        if (!current.active) {
+                            // already inactive
+                            return;
+                        }
+                        break;
                     }
+                    current = current.next;
+                }
+
+                if (current != null) {
                     // still active
                     assert current.active;
                     current.active = false;
                     handshake.deactivateThread();
-                    claimEntry(current);
-                    resetPending();
                 }
-
             } finally {
                 lock.unlock();
             }
@@ -335,53 +365,50 @@ public abstract class ThreadLocalHandshake {
             }
             lock.lock();
             try {
-                HandshakeEntry current = lookupEntry(handshake);
-                if (current != null) {
-                    /*
-                     * The handshake has already been put to this thread and it is active or it is
-                     * inactive and must not be re-activated.
-                     */
-                    return;
+                HandshakeEntry current = this.handshakes;
+                while (current != null) {
+                    if (current.handshake == handshake) {
+                        /*
+                         * The handshake has already been put to this thread and it is active or it
+                         * is inactive and must not be re-activated.
+                         */
+                        return;
+                    }
+                    current = current.next;
                 }
                 // not yet put or already processed
+                assert current == null;
                 if (!handshake.threads.add(Thread.currentThread())) {
                     // already processed on that thread, we don't want to process twice.
                     return;
                 }
                 if (handshake.activateThread()) {
-                    addHandshakeImpl(Thread.currentThread(), handshake);
+                    putHandshakeImpl(Thread.currentThread(), handshake);
                 }
             } finally {
                 lock.unlock();
             }
         }
 
-        private HandshakeEntry lookupEntry(Handshake<?> handshake) {
-            assert lock.isHeldByCurrentThread();
-
-            for (HandshakeEntry entry : handshakes) {
-                if (entry.handshake == handshake) {
-                    return entry;
-                }
-            }
-            return null;
-        }
-
-        void addHandshake(Thread t, Handshake<?> handshake) {
+        void putHandshake(Thread t, Handshake<?> handshake) {
             lock.lock();
             try {
-                addHandshakeImpl(t, handshake);
+                putHandshakeImpl(t, handshake);
             } finally {
                 lock.unlock();
             }
         }
 
-        private void addHandshakeImpl(Thread t, Handshake<?> handshake) {
-            handshakes.add(new HandshakeEntry(handshake));
+        private HandshakeEntry putHandshakeImpl(Thread t, Handshake<?> handshake) {
+            handshakes = new HandshakeEntry(handshake, handshakes);
+            hasSideEffects = hasSideEffects || handshake.sideEffecting;
+            hasNonSideEffects = hasNonSideEffects || !handshake.sideEffecting;
+
             if (isPending() && !fastPendingSet) {
                 fastPendingSet = true;
                 setFastPendingAndInterrupt(t);
             }
+            return handshakes;
         }
 
         private void setFastPendingAndInterrupt(Thread t) {
@@ -394,16 +421,37 @@ public abstract class ThreadLocalHandshake {
             }
         }
 
-        List<HandshakeEntry> takeHandshakes() {
+        HandshakeEntry takeHandshake(Node location) {
+            boolean resetInterrupted = this.interrupted;
+            if (resetInterrupted) {
+                this.blockedAction.resetInterrupted();
+            }
+
             lock.lock();
             try {
-                if (this.interrupted) {
-                    this.blockedAction.resetInterrupted();
+                if (resetInterrupted) {
                     this.interrupted = false;
                 }
+
                 if (isPending()) {
-                    List<HandshakeEntry> taken = takeHandshakeImpl();
-                    assert !taken.isEmpty();
+                    assert fastPendingSet : "invalid state";
+
+                    fastPendingSet = false;
+                    impl.clearFastPending();
+
+                    HandshakeEntry taken = takeHandshakeImpl();
+                    assert taken != null;
+
+                    /*
+                     * We need to remember the currently being processed handshake in case we end up
+                     * in a setBlocked call inside of an action. If an event is blocking we need to
+                     * continue the currently activly processed events.
+                     *
+                     * HandshakeEntry remembers whether it was already processed or not.
+                     */
+                    recursiveHandshakes.push(taken);
+                    recursiveLocations.push(location);
+
                     return taken;
                 }
                 return null;
@@ -412,111 +460,95 @@ public abstract class ThreadLocalHandshake {
             }
         }
 
-        private void resetPending() {
-            lock.lock();
-            try {
-                if (fastPendingSet && !isPending()) {
-                    fastPendingSet = false;
-                    impl.clearFastPending();
+        private HandshakeEntry takeHandshakeImpl() {
+            HandshakeEntry taken;
+            if (sideEffectsEnabled) {
+                // just take them all -> fast-path
+                taken = this.handshakes;
+                this.handshakes = null;
+                this.hasSideEffects = false;
+                this.hasNonSideEffects = false;
+            } else {
+                if (hasSideEffects) {
+                    assert this.hasNonSideEffects : "isPending() should not have returned true";
+
+                    // we have side-effects and we don't process them
+                    // so we need to split them into two lists
+                    HandshakeEntry unprocessed = null;
+                    HandshakeEntry processing = null;
+                    HandshakeEntry current = this.handshakes;
+                    while (current != null) {
+                        if (current.handshake.sideEffecting) {
+                            // do not process side-effecting events
+                            unprocessed = new HandshakeEntry(current.handshake, unprocessed);
+                            unprocessed.active = current.active;
+                        } else {
+                            processing = new HandshakeEntry(current.handshake, processing);
+                        }
+                        current = current.next;
+                    }
+                    taken = processing;
+                    this.handshakes = unprocessed;
+                    this.hasNonSideEffects = false;
+                    assert this.hasSideEffects;
+                } else {
+                    // no side-effects scheduled just process
+                    taken = this.handshakes;
+                    this.handshakes = null;
+                    this.hasNonSideEffects = false;
+                    assert !this.hasSideEffects;
                 }
-            } finally {
-                lock.unlock();
             }
+            return taken;
         }
 
-        private boolean claimEntry(HandshakeEntry entry) {
-            lock.lock();
-            try {
-                return this.handshakes.removeFirstOccurrence(entry);
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        private List<HandshakeEntry> takeHandshakeImpl() {
-            List<HandshakeEntry> toProcess = new ArrayList<>(this.handshakes.size());
-            for (HandshakeEntry entry : this.handshakes) {
-                if (isPending(entry)) {
-                    toProcess.add(entry);
-                }
-            }
-            return toProcess;
-        }
-
-        private boolean isPending(HandshakeEntry entry) {
-            if (!entry.active) {
-                return false;
-            }
-            if (sideEffectsEnabled || !entry.handshake.sideEffecting) {
-                return true;
-            }
-            return false;
+        void doneProcessing(HandshakeEntry handshake, Node location) {
+            HandshakeEntry done = recursiveHandshakes.pop();
+            assert done == handshake : "illegal state";
+            Node doneLocation = recursiveLocations.pop();
+            assert doneLocation == location;
         }
 
         @Override
         @TruffleBoundary
-        public <T> void setBlocked(Node location, Interrupter interrupter, Interruptible<T> interruptible, T object, Runnable onInterrupt) {
+        public Interrupter setBlocked(Interrupter interruptable) {
             assert impl.getCurrent() == this : "Cannot be used from a different thread.";
-            Interrupter prev = this.blockedAction;
-            try {
-                while (true) {
-                    try {
-                        setBlockedImpl(location, interrupter);
-                        interruptible.apply(object);
-                        break;
-                    } catch (InterruptedException e) {
-                        setBlockedImpl(location, prev);
-                        if (onInterrupt != null) {
-                            onInterrupt.run();
-                        }
-                        continue;
-                    }
-                }
-            } finally {
-                setBlockedImpl(location, prev);
-            }
-        }
-
-        private void setBlockedImpl(final Node location, final Interrupter interrupter) {
-            List<HandshakeEntry> toProcess = null;
             lock.lock();
             try {
-                if (isPending()) {
-                    toProcess = takeHandshakeImpl();
+                Interrupter prev = this.blockedAction;
+                if (interruptable != null && isPending()) {
+                    interrupted = true;
+                    interruptable.interrupt(Thread.currentThread());
                 }
-                if (interrupted) {
-                    assert this.blockedAction != null;
-                    this.blockedAction.resetInterrupted();
-                    this.interrupted = false;
+                this.blockedAction = interruptable;
+                if (prev != null && interrupted) {
+                    prev.resetInterrupted();
+                    interrupted = false;
                 }
-                this.blockedAction = interrupter;
+                return prev;
             } finally {
                 lock.unlock();
-            }
 
-            processHandshakes(location, toProcess);
-
-            if (interrupter != null) {
                 /*
-                 * We can only process once. Now we need to continue running, but interrupt.
+                 * We try to process all recursive currently processing handshakes here as the
+                 * current action seems to block. This allows other currently processing handshakes
+                 * to complete independently.
                  */
-                interruptIfPending(interrupter);
+                if (!recursiveHandshakes.isEmpty()) {
+                    flushRecursiveHandshakes();
+                }
             }
         }
 
-        private void interruptIfPending(final Interrupter interrupter) {
-            boolean doInterrupt = false;
-            lock.lock();
-            try {
-                if (interrupter != null && isPending()) {
-                    doInterrupt = true;
-                }
-            } finally {
-                lock.unlock();
+        protected void flushRecursiveHandshakes() {
+            Iterator<HandshakeEntry> entries = recursiveHandshakes.iterator();
+            Iterator<Node> locations = recursiveLocations.iterator();
+            Throwable t = null;
+            while (entries.hasNext() && locations.hasNext()) {
+                t = combineThrowable(entries.next().process(locations.next()), t);
             }
-            if (doInterrupt) {
-                interrupted = true;
-                interrupter.interrupt(Thread.currentThread());
+            if (t != null) {
+                sneakyThrow(t);
             }
         }
 
@@ -525,13 +557,11 @@ public abstract class ThreadLocalHandshake {
          */
         private boolean isPending() {
             assert lock.isHeldByCurrentThread();
-
-            for (HandshakeEntry entry : this.handshakes) {
-                if (isPending(entry)) {
-                    return true;
-                }
+            if (sideEffectsEnabled) {
+                return hasNonSideEffects || hasSideEffects;
+            } else {
+                return hasNonSideEffects;
             }
-            return false;
         }
 
         @Override
@@ -555,21 +585,10 @@ public abstract class ThreadLocalHandshake {
             assert impl.getCurrent() == this : "Cannot be used from a different thread.";
             lock.lock();
             try {
-                return !sideEffectsEnabled && hasSideEffecting();
+                return !sideEffectsEnabled && hasSideEffects;
             } finally {
                 lock.unlock();
             }
-        }
-
-        private boolean hasSideEffecting() {
-            assert lock.isHeldByCurrentThread();
-
-            for (HandshakeEntry entry : this.handshakes) {
-                if (entry.active && entry.handshake.sideEffecting) {
-                    return true;
-                }
-            }
-            return false;
         }
 
         private void updateFastPending() {
