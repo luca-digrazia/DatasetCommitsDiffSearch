@@ -23,6 +23,7 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -35,30 +36,51 @@ public final class HandshakeController {
 
     /**
      * Initializes a Socket connection which serves as a transport for jdwp communication.
+     * 
      * @param port the listening port that the debugger should attach to
      * @throws IOException
      */
-    public static SocketConnection createSocketConnection(int port, Collection<Thread> activeThreads) throws IOException {
-        ServerSocket serverSocket = new ServerSocket();
-        serverSocket.setSoTimeout(0); // no timeout
-        serverSocket.setReuseAddress(true);
-        serverSocket.bind(new InetSocketAddress(port));
-        // block until a debugger has accepted the socket
-        Socket connectionSocket = serverSocket.accept();
+    public static SocketConnection createSocketConnection(boolean server, String host, int port, Collection<Thread> activeThreads) throws IOException {
+        String connectionHost = host;
+        if (connectionHost == null) {
+            // only allow local host if nothing specified
+            connectionHost = "localhost";
+        }
+        Socket connectionSocket;
+        ServerSocket serverSocket = null;
+        if (server) {
+            serverSocket = new ServerSocket();
+            serverSocket.setSoTimeout(0); // no timeout
+            serverSocket.setReuseAddress(true);
+            if ("*".equals(host)) {
+                // allow any host to bind
+                serverSocket.bind(new InetSocketAddress((InetAddress) null, port));
+            } else {
+                // allow specific host to bind
+                serverSocket.bind(new InetSocketAddress(connectionHost, port));
+            }
+            // print to console that we're listening
+            String address = host != null ? host + ":" + port : "" + port;
+            System.out.println("Listening for transport dt_socket at address: " + address);
+            // block until a debugger has accepted the socket
+            connectionSocket = serverSocket.accept();
+        } else {
+            connectionSocket = new Socket(connectionHost, port);
+        }
 
         if (!handshake(connectionSocket)) {
             throw new IOException("Unable to handshake with debubgger");
         }
         SocketConnection connection = new SocketConnection(connectionSocket, serverSocket);
-        Thread JDWPSender = new Thread(connection, "jdwp-transmitter");
-        JDWPSender.setDaemon(true);
-        JDWPSender.start();
-        activeThreads.add(JDWPSender);
+        Thread jdwpSender = new Thread(connection, "jdwp-transmitter");
+        jdwpSender.setDaemon(true);
+        jdwpSender.start();
+        activeThreads.add(jdwpSender);
         return connection;
     }
 
     /**
-     * Handshake with the debugger
+     * Handshake with the debugger.
      */
     private static boolean handshake(Socket s) throws IOException {
 
@@ -69,7 +91,7 @@ public final class HandshakeController {
         while (received < hello.length) {
             int n;
             try {
-                n = s.getInputStream().read(b, received, hello.length-received);
+                n = s.getInputStream().read(b, received, hello.length - received);
             } catch (SocketTimeoutException x) {
                 throw new IOException("handshake timeout");
             }
@@ -79,7 +101,7 @@ public final class HandshakeController {
             }
             received += n;
         }
-        for (int i=0; i<hello.length; i++) {
+        for (int i = 0; i < hello.length; i++) {
             if (b[i] != hello[i]) {
                 throw new IOException("handshake failed - unrecognized message from the debugger");
             }
