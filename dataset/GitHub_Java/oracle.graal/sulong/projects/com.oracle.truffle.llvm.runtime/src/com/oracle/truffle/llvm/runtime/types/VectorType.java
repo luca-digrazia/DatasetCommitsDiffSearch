@@ -79,8 +79,8 @@ public final class VectorType extends AggregateType {
 
     public void setElementType(Type elementType) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        if (!(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
-            throw new AssertionError("Invalid ElementType of Vector: " + (elementType == null ? "null" : elementType.getClass().getSimpleName()));
+        if (elementType == null || !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
+            throw new AssertionError("Invalid ElementType of Vector: " + elementType.getClass().getSimpleName());
         }
         this.elementTypeAssumption.invalidate();
         this.elementType = elementType;
