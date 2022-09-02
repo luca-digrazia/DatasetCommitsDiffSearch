@@ -96,10 +96,6 @@ public abstract class InfoTreeVisitor {
         processChildren(info);
     }
 
-    protected void visitRawPointerToInfo(RawPointerToInfo info) {
-        processChildren(info);
-    }
-
     protected void visitAccessorInfo(AccessorInfo info) {
         processChildren(info);
     }
