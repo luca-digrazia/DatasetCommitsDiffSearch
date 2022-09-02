@@ -89,18 +89,14 @@ final class JDWP {
                     // we know it's a class type in the format Lsomething;
                     slashName = signature.substring(1, signature.length() - 1);
                 }
-                try {
-                    KlassRef[] loaded = context.findLoadedClass(slashName);
 
-                    reply.writeInt(loaded.length);
-                    for (KlassRef klass : loaded) {
-                        reply.writeByte(TypeTag.getKind(klass));
-                        reply.writeLong(context.getIds().getIdAsLong(klass));
-                        reply.writeInt(klass.getStatus());
-                    }
-                } catch (IllegalStateException e) {
-                    JDWPLogger.log("Invalid class name in CLASSES_BY_SIGNATURE: %s", JDWPLogger.LogLevel.ALL, slashName);
-                    reply.writeInt(0);
+                KlassRef[] loaded = context.findLoadedClass(slashName);
+
+                reply.writeInt(loaded.length);
+                for (KlassRef klass : loaded) {
+                    reply.writeByte(TypeTag.getKind(klass));
+                    reply.writeLong(context.getIds().getIdAsLong(klass));
+                    reply.writeInt(klass.getStatus());
                 }
                 return new CommandResult(reply);
             }
@@ -342,8 +338,8 @@ final class JDWP {
                 reply.writeBoolean(true); // canGetCurrentContendedMonitor
                 reply.writeBoolean(true); // canGetMonitorInfo
                 reply.writeBoolean(true); // canRedefineClasses
-                reply.writeBoolean(true); // canAddMethod
-                reply.writeBoolean(true); // canUnrestrictedlyRedefineClasses
+                reply.writeBoolean(false); // canAddMethod
+                reply.writeBoolean(false); // canUnrestrictedlyRedefineClasses
                 reply.writeBoolean(true); // canPopFrames
                 reply.writeBoolean(true); // canUseInstanceFilters
                 reply.writeBoolean(true); // canGetSourceDebugExtension
@@ -374,8 +370,10 @@ final class JDWP {
             public static final int ID = 18;
 
             static CommandResult createReply(Packet packet, JDWPContext context) {
+
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
                 int classes = input.readInt();
                 RedefineInfo[] redefineInfos = new RedefineInfo[classes];
                 for (int i = 0; i < classes; i++) {
