@@ -618,7 +618,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         if (!getLocalFlags().isIgnoreCase()) {
             return;
         }
-        bailOut("Ruby-style case folding is not supported");
+        CaseFoldTable.applyCaseFold(curCharClass, charClassTmp, CaseFoldTable.CaseFoldingAlgorithm.PythonUnicode);
     }
 
     private void negateCharClass() {
