@@ -1605,8 +1605,7 @@ public abstract class Launcher {
      */
     protected static OutputStream newLogStream(Path path) throws IOException {
         Path usedPath = path;
-        Path fileNamePath = path.getFileName();
-        String fileName = fileNamePath == null ? "" : fileNamePath.toString();
+        String fileName = path.getFileName().toString();
         Path lockFile = null;
         FileChannel lockFileChannel = null;
         for (int unique = 0;; unique++) {
