@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -320,7 +320,7 @@ public final class Types {
         return isValid(type) ? type : null;
     }
 
-    public Symbol<Type> fromName(Symbol<Name> name) {
+    public final Symbol<Type> fromName(Symbol<Name> name) {
         if (name.byteAt(0) == '[') {
             // TODO(peterssen): Verify . or / separators.
             return fromSymbol(name);
@@ -332,16 +332,15 @@ public final class Types {
         return symbols.symbolify(checkType(ByteSequence.wrap(bytes)));
     }
 
-    public Symbol<Type> lookup(String type) {
+    public final Symbol<Type> lookup(String type) {
         return symbols.lookup(checkType(type));
     }
 
     public static String getRuntimePackage(Symbol<Type> symbol) {
         String typeString = symbol.toString();
         int lastSlash = typeString.lastIndexOf('/');
-        if (lastSlash < 0) {
+        if (lastSlash < 0)
             return "";
-        }
         assert typeString.startsWith("L");
         return typeString.substring(1, lastSlash);
     }
