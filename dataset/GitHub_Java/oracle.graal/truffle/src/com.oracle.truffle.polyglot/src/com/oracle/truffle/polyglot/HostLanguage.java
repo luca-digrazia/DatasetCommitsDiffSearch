@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -63,7 +63,6 @@ import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.impl.TruffleJDKServices;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -125,14 +124,7 @@ class HostLanguage extends TruffleLanguage<HostContext> {
                 return primitiveType;
             }
             try {
-                ClassLoader classLoader = getClassloader();
-                Class<?> foundClass = classLoader.loadClass(className);
-                Object currentModule = TruffleJDKServices.getUnnamedModule(classLoader);
-                if (TruffleJDKServices.verifyModuleVisibility(currentModule, foundClass)) {
-                    return foundClass;
-                } else {
-                    throw new HostLanguageException(String.format("Access to host class %s is not allowed or does not exist.", className));
-                }
+                return getClassloader().loadClass(className);
             } catch (ClassNotFoundException e) {
                 throw new HostLanguageException(String.format("Access to host class %s is not allowed or does not exist.", className));
             }
