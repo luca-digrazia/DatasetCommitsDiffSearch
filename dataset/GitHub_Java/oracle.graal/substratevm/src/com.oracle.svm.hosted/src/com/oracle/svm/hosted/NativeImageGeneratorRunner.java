@@ -109,13 +109,11 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             timer.scheduleAtFixedRate(timerTask, 0, 1000);
         }
         int exitStatus;
-        ClassLoader applicationClassLoader = Thread.currentThread().getContextClassLoader();
         try {
-            ImageClassLoader imageClassLoader = installNativeImageClassLoader(classPath, new String[0]);
-            exitStatus = new NativeImageGeneratorRunner().build(arguments.toArray(new String[0]), imageClassLoader);
+            ImageClassLoader nativeImageClassLoaderSupport = installNativeImageClassLoader(classPath, new String[0]);
+            exitStatus = new NativeImageGeneratorRunner().build(arguments.toArray(new String[0]), nativeImageClassLoaderSupport);
         } finally {
-            uninstallNativeImageClassLoader();
-            Thread.currentThread().setContextClassLoader(applicationClassLoader);
+            unhookCustomClassLoaders();
             if (timerTask != null) {
                 timerTask.cancel();
             }
@@ -123,10 +121,12 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         System.exit(exitStatus);
     }
 
-    public static void uninstallNativeImageClassLoader() {
+    private static void unhookCustomClassLoaders() {
         ClassLoader loader = ClassLoader.getSystemClassLoader();
         if (loader instanceof NativeImageSystemClassLoader) {
-            ((NativeImageSystemClassLoader) loader).setNativeImageClassLoader(null);
+            NativeImageSystemClassLoader customSystemClassLoader = (NativeImageSystemClassLoader) ClassLoader.getSystemClassLoader();
+            customSystemClassLoader.setNativeImageClassLoader(null);
+            Thread.currentThread().setContextClassLoader(customSystemClassLoader.defaultSystemClassLoader);
         }
     }
 

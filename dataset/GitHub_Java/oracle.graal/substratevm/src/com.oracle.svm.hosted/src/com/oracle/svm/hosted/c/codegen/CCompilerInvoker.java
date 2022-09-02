@@ -39,6 +39,7 @@ import java.util.Optional;
 import java.util.Scanner;
 import java.util.function.Consumer;
 
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.ImageSingletons;
 
@@ -410,7 +411,7 @@ public abstract class CCompilerInvoker {
     }
 
     @SuppressWarnings("try")
-    public void compileAndParseError(boolean strict, List<String> compileOptions, Path source, Path target, CompilerErrorHandler handler) {
+    public void compileAndParseError(boolean strict, List<String> compileOptions, Path source, Path target, CompilerErrorHandler handler, DebugContext debug) {
         List<String> options = strict ? createStrictOptions(compileOptions) : compileOptions;
         ProcessBuilder pb = new ProcessBuilder()
                         .command(createCompilerCommand(options, target.normalize(), source.normalize()))

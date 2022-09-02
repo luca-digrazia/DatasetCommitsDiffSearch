@@ -25,6 +25,7 @@
 
 package com.oracle.svm.hosted.image;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -415,24 +416,24 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             pb.directory(inv.getTempDirectory().toFile());
             pb.redirectErrorStream(true);
             int status;
-            List<String> lines;
+            ByteArrayOutputStream output;
             try {
                 Process p = pb.start();
-                lines = FileUtils.readAllLines(p.getInputStream());
+                output = new ByteArrayOutputStream();
+                FileUtils.drainInputStream(p.getInputStream(), output);
                 status = p.waitFor();
             } catch (IOException | InterruptedException e) {
                 throw handleLinkerFailure(e.toString(), commandLine, null);
             }
 
             if (SubstrateOptions.traceNativeToolUsage()) {
-                for (String line : lines) {
+                for (String line : SubstrateUtil.split(output.toString(), "\n")) {
                     System.out.printf("># %s%n", line);
                 }
             }
 
             if (status != 0) {
-                String output = String.join(System.lineSeparator(), lines);
-                throw handleLinkerFailure("Linker command exited with " + status, commandLine, output);
+                throw handleLinkerFailure("Linker command exited with " + status, commandLine, output.toString());
             }
             return inv;
         }
