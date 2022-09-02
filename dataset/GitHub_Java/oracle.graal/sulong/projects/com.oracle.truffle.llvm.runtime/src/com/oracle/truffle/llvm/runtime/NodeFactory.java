@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
+import java.util.List;
+
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.nodes.RepeatingNode;
@@ -46,19 +48,15 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.nodes.base.LLVMBasicBlockNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMOffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.vars.LLVMWriteNode;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.symbols.LocalVariableDebugInfo;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
-
-import java.util.List;
 
 /**
  * This interface decouples the parser and the concrete implementation of the nodes by only making
@@ -73,11 +71,7 @@ public interface NodeFactory {
 
     LLVMExpressionNode createShuffleVector(Type llvmType, LLVMExpressionNode vector1, LLVMExpressionNode vector2, LLVMExpressionNode mask);
 
-    LLVMExpressionNode createLoad(Type resolvedResultType, LLVMExpressionNode loadTarget);
-
     LLVMStatementNode createStore(LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type);
-
-    LLVMOffsetStoreNode createOffsetMemoryStore(Type resolvedType, LLVMExpressionNode value) throws TypeOverflowException;
 
     LLVMExpressionNode createRMWXchg(LLVMExpressionNode pointerNode, LLVMExpressionNode valueNode, Type type);
 
@@ -95,7 +89,9 @@ public interface NodeFactory {
 
     LLVMStatementNode createFence();
 
-    LLVMExpressionNode createVectorLiteralNode(LLVMExpressionNode[] values, Type type);
+    LLVMExpressionNode createLiteral(Object value, Type type);
+
+    LLVMExpressionNode createVectorLiteralNode(List<LLVMExpressionNode> listValues, Type type);
 
     LLVMControlFlowNode createRetVoid();
 
@@ -131,8 +127,6 @@ public interface NodeFactory {
 
     LLVMExpressionNode createArrayLiteral(LLVMExpressionNode[] arrayValues, ArrayType arrayType, GetStackSpaceFactory arrayGetStackSpaceFactory);
 
-    LLVMExpressionNode createPrimitiveArrayLiteral(Object arrayValues, ArrayType arrayType, GetStackSpaceFactory arrayGetStackSpaceFactory);
-
     LLVMExpressionNode createBitcast(LLVMExpressionNode fromNode, Type targetType, Type fromType);
 
     LLVMExpressionNode createArithmeticOp(ArithmeticOperation op, Type type, LLVMExpressionNode left, LLVMExpressionNode right);
@@ -162,10 +156,9 @@ public interface NodeFactory {
     LLVMExpressionNode createStructureConstantNode(Type structureType, GetStackSpaceFactory getStackSpaceFactory, boolean packed, Type[] types, LLVMExpressionNode[] constants);
 
     RootNode createFunction(FrameSlot exceptionValueSlot, LLVMBasicBlockNode[] basicBlockNodes, UniquesRegion uniquesRegion, LLVMStatementNode[] copyArgumentsToFrame, FrameDescriptor frameDescriptor,
-                    FrameSlot loopSuccessorSlot, LocalVariableDebugInfo debugInfo, String name, String originalName, int argumentCount, Source bcSource, LLVMSourceLocation location,
-                    LLVMFunction rootFunction);
+                    FrameSlot loopSuccessorSlot, LocalVariableDebugInfo debugInfo, String name, String originalName, int argumentCount, Source bcSource, LLVMSourceLocation location);
 
-    LLVMExpressionNode createInlineAssemblerExpression(String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type.TypeArrayBuilder argTypes, Type retType);
+    LLVMExpressionNode createInlineAssemblerExpression(ExternalLibrary library, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type.TypeArrayBuilder argTypes, Type retType);
 
     LLVMExpressionNode createLandingPad(LLVMExpressionNode allocateLandingPadValue, FrameSlot exceptionSlot, boolean cleanup, long[] clauseKinds, LLVMExpressionNode[] entries,
                     LLVMExpressionNode getStack);
@@ -180,7 +173,7 @@ public interface NodeFactory {
 
     LLVMExpressionNode createCopyStructByValue(Type type, GetStackSpaceFactory getStackSpaceFactory, LLVMExpressionNode parameterNode);
 
-    LLVMExpressionNode createVarArgCompoundValue(long length, int alignment, Type type, LLVMExpressionNode parameterNode);
+    LLVMExpressionNode createVarArgCompoundValue(long length, int alignment, LLVMExpressionNode parameterNode);
 
     LLVMMemMoveNode createMemMove();
 

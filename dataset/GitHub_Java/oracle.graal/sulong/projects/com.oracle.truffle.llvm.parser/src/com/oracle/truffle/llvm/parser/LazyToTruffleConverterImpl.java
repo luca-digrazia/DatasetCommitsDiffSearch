@@ -29,6 +29,20 @@
  */
 package com.oracle.truffle.llvm.parser;
 
+import java.io.PrintWriter;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+
+import org.graalvm.options.OptionValues;
+
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
@@ -65,7 +79,6 @@ import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.LazyToTruffleConverter;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
@@ -85,19 +98,6 @@ import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.symbols.SSAValue;
-import org.graalvm.options.OptionValues;
-
-import java.io.PrintWriter;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 
 public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
 
@@ -136,7 +136,7 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
     }
 
     private RootCallTarget generateCallTarget() {
-        LLVMContext context = LLVMLanguage.getContext();
+        LLVMContext context = runtime.getContext();
         NodeFactory nodeFactory = runtime.getNodeFactory();
         OptionValues options = context.getEnv().getOptions();
 
@@ -154,12 +154,12 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         }
 
         // parse the function block
-        parser.parse(diProcessor, source, runtime, LLVMLanguage.getContext());
+        parser.parse(diProcessor, source, runtime);
 
         // prepare the phis
         final Map<InstructionBlock, List<Phi>> phis = LLVMPhiManager.getPhis(method);
 
-        LLVMLivenessAnalysisResult liveness = LLVMLivenessAnalysis.computeLiveness(phis, method, LLVMLanguage.getContext().lifetimeAnalysisStream());
+        LLVMLivenessAnalysisResult liveness = LLVMLivenessAnalysis.computeLiveness(phis, method, runtime.getContext().lifetimeAnalysisStream());
 
         // setup the frameDescriptor
         FrameDescriptor frame = new FrameDescriptor();
@@ -182,7 +182,7 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         for (InstructionBlock block : method.getBlocks()) {
             List<Phi> blockPhis = phis.get(block);
             ArrayList<LLVMLivenessAnalysis.NullerInformation> blockNullerInfos = liveness.getNullableWithinBlock()[block.getBlockIndex()];
-            LLVMBitcodeInstructionVisitor visitor = new LLVMBitcodeInstructionVisitor(frame, uniquesRegion, blockPhis, method.getParameters().size(), symbols, context,
+            LLVMBitcodeInstructionVisitor visitor = new LLVMBitcodeInstructionVisitor(frame, uniquesRegion, blockPhis, method.getParameters().size(), symbols, context, runtime.getLibrary(),
                             blockNullerInfos, neededForDebug, dataLayout, nodeFactory);
 
             if (initDebugValues) {

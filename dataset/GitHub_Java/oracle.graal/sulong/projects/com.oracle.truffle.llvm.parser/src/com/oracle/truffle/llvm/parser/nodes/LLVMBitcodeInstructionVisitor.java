@@ -29,6 +29,14 @@
  */
 package com.oracle.truffle.llvm.parser.nodes;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.Objects;
+
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.parser.LLVMLivenessAnalysis;
@@ -95,6 +103,7 @@ import com.oracle.truffle.llvm.parser.nodes.LLVMRuntimeDebugInformation.SetLocal
 import com.oracle.truffle.llvm.parser.nodes.LLVMRuntimeDebugInformation.SimpleLocalVariable;
 import com.oracle.truffle.llvm.parser.util.LLVMBitcodeTypeHelper;
 import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
+import com.oracle.truffle.llvm.runtime.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
@@ -125,14 +134,6 @@ import com.oracle.truffle.llvm.runtime.types.Type.TypeArrayBuilder;
 import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 import com.oracle.truffle.llvm.runtime.types.symbols.SSAValue;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Objects;
-
 public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
     private final LLVMContext context;
@@ -142,6 +143,7 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
     private final List<LLVMPhiManager.Phi> blockPhis;
     private final int argCount;
     private final LLVMSymbolReadResolver symbols;
+    private final ExternalLibrary library;
     private final ArrayList<LLVMLivenessAnalysis.NullerInformation> nullerInfos;
     private final LLVMStack.UniquesRegion uniquesRegion;
     private final DataLayout dataLayout;
@@ -161,7 +163,7 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
     private boolean optimizeFrameSlots;
 
     public LLVMBitcodeInstructionVisitor(FrameDescriptor frame, LLVMStack.UniquesRegion uniquesRegion, List<LLVMPhiManager.Phi> blockPhis, int argCount, LLVMSymbolReadResolver symbols,
-                    LLVMContext context, ArrayList<LLVMLivenessAnalysis.NullerInformation> nullerInfos, HashSet<Integer> neededForDebug, DataLayout dataLayout,
+                    LLVMContext context, ExternalLibrary library, ArrayList<LLVMLivenessAnalysis.NullerInformation> nullerInfos, HashSet<Integer> neededForDebug, DataLayout dataLayout,
                     NodeFactory nodeFactory) {
         this.context = context;
         this.neededForDebug = neededForDebug;
@@ -170,6 +172,7 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         this.blockPhis = blockPhis;
         this.argCount = argCount;
         this.symbols = symbols;
+        this.library = library;
         this.nullerInfos = nullerInfos;
         this.uniquesRegion = uniquesRegion;
         this.dataLayout = dataLayout;
@@ -1165,7 +1168,7 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         if (inlineAsmConstant.getDialect() != AsmDialect.AT_T) {
             throw new LLVMParserException("Unsupported Assembly Dialect: " + inlineAsmConstant.getDialect());
         }
-        return nodeFactory.createInlineAssemblerExpression(inlineAsmConstant.getAsmExpression(), inlineAsmConstant.getAsmFlags(), argNodes, argsType, retType);
+        return nodeFactory.createInlineAssemblerExpression(library, inlineAsmConstant.getAsmExpression(), inlineAsmConstant.getAsmFlags(), argNodes, argsType, retType);
     }
 
     private FrameSlot getExceptionSlot() {
