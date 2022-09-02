@@ -27,7 +27,6 @@ package org.graalvm.compiler.truffle.runtime;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ArgumentTypeSpeculation;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.BackgroundCompilation;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Compilation;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilationExceptionsAreFatal;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilationExceptionsAreThrown;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilationStatistics;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompilationStatisticDetails;
@@ -111,7 +110,6 @@ public final class EngineData {
     @CompilationFinal public boolean traceCompilationDetails;
     @CompilationFinal public boolean backgroundCompilation;
     @CompilationFinal public boolean compilationExceptionsAreThrown;
-    @CompilationFinal public boolean compilationExceptionsAreFatal;
     @CompilationFinal public boolean performanceWarningsAreFatal;
     @CompilationFinal public String compileOnly;
     @CompilationFinal public boolean callTargetStatistics;
@@ -158,8 +156,7 @@ public final class EngineData {
         this.traceCompilationDetails = getPolyglotOptionValue(options, TraceCompilationDetails);
         this.backgroundCompilation = getPolyglotOptionValue(options, BackgroundCompilation);
         this.compilationExceptionsAreThrown = getPolyglotOptionValue(options, CompilationExceptionsAreThrown);
-        this.compilationExceptionsAreFatal = getPolyglotOptionValue(options, CompilationExceptionsAreFatal);
-        this.performanceWarningsAreFatal = !getPolyglotOptionValue(options, PerformanceWarningsAreFatal).isEmpty();
+        this.performanceWarningsAreFatal = getPolyglotOptionValue(options, PerformanceWarningsAreFatal);
         this.firstTierCallThreshold = computeFirstTierCallThreshold(options);
         this.firstTierCallAndLoopThreshold = computeFirstTierCallAndLoopThreshold(options);
         this.lastTierCallThreshold = firstTierCallAndLoopThreshold;
