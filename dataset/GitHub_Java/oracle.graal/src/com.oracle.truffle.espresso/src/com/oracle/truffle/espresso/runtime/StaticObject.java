@@ -387,7 +387,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean hasArrayElements() {
-        return !isNull(this) && getKlass().isArray();
+        return getKlass().isArray();
     }
 
     @ExportMessage
@@ -626,31 +626,31 @@ public final class StaticObject implements TruffleObject {
     }
 
     protected static boolean isBooleanArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._boolean_array);
+        return object.getKlass().equals(object.getKlass().getMeta()._boolean_array);
     }
 
     protected static boolean isByteArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._byte_array);
+        return object.getKlass().equals(object.getKlass().getMeta()._byte_array);
     }
 
     protected static boolean isShortArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._short_array);
+        return object.getKlass().equals(object.getKlass().getMeta()._short_array);
     }
 
     protected static boolean isIntArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._int_array);
+        return object.getKlass().equals(object.getKlass().getMeta()._int_array);
     }
 
     protected static boolean isLongArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._long_array);
+        return object.getKlass().equals(object.getKlass().getMeta()._long_array);
     }
 
     protected static boolean isFloatArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._float_array);
+        return object.getKlass().equals(object.getKlass().getMeta()._float_array);
     }
 
     protected static boolean isDoubleArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._double_array);
+        return object.getKlass().equals(object.getKlass().getMeta()._double_array);
     }
 
     protected static boolean isPrimitiveArray(StaticObject object) {
