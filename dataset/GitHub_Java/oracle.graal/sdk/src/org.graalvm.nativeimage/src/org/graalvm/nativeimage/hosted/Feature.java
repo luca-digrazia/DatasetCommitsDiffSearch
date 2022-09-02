@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,10 +40,14 @@
  */
 package org.graalvm.nativeimage.hosted;
 
+import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -79,7 +83,7 @@ import org.graalvm.nativeimage.Platforms;
  * (unless the feature dependencies are cyclic).
  * </ul>
  *
- * @since 1.0
+ * @since 19.0
  */
 @Platforms(Platform.HOSTED_ONLY.class)
 public interface Feature {
@@ -87,7 +91,7 @@ public interface Feature {
     /**
      * Access methods that are available for all feature methods.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface FeatureAccess {
@@ -95,15 +99,43 @@ public interface Feature {
         /**
          * Returns a class if it is present on the classpath.
          *
-         * @since 1.0
+         * @since 19.0
          */
         Class<?> findClassByName(String className);
+
+        /**
+         * Returns the class path of the native image that is currently built.
+         * 
+         * The returned list does not include the native image generator itself, and does not
+         * include the JDK.
+         * 
+         * @since 20.2
+         */
+        List<Path> getApplicationClassPath();
+
+        /**
+         * Returns the module path of the native image that is currently built.
+         *
+         * The returned list does not include the native image generator itself, and does not
+         * include the JDK.
+         *
+         * @since 20.2
+         */
+        List<Path> getApplicationModulePath();
+
+        /**
+         * Returns the {@link ClassLoader} that can find all classes of the class path and module
+         * path.
+         *
+         * @since 20.2
+         */
+        ClassLoader getApplicationClassLoader();
     }
 
     /**
      * Access methods available for {@link Feature#isInConfiguration}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface IsInConfigurationAccess extends FeatureAccess {
@@ -112,7 +144,7 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#afterRegistration}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface AfterRegistrationAccess extends FeatureAccess {
@@ -121,7 +153,7 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#duringSetup}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface DuringSetupAccess extends FeatureAccess {
@@ -133,7 +165,7 @@ public interface Feature {
          * the new object and returns it. The function must return the original object if the object
          * should not be replaced.
          *
-         * @since 1.0
+         * @since 19.0
          */
         void registerObjectReplacer(Function<Object, Object> replacer);
     }
@@ -141,7 +173,7 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#beforeAnalysis}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface BeforeAnalysisAccess extends FeatureAccess {
@@ -150,7 +182,7 @@ public interface Feature {
          * Registers the provided type a used, i.e., metadata for the type is put into the native
          * image.
          *
-         * @since 1.0
+         * @since 19.0
          */
         void registerAsUsed(Class<?> type);
 
@@ -161,7 +193,7 @@ public interface Feature {
          * <p>
          * This implies that the type is also marked as {@link #registerAsUsed used}.
          *
-         * @since 1.0
+         * @since 19.0
          */
         void registerAsInHeap(Class<?> type);
 
@@ -169,7 +201,7 @@ public interface Feature {
          * Registers the provided field as accesses, i.e., the static analysis assumes the field is
          * used even if there are no explicit reads or writes in the bytecodes.
          *
-         * @since 1.0
+         * @since 19.0
          */
         void registerAsAccessed(Field field);
 
@@ -179,24 +211,70 @@ public interface Feature {
          * <p>
          * This implies that the field is also marked as {@link #registerAsAccessed accessed}.
          *
-         * @since 1.0
+         * @since 19.0
          */
         void registerAsUnsafeAccessed(Field field);
+
+        /**
+         * Registers a callback that is invoked once {@link Feature#duringAnalysis during analysis}
+         * when any of the provided elements is determined to be reachable at run time. The elements
+         * can only be of the following types:
+         * <p>
+         * <ul>
+         * <li>{@link Class} to specify reachability of the given class
+         * <li>{@link Field} to specify reachability of a field
+         * <li>{@link Executable} to specify reachability of a method or constructor
+         * </ul>
+         * <p>
+         *
+         * @since 19.2
+         */
+        void registerReachabilityHandler(Consumer<DuringAnalysisAccess> callback, Object... elements);
+
+        /**
+         * Registers a callback that is invoked once {@link Feature#duringAnalysis during analysis}
+         * for each time a method that overrides the specified {param baseMethod} is determined to
+         * be reachable at run time. In addition the handler will also get invoked once when the
+         * {param baseMethod} itself becomes reachable. The specific method that becomes reachable
+         * is passed to the handler as the second parameter.
+         *
+         * @since 19.3
+         */
+        void registerMethodOverrideReachabilityHandler(BiConsumer<DuringAnalysisAccess, Executable> callback, Executable baseMethod);
+
+        /**
+         * Registers a callback that is invoked once {@link Feature#duringAnalysis during analysis}
+         * for each time a subtype of the class specified by {param baseClass} is determined to be
+         * reachable at run time. In addition the handler will also get invoked once when the {param
+         * baseClass} itself becomes reachable. The specific class that becomes reachable is passed
+         * to the handler as the second parameter.
+         *
+         * @since 19.3
+         */
+        void registerSubtypeReachabilityHandler(BiConsumer<DuringAnalysisAccess, Class<?>> callback, Class<?> baseClass);
+
+        /**
+         * Registers a callback that is invoked once {@link Feature#duringAnalysis during analysis}
+         * when the class initializer for the given type is determined to be reachable at run time.
+         *
+         * @since 21.0
+         */
+        void registerClassInitializerReachabilityHandler(Consumer<DuringAnalysisAccess> callback, Class<?> clazz);
     }
 
     /**
      * Access methods available for {@link Feature#duringAnalysis}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
-    interface DuringAnalysisAccess extends BeforeAnalysisAccess {
+    interface DuringAnalysisAccess extends BeforeAnalysisAccess, QueryReachabilityAccess {
 
         /**
          * Notifies the static analysis that changes are made that enforce a new iteration of the
          * analysis.
          *
-         * @since 1.0
+         * @since 19.0
          */
         void requireAnalysisIteration();
     }
@@ -204,17 +282,65 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#afterAnalysis}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
-    interface AfterAnalysisAccess extends FeatureAccess {
+    interface AfterAnalysisAccess extends QueryReachabilityAccess {
+    }
 
+    /**
+     * Access reachability methods available for {@link Feature#afterAnalysis} and
+     * {@link Feature#duringAnalysis}.
+     *
+     * @since 19.2
+     */
+    @Platforms(Platform.HOSTED_ONLY.class)
+    interface QueryReachabilityAccess extends FeatureAccess {
+        /**
+         * Returns true if the static analysis determined that the provided class is reachable at
+         * run time.
+         *
+         * @since 19.2
+         */
+        boolean isReachable(Class<?> clazz);
+
+        /**
+         * Returns true if the static analysis determined that the provided field is reachable at
+         * run time.
+         *
+         * @since 19.2
+         */
+        boolean isReachable(Field field);
+
+        /**
+         * Returns true if the static analysis determined that the provided method is reachable at
+         * run time.
+         *
+         * @since 19.2
+         */
+        boolean isReachable(Executable method);
+
+        /**
+         * Returns all subtypes of the given {param baseClass} that the static analysis determined
+         * to be reachable at run time (including the {param baseClass} itself).
+         *
+         * @since 19.3
+         */
+        Set<Class<?>> reachableSubtypes(Class<?> baseClass);
+
+        /**
+         * Returns all method overrides of the given {param baseMethod} that the static analysis
+         * determined to be reachable at run time (including the {param baseMethod} itself).
+         *
+         * @since 19.3
+         */
+        Set<Executable> reachableMethodOverrides(Executable baseMethod);
     }
 
     /**
      * Access methods available for {@link Feature#onAnalysisExit}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface OnAnalysisExitAccess extends FeatureAccess {
@@ -222,10 +348,19 @@ public interface Feature {
     }
 
     /**
+     * Access methods available for {@link Feature#beforeUniverseBuilding}.
+     * 
+     * @since 21.1
+     */
+    @Platforms(Platform.HOSTED_ONLY.class)
+    interface BeforeUniverseBuildingAccess extends FeatureAccess {
+    }
+
+    /**
      * Access methods available for {@link Feature#beforeCompilation} and
      * {@link Feature#afterCompilation}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface CompilationAccess extends FeatureAccess {
@@ -233,7 +368,7 @@ public interface Feature {
         /**
          * Returns the field offset of the provided instance field.
          *
-         * @since 1.0
+         * @since 19.0
          */
         long objectFieldOffset(Field field);
 
@@ -241,7 +376,7 @@ public interface Feature {
          * Hint to the native image generator that the given object is immutable at runtime, i.e.,
          * can be placed in a read-only section of the native image heap.
          *
-         * @since 1.0
+         * @since 19.0
          */
         void registerAsImmutable(Object object);
 
@@ -250,7 +385,7 @@ public interface Feature {
          * provided predicate returns false for an object, the object is not marked as immutable and
          * the transitive iteration is stopped.
          *
-         * @since 1.0
+         * @since 19.0
          */
         void registerAsImmutable(Object root, Predicate<Object> includeObject);
     }
@@ -258,7 +393,7 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#beforeCompilation}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface BeforeCompilationAccess extends CompilationAccess {
@@ -267,7 +402,7 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#afterCompilation}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface AfterCompilationAccess extends CompilationAccess {
@@ -276,7 +411,7 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#afterHeapLayout}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface AfterHeapLayoutAccess extends FeatureAccess {
@@ -285,7 +420,7 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#beforeImageWrite}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface BeforeImageWriteAccess extends FeatureAccess {
@@ -294,14 +429,14 @@ public interface Feature {
     /**
      * Access methods available for {@link Feature#afterImageWrite}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     @Platforms(Platform.HOSTED_ONLY.class)
     interface AfterImageWriteAccess extends FeatureAccess {
         /**
          * Returns the path to the created native-image file (includes the native-image file name).
          *
-         * @since 1.0
+         * @since 19.0
          */
         Path getImagePath();
     }
@@ -314,7 +449,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default boolean isInConfiguration(IsInConfigurationAccess access) {
         return true;
@@ -324,7 +459,7 @@ public interface Feature {
      * Returns the list of features that this feature depends on. As long as the dependency chain is
      * non-cyclic, all required features are processed before this feature.
      *
-     * @since 1.0
+     * @since 19.0
      */
     default List<Class<? extends Feature>> getRequiredFeatures() {
         return Collections.emptyList();
@@ -336,7 +471,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void afterRegistration(AfterRegistrationAccess access) {
     }
@@ -347,7 +482,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void duringSetup(DuringSetupAccess access) {
     }
@@ -357,7 +492,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void beforeAnalysis(BeforeAnalysisAccess access) {
     }
@@ -371,7 +506,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void duringAnalysis(DuringAnalysisAccess access) {
     }
@@ -381,20 +516,31 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void afterAnalysis(AfterAnalysisAccess access) {
     }
 
     /**
-     * Handler for code that needs to run after the analysis, even if an error has occured, e.g.,
+     * Handler for code that needs to run after the analysis, even if an error has occurred, e.g.,
      * like reporting code.
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void onAnalysisExit(OnAnalysisExitAccess access) {
+    }
+
+    /**
+     * Handler for code that needs to run before universe building, but after hosted meta-access has
+     * been created.
+     * 
+     * @param access The supported operations that the feature can perform at this time
+     * 
+     * @since 21.1
+     */
+    default void beforeUniverseBuilding(BeforeUniverseBuildingAccess access) {
     }
 
     /**
@@ -402,7 +548,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void beforeCompilation(BeforeCompilationAccess access) {
     }
@@ -412,7 +558,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void afterCompilation(AfterCompilationAccess access) {
     }
@@ -425,7 +571,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void afterHeapLayout(AfterHeapLayoutAccess access) {
     }
@@ -436,7 +582,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time.
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void beforeImageWrite(BeforeImageWriteAccess access) {
     }
@@ -446,7 +592,7 @@ public interface Feature {
      *
      * @param access The supported operations that the feature can perform at this time.
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void afterImageWrite(AfterImageWriteAccess access) {
     }
@@ -458,7 +604,7 @@ public interface Feature {
      * Usually, overriding this method can be avoided by putting a configuration object into the
      * {@link ImageSingletons}.
      *
-     * @since 1.0
+     * @since 19.0
      */
     default void cleanup() {
     }

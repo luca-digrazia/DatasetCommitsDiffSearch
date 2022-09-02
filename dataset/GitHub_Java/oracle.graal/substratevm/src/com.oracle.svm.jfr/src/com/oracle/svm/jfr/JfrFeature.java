@@ -121,65 +121,61 @@ public class JfrFeature implements Feature {
         runtime.addShutdownHook(manager::teardown);
     }
 
-    private static class JfrMetadataCollection {
-        final Map<Class<?>, Integer> classToIndex = new HashMap<>();
-        final Set<Package> packages = new HashSet<>();
-        final Set<Module> modules = new HashSet<>();
-        final Set<ClassLoader> classLoaders = new HashSet<>();
-        int mapSize = 0;
-    }
+    private final Map<Class<?>, Integer> classToIndex = new HashMap<>();
+    private final Set<Package> packages = new HashSet<>();
+    private final Set<Module> modules = new HashSet<>();
+    private final Set<ClassLoader> classLoaders = new HashSet<>();
+    private int mapSize = 0;
 
-    private void assignClass(JfrMetadataCollection metadata, Class<?> clazz, int id) {
-        metadata.classToIndex.put(clazz, id);
-        metadata.mapSize++;
+    private void assignClass(Class<?> clazz, int id) {
+        classToIndex.put(clazz, id);
+        mapSize++;
         Package pkg = clazz.getPackage();
-        if (pkg != null && !metadata.packages.contains(pkg)) {
-            metadata.packages.add(pkg);
-            metadata.mapSize++;
+        if (pkg != null && !packages.contains(pkg)) {
+            packages.add(pkg);
+            mapSize++;
         }
         Module module = clazz.getModule();
-        if (module != null && !metadata.modules.contains(module)) {
-            metadata.modules.add(module);
-            metadata.mapSize++;
+        if (module != null && !modules.contains(module)) {
+            modules.add(module);
+            mapSize++;
         }
         ClassLoader cl = clazz.getClassLoader();
-        if (cl != null && !metadata.classLoaders.contains(cl)) {
-            metadata.classLoaders.add(cl);
-            metadata.mapSize++;
+        if (cl != null && !classLoaders.contains(cl)) {
+            classLoaders.add(cl);
+            mapSize++;
         }
     }
 
     @Override
     public void beforeCompilation(BeforeCompilationAccess a) {
 
-        final JfrMetadataCollection metadata = new JfrMetadataCollection();
-
         // Scan all classes and build sets of packages, modules and class-loaders. Count all items.
-        ((FeatureImpl.CompilationAccessImpl)a).compiledTypes((clazz, typeID) -> assignClass(metadata, clazz, typeID));
+        ((FeatureImpl.CompilationAccessImpl)a).compiledTypes(this::assignClass);
 
         // Create trace-ID map with fixed size.
-        JfrTraceIdMap map = new JfrTraceIdMap(metadata.mapSize);
+        JfrTraceIdMap map = new JfrTraceIdMap(mapSize);
         ImageSingletons.lookup(JfrRuntimeAccess.class).setTraceIdMap(map);
 
         // Assign each class, package, module and class-loader a unique index.
-        int idx = metadata.classToIndex.size();
-        for (Class<?> clazz : metadata.classToIndex.keySet()) {
+        int idx = classToIndex.size();
+        for (Class<?> clazz : classToIndex.keySet()) {
             if (!clazz.isPrimitive()) {
-                JfrTraceId.assign(clazz, metadata.classToIndex);
+                JfrTraceId.assign(clazz, classToIndex);
             }
-            if (metadata.classToIndex.get(clazz) >= idx) {
+            if (classToIndex.get(clazz) >= idx) {
                 throw new ArrayIndexOutOfBoundsException();
             }
         }
-        for (Package pkg : metadata.packages) {
+        for (Package pkg : packages) {
             Target_java_lang_Package.setJfrID(pkg, idx);
             JfrTraceId.assign(pkg, idx++);
         }
-        for (Module module : metadata.modules) {
+        for (Module module : modules) {
             Target_java_lang_Module.setJfrID(module, idx);
             JfrTraceId.assign(module, idx++);
         }
-        for (ClassLoader cl : metadata.classLoaders) {
+        for (ClassLoader cl : classLoaders) {
             Target_java_lang_ClassLoader.setJfrID(cl, idx);
             JfrTraceId.assign(cl, idx++);
         }
