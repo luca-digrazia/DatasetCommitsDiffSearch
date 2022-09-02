@@ -30,12 +30,6 @@
 package com.oracle.truffle.wasm.binary;
 
 
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.wasm.collection.ByteList;
-
-import java.util.ArrayList;
-
 import static com.oracle.truffle.wasm.binary.Instructions.BLOCK;
 import static com.oracle.truffle.wasm.binary.Instructions.DROP;
 import static com.oracle.truffle.wasm.binary.Instructions.END;
@@ -44,19 +38,46 @@ import static com.oracle.truffle.wasm.binary.Instructions.F32_CONST;
 import static com.oracle.truffle.wasm.binary.Instructions.F64_CONST;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_ADD;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_AND;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_CLZ;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_CONST;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_CTZ;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_DIV_S;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_DIV_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_EQ;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_EQZ;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_GE_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_GE_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_GT_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_GT_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_LE_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_LE_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_LT_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_LT_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_MUL;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_NE;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_OR;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_POPCNT;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_REM_S;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_REM_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_ROTL;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_ROTR;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_SHL;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SUB;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_XOR;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_CONST;
-import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_GET;
-import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_SET;
-import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_TEE;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_EQ;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_EQZ;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_GE_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_GE_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_GT_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_GT_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_LE_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_LE_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_LT_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_LT_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I64_NE;
 import static com.oracle.truffle.wasm.binary.Instructions.NOP;
 import static com.oracle.truffle.wasm.binary.Sections.CODE;
 import static com.oracle.truffle.wasm.binary.Sections.CUSTOM;
@@ -71,6 +92,12 @@ import static com.oracle.truffle.wasm.binary.Sections.START;
 import static com.oracle.truffle.wasm.binary.Sections.TABLE;
 import static com.oracle.truffle.wasm.binary.Sections.TYPE;
 import static com.oracle.truffle.wasm.binary.ValueTypes.VOID_TYPE;
+
+import java.util.ArrayList;
+
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.wasm.collection.ByteList;
 
 /** Simple recursive-descend parser for the binary WebAssembly format.
  */
@@ -152,7 +179,6 @@ public class BinaryReader extends BinaryStreamReader {
     public void readTypeSection() {
         int numTypes = readVectorLength();
         for (int t = 0; t != numTypes; ++t) {
-            System.err.println("offset: " + offset());
             byte type = read1();
             switch(type) {
                 case 0x60:
@@ -201,8 +227,7 @@ public class BinaryReader extends BinaryStreamReader {
 
         /* Read code entry (function) locals */
         WasmCodeEntry codeEntry = new WasmCodeEntry(data);
-        wasmModule.symbolTable().function(funcIndex).setCodeEntry(codeEntry);
-        int numLocals = readCodeEntryLocals(codeEntry);
+        int numLocals = readCodeEntryLocals();
 
         /* Create the necessary objects for the code entry */
         int expressionSize = codeEntrySize - (offset - startOffset);
@@ -211,8 +236,7 @@ public class BinaryReader extends BinaryStreamReader {
         WasmBlockNode block = new WasmBlockNode(codeEntry, offset, expressionSize, returnTypeId, state.stackSize());
         WasmRootNode rootNode = new WasmRootNode(wasmLanguage, codeEntry, block);
 
-        // Push a frame slot to the frame descriptor for every local.
-        codeEntry.initLocalSlots(rootNode.getFrameDescriptor());
+        // TODO: Push a frame slot to the frame descriptor for every local.
 
         // Abstractly interpret the code entry block.
         readBlock(block, state, returnTypeId);
@@ -223,23 +247,16 @@ public class BinaryReader extends BinaryStreamReader {
         // TODO: For structured code, we need to set the expressionSize later.
     }
 
-    private int readCodeEntryLocals(WasmCodeEntry codeEntry) {
-        int numLocalsGroups = readVectorLength();
-        int numLocals = 0;
-        ByteList locals = new ByteList();
-        for (int localGroup = 0; localGroup < numLocalsGroups; localGroup++) {
-            int groupLength = readVectorLength();
-            byte t = readValueType();
-            for (int i = 0; i != groupLength; ++i) {
-                locals.add(t);
-            }
-            numLocals += groupLength;
+    private int readCodeEntryLocals() {
+        int numLocals = readVectorLength();
+        for (int local = 0; local < numLocals; local++) {
+            throw new RuntimeException("Not implemented");
         }
-        codeEntry.setLocalTypes(locals.toArray());
         return numLocals;
     }
 
     private void initTruffleForCodeEntry(WasmCodeEntry codeEntry, int numLocals, WasmRootNode rootNode, ExecutionState state, int funcIndex) {
+        codeEntry.initLocalSlots(rootNode.getFrameDescriptor(), numLocals);
         codeEntry.initStackSlots(rootNode.getFrameDescriptor(), state.maxStackSize);
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         wasmModule.symbolTable().function(funcIndex).setCallTarget(callTarget);
@@ -276,41 +293,15 @@ public class BinaryReader extends BinaryStreamReader {
                 case DROP:
                     state.pop();
                     break;
-                case LOCAL_GET: {
-                    int localIndex = readLocalIndex(bytesConsumed);
-                    constantLengthTable.add(bytesConsumed[0]);
-                    // TODO: Assert localIndex exists.
-                    currentBlock.codeEntry().localSlot(localIndex);
-                    state.push();
-                    break;
-                }
-                case LOCAL_SET: {
-                    int localIndex = readLocalIndex(bytesConsumed);
-                    constantLengthTable.add(bytesConsumed[0]);
-                    // TODO: Assert localIndex exists
-                    currentBlock.codeEntry().localSlot(localIndex);
-                    // Assert there is a value on the top of the stack.
-                    Assert.assertLarger(state.stackSize(), 0, "local.set requires at least one element in the stack");
-                    state.pop();
-                    break;
-                }
-                case LOCAL_TEE: {
-                    int localIndex = readLocalIndex(bytesConsumed);
-                    constantLengthTable.add(bytesConsumed[0]);
-                    // TODO: Assert localIndex exists
-                    currentBlock.codeEntry().localSlot(localIndex);
-                    // Assert there is a value on the top of the stack.
-                    Assert.assertLarger(state.stackSize(), 0, "local.tee requires at least one element in the stack");
-                    state.push();
-                    break;
-                }
                 case I32_CONST:
                     readSignedInt32(bytesConsumed);
                     constantLengthTable.add(bytesConsumed[0]);
                     state.push();
                     break;
                 case I64_CONST:
-                    Assert.fail("Not implemented");
+                    readSignedInt64(bytesConsumed);
+                    constantLengthTable.add(bytesConsumed[0]);
+                    state.push();
                     break;
                 case F32_CONST:
                     readFloatAsInt32();
@@ -318,6 +309,48 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 case F64_CONST:
                     readFloatAsInt64();
+                    state.push();
+                    break;
+                case I32_EQZ:
+                    state.pop();
+                    state.push();
+                    break;
+                case I32_EQ:
+                case I32_NE:
+                case I32_LT_S:
+                case I32_LT_U:
+                case I32_GT_S:
+                case I32_GT_U:
+                case I32_LE_S:
+                case I32_LE_U:
+                case I32_GE_S:
+                case I32_GE_U:
+                    state.pop();
+                    state.pop();
+                    state.push();
+                    break;
+                case I64_EQZ:
+                    state.pop();
+                    state.push();
+                    break;
+                case I64_EQ:
+                case I64_NE:
+                case I64_LT_S:
+                case I64_LT_U:
+                case I64_GT_S:
+                case I64_GT_U:
+                case I64_LE_S:
+                case I64_LE_U:
+                case I64_GE_S:
+                case I64_GE_U:
+                    state.pop();
+                    state.pop();
+                    state.push();
+                    break;
+                case I32_CLZ:
+                case I32_CTZ:
+                case I32_POPCNT:
+                    state.pop();
                     state.push();
                     break;
                 case I32_ADD:
@@ -330,6 +363,11 @@ public class BinaryReader extends BinaryStreamReader {
                 case I32_AND:
                 case I32_OR:
                 case I32_XOR:
+                case I32_SHL:
+                case I32_SHR_S:
+                case I32_SHR_U:
+                case I32_ROTL:
+                case I32_ROTR:
                 case F32_ADD:
                     state.pop();
                     state.pop();
@@ -398,13 +436,5 @@ public class BinaryReader extends BinaryStreamReader {
 
     public int readVectorLength() {
         return readUnsignedInt32();
-    }
-
-    public int readLocalIndex() {
-        return readUnsignedInt32();
-    }
-
-    public int readLocalIndex(byte[] bytesConsumed) {
-        return readUnsignedInt32(bytesConsumed);
     }
 }
