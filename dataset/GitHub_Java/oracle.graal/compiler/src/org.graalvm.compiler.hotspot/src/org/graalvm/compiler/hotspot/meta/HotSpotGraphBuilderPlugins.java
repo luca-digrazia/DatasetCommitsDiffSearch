@@ -143,8 +143,7 @@ public class HotSpotGraphBuilderPlugins {
                     SnippetReflectionProvider snippetReflection,
                     ForeignCallsProvider foreignCalls,
                     ReplacementsImpl replacements,
-                    OptionValues options,
-                    TargetDescription target) {
+                    OptionValues options, TargetDescription target) {
         InvocationPlugins invocationPlugins = new HotSpotInvocationPlugins(graalRuntime, config, compilerConfiguration);
 
         Plugins plugins = new Plugins(invocationPlugins);
