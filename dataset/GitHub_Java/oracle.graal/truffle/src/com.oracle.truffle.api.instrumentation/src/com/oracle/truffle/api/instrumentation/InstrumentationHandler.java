@@ -219,9 +219,7 @@ final class InstrumentationHandler {
 
         // fast path no bindings attached
         if (!sourceSectionBindings.isEmpty()) {
-            List<VisitOperation> actions = new ArrayList<>();
-            actions.add(new NotifyLoadedOperation(VisitOperation.Scope.ALL, sourceSectionBindings));
-            visitRoot(root, root, new BindingsVisitor(true, actions), false, true);
+            visitRoot(root, root, new NotifyLoadedListenerVisitor(sourceSectionBindings), false, true);
         }
 
     }
@@ -353,9 +351,7 @@ final class InstrumentationHandler {
 
         // fast path no bindings attached
         if (!executionBindings.isEmpty()) {
-            List<VisitOperation> actions = new ArrayList<>();
-            actions.add(new InsertWrapperOperation(VisitOperation.Scope.ALL, executionBindings));
-            visitRoot(root, root, new BindingsVisitor(true, actions), false, true);
+            visitRoot(root, root, new InsertWrappersAllBindingsVisitor(executionBindings), false, true);
         }
     }
 
@@ -408,9 +404,7 @@ final class InstrumentationHandler {
         if (cleanupRequired) {
             Collection<EventBinding.Source<?>> disposedExecutionBindings = filterBindingsForInstrumenter(executionBindings, disposedInstrumenter);
             if (!disposedExecutionBindings.isEmpty()) {
-                List<VisitOperation> actions = new ArrayList<>();
-                actions.add(new DisposeWrapperOperation(VisitOperation.Scope.ALL, disposedExecutionBindings));
-                visitRoots(executedRoots, new BindingsVisitor(false, actions));
+                visitRoots(executedRoots, new DisposeWrappersWithBindingVisitor(disposedExecutionBindings));
             }
             disposeBindingsBulk(disposedExecutionBindings);
             disposeBindingsBulk(filterBindingsForInstrumenter(sourceSectionBindings, disposedInstrumenter));
@@ -448,11 +442,7 @@ final class InstrumentationHandler {
         this.executionBindings.add(binding);
 
         if (!executedRoots.isEmpty()) {
-            List<VisitOperation> actions = new ArrayList<>();
-            actions.add(new InsertWrapperOperation(VisitOperation.Scope.ORIGINALTREE, binding));
-            actions.add(new InsertWrapperOperation(VisitOperation.Scope.NEWMATERIALIZEDSUBTREES, executionBindings));
-            actions.add(new NotifyLoadedOperation(VisitOperation.Scope.NEWMATERIALIZEDSUBTREES, sourceSectionBindings));
-            visitRoots(executedRoots, new BindingsVisitor(true, actions));
+            visitRoots(executedRoots, new InsertWrappersAllBindingsNewBindingVisitor(executionBindings, binding));
         }
 
         if (TRACE) {
@@ -470,11 +460,7 @@ final class InstrumentationHandler {
         this.sourceSectionBindings.add(binding);
         if (notifyLoaded) {
             if (!loadedRoots.isEmpty()) {
-                List<VisitOperation> actions = new ArrayList<>();
-                actions.add(new NotifyLoadedOperation(VisitOperation.Scope.ORIGINALTREE, binding));
-                actions.add(new NotifyLoadedOperation(VisitOperation.Scope.NEWMATERIALIZEDSUBTREES, sourceSectionBindings));
-                actions.add(new InsertWrapperOperation(VisitOperation.Scope.NEWMATERIALIZEDSUBTREES, executionBindings));
-                visitRoots(loadedRoots, new BindingsVisitor(true, actions));
+                visitRoots(loadedRoots, new NotifyLoadedWithBindingVisitor(binding));
             }
         }
 
@@ -491,11 +477,7 @@ final class InstrumentationHandler {
         }
 
         if (!loadedRoots.isEmpty()) {
-            List<VisitOperation> actions = new ArrayList<>();
-            actions.add(new NotifyLoadedOperation(VisitOperation.Scope.ORIGINALTREE, binding));
-            actions.add(new NotifyLoadedOperation(VisitOperation.Scope.NEWMATERIALIZEDSUBTREES, sourceSectionBindings));
-            actions.add(new InsertWrapperOperation(VisitOperation.Scope.NEWMATERIALIZEDSUBTREES, executionBindings));
-            visitRoots(loadedRoots, new BindingsVisitor(true, actions));
+            visitRoots(loadedRoots, new NotifyLoadedWithBindingVisitor(binding));
         }
 
         if (TRACE) {
@@ -748,9 +730,7 @@ final class InstrumentationHandler {
         if (binding instanceof EventBinding.Source) {
             EventBinding.Source<?> sourceBinding = (EventBinding.Source<?>) binding;
             if (sourceBinding.isExecutionEvent()) {
-                List<VisitOperation> actions = new ArrayList<>();
-                actions.add(new DisposeWrapperOperation(VisitOperation.Scope.ALL, sourceBinding));
-                visitRoots(executedRoots, new BindingsVisitor(false, actions));
+                visitRoots(executedRoots, new DisposeWrappersVisitor(sourceBinding));
             }
         } else if (binding instanceof EventBinding.Allocation) {
             EventBinding.Allocation<?> allocationBinding = (EventBinding.Allocation<?>) binding;
@@ -871,11 +851,11 @@ final class InstrumentationHandler {
         }
         assert parentInstrumentable != null;
 
-        if (!sourceSectionBindings.isEmpty() || !executionBindings.isEmpty()) {
-            List<VisitOperation> actions = new ArrayList<>();
-            actions.add(new NotifyLoadedOperation(VisitOperation.Scope.ALL, sourceSectionBindings));
-            actions.add(new InsertWrapperOperation(VisitOperation.Scope.ALL, executionBindings));
-            visitRoot(rootNode, parentInstrumentable, new BindingsVisitor(true, actions), true, false);
+        if (!sourceSectionBindings.isEmpty()) {
+            visitRoot(rootNode, parentInstrumentable, new NotifyLoadedListenerVisitor(sourceSectionBindings), true, false);
+        }
+        if (!executionBindings.isEmpty()) {
+            visitRoot(rootNode, parentInstrumentable, new InsertWrappersAllBindingsVisitor(executionBindings), true, false);
         }
     }
 
@@ -1265,93 +1245,6 @@ final class InstrumentationHandler {
         return parent instanceof WrapperNode ? (WrapperNode) parent : null;
     }
 
-    private abstract static class VisitOperation {
-        enum Scope {
-            ALL,
-            ORIGINALTREE,
-            NEWMATERIALIZEDSUBTREES
-        };
-
-        private final Scope scope;
-        private final Collection<EventBinding.Source<?>> bindings;
-        private final boolean singleBindingOperation;
-        private final boolean performForEachBinding;
-
-        VisitOperation(Scope scope, EventBinding.Source<?> binding) {
-            this(scope, Collections.singletonList(binding), true, true);
-        }
-
-        VisitOperation(Scope scope, Collection<EventBinding.Source<?>> bindings, boolean performForEachBinding) {
-            this(scope, bindings, false, performForEachBinding);
-        }
-
-        VisitOperation(Scope scope, Collection<EventBinding.Source<?>> bindings, boolean singleBindingOperation, boolean performForEachBinding) {
-            this.scope = scope;
-            this.bindings = bindings;
-            this.singleBindingOperation = singleBindingOperation;
-            this.performForEachBinding = performForEachBinding;
-        }
-
-        public boolean isSingleBindingOperation() {
-            return singleBindingOperation;
-        }
-
-        public boolean isPerformForEachBinding() {
-            return performForEachBinding;
-        }
-
-        public Scope getScope() {
-            return scope;
-        }
-
-        protected abstract void perform(EventBinding.Source<?> binding, Node node, SourceSection section);
-    }
-
-    private class InsertWrapperOperation extends VisitOperation {
-        InsertWrapperOperation(Scope scope, EventBinding.Source<?> binding) {
-            super(scope, binding);
-        }
-
-        InsertWrapperOperation(Scope scope, Collection<EventBinding.Source<?>> bindings) {
-            super(scope, bindings, false);
-        }
-
-        @Override
-        protected void perform(EventBinding.Source<?> binding, Node node, SourceSection section) {
-            insertWrapper(node, section);
-        }
-    }
-
-    private static class NotifyLoadedOperation extends VisitOperation {
-        NotifyLoadedOperation(Scope scope, EventBinding.Source<?> binding) {
-            super(scope, binding);
-        }
-
-        NotifyLoadedOperation(Scope scope, Collection<EventBinding.Source<?>> bindings) {
-            super(scope, bindings, true);
-        }
-
-        @Override
-        protected void perform(EventBinding.Source<?> binding, Node node, SourceSection section) {
-            notifySourceSectionLoaded(binding, node, section);
-        }
-    }
-
-    private static class DisposeWrapperOperation extends VisitOperation {
-        DisposeWrapperOperation(Scope scope, EventBinding.Source<?> binding) {
-            super(scope, binding);
-        }
-
-        DisposeWrapperOperation(Scope scope, Collection<EventBinding.Source<?>> bindings) {
-            super(scope, bindings, false);
-        }
-
-        @Override
-        protected void perform(EventBinding.Source<?> binding, Node node, SourceSection section) {
-            invalidateWrapper(node);
-        }
-    }
-
     private abstract static class AbstractNodeVisitor implements NodeVisitor {
 
         InstrumentationHandler instrumentationHandler;
@@ -1371,8 +1264,6 @@ final class InstrumentationHandler {
         boolean visitingNewNodes;
 
         private final boolean shouldMaterializeSyntaxNodes;
-        Set<Class<? extends Tag>> materializeTags;
-        private boolean materializeLimitedTagsInitialized;
 
         AbstractNodeVisitor(boolean shouldMaterializeSyntaxNodes) {
             this.shouldMaterializeSyntaxNodes = shouldMaterializeSyntaxNodes;
@@ -1381,8 +1272,8 @@ final class InstrumentationHandler {
         abstract boolean shouldVisit();
 
         /**
-         * True if this visitor is invoked for at least one tag which hasn't been used yet. It may
-         * be falsely positive, but never falsely negative.
+         * True if this visitor is invoked for at least one materialization tag which hasn't been
+         * used yet. It may be falsely positive, but never falsely negative.
          */
         protected boolean hasNewMaterializeTags() {
             return true;
@@ -1401,7 +1292,7 @@ final class InstrumentationHandler {
                 if (rootSourceSection != null) {
                     if (RootNodeBits.isSourceSectionsHierachical(bits)) {
                         if (sourceSection.getCharIndex() < rootSourceSection.getCharIndex() //
-                                || sourceSection.getCharEndIndex() > rootSourceSection.getCharEndIndex()) {
+                                        || sourceSection.getCharEndIndex() > rootSourceSection.getCharEndIndex()) {
                             bits = RootNodeBits.setSourceSectionsUnstructured(bits);
                         }
                     }
@@ -1419,8 +1310,8 @@ final class InstrumentationHandler {
         private Node savedParent;
         private SourceSection savedParentSourceSection;
 
+        @SuppressWarnings("unchecked")
         public final boolean visit(Node originalNode) {
-            initMaterializeTags();
             Node node = originalNode;
             SourceSection sourceSection = node.getSourceSection();
             boolean instrumentable = InstrumentationHandler.isInstrumentableNode(node);
@@ -1428,19 +1319,78 @@ final class InstrumentationHandler {
             SourceSection previousParentSourceSection = null;
             if (instrumentable) {
                 computeRootBits(sourceSection);
-                boolean hasOldNodes = visitOldNodes(node);
-                if (!visitingOldNodes) {
-                    Node oldNode = node;
-                    node = materialize(node, sourceSection);
-                    if (saveAndVisitOldNode(node, sourceSection, oldNode)) {
-                        hasOldNodes = true;
+                Node oldNode = node;
+                Set<Class<? extends Tag>> materializeTags = (Set<Class<? extends Tag>>) (materializeLimitedTags == null ? providedTags : materializeLimitedTags);
+                if (shouldMaterializeSyntaxNodes && !visitingOldNodes) {
+                    node = materializeSyntaxNodes(node, sourceSection, materializeTags);
+                    // TODO uncomment the following, languages are not required to satisfy this yet.
+                    // assert !visitingNewNodes || node == oldNode : "New tree should be fully materialized!";
+                    assert hasNewMaterializeTags() || node == oldNode : "Node must not materialize if no new tag is specified!";
+                    // Assert no repeated materialization with the same tags
+                    assert node == materializeSyntaxNodes(node, sourceSection, materializeTags) : "Node must not be materialized multiple times for the same set of tags!";
+                    if (!firstExecution && node != oldNode) {
+                        /*
+                         * We also need to traverse all old children on materialization. This is
+                         * necessary if the old node is still currently executing and does not yet
+                         * see the new node. Unfortunately we don't know reliably whether we are
+                         * currently executing that is why we always need to instrument the old node
+                         * as well. This is especially problematic for long or infinite loops in
+                         * combination with cancel events.
+                         */
+                        visitingOldNodes = true;
+                        try {
+                            NodeUtil.forEachChild(oldNode, this);
+                        } finally {
+                            visitingOldNodes = false;
+                        }
                     }
-                    if (!hasOldNodes) {
-                        clearOldNodeReference(node);
+                }
+                /*
+                 * We also need to traverse all old children that are no longer reachable in the AST
+                 * due to previous materializations.
+                 */
+                if (!firstExecution) {
+                    WrapperNode wrapperNode = getWrapperNode(node);
+                    ProbeNode.OldNodeReference oldNodeReference = (wrapperNode != null ? wrapperNode.getProbeNode().getOldNodeReference() : null);
+                    if (oldNodeReference != null) {
+                        boolean wasVisitingOldNodes = visitingOldNodes;
+                        visitingOldNodes = true;
+                        boolean hasOldNodes = false;
+                        try {
+                            while (oldNodeReference != null) {
+                                Node nodeRefNode = oldNodeReference.getNode();
+                                if (nodeRefNode != null) {
+                                    hasOldNodes = true;
+                                    NodeUtil.forEachChild(nodeRefNode, this);
+                                }
+                                oldNodeReference = oldNodeReference.getNext();
+                            }
+                        } finally {
+                            visitingOldNodes = wasVisitingOldNodes;
+                        }
+                        if (!hasOldNodes && node == oldNode) {
+                            // There are no old trees to traverse.
+                            wrapperNode.getProbeNode().clearOldNodeReference();
+                            // At this point the probe node might already have no chain, and it
+                            // also might not be updated further, and so only invalidation makes
+                            // sure the wrapper gets eventually removed.
+                            invalidateWrapperImpl(wrapperNode, node);
+                        }
                     }
                 }
                 visitInstrumentable(this.savedParent, this.savedParentSourceSection, node, sourceSection);
-
+                if (!firstExecution && node != oldNode) {
+                    // If node is not the same as the oldNode and a wrapper was not created or it
+                    // was not updated, we need to create or update the wrapper otherwise reference
+                    // to the old node would be lost.
+                    WrapperNode wrapperNode = getWrapperNode(node);
+                    if (wrapperNode == null) {
+                        instrumentationHandler.insertWrapper(node, sourceSection);
+                    }
+                    wrapperNode = getWrapperNode(node);
+                    assert wrapperNode != null : "Node must have an instrumentation wrapper at this point!";
+                    wrapperNode.getProbeNode().setOldNode(oldNode, materializeTags);
+                }
                 previousParent = this.savedParent;
                 previousParentSourceSection = this.savedParentSourceSection;
                 this.savedParent = node;
@@ -1462,106 +1412,8 @@ final class InstrumentationHandler {
             return true;
         }
 
-        @SuppressWarnings("unchecked")
-        private void initMaterializeTags() {
-            if (!materializeLimitedTagsInitialized) {
-                if (shouldMaterializeSyntaxNodes) {
-                    materializeTags = (Set<Class<? extends Tag>>) (materializeLimitedTags == null ? providedTags : materializeLimitedTags);
-                }
-                materializeLimitedTagsInitialized = true;
-            }
-        }
-
-        private Node materialize(Node node, SourceSection sourceSection) {
-            node = materializeSyntaxNodes(node, sourceSection);
-            // TODO uncomment the following, languages are not required to satisfy this yet.
-            // assert !visitingNewNodes || node == oldNode : "New tree should be fully
-            // materialized!";
-            // Assert no repeated materialization with the same tags
-            assert node == materializeSyntaxNodes(node, sourceSection) : "Node must not be materialized multiple times for the same set of tags!";
-            return node;
-        }
-
-        private boolean saveAndVisitOldNode(Node node, SourceSection sourceSection, Node oldNode) {
-            if (!firstExecution && node != oldNode) {
-                assert materializeTags != null : "Materialize tags must not be null when materialization happened.";
-               // If node is not the same as the oldNode we keep a reference to the old
-                // node in its wrapper's probe node. If the wrapper does not exist yet,
-                // we create it, otherwise the reference to the old node would be lost.
-                WrapperNode wrapperNode = getWrapperNode(node);
-                if (wrapperNode == null) {
-                    instrumentationHandler.insertWrapper(node, sourceSection);
-                }
-                wrapperNode = getWrapperNode(node);
-                assert wrapperNode != null : "Node must have an instrumentation wrapper at this point!";
-                wrapperNode.getProbeNode().setOldNode(oldNode, materializeTags);
-                /*
-                 * We also need to traverse all children of the old node that was just
-                 * added. This is necessary if the old node is still currently executing and
-                 * does not yet see the new node. Unfortunately we don't know reliably
-                 * whether we are currently executing that is why we always need to
-                 * instrument the old node as well. This is especially problematic for long
-                 * or infinite loops in combination with cancel events.
-                 */
-                visitingOldNodes = true;
-                try {
-                    NodeUtil.forEachChild(oldNode, this);
-                } finally {
-                    visitingOldNodes = false;
-                }
-                return true;
-            }
-            return false;
-        }
-
-        private void clearOldNodeReference(Node node) {
-            // There are no old trees to traverse.
-            WrapperNode wrapperNode = getWrapperNode(node);
-            if (wrapperNode != null) {
-                wrapperNode.getProbeNode().clearOldNodeReference();
-                // At this point the probe node might already have no chain, and it
-                // also might not be updated further, and so only invalidation makes
-                // sure the wrapper gets eventually removed.
-                invalidateWrapperImpl(wrapperNode, node);
-            }
-        }
-
-        /*
-         * We need to traverse all old children that are no longer reachable in the AST due to
-         * previous materializations.
-         */
-        private boolean visitOldNodes(Node node) {
-            if (!firstExecution) {
-                WrapperNode wrapperNode = getWrapperNode(node);
-                ProbeNode.OldNodeReference oldNodeReference = (wrapperNode != null ? wrapperNode.getProbeNode().getOldNodeReference() : null);
-                if (oldNodeReference != null) {
-                    boolean wasVisitingOldNodes = visitingOldNodes;
-                    visitingOldNodes = true;
-                    boolean hasOldNodes = false;
-                    try {
-                        while (oldNodeReference != null) {
-                            Node nodeRefNode = oldNodeReference.getNode();
-                            if (nodeRefNode != null) {
-                                hasOldNodes = true;
-                                NodeUtil.forEachChild(nodeRefNode, this);
-                            }
-                            oldNodeReference = oldNodeReference.getNext();
-                        }
-                    } finally {
-                        visitingOldNodes = wasVisitingOldNodes;
-                    }
-                    return hasOldNodes;
-                }
-            }
-            return false;
-        }
-
-        private Node materializeSyntaxNodes(Node instrumentableNode, SourceSection sourceSection) {
-            if (!shouldMaterializeSyntaxNodes) {
-                return instrumentableNode;
-            }
+        private Node materializeSyntaxNodes(Node instrumentableNode, SourceSection sourceSection, Set<Class<? extends Tag>> materializeTags) {
             if (instrumentableNode instanceof InstrumentableNode) {
-                assert materializeTags != null : "Materialize tags must not be null before materialization.";
                 InstrumentableNode currentNode = (InstrumentableNode) instrumentableNode;
                 assert currentNode.isInstrumentable();
                 InstrumentableNode materializedNode = currentNode.materializeInstrumentableNodes(materializeTags);
@@ -1598,28 +1450,69 @@ final class InstrumentationHandler {
 
     }
 
-    private static class BindingsVisitor extends AbstractNodeVisitor {
-        private final List<VisitOperation> actions;
-        private final boolean singleBindingOptimization;
+    private abstract static class AbstractBindingVisitor extends AbstractNodeVisitor {
 
-        BindingsVisitor(boolean shouldMaterializeSyntaxNodes, List<VisitOperation> actions) {
+        protected final EventBinding.Source<?> binding;
+
+        AbstractBindingVisitor(EventBinding.Source<?> binding, boolean shouldMaterializeSyntaxNodes) {
             super(shouldMaterializeSyntaxNodes);
-            this.actions = actions;
-            this.singleBindingOptimization = actions.size() == 1 && actions.get(0).isSingleBindingOperation();
+            this.binding = binding;
+            Set<Class<?>> limitedTags = binding.getLimitedTags();
+            this.materializeLimitedTags = limitedTags != null ? Collections.unmodifiableSet(limitedTags) : null;
+        }
+
+        @Override
+        boolean shouldVisit() {
+            RootNode localRoot = root;
+            SourceSection localRootSourceSection = rootSourceSection;
+            int localRootBits = rootBits;
+            return binding.isInstrumentedRoot(providedTags, localRoot, localRootSourceSection, localRootBits);
+        }
+
+        @Override
+        protected final void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
+            if (binding.isInstrumentedLeaf(providedTags, instrumentableNode, sourceSection) ||
+                            binding.isChildInstrumentedLeaf(providedTags, root, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection)) {
+                if (TRACE) {
+                    traceFilterCheck("hit", instrumentableNode, sourceSection);
+                }
+                visitInstrumented(instrumentableNode, sourceSection);
+            } else {
+                if (TRACE) {
+                    traceFilterCheck("miss", instrumentableNode, sourceSection);
+                }
+            }
+        }
+
+        protected abstract void visitInstrumented(Node node, SourceSection section);
+    }
+
+    @SuppressWarnings("deprecation")
+    private static void traceFilterCheck(String result, Node instrumentableNode, SourceSection sourceSection) {
+        trace("  Filter %4s node:%s section:%s %n", result, instrumentableNode, sourceSection);
+    }
+
+    private abstract static class AbstractBindingsVisitor extends AbstractNodeVisitor {
+
+        private final Collection<EventBinding.Source<?>> bindings;
+        private final boolean visitForEachBinding;
+
+        AbstractBindingsVisitor(Collection<EventBinding.Source<?>> bindings, boolean visitForEachBinding, boolean shouldMaterializeSyntaxNodes) {
+            super(shouldMaterializeSyntaxNodes);
+            this.bindings = bindings;
+            this.visitForEachBinding = visitForEachBinding;
 
             Set<Class<?>> compoundTags = null; // null means all provided tags by the language
-            for (VisitOperation operation : actions) {
-                for (EventBinding.Source<?> sourceBinding : operation.bindings) {
-                    Set<Class<?>> limitedTags = sourceBinding.getLimitedTags();
-                    if (limitedTags == null) {
-                        compoundTags = null;
-                        break;
-                    } else {
-                        if (compoundTags == null) {
-                            compoundTags = new HashSet<>();
-                        }
-                        compoundTags.addAll(limitedTags);
+            for (EventBinding.Source<?> sourceBinding : bindings) {
+                Set<Class<?>> limitedTags = sourceBinding.getLimitedTags();
+                if (limitedTags == null) {
+                    compoundTags = null;
+                    break;
+                } else {
+                    if (compoundTags == null) {
+                        compoundTags = new HashSet<>();
                     }
+                    compoundTags.addAll(limitedTags);
                 }
             }
             this.materializeLimitedTags = compoundTags != null ? Collections.unmodifiableSet(compoundTags) : null;
@@ -1627,62 +1520,185 @@ final class InstrumentationHandler {
 
         @Override
         boolean shouldVisit() {
-            if (actions.isEmpty()) {
+            if (bindings.isEmpty()) {
                 return false;
             }
             RootNode localRoot = root;
             SourceSection localRootSourceSection = rootSourceSection;
             int localRootBits = rootBits;
 
-            for (VisitOperation operation : actions) {
-                for (EventBinding.Source<?> binding : operation.bindings) {
-                    if (binding.isInstrumentedRoot(providedTags, localRoot, localRootSourceSection, localRootBits)) {
-                        return true;
-                    }
+            for (EventBinding.Source<?> binding : bindings) {
+                if (binding.isInstrumentedRoot(providedTags, localRoot, localRootSourceSection, localRootBits)) {
+                    return true;
                 }
             }
             return false;
         }
 
-        boolean shouldPerformForBinding(EventBinding.Source<?> binding, Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
-            if (singleBindingOptimization) {
-                return binding.isInstrumentedLeaf(providedTags, instrumentableNode, sourceSection) ||
-                                binding.isChildInstrumentedLeaf(providedTags, root, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection);
+        protected final boolean visitInstrumentableWithBinding(EventBinding.Source<?> binding, Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode,
+                        SourceSection sourceSection) {
+            boolean hit = false;
+            if (binding.isInstrumentedFull(providedTags, root, instrumentableNode, sourceSection) ||
+                            binding.isChildInstrumentedFull(providedTags, root, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection)) {
+                if (TRACE) {
+                    traceFilterCheck("hit", instrumentableNode, sourceSection);
+                }
+                visitInstrumented(binding, instrumentableNode, sourceSection);
+                hit = true;
             } else {
-                return binding.isInstrumentedFull(providedTags, root, instrumentableNode, sourceSection) ||
-                                binding.isChildInstrumentedFull(providedTags, root, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection);
+                if (TRACE) {
+                    traceFilterCheck("miss", instrumentableNode, sourceSection);
+                }
             }
+            return hit;
         }
 
         @Override
         protected void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
-            for (VisitOperation operation : actions) {
-                if (operation.getScope() == VisitOperation.Scope.ALL ||
-                                (!visitingNewNodes && operation.getScope() == VisitOperation.Scope.ORIGINALTREE) ||
-                                (visitingNewNodes && operation.getScope() == VisitOperation.Scope.NEWMATERIALIZEDSUBTREES)) {
-                    for (EventBinding.Source<?> binding : operation.bindings) {
-                        if (shouldPerformForBinding(binding, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection)) {
-                            if (TRACE) {
-                                traceFilterCheck("hit", instrumentableNode, sourceSection);
-                            }
-                            operation.perform(binding, instrumentableNode, sourceSection);
-                            if (!operation.isPerformForEachBinding()) {
-                                break;
-                            }
-                        } else {
-                            if (TRACE) {
-                                traceFilterCheck("miss", instrumentableNode, sourceSection);
-                            }
-                        }
+            // no locking required for these atomic reference arrays
+            for (EventBinding.Source<?> binding : bindings) {
+                boolean hit = visitInstrumentableWithBinding(binding, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection);
+                if (hit && !visitForEachBinding) {
+                    break;
+                }
+            }
+
+        }
+
+        protected abstract void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section);
+
+    }
+
+    private abstract static class AbstractAllBindingsVisitor extends AbstractBindingsVisitor {
+        AbstractAllBindingsVisitor(Collection<EventBinding.Source<?>> bindings, boolean visitForEachBinding, boolean shouldMaterializeSyntaxNodes) {
+            super(bindings, visitForEachBinding, shouldMaterializeSyntaxNodes);
+        }
+
+        @Override
+        protected final void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
+            super.visitInstrumentable(parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection);
+        }
+    }
+
+    private abstract static class AbstractAllBindingsNewBindingVisitor extends AbstractBindingsVisitor {
+        protected final EventBinding.Source<?> newBinding;
+        private final Set<Class<?>> limitedNewTags;
+        private final Set<Class<?>> compoundOldTags;
+        private Boolean hasNewMaterializeTags;
+
+        AbstractAllBindingsNewBindingVisitor(Collection<EventBinding.Source<?>> bindings, EventBinding.Source<?> newBinding, boolean visitForEachBinding) {
+            super(bindings, visitForEachBinding, true);
+            Set<Class<?>> compoundOldTags = new HashSet<>();
+            for (EventBinding.Source<?> sourceBinding : bindings) {
+                if (sourceBinding != newBinding) {
+                    Set<Class<?>> limitedTags = sourceBinding.getLimitedTags();
+                    if (limitedTags == null) {
+                        compoundOldTags = null;
+                        break;
+                    } else {
+                        compoundOldTags.addAll(limitedTags);
                     }
                 }
+            }
+            this.compoundOldTags = compoundOldTags;
+            this.limitedNewTags = newBinding.getLimitedTags();
+            this.newBinding = newBinding;
+        }
+
+        @Override
+        protected boolean hasNewMaterializeTags() {
+            if (hasNewMaterializeTags == null) {
+                if (compoundOldTags == null || compoundOldTags.containsAll(providedTags) || (limitedNewTags != null && compoundOldTags.containsAll(limitedNewTags))) {
+                    this.hasNewMaterializeTags = false;
+                } else {
+                    this.hasNewMaterializeTags = true;
+                }
+            }
+            return hasNewMaterializeTags;
+        }
+
+        @Override
+        protected final void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
+            if (visitingNewNodes) {
+                super.visitInstrumentable(parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection);
+            } else {
+                visitInstrumentableWithBinding(newBinding, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection);
             }
         }
     }
 
-    @SuppressWarnings("deprecation")
-    private static void traceFilterCheck(String result, Node instrumentableNode, SourceSection sourceSection) {
-        trace("  Filter %4s node:%s section:%s %n", result, instrumentableNode, sourceSection);
+    private static final class DisposeWrappersVisitor extends AbstractBindingVisitor {
+
+        DisposeWrappersVisitor(EventBinding.Source<?> binding) {
+            super(binding, false);
+        }
+
+        @Override
+        protected void visitInstrumented(Node node, SourceSection section) {
+            invalidateWrapper(node);
+        }
+    }
+
+    private static final class InsertWrappersAllBindingsVisitor extends AbstractAllBindingsVisitor {
+
+        InsertWrappersAllBindingsVisitor(Collection<EventBinding.Source<?>> bindings) {
+            super(bindings, false, true);
+        }
+
+        @Override
+        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section) {
+            instrumentationHandler.insertWrapper(node, section);
+        }
+    }
+
+    private static final class InsertWrappersAllBindingsNewBindingVisitor extends AbstractAllBindingsNewBindingVisitor {
+
+        InsertWrappersAllBindingsNewBindingVisitor(Collection<EventBinding.Source<?>> bindings, EventBinding.Source<?> newBinding) {
+            super(bindings, newBinding, false);
+        }
+
+        @Override
+        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section) {
+            instrumentationHandler.insertWrapper(node, section);
+        }
+    }
+
+    private static final class DisposeWrappersWithBindingVisitor extends AbstractAllBindingsVisitor {
+
+        DisposeWrappersWithBindingVisitor(Collection<EventBinding.Source<?>> bindings) {
+            super(bindings, false, false);
+        }
+
+        @Override
+        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section) {
+            invalidateWrapper(node);
+        }
+
+    }
+
+    private static final class NotifyLoadedWithBindingVisitor extends AbstractBindingVisitor {
+
+        NotifyLoadedWithBindingVisitor(EventBinding.Source<?> binding) {
+            super(binding, true);
+        }
+
+        @Override
+        protected void visitInstrumented(Node node, SourceSection section) {
+            notifySourceSectionLoaded(binding, node, section);
+        }
+
+    }
+
+    private static final class NotifyLoadedListenerVisitor extends AbstractAllBindingsVisitor {
+
+        NotifyLoadedListenerVisitor(Collection<EventBinding.Source<?>> bindings) {
+            super(bindings, true, true);
+        }
+
+        @Override
+        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section) {
+            notifySourceSectionLoaded(binding, node, section);
+        }
     }
 
     /**

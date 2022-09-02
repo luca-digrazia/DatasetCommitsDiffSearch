@@ -2482,17 +2482,15 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
             if (node == null) {
                 return null;
             } else {
-                T copy = node;
-                if (node instanceof InstrumentableNode && ((InstrumentableNode) node).isInstrumentable() && materializedTags != null) {
-                    copy = (T) ((InstrumentableNode) node).materializeInstrumentableNodes(materializedTags);
+                T copy = (T) node.copyUninitialized(null);
+                if (copy.getSourceSection() == null && node.getSourceSection() != null) {
+                    copy.setSourceSection(node.getSourceSection());
                 }
-                if (node == copy) {
-                    copy = (T) node.copyUninitialized(materializedTags);
-                    if (copy.getSourceSection() == null && node.getSourceSection() != null) {
-                        copy.setSourceSection(node.getSourceSection());
-                    }
+                if (copy instanceof InstrumentableNode && materializedTags != null) {
+                    return (T) ((InstrumentableNode) copy).materializeInstrumentableNodes(materializedTags);
+                } else {
+                    return copy;
                 }
-                return copy;
             }
         }
 
