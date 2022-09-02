@@ -131,7 +131,9 @@ import com.oracle.truffle.api.frame.VirtualFrame;
  *     }
  *
  *     &#64;GenerateWrapper.Ignore
- *     abstract Object executeWithoutInstrumentation(VirtualFrame frame);
+ *     public Object executeWithoutInstrumentation(VirtualFrame frame) {
+ *         return null;
+ *     }
  * }
  * </pre>
  *
@@ -188,8 +190,7 @@ public @interface GenerateWrapper {
     }
 
     /**
-     * Annotates a method which should not be instrumented in the generated wrapper subclass. The
-     * generated wrapper can still delegate to this method if it is abstract and can be overridden.
+     * Annotates a method which should not be instrumented in the generated wrapper subclass.
      *
      * @see GenerateWrapper for usage examples
      * @since 21.2
