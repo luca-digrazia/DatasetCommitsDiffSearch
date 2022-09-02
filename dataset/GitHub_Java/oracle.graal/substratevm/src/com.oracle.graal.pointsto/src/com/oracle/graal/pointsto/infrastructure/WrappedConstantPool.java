@@ -33,8 +33,6 @@ import org.graalvm.compiler.debug.GraalError;
 
 import com.oracle.graal.pointsto.constraints.UnresolvedElementException;
 import com.oracle.graal.pointsto.util.AnalysisError.TypeNotFoundError;
-import com.oracle.svm.util.ReflectionUtil;
-import com.oracle.svm.util.ReflectionUtil.ReflectionUtilError;
 
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.JavaConstant;
@@ -44,7 +42,7 @@ import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public class WrappedConstantPool implements ConstantPool, ConstantPoolPatch {
+public class WrappedConstantPool implements ConstantPool {
 
     private final Universe universe;
     protected final ConstantPool wrapped;
@@ -68,23 +66,15 @@ public class WrappedConstantPool implements ConstantPool, ConstantPoolPatch {
      * late to change the API, so we need to invoke this method using reflection.
      */
     private static final Method hsLoadReferencedType;
-    private static final Method hsLookupReferencedType;
 
     static {
         try {
             Class<?> hsConstantPool = Class.forName("jdk.vm.ci.hotspot.HotSpotConstantPool");
-            hsLoadReferencedType = ReflectionUtil.lookupMethod(hsConstantPool, "loadReferencedType", int.class, int.class, boolean.class);
-        } catch (ClassNotFoundException | ReflectionUtilError ex) {
+            hsLoadReferencedType = hsConstantPool.getDeclaredMethod("loadReferencedType", int.class, int.class, boolean.class);
+            hsLoadReferencedType.setAccessible(true);
+        } catch (ReflectiveOperationException ex) {
             throw GraalError.shouldNotReachHere("JVMCI 0.47 or later, or JDK 11 is required for Substrate VM: could not find method HotSpotConstantPool.loadReferencedType");
         }
-
-        Method lookupReferencedType = null;
-        try {
-            Class<?> hsConstantPool = Class.forName("jdk.vm.ci.hotspot.HotSpotConstantPool");
-            lookupReferencedType = ReflectionUtil.lookupMethod(hsConstantPool, "lookupReferencedType", int.class, int.class);
-        } catch (ClassNotFoundException | ReflectionUtilError ex) {
-        }
-        hsLookupReferencedType = lookupReferencedType;
     }
 
     public static void loadReferencedType(ConstantPool cp, int cpi, int opcode, boolean initialize) {
@@ -198,27 +188,5 @@ public class WrappedConstantPool implements ConstantPool, ConstantPoolPatch {
         } else {
             throw unimplemented();
         }
-    }
-
-    @Override
-    public JavaType lookupReferencedType(int index, int opcode) {
-        if (hsLookupReferencedType != null) {
-            try {
-                JavaType type = null;
-                if (wrapped instanceof WrappedConstantPool) {
-                    type = ((WrappedConstantPool) wrapped).lookupReferencedType(index, opcode);
-                } else {
-                    try {
-                        type = (JavaType) hsLookupReferencedType.invoke(wrapped, index, opcode);
-                    } catch (Throwable ex) {
-                    }
-                }
-                if (type != null) {
-                    return universe.lookupAllowUnresolved(type);
-                }
-            } catch (TypeNotFoundError e) {
-            }
-        }
-        return null;
     }
 }
