@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,32 +25,35 @@
 package org.graalvm.compiler.core;
 
 import static org.graalvm.compiler.core.CompilationWrapper.ExceptionAction.ExitVM;
-import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationBailoutAction;
+import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationBailoutAsFailure;
 import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationFailureAction;
 import static org.graalvm.compiler.core.GraalCompilerOptions.ExitVMOnException;
-import static org.graalvm.compiler.debug.DebugContext.VERBOSE_LEVEL;
+import static org.graalvm.compiler.core.GraalCompilerOptions.MaxCompilationProblemsPerAction;
+import static org.graalvm.compiler.core.common.GraalOptions.TrackNodeSourcePosition;
 import static org.graalvm.compiler.debug.DebugOptions.Dump;
 import static org.graalvm.compiler.debug.DebugOptions.DumpPath;
 import static org.graalvm.compiler.debug.DebugOptions.MethodFilter;
+import static org.graalvm.compiler.debug.DebugOptions.PrintBackendCFG;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Map;
 
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugOptions;
 import org.graalvm.compiler.debug.DiagnosticsOutputDirectory;
 import org.graalvm.compiler.debug.PathUtilities;
 import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.options.EnumOptionKey;
 import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.BailoutException;
 
 /**
  * Wrapper for a compilation that centralizes what action to take based on
- * {@link GraalCompilerOptions#CompilationBailoutAction} and
+ * {@link GraalCompilerOptions#CompilationBailoutAsFailure} and
  * {@link GraalCompilerOptions#CompilationFailureAction} when an uncaught exception occurs during
  * compilation.
  */
@@ -59,55 +64,57 @@ public abstract class CompilationWrapper<T> {
      * {@link CompilationWrapper}. The actions are with respect to what the user sees on the
      * console. The compilation requester determines what ultimate action is taken in
      * {@link CompilationWrapper#handleException(Throwable)}.
+     *
+     * The actions are in ascending order of verbosity.
      */
     public enum ExceptionAction {
         /**
          * Print nothing to the console.
          */
         Silent,
+
         /**
          * Print a stack trace to the console.
          */
         Print,
+
         /**
          * An exception causes the compilation to be retried with extra diagnostics enabled.
          */
         Diagnose,
+
         /**
-         * Same as {@link #Diagnose} except that the VM process is exited if there is an exception
-         * during retry.
+         * Same as {@link #Diagnose} except that the VM process is exited after retrying.
          */
         ExitVM;
 
-        static ValueHelp HELP = new ValueHelp();
+        private static final ExceptionAction[] VALUES = values();
 
-        static class ValueHelp implements EnumOptionKey.ValueHelp<ExceptionAction> {
-            @Override
-            public String getHelp(Object value) {
-                ExceptionAction action = (ExceptionAction) value;
-                switch (action) {
-                    case Silent:
-                        return action + ": Print nothing to the console.";
-                    case Print:
-                        return action + ": Print a stack trace to the console.";
-                    case Diagnose:
-                        return action + ": Retry the compilation with extra diagnostics.";
-                    case ExitVM:
-                        return action + ": Same as " + Diagnose + " except that the VM process exits if there is an exception during retry.";
-                }
-                return null;
-            }
+        /**
+         * Gets the action that is one level less verbose than this action, bottoming out at the
+         * least verbose action.
+         */
+        ExceptionAction quieter() {
+            assert ExceptionAction.Silent.ordinal() == 0;
+            int index = Math.max(ordinal() - 1, 0);
+            return VALUES[index];
         }
     }
 
     private final DiagnosticsOutputDirectory outputDirectory;
 
+    private final Map<ExceptionAction, Integer> problemsHandledPerAction;
+
     /**
      * @param outputDirectory object used to access a directory for dumping if the compilation is
      *            re-executed
+     * @param problemsHandledPerAction map used to count the number of compilation failures or
+     *            bailouts handled by each action. This is provided by the caller as it is expected
+     *            to be shared between instances of {@link CompilationWrapper}.
      */
-    public CompilationWrapper(DiagnosticsOutputDirectory outputDirectory) {
+    public CompilationWrapper(DiagnosticsOutputDirectory outputDirectory, Map<ExceptionAction, Integer> problemsHandledPerAction) {
         this.outputDirectory = outputDirectory;
+        this.problemsHandledPerAction = problemsHandledPerAction;
     }
 
     /**
@@ -119,25 +126,30 @@ public abstract class CompilationWrapper<T> {
     protected abstract T handleException(Throwable t);
 
     /**
-     * Gets the action to take based on the value of {@code actionKey} in {@code options}.
+     * Gets the action to take based on the value of
+     * {@link GraalCompilerOptions#CompilationBailoutAsFailure},
+     * {@link GraalCompilerOptions#CompilationFailureAction} and
+     * {@link GraalCompilerOptions#ExitVMOnException} in {@code options}.
      *
-     * Subclasses can override this to choose a different action based on factors such as whether
-     * {@code actionKey} has been explicitly set in {@code options} for example.
+     * Subclasses can override this to choose a different action.
+     *
+     * @param cause the cause of the bailout or failure
      */
-    protected ExceptionAction lookupAction(OptionValues options, EnumOptionKey<ExceptionAction> actionKey) {
-        if (actionKey == CompilationFailureAction) {
-            if (ExitVMOnException.getValue(options)) {
-                assert CompilationFailureAction.getDefaultValue() != ExceptionAction.ExitVM;
-                assert ExitVMOnException.getDefaultValue() != true;
-                if (CompilationFailureAction.hasBeenSet(options) && CompilationFailureAction.getValue(options) != ExceptionAction.ExitVM) {
-                    TTY.printf("WARNING: Ignoring %s=%s since %s=true has been explicitly specified.%n",
-                                    CompilationFailureAction.getName(), CompilationFailureAction.getValue(options),
-                                    ExitVMOnException.getName());
-                }
-                return ExceptionAction.ExitVM;
-            }
+    protected ExceptionAction lookupAction(OptionValues options, Throwable cause) {
+        if (cause instanceof BailoutException && !CompilationBailoutAsFailure.getValue(options)) {
+            return ExceptionAction.Silent;
         }
-        return actionKey.getValue(options);
+        if (ExitVMOnException.getValue(options)) {
+            assert CompilationFailureAction.getDefaultValue() != ExceptionAction.ExitVM;
+            assert ExitVMOnException.getDefaultValue() != true;
+            if (CompilationFailureAction.hasBeenSet(options) && CompilationFailureAction.getValue(options) != ExceptionAction.ExitVM) {
+                TTY.printf("WARNING: Ignoring %s=%s since %s=true has been explicitly specified.%n",
+                                CompilationFailureAction.getName(), CompilationFailureAction.getValue(options),
+                                ExitVMOnException.getName());
+            }
+            return ExceptionAction.ExitVM;
+        }
+        return CompilationFailureAction.getValue(options);
     }
 
     /**
@@ -156,52 +168,118 @@ public abstract class CompilationWrapper<T> {
     /**
      * Creates the {@link DebugContext} to use when retrying a compilation.
      *
+     * @param initialDebug the debug context used in the failing compilation
      * @param options the options for configuring the debug context
+     * @param logStream the log stream to use in the debug context
      */
-    protected abstract DebugContext createRetryDebugContext(OptionValues options);
+    protected abstract DebugContext createRetryDebugContext(DebugContext initialDebug, OptionValues options, PrintStream logStream);
+
+    /**
+     * Entry point for handling a compilation failure.
+     *
+     * A subclass can use this to implement control over logging/dumping. This is important for
+     * example when an embedder wants to prevent flooding logging mechanisms in the embedding
+     * environment.
+     *
+     * @return the value returned by {@code failure.handle()}
+     */
+    protected T onCompilationFailure(Failure failure) {
+        return failure.handle(false);
+    }
+
+    /**
+     * Call back for {@linkplain #handle(boolean) handling} a compilation failure.
+     */
+    public final class Failure {
+        /**
+         * The cause of the failure.
+         */
+        public final Throwable cause;
+
+        private final DebugContext debug;
+
+        Failure(Throwable cause, DebugContext debug) {
+            this.cause = cause;
+            this.debug = debug;
+        }
+
+        /**
+         * Handles the compilation failure.
+         *
+         * @param silent suppresses all logging and dumping iff {@code true}
+         * @return a value representing the result of the failed compilation (may be {@code null})
+         */
+        public T handle(boolean silent) {
+            if (silent) {
+                return handleException(cause);
+            }
+            return handleFailure(debug, cause);
+        }
+    }
 
     @SuppressWarnings("try")
     public final T run(DebugContext initialDebug) {
         try {
             return performCompilation(initialDebug);
         } catch (Throwable cause) {
-            OptionValues initialOptions = initialDebug.getOptions();
+            return onCompilationFailure(new Failure(cause, initialDebug));
+        }
+    }
 
-            String causeType = "failure";
-            EnumOptionKey<ExceptionAction> actionKey;
-            if (cause instanceof BailoutException) {
-                actionKey = CompilationBailoutAction;
-                causeType = "bailout";
-            } else {
-                actionKey = CompilationFailureAction;
-                causeType = "failure";
+    private static void printCompilationFailureActionAlternatives(PrintStream ps, ExceptionAction... alternatives) {
+        if (alternatives.length > 0) {
+            ps.printf("If in an environment where setting system properties is possible, the following%n");
+            ps.printf("properties are available to change compilation failure reporting:%n");
+            for (ExceptionAction action : alternatives) {
+                String option = CompilationFailureAction.getName();
+                if (action == ExceptionAction.Silent) {
+                    ps.printf("- To disable compilation failure notifications, set %s to %s (e.g., -Dgraal.%s=%s).%n",
+                                    option, action,
+                                    option, action);
+                } else if (action == ExceptionAction.Print) {
+                    ps.printf("- To print a message for a compilation failure without retrying the compilation, " +
+                                    "set %s to %s (e.g., -Dgraal.%s=%s).%n",
+                                    option, action,
+                                    option, action);
+                } else if (action == ExceptionAction.Diagnose) {
+                    ps.printf("- To capture more information for diagnosing or reporting a compilation failure, " +
+                                    "set %s to %s or %s (e.g., -Dgraal.%s=%s).%n",
+                                    option, action,
+                                    ExceptionAction.ExitVM,
+                                    option, action);
+                }
             }
-            ExceptionAction action = lookupAction(initialOptions, actionKey);
+        }
+    }
+
+    private T handleFailure(DebugContext initialDebug, Throwable cause) {
+        OptionValues initialOptions = initialDebug.getOptions();
+
+        synchronized (CompilationFailureAction) {
+            // Serialize all compilation failure handling.
+            // This prevents retry compilation storms and interleaving
+            // of compilation exception messages.
+            // It also allows for reliable testing of CompilationWrapper
+            // by avoiding a race whereby retry compilation output from a
+            // forced crash (i.e., use of GraalCompilerOptions.CrashAt)
+            // is truncated.
+
+            ExceptionAction action = lookupAction(initialOptions, cause);
+
+            action = adjustAction(initialOptions, action);
 
             if (action == ExceptionAction.Silent) {
                 return handleException(cause);
             }
+
             if (action == ExceptionAction.Print) {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 try (PrintStream ps = new PrintStream(baos)) {
                     ps.printf("%s: Compilation of %s failed: ", Thread.currentThread(), this);
                     cause.printStackTrace(ps);
-                    ps.printf("To disable compilation %s notifications, set %s to %s (e.g., -Dgraal.%s=%s).%n",
-                                    causeType,
-                                    actionKey.getName(), ExceptionAction.Silent,
-                                    actionKey.getName(), ExceptionAction.Silent);
-                    ps.printf("To capture more information for diagnosing or reporting a compilation %s, " +
-                                    "set %s to %s or %s (e.g., -Dgraal.%s=%s).%n",
-                                    causeType,
-                                    actionKey.getName(), ExceptionAction.Diagnose,
-                                    ExceptionAction.ExitVM,
-                                    actionKey.getName(), ExceptionAction.Diagnose);
+                    printCompilationFailureActionAlternatives(ps, ExceptionAction.Silent, ExceptionAction.Diagnose);
                 }
-                synchronized (CompilationFailureAction) {
-                    // Synchronize to prevent compilation exception
-                    // messages from interleaving.
-                    TTY.println(baos.toString());
-                }
+                TTY.print(baos.toString());
                 return handleException(cause);
             }
 
@@ -213,68 +291,123 @@ public abstract class CompilationWrapper<T> {
                 return handleException(cause);
             }
 
-            String dir = this.outputDirectory.getPath();
-            if (dir == null) {
-                return null;
-            }
-            String dumpName = PathUtilities.sanitizeFileName(toString());
-            File dumpPath = new File(dir, dumpName);
-            dumpPath.mkdirs();
-            if (!dumpPath.exists()) {
-                TTY.println("Warning: could not create dump directory " + dumpPath);
-                return handleException(cause);
+            File dumpPath = null;
+            try {
+                String dir = this.outputDirectory.getPath();
+                if (dir != null) {
+                    String dumpName = PathUtilities.sanitizeFileName(toString());
+                    dumpPath = new File(dir, dumpName);
+                    dumpPath.mkdirs();
+                    if (!dumpPath.exists()) {
+                        TTY.println("Warning: could not create diagnostics directory " + dumpPath);
+                        dumpPath = null;
+                    }
+                }
+            } catch (Throwable t) {
+                TTY.println("Warning: could not create Graal diagnostic directory");
+                t.printStackTrace(TTY.out);
             }
 
             String message;
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             try (PrintStream ps = new PrintStream(baos)) {
-                ps.printf("%s: Compilation of %s failed: ", Thread.currentThread(), this);
+                // This output is used by external tools to detect compilation failures.
+                ps.println("[[[Graal compilation failure]]]");
+
+                ps.printf("%s: Compilation of %s failed:%n", Thread.currentThread(), this);
                 cause.printStackTrace(ps);
-                ps.printf("To disable compilation %s notifications, set %s to %s (e.g., -Dgraal.%s=%s).%n",
-                                causeType,
-                                actionKey.getName(), ExceptionAction.Silent,
-                                actionKey.getName(), ExceptionAction.Silent);
-                ps.printf("To print a message for a compilation %s without retrying the compilation, " +
-                                "set %s to %s (e.g., -Dgraal.%s=%s).%n",
-                                causeType,
-                                actionKey.getName(), ExceptionAction.Print,
-                                actionKey.getName(), ExceptionAction.Print);
-                ps.println("Retrying compilation of " + this);
+                printCompilationFailureActionAlternatives(ps, ExceptionAction.Silent, ExceptionAction.Print);
+                if (dumpPath != null) {
+                    ps.println("Retrying compilation of " + this);
+                } else {
+                    ps.println("Not retrying compilation of " + this + " as the dump path could not be created.");
+                }
                 message = baos.toString();
             }
 
-            synchronized (CompilationFailureAction) {
-                // Synchronize here to serialize retry compilations. This
-                // mitigates retry compilation storms.
-                TTY.println(message);
-                File retryLogFile = new File(dumpPath, "retry.log");
-                try (PrintStream ps = new PrintStream(new FileOutputStream(retryLogFile))) {
-                    ps.print(message);
-                } catch (IOException ioe) {
-                    TTY.printf("Error writing to %s: %s%n", retryLogFile, ioe);
-                }
+            TTY.print(message);
+            if (dumpPath == null) {
+                return handleException(cause);
+            }
 
-                OptionValues retryOptions = new OptionValues(initialOptions,
-                                Dump, ":" + VERBOSE_LEVEL,
-                                MethodFilter, null,
-                                DumpPath, dumpPath.getPath());
+            File retryLogFile = new File(dumpPath, "retry.log");
+            try (PrintStream ps = new PrintStream(new FileOutputStream(retryLogFile))) {
+                ps.print(message);
+            } catch (IOException ioe) {
+                TTY.printf("Error writing to %s: %s%n", retryLogFile, ioe);
+            }
 
-                try (DebugContext retryDebug = createRetryDebugContext(retryOptions)) {
-                    return performCompilation(retryDebug);
-                } catch (Throwable cause2) {
-                    if (action == ExitVM) {
-                        synchronized (ExceptionAction.class) {
-                            PrintStream ps = TTY.out;
-                            ps.println("Exiting VM due to uncaught exception while re-compiling " + this + ":");
-                            cause2.printStackTrace(ps);
-                            System.exit(-1);
-                        }
-                    }
+            OptionValues retryOptions = new OptionValues(initialOptions,
+                            Dump, ":" + DebugOptions.DiagnoseDumpLevel.getValue(initialOptions),
+                            MethodFilter, null,
+                            DumpPath, dumpPath.getPath(),
+                            PrintBackendCFG, true,
+                            TrackNodeSourcePosition, true);
 
-                    // Except for the ExitVM action, failures during retry are silent
-                    return handleException(cause);
-                }
+            ByteArrayOutputStream logBaos = new ByteArrayOutputStream();
+            PrintStream ps = new PrintStream(logBaos);
+            try (DebugContext retryDebug = createRetryDebugContext(initialDebug, retryOptions, ps)) {
+                T res = performCompilation(retryDebug);
+                ps.println("There was no exception during retry.");
+                return postRetry(action, retryLogFile, logBaos, ps, res);
+            } catch (Throwable e) {
+                ps.println("Exception during retry:");
+                e.printStackTrace(ps);
+                return postRetry(action, retryLogFile, logBaos, ps, handleException(cause));
             }
         }
+    }
+
+    private T postRetry(ExceptionAction action, File retryLogFile, ByteArrayOutputStream logBaos, PrintStream ps, T res) {
+        ps.close();
+        try (FileOutputStream fos = new FileOutputStream(retryLogFile, true)) {
+            fos.write(logBaos.toByteArray());
+        } catch (Throwable e) {
+            TTY.printf("Error writing to %s: %s%n", retryLogFile, e);
+        }
+        maybeExitVM(action);
+        return res;
+    }
+
+    /**
+     * Calls {@link System#exit(int)} in the runtime embedding the Graal compiler. This will be a
+     * different runtime than Graal's runtime in the case of libgraal.
+     */
+    protected abstract void exitHostVM(int status);
+
+    private void maybeExitVM(ExceptionAction action) {
+        if (action == ExitVM) {
+            TTY.println("Exiting VM after retry compilation of " + this);
+            exitHostVM(-1);
+        }
+    }
+
+    /**
+     * Adjusts {@code initialAction} if necessary based on
+     * {@link GraalCompilerOptions#MaxCompilationProblemsPerAction}.
+     */
+    private ExceptionAction adjustAction(OptionValues initialOptions, ExceptionAction initialAction) {
+        ExceptionAction action = initialAction;
+        int maxProblems = MaxCompilationProblemsPerAction.getValue(initialOptions);
+        if (action != ExceptionAction.ExitVM) {
+            synchronized (problemsHandledPerAction) {
+                while (action != ExceptionAction.Silent) {
+                    int problems = problemsHandledPerAction.getOrDefault(action, 0);
+                    if (problems >= maxProblems) {
+                        if (problems == maxProblems) {
+                            TTY.printf("Warning: adjusting %s from %s to %s after %s (%d) failed compilations%n", CompilationFailureAction, action, action.quieter(),
+                                            MaxCompilationProblemsPerAction, maxProblems);
+                            // Ensure that the message above is only printed once
+                            problemsHandledPerAction.put(action, problems + 1);
+                        }
+                        action = action.quieter();
+                    } else {
+                        break;
+                    }
+                }
+                problemsHandledPerAction.put(action, problemsHandledPerAction.getOrDefault(action, 0) + 1);
+            }
+        }
+        return action;
     }
 }
