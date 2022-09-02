@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,27 +24,21 @@
  */
 package com.oracle.graal.pointsto.flow;
 
-import com.oracle.graal.pointsto.BigBang;
+import org.graalvm.compiler.nodes.ValueNode;
+
 import com.oracle.graal.pointsto.meta.AnalysisType;
 
-public final class AllInstantiatedTypeFlow extends TypeFlow<AnalysisType> {
-
-    public AllInstantiatedTypeFlow(AnalysisType declaredType) {
-        super(declaredType, declaredType);
-    }
-
-    @Override
-    public TypeFlow<AnalysisType> copy(BigBang bb, MethodFlowsGraph methodFlows) {
-        return this;
-    }
-
-    @Override
-    public boolean canSaturate() {
-        return false;
+/**
+ * A sink type flow for the context insensitive invoke used to link in parameters in each caller
+ * context.
+ */
+public class ActualParameterTypeFlow extends TypeFlow<ValueNode> {
+    public ActualParameterTypeFlow(AnalysisType declaredType) {
+        super(null, declaredType);
     }
 
     @Override
     public String toString() {
-        return "AllInstantiated" + super.toString();
+        return "ActualParameter<" + getState() + '>';
     }
 }

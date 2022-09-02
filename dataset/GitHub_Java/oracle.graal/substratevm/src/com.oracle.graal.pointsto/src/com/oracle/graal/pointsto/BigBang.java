@@ -124,8 +124,6 @@ public abstract class BigBang {
 
     public final Timer typeFlowTimer;
     public final Timer checkObjectsTimer;
-    public final Timer processFeaturesTimer;
-    public final Timer analysisTimer;
 
     public BigBang(OptionValues options, AnalysisUniverse universe, HostedProviders providers, HostVM hostVM, ForkJoinPool executorService, Runnable heartbeatCallback,
                     UnsupportedFeatures unsupportedFeatures) {
@@ -136,8 +134,6 @@ public abstract class BigBang {
         String imageName = hostVM.getImageName();
         this.typeFlowTimer = new Timer(imageName, "(typeflow)", false);
         this.checkObjectsTimer = new Timer(imageName, "(objects)", false);
-        this.processFeaturesTimer = new Timer(imageName, "(features)", false);
-        this.analysisTimer = new Timer(imageName, "analysis", true);
 
         this.universe = universe;
         this.metaAccess = (AnalysisMetaAccess) providers.getMetaAccess();

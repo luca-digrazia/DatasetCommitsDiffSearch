@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.options.OptionValues;
 
 import com.oracle.graal.pointsto.flow.AbstractSpecialInvokeTypeFlow;
@@ -143,15 +144,15 @@ public class DefaultAnalysisPolicy extends AnalysisPolicy {
     }
 
     @Override
-    public AbstractVirtualInvokeTypeFlow createVirtualInvokeTypeFlow(BytecodePosition invokeLocation, AnalysisType receiverType, AnalysisMethod targetMethod,
+    public AbstractVirtualInvokeTypeFlow createVirtualInvokeTypeFlow(Invoke invoke, AnalysisType receiverType, AnalysisMethod targetMethod,
                     TypeFlow<?>[] actualParameters, ActualReturnTypeFlow actualReturn, BytecodeLocation location) {
-        return new DefaultVirtualInvokeTypeFlow(invokeLocation, receiverType, targetMethod, actualParameters, actualReturn, location);
+        return new DefaultVirtualInvokeTypeFlow(invoke, receiverType, targetMethod, actualParameters, actualReturn, location);
     }
 
     @Override
-    public AbstractSpecialInvokeTypeFlow createSpecialInvokeTypeFlow(BytecodePosition invokeLocation, AnalysisType receiverType, AnalysisMethod targetMethod,
+    public AbstractSpecialInvokeTypeFlow createSpecialInvokeTypeFlow(Invoke invoke, AnalysisType receiverType, AnalysisMethod targetMethod,
                     TypeFlow<?>[] actualParameters, ActualReturnTypeFlow actualReturn, BytecodeLocation location) {
-        return new DefaultSpecialInvokeTypeFlow(invokeLocation, receiverType, targetMethod, actualParameters, actualReturn, location);
+        return new DefaultSpecialInvokeTypeFlow(invoke, receiverType, targetMethod, actualParameters, actualReturn, location);
     }
 
     /** Explicitly context insensitive implementation of the invoke virtual type flow update. */
@@ -159,9 +160,9 @@ public class DefaultAnalysisPolicy extends AnalysisPolicy {
 
         private TypeState seenReceiverTypes = TypeState.forEmpty();
 
-        protected DefaultVirtualInvokeTypeFlow(BytecodePosition invokeLocation, AnalysisType receiverType, AnalysisMethod targetMethod,
+        protected DefaultVirtualInvokeTypeFlow(Invoke invoke, AnalysisType receiverType, AnalysisMethod targetMethod,
                         TypeFlow<?>[] actualParameters, ActualReturnTypeFlow actualReturn, BytecodeLocation location) {
-            super(invokeLocation, receiverType, targetMethod, actualParameters, actualReturn, location);
+            super(invoke, receiverType, targetMethod, actualParameters, actualReturn, location);
         }
 
         protected DefaultVirtualInvokeTypeFlow(BigBang bb, MethodFlowsGraph methodFlows, DefaultVirtualInvokeTypeFlow original) {
@@ -281,7 +282,7 @@ public class DefaultAnalysisPolicy extends AnalysisPolicy {
             }
 
             /* Link the saturated invoke. */
-            AbstractVirtualInvokeTypeFlow contextInsensitiveInvoke = (AbstractVirtualInvokeTypeFlow) targetMethod.initAndGetContextInsensitiveInvoke(bb, source);
+            AbstractVirtualInvokeTypeFlow contextInsensitiveInvoke = (AbstractVirtualInvokeTypeFlow) targetMethod.initAndGetContextInsensitiveInvoke(bb);
             contextInsensitiveInvoke.addInvokeLocation(getSource());
 
             /*
@@ -343,9 +344,9 @@ public class DefaultAnalysisPolicy extends AnalysisPolicy {
 
         MethodFlowsGraph calleeFlows = null;
 
-        DefaultSpecialInvokeTypeFlow(BytecodePosition invokeLocation, AnalysisType receiverType, AnalysisMethod targetMethod,
+        DefaultSpecialInvokeTypeFlow(Invoke invoke, AnalysisType receiverType, AnalysisMethod targetMethod,
                         TypeFlow<?>[] actualParameters, ActualReturnTypeFlow actualReturn, BytecodeLocation location) {
-            super(invokeLocation, receiverType, targetMethod, actualParameters, actualReturn, location);
+            super(invoke, receiverType, targetMethod, actualParameters, actualReturn, location);
         }
 
         private DefaultSpecialInvokeTypeFlow(BigBang bb, MethodFlowsGraph methodFlows, DefaultSpecialInvokeTypeFlow original) {

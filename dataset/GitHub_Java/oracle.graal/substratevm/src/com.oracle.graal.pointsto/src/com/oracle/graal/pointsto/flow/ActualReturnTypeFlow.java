@@ -24,27 +24,46 @@
  */
 package com.oracle.graal.pointsto.flow;
 
+import org.graalvm.compiler.nodes.ValueNode;
+
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 
-public final class AllInstantiatedTypeFlow extends TypeFlow<AnalysisType> {
+import jdk.vm.ci.code.BytecodePosition;
 
-    public AllInstantiatedTypeFlow(AnalysisType declaredType) {
-        super(declaredType, declaredType);
+public class ActualReturnTypeFlow extends TypeFlow<BytecodePosition> {
+    private InvokeTypeFlow invokeFlow;
+
+    public ActualReturnTypeFlow(AnalysisType declaredType) {
+        super(null, declaredType);
+    }
+
+    public ActualReturnTypeFlow(ValueNode source, AnalysisType declaredType) {
+        super(source.getNodeSourcePosition(), declaredType);
+    }
+
+    public ActualReturnTypeFlow(ActualReturnTypeFlow original, MethodFlowsGraph methodFlows) {
+        super(original, methodFlows);
+        assert original.invokeFlow != null;
+        this.invokeFlow = original.invokeFlow;
     }
 
     @Override
-    public TypeFlow<AnalysisType> copy(BigBang bb, MethodFlowsGraph methodFlows) {
-        return this;
-    }
-
-    @Override
-    public boolean canSaturate() {
-        return false;
+    public TypeFlow<BytecodePosition> copy(BigBang bb, MethodFlowsGraph methodFlows) {
+        return new ActualReturnTypeFlow(this, methodFlows);
     }
 
     @Override
     public String toString() {
-        return "AllInstantiated" + super.toString();
+        return "ActualReturn<" + getState() + '>';
     }
+
+    public void setInvokeFlow(InvokeTypeFlow invokeFlow) {
+        this.invokeFlow = invokeFlow;
+    }
+
+    public InvokeTypeFlow invokeFlow() {
+        return invokeFlow;
+    }
+
 }

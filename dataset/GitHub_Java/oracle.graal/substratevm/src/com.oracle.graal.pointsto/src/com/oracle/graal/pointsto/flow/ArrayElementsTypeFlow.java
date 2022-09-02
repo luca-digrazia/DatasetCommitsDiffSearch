@@ -28,47 +28,29 @@ import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.flow.context.object.AnalysisObject;
-import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
-import jdk.vm.ci.meta.JavaKind;
+/**
+ * This class is used to model the elements type flow for array objects.
+ */
+public class ArrayElementsTypeFlow extends TypeFlow<AnalysisType> {
 
-public class FieldTypeFlow extends TypeFlow<AnalysisField> {
-
-    private static TypeState initialFieldState(AnalysisField field) {
-        if (field.getJavaKind() == JavaKind.Object && field.canBeNull()) {
-            /*
-             * All object type instance fields of a new object can be null. Instance fields are null
-             * in the time between the new-instance and the first write to a field. This is even
-             * true for non-null final fields because even final fields are null until they are
-             * initialized in a constructor.
-             */
-            return TypeState.forNull();
-        }
-        return TypeState.forEmpty();
-    }
-
-    /** The holder of the field flow (null for static fields). */
+    /** The array object. */
     private AnalysisObject object;
 
-    public FieldTypeFlow(AnalysisField field, AnalysisType type) {
-        super(field, type, initialFieldState(field));
+    public ArrayElementsTypeFlow(AnalysisObject sourceObject) {
+        super(sourceObject.type(), sourceObject.type().getComponentType());
+        this.object = sourceObject;
     }
 
-    public FieldTypeFlow(AnalysisField field, AnalysisType type, AnalysisObject object) {
-        this(field, type);
-        this.object = object;
-    }
-
-    public AnalysisObject object() {
+    public AnalysisObject getSourceObject() {
         return object;
     }
 
     @Override
-    public TypeFlow<AnalysisField> copy(BigBang bb, MethodFlowsGraph methodFlows) {
-        // return this field flow
-        throw shouldNotReachHere("The field flow should not be cloned. Use Load/StoreFieldTypeFlow.");
+    public TypeFlow<AnalysisType> copy(BigBang bb, MethodFlowsGraph methodFlows) {
+        throw shouldNotReachHere("The mixed elements flow should not be cloned. Use Load/StoreFlows.");
     }
 
     @Override
@@ -79,15 +61,35 @@ public class FieldTypeFlow extends TypeFlow<AnalysisField> {
     @Override
     protected void onInputSaturated(BigBang bb, TypeFlow<?> input) {
         /*
-         * When a field store is saturated conservativelly assume that the field state can contain
-         * any subtype of its declared type.
+         * When an array store is saturated conservativelly assume that the array can contain any
+         * subtype of its declared type.
          */
         getDeclaredType().getTypeFlow(bb, true).addUse(bb, this);
     }
 
     @Override
+    public TypeState filter(BigBang bb, TypeState update) {
+        if (declaredType.equals(bb.getObjectType())) {
+            /* No need to filter. */
+            return update;
+        } else {
+            /*
+             * Filter out the objects not compatible with the declared type, i.e., those objects
+             * whose type cannot be converted to the component type of the this array by assignment
+             * conversion. At runtime that will throw an ArrayStoreException but during the analysis
+             * we can detect such cases and filter out the incompatible types.
+             */
+            return TypeState.forIntersection(bb, update, declaredType.getTypeFlow(bb, true).getState());
+        }
+    }
+
+    public AnalysisObject object() {
+        return object;
+    }
+
+    @Override
     public String toString() {
-        return "FieldFlow<" + source.format("%h.%n") + "\n" + getState() + ">";
+        return "MixedElementsFlow<" + source.getName() + "\n" + getState() + ">";
     }
 
 }

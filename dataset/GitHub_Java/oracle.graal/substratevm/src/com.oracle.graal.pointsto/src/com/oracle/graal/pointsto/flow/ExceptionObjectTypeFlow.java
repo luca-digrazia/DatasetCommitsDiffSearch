@@ -24,18 +24,16 @@
  */
 package com.oracle.graal.pointsto.flow;
 
-import com.oracle.graal.pointsto.BigBang;
-import com.oracle.graal.pointsto.meta.AnalysisType;
+import org.graalvm.compiler.graph.Node;
 
-public final class AllInstantiatedTypeFlow extends TypeFlow<AnalysisType> {
+/**
+ * Models the ExceptionObjectNode. It is a proxy type flow, i.e., it propagates the state of its
+ * input, which in current implementation is the type flow of a sub-type of Throwable.
+ */
+public class ExceptionObjectTypeFlow extends ProxyTypeFlow {
 
-    public AllInstantiatedTypeFlow(AnalysisType declaredType) {
-        super(declaredType, declaredType);
-    }
-
-    @Override
-    public TypeFlow<AnalysisType> copy(BigBang bb, MethodFlowsGraph methodFlows) {
-        return this;
+    public ExceptionObjectTypeFlow(Node source, TypeFlow<?> input) {
+        super(source, input);
     }
 
     @Override
@@ -45,6 +43,6 @@ public final class AllInstantiatedTypeFlow extends TypeFlow<AnalysisType> {
 
     @Override
     public String toString() {
-        return "AllInstantiated" + super.toString();
+        return "ExceptionObjectFlow<" + input + ">";
     }
 }
