@@ -570,7 +570,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                 }
             }
             if (task != null) {
-                runtime().getListener().onCompilationQueued(this);
                 return maybeWaitForTask(task);
             }
         }
@@ -589,7 +588,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     public final boolean isCompiling() {
-        return getCompilationTask() != null;
+        return compilationTask != null;
     }
 
     /**
@@ -625,7 +624,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             invalidateCode();
             runtime().getListener().onCompilationInvalidated(this, source, reason);
         }
-        runtime().cancelInstalledTask(this, source, reason);
+        cancelInstalledTask(source, reason);
     }
 
     final OptimizedCallTarget cloneUninitialized() {
@@ -668,11 +667,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     @Override
-    public final void cancelInstalledTask() {
-        runtime().cancelInstalledTask(this, null, "Got inlined. Call site count: " + getKnownCallSiteCount());
-    }
-
-    @Override
     public final boolean isSameOrSplit(CompilableTruffleAST ast) {
         if (!(ast instanceof OptimizedCallTarget)) {
             return false;
@@ -682,8 +676,23 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                         (this.sourceCallTarget != null && other.sourceCallTarget != null && this.sourceCallTarget == other.sourceCallTarget);
     }
 
-    final boolean cancelInstalledTask(Node source, CharSequence reason) {
-        return runtime().cancelInstalledTask(this, source, reason);
+    @Override
+    public boolean cancelInstalledTask(Object source, CharSequence reason) {
+        if (cancelAndResetCompilationTask()) {
+            runtime().getListener().onCompilationDequeued(this, source, reason);
+            return true;
+        }
+        return false;
+    }
+
+    private synchronized boolean cancelAndResetCompilationTask() {
+        if (compilationTask != null && compilationTask.cancel()) {
+            if (compilationTask.getFuture().cancel(false)) {
+                resetCompilationTask();
+            }
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -1233,27 +1242,13 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return System.identityHashCode(this);
     }
 
+    // TODO: remove once GraalTruffleRuntime#waitForCompilation is removed
     final CancellableCompileTask getCompilationTask() {
         return compilationTask;
     }
 
-    /**
-     * This marks the end of the compilation.
-     *
-     * It may only ever be called by the thread that performed the compilation, and after the
-     * compilation is completely done (either successfully or not successfully).
-     */
-    public final void resetCompilationTask() {
-        /*
-         * We synchronize because this is called from the compilation threads so we want to make
-         * sure we have finished setting the compilationTask in #compile. Otherwise
-         * `this.compilationTask = null` might run before then the field is set in #compile and this
-         * will get stuck in a "compiling" state.
-         */
-        synchronized (this) {
-            assert this.compilationTask != null;
-            this.compilationTask = null;
-        }
+    final synchronized void resetCompilationTask() {
+        this.compilationTask = null;
     }
 
     @SuppressFBWarnings(value = "VO_VOLATILE_INCREMENT", justification = "All increments and decrements are synchronized.")

@@ -32,13 +32,11 @@ import java.util.concurrent.TimeoutException;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 
 public final class CancellableCompileTask implements TruffleCompilationTask {
-    private final OptimizedCallTarget target;
     private volatile Future<?> future;
     private volatile boolean cancelled;
     private final boolean lastTierCompilation;
 
-    public CancellableCompileTask(OptimizedCallTarget target, boolean lastTierCompilation) {
-        this.target = target;
+    public CancellableCompileTask(boolean lastTierCompilation) {
         this.lastTierCompilation = lastTierCompilation;
     }
 
@@ -66,16 +64,9 @@ public final class CancellableCompileTask implements TruffleCompilationTask {
     public synchronized boolean cancel() {
         if (!cancelled) {
             cancelled = true;
-            if (future.cancel(false)) {
-                finished();
-            }
             return true;
         }
         return false;
-    }
-
-    public synchronized void finished() {
-        target.resetCompilationTask();
     }
 
     @Override
