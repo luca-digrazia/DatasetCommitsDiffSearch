@@ -69,13 +69,13 @@ import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.ExcludeFromReferenceMap;
 import com.oracle.svm.core.c.BoxedRelocatedPointer;
 import com.oracle.svm.core.c.function.CFunctionOptions;
-import com.oracle.svm.core.classinitialization.ClassInitializationInfo.ClassInitializerFunctionPointerHolder;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.deopt.DeoptimizedFrame;
 import com.oracle.svm.core.heap.InstanceReferenceMapEncoder;
 import com.oracle.svm.core.heap.ReferenceMapEncoder;
 import com.oracle.svm.core.heap.SubstrateReferenceMap;
+import com.oracle.svm.core.hub.ClassInitializationInfo.ClassInitializerFunctionPointerHolder;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.DynamicHubSupport;
 import com.oracle.svm.core.hub.LayoutEncoding;
@@ -380,8 +380,6 @@ public class UniverseBuilder {
             arrayDepth++;
         } while (typeFound);
 
-        ImageSingletons.lookup(DynamicHubSupport.class).setMaxTypeId(orderedTypes.size());
-
         assert assertSame(orderedTypes, hUniverse.types.values());
         hUniverse.orderedTypes = orderedTypes;
     }
@@ -610,8 +608,7 @@ public class UniverseBuilder {
     /**
      * We want these types to be immutable so that they can be in the read-only part of the image
      * heap. Moreover, all of them except for String *must* be read-only because they contain
-     * relocatable pointers. Therefore these types will not get a monitor field and will always use
-     * the secondary storage for monitor slots.
+     * relocatable pointers.
      */
     private static final Set<Class<?>> IMMUTABLE_TYPES = new HashSet<>(Arrays.asList(
                     String.class,
@@ -626,16 +623,25 @@ public class UniverseBuilder {
             return;
         }
 
-        HostedConfiguration.instance().collectMonitorFieldInfo(bb, hUniverse, getImmutableTypes());
-    }
-
-    private Set<AnalysisType> getImmutableTypes() {
         Set<AnalysisType> immutableTypes = new HashSet<>();
         for (Class<?> immutableType : IMMUTABLE_TYPES) {
             Optional<AnalysisType> aType = aMetaAccess.optionalLookupJavaType(immutableType);
-            aType.ifPresent(immutableTypes::add);
+            if (aType.isPresent()) {
+                immutableTypes.add(aType.get());
+            }
         }
-        return immutableTypes;
+
+        TypeState allSynchronizedTypeState = bb.getAllSynchronizedTypeState();
+        for (AnalysisType aType : allSynchronizedTypeState.types()) {
+            if (!aType.isArray() && !immutableTypes.contains(aType)) {
+                /*
+                 * Monitor fields on arrays would increase the array header too much. Also, types
+                 * that must be immutable cannot have a monitor field.
+                 */
+                final HostedInstanceClass hostedInstanceClass = (HostedInstanceClass) hUniverse.lookup(aType);
+                hostedInstanceClass.setNeedMonitorField();
+            }
+        }
     }
 
     public static boolean isKnownImmutableType(Class<?> clazz) {
