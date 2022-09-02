@@ -229,9 +229,7 @@ public final class LLVMStack {
         public LLVMNativeStackAccess(FrameDescriptor frameDescriptor, LLVMMemory memory) {
             this.memory = memory;
             this.stackSlot = getStackSlot(frameDescriptor);
-            //this.basePointerSlot = getBasePointerSlot(frameDescriptor, false);
-            // TODO: a AOT hot fix
-            this.basePointerSlot = getBasePointerSlot(frameDescriptor, true);
+            this.basePointerSlot = getBasePointerSlot(frameDescriptor, false);
             this.noBasePointerAssumption = basePointerSlot == null ? frameDescriptor.getNotInFrameAssumption(BASE_POINTER_ID) : null;
             this.hasAllocatedStack = false;
         }
