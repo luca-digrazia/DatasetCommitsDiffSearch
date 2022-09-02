@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.nodes.memory;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.memory.LLVMGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
@@ -42,7 +41,8 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
+@NodeChild(type = LLVMExpressionNode.class)
+@NodeChild(type = LLVMExpressionNode.class)
 @NodeField(type = long.class, name = "typeWidth")
 public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
 
@@ -95,7 +95,7 @@ public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
             if (addr.getValue() instanceof Long) {
                 return LLVMNativePointer.create((long) addr.getValue() + incr);
             } else if (addr.getValue() instanceof Integer) {
-                return LLVMNativePointer.create((int) addr.getValue() + incr);
+                return LLVMNativePointer.create((long) (int) addr.getValue() + incr);
             } else {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalAccessError("Cannot do pointer arithmetic with address: " + addr.getValue());
