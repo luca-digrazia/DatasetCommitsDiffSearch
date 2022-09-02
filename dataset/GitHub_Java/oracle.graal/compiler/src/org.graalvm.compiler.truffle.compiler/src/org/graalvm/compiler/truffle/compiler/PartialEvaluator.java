@@ -25,8 +25,6 @@
 package org.graalvm.compiler.truffle.compiler;
 
 import static org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.NodeSourcePositions;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExcludeAssertions;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceInlining;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceStackTraceLimit;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.PerformanceWarningsAreFatal;
@@ -105,7 +103,7 @@ import org.graalvm.compiler.replacements.PEGraphDecoder;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
+import org.graalvm.compiler.truffle.common.CallNodeProvider;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.InlineKind;
@@ -126,7 +124,6 @@ import org.graalvm.compiler.truffle.compiler.phases.inlining.AgnosticInliningPha
 import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
 import org.graalvm.compiler.truffle.compiler.substitutions.TruffleGraphBuilderPlugins;
 import org.graalvm.compiler.truffle.compiler.substitutions.TruffleInvocationPluginProvider;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.PerformanceWarningKind;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 import org.graalvm.options.OptionValues;
 
@@ -138,6 +135,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 
 /**
  * Class performing the partial evaluation starting from the root node of an AST.
@@ -153,19 +151,12 @@ public abstract class PartialEvaluator {
     protected final ResolvedJavaMethod callInlinedAgnosticMethod;
     private final ResolvedJavaMethod callIndirectMethod;
     private final ResolvedJavaMethod callRootMethod;
-    private final GraphBuilderConfiguration configPrototype;
+    private final GraphBuilderConfiguration configForParsing;
     private final InvocationPlugins decodingInvocationPlugins;
     private final NodePlugin[] nodePlugins;
     private final KnownTruffleTypes knownTruffleTypes;
     private final ResolvedJavaMethod callBoundary;
-    private volatile GraphBuilderConfiguration configForParsing;
 
-    /**
-     * Holds instrumentation options initialized in
-     * {@link #initialize(org.graalvm.options.OptionValues)} method before the first compilation.
-     * These options are not engine aware.
-     */
-    volatile InstrumentPhase.InstrumentationConfiguration instrumentationCfg;
     /**
      * The instrumentation object is used by the Truffle instrumentation to count executions. The
      * value is lazily initialized the first time it is requested because it depends on the Truffle
@@ -193,33 +184,20 @@ public abstract class PartialEvaluator {
         this.callRootMethod = findRequiredMethod(type, methods, "callRoot", "([Ljava/lang/Object;)Ljava/lang/Object;");
         this.callBoundary = findRequiredMethod(type, methods, "callBoundary", "([Ljava/lang/Object;)Ljava/lang/Object;");
 
-        this.configPrototype = createGraphBuilderConfig(configForRoot, true);
+        this.configForParsing = createGraphBuilderConfig(configForRoot, true);
         this.decodingInvocationPlugins = createDecodingInvocationPlugins(configForRoot.getPlugins());
         this.nodePlugins = createNodePlugins(configForRoot.getPlugins());
-    }
-
-    void initialize(OptionValues options) {
-        instrumentationCfg = new InstrumentPhase.InstrumentationConfiguration(options);
-        boolean needSourcePositions = TruffleCompilerOptions.getPolyglotOptionValue(options, NodeSourcePositions) ||
-                        instrumentationCfg.instrumentBranches ||
-                        instrumentationCfg.instrumentBoundaries ||
-                        !TruffleCompilerOptions.getPolyglotOptionValue(options, TracePerformanceWarnings).isEmpty();
-        configForParsing = configPrototype.withNodeSourcePosition(configPrototype.trackNodeSourcePosition() || needSourcePositions).withOmitAssertions(
-                        TruffleCompilerOptions.getPolyglotOptionValue(options, ExcludeAssertions));
     }
 
     /**
      * Gets the instrumentation manager associated with this compiler, creating it first if
      * necessary. Each compiler instance has its own instrumentation manager.
      */
-    public final InstrumentPhase.Instrumentation getInstrumentation() {
+    public final InstrumentPhase.Instrumentation getInstrumentation(OptionValues options) {
         if (instrumentation == null) {
             synchronized (this) {
                 if (instrumentation == null) {
-                    if (instrumentationCfg == null) {
-                        throw new IllegalStateException("PartialEvaluator is not yet initialized");
-                    }
-                    long[] accessTable = new long[instrumentationCfg.instrumentationTableSize];
+                    long[] accessTable = new long[getPolyglotOptionValue(options, PolyglotCompilerOptions.InstrumentationTableSize)];
                     instrumentation = new InstrumentPhase.Instrumentation(accessTable);
                 }
             }
@@ -249,10 +227,6 @@ public abstract class PartialEvaluator {
         return callDirectMethod;
     }
 
-    public ResolvedJavaMethod getCallIndirectMethod() {
-        return callIndirectMethod;
-    }
-
     public ResolvedJavaMethod getCallBoundary() {
         return callBoundary;
     }
@@ -261,27 +235,7 @@ public abstract class PartialEvaluator {
         return providers;
     }
 
-    /**
-     * Returns the root {@link GraphBuilderConfiguration}. The root configuration provides plugins
-     * used by this {@link PartialEvaluator} but it's not configured with engine options. The root
-     * configuration should be used in image generation time where the {@link PartialEvaluator} is
-     * not yet initialized with engine options. At runtime the {@link #getConfig} should be used.
-     */
-    public GraphBuilderConfiguration getConfigPrototype() {
-        return configPrototype;
-    }
-
-    /**
-     * Returns the {@link GraphBuilderConfiguration} used by parsing. The returned configuration is
-     * configured with engine options. In the image generation time the {@link PartialEvaluator} is
-     * not yet initialized and the {@link #getConfigPrototype} should be used instead.
-     *
-     * @throws IllegalStateException when called on non initialized {@link PartialEvaluator}
-     */
-    public GraphBuilderConfiguration getConfig() {
-        if (configForParsing == null) {
-            throw new IllegalStateException("PartialEvaluator is not yet initialized");
-        }
+    public GraphBuilderConfiguration getConfigForParsing() {
         return configForParsing;
     }
 
@@ -343,17 +297,15 @@ public abstract class PartialEvaluator {
         }
     }
 
-    public void parseRootGraphForInlining(OptionValues options, CompilableTruffleAST compilable, StructuredGraph graph, TruffleMetaAccessProvider truffleMetaAccessProvider,
-                    InlineInvokePlugin callNodePlugin,
+    public void parseRootGraphForInlining(OptionValues options, CompilableTruffleAST compilable, StructuredGraph graph, CallNodeProvider callNodeProvider, InlineInvokePlugin callNodePlugin,
                     EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining) {
         // This is only called by agnostic inlining. Legacy inlining does not use this method.
         HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<>(), OptimisticOptimizations.NONE);
 
-        doGraphPE(options, compilable, graph, tierContext, (TruffleInliningPlan) truffleMetaAccessProvider, callNodePlugin, graphCacheForInlining);
+        doGraphPE(options, compilable, graph, tierContext, (TruffleInliningPlan) callNodeProvider, callNodePlugin, graphCacheForInlining);
     }
 
-    public StructuredGraph createGraphForInlining(OptionValues options, DebugContext debug, CompilableTruffleAST compilable, TruffleMetaAccessProvider truffleMetaAccessProvider,
-                    InlineInvokePlugin callNodePlugin,
+    public StructuredGraph createGraphForInlining(OptionValues options, DebugContext debug, CompilableTruffleAST compilable, CallNodeProvider callNodeProvider, InlineInvokePlugin callNodePlugin,
                     AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable,
                     EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining) {
         // This is only called by agnostic inlining. Legacy inlining does not use this method.
@@ -362,7 +314,7 @@ public abstract class PartialEvaluator {
         final StructuredGraph graph = createGraphForPE(debug, name, rootMethod, allowAssumptions, compilationId, log, cancellable);
         HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<>(), OptimisticOptimizations.NONE);
 
-        doGraphPE(options, compilable, graph, tierContext, (TruffleInliningPlan) truffleMetaAccessProvider, callNodePlugin, graphCacheForInlining);
+        doGraphPE(options, compilable, graph, tierContext, (TruffleInliningPlan) callNodeProvider, callNodePlugin, graphCacheForInlining);
 
         return graph;
     }
@@ -659,7 +611,10 @@ public abstract class PartialEvaluator {
         GraphBuilderConfiguration newConfig = config.copy();
         InvocationPlugins invocationPlugins = newConfig.getPlugins().getInvocationPlugins();
         registerTruffleInvocationPlugins(invocationPlugins, canDelayIntrinsification);
-        return newConfig;
+        boolean mustInstrumentBranches = TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleInstrumentBranches) ||
+                        TruffleCompilerOptions.getValue(TruffleCompilerOptions.TruffleInstrumentBoundaries);
+        return newConfig.withNodeSourcePosition(
+                        newConfig.trackNodeSourcePosition() || mustInstrumentBranches || TruffleCompilerOptions.getValue(TruffleCompilerOptions.TraceTrufflePerformanceWarnings));
     }
 
     protected NodePlugin[] createNodePlugins(Plugins plugins) {
@@ -743,12 +698,11 @@ public abstract class PartialEvaluator {
     }
 
     protected void applyInstrumentationPhases(OptionValues options, StructuredGraph graph, HighTierContext tierContext) {
-        InstrumentPhase.InstrumentationConfiguration cfg = instrumentationCfg;
-        if (cfg.instrumentBranches) {
-            new InstrumentBranchesPhase(options, snippetReflection, getInstrumentation(), cfg.instrumentBranchesPerInlineSite).apply(graph, tierContext);
+        if (TruffleCompilerOptions.TruffleInstrumentBranches.getValue(graph.getOptions())) {
+            new InstrumentBranchesPhase(options, snippetReflection, getInstrumentation(options)).apply(graph, tierContext);
         }
-        if (cfg.instrumentBoundaries) {
-            new InstrumentTruffleBoundariesPhase(options, snippetReflection, getInstrumentation(), cfg.instrumentBoundariesPerInlineSite).apply(graph, tierContext);
+        if (TruffleCompilerOptions.TruffleInstrumentBoundaries.getValue(graph.getOptions())) {
+            new InstrumentTruffleBoundariesPhase(options, snippetReflection, getInstrumentation(options)).apply(graph, tierContext);
         }
     }
 
@@ -797,17 +751,17 @@ public abstract class PartialEvaluator {
 
         private static final ThreadLocal<PerformanceInformationHandler> instance = new ThreadLocal<>();
         private final OptionValues options;
-        private Set<PerformanceWarningKind> warningKinds = EnumSet.noneOf(PerformanceWarningKind.class);
+        private Set<PolyglotCompilerOptions.PerformanceWarningKind> warningKinds = EnumSet.noneOf(PolyglotCompilerOptions.PerformanceWarningKind.class);
 
         private PerformanceInformationHandler(OptionValues options) {
             this.options = options;
         }
 
-        private void addWarning(PerformanceWarningKind warningKind) {
+        private void addWarning(PolyglotCompilerOptions.PerformanceWarningKind warningKind) {
             warningKinds.add(warningKind);
         }
 
-        private Set<PerformanceWarningKind> getWarnings() {
+        private Set<PolyglotCompilerOptions.PerformanceWarningKind> getWarnings() {
             return warningKinds;
         }
 
@@ -824,22 +778,18 @@ public abstract class PartialEvaluator {
             return handler;
         }
 
-        public static boolean isWarningEnabled(PerformanceWarningKind warningKind) {
+        public static boolean isEnabled(PolyglotCompilerOptions.PerformanceWarningKind warningKind) {
             PerformanceInformationHandler handler = instance.get();
             return getPolyglotOptionValue(handler.options, TracePerformanceWarnings).contains(warningKind) ||
                             getPolyglotOptionValue(handler.options, PerformanceWarningsAreFatal).contains(warningKind);
         }
 
-        public static void logPerformanceWarning(PerformanceWarningKind warningKind, String callTargetName, List<? extends Node> locations, String details,
+        public static void logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind warningKind, String callTargetName, List<? extends Node> locations, String details,
                         Map<String, Object> properties) {
             PerformanceInformationHandler handler = instance.get();
             handler.addWarning(warningKind);
             logPerformanceWarningImpl(callTargetName, "perf warn", details, properties);
             handler.logPerformanceStackTrace(locations);
-        }
-
-        private static void logInliningWarning(String callTargetName, String details, Map<String, Object> properties) {
-            logPerformanceWarningImpl(callTargetName, "inlining warn", details, properties);
         }
 
         private static void logPerformanceInfo(String callTargetName, List<? extends Node> locations, String details, Map<String, Object> properties) {
@@ -899,24 +849,20 @@ public abstract class PartialEvaluator {
         void reportPerformanceWarnings(CompilableTruffleAST target, StructuredGraph graph) {
             DebugContext debug = graph.getDebug();
             ArrayList<ValueNode> warnings = new ArrayList<>();
-            if (isWarningEnabled(PerformanceWarningKind.VIRTUAL_RUNTIME_CALL)) {
+            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.INLINE)) {
                 for (MethodCallTargetNode call : graph.getNodes(MethodCallTargetNode.TYPE)) {
                     if (call.targetMethod().isNative()) {
                         continue; // native methods cannot be inlined
                     }
                     TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
                     if (runtime.getInlineKind(call.targetMethod(), true).allowsInlining()) {
-                        logPerformanceWarning(PerformanceWarningKind.VIRTUAL_RUNTIME_CALL, target.getName(), Arrays.asList(call),
-                                        String.format("Partial evaluation could not inline the virtual runtime call %s to %s (%s).",
-                                                        call.invokeKind(),
-                                                        call.targetMethod(),
-                                                        call),
-                                        null);
+                        logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.INLINE, target.getName(), Arrays.asList(call),
+                                        String.format("not inlined %s call to %s (%s)", call.invokeKind(), call.targetMethod(), call), null);
                         warnings.add(call);
                     }
                 }
             }
-            if (isWarningEnabled(PerformanceWarningKind.VIRTUAL_INSTANCEOF)) {
+            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.INSTANCE_OF)) {
                 EconomicMap<ResolvedJavaType, ArrayList<ValueNode>> groupedByType = EconomicMap.create(Equivalence.DEFAULT);
                 for (InstanceOfNode instanceOf : graph.getNodes().filter(InstanceOfNode.class)) {
                     if (!instanceOf.type().isExact()) {
@@ -933,8 +879,7 @@ public abstract class PartialEvaluator {
                 MapCursor<ResolvedJavaType, ArrayList<ValueNode>> entry = groupedByType.getEntries();
                 while (entry.advance()) {
                     ResolvedJavaType type = entry.getKey();
-                    String reason = "Partial evaluation could not resolve virtual instanceof to an exact type due to: " +
-                                    String.format(type.isInterface() ? "interface type check: %s" : "too deep in class hierarchy: %s", type);
+                    String reason = type.isInterface() ? String.format("interface type check: %s", type) : String.format("too deep in class hierarchy: %s", type);
                     logPerformanceInfo(target.getName(), entry.getValue(), reason, Collections.singletonMap("Nodes", entry.getValue()));
                 }
             }
@@ -974,19 +919,21 @@ public abstract class PartialEvaluator {
         }
 
         static void reportDecisionIsNull(JavaConstant target, JavaConstant callNode) {
-            if (TruffleCompilerOptions.getPolyglotOptionValue(instance.get().options, TraceInlining)) {
+            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.UNREACHABLE_DIRECT_CALL)) {
                 Map<String, Object> properties = new LinkedHashMap<>();
                 properties.put("callNode", callNode.toValueString());
-                logInliningWarning(target.toValueString(), "A direct call within the Truffle AST is not reachable anymore. Call node could not be inlined.", properties);
+                logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.UNREACHABLE_DIRECT_CALL, target.toValueString(), null,
+                                "A direct call within the Truffle AST is not reachable anymore. Call node could not be inlined.", properties);
             }
         }
 
         static void reportCallTargetChanged(JavaConstant target, JavaConstant callNode, TruffleInliningPlan.Decision decision) {
-            if (TruffleCompilerOptions.getPolyglotOptionValue(instance.get().options, TraceInlining)) {
+            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.CALL_TARGET_CHANGE)) {
                 Map<String, Object> properties = new LinkedHashMap<>();
                 properties.put("originalTarget", decision.getTargetName());
                 properties.put("callNode", callNode.toValueString());
-                logInliningWarning(target.toValueString(), "CallTarget changed during compilation. Call node could not be inlined.", properties);
+                logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.CALL_TARGET_CHANGE, target.toValueString(), null,
+                                "CallTarget changed during compilation. Call node could not be inlined.", properties);
             }
         }
     }

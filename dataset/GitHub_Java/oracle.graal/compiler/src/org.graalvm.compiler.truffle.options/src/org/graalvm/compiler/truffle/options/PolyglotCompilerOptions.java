@@ -68,27 +68,31 @@ public final class PolyglotCompilerOptions {
                     });
 
     public enum PerformanceWarningKind {
-        VIRTUAL_RUNTIME_CALL("call", "Enables virtual call warnings"),
-        VIRTUAL_INSTANCEOF("instanceof", "Enables virtual instanceof warnings"),
-        VIRTUAL_STORE("store", "Enables virtual store warnings");
+        INLINE("inlining"),
+        INSTANCE_OF("instanceof"),
+        UNREACHABLE_DIRECT_CALL("unreachable"),
+        CALL_TARGET_CHANGE("calltargetchange"),
+        NON_CONSTANT_LOCATION_STORE("store");
 
-        private static final EconomicMap<String, PerformanceWarningKind> kindByName;
-        static {
-            kindByName = EconomicMap.create();
-            for (PerformanceWarningKind kind : PerformanceWarningKind.values()) {
-                kindByName.put(kind.name, kind);
-            }
-        }
+        private static volatile EconomicMap<String, PerformanceWarningKind> kindByName;
+        private String name;
 
-        final String name;
-        final String help;
-
-        PerformanceWarningKind(String name, String help) {
+        PerformanceWarningKind(String name) {
             this.name = name;
-            this.help = help;
         }
 
         public static PerformanceWarningKind forName(String name) {
+            if (kindByName == null) {
+                synchronized (PerformanceWarningKind.class) {
+                    if (kindByName == null) {
+                        EconomicMap<String, PerformanceWarningKind> m = EconomicMap.create();
+                        for (PerformanceWarningKind kind : PerformanceWarningKind.values()) {
+                            m.put(kind.name, kind);
+                        }
+                        kindByName = m;
+                    }
+                }
+            }
             PerformanceWarningKind kind = kindByName.get(name);
             if (kind == null) {
                 throw new IllegalArgumentException("Unknown PerformanceWarningKind name " + name);
@@ -97,10 +101,10 @@ public final class PolyglotCompilerOptions {
         }
     }
 
-    static final OptionType<Set<PerformanceWarningKind>> PERFORMANCE_WARNING_TYPE = new OptionType<>("PerformanceWarningKind",
-                    new Function<String, Set<PerformanceWarningKind>>() {
+    static final OptionType<Set<? extends PerformanceWarningKind>> PERFORMANCE_WARNING_TYPE = new OptionType<>("PerformanceWarningKind",
+                    new Function<String, Set<? extends PerformanceWarningKind>>() {
                         @Override
-                        public Set<PerformanceWarningKind> apply(String value) {
+                        public Set<? extends PerformanceWarningKind> apply(String value) {
                             if ("none".equals(value)) {
                                 return EnumSet.noneOf(PerformanceWarningKind.class);
                             } else if ("all".equals(value)) {
@@ -111,22 +115,11 @@ public final class PolyglotCompilerOptions {
                                     try {
                                         result.add(PerformanceWarningKind.forName(name));
                                     } catch (IllegalArgumentException e) {
-                                        String message = String.format("The \"%s\" is not a valid performance warning kind. Valid values are%n", name);
-                                        for (PerformanceWarningKind kind : PerformanceWarningKind.values()) {
-                                            message = message + String.format("%s%s%s%n", kind.name, indent(kind.name.length()), kind.help);
-                                        }
-                                        message = message + String.format("all%sEnables all performance warnings%n", indent(3));
-                                        message = message + String.format("none%sDisables performance warnings%n", indent(4));
-                                        throw new IllegalArgumentException(message);
+                                        throw new IllegalArgumentException("\"" + name + "\" is not a valid option. Valid values are " + EnumSet.allOf(PerformanceWarningKind.class));
                                     }
                                 }
                                 return result;
                             }
-                        }
-
-                        private String indent(int nameLength) {
-                            int len = Math.max(1, 16 - nameLength);
-                            return new String(new char[len]).replace('\0', ' ');
                         }
                     });
 
@@ -199,7 +192,7 @@ public final class PolyglotCompilerOptions {
     public static final OptionKey<Boolean> CompilationExceptionsAreFatal = new OptionKey<>(false);
 
     @Option(help = "Treat performance warnings as fatal occurrences that will exit the applications", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Set<PerformanceWarningKind>> PerformanceWarningsAreFatal = new OptionKey<>(Collections.emptySet(), PERFORMANCE_WARNING_TYPE);
+    public static final OptionKey<Set<? extends PerformanceWarningKind>> PerformanceWarningsAreFatal = new OptionKey<>(Collections.emptySet(), PERFORMANCE_WARNING_TYPE);
 
     // Tracing
 
@@ -254,10 +247,10 @@ public final class PolyglotCompilerOptions {
     public static final OptionKey<Boolean> LanguageAgnosticInlining = new OptionKey<>(false);
 
     @Option(help = "Controls how impactful many cutoff nodes is on exploration decision in language-agnostic inlining.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Double> InliningCutoffCountPenalty = new OptionKey<>(0.9);
+    public static final OptionKey<Double> InliningCutoffCountPenalty = new OptionKey<>(0.1);
 
     @Option(help = "Controls how impactful the size of the subtree is on exploration decision in language-agnostic inlining.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Double> InliningNodeCountPenalty = new OptionKey<>(0.01);
+    public static final OptionKey<Double> InliningNodeCountPenalty = new OptionKey<>(0.1);
 
     @Option(help = "Controls how impactful few cutoff nodes are on exploration decisions in language-agnostic inlining.", category = OptionCategory.EXPERT)
     public static final OptionKey<Double> InliningExpandAllProximityFactor = new OptionKey<>(0.5);
@@ -328,7 +321,7 @@ public final class PolyglotCompilerOptions {
     public static final OptionKey<Boolean> InlineAcrossTruffleBoundary = new OptionKey<>(false);
 
     @Option(help = "Print potential performance problems", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Set<PerformanceWarningKind>> TracePerformanceWarnings = new OptionKey<>(Collections.emptySet(), PERFORMANCE_WARNING_TYPE);
+    public static final OptionKey<Set<? extends PerformanceWarningKind>> TracePerformanceWarnings = new OptionKey<>(Collections.emptySet(), PERFORMANCE_WARNING_TYPE);
 
     @Option(help = "Prints a histogram of all expanded Java methods.", category = OptionCategory.INTERNAL)
     public static final OptionKey<Boolean> PrintExpansionHistogram = new OptionKey<>(false);
@@ -347,24 +340,6 @@ public final class PolyglotCompilerOptions {
 
     @Option(help = "Ignore further truffle inlining decisions when the graph exceeded this many nodes.", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> MaximumInlineNodeCount = new OptionKey<>(150000);
-
-    @Option(help = "Exclude assertion code from Truffle compilations", category = OptionCategory.EXPERT)
-    public static final OptionKey<Boolean> ExcludeAssertions = new OptionKey<>(true);
-
-    @Option(help = "Enable node source positions in truffle partial evaluations.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Boolean> NodeSourcePositions = new OptionKey<>(false);
-
-    @Option(help = "Instrument Truffle boundaries and output profiling information to the standard output.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Boolean> InstrumentBoundaries = new OptionKey<>(false);
-
-    @Option(help = "Instrument Truffle boundaries by considering different inlining sites as different branches.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Boolean> InstrumentBoundariesPerInlineSite = new OptionKey<>(false);
-
-    @Option(help = "Instrument branches and output profiling information to the standard output.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Boolean> InstrumentBranches = new OptionKey<>(false);
-
-    @Option(help = "Instrument branches by considering different inlining sites as different branches.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Boolean> InstrumentBranchesPerInlineSite = new OptionKey<>(false);
 
     // Language agnostic inlining
 
