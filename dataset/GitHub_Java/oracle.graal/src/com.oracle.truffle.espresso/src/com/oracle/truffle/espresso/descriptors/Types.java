@@ -81,7 +81,6 @@ public final class Types {
         return "L" + className.replace('.', '/') + ";";
     }
 
-    @TruffleBoundary
     public Symbol<Type> fromClassGetName(String className) {
         return symbols.symbolify(ByteSequence.create(checkType(internalFromClassName(className))));
     }

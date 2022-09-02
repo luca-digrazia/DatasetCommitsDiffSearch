@@ -23,12 +23,6 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
-import java.lang.reflect.Constructor;
-import java.security.ProtectionDomain;
-import java.util.Arrays;
-import java.util.function.IntFunction;
-import java.util.function.Predicate;
-
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
@@ -52,6 +46,12 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
+
+import java.lang.reflect.Constructor;
+import java.security.ProtectionDomain;
+import java.util.Arrays;
+import java.util.function.IntFunction;
+import java.util.function.Predicate;
 
 @EspressoSubstitutions
 public final class Target_java_lang_Class {
