@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,8 +52,7 @@ public abstract class InstanceOfNode extends QuickNode {
         return instanceOf(typeToCheck, instanceKlass);
     }
 
-    InstanceOfNode(Klass typeToCheck, int top, int curBCI) {
-        super(top, curBCI);
+    InstanceOfNode(Klass typeToCheck) {
         assert !typeToCheck.isPrimitive();
         this.typeToCheck = typeToCheck;
     }
@@ -65,9 +64,9 @@ public abstract class InstanceOfNode extends QuickNode {
     }
 
     @Override
-    public final int execute(final VirtualFrame frame) {
+    public final int invoke(final VirtualFrame frame, int top) {
         // TODO(peterssen): Maybe refrain from exposing the whole root node?.
-        BytecodeNode root = getBytecodesNode();
+        BytecodeNode root = (BytecodeNode) getParent();
         StaticObject receiver = root.peekObject(frame, top - 1);
         boolean result = StaticObject.notNull(receiver) && executeInstanceOf(receiver.getKlass());
         root.putKind(frame, top - 1, result, JavaKind.Boolean);
