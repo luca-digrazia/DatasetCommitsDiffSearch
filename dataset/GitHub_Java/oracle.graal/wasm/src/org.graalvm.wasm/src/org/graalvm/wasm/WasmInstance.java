@@ -99,10 +99,6 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         return new WasmFunctionInstance(function, target(function.index()));
     }
 
-    private void ensureLinked() {
-        WasmContext.getCurrent().linker().tryLink(this);
-    }
-
     @ExportMessage
     boolean hasMembers() {
         return true;
@@ -111,7 +107,6 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
     @ExportMessage
     @TruffleBoundary
     public Object readMember(String member) throws UnknownIdentifierException {
-        ensureLinked();
         final SymbolTable symbolTable = symbolTable();
         final WasmFunction function = symbolTable.exportedFunctions().get(member);
         if (function != null) {
@@ -130,7 +125,6 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
     @ExportMessage
     @TruffleBoundary
     public void writeMember(String member, Object value) throws UnknownIdentifierException, UnsupportedMessageException {
-        ensureLinked();
         // This method works only for mutable globals.
         final SymbolTable symbolTable = symbolTable();
         final Integer index = symbolTable.exportedGlobals().get(member);
@@ -153,7 +147,6 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
     @ExportMessage
     @TruffleBoundary
     boolean isMemberReadable(String member) {
-        ensureLinked();
         final SymbolTable symbolTable = symbolTable();
         try {
             return symbolTable.exportedFunctions().containsKey(member) || symbolTable.exportedGlobals().containsKey(member) ||
@@ -166,7 +159,6 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
     @ExportMessage
     @TruffleBoundary
     boolean isMemberModifiable(String member) {
-        ensureLinked();
         final SymbolTable symbolTable = symbolTable();
         final Integer index = symbolTable.exportedGlobals().get(member);
         if (index == null) {
@@ -206,7 +198,6 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
     @ExportMessage
     @TruffleBoundary
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-        ensureLinked();
         // TODO: Handle includeInternal.
         return new ExportedMembers(this, symbolTable());
     }
