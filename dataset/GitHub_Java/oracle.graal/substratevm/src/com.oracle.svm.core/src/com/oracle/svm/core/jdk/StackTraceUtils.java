@@ -79,7 +79,7 @@ public class StackTraceUtils {
      * keep both versions in sync, otherwise intrinsifications by the compiler will return different
      * results than stack walking at run time.
      */
-    public static boolean shouldShowFrame(FrameInfoQueryResult frameInfo, boolean showLambdaFrames, boolean showReflectFrames, boolean showHiddenFrames) {
+    public static boolean shouldShowFrame(FrameInfoQueryResult frameInfo, boolean showReflectFrames, boolean showHiddenFrames) {
         if (showHiddenFrames) {
             /* No filtering, all frames including internal frames are shown. */
             return true;
@@ -96,10 +96,6 @@ public class StackTraceUtils {
         }
 
         if (DirectAnnotationAccess.isAnnotationPresent(clazz, InternalVMMethod.class)) {
-            return false;
-        }
-
-        if (!showLambdaFrames && DirectAnnotationAccess.isAnnotationPresent(clazz, LambdaFormHiddenMethod.class)) {
             return false;
         }
 
@@ -121,17 +117,13 @@ public class StackTraceUtils {
      * Note that this method is duplicated (and commented) above for stack walking at run time. Make
      * sure to always keep both versions in sync.
      */
-    public static boolean shouldShowFrame(MetaAccessProvider metaAccess, ResolvedJavaMethod method, boolean showLambdaFrames, boolean showReflectFrames, boolean showHiddenFrames) {
+    public static boolean shouldShowFrame(MetaAccessProvider metaAccess, ResolvedJavaMethod method, boolean showReflectFrames, boolean showHiddenFrames) {
         if (showHiddenFrames) {
             return true;
         }
 
         ResolvedJavaType clazz = method.getDeclaringClass();
         if (DirectAnnotationAccess.isAnnotationPresent(clazz, InternalVMMethod.class)) {
-            return false;
-        }
-
-        if (!showLambdaFrames && DirectAnnotationAccess.isAnnotationPresent(clazz, LambdaFormHiddenMethod.class)) {
             return false;
         }
 
@@ -156,7 +148,7 @@ class BuildStackTraceVisitor extends JavaStackFrameVisitor {
 
     @Override
     public boolean visitFrame(FrameInfoQueryResult frameInfo) {
-        if (!StackTraceUtils.shouldShowFrame(frameInfo, false, true, false)) {
+        if (!StackTraceUtils.shouldShowFrame(frameInfo, true, false)) {
             /* Always ignore the frame. It is an internal frame of the VM. */
             return true;
 
@@ -176,20 +168,17 @@ class BuildStackTraceVisitor extends JavaStackFrameVisitor {
 
 class GetCallerClassVisitor extends JavaStackFrameVisitor {
     private int depth;
-    private boolean ignoreFirst;
+    private boolean ignoreNext;
     Class<?> result;
 
     GetCallerClassVisitor(int depth, boolean ignoreFirst) {
-        this.ignoreFirst = ignoreFirst;
+        this.ignoreNext = ignoreFirst;
         this.depth = depth;
-        assert depth >= 0;
     }
 
     @Override
     public boolean visitFrame(FrameInfoQueryResult frameInfo) {
-        assert depth >= 0;
-
-        if (ignoreFirst) {
+        if (ignoreNext) {
             /*
              * Skip the frame that contained the invocation of getCallerFrame() and continue the
              * stack walk. Note that this could be a frame related to reflection, but we still must
@@ -199,10 +188,10 @@ class GetCallerClassVisitor extends JavaStackFrameVisitor {
              * does not count as as frame (handled by the shouldShowFrame check below because this
              * path was already taken for the constructor frame).
              */
-            ignoreFirst = false;
+            ignoreNext = false;
             return true;
 
-        } else if (!StackTraceUtils.shouldShowFrame(frameInfo, true, false, false)) {
+        } else if (!StackTraceUtils.shouldShowFrame(frameInfo, false, false)) {
             /*
              * Always ignore the frame. It is an internal frame of the VM or a frame related to
              * reflection.
@@ -213,12 +202,14 @@ class GetCallerClassVisitor extends JavaStackFrameVisitor {
             /* Skip the number of frames specified by "depth". */
             depth--;
             return true;
-
-        } else {
-            /* Found the caller frame, remember it and end the stack walk. */
-            result = frameInfo.getSourceClass();
-            return false;
         }
+
+        if (depth == 0) {
+            /* Found the caller frame. */
+            result = frameInfo.getSourceClass();
+        }
+        /* We found the caller or the depth is invalid, stop. */
+        return false;
     }
 }
 
@@ -235,7 +226,7 @@ class GetClassContextVisitor extends JavaStackFrameVisitor {
     public boolean visitFrame(final FrameInfoQueryResult frameInfo) {
         if (skip > 0) {
             skip--;
-        } else if (StackTraceUtils.shouldShowFrame(frameInfo, true, false, false)) {
+        } else if (StackTraceUtils.shouldShowFrame(frameInfo, false, false)) {
             trace.add(frameInfo.getSourceClass());
         }
         return true;
