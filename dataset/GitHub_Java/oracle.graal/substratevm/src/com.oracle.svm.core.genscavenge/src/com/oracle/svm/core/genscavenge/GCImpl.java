@@ -66,14 +66,14 @@ import com.oracle.svm.core.deopt.DeoptimizationSupport;
 import com.oracle.svm.core.heap.AllocationFreeList;
 import com.oracle.svm.core.heap.AllocationFreeList.PreviouslyRegisteredElementException;
 import com.oracle.svm.core.heap.CollectionWatcher;
+import com.oracle.svm.core.heap.DiscoverableReference;
 import com.oracle.svm.core.heap.GC;
 import com.oracle.svm.core.heap.GCCause;
 import com.oracle.svm.core.heap.NoAllocationVerifier;
 import com.oracle.svm.core.heap.ObjectVisitor;
-import com.oracle.svm.core.heap.Target_java_lang_ref_Reference;
 import com.oracle.svm.core.hub.LayoutEncoding;
-import com.oracle.svm.core.jdk.CleanerSupport;
 import com.oracle.svm.core.jdk.RuntimeSupport;
+import com.oracle.svm.core.jdk.SunMiscSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.os.CommittedMemoryProvider;
@@ -164,7 +164,7 @@ public class GCImpl implements GC {
         this.cheneyScanFromRootsTimer = new Timer("cheneyScanFromRoots");
         this.cheneyScanFromDirtyRootsTimer = new Timer("cheneyScanFromDirtyRoots");
         this.collectionTimer = new Timer("collection");
-        this.referenceObjectsTimer = new Timer("referenceObjects");
+        this.discoverableReferenceTimer = new Timer("discoverableReferences");
         this.releaseSpacesTimer = new Timer("releaseSpaces");
         this.promotePinnedObjectsTimer = new Timer("promotePinnedObjects");
         this.rootScanTimer = new Timer("rootScan");
@@ -314,7 +314,7 @@ public class GCImpl implements GC {
         postcondition();
 
         /* Distribute any discovered references to their queues. */
-        ReferenceObjectProcessing.Scatterer.distributeReferences();
+        DiscoverableReferenceProcessing.Scatterer.distributeReferences();
 
         trace.string("]").newline();
     }
@@ -524,7 +524,7 @@ public class GCImpl implements GC {
             final Log trace = Log.noopLog().string("[GCImpl.scavenge:").string("  fromDirtyRoots: ").bool(fromDirtyRoots).newline();
 
             /* Empty the list of DiscoveredReferences before walking the heap. */
-            ReferenceObjectProcessing.clearDiscoveredList();
+            DiscoverableReferenceProcessing.clearDiscoveredReferences();
 
             try (Timer rst = rootScanTimer.open()) {
                 trace.string("  Cheney scan: ");
@@ -537,8 +537,8 @@ public class GCImpl implements GC {
 
             trace.string("  Discovered references: ");
             /* Process the list of DiscoveredReferences after walking the heap. */
-            try (Timer drt = referenceObjectsTimer.open()) {
-                ReferenceObjectProcessing.processDiscoveredReferences();
+            try (Timer drt = discoverableReferenceTimer.open()) {
+                DiscoverableReferenceProcessing.processDiscoveredReferences();
             }
 
             trace.string("  Release spaces: ");
@@ -950,7 +950,7 @@ public class GCImpl implements GC {
             return;
         }
 
-        CleanerSupport.drainReferenceQueues();
+        SunMiscSupport.drainCleanerQueue();
         visitWatchersReport();
     }
 
@@ -1059,13 +1059,13 @@ public class GCImpl implements GC {
         policy = newPolicy;
     }
 
-    private Target_java_lang_ref_Reference<?> discoveredReferenceList = null;
+    private DiscoverableReference discoveredReferenceList = null;
 
-    Target_java_lang_ref_Reference<?> getDiscoveredReferenceList() {
+    DiscoverableReference getDiscoveredReferenceList() {
         return discoveredReferenceList;
     }
 
-    void setDiscoveredReferenceList(Target_java_lang_ref_Reference<?> newList) {
+    void setDiscoveredReferenceList(DiscoverableReference newList) {
         discoveredReferenceList = newList;
     }
 
@@ -1082,7 +1082,7 @@ public class GCImpl implements GC {
     private final Timer cheneyScanFromRootsTimer;
     private final Timer cheneyScanFromDirtyRootsTimer;
     private final Timer collectionTimer;
-    private final Timer referenceObjectsTimer;
+    private final Timer discoverableReferenceTimer;
     private final Timer promotePinnedObjectsTimer;
     private final Timer rootScanTimer;
     private final Timer scanGreyObjectsTimer;
@@ -1113,7 +1113,7 @@ public class GCImpl implements GC {
         blackenBootImageRootsTimer.reset();
         blackenDirtyCardRootsTimer.reset();
         scanGreyObjectsTimer.reset();
-        referenceObjectsTimer.reset();
+        discoverableReferenceTimer.reset();
         releaseSpacesTimer.reset();
         verifyAfterTimer.reset();
         watchersAfterTimer.reset();
@@ -1139,7 +1139,7 @@ public class GCImpl implements GC {
             logOneTimer(log, "          ", blackenBootImageRootsTimer);
             logOneTimer(log, "          ", blackenDirtyCardRootsTimer);
             logOneTimer(log, "          ", scanGreyObjectsTimer);
-            logOneTimer(log, "      ", referenceObjectsTimer);
+            logOneTimer(log, "      ", discoverableReferenceTimer);
             logOneTimer(log, "      ", releaseSpacesTimer);
             logOneTimer(log, "    ", verifyAfterTimer);
             logOneTimer(log, "    ", watchersAfterTimer);

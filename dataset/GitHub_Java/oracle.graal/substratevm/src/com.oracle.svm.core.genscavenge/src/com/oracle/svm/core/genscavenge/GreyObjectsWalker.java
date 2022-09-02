@@ -117,9 +117,9 @@ public final class GreyObjectsWalker {
         /* Visit Objects in the AlignedChunks. */
         GreyToBlackObjectVisitor visitor = GCImpl.getGCImpl().getGreyToBlackObjectVisitor();
         if (aChunk.isNonNull()) {
-            AlignedHeapChunk.AlignedHeader lastChunk;
+            AlignedHeapChunk.AlignedHeader lastChunkChunk;
             do {
-                lastChunk = aChunk;
+                lastChunkChunk = aChunk;
                 if (!AlignedHeapChunk.walkObjectsFromInline(aChunk, aOffset, visitor)) {
                     throw VMError.shouldNotReachHere();
                 }
@@ -128,8 +128,8 @@ public final class GreyObjectsWalker {
             } while (aChunk.isNonNull());
 
             /* Move the scan point. */
-            alignedHeapChunk = lastChunk;
-            alignedTop = lastChunk.getTop();
+            alignedHeapChunk = lastChunkChunk;
+            alignedTop = lastChunkChunk.getTop();
         }
     }
 
@@ -144,9 +144,9 @@ public final class GreyObjectsWalker {
         }
         GreyToBlackObjectVisitor visitor = GCImpl.getGCImpl().getGreyToBlackObjectVisitor();
         if (uChunk.isNonNull()) {
-            UnalignedHeapChunk.UnalignedHeader lastChunk;
+            UnalignedHeapChunk.UnalignedHeader lastChunkChunk;
             do {
-                lastChunk = uChunk;
+                lastChunkChunk = uChunk;
                 if (!UnalignedHeapChunk.walkObjectsFromInline(uChunk, UnalignedHeapChunk.getUnalignedHeapChunkStart(uChunk), visitor)) {
                     throw VMError.shouldNotReachHere();
                 }
@@ -154,7 +154,7 @@ public final class GreyObjectsWalker {
             } while (uChunk.isNonNull());
 
             /* Move the scan point. */
-            unalignedHeapChunk = lastChunk;
+            unalignedHeapChunk = lastChunkChunk;
         }
     }
 }

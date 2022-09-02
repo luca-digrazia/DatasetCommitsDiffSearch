@@ -31,11 +31,15 @@ import org.graalvm.word.UnsignedWord;
 import com.oracle.svm.core.heap.ObjectVisitor;
 import com.oracle.svm.core.log.Log;
 
-/** A Generation is a collection of one or more Spaces. */
+/**
+ * A Generation is a collection of one or more Spaces.
+ */
 public abstract class Generation {
 
-    private final String name;
+    /** Final state. */
+    protected final String name;
 
+    /** Constructor for subclasses. */
     @Platforms(Platform.HOSTED_ONLY.class)
     Generation(String name) {
         this.name = name;
@@ -49,6 +53,7 @@ public abstract class Generation {
      */
     public abstract boolean walkObjects(ObjectVisitor visitor);
 
+    /** The name of this generation. */
     public String getName() {
         return name;
     }

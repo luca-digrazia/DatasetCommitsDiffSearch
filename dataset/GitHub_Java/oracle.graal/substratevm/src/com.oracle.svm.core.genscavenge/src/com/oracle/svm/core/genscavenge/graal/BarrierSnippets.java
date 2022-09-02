@@ -24,7 +24,7 @@
  */
 package com.oracle.svm.core.genscavenge.graal;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -64,21 +64,24 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.Counter;
 import com.oracle.svm.core.util.CounterFeature;
 
+/** Methods in this class are snippets. */
 public class BarrierSnippets extends SubstrateTemplates implements Snippets {
+
     public static class Options {
         @Option(help = "Instrument write barriers with counters")//
         public static final HostedOptionKey<Boolean> CountWriteBarriers = new HostedOptionKey<>(false);
     }
 
     @Fold
-    static BarrierSnippetCounters counters() {
+    protected static BarrierSnippetCounters counters() {
         return ImageSingletons.lookup(BarrierSnippetCounters.class);
     }
 
-    BarrierSnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection) {
-        super(options, factories, providers, snippetReflection);
+    protected static BarrierSnippets factory(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection) {
+        return new BarrierSnippets(options, factories, providers, snippetReflection);
     }
 
+    /** The entry point for registering lowerings. */
     public void registerLowerings(Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
         PostWriteBarrierLowering lowering = new PostWriteBarrierLowering();
         lowerings.put(SerialWriteBarrier.class, lowering);
@@ -94,19 +97,28 @@ public class BarrierSnippets extends SubstrateTemplates implements Snippets {
         final UnsignedWord objectHeader = ObjectHeaderImpl.readHeaderFromObject(fixedObject);
         final boolean needsBarrier = ObjectHeaderImpl.hasRememberedSet(objectHeader);
         if (BranchProbabilityNode.probability(BranchProbabilityNode.FREQUENT_PROBABILITY, !needsBarrier)) {
+            // Most likely (?): expect that no barrier is needed.
             return;
         }
+        // The object needs a write-barrier. Is it aligned or unaligned?
         final boolean aligned = ObjectHeaderImpl.isAlignedHeaderUnsafe(objectHeader);
         if (BranchProbabilityNode.probability(BranchProbabilityNode.LIKELY_PROBABILITY, aligned)) {
+            // Next most likely (?): aligned objects.
             counters().postWriteBarrierAligned.inc();
-            AlignedHeapChunk.dirtyCardForObject(fixedObject, verifyOnly);
+            AlignedHeapChunk.dirtyCardForObjectOfAlignedHeapChunk(fixedObject, verifyOnly);
             return;
         }
+        // Least likely (?): object needs a write-barrier and is unaligned.
         counters().postWriteBarrierUnaligned.inc();
-        UnalignedHeapChunk.dirtyCardForObject(fixedObject, verifyOnly);
+        UnalignedHeapChunk.dirtyCardForObjectOfUnalignedHeapChunk(fixedObject, verifyOnly);
+        return;
     }
 
-    private class PostWriteBarrierLowering implements NodeLoweringProvider<WriteBarrier> {
+    protected BarrierSnippets(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection) {
+        super(options, factories, providers, snippetReflection);
+    }
+
+    protected class PostWriteBarrierLowering implements NodeLoweringProvider<WriteBarrier> {
         private final SnippetInfo postWriteBarrierSnippet = snippet(BarrierSnippets.class, "postWriteBarrierSnippet", CardTable.CARD_REMEMBERED_SET_LOCATION);
 
         @Override
@@ -161,7 +173,7 @@ class BarrierSnippetCountersFeature implements Feature {
 
     @Override
     public List<Class<? extends Feature>> getRequiredFeatures() {
-        return Collections.singletonList(CounterFeature.class);
+        return Arrays.asList(CounterFeature.class);
     }
 
     @Override

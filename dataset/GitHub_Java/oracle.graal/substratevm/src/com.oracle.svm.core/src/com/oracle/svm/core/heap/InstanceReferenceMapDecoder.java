@@ -34,7 +34,6 @@ import com.oracle.svm.core.c.NonmovableArray;
 import com.oracle.svm.core.code.CodeInfoQueryResult;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.util.NonmovableByteArrayReader;
-import com.oracle.svm.core.util.TypedMemoryReader;
 
 @DuplicatedInNativeCode
 public class InstanceReferenceMapDecoder {
@@ -44,7 +43,7 @@ public class InstanceReferenceMapDecoder {
         assert referenceMapEncoding.isNonNull();
 
         Pointer position = NonmovableByteArrayReader.pointerTo(referenceMapEncoding, referenceMapIndex);
-        int entryCount = TypedMemoryReader.getS4(position);
+        int entryCount = NonmovableByteArrayReader.getS4(position);
         position = position.add(4);
 
         int referenceSize = ConfigurationValues.getObjectLayout().getReferenceSize();
@@ -54,10 +53,10 @@ public class InstanceReferenceMapDecoder {
         UnsignedWord sizeOfEntries = WordFactory.unsigned(InstanceReferenceMapEncoder.MAP_ENTRY_SIZE).multiply(entryCount);
         Pointer end = position.add(sizeOfEntries);
         while (position.belowThan(end)) {
-            int offset = TypedMemoryReader.getS4(position);
+            int offset = NonmovableByteArrayReader.getS4(position);
             position = position.add(4);
 
-            long count = TypedMemoryReader.getU4(position);
+            long count = NonmovableByteArrayReader.getU4(position);
             position = position.add(4);
 
             Pointer objRef = baseAddress.add(offset);
