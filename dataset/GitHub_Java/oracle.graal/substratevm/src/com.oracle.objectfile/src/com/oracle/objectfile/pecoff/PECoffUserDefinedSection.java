@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,7 +34,6 @@ import com.oracle.objectfile.ElementImpl;
 import com.oracle.objectfile.LayoutDecisionMap;
 import com.oracle.objectfile.ObjectFile;
 import com.oracle.objectfile.ObjectFile.Element;
-import com.oracle.objectfile.ObjectFile.RelocationRecord;
 import com.oracle.objectfile.io.AssemblyBuffer;
 import com.oracle.objectfile.pecoff.PECoffObjectFile.PECoffSection;
 import com.oracle.objectfile.pecoff.PECoffObjectFile.PECoffSectionFlag;
@@ -141,22 +140,17 @@ public class PECoffUserDefinedSection extends PECoffSection implements ObjectFil
     }
 
     @Override
-    public RelocationRecord markRelocationSite(int offset, int length, ByteBuffer bb, ObjectFile.RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend) {
+    public void markRelocationSite(int offset, ByteBuffer bb, ObjectFile.RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend) {
         if (useImplicitAddend != (explicitAddend == null)) {
             throw new IllegalArgumentException("must have either an explicit or implicit addend");
         }
         PECoffSymtab syms = (PECoffSymtab) getOwner().elementForName(".symtab");
         PECoffRelocationTable rs = (PECoffRelocationTable) getOrCreateRelocationElement(useImplicitAddend);
-        PECoffSymtab.Entry ent;
-        if (symbolName != null) {
-            ent = syms.getSymbol(symbolName);
-        } else {
-            // else we're a reloc type that doesn't need a symbol
-            // assert this about the reloc type
-            assert !k.usesSymbolValue();
-            // use the null symtab entry
-            ent = syms.getNullEntry();
-            assert ent.isNull();
+        assert symbolName != null;
+        PECoffSymtab.Entry ent = syms.getSymbol(symbolName);
+        if (ent == null) {
+            warn("attempting to mark relocation site for non-existent symbol " + symbolName);
+            return;
         }
 
         AssemblyBuffer sbb = new AssemblyBuffer(bb);
@@ -167,6 +161,7 @@ public class PECoffUserDefinedSection extends PECoffSection implements ObjectFil
          * during dynamic linking. So if the caller supplies an explicit addend, we turn it into an
          * implicit one by updating our content.
          */
+        int length = ObjectFile.RelocationKind.getRelocationSize(k);
         long currentInlineAddendValue = sbb.readTruncatedLong(length);
         long desiredInlineAddendValue;
         if (explicitAddend != null) {
@@ -190,7 +185,7 @@ public class PECoffUserDefinedSection extends PECoffSection implements ObjectFil
          * always the length in bytes of the relocation site (since on x86-64 the reference is
          * always the last field in a PC-relative instruction).
          */
-        if (k == ObjectFile.RelocationKind.PC_RELATIVE) {
+        if (ObjectFile.RelocationKind.isPCRelative(k)) {
             desiredInlineAddendValue += length;
         }
 
@@ -201,6 +196,15 @@ public class PECoffUserDefinedSection extends PECoffSection implements ObjectFil
         // return ByteBuffer cursor to where it was
         sbb.pop();
 
-        return rs.addEntry(this, offset, PECoffMachine.getRelocation(getOwner().getMachine(), k, length), ent, explicitAddend);
+        rs.addEntry(this, offset, PECoffMachine.getRelocation(getOwner().getMachine(), k), ent, explicitAddend);
+    }
+
+    /**
+     * Report a warning message in SVM.
+     *
+     * @param msg warning message that is printed.
+     */
+    private static void warn(String msg) {
+        System.err.println("Warning: " + msg);
     }
 }
