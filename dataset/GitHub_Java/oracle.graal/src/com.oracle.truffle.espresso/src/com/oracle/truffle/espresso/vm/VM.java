@@ -631,7 +631,8 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     public @Host(Class.class) StaticObject JVM_DefineClass(String name, @Host(ClassLoader.class) StaticObject loader, long bufPtr, int len,
-                    @Host(ProtectionDomain.class) StaticObject pd) {
+                    @SuppressWarnings("unused") @Host(ProtectionDomain.class) StaticObject pd) {
+        // TODO(peterssen): The protection domain is unused.
         ByteBuffer buf = JniEnv.directByteBuffer(bufPtr, len, JavaKind.Byte);
         final byte[] bytes = new byte[len];
         buf.get(bytes);

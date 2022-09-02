@@ -35,18 +35,17 @@ class FieldTable {
         Field[] staticFieldTable;
         Field[] declaredFields;
 
-        int primitiveFieldTotalByteCount;
-        int primitiveStaticFieldTotalByteCount;
+        int wordFields;
+        int staticWordFields;
         int objectFields;
         int staticObjectFields;
 
-        CreationResult(Field[] fieldTable, Field[] staticFieldTable, Field[] declaredFields, int primitiveFieldTotalByteCount, int primitiveStaticFieldTotalByteCount, int objectFields,
-                        int staticObjectFields) {
+        CreationResult(Field[] fieldTable, Field[] staticFieldTable, Field[] declaredFields, int wordFields, int staticWordFields, int objectFields, int staticObjectFields) {
             this.fieldTable = fieldTable;
             this.staticFieldTable = staticFieldTable;
             this.declaredFields = declaredFields;
-            this.primitiveFieldTotalByteCount = primitiveFieldTotalByteCount;
-            this.primitiveStaticFieldTotalByteCount = primitiveStaticFieldTotalByteCount;
+            this.wordFields = wordFields;
+            this.staticWordFields = staticWordFields;
             this.objectFields = objectFields;
             this.staticObjectFields = staticObjectFields;
         }
@@ -56,15 +55,15 @@ class FieldTable {
         ArrayList<Field> tmpFields;
         ArrayList<Field> tmpStatics = new ArrayList<>();
 
-        int primitiveFieldTotalByteCount = 0;
-        int primitiveStaticFieldTotalByteCount = 0;
+        int wordFields = 0;
+        int staticWordFields = 0;
         int objectFields = 0;
         int staticObjectFields = 0;
 
         if (superKlass != null) {
             tmpFields = new ArrayList<>(Arrays.asList(superKlass.getFieldTable()));
-            primitiveFieldTotalByteCount = superKlass.getPrimitiveFieldTotalByteCount();
-            primitiveStaticFieldTotalByteCount = superKlass.getPrimitiveStaticFieldTotalByteCount();
+            wordFields = superKlass.getWordFieldsCount();
+            staticWordFields = superKlass.getStaticWordFieldsCount();
             objectFields = superKlass.getObjectFieldsCount();
             staticObjectFields = superKlass.getStaticObjectFieldsCount();
         } else {
@@ -79,8 +78,8 @@ class FieldTable {
             if (f.isStatic()) {
                 f.setSlot(tmpStatics.size());
                 if (f.getKind().isPrimitive()) {
-                    f.setFieldIndex(primitiveStaticFieldTotalByteCount);
-                    primitiveStaticFieldTotalByteCount += f.getKind().getByteCount();
+                    f.setFieldIndex(staticWordFields);
+                    staticWordFields += f.getKind().getByteCount();
                 } else {
                     f.setFieldIndex(staticObjectFields++);
                 }
@@ -88,8 +87,8 @@ class FieldTable {
             } else {
                 f.setSlot(tmpFields.size());
                 if (f.getKind().isPrimitive()) {
-                    f.setFieldIndex(primitiveFieldTotalByteCount);
-                    primitiveFieldTotalByteCount += f.getKind().getByteCount();
+                    f.setFieldIndex(wordFields);
+                    wordFields += f.getKind().getByteCount();
                 } else {
                     f.setFieldIndex(objectFields++);
                 }
@@ -100,7 +99,7 @@ class FieldTable {
         objectFields += setHiddenFields(thisKlass.getType(), tmpFields, thisKlass, objectFields);
 
         return new CreationResult(tmpFields.toArray(Field.EMPTY_ARRAY), tmpStatics.toArray(Field.EMPTY_ARRAY), fields,
-                        primitiveFieldTotalByteCount, primitiveStaticFieldTotalByteCount, objectFields, staticObjectFields);
+                        wordFields, staticWordFields, objectFields, staticObjectFields);
     }
 
     private static int setHiddenFields(Symbol<Type> type, ArrayList<Field> tmpTable, ObjectKlass thisKlass, int fieldIndex) {
