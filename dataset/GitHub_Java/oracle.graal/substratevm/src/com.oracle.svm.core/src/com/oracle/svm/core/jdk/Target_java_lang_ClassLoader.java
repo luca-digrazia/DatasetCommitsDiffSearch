@@ -43,7 +43,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
-import com.oracle.svm.core.annotate.Inject;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
@@ -55,8 +54,6 @@ import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 
 @TargetClass(classNameProvider = Package_jdk_internal_loader.class, className = "URLClassPath")
 @SuppressWarnings("static-method")
@@ -189,7 +186,7 @@ final class Target_jdk_internal_loader_Loader {
 
 @TargetClass(ClassLoader.class)
 @SuppressWarnings("static-method")
-public final class Target_java_lang_ClassLoader {
+final class Target_java_lang_ClassLoader {
 
     /**
      * This field can be safely deleted, but that would require substituting the entire constructor
@@ -217,27 +214,6 @@ public final class Target_java_lang_ClassLoader {
 
     @Alias //
     private static ClassLoader scl;
-
-    @Inject
-    @RecomputeFieldValue(kind = Kind.Custom, declClass = ClassLoaderJfrIDRecomputation.class)
-    public int jfrID;
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    static HashMap<ClassLoader, Integer> jfrIdsMap = new HashMap<>();
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public static void setJfrID(ClassLoader cl, Integer id) {
-        jfrIdsMap.put(cl, id);
-    }
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    class ClassLoaderJfrIDRecomputation implements RecomputeFieldValue.CustomFieldValueComputer {
-        @Override
-        public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
-            ClassLoader cl = (ClassLoader) receiver;
-            return jfrIdsMap.get(cl);
-        }
-    }
 
     @Substitute
     public static ClassLoader getSystemClassLoader() {
@@ -367,22 +343,10 @@ public final class Target_java_lang_ClassLoader {
     @Substitute //
     @SuppressWarnings({"unused"}) //
     private Class<?> findLoadedClass0(String name) {
-        /* See open/src/hotspot/share/prims/jvm.cpp#958. */
-        throw VMError.unsupportedFeature("Target_java_lang_ClassLoader.findLoadedClass0(String)");
-    }
-
-    @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class) //
-    @SuppressWarnings({"unused"})
-    protected Class<?> findClass(String moduleName, String name) {
-        throw VMError.unsupportedFeature("JDK11OrLater: Target_java_lang_ClassLoader.findClass(String moduleName, String name)");
-    }
-
-    @Substitute //
-    @TargetElement(onlyWith = JDK11OrLater.class) //
-    @SuppressWarnings({"unused"})
-    public Package getDefinedPackage(String name) {
-        throw VMError.unsupportedFeature("JDK11OrLater: Target_java_lang_ClassLoader.getDefinedPackage(String name)");
+        if (name == null) {
+            return null;
+        }
+        return ClassForNameSupport.forNameOrNull(name, false);
     }
 
     @Substitute
