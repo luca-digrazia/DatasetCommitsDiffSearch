@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2011, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -62,12 +62,12 @@ public interface InvokeDynamicConstant extends PoolConstant {
         }
 
         @Override
-        public Symbol<Signature> getSignature(ConstantPool pool) {
+        public final Symbol<Signature> getSignature(ConstantPool pool) {
             return Signatures.check(pool.nameAndTypeAt(nameAndTypeIndex).getDescriptor(pool));
         }
 
         @Override
-        public Symbol<Name> getName(ConstantPool pool) {
+        public final Symbol<Name> getName(ConstantPool pool) {
             return pool.nameAndTypeAt(nameAndTypeIndex).getName(pool);
         }
 
