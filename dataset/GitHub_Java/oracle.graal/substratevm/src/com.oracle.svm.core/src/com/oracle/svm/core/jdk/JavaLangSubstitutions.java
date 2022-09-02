@@ -826,7 +826,6 @@ class JavaLangSubstituteFeature implements Feature {
             JNIRuntimeAccess.register(java.io.RandomAccessFile.class.getDeclaredField("fd"));
             JNIRuntimeAccess.register(java.io.IOException.class);
             JNIRuntimeAccess.register(java.io.IOException.class.getDeclaredConstructor(String.class));
-            JNIRuntimeAccess.register(java.io.FileNotFoundException.class.getDeclaredConstructor(String.class, String.class));
             if (JavaVersionUtil.JAVA_SPEC >= 11) {
                 JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("inputConsumed"));
                 JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("outputConsumed"));
@@ -842,7 +841,6 @@ public final class JavaLangSubstitutions {
 
     public static class ClassLoaderSupport {
         public Target_java_lang_ClassLoader systemClassLoader;
-        public Target_java_lang_ClassLoader platformClassLoader;
 
         @Platforms(Platform.HOSTED_ONLY.class) public Map<ClassLoader, Target_java_lang_ClassLoader> classLoaders = Collections.synchronizedMap(new IdentityHashMap<>());
 

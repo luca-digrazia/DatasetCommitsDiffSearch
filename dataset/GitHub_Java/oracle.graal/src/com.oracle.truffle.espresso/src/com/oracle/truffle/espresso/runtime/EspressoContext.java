@@ -239,6 +239,7 @@ public final class EspressoContext {
         StaticObject outOfMemoryErrorInstance = meta.OutOfMemoryError.allocateInstance();
         meta.StackOverflowError.lookupDeclaredMethod(Name.INIT, Signature._void_String).invokeDirect(stackOverflowErrorInstance, meta.toGuestString("VM StackOverFlow"));
         meta.OutOfMemoryError.lookupDeclaredMethod(Name.INIT, Signature._void_String).invokeDirect(outOfMemoryErrorInstance, meta.toGuestString("VM OutOfMemory"));
+        this.frames = new ArrayList<>(DEFAULT_STACK_SIZE);
         this.stackOverflow = new EspressoException(stackOverflowErrorInstance);
         this.outOfMemory = new EspressoException(outOfMemoryErrorInstance);
 
@@ -358,6 +359,10 @@ public final class EspressoContext {
 
     public EspressoException getOutOfMemory() {
         return outOfMemory;
+    }
+
+    public ArrayList<Method> getFrames() {
+        return frames;
     }
 
     public void putHost2Guest(Thread hostThread, StaticObject guest) {

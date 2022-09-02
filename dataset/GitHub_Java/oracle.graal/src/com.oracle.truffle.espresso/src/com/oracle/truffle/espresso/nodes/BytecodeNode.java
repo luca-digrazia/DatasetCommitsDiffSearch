@@ -227,9 +227,7 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.SWAP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerAsserts;
@@ -279,7 +277,6 @@ import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.ReturnAddress;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-import com.oracle.truffle.espresso.vm.VM;
 import com.oracle.truffle.object.DebugCounter;
 
 /**
@@ -509,7 +506,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
     @CompilationFinal private boolean zeroStackBackEdges = false;
 
     @Override
-    @SuppressWarnings("unchecked")
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.MERGE_EXPLODE)
     public Object invokeNaked(VirtualFrame frame) {
 
@@ -892,22 +888,31 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                 } catch (EspressoException | EspressoExitException e) {
                     throw e;
                 } catch (OutOfMemoryError e) {
-                    CompilerDirectives.transferToInterpreter();
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
                     // Free lots of memory (this stack trace is ~5x bigger than the espresso one)
                     e.setStackTrace(EspressoContext.EMPTY_STACK);
                     for (int i = 0; i < getMethod().getMaxStackSize(); i++) {
                         // Free the current stack
                         putObject(frame, i, null);
                     }
-                    EspressoException outOfMemory = getContext().getOutOfMemory();
-                    outOfMemory.resetFrames(getMeta());
-                    throw outOfMemory;
+                    InterpreterToVM.fillInStackTrace(getContext().getFrames(), getContext().getOutOfMemory().getException(), getMeta());
+                    throw getContext().getOutOfMemory();
                 } catch (StackOverflowError e) {
                     // Free some memory
-                    CompilerDirectives.transferToInterpreter();
-                    EspressoException stackOverflow = getContext().getStackOverflow();
-                    stackOverflow.getException().setHiddenField(getMeta().HIDDEN_FRAMES, new ArrayList<VM.StackElement>());
-                    throw stackOverflow;
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    if (SOEinfo != null) {
+                        for (int i = 0; i < SOEinfo.length; i += 3) {
+                            if (curBCI >= SOEinfo[i] && curBCI < SOEinfo[i + 1]) {
+                                top = 0;
+                                // TODO: Find a way to fill the stack trace without overflowing.
+                                putObject(frame, 0, getContext().getStackOverflow().getException());
+                                top++;
+                                curBCI = SOEinfo[i + 2];
+                                continue loop;
+                            }
+                        }
+                    }
+                    throw getContext().getStackOverflow();
                 } catch (RuntimeException e) {
                     CompilerDirectives.transferToInterpreter();
                     if (DEBUG_GENERAL) {
@@ -925,21 +930,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
             } catch (EspressoException e) {
                 // CompilerDirectives.transferToInterpreter();
                 CompilerAsserts.partialEvaluationConstant(curBCI);
-                if (e == getContext().getStackOverflow()) {
-                    if (SOEinfo != null) {
-                        for (int i = 0; i < SOEinfo.length; i += 3) {
-                            if (curBCI >= SOEinfo[i] && curBCI < SOEinfo[i + 1]) {
-                                top = 0;
-                                putObject(frame, 0, e.getException());
-                                top++;
-                                curBCI = SOEinfo[i + 2];
-                                continue loop;
-                            }
-                        }
-                    }
-                    ((List<VM.StackElement>) e.getException().getHiddenField(getMeta().HIDDEN_FRAMES)).add(new VM.StackElement(getMethod(), curBCI));
-                    throw e;
-                }
                 ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
                 ExceptionHandler handler = null;
                 for (ExceptionHandler toCheck : handlers) {
@@ -959,7 +949,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                 }
                 if (handler != null) {
                     top = 0;
-                    InterpreterToVM.fillInStackTrace(e.getException(), getMeta());
                     putObject(frame, 0, e.getException());
                     top++;
                     curBCI = handler.getHandlerBCI();
@@ -968,7 +957,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                     }
                     continue loop; // skip bs.next()
                 } else {
-                    e.addStackFrame(getMethod(), curBCI, getMeta());
                     throw e;
                 }
             } catch (VirtualMachineError e) {
