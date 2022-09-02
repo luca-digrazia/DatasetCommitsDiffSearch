@@ -45,7 +45,7 @@ public final class SubstrateArraysCopyOfNode extends DeoptimizingFixedWithNextNo
     @Input ValueNode originalLength;
     @Input ValueNode newLength;
     /** The type of the array copy. */
-    @Input ValueNode newObjectArrayType;
+    @Input ValueNode newArrayType;
 
     /**
      * The stamp is conservative. The concrete type will be loaded from newTypeObject.
@@ -55,7 +55,7 @@ public final class SubstrateArraysCopyOfNode extends DeoptimizingFixedWithNextNo
         this.original = original;
         this.originalLength = originaLength;
         this.newLength = newLength;
-        this.newObjectArrayType = newArrayType;
+        this.newArrayType = newArrayType;
     }
 
     @Override
@@ -69,8 +69,8 @@ public final class SubstrateArraysCopyOfNode extends DeoptimizingFixedWithNextNo
     }
 
     @Override
-    public ValueNode getNewObjectArrayType() {
-        return newObjectArrayType;
+    public ValueNode getNewArrayType() {
+        return newArrayType;
     }
 
     @Override

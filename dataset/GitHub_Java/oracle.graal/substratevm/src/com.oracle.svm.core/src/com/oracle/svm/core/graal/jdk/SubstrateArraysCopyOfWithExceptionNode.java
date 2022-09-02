@@ -35,6 +35,7 @@ import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.DeoptimizingNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FrameState;
+import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.WithExceptionNode;
 import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
@@ -50,6 +51,7 @@ public final class SubstrateArraysCopyOfWithExceptionNode extends WithExceptionN
     public static final NodeClass<SubstrateArraysCopyOfWithExceptionNode> TYPE = NodeClass.create(SubstrateArraysCopyOfWithExceptionNode.class);
 
     @OptionalInput(InputType.State) protected FrameState stateBefore;
+    @OptionalInput(InputType.State) protected FrameState stateAfter;
     @Input ValueNode original;
     @Input ValueNode originalLength;
     @Input ValueNode newLength;
@@ -122,5 +124,10 @@ public final class SubstrateArraysCopyOfWithExceptionNode extends WithExceptionN
         graph().replaceSplitWithFixed(this, plainArrayCopy, this.next());
         GraphUtil.killCFG(oldException);
         return plainArrayCopy;
+    }
+
+    @Override
+    public AbstractBeginNode createNextBegin() {
+        return KillingBeginNode.create(getKilledLocationIdentity());
     }
 }
