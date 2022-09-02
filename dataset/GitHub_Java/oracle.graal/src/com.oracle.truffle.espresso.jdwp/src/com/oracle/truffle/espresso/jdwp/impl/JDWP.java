@@ -207,20 +207,15 @@ final class JDWP {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                if (context.systemExitImplemented()) {
-                    return new CommandResult(reply,
-                            null,
-                            Collections.singletonList(new Callable<Void>() {
-                                @Override
-                                public Void call() {
-                                    context.exit(input.readInt());
-                                    return null;
-                                }
-                            }));
-                } else {
-                    reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
-                    return new CommandResult(reply);
-                }
+                return new CommandResult(reply,
+                                null,
+                                Collections.singletonList(new Callable<Void>() {
+                                    @Override
+                                    public Void call() {
+                                        context.exit(input.readInt());
+                                        return null;
+                                    }
+                                }));
             }
         }
 
