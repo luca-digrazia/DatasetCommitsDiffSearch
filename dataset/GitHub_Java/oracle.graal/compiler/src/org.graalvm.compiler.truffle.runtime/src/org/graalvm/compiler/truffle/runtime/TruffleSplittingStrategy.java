@@ -27,7 +27,6 @@ package org.graalvm.compiler.truffle.runtime;
 import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.getOptions;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -46,7 +45,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 final class TruffleSplittingStrategy {
 
-    private static final Set<OptimizedCallTarget> waste = Collections.synchronizedSet(new HashSet<>());
+    private static Set<OptimizedCallTarget> waste = new HashSet<>();
     private static final int LEGACY_RECURSIVE_SPLIT_DEPTH = 2;
     private static final int RECURSIVE_SPLIT_DEPTH = 3;
 
