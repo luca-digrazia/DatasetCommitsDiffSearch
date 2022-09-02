@@ -26,7 +26,6 @@ package com.oracle.truffle.espresso.libespresso.arghelper;
 import static com.oracle.truffle.espresso.libespresso.Arguments.abort;
 
 import java.io.PrintStream;
-import java.util.function.Consumer;
 
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
@@ -56,6 +55,7 @@ public class ArgumentsHandler {
     private final Native nativeAccess;
     private final PolyglotArgs polyglotAccess;
     private final ModulePropertyCounter modulePropertyCounter;
+    private final AgentAccumulator agents;
 
     private final boolean experimental;
 
@@ -70,6 +70,7 @@ public class ArgumentsHandler {
         this.nativeAccess = new Native(this);
         this.modulePropertyCounter = new ModulePropertyCounter(builder);
         this.polyglotAccess = new PolyglotArgs(builder, this);
+        this.agents = new AgentAccumulator(builder);
         this.experimental = checkExperimental(args);
     }
 
@@ -168,6 +169,10 @@ public class ArgumentsHandler {
         polyglotAccess.argumentProcessingDone();
     }
 
+    public void handleAgent(String value, boolean isAbsolutePath) {
+        agents.handleAgent(value, isAbsolutePath);
+    }
+
     public void help(String arg) {
         switch (arg) {
             case "--help:vm":
@@ -213,17 +218,11 @@ public class ArgumentsHandler {
             help = true;
         }
         if (helpTools) {
-            printHelp(polyglotAccess::printToolsHelp);
+            polyglotAccess.printToolsHelp(getHelpCategory());
             help = true;
         }
         if (helpLanguages) {
-            printHelp(polyglotAccess::printLanguageHelp);
-            help = true;
-        }
-        if ((helpExpert || helpInternal) && !help) {
-            // an expert or internal help was requested, but no category was specified. Default to
-            // language help.
-            printHelp(polyglotAccess::printLanguageHelp);
+            polyglotAccess.printLanguageHelp(getHelpCategory());
             help = true;
         }
         if (help) {
@@ -275,18 +274,13 @@ public class ArgumentsHandler {
         return sb.toString();
     }
 
-    private void printHelp(Consumer<OptionCategory> printer) {
-        boolean user = true;
+    private OptionCategory getHelpCategory() {
         if (helpInternal) {
-            printer.accept(OptionCategory.INTERNAL);
-            user = false;
-        }
-        if (helpExpert) {
-            printer.accept(OptionCategory.EXPERT);
-            user = false;
-        }
-        if (user) {
-            printer.accept(OptionCategory.USER);
+            return OptionCategory.INTERNAL;
+        } else if (helpExpert) {
+            return OptionCategory.EXPERT;
+        } else {
+            return OptionCategory.USER;
         }
     }
 }
