@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -54,30 +54,23 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.impl.TruffleJDKServices;
 
 final class HostClassCache {
 
     static final PolyglotTargetMapping[] EMPTY_MAPPINGS = new PolyglotTargetMapping[0];
 
     private final APIAccess apiAccess;
-    final HostAccess hostAccess;
+    private final HostAccess hostAccess;
     private final boolean arrayAccess;
     private final boolean listAccess;
     private final Map<Class<?>, Object> targetMappings;
-    private final Object unnamedModule;
 
-    private HostClassCache(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf, ClassLoader classLoader) {
+    private HostClassCache(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf) {
         this.hostAccess = conf;
         this.arrayAccess = apiAccess.isArrayAccessible(hostAccess);
         this.listAccess = apiAccess.isListAccessible(hostAccess);
         this.apiAccess = apiAccess;
         this.targetMappings = groupMappings(apiAccess, conf);
-        this.unnamedModule = TruffleJDKServices.getUnnamedModule(classLoader);
-    }
-
-    Object getUnnamedModule() {
-        return unnamedModule;
     }
 
     boolean hasTargetMappings() {
@@ -145,20 +138,20 @@ final class HostClassCache {
         return localMappings;
     }
 
-    public static HostClassCache findOrInitialize(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf, ClassLoader classLoader) {
+    public static HostClassCache findOrInitialize(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf) {
         HostClassCache cache = (HostClassCache) apiAccess.getHostAccessImpl(conf);
         if (cache == null) {
-            cache = initializeHostCache(apiAccess, conf, classLoader);
+            cache = initializeHostCache(apiAccess, conf);
         }
         return cache;
     }
 
-    private static HostClassCache initializeHostCache(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf, ClassLoader classLoader) {
+    private static HostClassCache initializeHostCache(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf) {
         HostClassCache cache;
         synchronized (conf) {
             cache = (HostClassCache) apiAccess.getHostAccessImpl(conf);
             if (cache == null) {
-                cache = new HostClassCache(apiAccess, conf, classLoader);
+                cache = new HostClassCache(apiAccess, conf);
                 apiAccess.setHostAccessImpl(conf, cache);
             }
         }
@@ -182,17 +175,14 @@ final class HostClassCache {
         return descs.get(clazz);
     }
 
-    @TruffleBoundary
     boolean allowsAccess(Method m) {
         return apiAccess.allowsAccess(hostAccess, m);
     }
 
-    @TruffleBoundary
     boolean allowsAccess(Constructor<?> m) {
         return apiAccess.allowsAccess(hostAccess, m);
     }
 
-    @TruffleBoundary
     boolean allowsAccess(Field f) {
         return apiAccess.allowsAccess(hostAccess, f);
     }
@@ -203,10 +193,6 @@ final class HostClassCache {
 
     boolean isListAccess() {
         return listAccess;
-    }
-
-    boolean allowsImplementation(Class<?> type) {
-        return apiAccess.allowsImplementation(hostAccess, type);
     }
 
 }
