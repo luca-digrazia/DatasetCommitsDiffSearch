@@ -56,6 +56,7 @@ public final class UnsupportedMessageException extends InteropException {
      *
      * @param cause the guest language exception that caused the error.
      */
+    @SuppressWarnings("deprecation")
     public static UnsupportedMessageException create(Throwable cause) {
         return new UnsupportedMessageException(cause);
     }

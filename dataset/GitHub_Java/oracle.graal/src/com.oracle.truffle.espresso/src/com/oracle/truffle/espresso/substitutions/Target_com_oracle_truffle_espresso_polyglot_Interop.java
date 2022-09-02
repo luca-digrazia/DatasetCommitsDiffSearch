@@ -2,6 +2,7 @@ package com.oracle.truffle.espresso.substitutions;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropException;
@@ -13,8 +14,10 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.nodes.interop.ToEspressoNode;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 @EspressoSubstitutions
 public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
@@ -338,13 +341,13 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
                     @InjectMeta Meta meta) {
         try {
             ExceptionType exceptionType = UNCACHED.getExceptionType(unwrap(receiver));
-            StaticObject staticStorage = meta.polyglot.ExceptionType.tryInitializeAndGetStatics();
+            StaticObject staticStorage = meta.com_oracle_truffle_espresso_polyglot_ExceptionType.tryInitializeAndGetStatics();
             // @formatter:off
             switch (exceptionType) {
-                case EXIT          : return (StaticObject) meta.polyglot.ExceptionType_EXIT.get(staticStorage);
-                case INTERRUPT     : return (StaticObject) meta.polyglot.ExceptionType_INTERRUPT.get(staticStorage);
-                case RUNTIME_ERROR : return (StaticObject) meta.polyglot.ExceptionType_RUNTIME_ERROR.get(staticStorage);
-                case PARSE_ERROR   : return (StaticObject) meta.polyglot.ExceptionType_PARSE_ERROR.get(staticStorage);
+                case EXIT          : return (StaticObject) meta.com_oracle_truffle_espresso_polyglot_ExceptionType_EXIT.get(staticStorage);
+                case INTERRUPT     : return (StaticObject) meta.com_oracle_truffle_espresso_polyglot_ExceptionType_INTERRUPT.get(staticStorage);
+                case RUNTIME_ERROR : return (StaticObject) meta.com_oracle_truffle_espresso_polyglot_ExceptionType_RUNTIME_ERROR.get(staticStorage);
+                case PARSE_ERROR   : return (StaticObject) meta.com_oracle_truffle_espresso_polyglot_ExceptionType_PARSE_ERROR.get(staticStorage);
                 default:
                     CompilerDirectives.transferToInterpreter();
                     throw EspressoError.shouldNotReachHere("Unexpected ExceptionType: ", exceptionType);
@@ -427,7 +430,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
                 return (StaticObject) cause; // Already typed, do not re-type.
             }
             // The cause must be an exception, wrap it as ForeignException.
-            return StaticObject.createForeign(meta.polyglot.ForeignException, cause, UNCACHED);
+            return StaticObject.createForeign(meta.com_oracle_truffle_espresso_polyglot_ForeignException, cause, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -705,19 +708,19 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
 
     private static RuntimeException throwInteropException(InteropException e, Meta meta) {
         if (e instanceof UnsupportedMessageException) {
-            throw createInteropException(meta.polyglot.UnsupportedMessageException, e);
+            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_UnsupportedMessageException, e);
         }
         if (e instanceof UnknownIdentifierException) {
-            throw createInteropException(meta.polyglot.UnknownIdentifierException, e);
+            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_UnknownIdentifierException, e);
         }
         if (e instanceof ArityException) {
-            throw createInteropException(meta.polyglot.ArityException, e);
+            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_ArityException, e);
         }
         if (e instanceof UnsupportedTypeException) {
-            throw createInteropException(meta.polyglot.UnsupportedTypeException, e);
+            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_UnsupportedTypeException, e);
         }
         if (e instanceof InvalidArrayIndexException) {
-            throw createInteropException(meta.polyglot.InvalidArrayIndexException, e);
+            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_InvalidArrayIndexException, e);
         }
         CompilerDirectives.transferToInterpreter();
         throw EspressoError.unexpected("Unexpected interop exception: ", e);

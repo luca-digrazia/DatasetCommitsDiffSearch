@@ -21,9 +21,10 @@ public abstract class InteropException extends Exception {
      *
      * @since 20.2
      */
-    @SuppressWarnings("sync-override")
     @Override
-    public final Throwable getCause() {
+    // GR-23961 - after language adoption we should make this non-synchronized as initCause is not
+    // longer used
+    public final synchronized Throwable getCause() {
         return super.getCause();
     }
 
