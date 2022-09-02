@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,30 +24,51 @@
  */
 package com.oracle.svm.core.jdk;
 
+import java.lang.management.ClassLoadingMXBean;
+import java.lang.management.CompilationMXBean;
 import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
+import java.lang.management.MemoryManagerMXBean;
+import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.OperatingSystemMXBean;
+import java.lang.management.PlatformManagedObject;
 import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
+import javax.management.MBeanServer;
+import javax.management.MBeanServerConnection;
 import javax.management.ObjectName;
 
-import org.graalvm.compiler.debug.PathUtilities;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.ProcessProperties;
 
+import com.oracle.svm.core.JavaMainWrapper.JavaMainSupport;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.heap.Heap;
+import com.oracle.svm.core.thread.JavaThreads;
+import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 
+//Checkstyle: stop
+import sun.management.Util;
+//Checkstyle: resume
+
 @TargetClass(java.lang.management.ManagementFactory.class)
+@SuppressWarnings("unused")
 final class Target_java_lang_management_ManagementFactory {
 
     @Substitute
@@ -60,17 +83,81 @@ final class Target_java_lang_management_ManagementFactory {
 
     @Substitute
     private static RuntimeMXBean getRuntimeMXBean() {
-        return ImageSingletons.lookup(SubstrateRuntimeMXBean.class);
+        return ImageSingletons.lookup(RuntimeMXBean.class);
     }
 
     @Substitute
     private static ThreadMXBean getThreadMXBean() {
-        return ImageSingletons.lookup(SubstrateThreadMXBean.class);
+        return ImageSingletons.lookup(ThreadMXBean.class);
+    }
+
+    @Substitute
+    private static OperatingSystemMXBean getOperatingSystemMXBean() {
+        return ImageSingletons.lookup(OperatingSystemMXBean.class);
+    }
+
+    @Substitute
+    private static ClassLoadingMXBean getClassLoadingMXBean() {
+        return ImageSingletons.lookup(ClassLoadingMXBean.class);
+    }
+
+    @Substitute
+    private static CompilationMXBean getCompilationMXBean() {
+        return ImageSingletons.lookup(CompilationMXBean.class);
+    }
+
+    @Substitute
+    private static List<MemoryPoolMXBean> getMemoryPoolMXBeans() {
+        return Collections.emptyList();
+    }
+
+    @Substitute
+    private static List<MemoryManagerMXBean> getMemoryManagerMXBeans() {
+        return Collections.emptyList();
+    }
+
+    @Substitute
+    private static MBeanServer getPlatformMBeanServer() {
+        return null;
+    }
+
+    @Substitute
+    private static <T> T newPlatformMXBeanProxy(MBeanServerConnection connection, String mxbeanName, Class<T> mxbeanInterface) throws java.io.IOException {
+        return null;
+    }
+
+    @Substitute
+    private static <T extends PlatformManagedObject> T getPlatformMXBean(Class<T> mxbeanInterface) {
+        return null;
+    }
+
+    @Substitute
+    private static <T extends PlatformManagedObject> List<T> getPlatformMXBeans(Class<T> mxbeanInterface) {
+        return Collections.emptyList();
+    }
+
+    @Substitute
+    private static <T extends PlatformManagedObject> T getPlatformMXBean(MBeanServerConnection connection, Class<T> mxbeanInterface) throws java.io.IOException {
+        return null;
+    }
+
+    @Substitute
+    private static <T extends PlatformManagedObject> List<T> getPlatformMXBeans(MBeanServerConnection connection, Class<T> mxbeanInterface) throws java.io.IOException {
+        return Collections.emptyList();
+    }
+
+    @Substitute
+    private static Set<Class<? extends PlatformManagedObject>> getPlatformManagementInterfaces() {
+        return Collections.emptySet();
     }
 }
 
 @AutomaticFeature
 final class ManagementFactoryFeature implements Feature {
+    @Override
+    public List<Class<? extends Feature>> getRequiredFeatures() {
+        return Collections.singletonList(RuntimeFeature.class);
+    }
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
@@ -79,15 +166,54 @@ final class ManagementFactoryFeature implements Feature {
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
-        ImageSingletons.add(SubstrateRuntimeMXBean.class, new SubstrateRuntimeMXBean());
-        ImageSingletons.add(SubstrateThreadMXBean.class, new SubstrateThreadMXBean());
+        SubstrateRuntimeMXBean runtimeMXBean = new SubstrateRuntimeMXBean();
+        ImageSingletons.add(RuntimeMXBean.class, runtimeMXBean);
+        ImageSingletons.add(ThreadMXBean.class, new SubstrateThreadMXBean());
+        ImageSingletons.add(ClassLoadingMXBean.class, new SubstrateClassLoadingMXBean());
+        ImageSingletons.add(CompilationMXBean.class, new SubstrateCompilationMXBean());
+
+        RuntimeSupport.getRuntimeSupport().addStartupHook(runtimeMXBean.startupHook());
     }
 
     private static Object replace(Object source) {
         if (source instanceof ThreadMXBean) {
-            return ImageSingletons.lookup(SubstrateThreadMXBean.class);
+            return ImageSingletons.lookup(ThreadMXBean.class);
         } else if (source instanceof RuntimeMXBean) {
-            return ImageSingletons.lookup(SubstrateRuntimeMXBean.class);
+            return ImageSingletons.lookup(RuntimeMXBean.class);
+        } else if (source instanceof OperatingSystemMXBean) {
+            return ImageSingletons.lookup(OperatingSystemMXBean.class);
+        } else if (source instanceof ClassLoadingMXBean) {
+            return ImageSingletons.lookup(ClassLoadingMXBean.class);
+        } else if (source instanceof CompilationMXBean) {
+            return ImageSingletons.lookup(CompilationMXBean.class);
+        } else if (source instanceof MemoryMXBean) {
+            return Heap.getHeap().getMemoryMXBean();
+        } else if (source instanceof GarbageCollectorMXBean) {
+            /*
+             * Happens that the JVM has only two GC beans that are implemented with the same class.
+             * For different GC implementation they have different names so that can't be used to
+             * distinguish them.
+             *
+             * What is constant across all GCs in the JVM is the number of memory pools they operate
+             * on. The GC that operates on two pools is equivalent to our incremental GC and the on
+             * that operates on three is equivalent to our full GC.
+             */
+            if (source.getClass().getName().equals("sun.management.GarbageCollectorImpl")) {
+                if (((GarbageCollectorMXBean) source).getMemoryPoolNames().length == 2) {
+                    GarbageCollectorMXBean incrementalBean = Heap.getHeap().getGC().getGarbageCollectorMXBeanList().get(0);
+                    assert incrementalBean.getName().equals("young generation scavenger");
+                    return incrementalBean;
+                } else if (((GarbageCollectorMXBean) source).getMemoryPoolNames().length == 3) {
+                    GarbageCollectorMXBean completeBean = Heap.getHeap().getGC().getGarbageCollectorMXBeanList().get(1);
+                    assert completeBean.getName().equals("complete scavenger");
+                    return completeBean;
+                } else {
+                    throw UserError.abort("Found " + source + " in image heap. Don't know to which Substrate VM GC bean to map.");
+                }
+            } else {
+                /* already an Substrate VM bean */
+                return source;
+            }
         }
         return source;
     }
@@ -97,29 +223,44 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
 
     private static final String MSG = "RuntimeMXBean methods";
 
+    private long startMillis = 0;
+
     SubstrateRuntimeMXBean() {
+    }
+
+    Runnable startupHook() {
+        return new Runnable() {
+
+            /** Set the start time of the VM. */
+            @Override
+            public void run() {
+                startMillis = System.currentTimeMillis();
+            }
+        };
     }
 
     @Override
     public List<String> getInputArguments() {
+        if (ImageSingletons.contains(JavaMainSupport.class)) {
+            return ImageSingletons.lookup(JavaMainSupport.class).getInputArguments();
+        }
         return Collections.emptyList();
     }
 
-    /* All remaining methods are unsupported on Substrate VM. */
-
     @Override
     public ObjectName getObjectName() {
-        throw VMError.unsupportedFeature(MSG);
+        return Util.newObjectName(ManagementFactory.RUNTIME_MXBEAN_NAME);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public String getName() {
         long id;
         String hostName;
         try {
-            id = (Integer) Compiler.command(new Object[]{"com.oracle.svm.core.posix.PosixUtils.getpid()int"});
+            id = ProcessProperties.getProcessID();
         } catch (Throwable t) {
-            id = PathUtilities.getGlobalTimeStamp();
+            id = GraalServices.getGlobalTimeStamp();
         }
         try {
             hostName = InetAddress.getLocalHost().getHostName();
@@ -128,6 +269,8 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
         }
         return id + "@" + hostName;
     }
+
+    /* All remaining methods are unsupported on Substrate VM. */
 
     @Override
     public String getVmName() {
@@ -166,7 +309,7 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
 
     @Override
     public String getClassPath() {
-        throw VMError.unsupportedFeature(MSG);
+        return System.getProperty("java.class.path");
     }
 
     @Override
@@ -186,25 +329,54 @@ final class SubstrateRuntimeMXBean implements RuntimeMXBean {
 
     @Override
     public long getUptime() {
-        throw VMError.unsupportedFeature(MSG);
+        return System.currentTimeMillis() - startMillis;
     }
 
     @Override
     public long getStartTime() {
-        throw VMError.unsupportedFeature(MSG);
+        assert startMillis > 0 : "SubstrateRuntimeMXBean.getStartTime: Should have set SubstrateRuntimeMXBean.startMillis.";
+        return startMillis;
     }
 
+    /** Copied from {@code sun.management.RuntimeImpl#getSystemProperties()}. */
     @Override
     public Map<String, String> getSystemProperties() {
-        throw VMError.unsupportedFeature(MSG);
+        Properties sysProps = System.getProperties();
+        Map<String, String> map = new HashMap<>();
+
+        // Properties.entrySet() does not include the entries in
+        // the default properties. So use Properties.stringPropertyNames()
+        // to get the list of property keys including the default ones.
+        Set<String> keys = sysProps.stringPropertyNames();
+        for (String k : keys) {
+            String value = sysProps.getProperty(k);
+            map.put(k, value);
+        }
+
+        return map;
     }
 }
 
-final class SubstrateThreadMXBean implements ThreadMXBean {
+final class SubstrateThreadMXBean implements com.sun.management.ThreadMXBean {
 
     private static final String MSG = "ThreadMXBean methods";
 
     SubstrateThreadMXBean() {
+    }
+
+    @Override
+    public ObjectName getObjectName() {
+        return Util.newObjectName(ManagementFactory.THREAD_MXBEAN_NAME);
+    }
+
+    @Override
+    public boolean isThreadAllocatedMemoryEnabled() {
+        return false;
+    }
+
+    @Override
+    public boolean isThreadAllocatedMemorySupported() {
+        return false;
     }
 
     @Override
@@ -217,32 +389,27 @@ final class SubstrateThreadMXBean implements ThreadMXBean {
         return false;
     }
 
-    /* All remaining methods are unsupported on Substrate VM. */
-
-    @Override
-    public ObjectName getObjectName() {
-        throw VMError.unsupportedFeature(MSG);
-    }
-
     @Override
     public int getThreadCount() {
-        throw VMError.unsupportedFeature(MSG);
+        return JavaThreads.singleton().getLiveThreads();
     }
 
     @Override
     public int getPeakThreadCount() {
-        throw VMError.unsupportedFeature(MSG);
+        return JavaThreads.singleton().getPeakThreads();
     }
 
     @Override
     public long getTotalStartedThreadCount() {
-        throw VMError.unsupportedFeature(MSG);
+        return JavaThreads.singleton().getTotalThreads();
     }
 
     @Override
     public int getDaemonThreadCount() {
-        throw VMError.unsupportedFeature(MSG);
+        return JavaThreads.singleton().getDaemonThreads();
     }
+
+    /* All remaining methods are unsupported on Substrate VM. */
 
     @Override
     public long[] getAllThreadIds() {
@@ -271,17 +438,16 @@ final class SubstrateThreadMXBean implements ThreadMXBean {
 
     @Override
     public boolean isThreadContentionMonitoringSupported() {
-        throw VMError.unsupportedFeature(MSG);
+        return false;
     }
 
     @Override
     public boolean isThreadContentionMonitoringEnabled() {
-        throw VMError.unsupportedFeature(MSG);
+        return false;
     }
 
     @Override
     public void setThreadContentionMonitoringEnabled(boolean enable) {
-        throw VMError.unsupportedFeature(MSG);
     }
 
     @Override
@@ -347,6 +513,86 @@ final class SubstrateThreadMXBean implements ThreadMXBean {
     @Override
     public ThreadInfo[] dumpAllThreads(boolean lockedMonitors, boolean lockedSynchronizers) {
         throw VMError.unsupportedFeature(MSG);
+    }
+
+    @Override
+    public long getThreadAllocatedBytes(long arg0) {
+        throw VMError.unsupportedFeature(MSG);
+    }
+
+    @Override
+    public long[] getThreadAllocatedBytes(long[] arg0) {
+        throw VMError.unsupportedFeature(MSG);
+    }
+
+    @Override
+    public long[] getThreadCpuTime(long[] arg0) {
+        throw VMError.unsupportedFeature(MSG);
+    }
+
+    @Override
+    public long[] getThreadUserTime(long[] arg0) {
+        throw VMError.unsupportedFeature(MSG);
+    }
+
+    @Override
+    public void setThreadAllocatedMemoryEnabled(boolean arg0) {
+        throw VMError.unsupportedFeature(MSG);
+    }
+}
+
+class SubstrateClassLoadingMXBean implements ClassLoadingMXBean {
+
+    @Override
+    public ObjectName getObjectName() {
+        return Util.newObjectName(ManagementFactory.CLASS_LOADING_MXBEAN_NAME);
+    }
+
+    @Override
+    public long getTotalLoadedClassCount() {
+        return 0;
+    }
+
+    @Override
+    public int getLoadedClassCount() {
+        return 0;
+    }
+
+    @Override
+    public long getUnloadedClassCount() {
+        return 0;
+    }
+
+    @Override
+    public boolean isVerbose() {
+        return false;
+    }
+
+    @Override
+    public void setVerbose(boolean value) {
+    }
+}
+
+class SubstrateCompilationMXBean implements CompilationMXBean {
+
+    @Override
+    public ObjectName getObjectName() {
+        return Util.newObjectName(ManagementFactory.COMPILATION_MXBEAN_NAME);
+    }
+
+    @Override
+    public String getName() {
+        return "Graal";
+    }
+
+    @Override
+    public boolean isCompilationTimeMonitoringSupported() {
+        return false;
+    }
+
+    @Override
+    public long getTotalCompilationTime() {
+        return 0;
     }
 }
 
