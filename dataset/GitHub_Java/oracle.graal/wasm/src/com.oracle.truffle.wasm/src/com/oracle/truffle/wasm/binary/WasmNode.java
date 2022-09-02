@@ -48,18 +48,13 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
      */
     @CompilationFinal private int byteConstantLength;
 
-    /**
-     * The number of bytes in the int constant table used by this node.
-     */
-    @CompilationFinal private int intConstantLength;
-
     public WasmNode(WasmCodeEntry codeEntry, int byteLength, int byteConstantLength) {
         this.codeEntry = codeEntry;
         this.byteLength = byteLength;
         this.byteConstantLength = byteConstantLength;
     }
 
-    public abstract int execute(VirtualFrame frame);
+    public abstract void execute(VirtualFrame frame);
 
     public abstract byte returnTypeId();
 
@@ -92,13 +87,5 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
 
     public void setByteConstantLength(int byteConstantLength) {
         this.byteConstantLength = byteConstantLength;
-    }
-
-    public int intConstantLength() {
-        return intConstantLength;
-    }
-
-    public void setIntConstantLength(int intConstantLength) {
-        this.intConstantLength = intConstantLength;
     }
 }

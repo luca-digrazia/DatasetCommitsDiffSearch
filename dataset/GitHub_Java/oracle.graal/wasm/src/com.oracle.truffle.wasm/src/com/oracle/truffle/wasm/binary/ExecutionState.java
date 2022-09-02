@@ -29,20 +29,17 @@
  */
 package com.oracle.truffle.wasm.binary;
 
-import com.oracle.truffle.wasm.collection.ByteArrayList;
-import com.oracle.truffle.wasm.collection.IntArrayList;
+import com.oracle.truffle.wasm.collection.ByteList;
 
 public class ExecutionState {
     private int stackSize;
     private int maxStackSize;
-    private ByteArrayList byteConstants;
-    private IntArrayList intConstants;
+    private ByteList byteConstants;
 
     public ExecutionState() {
         this.stackSize = 0;
         this.maxStackSize = 0;
-        this.byteConstants = new ByteArrayList();
-        this.intConstants = new IntArrayList();
+        this.byteConstants = new ByteList();
     }
 
     public void push() {
@@ -58,10 +55,6 @@ public class ExecutionState {
         byteConstants.add(constant);
     }
 
-    public void useIntConstant(int constant) {
-        intConstants.add(constant);
-    }
-
     public int stackSize() {
         return stackSize;
     }
@@ -74,15 +67,7 @@ public class ExecutionState {
         return byteConstants.size();
     }
 
-    public int intConstantOffset() {
-        return intConstants.size();
-    }
-
     public byte[] byteConstants() {
         return byteConstants.toArray();
-    }
-
-    public int[] intConstants() {
-        return intConstants.toArray();
     }
 }

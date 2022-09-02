@@ -40,8 +40,7 @@ public class WasmEmptyNode extends WasmNode {
     }
 
     @Override
-    public int execute(VirtualFrame frame) {
-        return 0;
+    public void execute(VirtualFrame frame) {
     }
 
     @Override
