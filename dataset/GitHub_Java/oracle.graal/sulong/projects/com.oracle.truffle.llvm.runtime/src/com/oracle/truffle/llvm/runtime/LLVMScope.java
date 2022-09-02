@@ -55,12 +55,10 @@ public class LLVMScope implements TruffleObject {
 
     private final HashMap<String, LLVMSymbol> symbols;
     private final ArrayList<String> functionKeys;
-    private final HashMap<String, String> linkageNames;
 
     public LLVMScope() {
         this.symbols = new HashMap<>();
         this.functionKeys = new ArrayList<>();
-        this.linkageNames = new HashMap<>();
     }
 
     @TruffleBoundary
@@ -74,8 +72,7 @@ public class LLVMScope implements TruffleObject {
     }
 
     /**
-     * Lookup a function in the scope by name. If not found, interpret the name as linkageName and
-     * lookup the function by its original name.
+     * Lookup a function in the scope by name.
      *
      * @param name Function name to lookup.
      * @return A handle to the function if found, null otherwise.
@@ -86,22 +83,7 @@ public class LLVMScope implements TruffleObject {
         if (symbol != null && symbol.isFunction()) {
             return symbol.asFunction();
         }
-        final String newName = linkageNames.get(name);
-        if (newName != null) {
-            symbol = get(newName);
-            if (symbol != null && symbol.isFunction()) {
-                return symbol.asFunction();
-            }
-        }
-
         return null;
-    }
-
-    /**
-     * add a tuple of function name and function linkage name to the map
-     */
-    public void registerLinkageName(String name, String linkageName) {
-        linkageNames.put(name, linkageName);
     }
 
     /**
@@ -149,9 +131,6 @@ public class LLVMScope implements TruffleObject {
     public void addMissingEntries(LLVMScope other) {
         for (Entry<String, LLVMSymbol> entry : other.symbols.entrySet()) {
             symbols.putIfAbsent(entry.getKey(), entry.getValue());
-        }
-        for (Entry<String, String> entry : other.linkageNames.entrySet()) {
-            linkageNames.putIfAbsent(entry.getKey(), entry.getValue());
         }
     }
 
