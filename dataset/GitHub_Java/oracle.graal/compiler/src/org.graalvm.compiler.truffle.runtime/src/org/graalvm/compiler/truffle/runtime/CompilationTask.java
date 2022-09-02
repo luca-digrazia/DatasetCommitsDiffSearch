@@ -190,17 +190,31 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
 
     public boolean betterThan(CompilationTask other) {
         int tier = tier();
-        if (tier != other.tier()) {
+        if (Integer.compare(tier, other.tier()) != 0) {
             // Lower tier tasks are better
             return tier < other.tier();
         }
         int otherCompileTier = other.targetHighestCompiledTier();
         int compiledTier = targetHighestCompiledTier();
-        if (compiledTier != otherCompileTier) {
+        if (Integer.compare(compiledTier, otherCompileTier) != 0) {
             // tasks previously compiled with higher tier are better
             return compiledTier > otherCompileTier;
         }
-        return lastWeight > other.lastWeight;
+        if (tier == 1) {
+            // for first tier compilations higher weight is better
+            return lastWeight > other.lastWeight;
+        } else {
+            // for last tier compilations higher inline potential is better
+            return inlinePotential() > other.inlinePotential();
+        }
+    }
+
+    private double inlinePotential() {
+        OptimizedCallTarget target = targetRef.get();
+        if (target == null) {
+            return -1.0;
+        }
+        return target.getInlinePotential();
     }
 
     public double updateWeight(long currentTime) {

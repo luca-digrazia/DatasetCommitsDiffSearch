@@ -82,7 +82,7 @@ public class TraversingBlockingQueue<E> implements BlockingQueue<E> {
                 it.remove();
                 continue;
             }
-            if (max == null || task.isHigherPriorityThan(task(max))) {
+            if (max == null || task.betterThan(task(max))) {
                 max = entry;
             }
         }
