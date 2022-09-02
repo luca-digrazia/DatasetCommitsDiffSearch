@@ -45,8 +45,10 @@ import org.graalvm.tools.lsp.server.types.CompletionContext;
 import org.graalvm.tools.lsp.server.types.CompletionList;
 import org.graalvm.tools.lsp.server.types.DocumentHighlight;
 import org.graalvm.tools.lsp.server.types.Hover;
+import org.graalvm.tools.lsp.server.types.Location;
 import org.graalvm.tools.lsp.server.types.PublishDiagnosticsParams;
 import org.graalvm.tools.lsp.server.types.SignatureHelp;
+import org.graalvm.tools.lsp.server.types.SymbolInformation;
 import org.graalvm.tools.lsp.server.types.TextDocumentContentChangeEvent;
 import org.graalvm.tools.lsp.exceptions.DiagnosticsNotification;
 import org.graalvm.tools.lsp.exceptions.UnknownLanguageException;
@@ -54,10 +56,13 @@ import org.graalvm.tools.lsp.instrument.LSPInstrument;
 import org.graalvm.tools.lsp.server.request.AbstractRequestHandler;
 import org.graalvm.tools.lsp.server.request.CompletionRequestHandler;
 import org.graalvm.tools.lsp.server.request.CoverageRequestHandler;
+import org.graalvm.tools.lsp.server.request.DefinitionRequestHandler;
 import org.graalvm.tools.lsp.server.request.HighlightRequestHandler;
 import org.graalvm.tools.lsp.server.request.HoverRequestHandler;
+import org.graalvm.tools.lsp.server.request.ReferencesRequestHandler;
 import org.graalvm.tools.lsp.server.request.SignatureHelpRequestHandler;
 import org.graalvm.tools.lsp.server.request.SourceCodeEvaluator;
+import org.graalvm.tools.lsp.server.request.SymbolRequestHandler;
 import org.graalvm.tools.lsp.server.utils.SourceUtils;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogate;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogateMap;
@@ -70,7 +75,6 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
-import java.util.function.Function;
 
 /**
  * This class delegates LSP requests of {@link LanguageServerImpl} to specific implementations of
@@ -82,19 +86,20 @@ import java.util.function.Function;
 public final class TruffleAdapter implements VirtualLanguageServerFileProvider {
     private static final TruffleLogger LOG = TruffleLogger.getLogger(LSPInstrument.ID, TruffleAdapter.class);
 
-    private final boolean developerMode;
     private TruffleInstrument.Env env;
     ContextAwareExecutor contextAwareExecutor;
     private SourceCodeEvaluator sourceCodeEvaluator;
     CompletionRequestHandler completionHandler;
+    private SymbolRequestHandler symbolHandler;
+    private DefinitionRequestHandler definitionHandler;
     private HoverRequestHandler hoverHandler;
     private SignatureHelpRequestHandler signatureHelpHandler;
     private CoverageRequestHandler coverageHandler;
+    private ReferencesRequestHandler referencesHandler;
     private HighlightRequestHandler highlightHandler;
     private TextDocumentSurrogateMap surrogateMap;
 
-    public TruffleAdapter(boolean developerMode) {
-        this.developerMode = developerMode;
+    public TruffleAdapter() {
     }
 
     public void register(Env environment, ContextAwareExecutor executor) {
@@ -110,10 +115,13 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider {
     private void createLSPRequestHandlers() {
         this.sourceCodeEvaluator = new SourceCodeEvaluator(env, surrogateMap, contextAwareExecutor);
         this.completionHandler = new CompletionRequestHandler(env, surrogateMap, contextAwareExecutor, sourceCodeEvaluator);
-        this.hoverHandler = new HoverRequestHandler(env, surrogateMap, contextAwareExecutor, completionHandler, developerMode);
+        this.symbolHandler = new SymbolRequestHandler(env, surrogateMap, contextAwareExecutor);
+        this.definitionHandler = new DefinitionRequestHandler(env, surrogateMap, contextAwareExecutor, sourceCodeEvaluator, symbolHandler);
+        this.hoverHandler = new HoverRequestHandler(env, surrogateMap, contextAwareExecutor, completionHandler);
         this.signatureHelpHandler = new SignatureHelpRequestHandler(env, surrogateMap, contextAwareExecutor, sourceCodeEvaluator, completionHandler);
         this.coverageHandler = new CoverageRequestHandler(env, surrogateMap, contextAwareExecutor, sourceCodeEvaluator);
         this.highlightHandler = new HighlightRequestHandler(env, surrogateMap, contextAwareExecutor);
+        this.referencesHandler = new ReferencesRequestHandler(env, surrogateMap, contextAwareExecutor, highlightHandler);
     }
 
     private void initSurrogateMap() {
@@ -323,6 +331,14 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider {
 
     }
 
+    public Future<List<? extends SymbolInformation>> documentSymbol(URI uri) {
+        return contextAwareExecutor.executeWithDefaultContext(() -> symbolHandler.documentSymbolWithEnteredContext(uri));
+    }
+
+    public Future<List<? extends SymbolInformation>> workspaceSymbol(String query) {
+        return contextAwareExecutor.executeWithDefaultContext(() -> symbolHandler.workspaceSymbolWithEnteredContext(query));
+    }
+
     /**
      * Provides completions for a specific position in the document. If line or column are out of
      * range, items of global scope (top scope) are provided.
@@ -336,6 +352,10 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider {
      */
     public Future<CompletionList> completion(final URI uri, int line, int column, CompletionContext completionContext) {
         return contextAwareExecutor.executeWithDefaultContext(() -> completionHandler.completionWithEnteredContext(uri, line, column, completionContext));
+    }
+
+    public Future<List<? extends Location>> definition(URI uri, int line, int character) {
+        return contextAwareExecutor.executeWithDefaultContext(() -> definitionHandler.definitionWithEnteredContext(uri, line, character));
     }
 
     public Future<Hover> hover(URI uri, int line, int column) {
@@ -437,13 +457,12 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider {
         });
     }
 
-    public Future<List<? extends DocumentHighlight>> documentHighlight(URI uri, int line, int character) {
-        return contextAwareExecutor.executeWithDefaultContext(() -> highlightHandler.highlightWithEnteredContext(uri, line, character));
+    public Future<List<? extends Location>> references(URI uri, int line, int character) {
+        return contextAwareExecutor.executeWithDefaultContext(() -> referencesHandler.referencesWithEnteredContext(uri, line, character));
     }
 
-    public boolean hasCoverageData(URI uri) {
-        TextDocumentSurrogate surrogate = surrogateMap.get(uri);
-        return surrogate != null ? surrogate.hasCoverageData() : false;
+    public Future<List<? extends DocumentHighlight>> documentHighlight(URI uri, int line, int character) {
+        return contextAwareExecutor.executeWithDefaultContext(() -> highlightHandler.highlightWithEnteredContext(uri, line, character));
     }
 
     @Override
@@ -459,11 +478,5 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider {
     @Override
     public boolean isVirtualFile(Path path) {
         return surrogateMap.containsSurrogate(path.toUri());
-    }
-
-    public Function<URI, TextDocumentSurrogate> surrogateGetter(LanguageInfo languageInfo) {
-        return (sourceUri) -> {
-            return surrogateMap.getOrCreateSurrogate(sourceUri, () -> languageInfo);
-        };
     }
 }

@@ -25,13 +25,10 @@
 package org.graalvm.tools.lsp.server;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -94,7 +91,6 @@ import org.graalvm.tools.lsp.exceptions.UnknownLanguageException;
 import org.graalvm.tools.lsp.instrument.LSPInstrument;
 
 import com.oracle.truffle.api.TruffleLogger;
-import com.oracle.truffle.tools.utils.json.JSONObject;
 
 /**
  * A LSP4J {@link LanguageServer} implementation using TCP sockets as transportation layer for the
@@ -104,8 +100,8 @@ public final class LanguageServerImpl extends LanguageServer {
 
     private static final TruffleLogger LOG = TruffleLogger.getLogger(LSPInstrument.ID, LanguageServer.class);
 
-    private static final String DRY_RUN = "dry_run";
     private static final String SHOW_COVERAGE = "show_coverage";
+    private static final String ANALYSE_COVERAGE = "analyse_coverage";
     private static final String CLEAR_COVERAGE = "clear_coverage";
     private static final String CLEAR_ALL_COVERAGE = "clear_all_coverage";
     private static final TextDocumentSyncKind TEXT_DOCUMENT_SYNC_KIND = TextDocumentSyncKind.Incremental;
@@ -119,7 +115,6 @@ public final class LanguageServerImpl extends LanguageServer {
 
     private final Hover emptyHover = Hover.create(Collections.emptyList());
     private final SignatureHelp emptySignatureHelp = SignatureHelp.create(Collections.emptyList(), null, null);
-    private ServerCapabilities serverCapabilities;
 
     private LanguageServerImpl(TruffleAdapter adapter, PrintWriter info, PrintWriter err) {
         this.truffleAdapter = adapter;
@@ -129,40 +124,34 @@ public final class LanguageServerImpl extends LanguageServer {
 
     public static LanguageServerImpl create(TruffleAdapter adapter, PrintWriter info, PrintWriter err) {
         LanguageServerImpl server = new LanguageServerImpl(adapter, info, err);
-        adapter.initialize();
         return server;
     }
 
     @Override
     public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
         // TODO: Read params.getCapabilities();
+        truffleAdapter.initialize();
 
         List<String> signatureTriggerChars = waitForResultAndHandleExceptions(truffleAdapter.getSignatureHelpTriggerCharactersOfAllLanguages());
         List<String> triggerCharacters = waitForResultAndHandleExceptions(truffleAdapter.getCompletionTriggerCharactersOfAllLanguages());
 
         ServerCapabilities capabilities = ServerCapabilities.create();
         capabilities.setTextDocumentSync(TEXT_DOCUMENT_SYNC_KIND);
-        capabilities.setDocumentSymbolProvider(false);
-        capabilities.setWorkspaceSymbolProvider(false);
-        capabilities.setDefinitionProvider(false);
+        capabilities.setDocumentSymbolProvider(true);
+        capabilities.setWorkspaceSymbolProvider(true);
+        capabilities.setDefinitionProvider(true);
         capabilities.setDocumentHighlightProvider(true);
         capabilities.setCodeLensProvider(CodeLensOptions.create().setResolveProvider(false));
         capabilities.setCompletionProvider(CompletionOptions.create().setTriggerCharacters(triggerCharacters).setResolveProvider(false));
         capabilities.setCodeActionProvider(true);
         capabilities.setSignatureHelpProvider(SignatureHelpOptions.create().setTriggerCharacters(signatureTriggerChars));
         capabilities.setHoverProvider(true);
-        capabilities.setReferencesProvider(false);
-        capabilities.setExecuteCommandProvider(ExecuteCommandOptions.create(Arrays.asList(DRY_RUN, SHOW_COVERAGE, CLEAR_COVERAGE, CLEAR_ALL_COVERAGE)));
+        capabilities.setReferencesProvider(true);
+        capabilities.setExecuteCommandProvider(ExecuteCommandOptions.create(Arrays.asList(ANALYSE_COVERAGE, SHOW_COVERAGE, CLEAR_COVERAGE, CLEAR_ALL_COVERAGE)));
 
-        this.serverCapabilities = capabilities;
         CompletableFuture.runAsync(() -> parseWorkspace(params.getRootUri()));
 
         return CompletableFuture.completedFuture(InitializeResult.create(capabilities));
-    }
-
-    @Override
-    protected boolean supportsMethod(String method, JSONObject params) {
-        return DelegateServers.supportsMethod(method, params, serverCapabilities);
     }
 
     @Override
@@ -209,12 +198,18 @@ public final class LanguageServerImpl extends LanguageServer {
 
     @Override
     public CompletableFuture<List<? extends Location>> definition(TextDocumentPositionParams position) {
-        return CompletableFuture.completedFuture(Collections.emptyList());
+        Future<List<? extends Location>> future = truffleAdapter.definition(URI.create(position.getTextDocument().getUri()), position.getPosition().getLine(),
+                        position.getPosition().getCharacter());
+        Supplier<List<? extends Location>> supplier = () -> waitForResultAndHandleExceptions(future, Collections.emptyList());
+        return CompletableFuture.supplyAsync(supplier);
     }
 
     @Override
     public CompletableFuture<List<? extends Location>> references(ReferenceParams params) {
-        return CompletableFuture.completedFuture(Collections.emptyList());
+        Future<List<? extends Location>> future = truffleAdapter.references(URI.create(params.getTextDocument().getUri()), params.getPosition().getLine(),
+                        params.getPosition().getCharacter());
+        Supplier<List<? extends Location>> supplier = () -> waitForResultAndHandleExceptions(future, Collections.emptyList());
+        return CompletableFuture.supplyAsync(supplier);
     }
 
     @Override
@@ -227,7 +222,9 @@ public final class LanguageServerImpl extends LanguageServer {
 
     @Override
     public CompletableFuture<List<? extends SymbolInformation>> documentSymbol(DocumentSymbolParams params) {
-        return CompletableFuture.completedFuture(Collections.emptyList());
+        Future<List<? extends SymbolInformation>> future = truffleAdapter.documentSymbol(URI.create(params.getTextDocument().getUri()));
+        Supplier<List<? extends SymbolInformation>> supplier = () -> waitForResultAndHandleExceptions(future, Collections.emptyList());
+        return CompletableFuture.supplyAsync(supplier);
     }
 
     @Override
@@ -238,23 +235,23 @@ public final class LanguageServerImpl extends LanguageServer {
     @Override
     public CompletableFuture<List<? extends CodeLens>> codeLens(CodeLensParams params) {
         return CompletableFuture.supplyAsync(() -> {
-            String uri = params.getTextDocument().getUri();
-            if (truffleAdapter.hasCoverageData(URI.create(uri))) {
-                CodeLens codeLensShowCoverage = CodeLens.create(Range.create(0, 0, 0, 0), null);
-                Command commandShowCoverage = Command.create("Highlight uncovered code", SHOW_COVERAGE, uri);
-                codeLensShowCoverage.setCommand(commandShowCoverage);
+            CodeLens codeLens = CodeLens.create(Range.create(0, 0, 0, 0), null);
+            Command command = Command.create("Analyse coverage", ANALYSE_COVERAGE, params.getTextDocument().getUri());
+            codeLens.setCommand(command);
 
-                CodeLens codeLensClear = CodeLens.create(Range.create(0, 0, 0, 0), null);
-                Command commandClear = Command.create("Clear coverage", CLEAR_COVERAGE, uri);
-                codeLensClear.setCommand(commandClear);
+            CodeLens codeLensShowCoverage = CodeLens.create(Range.create(0, 0, 0, 0), null);
+            Command commandShowCoverage = Command.create("Highlight uncovered code", SHOW_COVERAGE, params.getTextDocument().getUri());
+            codeLensShowCoverage.setCommand(commandShowCoverage);
 
-                CodeLens codeLensClearAll = CodeLens.create(Range.create(0, 0, 0, 0), null);
-                Command commandClearAll = Command.create("Clear coverage (all files)", CLEAR_ALL_COVERAGE, uri);
-                codeLensClearAll.setCommand(commandClearAll);
+            CodeLens codeLensClear = CodeLens.create(Range.create(0, 0, 0, 0), null);
+            Command commandClear = Command.create("Clear coverage", CLEAR_COVERAGE, params.getTextDocument().getUri());
+            codeLensClear.setCommand(commandClear);
 
-                return Arrays.asList(/* codeLens, */ codeLensShowCoverage, codeLensClear, codeLensClearAll);
-            }
-            return Collections.emptyList();
+            CodeLens codeLensClearAll = CodeLens.create(Range.create(0, 0, 0, 0), null);
+            Command commandClearAll = Command.create("Clear coverage (all files)", CLEAR_ALL_COVERAGE, params.getTextDocument().getUri());
+            codeLensClearAll.setCommand(commandClearAll);
+
+            return Arrays.asList(codeLens, codeLensShowCoverage, codeLensClear, codeLensClearAll);
         });
     }
 
@@ -311,10 +308,7 @@ public final class LanguageServerImpl extends LanguageServer {
     private void processChanges(final String documentUri,
                     final List<? extends TextDocumentContentChangeEvent> list) {
         String langId = openedFileUri2LangId.get(URI.create(documentUri));
-        if (langId == null) {
-            LOG.warning("Changed document that was not opened: " + documentUri);
-            return;
-        }
+        assert langId != null : documentUri; // TODO: Are we sure we want to throw AssertionError?
 
         URI uri = URI.create(documentUri);
         Future<?> future;
@@ -337,7 +331,9 @@ public final class LanguageServerImpl extends LanguageServer {
     @Override
     public void didClose(DidCloseTextDocumentParams params) {
         URI uri = URI.create(params.getTextDocument().getUri());
-        openedFileUri2LangId.remove(uri);
+        String removed = openedFileUri2LangId.remove(uri);
+        assert removed != null : uri.toString();
+
         truffleAdapter.didClose(uri);
     }
 
@@ -347,11 +343,9 @@ public final class LanguageServerImpl extends LanguageServer {
         URI uri = URI.create(params.getTextDocument().getUri());
         if (params.getText() != null) {
             String langId = openedFileUri2LangId.get(uri);
-            if (langId == null) {
-                LOG.warning("Saved document that was not opened: " + uri);
-                return;
-            }
+            assert langId != null : uri;
             future = truffleAdapter.parse(params.getText(), langId, uri);
+
         } else {
             future = truffleAdapter.reparse(uri);
         }
@@ -360,17 +354,30 @@ public final class LanguageServerImpl extends LanguageServer {
 
     @Override
     public CompletableFuture<List<? extends SymbolInformation>> symbol(WorkspaceSymbolParams params) {
-        return CompletableFuture.completedFuture(Collections.emptyList());
+        Future<List<? extends SymbolInformation>> future = truffleAdapter.workspaceSymbol(params.getQuery());
+        Supplier<List<? extends SymbolInformation>> supplier = () -> waitForResultAndHandleExceptions(future, Collections.emptyList());
+        return CompletableFuture.supplyAsync(supplier);
     }
 
     @Override
     public CompletableFuture<Object> executeCommand(ExecuteCommandParams params) {
         switch (params.getCommand()) {
-            case DRY_RUN:
+            case ANALYSE_COVERAGE:
+                client.showMessage(ShowMessageParams.create(MessageType.Info, "Running Coverage analysis..."));
                 String uri = (String) params.getArguments().get(0);
 
-                Future<?> future = truffleAdapter.runCoverageAnalysis(URI.create(uri));
-                return CompletableFuture.supplyAsync(() -> waitForResultAndHandleExceptions(future));
+                Future<Boolean> future = truffleAdapter.runCoverageAnalysis(URI.create(uri));
+                return CompletableFuture.supplyAsync(() -> {
+                    Boolean result = waitForResultAndHandleExceptions(future, Boolean.FALSE);
+                    if (result) {
+                        client.showMessage(ShowMessageParams.create(MessageType.Info, "Coverage analysis done."));
+                        Future<?> futureShowCoverage = truffleAdapter.showCoverage(URI.create(uri));
+                        waitForResultAndHandleExceptions(futureShowCoverage);
+                    } else {
+                        client.showMessage(ShowMessageParams.create(MessageType.Error, "Coverage analysis failed."));
+                    }
+                    return new Object();
+                });
             case SHOW_COVERAGE:
                 uri = (String) params.getArguments().get(0);
 
@@ -454,7 +461,7 @@ public final class LanguageServerImpl extends LanguageServer {
         return resultOnError;
     }
 
-    public CompletableFuture<?> start(final ServerSocket serverSocket, final List<SocketAddress> delegateAddresses) {
+    public CompletableFuture<?> start(final ServerSocket serverSocket) {
         clientConnectionExecutor = Executors.newSingleThreadExecutor(new ThreadFactory() {
 
             @Override
@@ -489,9 +496,7 @@ public final class LanguageServerImpl extends LanguageServer {
                         }
                     });
 
-                    OutputStream serverOutput = clientSocket.getOutputStream();
-                    DelegateServers delegateServers = createDelegateServers(serverOutput);
-                    Future<?> listenFuture = Session.connect(LanguageServerImpl.this, clientSocket.getInputStream(), serverOutput, lspRequestExecutor, delegateServers);
+                    Future<?> listenFuture = Session.connect(LanguageServerImpl.this, clientSocket.getInputStream(), clientSocket.getOutputStream(), lspRequestExecutor);
                     try {
                         listenFuture.get();
                     } catch (InterruptedException | ExecutionException e) {
@@ -502,23 +507,6 @@ public final class LanguageServerImpl extends LanguageServer {
                 } catch (IOException e) {
                     err.println("[Graal LSP] Error while connecting to client: " + e.getLocalizedMessage());
                 }
-            }
-
-            private DelegateServers createDelegateServers(OutputStream serverOutput) {
-                List<DelegateServer> delegateServersList;
-                if (delegateAddresses.isEmpty()) {
-                    delegateServersList = Collections.emptyList();
-                } else {
-                    delegateServersList = new ArrayList<>(delegateAddresses.size());
-                    for (SocketAddress address : delegateAddresses) {
-                        try {
-                            delegateServersList.add(new DelegateServer(address, serverOutput, getLogger()));
-                        } catch (IOException ex) {
-                            err.println("[Graal LSP] Error while connecting to delegate server at " + address + " : " + ex.getLocalizedMessage());
-                        }
-                    }
-                }
-                return new DelegateServers(delegateServersList);
             }
         }, clientConnectionExecutor);
         return future;
