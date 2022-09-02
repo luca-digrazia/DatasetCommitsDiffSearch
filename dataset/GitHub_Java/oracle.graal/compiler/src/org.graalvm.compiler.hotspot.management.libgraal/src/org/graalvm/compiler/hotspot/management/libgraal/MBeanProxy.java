@@ -72,9 +72,7 @@ class MBeanProxy<T extends DynamicMBean> {
     /**
      * Offset of the {@code _jni_environment} field in {@code JavaThread}.
      */
-    private static volatile long jniEnvOffset;
-
-    private static LibGraalMemoryPoolMBean memPoolBean;
+    private static long jniEnvOffset;
 
     /**
      * The MBean instance.
@@ -147,10 +145,6 @@ class MBeanProxy<T extends DynamicMBean> {
     }
 
     ObjectName poll() {
-        LibGraalMemoryPoolMBean memPool = memPoolBean;
-        if (memPool != null) {
-            memPool.update();
-        }
         if (bean == null || needsRegistration) {
             return null;
         }
@@ -165,15 +159,14 @@ class MBeanProxy<T extends DynamicMBean> {
                         // Old unsupported JVMCI version.
                         return;
                     }
-                    memPoolBean = new LibGraalMemoryPoolMBean();
                     jniEnvOffset = config.jniEnvironmentOffset;
                     defineClassesInHotSpot(getCurrentJNIEnv());
-                    try {
-                        MBeanProxy<?> memPoolMBean = new MBeanProxy<>(memPoolBean, LibGraalMemoryPoolMBean.NAME);
-                        registrations.add(memPoolMBean);
-                    } catch (MalformedObjectNameException mon) {
-                        throw new AssertionError("Invlid object name.", mon);
-                    }
+                }
+                try {
+                    MBeanProxy<?> memPoolMBean = new MBeanProxy<>(new LibGraalMemoryPoolMBean(), LibGraalMemoryPoolMBean.NAME);
+                    registrations.add(memPoolMBean);
+                } catch (MalformedObjectNameException mon) {
+                    throw new AssertionError("Invlid object name.", mon);
                 }
             }
         }
