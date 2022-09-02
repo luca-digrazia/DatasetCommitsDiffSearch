@@ -568,6 +568,10 @@ public class ContextLookupCompilationTest extends PartialEvaluationTest {
             return false;
         }
 
+        public static ContextReference<LanguageContext> getCurrentContextReference() {
+            return getCurrentLanguage(Exclusive.class).getContextReference();
+        }
+
         public static LanguageContext getCurrentContext() {
             return getCurrentContext(Exclusive.class);
         }
@@ -608,7 +612,6 @@ public class ContextLookupCompilationTest extends PartialEvaluationTest {
             return false;
         }
 
-        @SuppressWarnings("deprecation")
         public static ContextReference<LanguageContext> getCurrentContextReference() {
             return getCurrentLanguage(Shared.class).getContextReference();
         }

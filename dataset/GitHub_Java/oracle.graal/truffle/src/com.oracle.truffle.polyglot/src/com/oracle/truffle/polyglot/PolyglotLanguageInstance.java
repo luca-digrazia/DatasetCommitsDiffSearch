@@ -99,19 +99,16 @@ final class PolyglotLanguageInstance implements VMObject {
         Assumption useDirectSingleContext = currentExclusive ? null : singleContext;
         Assumption useInnerContext = mayBeUsedInInnerContext ? language.engine.noInnerContexts : null;
 
-        if (language.engine.conservativeContextReferences) {
-            this.directContextSupplier = language.getConservativeContextReference();
+        if (useDirectSingleContext == null && useInnerContext == null) {
+            // no checks can use direct reference
+            this.directContextSupplier = PolyglotReferences.createAlwaysSingleContext(language, currentExclusive);
         } else {
-            if (useDirectSingleContext == null && useInnerContext == null) {
-                // no checks can use direct reference
-                this.directContextSupplier = PolyglotReferences.createAlwaysSingleContext(language, currentExclusive);
-            } else {
-                this.directContextSupplier = PolyglotReferences.createAssumeSingleContext(language,
-                                useInnerContext,
-                                useDirectSingleContext,
-                                language.getContextReference(), currentExclusive);
-            }
+            this.directContextSupplier = PolyglotReferences.createAssumeSingleContext(language,
+                            useInnerContext,
+                            useDirectSingleContext,
+                            language.getContextReference(), currentExclusive);
         }
+
         this.directLanguageSupplier = PolyglotReferences.createAlwaysSingleLanguage(language, this);
     }
 
