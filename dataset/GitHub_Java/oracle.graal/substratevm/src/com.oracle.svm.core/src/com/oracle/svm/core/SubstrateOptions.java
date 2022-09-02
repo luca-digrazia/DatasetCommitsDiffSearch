@@ -33,7 +33,6 @@ import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -249,20 +248,10 @@ public class SubstrateOptions {
     public static final HostedOptionKey<Boolean> UseStackBasePointer = new HostedOptionKey<>(false);
 
     @Option(help = "Report error if <typename>[:<UsageKind>{,<UsageKind>}] is discovered during analysis (valid values for UsageKind: InHeap, Allocated, InTypeCheck).", type = OptionType.Debug)//
-    public static final HostedOptionKey<String[]> ReportAnalysisForbiddenType = new HostedOptionKey<>(new String[0]);
+    public static final OptionKey<String[]> ReportAnalysisForbiddenType = new OptionKey<>(new String[0]);
 
     @Option(help = "Backend used by the compiler", type = OptionType.User)//
-    public static final HostedOptionKey<String> CompilerBackend = new HostedOptionKey<String>("lir") {
-        @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
-            if ("llvm".equals(newValue) && !JavaVersionUtil.Java8OrEarlier) {
-                EmitStringEncodingSubstitutions.update(values, false);
-            }
-        }
-    };
-
-    @Option(help = "Emit substitutions for UTF16 and latin1 compression", type = OptionType.Debug)//
-    public static final HostedOptionKey<Boolean> EmitStringEncodingSubstitutions = new HostedOptionKey<>(true);
+    public static final HostedOptionKey<String> CompilerBackend = new HostedOptionKey<>("lir");
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public static Predicate<String> makeFilter(String[] definedFilters) {

@@ -24,13 +24,11 @@
  */
 package org.graalvm.compiler.graph;
 
-import static org.graalvm.compiler.core.common.Fields.translateInto;
 import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
-import static org.graalvm.compiler.graph.Edges.translateInto;
 import static org.graalvm.compiler.graph.Graph.isModificationCountsEnabled;
 import static org.graalvm.compiler.graph.InputEdges.translateInto;
 import static org.graalvm.compiler.graph.Node.WithAllEdges;
-import static org.graalvm.compiler.serviceprovider.GraalUnsafeAccess.getUnsafe;
+import static org.graalvm.compiler.graph.UnsafeAccess.UNSAFE;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
@@ -71,8 +69,6 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 
-import sun.misc.Unsafe;
-
 /**
  * Metadata for every {@link Node} type. The metadata includes:
  * <ul>
@@ -83,7 +79,6 @@ import sun.misc.Unsafe;
  */
 public final class NodeClass<T> extends FieldIntrospection<T> {
 
-    private static final Unsafe UNSAFE = getUnsafe();
     // Timers for creation of a NodeClass instance
     private static final TimerKey Init_FieldScanning = DebugContext.timer("NodeClass.Init.FieldScanning");
     private static final TimerKey Init_FieldScanningInner = DebugContext.timer("NodeClass.Init.FieldScanning.Inner");
@@ -126,14 +121,14 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             field.setAccessible(true);
             return (NodeClass<T>) field.get(null);
         } catch (IllegalArgumentException | IllegalAccessException | NoSuchFieldException | SecurityException e) {
-            throw new RuntimeException("Could not load Graal NodeClass TYPE field for " + clazz, e);
+            throw new RuntimeException(e);
         }
     }
 
     public static <T> NodeClass<T> get(Class<T> clazz) {
         int numTries = 0;
         while (true) {
-            boolean shouldBeInitializedBefore = UNSAFE.shouldBeInitialized(clazz);
+            boolean shouldBeInitializedBefore = UnsafeAccess.UNSAFE.shouldBeInitialized(clazz);
 
             NodeClass<T> result = getUnchecked(clazz);
             if (result != null || clazz == NODE_CLASS) {
@@ -146,13 +141,13 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
              * information without failing gates.
              */
             numTries++;
-            boolean shouldBeInitializedAfter = UNSAFE.shouldBeInitialized(clazz);
+            boolean shouldBeInitializedAfter = UnsafeAccess.UNSAFE.shouldBeInitialized(clazz);
             String msg = "GR-9537 Reflective field access of TYPE field returned null. This is probably a bug in HotSpot class initialization. " +
                             " clazz: " + clazz.getTypeName() + ", numTries: " + numTries +
                             ", shouldBeInitializedBefore: " + shouldBeInitializedBefore + ", shouldBeInitializedAfter: " + shouldBeInitializedAfter;
             if (numTries <= 100) {
                 TTY.println(msg);
-                UNSAFE.ensureClassInitialized(clazz);
+                UnsafeAccess.UNSAFE.ensureClassInitialized(clazz);
             } else {
                 throw GraalError.shouldNotReachHere(msg);
             }
