@@ -387,15 +387,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 m.put(c.getName(), c);
             }
         }
-        if (JAVA_SPECIFICATION_VERSION >= 15) {
-            String className = "jdk.internal.access.foreign.MemorySegmentProxy";
-            try {
-                Class<?> c = Class.forName(className);
-                m.put(c.getName(), c);
-            } catch (ClassNotFoundException e) {
-                throw new NoClassDefFoundError(className);
-            }
-        }
         return m;
     }
 
@@ -425,11 +416,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     protected void installShutdownHooks() {
-        addShutdownHook(this::shutdown);
-    }
-
-    protected void addShutdownHook(Runnable hook) {
-        Runtime.getRuntime().addShutdownHook(new Thread(hook));
+        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
     }
 
     protected void lookupCallMethods(MetaAccessProvider metaAccess) {
@@ -634,7 +621,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         listeners.remove(listener);
     }
 
-    protected void shutdown() {
+    private void shutdown() {
         getListener().onShutdown();
         TruffleCompiler tcp = truffleCompiler;
         if (tcp != null) {

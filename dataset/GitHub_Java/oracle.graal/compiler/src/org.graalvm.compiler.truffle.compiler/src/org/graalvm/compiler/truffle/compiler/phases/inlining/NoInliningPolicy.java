@@ -24,22 +24,6 @@
  */
 package org.graalvm.compiler.truffle.compiler.phases.inlining;
 
-import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.serviceprovider.ServiceProvider;
-import org.graalvm.options.OptionValues;
+final class NoInliningPolicy implements InliningPolicy {
 
-@ServiceProvider(InliningPolicyProvider.class)
-public class NoInliningPolicyProvider extends InliningPolicyProvider {
-
-    private static final int PRIORITY = -1;
-    private static final String NAME = "No";
-
-    public NoInliningPolicyProvider() {
-        super(PRIORITY, NAME);
-    }
-
-    @Override
-    public InliningPolicy get(OptionValues options, CoreProviders providers) {
-        return new NoInliningPolicy();
-    }
 }

@@ -24,6 +24,8 @@
  */
 package org.graalvm.compiler.truffle.compiler.phases.inlining;
 
+import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Objects;
@@ -67,7 +69,7 @@ public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
     }
 
     private InliningPolicyProvider getInliningPolicyProvider(boolean firstTier) {
-        final String policy = request.options.get(firstTier ? PolyglotCompilerOptions.FirstTierInliningPolicy : PolyglotCompilerOptions.InliningPolicy);
+        final String policy = getPolyglotOptionValue(request.options, firstTier ? PolyglotCompilerOptions.FirstTierInliningPolicy : PolyglotCompilerOptions.InliningPolicy);
         if (Objects.equals(policy, "")) {
             return POLICY_PROVIDERS.get(firstTier ? POLICY_PROVIDERS.size() - 1 : 0);
         } else {
@@ -90,8 +92,8 @@ public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
         tree.trace();
     }
 
-    private boolean optionsAllowInlining() {
-        return request.options.get(PolyglotCompilerOptions.Inlining) &&
-                        (request.options.get(PolyglotCompilerOptions.Mode) != PolyglotCompilerOptions.EngineModeEnum.LATENCY);
+    private Boolean optionsAllowInlining() {
+        return getPolyglotOptionValue(request.options, PolyglotCompilerOptions.Inlining) &&
+                        (getPolyglotOptionValue(request.options, PolyglotCompilerOptions.Mode) != PolyglotCompilerOptions.EngineModeEnum.LATENCY);
     }
 }

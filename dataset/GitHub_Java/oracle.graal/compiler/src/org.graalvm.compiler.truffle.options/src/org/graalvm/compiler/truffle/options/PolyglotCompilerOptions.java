@@ -70,8 +70,7 @@ public final class PolyglotCompilerOptions {
     public enum PerformanceWarningKind {
         VIRTUAL_RUNTIME_CALL("call", "Enables virtual call warnings"),
         VIRTUAL_INSTANCEOF("instanceof", "Enables virtual instanceof warnings"),
-        VIRTUAL_STORE("store", "Enables virtual store warnings"),
-        TRIVIAL_FAIL("trivial", "Enables trivial fail warnings");
+        VIRTUAL_STORE("store", "Enables virtual store warnings");
 
         private static final EconomicMap<String, PerformanceWarningKind> kindByName;
         static {

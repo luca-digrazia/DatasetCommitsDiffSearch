@@ -64,7 +64,7 @@ final class GraphManager {
             final PartialEvaluator.Request request = newRequest(truffleAST, false);
             request.graph.getAssumptions().record(new TruffleAssumption(truffleAST.getNodeRewritingAssumptionConstant()));
             partialEvaluator.doGraphPE(request, plugin, graphCacheForInlining);
-            entry = new Entry(request.graph, plugin.getInvokeToTruffleCallNode(), plugin.getIndirectInvokes(), !plugin.graphHasCalls());
+            entry = new Entry(request.graph, plugin.getInvokeToTruffleCallNode(), plugin.getIndirectInvokes());
             irCache.put(truffleAST, entry);
         }
         return entry;
@@ -86,10 +86,10 @@ final class GraphManager {
         return new PEAgnosticInlineInvokePlugin(rootRequest.inliningPlan, partialEvaluator);
     }
 
-    Entry peRoot() {
+    EconomicMap<Invoke, TruffleCallNode> peRoot() {
         final PEAgnosticInlineInvokePlugin plugin = newPlugin();
         partialEvaluator.doGraphPE(rootRequest, plugin, graphCacheForInlining);
-        return new Entry(rootRequest.graph, plugin.getInvokeToTruffleCallNode(), plugin.getIndirectInvokes(), !plugin.graphHasCalls());
+        return plugin.getInvokeToTruffleCallNode();
     }
 
     UnmodifiableEconomicMap<Node, Node> doInline(Invoke invoke, StructuredGraph ir, CompilableTruffleAST truffleAST) {
@@ -112,13 +112,11 @@ final class GraphManager {
         final StructuredGraph graph;
         final EconomicMap<Invoke, TruffleCallNode> invokeToTruffleCallNode;
         final List<Invoke> indirectInvokes;
-        final boolean trivial;
 
-        Entry(StructuredGraph graph, EconomicMap<Invoke, TruffleCallNode> invokeToTruffleCallNode, List<Invoke> indirectInvokes, boolean trivial) {
+        Entry(StructuredGraph graph, EconomicMap<Invoke, TruffleCallNode> invokeToTruffleCallNode, List<Invoke> indirectInvokes) {
             this.graph = graph;
             this.invokeToTruffleCallNode = invokeToTruffleCallNode;
             this.indirectInvokes = indirectInvokes;
-            this.trivial = trivial;
         }
     }
 
