@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,36 +40,70 @@
  */
 package org.graalvm.wasm.api;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import org.graalvm.wasm.exception.WasmExecutionException;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import org.graalvm.wasm.exception.WasmJsApiException;
+import org.graalvm.wasm.memory.ByteArrayWasmMemory;
 import org.graalvm.wasm.memory.WasmMemory;
 
-@ExportLibrary(InteropLibrary.class)
+import static java.lang.Integer.compareUnsigned;
+import static org.graalvm.wasm.WasmMath.minUnsigned;
+import static org.graalvm.wasm.api.JsConstants.JS_LIMITS;
+
 public class Memory extends Dictionary {
     private final MemoryDescriptor descriptor;
     private final WasmMemory memory;
 
     public Memory(WasmMemory memory) {
-        this.descriptor = new MemoryDescriptor(memory.pageSize(), memory.maxPageSize());
+        this.descriptor = new MemoryDescriptor(memory.declaredMinSize(), memory.declaredMaxSize());
         this.memory = memory;
         addMembers(new Object[]{
                         "descriptor", this.descriptor,
-                        "grow", new Executable(args -> grow((Long) args[0])),
-                        "buffer", new Executable(args -> new MemoryArrayBuffer(memory)),
+                        "grow", new Executable(args -> grow((Integer) args[0])),
+                        "buffer", new Executable(args -> memory),
         });
     }
 
-    @TruffleBoundary
-    private WasmExecutionException rangeError() {
-        return new WasmExecutionException(null, "Range error.");
+    public static Memory create(int declaredMinSize, int declaredMaxSize) {
+        if (compareUnsigned(declaredMinSize, declaredMaxSize) > 0) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.LinkError, "Min memory size exceeds max memory size");
+        } else if (compareUnsigned(declaredMinSize, JS_LIMITS.memoryInstanceSizeLimit()) > 0) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.LinkError, "Min memory size exceeds implementation limit");
+        }
+        final int maxAllowedSize = minUnsigned(declaredMaxSize, JS_LIMITS.memoryInstanceSizeLimit());
+        final WasmMemory wasmMemory = new ByteArrayWasmMemory(declaredMinSize, declaredMaxSize, maxAllowedSize);
+        return new Memory(wasmMemory);
     }
 
-    private final long grow(long delta) {
-        final long pageSize = memory.pageSize();
+    public static Memory create(Object descriptor) {
+        return create(initial(descriptor), maximum(descriptor));
+    }
+
+    private static int initial(Object descriptor) {
+        try {
+            return (int) InteropLibrary.getUncached().readMember(descriptor, "initial");
+        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid memory descriptor " + descriptor);
+        }
+    }
+
+    private static int maximum(Object descriptor) {
+        try {
+            return (int) InteropLibrary.getUncached().readMember(descriptor, "maximum");
+        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid memory descriptor " + descriptor);
+        }
+    }
+
+    public WasmMemory wasmMemory() {
+        return memory;
+    }
+
+    private long grow(int delta) {
+        final long pageSize = memory.size();
         if (!memory.grow(delta)) {
-            throw rangeError();
+            throw new WasmJsApiException(WasmJsApiException.Kind.LinkError, "Cannot grow memory above max limit");
         }
         return pageSize;
     }
