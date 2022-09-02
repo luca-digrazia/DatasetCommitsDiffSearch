@@ -67,7 +67,6 @@ public final class WasmModule extends SymbolTable {
         this.isParsed = false;
     }
 
-    @Override
     protected WasmModule module() {
         return this;
     }
