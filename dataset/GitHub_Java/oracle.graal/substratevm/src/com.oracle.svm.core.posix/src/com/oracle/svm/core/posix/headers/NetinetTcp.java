@@ -24,15 +24,17 @@
  */
 package com.oracle.svm.core.posix.headers;
 
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.Platform.DARWIN;
+import org.graalvm.nativeimage.Platform.LINUX;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.constant.CConstant;
-import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 
 //Allow methods with non-standard names: Checkstyle: stop
 
 /** The definitions I need, manually translated from the C header file. */
-@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class, DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+@Platforms({DARWIN.class, LINUX.class})
 @CContext(PosixDirectives.class)
 public class NetinetTcp {
 
@@ -42,22 +44,22 @@ public class NetinetTcp {
     @CConstant
     public static native int TCP_KEEPINTVL();
 
-    @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+    @Platforms({Platform.DARWIN.class})
     @CConstant
     public static native int TCP_KEEPALIVE();
 
-    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+    @Platforms({Platform.LINUX.class})
     @CConstant
     public static native int TCP_KEEPIDLE();
 
     @CConstant
     public static native int TCP_KEEPCNT();
 
-    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+    @Platforms({Platform.LINUX.class})
     @CConstant
     public static native int SOL_TCP();
 
-    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+    @Platforms({Platform.LINUX.class})
     @CConstant
     public static native int TCP_QUICKACK();
 
