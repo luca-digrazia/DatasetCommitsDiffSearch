@@ -58,6 +58,7 @@ import org.graalvm.wasm.exception.WasmLinkerException;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.nodes.WasmBlockNode;
 import org.graalvm.wasm.nodes.WasmCallStubNode;
+import org.graalvm.wasm.nodes.WasmEmptyNode;
 import org.graalvm.wasm.nodes.WasmIfNode;
 import org.graalvm.wasm.nodes.WasmIndirectCallNode;
 import org.graalvm.wasm.nodes.WasmNode;
@@ -362,7 +363,8 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     private WasmBlockNode readBlockBody(WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId, byte continuationTypeId) {
-        ArrayList<Node> children = new ArrayList<>();
+        ArrayList<Node> nestedControlTable = new ArrayList<>();
+        ArrayList<Node> callNodes = new ArrayList<>();
         int startStackSize = state.stackSize();
         int startOffset = offset();
         int startByteConstantOffset = state.byteConstantOffset();
@@ -393,7 +395,7 @@ public class BinaryParser extends BinaryStreamParser {
                     int stackSize = state.stackSize();
                     state.pushStackState(stackSize);
                     WasmBlockNode nestedBlock = readBlock(codeEntry, state);
-                    children.add(nestedBlock);
+                    nestedControlTable.add(nestedBlock);
                     state.popStackState();
                     state.setReachable(reachable);
                     break;
@@ -405,7 +407,7 @@ public class BinaryParser extends BinaryStreamParser {
                     // the nested block (continuation stack pointer).
                     state.pushStackState(state.stackSize());
                     LoopNode loopBlock = readLoop(codeEntry, state);
-                    children.add(loopBlock);
+                    nestedControlTable.add(loopBlock);
                     state.popStackState();
                     state.setReachable(reachable);
                     break;
@@ -421,7 +423,7 @@ public class BinaryParser extends BinaryStreamParser {
                     // condition value that will be popped before executing the if statement.
                     state.pushStackState(state.stackSize());
                     WasmIfNode ifNode = readIf(codeEntry, state);
-                    children.add(ifNode);
+                    nestedControlTable.add(ifNode);
                     state.popStackState();
                     state.setReachable(reachable);
                     break;
@@ -530,8 +532,8 @@ public class BinaryParser extends BinaryStreamParser {
                     // then that other module might not have been parsed yet.
                     // Therefore, the call node will be created lazily during linking,
                     // after the call target from the other module exists.
-                    children.add(new WasmCallStubNode(function));
-                    context.linker().resolveCallsite(module, currentBlock, children.size() - 1, function);
+                    callNodes.add(new WasmCallStubNode(function));
+                    context.linker().resolveCallsite(module, currentBlock, callNodes.size() - 1, function);
 
                     break;
                 }
@@ -545,7 +547,7 @@ public class BinaryParser extends BinaryStreamParser {
                     state.pop();
                     state.pop(numArguments);
                     state.push(returnLength);
-                    children.add(WasmIndirectCallNode.create());
+                    callNodes.add(WasmIndirectCallNode.create());
                     Assert.assertIntEqual(read1(), CallIndirect.ZERO_TABLE, "CALL_INDIRECT: Instruction must end with 0x00");
                     break;
                 }
@@ -865,7 +867,8 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
             }
         } while (opcode != Instructions.END && opcode != Instructions.ELSE);
-        currentBlock.initialize(toArray(children),
+        currentBlock.initialize(nestedControlTable.toArray(new Node[nestedControlTable.size()]),
+                        callNodes.toArray(new Node[callNodes.size()]),
                         offset() - startOffset, state.byteConstantOffset() - startByteConstantOffset,
                         state.intConstantOffset() - startIntConstantOffset, state.longConstantOffset() - startLongConstantOffset,
                         state.branchTableOffset() - startBranchTableOffset);
@@ -878,13 +881,6 @@ public class BinaryParser extends BinaryStreamParser {
         state.popContinuationReturnLength();
 
         return currentBlock;
-    }
-
-    static Node[] toArray(ArrayList<Node> list) {
-        if (list.size() == 0) {
-            return null;
-        }
-        return list.toArray(new Node[list.size()]);
     }
 
     private LoopNode readLoop(WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId) {
@@ -919,12 +915,16 @@ public class BinaryParser extends BinaryStreamParser {
         state.setStackSize(stackSizeAfterCondition);
 
         // Read false branch, if it exists.
-        WasmNode falseBranchBlock = null;
+        WasmNode falseBranchBlock;
         if (peek1(-1) == Instructions.ELSE) {
             falseBranchBlock = readBlockBody(codeEntry, state, blockTypeId, blockTypeId);
-        } else if (blockTypeId != ValueTypes.VOID_TYPE) {
-            Assert.fail("An if statement without an else branch block cannot return values.");
+        } else {
+            if (blockTypeId != ValueTypes.VOID_TYPE) {
+                Assert.fail("An if statement without an else branch block cannot return values.");
+            }
+            falseBranchBlock = new WasmEmptyNode(module, codeEntry, 0);
         }
+
         int stackSizeBeforeCondition = stackSizeAfterCondition + 1;
         return new WasmIfNode(module, codeEntry, trueBranchBlock, falseBranchBlock, offset() - startOffset, blockTypeId, stackSizeBeforeCondition);
     }
