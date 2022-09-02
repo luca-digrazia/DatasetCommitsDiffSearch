@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.meta.Meta;
 
 /**
  * Helper for creating virtual tables in ObjectKlass.
@@ -73,8 +72,7 @@ public final class VirtualTable {
             int count = 1;
             for (Method override : overrides) {
                 if (override.isFinalFlagSet()) {
-                    Meta meta = m.getDeclaringKlass().getMeta();
-                    throw meta.throwExceptionWithMessage(meta.java_lang_VerifyError, "Overriding final method: " + override);
+                    throw m.getDeclaringKlass().getMeta().throwExWithMessage(VerifyError.class, "Overriding final method: " + override);
                 }
                 override.invalidateLeaf();
                 int pos = override.getVTableIndex();
