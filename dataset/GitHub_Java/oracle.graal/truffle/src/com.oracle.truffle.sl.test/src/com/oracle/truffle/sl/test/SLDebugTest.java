@@ -829,7 +829,7 @@ public class SLDebugTest {
     public void testMisplacedLineBreakpoints() throws Throwable {
         final String sourceStr = "// A comment\n" +              // 1
                         "function invocable(n) {\n" +
-                        "  if (R3_R27_n <= 1) {\n" +
+                        "  if (R1-3_R27_n <= 1) {\n" +
                         "    R4-6_one \n" +
                         "        =\n" +                 // 5
                         "          1;\n" +
@@ -858,27 +858,17 @@ public class SLDebugTest {
                         "function\n" +
                         "   main()\n" +                 // 30
                         "         {\n" +
-                        "  R31-33_return invocable(1) + invocable(2);\n" +
+                        "  R28-34_return invocable(1) + invocable(2);\n" +
                         "}\n" +
                         "\n";
-        tester.assertLineBreakpointsResolution(sourceStr, new DebuggerTester.PositionPredicate() {
-            @Override
-            public boolean testLine(int line) {
-                return 3 <= line && line <= 27 || 31 <= line && line <= 33;
-            }
-
-            @Override
-            public boolean testLineColumn(int line, int column) {
-                return testLine(line);
-            }
-        }, "R", "sl");
+        tester.assertLineBreakpointsResolution(sourceStr, "R", "sl");
     }
 
     @Test
     public void testMisplacedColumnBreakpoints() throws Throwable {
-        final String sourceStr = "// A comment\n" +              // 1
-                        "function invocable(B3_n) {\n" +
-                        "  if (R3-4_R16_n <= 1) B4_ B5_{B6_\n" +
+        final String sourceStr = "// A B1_comment\n" +              // 1
+                        "function B2_ invocable(B3_n) {\n" +
+                        "  if (R1-4_R16_n <= 1) B4_ B5_{B6_\n" +
                         "    R5-7_one \n" +
                         "        =\n" +                 // 5
                         "          B7_1;\n" +
@@ -946,17 +936,7 @@ public class SLDebugTest {
                         "}\n" +
                         "\n";
         Source source = Source.newBuilder("sl", sourceCode, "testBreakpointsAnywhere.sl").build();
-        tester.assertBreakpointsBreakEverywhere(source, new DebuggerTester.PositionPredicate() {
-            @Override
-            public boolean testLine(int line) {
-                return 3 <= line && line <= 25 || 29 <= line && line <= 31;
-            }
-
-            @Override
-            public boolean testLineColumn(int line, int column) {
-                return 3 <= line && line <= 24 || line == 25 && column == 1 || 29 <= line && line <= 30 || line == 31 && column == 1;
-            }
-        });
+        tester.assertBreakpointsBreakEverywhere(source);
     }
 
     private enum StepDepth {

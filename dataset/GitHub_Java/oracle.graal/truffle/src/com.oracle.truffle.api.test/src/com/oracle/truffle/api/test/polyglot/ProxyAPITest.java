@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,22 +40,16 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
-import static com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest.assertFails;
-import static com.oracle.truffle.tck.tests.ValueAssert.assertUnsupported;
-import static com.oracle.truffle.tck.tests.ValueAssert.assertValue;
-import static com.oracle.truffle.tck.tests.ValueAssert.Trait.PROXY_OBJECT;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.assertFails;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.assertUnsupported;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.assertValue;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.PROXY_OBJECT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -65,26 +59,21 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.Proxy;
 import org.graalvm.polyglot.proxy.ProxyArray;
-import org.graalvm.polyglot.proxy.ProxyDate;
-import org.graalvm.polyglot.proxy.ProxyDuration;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
-import org.graalvm.polyglot.proxy.ProxyInstant;
 import org.graalvm.polyglot.proxy.ProxyInstantiable;
 import org.graalvm.polyglot.proxy.ProxyObject;
-import org.graalvm.polyglot.proxy.ProxyTime;
-import org.graalvm.polyglot.proxy.ProxyTimeZone;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.oracle.truffle.tck.tests.ValueAssert.Trait;
+import com.oracle.truffle.api.test.polyglot.ValueAssert.Trait;
+import org.graalvm.polyglot.HostAccess;
 
 /**
  * Testing the behavior of proxies API and proxy interfaces.
@@ -95,7 +84,7 @@ public class ProxyAPITest {
 
     @Before
     public void setUp() {
-        context = Context.newBuilder().allowHostAccess(HostAccess.ALL).build();
+        context = Context.newBuilder().allowHostAccess(HostAccess.PUBLIC).build();
     }
 
     @After
@@ -549,80 +538,7 @@ public class ProxyAPITest {
 
         assertSame(arg0[0], instantiable.newInstance((Object[]) arg0).asHostObject());
         assertSame(arg1[0], instantiable.newInstance((Object[]) arg1).asHostObject());
-    }
 
-    @Test
-    public void testInvalidReturnValue() {
-        Value date = context.asValue(new ProxyDate() {
-            public LocalDate asDate() {
-                return null;
-            }
-        });
-        assertFails(() -> date.asDate(), PolyglotException.class, (e) -> assertTrue(e.asHostException() instanceof AssertionError));
-
-        Value time = context.asValue(new ProxyTime() {
-            public LocalTime asTime() {
-                return null;
-            }
-        });
-        assertFails(() -> time.asTime(), PolyglotException.class, (e) -> assertTrue(e.asHostException() instanceof AssertionError));
-
-        Value timeZone = context.asValue(new ProxyTimeZone() {
-            public ZoneId asTimeZone() {
-                return null;
-            }
-        });
-        assertFails(() -> timeZone.asTimeZone(), PolyglotException.class, (e) -> assertTrue(e.asHostException() instanceof AssertionError));
-
-        Value instant = context.asValue(new ProxyInstant() {
-            public Instant asInstant() {
-                return null;
-            }
-        });
-        assertFails(() -> instant.asInstant(), PolyglotException.class, (e) -> assertTrue(e.asHostException() instanceof AssertionError));
-
-        Value duration = context.asValue(new ProxyDuration() {
-            public Duration asDuration() {
-                return null;
-            }
-        });
-        assertFails(() -> duration.asDuration(), PolyglotException.class, (e) -> assertTrue(e.asHostException() instanceof AssertionError));
-    }
-
-    static final class P0 implements Proxy {
-
-        @Override
-        public boolean equals(Object obj) {
-            return obj instanceof P0 || obj instanceof P1;
-        }
-
-        @Override
-        public int hashCode() {
-            return 0;
-        }
-
-    }
-
-    static final class P1 implements Proxy {
-        @Override
-        public boolean equals(Object obj) {
-            return obj instanceof P0 || obj instanceof P1;
-        }
-
-        @Override
-        public int hashCode() {
-            return 0;
-        }
-    }
-
-    @Test
-    public void testProxyEquality() {
-        Value p0 = context.asValue(new P0());
-        Value p1 = context.asValue(new P1());
-        assertEquals(p0, p0);
-        assertEquals(p1, p1);
-        assertNotEquals(p0, p1);
-        assertNotEquals(p1, p0);
     }
 
 }

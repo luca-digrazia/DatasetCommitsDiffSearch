@@ -95,7 +95,10 @@ public class ContextAPITest {
 
     @BeforeClass
     public static void initHostAccess() throws Exception {
-        CONFIG = HostAccess.newBuilder().allowAccess(Runnable.class.getMethod("run")).allowAccessAnnotatedBy(HostAccess.Export.class).build();
+        CONFIG = HostAccess.newBuilder().
+            allowAccess(Runnable.class.getMethod("run")).
+            allowAccessAnnotatedBy(HostAccess.Export.class).
+            build();
     }
 
     @Test
@@ -396,7 +399,8 @@ public class ContextAPITest {
 
     public static class MyClass {
 
-        @HostAccess.Export public Object field = "bar";
+        @HostAccess.Export
+        public Object field = "bar";
 
         @HostAccess.Export
         public int bazz() {

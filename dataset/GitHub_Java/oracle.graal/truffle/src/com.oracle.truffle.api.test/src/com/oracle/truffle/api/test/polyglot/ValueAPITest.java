@@ -1402,7 +1402,8 @@ public class ValueAPITest {
     }
 
     public static class RecursiveObject {
-        @HostAccess.Export public RecursiveObject rec;
+        @HostAccess.Export
+        public RecursiveObject rec;
 
     }
 
