@@ -37,7 +37,6 @@ import org.graalvm.launcher.AbstractLanguageLauncher;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Context.Builder;
-import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 
 public class EspressoLauncher extends AbstractLanguageLauncher {
@@ -341,28 +340,34 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
 
         int rc = 1;
 
-        contextBuilder.allowCreateThread(true);
+        Context[] c = new Context[1];
 
-        try (Context context = contextBuilder.build()) {
+        Runnable target = new Runnable() {
+            @Override
+            public void run() {
+                contextBuilder.allowCreateThread(true);
 
-            // runVersionAction(versionAction, context.getEngine());
-            if (versionAction != VersionAction.None) {
-                Value version = context.eval("java", "sun.misc.Version");
-                version.invokeMember("print");
-                if (versionAction == VersionAction.PrintAndExit) {
-                    throw exit(0);
+                Context context = contextBuilder.build();
+                c[0] = context;
+
+                // runVersionAction(versionAction, context.getEngine());
+                if (versionAction != VersionAction.None) {
+                    Value version = context.eval("java", "sun.misc.Version");
+                    version.invokeMember("print");
+                    if (versionAction == VersionAction.PrintAndExit) {
+                        throw exit(0);
+                    }
                 }
-            }
 
-            if (mainClassName == null) {
-                throw abort(usage());
-            }
-            try {
+                if (mainClassName == null) {
+                    throw abort(usage());
+                }
                 Value launcherHelper = context.eval("java", "sun.launcher.LauncherHelper");
                 Value mainKlass = launcherHelper //
                                 .invokeMember("checkAndLoadMain", true, launchMode.ordinal(), mainClassName) //
                                 .getMember("static");
                 mainKlass.invokeMember("main", (Object) mainClassArgs.toArray(new String[0]));
+                // TODO(garcia): handle uncaught exceptions.
                 if (pauseOnExit) {
                     getError().print("Press any key to continue...");
                     try {
@@ -371,30 +376,20 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
                         e.printStackTrace();
                     }
                 }
-            } catch (PolyglotException e) {
-                if (!e.isExit()) {
-                    // TODO(garcia): handle uncaught exceptions.
-                    e.printStackTrace();
-                }
-            } finally {
-                try {
-                    context.eval("java", "<DestroyJavaVM>").execute();
-                } catch (PolyglotException e) {
-                    assert e.isExit();
-                    rc = e.getExitStatus();
-                }
             }
-            /*
-             * We abruptly exit the host system for compatibility with the reference implementation,
-             * and because we have no control over un-registering thread from Truffle, which
-             * sometimes leads to getting an exception on exit when trying to close a context with a
-             * rogue thread in native.
-             * 
-             * Note that since the launcher thread and the main thread are the same, a rogue native
-             * main means we may never return.
-             */
-            System.exit(rc);
-        }
+        };
+        Runnable close = new Runnable() {
+            @Override
+            public void run() {
+                c[0].close(true);
+            }
+        };
+        CallbackThreadWithClosingPayload t = new CallbackThreadWithClosingPayload(target, close);
+        t.start();
+        t.waitForCloser();
+        rc = t.getExitStatus();
+
+        throw exit(rc);
     }
 
     @Override
