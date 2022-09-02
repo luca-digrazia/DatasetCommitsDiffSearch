@@ -72,7 +72,7 @@ public class WasmBinaryTools {
     public static byte[] compileWat(File watFile) throws IOException, InterruptedException {
         File wasmFile = File.createTempFile("wasm-bin-", ".wasm");
         byte[] binary = wat2wasm(watFile, wasmFile);
-        wasmFile.deleteOnExit();
+        Assert.assertTrue("compileWat: could not delete temp .wasm file", wasmFile.delete());
         return binary;
     }
 
@@ -83,8 +83,8 @@ public class WasmBinaryTools {
         Files.write(watFile.toPath(), program.getBytes(StandardCharsets.UTF_8), StandardOpenOption.WRITE);
         // read the resulting binary, delete the temporary files and return
         byte[] binary = wat2wasm(watFile, wasmFile);
-        watFile.deleteOnExit();
-        wasmFile.deleteOnExit();
+        Assert.assertTrue("compileWat: could not delete temp .wat file", watFile.delete());
+        Assert.assertTrue("compileWat: could not delete temp .wasm file", wasmFile.delete());
         return binary;
     }
 }
