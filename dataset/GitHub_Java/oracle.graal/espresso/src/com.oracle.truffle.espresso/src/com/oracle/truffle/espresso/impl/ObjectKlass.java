@@ -76,7 +76,7 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.JavaType;
+import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.verifier.MethodVerifier;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
@@ -305,9 +305,9 @@ public final class ObjectKlass extends Klass {
 
                     initState = PREPARED;
                     if (getContext().isMainThreadCreated()) {
-                        if (getContext().shouldReportVMEvents()) {
+                        if (getContext().getJDWPListener() != null) {
                             prepareThread = getContext().getGuestThreadFromHost(Thread.currentThread());
-                            getContext().reportClassPrepared(this, prepareThread);
+                            getContext().getJDWPListener().classPrepared(this, prepareThread);
                         }
                     }
                     if (!isInterface()) {
@@ -445,7 +445,7 @@ public final class ObjectKlass extends Klass {
     }
 
     @Override
-    public @JavaType(ClassLoader.class) StaticObject getDefiningClassLoader() {
+    public @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
         return definingClassLoader;
     }
 
@@ -1005,7 +1005,7 @@ public final class ObjectKlass extends Klass {
         return result;
     }
 
-    private void initPackage(@JavaType(ClassLoader.class) StaticObject classLoader) {
+    private void initPackage(@Host(ClassLoader.class) StaticObject classLoader) {
         if (!Names.isUnnamedPackage(getRuntimePackage())) {
             ClassRegistry registry = getRegistries().getClassRegistry(classLoader);
             packageEntry = registry.packages().lookup(getRuntimePackage());

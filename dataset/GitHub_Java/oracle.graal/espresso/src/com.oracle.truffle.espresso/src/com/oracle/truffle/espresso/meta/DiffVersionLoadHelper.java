@@ -38,7 +38,6 @@ final class DiffVersionLoadHelper {
     static final VersionRange VERSION_9_OR_HIGHER = VersionRange.higher(9);
     static final VersionRange VERSION_11_OR_HIGHER = VersionRange.higher(11);
     static final VersionRange VERSION_11_TO_17 = new VersionRange(11, 17);
-    static final VersionRange VERSION_16_OR_HIGHER = VersionRange.higher(16);
     static final VersionRange VERSION_17_OR_HIGHER = VersionRange.higher(17);
     static final VersionRange ALL = new VersionRange(0, JavaVersion.LATEST_SUPPORTED);
 
@@ -91,9 +90,6 @@ final class DiffVersionLoadHelper {
         if (name == null || signature == null) {
             return null;
         }
-        if (klass == null) {
-            return null;
-        }
         return klass.lookupDeclaredMethod(name, signature);
     }
 
@@ -114,9 +110,6 @@ final class DiffVersionLoadHelper {
 
     Field notRequiredField(ObjectKlass klass) {
         if (name == null || type == null) {
-            return null;
-        }
-        if (klass == null) {
             return null;
         }
         return klass.lookupDeclaredField(name, type);
