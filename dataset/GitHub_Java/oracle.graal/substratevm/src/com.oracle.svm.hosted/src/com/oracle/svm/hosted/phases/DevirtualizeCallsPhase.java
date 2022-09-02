@@ -24,9 +24,6 @@
  */
 package com.oracle.svm.hosted.phases;
 
-import static com.oracle.svm.core.graal.snippets.DeoptHostedSnippets.AnalysisSpeculation;
-import static com.oracle.svm.core.graal.snippets.DeoptHostedSnippets.AnalysisSpeculationReason;
-
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
@@ -101,9 +98,8 @@ public class DevirtualizeCallsPhase extends Phase {
         if (!callTarget.isStatic()) {
             InliningUtil.nonNullReceiver(invoke);
         }
-        AnalysisSpeculation speculation = new AnalysisSpeculation(new AnalysisSpeculationReason("The call to " + callTarget.targetMethod().format("%H.%n(%P)") + " is not reachable."));
-        FixedGuardNode node = new FixedGuardNode(LogicConstantNode.forBoolean(true, graph), DeoptimizationReason.UnreachedCode, DeoptimizationAction.None, speculation, true);
-        graph.addBeforeFixed(invoke.asNode(), graph.add(node));
+        graph.addBeforeFixed(invoke.asNode(), graph.add(new FixedGuardNode(LogicConstantNode.forBoolean(true, graph), DeoptimizationReason.UnreachedCode, DeoptimizationAction.None, true)));
+
         graph.getDebug().dump(DebugContext.VERY_DETAILED_LEVEL, graph, "After dead invoke %s", invoke);
     }
 
