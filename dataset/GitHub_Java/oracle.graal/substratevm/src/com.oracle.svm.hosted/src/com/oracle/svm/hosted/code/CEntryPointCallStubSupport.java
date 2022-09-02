@@ -29,18 +29,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.code.CEntryPointJavaCallStubs;
+import com.oracle.svm.core.c.BoxedRelocatedPointer;
+import com.oracle.svm.core.code.IsolateLeaveStub;
 import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.DuringSetupAccessImpl;
 import com.oracle.svm.hosted.c.NativeLibraries;
-import com.oracle.svm.hosted.image.NativeBootImage;
 import com.oracle.svm.hosted.meta.MethodPointer;
 
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -59,6 +60,12 @@ public final class CEntryPointCallStubSupport {
     private final Map<AnalysisMethod, AnalysisMethod> methodToStub = new ConcurrentHashMap<>();
     private final Map<AnalysisMethod, AnalysisMethod> methodToJavaStub = new ConcurrentHashMap<>();
     private NativeLibraries nativeLibraries;
+
+    /**
+     * Cache the BoxedRelocatedPointer objects to ensure that the same constant is seen during
+     * analysis and compilation.
+     */
+    private final ConcurrentHashMap<CFunctionPointer, BoxedRelocatedPointer> cFunctionPointerCache = new ConcurrentHashMap<>();
 
     private CEntryPointCallStubSupport(BigBang bigbang) {
         this.bigbang = bigbang;
@@ -104,8 +111,8 @@ public final class CEntryPointCallStubSupport {
                 assert !bigbang.getUniverse().sealed();
                 AnalysisMethod nativeStub = registerStubForMethod(method, () -> CEntryPointData.create(method));
                 CFunctionPointer nativeStubAddress = MethodPointer.factory(nativeStub);
-                String stubName = NativeBootImage.globalSymbolNameForMethod(method);
-                ResolvedJavaType holderClass = bigbang.getMetaAccess().lookupJavaType(CEntryPointJavaCallStubs.class).getWrapped();
+                String stubName = SubstrateUtil.uniqueShortName(method);
+                ResolvedJavaType holderClass = bigbang.getMetaAccess().lookupJavaType(IsolateLeaveStub.class).getWrapped();
                 CEntryPointJavaCallStubMethod stub = new CEntryPointJavaCallStubMethod(method.getWrapped(), stubName, holderClass, nativeStubAddress);
                 value = bigbang.getUniverse().lookup(stub);
             }
@@ -117,9 +124,13 @@ public final class CEntryPointCallStubSupport {
         this.nativeLibraries = nativeLibraries;
     }
 
-    NativeLibraries getNativeLibraries() {
+    public NativeLibraries getNativeLibraries() {
         assert nativeLibraries != null;
         return nativeLibraries;
+    }
+
+    public BoxedRelocatedPointer getBoxedRelocatedPointer(CFunctionPointer cFunctionPointer) {
+        return cFunctionPointerCache.computeIfAbsent(cFunctionPointer, t -> new BoxedRelocatedPointer(t));
     }
 }
 
