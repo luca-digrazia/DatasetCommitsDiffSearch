@@ -28,11 +28,11 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 @EspressoSubstitutions
 public final class Target_java_lang_ref_Reference$ReferenceHandler {
 
-    // TODO(garcia) evaluate impact of disabling this class
+    // TODO evaluate impact of disabling this class
 
     @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
-    static public void run(@Host(Thread.class) StaticObject self) {
+    static public void run(@Host(typeName = "Thread") StaticObject self) {
         /* nop */
     }
 }

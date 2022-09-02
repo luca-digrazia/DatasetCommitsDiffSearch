@@ -239,15 +239,13 @@ public final class Target_java_lang_Thread {
         // hostThread.suspend();
     }
 
-    @SuppressWarnings({"unused"})
+    @SuppressWarnings({"deprecation", "unused"})
     @Substitution(hasReceiver = true)
     public static void stop0(@Host(Object.class) StaticObject self, Object unused) {
-        /* nop */
-        // Thread hostThread = (Thread)
-        // self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        // if (hostThread == null) {
-        // return;
-        // }
-        // hostThread.stop();
+        Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
+        if (hostThread == null) {
+            return;
+        }
+        hostThread.stop();
     }
 }
