@@ -102,11 +102,7 @@ public final class Types {
     Symbol<Type> parse(Symbol<? extends Descriptor> descriptor, int beginIndex, boolean slashes) throws ClassFormatError {
         int endIndex = skipValidTypeDescriptor(descriptor, beginIndex, slashes);
         if (endIndex == beginIndex + 1) {
-            try {
-                return forPrimitive(JavaKind.fromPrimitiveOrVoidTypeChar((char) descriptor.byteAt(beginIndex)));
-            } catch (IllegalArgumentException e) {
-                throw new ClassFormatError("invalid descriptor: " + descriptor);
-            }
+            return forPrimitive(JavaKind.fromPrimitiveOrVoidTypeChar((char) descriptor.byteAt(beginIndex)));
         }
         return symbols.symbolify(descriptor.substring(beginIndex, endIndex));
     }

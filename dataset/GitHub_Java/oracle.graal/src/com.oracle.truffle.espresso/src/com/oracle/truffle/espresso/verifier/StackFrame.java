@@ -135,14 +135,8 @@ class Stack {
     Operand popRef(Operand kind) {
         procSize(-(isType2(kind) ? 2 : 1));
         Operand op = stack[--top];
-        if (!op.isReference()) {
-            throw new VerifyError("Popped " + op + " when a reference was expected!");
-        }
         if (!op.compliesWith(kind)) {
-            if (!kind.isReference() || kind.isArrayType() || !kind.getKlass().isInterface()) {
-                // a class not implementing an interface is a ClassFormatError at *Runtime*
-                throw new VerifyError("Type check error: " + op + " cannot be merged into " + kind);
-            }
+            throw new VerifyError("Type check error: " + op + " cannot be merged into " + kind);
         }
         return op;
     }
@@ -189,16 +183,15 @@ class Stack {
         return op;
     }
 
-    Operand pop(Operand k) {
+    void pop(Operand k) {
         if (!k.getKind().isStackInt() || k == Int) {
             procSize((isType2(k) ? -2 : -1));
             Operand op = stack[--top];
             if (!(op.compliesWith(k))) {
                 throw new VerifyError(stack[top] + " on stack, required: " + k);
             }
-            return op;
         } else {
-            return pop(Int);
+            pop(Int);
         }
     }
 
