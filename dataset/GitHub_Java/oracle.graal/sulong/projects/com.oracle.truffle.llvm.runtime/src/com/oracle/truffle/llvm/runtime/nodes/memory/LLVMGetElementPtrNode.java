@@ -30,42 +30,23 @@
 package com.oracle.truffle.llvm.runtime.nodes.memory;
 
 import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.interop.LLVMNegatedForeignObject;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.types.Type;
 
 @NodeChild(type = LLVMExpressionNode.class)
 @NodeChild(type = LLVMExpressionNode.class)
-@NodeField(type = long.class, name = "typeWidth")
 public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
+    final long typeWidth;
+    final Type targetType;
 
-    @Child private LLVMIncrementPointerNode incrementNode = LLVMIncrementPointerNodeGen.create();
-
-    public abstract long getTypeWidth();
-
-    @Specialization
-    protected Object longIncrement(Object addr, long val) {
-        long incr = getTypeWidth() * val;
-        return incrementNode.executeWithTarget(addr, incr);
-    }
-
-    @Specialization
-    protected Object longIncrement(Object addr, LLVMNativePointer val) {
-        long incr = getTypeWidth() * val.asNative();
-        return incrementNode.executeWithTarget(addr, incr);
-    }
-
-    @Specialization
-    protected Object intIncrement(Object addr, int val) {
-        long incr = getTypeWidth() * val;
-        return incrementNode.executeWithTarget(addr, incr);
+    public LLVMGetElementPtrNode(long typeWidth, Type targetType) {
+        this.typeWidth = typeWidth;
+        this.targetType = targetType;
     }
 
     protected static boolean isNegated(Object obj, Object negatedObj) {
@@ -77,41 +58,27 @@ public abstract class LLVMGetElementPtrNode extends LLVMExpressionNode {
     }
 
     @Specialization(guards = "isNegated(addr.getObject(), val.getObject())")
-    protected LLVMPointer pointerDiff(LLVMManagedPointer addr, LLVMManagedPointer val) {
+    protected LLVMPointer doPointerDiff(LLVMManagedPointer addr, LLVMManagedPointer val) {
         return LLVMNativePointer.create(addr.getOffset() + val.getOffset());
     }
 
     @Specialization(guards = "isNegated(val.getObject(), addr.getObject())")
-    protected LLVMPointer pointerDiffRev(LLVMManagedPointer addr, LLVMManagedPointer val) {
+    protected LLVMPointer doPointerDiffRev(LLVMManagedPointer addr, LLVMManagedPointer val) {
         return LLVMNativePointer.create(val.getOffset() + addr.getOffset());
     }
 
-    public abstract static class LLVMIncrementPointerNode extends LLVMNode {
+    @Specialization
+    protected LLVMPointer doInt(LLVMPointer addr, int val) {
+        return addr.increment(typeWidth * val);
+    }
 
-        public abstract Object executeWithTarget(Object addr, int val);
+    @Specialization
+    protected LLVMPointer doLong(LLVMPointer addr, long val) {
+        return addr.increment(typeWidth * val);
+    }
 
-        public abstract Object executeWithTarget(Object addr, long val);
-
-        public abstract Object executeWithTarget(Object addr, Object val);
-
-        @Specialization
-        protected LLVMPointer doPointer(LLVMPointer addr, int incr) {
-            return addr.increment(incr);
-        }
-
-        @Specialization
-        protected LLVMPointer doPointer(LLVMPointer addr, long incr) {
-            return addr.increment(incr);
-        }
-
-        @Specialization
-        protected LLVMVirtualAllocationAddress doTruffleObject(LLVMVirtualAllocationAddress addr, int incr) {
-            return addr.increment(incr);
-        }
-
-        @Specialization
-        protected LLVMVirtualAllocationAddress doTruffleObject(LLVMVirtualAllocationAddress addr, long incr) {
-            return addr.increment(incr);
-        }
+    @Specialization
+    protected LLVMPointer doNativePointer(LLVMPointer addr, LLVMNativePointer val) {
+        return addr.increment(typeWidth * val.asNative());
     }
 }
