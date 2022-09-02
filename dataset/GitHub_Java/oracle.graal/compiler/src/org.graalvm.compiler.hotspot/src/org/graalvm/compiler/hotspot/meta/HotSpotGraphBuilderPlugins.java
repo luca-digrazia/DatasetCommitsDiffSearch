@@ -117,7 +117,6 @@ import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.services.Services;
 import sun.misc.Unsafe;
 
 /**
@@ -532,8 +531,8 @@ public class HotSpotGraphBuilderPlugins {
         try {
             r.registerMethodSubstitution(substitutionClass, intrinsicNames.getLeft(), argumentTypes);
         } catch (NoSuchMethodError e) {
-            throw new GraalError(e, "Found method named '%s' instead of '%s' in class '%s'. This is most likely because the JVMCI JDK in %s was built on an incompatible base JDK.",
-                            intrinsicNames.getRight(), intrinsicNames.getLeft(), r.getDeclaringType().getTypeName(), Services.getSavedProperty("java.home"));
+            throw new GraalError(e, String.format("Cannot find method '%s' in class '%s'. It is possible that JVMCI is compiled with an incompatible base JDK, which contains method '%s' instead.",
+                            intrinsicNames.getLeft(), r.getDeclaringType().getTypeName(), intrinsicNames.getRight()));
         }
     }
 
@@ -541,8 +540,8 @@ public class HotSpotGraphBuilderPlugins {
         try {
             r.registerMethodSubstitution(substitutionClass, intrinsicNames.getLeft(), substituteName, argumentTypes);
         } catch (NoSuchMethodError e) {
-            throw new GraalError(e, "Found method named '%s' instead of '%s' in class '%s'. This is most likely because the JVMCI JDK in %s was built on an incompatible base JDK.",
-                            intrinsicNames.getRight(), intrinsicNames.getLeft(), r.getDeclaringType().getTypeName(), Services.getSavedProperty("java.home"));
+            throw new GraalError(e, String.format("Cannot find method '%s' in class '%s'. It is possible that JVMCI is compiled with an incompatible base JDK, which contains method '%s' instead.",
+                            intrinsicNames.getLeft(), r.getDeclaringType().getTypeName(), intrinsicNames.getRight()));
         }
     }
 
