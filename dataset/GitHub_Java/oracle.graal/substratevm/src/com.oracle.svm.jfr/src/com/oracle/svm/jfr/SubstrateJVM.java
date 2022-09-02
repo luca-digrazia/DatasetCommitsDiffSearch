@@ -422,7 +422,7 @@ class SubstrateJVM {
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean isEnabled(JfrEvents event) {
-        return eventSettings[(int) event.getId()].isEnabled();
+        return eventSettings[event.getId()].isEnabled();
     }
 
     /** See {@link JVM#setThreshold}. */

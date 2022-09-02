@@ -31,9 +31,6 @@ import org.graalvm.nativeimage.Platforms;
 
 import java.util.List;
 
-/**
- * Maps JFR types against their IDs in the JDK.
- */
 public enum JfrTypes {
     Class("java.lang.Class"),
     String("java.lang.String"),
