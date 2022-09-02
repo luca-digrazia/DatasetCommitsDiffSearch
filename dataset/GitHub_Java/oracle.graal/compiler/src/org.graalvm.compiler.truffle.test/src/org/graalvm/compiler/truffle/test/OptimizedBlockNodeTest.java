@@ -109,12 +109,12 @@ public class OptimizedBlockNodeTest {
             assertTrue(partialBlocks.getBlockTargets()[1].isValid());
 
             // test explicit invalidations
-            partialBlocks.getBlockTargets()[0].invalidate("test invalidation");
+            partialBlocks.getBlockTargets()[0].invalidate(null, "test invalidation");
             assertTrue(target.isValid());
             assertFalse(partialBlocks.getBlockTargets()[0].isValid());
             assertTrue(partialBlocks.getBlockTargets()[1].isValid());
 
-            target.invalidate("test invalidation");
+            target.invalidate(null, "test invalidation");
             assertFalse(target.isValid());
             assertFalse(partialBlocks.getBlockTargets()[0].isValid());
             assertTrue(partialBlocks.getBlockTargets()[1].isValid());
@@ -534,7 +534,7 @@ public class OptimizedBlockNodeTest {
         try {
             OptimizedCallTarget target = ((OptimizedCallTarget) SLLanguage.getCurrentContext().getFunctionRegistry().getFunction(name).getCallTarget());
             // we invalidate to make sure the call counts are updated.
-            target.invalidate("invalidate for test");
+            target.invalidate(null, "invalidate for test");
             return target;
         } finally {
             context.leave();

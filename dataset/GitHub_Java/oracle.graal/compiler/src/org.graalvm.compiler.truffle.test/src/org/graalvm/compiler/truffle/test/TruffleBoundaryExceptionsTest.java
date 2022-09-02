@@ -87,7 +87,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
         final int[] compilationCount = {0};
         GraalTruffleRuntimeListener listener = new GraalTruffleRuntimeListener() {
             @Override
-            public void onCompilationStarted(OptimizedCallTarget target, int tier) {
+            public void onCompilationStarted(OptimizedCallTarget target) {
                 compilationCount[0]++;
             }
         };

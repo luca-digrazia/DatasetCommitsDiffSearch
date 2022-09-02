@@ -29,7 +29,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
@@ -48,7 +47,7 @@ public class CompilerLoggingTest extends TruffleCompilerImplTest {
     @Test
     public void testLogging() throws IOException {
         try (ByteArrayOutputStream logOut = new ByteArrayOutputStream()) {
-            setupContext(Context.newBuilder().logHandler(logOut).option("engine.CompileImmediately", "true").option("engine.BackgroundCompilation", "false"));
+            setupContext(Context.newBuilder().logHandler(logOut).option("engine.CompileImmediately", "true").option("engine.MultiTier", "false").option("engine.BackgroundCompilation", "false"));
             GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
             TestListener listener = new TestListener();
             try {
@@ -67,8 +66,7 @@ public class CompilerLoggingTest extends TruffleCompilerImplTest {
     private static final class TestListener implements GraalTruffleRuntimeListener {
 
         @Override
-        public void onCompilationSuccess(OptimizedCallTarget target, TruffleMetaAccessProvider inliningDecision, TruffleCompilerListener.GraphInfo graph,
-                        TruffleCompilerListener.CompilationResultInfo result) {
+        public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, TruffleCompilerListener.GraphInfo graph, TruffleCompilerListener.CompilationResultInfo result) {
             TTY.printf(FORMAT_SUCCESS, target.getName());
             printCommon();
         }
