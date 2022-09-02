@@ -42,9 +42,8 @@ import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 
-import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.nodes.SubstrateMethodCallTargetNode;
 import com.oracle.svm.hosted.meta.HostedMethod;
+import com.oracle.svm.hosted.nodes.SubstrateMethodCallTargetNode;
 
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -93,11 +92,7 @@ public class DevirtualizeCallsPhase extends Phase {
         }
     }
 
-    private final boolean parseOnce = SubstrateOptions.parseOnce();
-
-    private void unreachableInvoke(StructuredGraph graph, Invoke invoke, SubstrateMethodCallTargetNode callTarget) {
-        assert !parseOnce : "Must be done by StrengthenGraphs";
-
+    private static void unreachableInvoke(StructuredGraph graph, Invoke invoke, SubstrateMethodCallTargetNode callTarget) {
         /*
          * The invoke has no callee, i.e., it is unreachable. We just insert a always-failing guard
          * before the invoke and let dead code elimination remove the invoke and everything after
@@ -114,9 +109,7 @@ public class DevirtualizeCallsPhase extends Phase {
         graph.getDebug().dump(DebugContext.VERY_DETAILED_LEVEL, graph, "After dead invoke %s", invoke);
     }
 
-    private void singleCallee(HostedMethod singleCallee, StructuredGraph graph, Invoke invoke, SubstrateMethodCallTargetNode callTarget) {
-        assert !parseOnce : "Must be done by StrengthenGraphs";
-
+    private static void singleCallee(HostedMethod singleCallee, StructuredGraph graph, Invoke invoke, SubstrateMethodCallTargetNode callTarget) {
         /*
          * The invoke has only one callee, i.e., the call can be devirtualized to this callee. This
          * allows later inlining of the callee.
