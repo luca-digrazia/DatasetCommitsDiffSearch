@@ -32,13 +32,15 @@ import com.oracle.svm.core.option.RuntimeOptionKey;
 
 public class HeapPolicyOptions {
 
+    /* Memory configuration */
+
     @Option(help = "The maximum heap size as percent of physical memory") //
     public static final RuntimeOptionKey<Integer> MaximumHeapSizePercent = new RuntimeOptionKey<>(80);
 
-    @Option(help = "The maximum size of the young generation as a percentage of the maximum heap size") //
+    @Option(help = "The maximum size of the young generation as a percent of the maximum heap size") //
     public static final RuntimeOptionKey<Integer> MaximumYoungGenerationSizePercent = new RuntimeOptionKey<>(10);
 
-    @Option(help = "Bytes that can be allocated before (re-)querying the physical memory size") //
+    @Option(help = "Bytes that can be allocated before asking what the physical memory size is") //
     public static final HostedOptionKey<Long> AllocationBeforePhysicalMemorySize = new HostedOptionKey<>(1L * 1024L * 1024L);
 
     @Option(help = "The size of an aligned chunk.") //
@@ -48,27 +50,31 @@ public class HeapPolicyOptions {
      * This should be a fraction of the size of an aligned chunk, else large small arrays will not
      * fit in an aligned chunk.
      */
-    @Option(help = "The size at or above which an array will be allocated in its own unaligned chunk.  0 implies (AlignedHeapChunkSize / 8).") //
+    @Option(help = "How many bytes is enough to allocate an unaligned chunk for an array?  0 implies (AlignedHeapChunkSize / 8).") //
     public static final HostedOptionKey<Long> LargeArrayThreshold = new HostedOptionKey<>(HeapPolicy.LARGE_ARRAY_THRESHOLD_SENTINEL_VALUE);
 
-    @Option(help = "Fill unused memory chunks with a sentinel value.") //
+    /* Zapping */
+
+    /* - Should chunks be zapped? */
+    @Option(help = "Zap memory chunks") //
     public static final HostedOptionKey<Boolean> ZapChunks = new HostedOptionKey<>(false);
-
-    @Option(help = "Before use, fill memory chunks with a sentinel value.") //
+    /* - Should chunks be zapped when they are produced? */
+    @Option(help = "Zap produced memory chunks") //
     public static final HostedOptionKey<Boolean> ZapProducedHeapChunks = new HostedOptionKey<>(false);
-
-    @Option(help = "After use, Fill memory chunks with a sentinel value.") //
+    /* - Should chunks be zapped when they are consumed? */
+    @Option(help = "Zap consumed memory chunks") //
     public static final HostedOptionKey<Boolean> ZapConsumedHeapChunks = new HostedOptionKey<>(false);
 
+    /* Should heap chunks be traced during collections? */
     @Option(help = "Trace heap chunks during collections, if +VerboseGC and +PrintHeapShape.") //
     public static final RuntimeOptionKey<Boolean> TraceHeapChunks = new RuntimeOptionKey<>(false);
 
-    @Option(help = "Policy used when user code requests garbage collection.")//
+    @Option(help = "Policy used when users request garbage collection.")//
     public static final HostedOptionKey<String> UserRequestedGCPolicy = new HostedOptionKey<>(AlwaysCollectCompletely.class.getName());
 
-    @Option(help = "With the skeptical policy for user-requested collections, the threshold for the young generation size to cause a collection.") //
+    @Option(help = "Defines the upper bound for the number of remaining bytes in the young generation that cause a collection when `System.gc` is called.") //
     public static final RuntimeOptionKey<Long> UserRequestedGCThreshold = new RuntimeOptionKey<>(16L * 1024L * 1024L);
 
-    @Option(help = "Maximum number of survivor spaces.") //
+    @Option(help = "Maximum value for survivor space") //
     public static final HostedOptionKey<Integer> MaxSurvivorSpaces = new HostedOptionKey<>(0);
 }
