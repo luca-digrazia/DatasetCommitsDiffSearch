@@ -31,13 +31,11 @@ package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess.LLVMObjectReadNode;
@@ -78,9 +76,8 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
         @ExplodeLoop
-        protected LLVMI1Vector doI1VectorNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            LLVMMemory memory = language.getCapability(LLVMMemory.class);
+        protected LLVMI1Vector doI1VectorNative(LLVMNativePointer addr) {
+            LLVMMemory memory = getLLVMMemoryCached();
             boolean[] vector = new boolean[getVectorLength()];
             long basePtr = addr.asNative();
             for (int byteOffset = 0; byteOffset < (vector.length / 8) + 1; byteOffset++) {
@@ -123,9 +120,8 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
         @ExplodeLoop
-        protected LLVMI8Vector doI8VectorNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            LLVMMemory memory = language.getCapability(LLVMMemory.class);
+        protected LLVMI8Vector doI8VectorNative(LLVMNativePointer addr) {
+            LLVMMemory memory = getLLVMMemoryCached();
             byte[] vector = new byte[getVectorLength()];
             long currentPtr = addr.asNative();
             for (int i = 0; i < vector.length; i++) {
@@ -165,9 +161,8 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
         @ExplodeLoop
-        protected LLVMI16Vector doI16VectorNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            LLVMMemory memory = language.getCapability(LLVMMemory.class);
+        protected LLVMI16Vector doI16VectorNative(LLVMNativePointer addr) {
+            LLVMMemory memory = getLLVMMemoryCached();
             short[] vector = new short[getVectorLength()];
             long currentPtr = addr.asNative();
             for (int i = 0; i < vector.length; i++) {
@@ -207,9 +202,8 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
         @ExplodeLoop
-        protected LLVMI32Vector doI32VectorNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            LLVMMemory memory = language.getCapability(LLVMMemory.class);
+        protected LLVMI32Vector doI32VectorNative(LLVMNativePointer addr) {
+            LLVMMemory memory = getLLVMMemoryCached();
             int[] vector = new int[getVectorLength()];
             long currentPtr = addr.asNative();
             for (int i = 0; i < vector.length; i++) {
@@ -249,9 +243,8 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
         @ExplodeLoop
-        protected LLVMI64Vector doI64VectorNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            LLVMMemory memory = language.getCapability(LLVMMemory.class);
+        protected LLVMI64Vector doI64VectorNative(LLVMNativePointer addr) {
+            LLVMMemory memory = getLLVMMemoryCached();
             long[] vector = new long[getVectorLength()];
             long currentPtr = addr.asNative();
             for (int i = 0; i < vector.length; i++) {
@@ -323,9 +316,8 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
         @ExplodeLoop
-        protected LLVMPointerVector doPointerVectorNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            LLVMMemory memory = language.getCapability(LLVMMemory.class);
+        protected LLVMPointerVector doPointerVectorNative(LLVMNativePointer addr) {
+            LLVMMemory memory = getLLVMMemoryCached();
             LLVMPointer[] vector = new LLVMPointer[getVectorLength()];
             long currentPtr = addr.asNative();
             for (int i = 0; i < vector.length; i++) {
@@ -365,9 +357,8 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
         @ExplodeLoop
-        protected LLVMFloatVector doFloatVectorNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            LLVMMemory memory = language.getCapability(LLVMMemory.class);
+        protected LLVMFloatVector doFloatVectorNative(LLVMNativePointer addr) {
+            LLVMMemory memory = getLLVMMemoryCached();
             float[] vector = new float[getVectorLength()];
             long currentPtr = addr.asNative();
             for (int i = 0; i < vector.length; i++) {
@@ -407,9 +398,8 @@ public abstract class LLVMLoadVectorNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
         @ExplodeLoop
-        protected LLVMDoubleVector doDoubleVectorNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            LLVMMemory memory = language.getCapability(LLVMMemory.class);
+        protected LLVMDoubleVector doDoubleVectorNative(LLVMNativePointer addr) {
+            LLVMMemory memory = getLLVMMemoryCached();
             double[] vector = new double[getVectorLength()];
             long currentPtr = addr.asNative();
             for (int i = 0; i < vector.length; i++) {
