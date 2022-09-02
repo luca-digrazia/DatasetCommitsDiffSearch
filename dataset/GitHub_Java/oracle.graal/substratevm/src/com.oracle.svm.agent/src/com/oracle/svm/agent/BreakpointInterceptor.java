@@ -315,6 +315,7 @@ final class BreakpointInterceptor {
             return result;
         }
         boolean validResult = !clearException(jni);
+
         JNIMethodId currentMethod = getCallerMethod(0);
         JNIObjectHandle callerClass = getCallerClass(1);
         JNIObjectHandle name = nullHandle();
