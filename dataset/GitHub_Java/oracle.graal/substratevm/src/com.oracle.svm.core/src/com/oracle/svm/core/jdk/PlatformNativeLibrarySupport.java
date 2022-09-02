@@ -35,8 +35,6 @@ import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.PointerBase;
 
-import com.oracle.svm.core.util.VMError;
-
 public abstract class PlatformNativeLibrarySupport {
 
     public static final String[] defaultBuiltInLibraries = {
@@ -65,7 +63,6 @@ public abstract class PlatformNativeLibrarySupport {
                     "javax_script",
                     "javax_security",
                     "jdk_internal_org",
-                    "jdk_internal_misc",
                     "jdk_internal_util",
                     "jdk_net",
                     "sun_invoke",
@@ -107,18 +104,12 @@ public abstract class PlatformNativeLibrarySupport {
     }
 
     private List<String> builtInPkgNatives;
-    private boolean builtInPkgNativesSealed;
 
     public void addBuiltinPkgNativePrefix(String name) {
-        if (builtInPkgNativesSealed) {
-            throw VMError.shouldNotReachHere("Cannot register any more packages as built-ins because information has already been used.");
-        }
         builtInPkgNatives.add(name);
     }
 
     public boolean isBuiltinPkgNative(String name) {
-        builtInPkgNativesSealed = true;
-
         String commonPrefix = "Java_";
         if (name.startsWith(commonPrefix)) {
             String strippedName = name.substring(commonPrefix.length());
@@ -169,7 +160,7 @@ public abstract class PlatformNativeLibrarySupport {
      * implicitly shared between the isolates of the process (for example, because they have a
      * single native state that does not distinguish between isolates).
      */
-    public boolean isFirstIsolate() {
+    protected boolean isFirstIsolate() {
         return firstIsolate;
     }
 
