@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.runtime;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -50,7 +51,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
-import com.oracle.truffle.api.utilities.AssumedValue;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension.NativeLookupResult;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType;
@@ -79,7 +79,8 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
     private ExternalLibrary library;
 
     @CompilationFinal private String name;
-    private final AssumedValue<Function> function;
+    @CompilationFinal private Function function;
+    @CompilationFinal private Assumption functionAssumption;
 
     @CompilationFinal private TruffleObject nativeWrapper;
     @CompilationFinal private long nativePointer;
@@ -275,11 +276,20 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
     }
 
     private void setFunction(Function newFunction) {
-        function.set(newFunction);
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        synchronized (this) {
+            this.function = newFunction;
+            final Assumption oldAssumption = functionAssumption;
+            this.functionAssumption = Truffle.getRuntime().createAssumption("LLVMFunctionDescriptor.functionAssumption");
+            oldAssumption.invalidate();
+        }
     }
 
     public Function getFunction() {
-        return function.get();
+        if (!functionAssumption.isValid()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+        }
+        return function;
     }
 
     private LLVMFunctionDescriptor(LLVMContext context, String name, FunctionType type, int functionId, Function function) {
@@ -288,7 +298,8 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
         this.name = name;
         this.type = type;
         this.functionId = functionId;
-        this.function = new AssumedValue<>("LLVMFunctionDescriptor.functionAssumption", function);
+        this.functionAssumption = Truffle.getRuntime().createAssumption("LLVMFunctionDescriptor.functionAssumption");
+        this.function = function;
     }
 
     public static LLVMFunctionDescriptor createDescriptor(LLVMContext context, String name, FunctionType type, int functionId) {
@@ -331,7 +342,7 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
 
     @Override
     public boolean isDefined() {
-        return !(getFunction() instanceof UnresolvedFunction);
+        return !(function instanceof UnresolvedFunction);
     }
 
     public void define(LLVMIntrinsicProvider intrinsicProvider) {
