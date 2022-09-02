@@ -139,7 +139,6 @@ import com.oracle.truffle.espresso.vm.structs.JavaVMAttachArgs;
 import com.oracle.truffle.espresso.vm.structs.JdkVersionInfo;
 import com.oracle.truffle.espresso.vm.structs.Structs;
 import com.oracle.truffle.espresso.vm.structs.StructsAccess;
-import sun.misc.Unsafe;
 
 /**
  * Espresso implementation of the VM interface (libjvm).
@@ -671,10 +670,11 @@ public final class VM extends NativeEnv implements ContextAccess {
     @TruffleBoundary
     public static boolean JVM_SupportsCX8() {
         try {
-            java.lang.reflect.Field field = AtomicLong.class.getDeclaredField("VM_SUPPORTS_LONG_CAS");
-            Unsafe unsafe = UnsafeAccess.get();
-            return unsafe.getBoolean(unsafe.staticFieldBase(field), unsafe.staticFieldOffset(field));
-        } catch (NoSuchFieldException e) {
+            Class<?> klass = Class.forName("java.util.concurrent.atomic.AtomicLong");
+            java.lang.reflect.Field field = klass.getDeclaredField("VM_SUPPORTS_LONG_CAS");
+            field.setAccessible(true);
+            return field.getBoolean(null);
+        } catch (IllegalAccessException | NoSuchFieldException | ClassNotFoundException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
     }

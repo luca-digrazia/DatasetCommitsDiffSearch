@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.processor;
 import java.io.IOException;
 import java.io.Writer;
 import java.time.Year;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -162,7 +163,7 @@ public abstract class EspressoProcessor extends BaseProcessor {
      * Generates the string corresponding to the Constructor for the current substitutor. In
      * particular, it should call its super class substitutor's constructor.
      *
-     * @see EspressoProcessor#substitutor
+     * @see EspressoProcessor#SUBSTITUTOR
      */
     abstract String generateFactoryConstructorAndBody(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper);
 
@@ -179,14 +180,14 @@ public abstract class EspressoProcessor extends BaseProcessor {
      */
     abstract String generateInvoke(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper);
 
-    EspressoProcessor(String substitutionPackage, String substitutor) {
-        this.substitutorPackage = substitutionPackage;
-        this.substitutor = substitutor;
+    EspressoProcessor(String SUBSTITUTION_PACKAGE, String SUBSTITUTOR) {
+        this.SUBSTITUTOR_PACKAGE = SUBSTITUTION_PACKAGE;
+        this.SUBSTITUTOR = SUBSTITUTOR;
     }
 
     // Instance specific constants
-    protected final String substitutorPackage;
-    private final String substitutor;
+    protected final String SUBSTITUTOR_PACKAGE;
+    private final String SUBSTITUTOR;
 
     // Processor local info
     protected boolean done = false;
@@ -197,9 +198,6 @@ public abstract class EspressoProcessor extends BaseProcessor {
 
     TypeElement injectProfile;
     private static final String INJECT_PROFILE = "com.oracle.truffle.espresso.substitutions.InjectProfile";
-
-    TypeElement truffleNode;
-    private static final String TRUFFLE_NODE = "com.oracle.truffle.api.nodes.Node";
 
     // Global constants
     private static final String FACTORY = "Factory";
@@ -323,7 +321,6 @@ public abstract class EspressoProcessor extends BaseProcessor {
         }
         injectMeta = getTypeElement(INJECT_META);
         injectProfile = getTypeElement(INJECT_PROFILE);
-        truffleNode = getTypeElement(TRUFFLE_NODE);
         processImpl(roundEnv);
         done = true;
         return false;
@@ -360,39 +357,18 @@ public abstract class EspressoProcessor extends BaseProcessor {
     }
 
     /**
-     * For substitutions that use a node, find the execute* method. Suitable methods must be
-     * non-private and be called execute*.
+     * For substitutions that use a node, find the execute* (abstract) method.
      */
     ExecutableElement findNodeExecute(TypeElement node) {
-        if (!env().getTypeUtils().isSubtype(node.asType(), truffleNode.asType())) {
-            getMessager().printMessage(Diagnostic.Kind.ERROR, "(Node) Substitution must inherit from " + truffleNode.getQualifiedName(), node);
-        }
-        ExecutableElement executeMethod = null;
-        TypeElement curElement = node;
-        while (true) {
-            for (Element method : curElement.getEnclosedElements()) {
-                if (method.getKind() == ElementKind.METHOD) {
-                    // Match abstract non-private execute* .
-                    if (method.getSimpleName().toString().startsWith("execute") &&
-                                    !method.getModifiers().contains(Modifier.PRIVATE) &&
-                                    method.getModifiers().contains(Modifier.ABSTRACT)) {
-                        if (executeMethod != null) {
-                            getMessager().printMessage(Diagnostic.Kind.ERROR, "Ambiguous execute* methods found: a unique non-private abstract execute* method is required", node);
-                        }
-                        executeMethod = (ExecutableElement) method;
-                    }
+        for (Element method : node.getEnclosedElements()) {
+            if (method.getKind() == ElementKind.METHOD) {
+                if (method.getModifiers().contains(Modifier.ABSTRACT)) {
+                    return (ExecutableElement) method;
                 }
             }
-            TypeMirror superClass = curElement.getSuperclass();
-            if (TypeKind.NONE.equals(superClass.getKind())) {
-                break;
-            }
-            curElement = asTypeElement(superClass);
         }
-        if (executeMethod == null) {
-            getMessager().printMessage(Diagnostic.Kind.ERROR, "Node execute* method not found", node);
-        }
-        return executeMethod;
+        getMessager().printMessage(Diagnostic.Kind.ERROR, "Node abstract execute* method not found", node);
+        return null;
     }
 
     boolean hasProfileInjection(ExecutableElement method) {
@@ -527,37 +503,37 @@ public abstract class EspressoProcessor extends BaseProcessor {
 
     // @formatter:off
     /**
-     * Generates the following.
+     * Generate the following:
+     *     @Collect(ImplAnnotation.class)
+     *     public static final class Factory extends SUBSTITUTOR.Factory {
+     *         private Factory() {
+     *             super(
+     *                 "SUBSTITUTED_METHOD",
+     *                 "SUBSTITUTION_CLASS",
+     *                 "RETURN_TYPE",
+     *                 new String[]{
+     *                     SIGNATURE
+     *                 },
+     *                 HAS_RECEIVER
+     *             );
+     *         }
      * 
-     * @Collect(ImplAnnotation.class)
-     * public static final class Factory extends SUBSTITUTOR.Factory {
-     *     private Factory() {
-     *         super(
-     *             "SUBSTITUTED_METHOD",
-     *             "SUBSTITUTION_CLASS",
-     *             "RETURN_TYPE",
-     *             new String[]{
-     *                 SIGNATURE
-     *             },
-     *             HAS_RECEIVER
-     *         );
+     *         @Override
+     *         public final SUBSTITUTOR create(Meta meta) {
+     *             return new className(meta);
+     *         }
      *     }
-     *     @Override
-     *     public final SUBSTITUTOR create(Meta meta) {
-     *         return new className(meta);
-     *     }
-     * }
      */
     // @formatter:on
     private String generateFactory(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         str.append("\n");
         str.append(TAB_1).append("@Collect(").append(helper.getImplAnnotation().getQualifiedName()).append(".class").append(")\n");
-        str.append(TAB_1).append(PUBLIC_STATIC_FINAL_CLASS).append(FACTORY).append(" extends ").append(substitutor).append(".").append(FACTORY).append(" {\n");
+        str.append(TAB_1).append(PUBLIC_STATIC_FINAL_CLASS).append(FACTORY).append(" extends ").append(SUBSTITUTOR).append(".").append(FACTORY).append(" {\n");
         str.append(TAB_2).append("public ").append(FACTORY).append("() {\n");
         str.append(generateFactoryConstructorAndBody(className, targetMethodName, parameterTypeName, helper)).append("\n");
         str.append(TAB_2).append(OVERRIDE).append("\n");
-        str.append(TAB_2).append(PUBLIC_FINAL).append(" ").append(substitutor).append(" ").append(CREATE).append("(");
+        str.append(TAB_2).append(PUBLIC_FINAL).append(" ").append(SUBSTITUTOR).append(" ").append(CREATE).append("(");
         str.append(META_CLASS).append(META_VAR).append(") {\n");
         str.append(TAB_3).append("return new ").append(className).append("(").append(META_VAR).append(");\n");
         str.append(TAB_2).append("}\n");
@@ -569,7 +545,7 @@ public abstract class EspressoProcessor extends BaseProcessor {
      * Injects meta data in the substitutor's field, so the Meta be passed along during substitution
      * invocation.
      */
-    private static String generateInstanceFields(SubstitutionHelper helper) {
+    static private String generateInstanceFields(SubstitutionHelper helper) {
         if (!helper.isNodeTarget() && !helper.hasMetaInjection && !helper.hasProfileInjection) {
             return "";
         }
@@ -634,7 +610,7 @@ public abstract class EspressoProcessor extends BaseProcessor {
 
         // Class
         classFile.append(generateGeneratedBy(className, targetMethodName, parameterTypeName, helper)).append("\n");
-        classFile.append(PUBLIC_FINAL_CLASS).append(substitutorName).append(" extends " + substitutor + " {\n");
+        classFile.append(PUBLIC_FINAL_CLASS).append(substitutorName).append(" extends " + SUBSTITUTOR + " {\n");
 
         // Instance Provider
         classFile.append(generateFactory(substitutorName, targetMethodName, parameterTypeName, helper)).append("\n");
@@ -690,7 +666,7 @@ public abstract class EspressoProcessor extends BaseProcessor {
     private String generateSplit() {
         StringBuilder str = new StringBuilder();
 
-        str.append(TAB_1).append(PUBLIC_FINAL).append(" ").append(substitutor).append(" ").append(SPLIT).append("() {\n");
+        str.append(TAB_1).append(PUBLIC_FINAL).append(" ").append(SUBSTITUTOR).append(" ").append(SPLIT).append("() {\n");
         str.append(TAB_2).append("return new ").append(FACTORY).append("()").append(".").append(CREATE).append("(").append(META_VAR).append(");\n");
         str.append(TAB_1).append("}\n");
 
