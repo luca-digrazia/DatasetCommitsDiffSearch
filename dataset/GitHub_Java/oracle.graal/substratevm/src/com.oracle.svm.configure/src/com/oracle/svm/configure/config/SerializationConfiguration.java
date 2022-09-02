@@ -26,8 +26,13 @@
 package com.oracle.svm.configure.config;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import com.oracle.svm.configure.json.JsonPrintable;
 import com.oracle.svm.configure.json.JsonWriter;
@@ -38,25 +43,51 @@ public class SerializationConfiguration implements JsonPrintable {
 
     private static final String KEY_SEPARATOR = "|";
 
-    private final Set<String> serializations = ConcurrentHashMap.newKeySet();
+    private final ConcurrentHashMap<String, Set<String>> serializations = new ConcurrentHashMap<>();
 
-    public void add(String serializationTargetClass, String customTargetConstructorClass) {
-        serializations.add(serializationTargetClass + (customTargetConstructorClass != null ? KEY_SEPARATOR + customTargetConstructorClass : ""));
+    public void addAll(String serializationTargetClass, String customTargetConstructorClass, Collection<String> checksums) {
+        String serializationKey = serializationTargetClass + (customTargetConstructorClass != null ? KEY_SEPARATOR + customTargetConstructorClass : "");
+        serializations.computeIfAbsent(serializationKey, key -> new LinkedHashSet<>()).addAll(checksums);
+    }
+
+    public void add(String serializationTargetClass, String checksum) {
+        if (checksum == null) {
+            addAll(serializationTargetClass, null, Collections.emptySet());
+        } else {
+            addAll(serializationTargetClass, null, Collections.singleton(checksum));
+        }
+    }
+
+    public boolean contains(String serializationTargetClass, String checksum) {
+        Set<String> checksums = serializations.get(serializationTargetClass);
+        return checksums != null && checksums.contains(checksum);
     }
 
     @Override
     public void printJson(JsonWriter writer) throws IOException {
         writer.append('[').indent();
         String prefix = "";
-        for (String entry : serializations) {
+        for (Map.Entry<String, Set<String>> entry : serializations.entrySet()) {
             writer.append(prefix);
             writer.newline().append('{').newline();
-            String[] serializationKeyValues = SubstrateUtil.split(entry, KEY_SEPARATOR, 2);
+            String[] serializationKeyValues = SubstrateUtil.split(entry.getKey(), KEY_SEPARATOR, 2);
             String className = serializationKeyValues[0];
             writer.quote(SerializationConfigurationParser.NAME_KEY).append(":").quote(className);
             if (serializationKeyValues.length > 1) {
                 writer.append(",").newline();
                 writer.quote(SerializationConfigurationParser.CUSTOM_TARGET_CONSTRUCTOR_CLASS_KEY).append(":").quote(serializationKeyValues[1]);
+            }
+            Set<String> checksums = entry.getValue();
+            if (!checksums.isEmpty()) {
+                writer.append(",").newline();
+                writer.quote(SerializationConfigurationParser.CHECKSUM_KEY).append(':');
+                if (checksums.size() == 1) {
+                    writer.quote(checksums.iterator().next());
+                } else {
+                    writer.append(checksums.stream()
+                                    .map(JsonWriter::quoteString)
+                                    .collect(Collectors.joining(", ", "[", "]")));
+                }
             }
             writer.newline().append('}');
             prefix = ",";
