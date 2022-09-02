@@ -31,6 +31,9 @@ import static org.graalvm.compiler.core.llvm.LLVMUtils.getVal;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.bytedeco.javacpp.LLVM.LLVMContextRef;
+import org.bytedeco.javacpp.LLVM.LLVMTypeRef;
+import org.bytedeco.javacpp.LLVM.LLVMValueRef;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.llvm.LLVMGenerationResult;
 import org.graalvm.compiler.core.llvm.LLVMGenerator;
@@ -55,9 +58,6 @@ import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.hosted.code.CEntryPointData;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedType;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMContextRef;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMTypeRef;
-import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMValueRef;
 
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.Register;
@@ -84,7 +84,7 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
 
     SubstrateLLVMGenerator(Providers providers, LLVMGenerationResult generationResult, ResolvedJavaMethod method, LLVMContextRef context, int debugLevel) {
         super(providers, generationResult, method, new LLVMIRBuilder(SubstrateUtil.uniqueShortName(method), context),
-                        new LLVMKindTool(context), debugLevel, LLVMFeature.useExplicitSelects());
+                        new LLVMKindTool(context), debugLevel);
         this.isEntryPoint = isEntryPoint(method);
         this.canModifySpecialRegisters = canModifySpecialRegisters(method);
 
@@ -120,11 +120,9 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
     }
 
     private boolean canModifySpecialRegisters(ResolvedJavaMethod method) {
-        CEntryPointOptions entryPointOptions = GuardedAnnotationAccess.getAnnotation(method, CEntryPointOptions.class);
-        return (entryPointOptions != null) && entryPointOptions.prologue() == CEntryPointOptions.NoPrologue.class ||
-                        method.getDeclaringClass().equals(getMetaAccess().lookupJavaType(CEntryPointSnippets.class)) ||
+        return (method.getDeclaringClass().equals(getMetaAccess().lookupJavaType(CEntryPointSnippets.class)) ||
                         method.getDeclaringClass().equals(getMetaAccess().lookupJavaType(CEntryPointNativeFunctions.class)) ||
-                        method.getDeclaringClass().equals(getMetaAccess().lookupJavaType(CEntryPointBuiltins.class));
+                        method.getDeclaringClass().equals(getMetaAccess().lookupJavaType(CEntryPointBuiltins.class)));
     }
 
     @Override
@@ -167,6 +165,7 @@ public class SubstrateLLVMGenerator extends LLVMGenerator implements SubstrateLI
 
     @Override
     public void emitDeadEnd() {
+        emitPrintf("Dead end");
         builder.buildUnreachable();
     }
 
