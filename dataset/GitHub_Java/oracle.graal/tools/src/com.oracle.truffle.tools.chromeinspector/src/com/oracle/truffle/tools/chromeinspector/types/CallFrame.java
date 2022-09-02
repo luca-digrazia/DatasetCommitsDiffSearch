@@ -26,7 +26,6 @@ package com.oracle.truffle.tools.chromeinspector.types;
 
 import com.oracle.truffle.tools.utils.json.JSONObject;
 
-import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugStackFrame;
 import com.oracle.truffle.api.debug.SuspendAnchor;
 import com.oracle.truffle.api.source.SourceSection;
@@ -89,11 +88,7 @@ public final class CallFrame {
     private JSONObject createJSON() {
         JSONObject json = new JSONObject();
         json.put("callFrameId", Integer.toString(depth));
-        try {
-            json.put("functionName", frame.getName());
-        } catch (DebugException ex) {
-            json.put("functionName", ex.getLocalizedMessage());
-        }
+        json.put("functionName", frame.getName());
         json.put("location", location.toJSON());
         json.putOpt("functionLocation", (functionLocation != null) ? functionLocation.toJSON() : null);
         json.put("url", url);

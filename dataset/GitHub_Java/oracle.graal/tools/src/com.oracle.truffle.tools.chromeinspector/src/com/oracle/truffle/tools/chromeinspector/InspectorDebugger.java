@@ -56,7 +56,6 @@ import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugScope;
 import com.oracle.truffle.api.debug.DebugStackFrame;
-import com.oracle.truffle.api.debug.DebugStackTraceElement;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
@@ -87,7 +86,6 @@ import com.oracle.truffle.tools.chromeinspector.types.Location;
 import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
 import com.oracle.truffle.tools.chromeinspector.types.Scope;
 import com.oracle.truffle.tools.chromeinspector.types.Script;
-import com.oracle.truffle.tools.chromeinspector.types.StackTrace;
 import com.oracle.truffle.tools.chromeinspector.util.LineSearch;
 
 import org.graalvm.collections.Pair;
@@ -189,21 +187,8 @@ public final class InspectorDebugger extends DebuggerDomain {
     }
 
     @Override
-    protected void notifyDisabled() {
-        // We might call startSession() in the constructor, without doEnable().
-        // That means that doDisable() might not have been called.
-        if (debuggerSession != null) {
-            doDisable();
-        }
-    }
+    public void setAsyncCallStackDepth(int maxDepth) {
 
-    @Override
-    public void setAsyncCallStackDepth(int maxDepth) throws CommandProcessException {
-        if (maxDepth >= 0) {
-            debuggerSession.setAsynchronousStackDepth(maxDepth);
-        } else {
-            throw new CommandProcessException("Invalid async call stack depth: " + maxDepth);
-        }
     }
 
     @Override
@@ -1070,7 +1055,6 @@ public final class InspectorDebugger extends DebuggerDomain {
                         commandLazyResponse = null;
                     } else {
                         jsonParams.put("callFrames", getFramesParam(callFrames));
-                        jsonParams.putOpt("asyncStackTrace", findAsyncStackTrace(se.getAsynchronousStacks()));
                         List<Breakpoint> breakpoints = se.getBreakpoints();
                         JSONArray bpArr = new JSONArray();
                         Set<Breakpoint.Kind> kinds = new HashSet<>(1);
@@ -1232,14 +1216,6 @@ public final class InspectorDebugger extends DebuggerDomain {
             array.put(cf.toJSON());
         }
         return array;
-    }
-
-    private JSONObject findAsyncStackTrace(List<List<DebugStackTraceElement>> asyncStacks) {
-        if (asyncStacks.isEmpty()) {
-            return null;
-        }
-        StackTrace stackTrace = new StackTrace(context, asyncStacks);
-        return stackTrace.toJSON();
     }
 
     private interface CommandLazyResponse {
