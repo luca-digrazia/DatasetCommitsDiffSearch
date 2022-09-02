@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,13 +30,15 @@
 package com.oracle.truffle.llvm.runtime.nodes.op;
 
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativePointerSupport;
 import com.oracle.truffle.llvm.runtime.nodes.op.LLVMPointerCompareNodeGen.LLVMNegateNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.op.ToComparableValue.ManagedToComparableValue;
 import com.oracle.truffle.llvm.runtime.nodes.util.LLVMSameObjectNode;
@@ -64,39 +66,33 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
         return op.compare(a.asNative(), b.asNative());
     }
 
-    @Specialization(guards = {"isPointerA.execute(a)", "isPointerB.execute(b)"}, rewriteOn = UnsupportedMessageException.class)
+    @Specialization(guards = {"libA.isPointer(a)", "libB.isPointer(b)"}, rewriteOn = UnsupportedMessageException.class)
     protected boolean doPointerPointer(Object a, Object b,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerA,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointerA,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerB,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointerB) throws UnsupportedMessageException {
-        return op.compare(asPointerA.execute(a), asPointerB.execute(b));
+                    @CachedLibrary(limit = "3") LLVMNativeLibrary libA,
+                    @CachedLibrary(limit = "3") LLVMNativeLibrary libB) throws UnsupportedMessageException {
+        return op.compare(libA.asPointer(a), libB.asPointer(b));
     }
 
-    @Specialization(guards = {"isPointerA.execute(a)", "isPointerB.execute(b)"})
+    @Specialization(guards = {"libA.isPointer(a)", "libB.isPointer(b)"})
     protected boolean doPointerPointerException(Object a, Object b,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerA,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointerA,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerB,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointerB,
+                    @CachedLibrary(limit = "3") LLVMNativeLibrary libA,
+                    @CachedLibrary(limit = "3") LLVMNativeLibrary libB,
                     @Cached LLVMManagedCompareNode managedCompare) {
         try {
-            return doPointerPointer(a, b, isPointerA, asPointerA, isPointerB, asPointerB);
+            return doPointerPointer(a, b, libA, libB);
         } catch (UnsupportedMessageException ex) {
             // even though both say isPointer == true, one of them threw an exception in asPointer
             // this is the same as if one of the objects has isPointer == false
-            return doOther(a, b, isPointerA, asPointerA, isPointerB, asPointerB, managedCompare);
+            return doOther(a, b, libA, libB, managedCompare);
         }
     }
 
-    @Specialization(guards = "!isPointerA.execute(a) || !isPointerB.execute(b)")
+    @Specialization(guards = "!libA.isPointer(a) || !libB.isPointer(b)")
     protected boolean doOther(Object a, Object b,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerA,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointerA,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerB,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointerB,
+                    @CachedLibrary(limit = "3") LLVMNativeLibrary libA,
+                    @CachedLibrary(limit = "3") LLVMNativeLibrary libB,
                     @Cached LLVMManagedCompareNode managedCompare) {
-        return managedCompare.execute(a, b, isPointerA, asPointerA, isPointerB, asPointerB, op);
+        return managedCompare.execute(a, libA, b, libB, op);
     }
 
     public static LLVMAbstractCompareNode create(Kind kind, LLVMExpressionNode l, LLVMExpressionNode r) {
@@ -165,13 +161,11 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
     abstract static class LLVMManagedCompareNode extends LLVMNode {
         private static final long TYPICAL_POINTER = 0x00007f0000000000L;
 
-        abstract boolean execute(Object a, Object b, LLVMNativePointerSupport.IsPointerNode isPointerA, LLVMNativePointerSupport.AsPointerNode asPointerA,
-                        LLVMNativePointerSupport.IsPointerNode isPointerB, LLVMNativePointerSupport.AsPointerNode asPointerB, NativePointerCompare op);
+        abstract boolean execute(Object a, LLVMNativeLibrary libA, Object b, LLVMNativeLibrary libB, NativePointerCompare op);
 
         @Specialization(guards = {"pointToSameObject.execute(a.getObject(), b.getObject())"})
-        protected boolean doForeignSameObject(LLVMManagedPointer a, LLVMManagedPointer b, @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerA,
-                        @SuppressWarnings("unused") LLVMNativePointerSupport.AsPointerNode asPointerA, @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerB,
-                        @SuppressWarnings("unused") LLVMNativePointerSupport.AsPointerNode asPointerB, NativePointerCompare op,
+        protected boolean doForeign(LLVMManagedPointer a, @SuppressWarnings("unused") LLVMNativeLibrary libA,
+                        LLVMManagedPointer b, @SuppressWarnings("unused") LLVMNativeLibrary libB, NativePointerCompare op,
                         @SuppressWarnings("unused") @Cached LLVMSameObjectNode pointToSameObject) {
             // when comparing pointers to the same object, it is not sufficient to simply compare
             // the offsets if we have an unsigned comparison and one of the offsets is negative. So,
@@ -180,50 +174,50 @@ public abstract class LLVMPointerCompareNode extends LLVMAbstractCompareNode {
         }
 
         @Specialization(guards = "!pointToSameObject.execute(a.getObject(), b.getObject())")
-        protected boolean doForeignDifferentObjects(LLVMManagedPointer a, LLVMManagedPointer b, @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerA,
-                        @SuppressWarnings("unused") LLVMNativePointerSupport.AsPointerNode asPointerA, @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerB,
-                        @SuppressWarnings("unused") LLVMNativePointerSupport.AsPointerNode asPointerB, NativePointerCompare op,
+        protected boolean doForeign(LLVMManagedPointer a, @SuppressWarnings("unused") LLVMNativeLibrary libA,
+                        LLVMManagedPointer b, @SuppressWarnings("unused") LLVMNativeLibrary libB, NativePointerCompare op,
+                        @SuppressWarnings("unused") @Cached LLVMSameObjectNode pointToSameObject,
                         @Cached("createIgnoreOffset()") ManagedToComparableValue convertA,
-                        @Cached("createIgnoreOffset()") ManagedToComparableValue convertB,
-                        @SuppressWarnings("unused") @Cached LLVMSameObjectNode pointToSameObject) {
+                        @Cached("createIgnoreOffset()") ManagedToComparableValue convertB) {
             return op.compare(convertA.executeWithTarget(a), convertB.executeWithTarget(b));
         }
 
         /**
-         * @see #execute(Object, Object, LLVMNativePointerSupport.IsPointerNode,
-         *      LLVMNativePointerSupport.AsPointerNode, LLVMNativePointerSupport.IsPointerNode,
-         *      LLVMNativePointerSupport.AsPointerNode, NativePointerCompare)
+         * @param a
+         * @param libA
+         * @param b
+         * @param libB
+         * @param op
+         * @see #execute(Object, LLVMNativeLibrary, Object, LLVMNativeLibrary, NativePointerCompare)
          */
-        @Specialization(guards = "isPointerA.execute(a)", rewriteOn = UnsupportedMessageException.class)
-        protected boolean doNativeManaged(Object a, Object b, @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerA, LLVMNativePointerSupport.AsPointerNode asPointerA,
-                        @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerB, @SuppressWarnings("unused") LLVMNativePointerSupport.AsPointerNode asPointerB,
-                        NativePointerCompare op,
+        @Specialization(guards = "libA.isPointer(a)", rewriteOn = UnsupportedMessageException.class)
+        protected boolean doNativeManaged(Object a, LLVMNativeLibrary libA, Object b, LLVMNativeLibrary libB, NativePointerCompare op,
                         @Cached("createIgnoreOffset()") ManagedToComparableValue convert) throws UnsupportedMessageException {
-            return op.compare(asPointerA.execute(a), convert.executeWithTarget(b));
+            return op.compare(libA.asPointer(a), convert.executeWithTarget(b));
         }
 
         /**
-         * @see #execute(Object, Object, LLVMNativePointerSupport.IsPointerNode,
-         *      LLVMNativePointerSupport.AsPointerNode, LLVMNativePointerSupport.IsPointerNode,
-         *      LLVMNativePointerSupport.AsPointerNode, NativePointerCompare)
+         * @param a
+         * @param libA
+         * @param b
+         * @param libB
+         * @param op
+         * @see #execute(Object, LLVMNativeLibrary, Object, LLVMNativeLibrary, NativePointerCompare)
          */
-        @Specialization(guards = "isPointerB.execute(b)", rewriteOn = UnsupportedMessageException.class)
-        protected boolean doManagedNative(Object a, Object b, @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerA,
-                        @SuppressWarnings("unused") LLVMNativePointerSupport.AsPointerNode asPointerA, @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerB,
-                        LLVMNativePointerSupport.AsPointerNode asPointerB, NativePointerCompare op,
+        @Specialization(guards = "libB.isPointer(b)", rewriteOn = UnsupportedMessageException.class)
+        protected boolean doManagedNative(Object a, LLVMNativeLibrary libA, Object b, LLVMNativeLibrary libB, NativePointerCompare op,
                         @Cached("createIgnoreOffset()") ManagedToComparableValue convert) throws UnsupportedMessageException {
-            return op.compare(convert.executeWithTarget(a), asPointerB.execute(b));
+            return op.compare(convert.executeWithTarget(a), libB.asPointer(b));
         }
 
-        @Specialization(guards = "isPointerA.execute(a) || isPointerB.execute(b)")
-        protected boolean doManagedNativeException(Object a, Object b, @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerA, LLVMNativePointerSupport.AsPointerNode asPointerA,
-                        @SuppressWarnings("unused") LLVMNativePointerSupport.IsPointerNode isPointerB, LLVMNativePointerSupport.AsPointerNode asPointerB, NativePointerCompare op,
+        @Specialization(guards = "libA.isPointer(a) || libB.isPointer(b)")
+        protected boolean doManagedNativeException(Object a, LLVMNativeLibrary libA, Object b, LLVMNativeLibrary libB, NativePointerCompare op,
                         @Cached("createIgnoreOffset()") ManagedToComparableValue convert) {
             try {
-                return op.compare(asPointerA.execute(a), convert.executeWithTarget(b));
+                return op.compare(libA.asPointer(a), convert.executeWithTarget(b));
             } catch (UnsupportedMessageException e) {
                 try {
-                    return op.compare(convert.executeWithTarget(a), asPointerB.execute(b));
+                    return op.compare(convert.executeWithTarget(a), libB.asPointer(b));
                 } catch (UnsupportedMessageException ex) {
                     return op.compare(convert.executeWithTarget(a), convert.executeWithTarget(b));
                 }

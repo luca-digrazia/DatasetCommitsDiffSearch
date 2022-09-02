@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,14 +31,16 @@ package com.oracle.truffle.llvm.runtime.nodes.op;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativePointerSupport;
 import com.oracle.truffle.llvm.runtime.nodes.op.ToComparableValueNodeGen.ManagedToComparableValueNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
@@ -46,27 +48,26 @@ public abstract class ToComparableValue extends LLVMNode {
 
     public abstract long executeWithTarget(Object obj);
 
-    @Specialization(guards = "isPointer.execute(obj)", rewriteOn = UnsupportedMessageException.class)
+    @Specialization(guards = "lib.isPointer(obj)", rewriteOn = UnsupportedMessageException.class)
     protected long doPointer(Object obj,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointer,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointer) throws UnsupportedMessageException {
-        return asPointer.execute(obj);
+                    @CachedLibrary(limit = "3") LLVMNativeLibrary lib) throws UnsupportedMessageException {
+        return lib.asPointer(obj);
     }
 
-    @Specialization(guards = "isPointer.execute(obj)")
+    @Specialization(guards = "lib.isPointer(obj)")
     protected long doPointerException(Object obj,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointer,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointer,
+                    @CachedLibrary(limit = "3") LLVMNativeLibrary lib,
                     @Cached("createUseOffset()") ManagedToComparableValue toComparable) {
         try {
-            return asPointer.execute(obj);
+            return lib.asPointer(obj);
         } catch (UnsupportedMessageException ex) {
-            return doManaged(obj, isPointer, toComparable);
+            return doManaged(obj, lib, toComparable);
         }
     }
 
-    @Specialization(guards = "!isPointer.execute(obj)")
-    protected long doManaged(Object obj, @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointer,
+    @Specialization(guards = "!lib.isPointer(obj)")
+    protected long doManaged(Object obj,
+                    @CachedLibrary(limit = "3") @SuppressWarnings("unused") LLVMNativeLibrary lib,
                     @Cached("createUseOffset()") ManagedToComparableValue toComparable) {
         return toComparable.executeWithTarget(obj);
     }

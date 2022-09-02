@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,13 +30,15 @@
 package com.oracle.truffle.llvm.runtime.nodes.op;
 
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativePointerSupport;
 import com.oracle.truffle.llvm.runtime.nodes.util.LLVMSameObjectNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -95,33 +97,33 @@ public abstract class LLVMAddressEqualsNode extends LLVMAbstractCompareNode {
 
         public abstract boolean execute(Object a, Object b);
 
-        @Specialization(guards = {"nativesA.isPointer(a)", "nativesB.isPointer(b)"}, rewriteOn = UnsupportedMessageException.class)
+        @Specialization(guards = {"libA.isPointer(a)", "libB.isPointer(b)"}, rewriteOn = UnsupportedMessageException.class)
         boolean doPointerPointer(Object a, Object b,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport nativesA,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport nativesB) throws UnsupportedMessageException {
-            return nativesA.asPointer(a) == nativesB.asPointer(b);
+                        @CachedLibrary(limit = "8") LLVMNativeLibrary libA,
+                        @CachedLibrary(limit = "8") LLVMNativeLibrary libB) throws UnsupportedMessageException {
+            return libA.asPointer(a) == libB.asPointer(b);
         }
 
-        @Specialization(guards = {"nativesA.isPointer(a)", "nativesB.isPointer(b)"}, replaces = "doPointerPointer")
+        @Specialization(guards = {"libA.isPointer(a)", "libB.isPointer(b)"}, replaces = "doPointerPointer")
         boolean doPointerPointerException(Object a, Object b,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport nativesA,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport nativesB,
+                        @CachedLibrary(limit = "8") LLVMNativeLibrary libA,
+                        @CachedLibrary(limit = "8") LLVMNativeLibrary libB,
                         @Cached LLVMManagedEqualsNode managedEquals) {
             try {
-                return doPointerPointer(a, b, nativesA, nativesB);
+                return doPointerPointer(a, b, libA, libB);
             } catch (UnsupportedMessageException ex) {
                 /*
                  * Even though both say isPointer == true, one of them threw an exception in
                  * asPointer. This is the same as if one of the objects has isPointer == false.
                  */
-                return doOther(a, b, nativesA, nativesB, managedEquals);
+                return doOther(a, b, libA, libB, managedEquals);
             }
         }
 
-        @Specialization(guards = "!nativesA.isPointer(a) || !nativesB.isPointer(b)")
+        @Specialization(guards = "!libA.isPointer(a) || !libB.isPointer(b)")
         boolean doOther(Object a, Object b,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport nativesA,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport nativesB,
+                        @SuppressWarnings("unused") @CachedLibrary(limit = "8") LLVMNativeLibrary libA,
+                        @SuppressWarnings("unused") @CachedLibrary(limit = "8") LLVMNativeLibrary libB,
                         @Cached LLVMManagedEqualsNode managedEquals) {
             return managedEquals.execute(a, b);
         }
