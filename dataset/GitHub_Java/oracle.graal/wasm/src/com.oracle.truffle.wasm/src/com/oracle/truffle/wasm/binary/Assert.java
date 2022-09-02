@@ -30,7 +30,6 @@
 package com.oracle.truffle.wasm.binary;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.wasm.binary.exception.BinaryReaderException;
 
 public class Assert {
 

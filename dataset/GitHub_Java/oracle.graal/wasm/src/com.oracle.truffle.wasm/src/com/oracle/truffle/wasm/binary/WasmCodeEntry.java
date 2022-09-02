@@ -39,14 +39,13 @@ public class WasmCodeEntry {
     @CompilationFinal(dimensions = 1) private FrameSlot[] localSlots;
     @CompilationFinal(dimensions = 1) private FrameSlot[] stackSlots;
     @CompilationFinal(dimensions = 1) private byte[] localTypes;
-    @CompilationFinal(dimensions = 1) private byte[] byteConstants;
+
 
     public WasmCodeEntry(byte[] data) {
         this.data = data;
         this.localSlots = null;
         this.stackSlots = null;
         this.localTypes = null;
-        this.byteConstants = null;
     }
 
     public byte[] data() {
@@ -99,13 +98,5 @@ public class WasmCodeEntry {
 
     public byte localType(int index) {
         return localTypes[index];
-    }
-
-    public byte[] byteConstants() {
-        return byteConstants;
-    }
-
-    public void setByteConstants(byte[] byteConstants) {
-        this.byteConstants = byteConstants;
     }
 }
