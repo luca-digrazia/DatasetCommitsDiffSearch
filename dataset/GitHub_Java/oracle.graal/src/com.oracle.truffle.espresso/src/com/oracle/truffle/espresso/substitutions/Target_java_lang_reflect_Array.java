@@ -74,7 +74,7 @@ public final class Target_java_lang_reflect_Array {
 
         if (component.isPrimitive()) {
             byte jvmPrimitiveType = (byte) component.getJavaKind().getBasicType();
-            return InterpreterToVM.allocatePrimitiveArray(jvmPrimitiveType, length, meta);
+            return InterpreterToVM.allocatePrimitiveArray(jvmPrimitiveType, length);
         }
 
         // NegativeArraySizeException is thrown in getInterpreterToVM().newArray
