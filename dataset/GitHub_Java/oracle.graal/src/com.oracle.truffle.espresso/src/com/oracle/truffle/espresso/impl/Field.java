@@ -74,6 +74,11 @@ public final class Field implements ModifiersProvider {
         return linkedField.getSlot();
     }
 
+    public boolean isInternal() {
+        // No internal fields in Espresso (yet).
+        return false;
+    }
+
     @Override
     public String toString() {
         return "EspressoField<" + getDeclaringKlass() + "." + getName() + " -> " + getType() + ">";

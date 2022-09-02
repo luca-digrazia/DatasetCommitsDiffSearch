@@ -120,8 +120,8 @@ public final class Method implements ModifiersProvider, ContextAccess {
         this.exceptionsAttribute = (ExceptionsAttribute) getAttribute(ExceptionsAttribute.NAME);
     }
 
-    final Attribute getAttribute(Symbol<Name> attrName) {
-        return linkedMethod.getAttribute(attrName);
+    final Attribute getAttribute(Symbol<Name> name) {
+        return linkedMethod.getAttribute(name);
     }
 
     @Override
@@ -378,6 +378,20 @@ public final class Method implements ModifiersProvider, ContextAccess {
 
     public final JavaKind getReturnKind() {
         return Signatures.returnKind(getParsedSignature());
+    }
+
+    private Klass[] resolvedSignature;
+
+    private Klass[] getResolvedSignature() {
+        if (resolvedSignature == null) {
+            final Symbol<Type>[] signature = getParsedSignature();
+            Klass[] resolved = new Klass[signature.length];
+            for (int i = 0; i < signature.length; ++i) {
+                resolved[i] = getMeta().loadKlass(signature[i], getDeclaringKlass().getDefiningClassLoader());
+            }
+            resolvedSignature = resolved;
+        }
+        return resolvedSignature;
     }
 
     public Klass[] resolveParameterKlasses() {

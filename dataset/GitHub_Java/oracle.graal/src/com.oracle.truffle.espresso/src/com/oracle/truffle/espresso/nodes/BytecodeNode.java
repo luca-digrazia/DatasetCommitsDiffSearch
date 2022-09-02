@@ -238,7 +238,6 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.CustomNodeCount;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
@@ -275,18 +274,10 @@ import com.oracle.truffle.object.DebugCounter;
 /**
  * Bytecode interpreter loop.
  *
- * 
- * Calling convention uses strict Java primitive types although internally the VM basic types are
- * used with conversions at the boundaries.
- *
- * <h3>Operand stack</h3>
- * <p>
- * The operand stack is implemented in a PE-friendly way, with the {@code top} of the stack index
- * being a local variable. With ad-hoc implementation there's no explicit pop operation. Each
- * bytecode is first processed/executed without growing or shinking the stack and only then the
- * {@code top} of the stack index is adjusted depending on the bytecode stack offset.
+ * Calling convention use Java primitive types although internally the VM basic types (e.g. sub-word
+ * types are coerced to int) are used with conversions at the boundaries.
  */
-public final class BytecodeNode extends EspressoRootNode implements CustomNodeCount {
+public final class BytecodeNode extends EspressoRootNode {
 
     public static final DebugCounter bcCount = DebugCounter.create("Bytecodes executed");
 
@@ -840,22 +831,14 @@ public final class BytecodeNode extends EspressoRootNode implements CustomNodeCo
                     case MONITORENTER          : InterpreterToVM.monitorEnter(nullCheck(peekObject(frame, top - 1))); break;
                     case MONITOREXIT           : InterpreterToVM.monitorExit(nullCheck(peekObject(frame, top - 1))); break;
 
-                    case WIDE                  :
-                        CompilerAsserts.neverPartOfCompilation();
-                        throw EspressoError.shouldNotReachHere("BytecodeStream.currentBC() should never return this bytecode.");
+                    case WIDE                  : throw EspressoError.shouldNotReachHere("BytecodeStream.currentBC() should never return this bytecode.");
                     case MULTIANEWARRAY        : top += allocateMultiArray(frame, top, resolveType(curOpcode, bs.readCPI(curBCI)), bs.readUByte(curBCI + 3)); break;
 
-                    case BREAKPOINT            :
-                        CompilerAsserts.neverPartOfCompilation();
-                        throw EspressoError.unimplemented(Bytecodes.nameOf(curOpcode) + " not supported.");
-                    case INVOKEDYNAMIC         :
-                        CompilerAsserts.neverPartOfCompilation();
-                        throw EspressoError.unimplemented(Bytecodes.nameOf(curOpcode) + " not supported.");
+                    case BREAKPOINT            : throw EspressoError.unimplemented(Bytecodes.nameOf(curOpcode) + " not supported.");
+                    case INVOKEDYNAMIC         : throw EspressoError.unimplemented(Bytecodes.nameOf(curOpcode) + " not supported.");
 
                     case QUICK                 : top += nodes[bs.readCPI(curBCI)].invoke(frame, top); break;
-                    default                    :
-                        CompilerAsserts.neverPartOfCompilation();
-                        throw EspressoError.shouldNotReachHere(Bytecodes.nameOf(curOpcode));
+                    default                    : throw EspressoError.shouldNotReachHere(Bytecodes.nameOf(curOpcode));
                 }
                 // @formatter:on
                 // Checkstyle: resume
@@ -1095,7 +1078,6 @@ public final class BytecodeNode extends EspressoRootNode implements CustomNodeCo
             Klass klass = getConstantPool().resolvedKlassAt(getMethod().getDeclaringKlass(), cpi);
             putObject(frame, top, klass.mirror());
         } else {
-            CompilerAsserts.neverPartOfCompilation();
             throw EspressoError.unimplemented(constant.toString());
         }
     }
@@ -1538,10 +1520,5 @@ public final class BytecodeNode extends EspressoRootNode implements CustomNodeCo
         assert !m.isStatic();
         int skipSlots = Signatures.slotsForParameters(m.getParsedSignature());
         return peekObject(frame, top - skipSlots - 1);
-    }
-
-    @Override
-    public int customNodeCount() {
-        return getMethod().getCodeSize() / 3 + 3;
     }
 }

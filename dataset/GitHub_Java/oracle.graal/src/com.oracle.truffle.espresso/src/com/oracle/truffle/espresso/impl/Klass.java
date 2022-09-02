@@ -69,7 +69,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     private final ObjectKlass[] superInterfaces;
 
     @CompilationFinal //
-    private volatile ArrayKlass arrayClass;
+    private ArrayKlass arrayClass;
 
     @CompilationFinal //
     private StaticObjectClass mirrorCache;
@@ -173,6 +173,15 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     public abstract StaticObject getStatics();
 
     /**
+     * Checks whether this type has a finalizer method.
+     *
+     * @return {@code true} if this class has a finalizer
+     */
+    public final boolean hasFinalizer() {
+        throw EspressoError.unimplemented("finalizers");
+    }
+
+    /**
      * Checks whether this type is an instance class.
      *
      * @return {@code true} if this type is an instance class
@@ -198,7 +207,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
 
     /**
      * Checks whether this type is initialized. If a type is initialized it implies that it was
-     * linked and that the static initializer has run.
+     * {@link #isLinked() linked} and that the static initializer has run.
      *
      * @return {@code true} if this type is initialized
      */
@@ -208,6 +217,18 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
      * Initializes this type.
      */
     public abstract void initialize();
+
+    /**
+     * Checks whether this type is linked and verified. When a type is linked the static initializer
+     * has not necessarily run. An {@link #isInitialized() initialized} type is always linked.
+     *
+     * @return {@code true} if this type is linked
+     */
+    public final boolean isLinked() {
+        // TODO(peterssen): Klasses in Espresso are linked in the very moment the Klass is created
+        // from LinkedKlass.
+        return true;
+    }
 
     /**
      * Determines if this type is either the same as, or is a superclass or superinterface of, the
@@ -355,7 +376,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         return getSuperKlass();
     }
 
-    public final boolean isPrimaryType() {
+    private final boolean isPrimaryType() {
         assert !isPrimitive();
         if (isArray()) {
             return getElementalType().isPrimaryType();

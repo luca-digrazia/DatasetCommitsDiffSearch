@@ -87,7 +87,9 @@ public final class ClassfileParser {
     // */
     // private final Klass hostClass;
 
-    private ClassfileParser(ClasspathFile classpathFile, String requestedClassName, @SuppressWarnings("unused") Klass hostClass, EspressoContext context) {
+    private Symbol<Type> typeDescriptor;
+
+    private ClassfileParser(ClasspathFile classpathFile, String requestedClassName, Klass hostClass, EspressoContext context) {
         this.requestedClassName = requestedClassName;
         this.className = requestedClassName;
         // this.hostClass = hostClass;
@@ -96,7 +98,7 @@ public final class ClassfileParser {
         this.stream = new ClassfileStream(classfile);
     }
 
-    private ClassfileParser(ClassfileStream stream, String requestedClassName, @SuppressWarnings("unused") Klass hostClass, EspressoContext context) {
+    private ClassfileParser(ClassfileStream stream, String requestedClassName, Klass hostClass, EspressoContext context) {
         this.requestedClassName = requestedClassName;
         this.className = requestedClassName;
         // this.hostClass = hostClass;
@@ -412,24 +414,24 @@ public final class ClassfileParser {
         return interfaces;
     }
 
-//    private static String getPackageName(String fqn) {
-//        int slash = fqn.lastIndexOf('/');
-//        if (slash == -1) {
-//            int first = 0;
-//            while (fqn.charAt(first) == '[') {
-//                first++;
-//            }
-//            if (fqn.charAt(first) == 'L') {
-//                assert fqn.endsWith(";");
-//                first++;
-//            }
-//            int end = fqn.lastIndexOf('/');
-//            if (end != -1) {
-//                return fqn.substring(first, end);
-//            }
-//        }
-//        return null;
-//    }
+    private static String getPackageName(String fqn) {
+        int slash = fqn.lastIndexOf('/');
+        if (slash == -1) {
+            int first = 0;
+            while (fqn.charAt(first) == '[') {
+                first++;
+            }
+            if (fqn.charAt(first) == 'L') {
+                assert fqn.endsWith(";");
+                first++;
+            }
+            int end = fqn.lastIndexOf('/');
+            if (end != -1) {
+                return fqn.substring(first, end);
+            }
+        }
+        return null;
+    }
 
     // /**
     // * If the host class and the anonymous class are in the same package then do nothing. If the
