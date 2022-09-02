@@ -31,6 +31,7 @@ package com.oracle.truffle.wasm.test;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -47,9 +48,13 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.oracle.truffle.wasm.binary.WasmIfNode;
-import com.oracle.truffle.wasm.utils.SystemProperties;
-import com.oracle.truffle.wasm.utils.WasmInitialization;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.wasm.binary.WasmContext;
+import com.oracle.truffle.wasm.binary.WasmModule;
+import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
@@ -60,8 +65,6 @@ import org.junit.Assert;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.wasm.predefined.testutil.TestutilModule;
 import com.oracle.truffle.wasm.test.options.WasmTestOptions;
-import com.oracle.truffle.wasm.utils.WasmBinaryTools;
-import com.oracle.truffle.wasm.utils.WasmResource;
 
 public abstract class WasmSuiteBase extends WasmTestBase {
 
@@ -371,6 +374,45 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return testCases.stream().filter((WasmTestCase x) -> filterTestName().test(x.name)).collect(Collectors.toList());
     }
 
+    protected String getResourceAsString(String resourceName, boolean fail) throws IOException {
+        byte[] contents = getResourceAsBytes(resourceName, fail);
+        if (contents != null) {
+            return new String(contents);
+        } else {
+            assert !fail;
+            return null;
+        }
+    }
+
+    protected byte[] getResourceAsBytes(String resourceName, boolean fail) throws IOException {
+        InputStream stream = getClass().getResourceAsStream(resourceName);
+        if (stream == null) {
+            if (fail) {
+                Assert.fail(String.format("Could not find resource: %s", resourceName));
+            } else {
+                return null;
+            }
+        }
+        byte[] contents = new byte[stream.available()];
+        new DataInputStream(stream).readFully(contents);
+        return contents;
+    }
+
+    protected Object getResourceAsTest(String baseName, boolean fail) throws IOException {
+        final byte[] bytes = getResourceAsBytes(baseName + ".wasm", false);
+        if (bytes != null) {
+            return bytes;
+        }
+        final String text = getResourceAsString(baseName + ".wat", false);
+        if (text != null) {
+            return text;
+        }
+        if (fail) {
+            Assert.fail(String.format("Could not find test (neither .wasm or .wat): %s", baseName));
+        }
+        return null;
+    }
+
     protected Collection<WasmTestCase> collectFileTestCases(String testBundle) throws IOException {
         Collection<WasmTestCase> collectedCases = new ArrayList<>();
         if (testBundle == null) {
@@ -390,12 +432,12 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 continue;
             }
 
-            Object mainContent = WasmResource.getResourceAsTest(String.format("/test/%s/%s", testBundle, testName), true);
-            String resultContent = WasmResource.getResourceAsString(String.format("/test/%s/%s.result", testBundle, testName), true);
-            String initContent = WasmResource.getResourceAsString(String.format("/test/%s/%s.init", testBundle, testName), false);
-            String optsContent = WasmResource.getResourceAsString(String.format("/test/%s/%s.opts", testBundle, testName), false);
-            WasmInitialization initializer = WasmInitialization.create(initContent);
-            Properties options = SystemProperties.createFromOptions(optsContent);
+            Object mainContent = getResourceAsTest(String.format("/test/%s/%s", testBundle, testName), true);
+            String resultContent = getResourceAsString(String.format("/test/%s/%s.result", testBundle, testName), true);
+            String initContent = getResourceAsString(String.format("/test/%s/%s.init", testBundle, testName), false);
+            String optsContent = getResourceAsString(String.format("/test/%s/%s.opts", testBundle, testName), false);
+            WasmTestInitialization initializer = testInitialization(initContent);
+            Properties options = testOptions(optsContent);
 
             String[] resultTypeValue = resultContent.split("\\s+", 2);
             String resultType = resultTypeValue[0];
@@ -444,11 +486,11 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return new WasmStringTestCase(name, data, program, null, new Properties());
     }
 
-    protected static WasmStringTestCase testCase(String name, WasmTestCaseData data, String program, WasmInitialization initializer, Properties options) {
+    protected static WasmStringTestCase testCase(String name, WasmTestCaseData data, String program, WasmTestInitialization initializer, Properties options) {
         return new WasmStringTestCase(name, data, program, initializer, options);
     }
 
-    protected static WasmBinaryTestCase testCase(String name, WasmTestCaseData data, byte[] binary, WasmInitialization initializer, Properties options) {
+    protected static WasmBinaryTestCase testCase(String name, WasmTestCaseData data, byte[] binary, WasmTestInitialization initializer, Properties options) {
         return new WasmBinaryTestCase(name, data, binary, initializer, options);
     }
 
@@ -472,13 +514,95 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return new WasmTestCaseData(expectedErrorMessage);
     }
 
+    protected Properties testOptions(String optsContent) {
+        Properties options = new Properties();
+        if (optsContent == null) {
+            return options;
+        }
+
+        try {
+            options.load(new StringReader(optsContent));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        return options;
+    }
+
+    protected WasmTestInitialization testInitialization(String initContent) {
+        if (initContent == null) {
+            return null;
+        }
+
+        final String[] lines = initContent.split("\n");
+        Map<String, Long> globals = new LinkedHashMap<>();
+        Map<String, String> memory = new LinkedHashMap<>();
+        for (String line : lines) {
+            if (line.startsWith("[")) {
+                // Memory store.
+                String[] parts = line.split("=");
+                String address = parts[0].substring(1, parts[0].length() - 1);
+                String value = parts[1];
+                memory.put(address, value);
+            } else {
+                // Global store.
+                String[] parts = line.split("=");
+                String name = parts[0];
+                Long value = Long.parseLong(parts[1]);
+                globals.put(name, value);
+            }
+        }
+        return new WasmTestInitialization(globals, memory);
+    }
+
+    protected static class WasmTestInitialization implements Consumer<WasmContext>, TruffleObject {
+        private final Map<String, Long> globalValues;
+        private final Map<String, String> memoryValues;
+
+        public WasmTestInitialization(Map<String, Long> globalValues, Map<String, String> memoryValues) {
+            this.globalValues = globalValues;
+            this.memoryValues = memoryValues;
+        }
+
+        public void accept(WasmContext context) {
+            try {
+                final WasmModule module = context.modules().get("env");
+                for (Map.Entry<String, Long> entry : globalValues.entrySet()) {
+                    final String name = entry.getKey();
+                    final Long value = entry.getValue();
+                    if (!module.isLinked() || module.global(name).isMutable()) {
+                        module.writeMember(name, value);
+                    }
+                }
+                final WasmMemory memory = (WasmMemory) module.readMember("memory");
+                for (Map.Entry<String, String> entry : memoryValues.entrySet()) {
+                    final String addressGlobal = entry.getKey();
+                    final long address = getValue(addressGlobal);
+                    final String valueGlobal = entry.getValue();
+                    final long value = getValue(valueGlobal);
+                    memory.writeArrayElement(address, value);
+                }
+            } catch (UnknownIdentifierException | UnsupportedMessageException | InvalidArrayIndexException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        private long getValue(String s) {
+            if (Character.isDigit(s.charAt(0))) {
+                return Integer.parseInt(s);
+            } else {
+                return globalValues.get(s);
+            }
+        }
+    }
+
     protected static abstract class WasmTestCase {
         private final String name;
         private final WasmTestCaseData data;
-        private final WasmInitialization initialization;
+        private final WasmTestInitialization initialization;
         private final Properties options;
 
-        WasmTestCase(String name, WasmTestCaseData data, WasmInitialization initialization, Properties options) {
+        WasmTestCase(String name, WasmTestCaseData data, WasmTestInitialization initialization, Properties options) {
             this.name = name;
             this.data = data;
             this.initialization = initialization;
@@ -487,7 +611,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
         public abstract byte[] createBinary() throws IOException, InterruptedException;
 
-        public WasmInitialization initialization() {
+        public WasmTestInitialization initialization() {
             return initialization;
         }
 
@@ -499,21 +623,21 @@ public abstract class WasmSuiteBase extends WasmTestBase {
     protected static class WasmStringTestCase extends WasmTestCase {
         private String program;
 
-        WasmStringTestCase(String name, WasmTestCaseData data, String program, WasmInitialization initializer, Properties options) {
+        WasmStringTestCase(String name, WasmTestCaseData data, String program, WasmTestInitialization initializer, Properties options) {
             super(name, data, initializer, options);
             this.program = program;
         }
 
         @Override
         public byte[] createBinary() throws IOException, InterruptedException {
-            return WasmBinaryTools.compileWat(program);
+            return WasmTestToolkit.compileWatString(program);
         }
     }
 
     protected static class WasmBinaryTestCase extends WasmTestCase {
         private final byte[] binary;
 
-        public WasmBinaryTestCase(String name, WasmTestCaseData data, byte[] binary, WasmInitialization initializer, Properties options) {
+        public WasmBinaryTestCase(String name, WasmTestCaseData data, byte[] binary, WasmTestInitialization initializer, Properties options) {
             super(name, data, initializer, options);
             this.binary = binary;
         }
