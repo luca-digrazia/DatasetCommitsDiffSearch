@@ -1,13 +1,16 @@
 package com.oracle.truffle.wasm.binary.constants;
 
-public class TargetOffset {
-    public final int value;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.nodes.RepeatingNode;
+
+public class TargetOffset implements RepeatingNode.ShouldContinue {
+    @CompilationFinal public final int value;
 
     public TargetOffset(int value) {
         this.value = value;
     }
 
-    public boolean greaterThanZero() {
+    public boolean isGreaterThanZero() {
         return value > 0;
     }
 
@@ -21,19 +24,21 @@ public class TargetOffset {
     }
 
     public static TargetOffset createOrCached(int value) {
-        // The cache index starts with value -1, so we need a -1 offset.
-        final int resultCacheIndex = value - 1;
+        // The cache index starts with value -1, so we need a +1 offset.
+        final int resultCacheIndex = value + 1;
         if (resultCacheIndex < CACHE.length) {
             return CACHE[resultCacheIndex];
         }
         return new TargetOffset(value);
     }
 
-    public static final TargetOffset MINUS_ONE = new TargetOffset(-1);
+    @CompilationFinal public static final TargetOffset MINUS_ONE = new TargetOffset(-1);
 
-    private static final TargetOffset[] CACHE = new TargetOffset[] {
+    @CompilationFinal public static final TargetOffset ZERO = new TargetOffset(0);
+
+    @CompilationFinal(dimensions = 1) private static final TargetOffset[] CACHE = new TargetOffset[] {
                     MINUS_ONE,
-                    new TargetOffset(0),
+                    ZERO,
                     new TargetOffset(1),
                     new TargetOffset(2),
                     new TargetOffset(3),
@@ -67,4 +72,17 @@ public class TargetOffset {
                     new TargetOffset(31),
                     new TargetOffset(32)
     };
+
+    @Override
+    public boolean shouldContinue() {
+        // This is a trick to avoid the load of the value field.
+        // In particular, we avoid:
+        //
+        // return this.value == 0;
+        //
+        // This helps the partial evaluator short-circuit the
+        // pattern with a diamond and a loop exit check,
+        // when br_if occurs in the loop body.
+        return this == ZERO;
+    }
 }
