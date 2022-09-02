@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -102,15 +102,15 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
         for (NFAState s : states) {
             assert this.states[s.getId()] == null;
             this.states[s.getId()] = s;
-            if (s.getSuccessors() == null) {
+            if (s.getNext() == null) {
                 continue;
             }
-            for (NFAStateTransition t : s.getSuccessors()) {
+            for (NFAStateTransition t : s.getNext()) {
                 assert this.transitions[t.getId()] == null || (s == dummyInitialState && this.transitions[t.getId()] == t);
                 this.transitions[t.getId()] = t;
             }
             if (s == dummyInitialState) {
-                for (NFAStateTransition t : s.getPredecessors()) {
+                for (NFAStateTransition t : s.getPrev()) {
                     assert this.transitions[t.getId()] == null;
                     this.transitions[t.getId()] = t;
                 }
@@ -127,7 +127,7 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
     }
 
     public boolean hasReverseUnAnchoredEntry() {
-        return reverseUnAnchoredEntry != null && reverseUnAnchoredEntry.getSource().getPredecessors().length > 0;
+        return reverseUnAnchoredEntry != null && reverseUnAnchoredEntry.getSource().getPrev().length > 0;
     }
 
     public RegexAST getAst() {
@@ -220,7 +220,7 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
     }
 
     @Override
-    public int getId(NFAState state) {
+    public short getId(NFAState state) {
         return state.getId();
     }
 
@@ -238,10 +238,10 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
     }
 
     public void setInitialLoopBack(boolean enable) {
-        if (getUnAnchoredInitialState().getSuccessors().length == 0) {
+        if (getUnAnchoredInitialState().getNext().length == 0) {
             return;
         }
-        NFAStateTransition lastInitTransition = getUnAnchoredInitialState().getSuccessors()[getUnAnchoredInitialState().getSuccessors().length - 1];
+        NFAStateTransition lastInitTransition = getUnAnchoredInitialState().getNext()[getUnAnchoredInitialState().getNext().length - 1];
         if (enable) {
             if (lastInitTransition != initialLoopBack) {
                 getUnAnchoredInitialState().addLoopBackNext(initialLoopBack);
@@ -273,7 +273,7 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
             if (s == null || s == dummyInitialState) {
                 continue;
             }
-            for (NFAStateTransition t : s.getSuccessors(forward)) {
+            for (NFAStateTransition t : s.getNext(forward)) {
                 reachable.set(t.getId());
                 if (t.getTarget(forward).isAnchoredFinalState(forward)) {
                     anchoredFinalStateReachable = true;

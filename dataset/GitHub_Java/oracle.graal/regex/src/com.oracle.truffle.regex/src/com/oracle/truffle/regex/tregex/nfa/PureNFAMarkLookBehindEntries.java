@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,6 +47,7 @@ import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
 public class PureNFAMarkLookBehindEntries {
 
     private final PureNFAMap nfa;
+    private StateSet<LookBehindAssertion> allReferencedInState;
 
     private StateSet<PureNFAState> markLiteralStatesCur;
     private StateSet<PureNFAState> markLiteralStatesNext;
@@ -55,23 +56,30 @@ public class PureNFAMarkLookBehindEntries {
         this.nfa = nfa;
         markLiteralStatesCur = StateSet.create(nfa.getRoot());
         markLiteralStatesNext = StateSet.create(nfa.getRoot());
+        allReferencedInState = StateSet.create(nfa.getAst().getLookBehinds());
     }
 
     public void markEntries() {
-        if (!nfa.getAst().getProperties().hasLookBehindAssertions()) {
-            return;
+        for (PureNFA subTree : nfa.getLookAheads()) {
+            markEntriesInSubtree(subTree, false);
         }
-        for (PureNFA subTree : nfa.getLookArounds()) {
+        for (PureNFA subTree : nfa.getLookBehinds()) {
             markEntriesInSubtree(subTree, false);
         }
         markEntriesInSubtree(nfa.getRoot(), true);
     }
 
     private void markEntriesInSubtree(PureNFA subtree, boolean subtreeIsRoot) {
+        if (!subtree.hasLookBehinds()) {
+            return;
+        }
         for (PureNFAState s : subtree.getStates()) {
-            if (s.isLookBehind(nfa.getAst())) {
-                LookBehindAssertion lb = (LookBehindAssertion) s.getAstNode(nfa.getAst());
-                PureNFA lookBehindNFA = nfa.getLookArounds().get(lb.getSubTreeId());
+            allReferencedInState.clear();
+            for (PureNFATransition t : s.getSuccessors()) {
+                allReferencedInState.addAll(t.getTraversedLookBehinds());
+            }
+            for (LookBehindAssertion lb : allReferencedInState) {
+                PureNFA lookBehindNFA = nfa.getLookBehinds().get(lb.getSubTreeId());
                 if (subtreeIsRoot && lb.getGroup().isLiteral()) {
                     markLiteral(s, lookBehindNFA);
                 } else {
@@ -86,7 +94,6 @@ public class PureNFAMarkLookBehindEntries {
      * nodes.
      */
     private void markLiteral(PureNFAState parentState, PureNFA lb) {
-        // TODO: handle look-around and back-reference states
         PureNFAState lbChar = lb.getReverseUnAnchoredEntry().getSource();
         markLiteralStatesCur.clear();
         markLiteralStatesCur.add(parentState);
@@ -116,12 +123,12 @@ public class PureNFAMarkLookBehindEntries {
                     if (prevLBState.isAnchoredInitialState()) {
                         for (PureNFATransition curTransition : cur.getPredecessors()) {
                             if (curTransition.getSource().isInitialState()) {
-                                cur.addLookBehindEntry(nfa.getLookArounds(), lb);
+                                cur.addLookBehindEntry(nfa.getLookBehinds(), lb);
                                 break;
                             }
                         }
                     } else if (prevLBState.isUnAnchoredInitialState()) {
-                        cur.addLookBehindEntry(nfa.getLookArounds(), lb);
+                        cur.addLookBehindEntry(nfa.getLookBehinds(), lb);
                     } else {
                         for (PureNFATransition curTransition : cur.getPredecessors()) {
                             markLiteralStatesNext.add(curTransition.getSource());

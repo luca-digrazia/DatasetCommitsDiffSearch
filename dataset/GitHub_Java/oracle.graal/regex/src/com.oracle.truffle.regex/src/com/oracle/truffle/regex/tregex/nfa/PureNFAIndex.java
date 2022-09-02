@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -55,11 +55,11 @@ public class PureNFAIndex extends SimpleStateIndex<PureNFA> {
     }
 
     @Override
-    protected int getStateId(PureNFA state) {
+    protected short getStateId(PureNFA state) {
         return state.getSubTreeId();
     }
 
     @Override
-    protected void setStateId(PureNFA state, int id) {
+    protected void setStateId(PureNFA state, short id) {
     }
 }

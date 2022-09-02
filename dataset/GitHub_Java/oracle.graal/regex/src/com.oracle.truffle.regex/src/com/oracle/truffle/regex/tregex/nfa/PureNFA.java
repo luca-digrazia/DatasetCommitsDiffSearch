@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,18 +40,13 @@
  */
 package com.oracle.truffle.regex.tregex.nfa;
 
-import java.util.Arrays;
+import java.util.Collection;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.automaton.StateIndex;
 import com.oracle.truffle.regex.tregex.dfa.DFAGenerator;
 import com.oracle.truffle.regex.tregex.parser.Counter;
-import com.oracle.truffle.regex.tregex.parser.ast.GroupBoundaries;
-import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexASTSubtreeRootNode;
-import com.oracle.truffle.regex.tregex.util.json.Json;
-import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 
 /**
  * A NFA that corresponds to the subtree of one {@link RegexASTSubtreeRootNode}.
@@ -59,20 +54,19 @@ import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 public class PureNFA implements StateIndex<PureNFAState> {
 
     private final short subTreeId;
+    private final boolean hasLookBehinds;
     @CompilationFinal(dimensions = 1) private final PureNFAState[] states;
     @CompilationFinal(dimensions = 1) private final PureNFATransition[] transitions;
 
-    public PureNFA(RegexASTSubtreeRootNode astSubRoot,
-                    PureNFAState[] states,
+    public PureNFA(short subTreeId,
+                    Collection<PureNFAState> states,
                     Counter.ThresholdCounter stateIDCounter,
                     Counter.ThresholdCounter transitionIDCounter) {
-        this.subTreeId = astSubRoot.getSubTreeId();
+        this.subTreeId = subTreeId;
         this.states = new PureNFAState[stateIDCounter.getCount()];
-        this.transitions = new PureNFATransition[transitionIDCounter.getCount() + (astSubRoot.isRoot() ? 1 : 0)];
+        this.transitions = new PureNFATransition[transitionIDCounter.getCount()];
+        boolean lookBehinds = false;
         for (PureNFAState s : states) {
-            if (s == null) {
-                continue;
-            }
             assert this.states[s.getId()] == null;
             this.states[s.getId()] = s;
             for (PureNFATransition t : s.getSuccessors()) {
@@ -80,20 +74,12 @@ public class PureNFA implements StateIndex<PureNFAState> {
                     // don't link the dummy initial state as predecessor of initial states.
                     t.getTarget().addPredecessor(t);
                 }
+                lookBehinds |= !t.getTraversedLookBehinds().isEmpty();
                 assert this.transitions[t.getId()] == null || (s.getId() == 0 && this.transitions[t.getId()] == t);
                 this.transitions[t.getId()] = t;
             }
         }
-        if (astSubRoot.isRoot()) {
-            // initialize loopback transition
-            transitions[transitionIDCounter.getCount()] = new PureNFATransition(
-                            (short) transitionIDCounter.getCount(),
-                            getUnAnchoredInitialState(),
-                            getUnAnchoredInitialState(),
-                            GroupBoundaries.getEmptyInstance(),
-                            false,
-                            false, QuantifierGuard.NO_GUARDS);
-        }
+        this.hasLookBehinds = lookBehinds;
     }
 
     /**
@@ -114,7 +100,6 @@ public class PureNFA implements StateIndex<PureNFAState> {
      * unanchored final state, in that order. They serve as entry points for reverse DFAs.
      */
     public PureNFAState getDummyInitialState() {
-        assert states[0].getSuccessors().length == 2 && states[0].getPredecessors().length == 2;
         return states[0];
     }
 
@@ -122,20 +107,12 @@ public class PureNFA implements StateIndex<PureNFAState> {
         return getDummyInitialState().getSuccessors().length / 2;
     }
 
-    public PureNFATransition getAnchoredEntry() {
-        return getDummyInitialState().getSuccessors()[0];
+    public PureNFATransition getAnchoredEntry(int i) {
+        return getDummyInitialState().getSuccessors()[i];
     }
 
-    public PureNFATransition getUnAnchoredEntry() {
-        return getDummyInitialState().getSuccessors()[1];
-    }
-
-    public PureNFAState getUnAnchoredInitialState() {
-        return getUnAnchoredEntry().getTarget();
-    }
-
-    public PureNFAState getAnchoredInitialState() {
-        return getAnchoredEntry().getTarget();
+    public PureNFATransition getUnAnchoredEntry(int i) {
+        return getDummyInitialState().getSuccessors()[getNumberOfEntryPoints() + i];
     }
 
     public PureNFATransition getReverseAnchoredEntry() {
@@ -146,28 +123,16 @@ public class PureNFA implements StateIndex<PureNFAState> {
         return getDummyInitialState().getPredecessors()[1];
     }
 
-    public PureNFAState getUnAnchoredFinalState() {
-        return getReverseUnAnchoredEntry().getSource();
-    }
-
-    public PureNFAState getAnchoredFinalState() {
-        return getReverseAnchoredEntry().getSource();
-    }
-
-    public PureNFAState getUnAnchoredInitialState(boolean forward) {
-        return forward ? getUnAnchoredInitialState() : getUnAnchoredFinalState();
-    }
-
-    public PureNFAState getAnchoredInitialState(boolean forward) {
-        return forward ? getAnchoredInitialState() : getAnchoredFinalState();
-    }
-
     public PureNFAState[] getStates() {
         return states;
     }
 
     public PureNFATransition[] getTransitions() {
         return transitions;
+    }
+
+    public boolean hasLookBehinds() {
+        return hasLookBehinds;
     }
 
     @Override
@@ -184,47 +149,5 @@ public class PureNFA implements StateIndex<PureNFAState> {
     @Override
     public PureNFAState getState(int id) {
         return states[id];
-    }
-
-    private PureNFATransition getInitialLoopBackTransition() {
-        PureNFATransition t = transitions[transitions.length - 1];
-        assert t.getSource() == getUnAnchoredInitialState();
-        assert t.getTarget() == getUnAnchoredInitialState();
-        return t;
-    }
-
-    public void setInitialLoopBack(boolean enable) {
-        PureNFAState initialState = getUnAnchoredInitialState();
-        if (initialState.getSuccessors().length == 0) {
-            return;
-        }
-        PureNFATransition loopBack = getInitialLoopBackTransition();
-        PureNFATransition lastInitTransition = initialState.getSuccessors()[initialState.getSuccessors().length - 1];
-        if (enable) {
-            if (lastInitTransition != loopBack) {
-                initialState.addLoopBackNext(loopBack);
-            }
-        } else {
-            if (lastInitTransition == loopBack) {
-                initialState.removeLoopBackNext();
-            }
-        }
-    }
-
-    public void materializeGroupBoundaries() {
-        for (PureNFATransition t : transitions) {
-            if (t != null) {
-                t.getGroupBoundaries().materializeArrays();
-            }
-        }
-    }
-
-    @TruffleBoundary
-    public JsonValue toJson(RegexAST ast) {
-        return Json.obj(Json.prop("states",
-                        Arrays.stream(states).map(x -> x == null || x == getDummyInitialState() || (x.isAnchoredFinalState() && !x.hasPredecessors()) ? Json.nullValue() : x.toJson(ast))),
-                        Json.prop("transitions", Arrays.stream(transitions).map(x -> x == null || x.getSource() == getDummyInitialState() ? Json.nullValue() : x.toJson(ast))),
-                        Json.prop("anchoredEntry", Json.array(Json.val(getAnchoredInitialState().getId()))),
-                        Json.prop("unAnchoredEntry", Json.array(Json.val(getUnAnchoredInitialState().getId()))));
     }
 }
