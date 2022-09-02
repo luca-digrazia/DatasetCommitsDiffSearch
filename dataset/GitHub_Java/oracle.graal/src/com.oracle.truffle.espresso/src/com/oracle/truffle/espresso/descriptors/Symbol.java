@@ -122,7 +122,7 @@ public final class Symbol<T> extends ByteSequence {
     }
 
     @Override
-    public boolean equals(Object that) {
+    public final boolean equals(Object that) {
         return this == that;
     }
 
