@@ -162,7 +162,7 @@ public final class DefaultHomeFinder extends HomeFinder {
         }
 
         final Path home;
-        if (ImageInfo.inImageRuntimeCode()) {
+        if (ImageInfo.inImageCode()) {
             final String graalvmHomeValue = System.getProperty("org.graalvm.home");
             if (graalvmHomeValue != null) {
                 verbose("GraalVM home already set to: ", graalvmHomeValue);
