@@ -28,7 +28,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.RepeatingNode;
-
 public final class OptimizedLoopNode extends LoopNode {
 
     @Child private RepeatingNode repeatingNode;
@@ -54,13 +53,15 @@ public final class OptimizedLoopNode extends LoopNode {
         int loopCount = 0;
         try {
             while (repeatingNode.shouldContinue(status = repeatingNode.executeRepeatingWithValue(frame))) {
-                if (CompilerDirectives.inInterpreter() || GraalCompilerDirectives.inFirstTier()) {
+                if (CompilerDirectives.inInterpreter()) {
                     loopCount++;
                 }
             }
             return status;
         } finally {
-            reportLoopCount(this, loopCount);
+            if (CompilerDirectives.inInterpreter()) {
+                reportLoopCount(this, loopCount);
+            }
         }
     }
 
