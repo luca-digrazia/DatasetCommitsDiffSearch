@@ -108,7 +108,6 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
@@ -357,7 +356,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         invokeStaticMethod("com.oracle.truffle.polyglot.InstrumentCache", "resetNativeImageState", Collections.emptyList());
         invokeStaticMethod("org.graalvm.polyglot.Engine$ImplHolder", "resetPreInitializedEngine", Collections.emptyList());
         invokeStaticMethod("com.oracle.truffle.api.impl.TruffleLocator", "resetNativeImageState", Collections.emptyList());
-        invokeStaticMethod("com.oracle.truffle.api.impl.ThreadLocalHandshake", "resetNativeImageState", Collections.emptyList());
         invokeStaticMethod("com.oracle.truffle.api.library.LibraryFactory", "resetNativeImageState", Collections.singletonList(ClassLoader.class), imageClassLoader);
         invokeStaticMethod("com.oracle.truffle.api.nodes.Node", "resetNativeImageState", Collections.emptyList());
         invokeStaticMethod("com.oracle.truffle.api.source.Source", "resetNativeImageState", Collections.emptyList());
@@ -370,12 +368,12 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
     }
 
     @Override
-    public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, Plugins plugins, ParsingReason reason) {
+    public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, InvocationPlugins invocationPlugins, ParsingReason reason) {
         /*
          * We need to constant-fold Profile.isProfilingEnabled already during static analysis, so
          * that we get exact types for fields that store profiles.
          */
-        Registration r = new Registration(plugins.getInvocationPlugins(), Profile.class);
+        Registration r = new Registration(invocationPlugins, Profile.class);
         r.register0("isProfilingEnabled", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
@@ -391,7 +389,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         });
 
         if (reason != ParsingReason.JITCompilation) {
-            r = new Registration(plugins.getInvocationPlugins(), CompilerDirectives.class);
+            r = new Registration(invocationPlugins, CompilerDirectives.class);
             /*
              * For AOT compilation and static analysis, we intrinsify CompilerDirectives.castExact
              * with explicit exception edges. For runtime compilation, TruffleGraphBuilderPlugins
@@ -620,7 +618,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             Object keep = invokeStaticMethod("com.oracle.truffle.polyglot.PolyglotContextImpl", "resetSingleContextState", Collections.singleton(boolean.class), false);
             invokeStaticMethod("org.graalvm.polyglot.Engine$ImplHolder", "preInitializeEngine", Collections.emptyList());
             invokeStaticMethod("com.oracle.truffle.polyglot.PolyglotContextImpl", "restoreSingleContextState", Collections.singleton(Object.class), keep);
-            invokeStaticMethod("com.oracle.truffle.api.impl.ThreadLocalHandshake", "resetNativeImageState", Collections.emptyList());
             access.requireAnalysisIteration();
         }
 
