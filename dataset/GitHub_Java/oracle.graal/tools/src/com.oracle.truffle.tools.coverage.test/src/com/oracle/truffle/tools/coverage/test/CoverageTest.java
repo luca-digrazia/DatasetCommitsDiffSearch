@@ -38,43 +38,23 @@ import com.oracle.truffle.tools.coverage.SectionCoverage;
 import com.oracle.truffle.tools.coverage.SourceCoverage;
 import com.oracle.truffle.tools.coverage.impl.CoverageInstrument;
 
-public final class CoverageTest {
+public class CoverageTest {
 
-    private final String defaultSource = "ROOT(\n" +
-                    "DEFINE(foo,ROOT(SLEEP(1))),\n" +
-                    "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo))))),\n" +
-                    "DEFINE(neverCalled,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(bar))))),\n" +
-                    "CALL(bar)\n" +
-                    ")";
-
-    private static Source makeSource(String s) {
+    protected Source makeSource(String s) {
         return Source.newBuilder(InstrumentationTestLanguage.ID, s, "test").buildLiteral();
-    }
-
-    private static void assertCoverage(RootCoverage root, int expectedLoaded, int expectedCovered, String name, boolean covered) {
-        Assert.assertEquals("Wrong root name!", name, root.getName());
-        Assert.assertEquals("Unexpected \"" + name + "\" root coverage", covered, root.isCovered());
-        final SectionCoverage[] sectionCoverage = root.getSectionCoverage();
-        Assert.assertEquals("Unexpected number of statements loaded ", expectedLoaded, sectionCoverage.length);
-        Assert.assertEquals("Unexpected number of statements covered", expectedCovered, countCovered(sectionCoverage));
-    }
-
-    private static int countCovered(SectionCoverage[] sectionCoverage) {
-        int count = 0;
-        for (SectionCoverage coverage : sectionCoverage) {
-            if (coverage.isCovered()) {
-                count++;
-            }
-        }
-        return count;
     }
 
     @Test
     public void testBasic() {
         final ByteArrayOutputStream out = new ByteArrayOutputStream();
         final ByteArrayOutputStream err = new ByteArrayOutputStream();
-        Context context = Context.newBuilder().in(System.in).out(out).err(err).option(CoverageInstrument.ID, "true").build();
-        Source source = makeSource(defaultSource);
+        Context context = Context.newBuilder().in(System.in).out(out).err(err).option(CoverageInstrument.ID, "true").option("cpusampler.Output", "json").build();
+        Source source = makeSource("ROOT(\n" +
+                        "DEFINE(foo,ROOT(SLEEP(1))),\n" +
+                        "DEFINE(bar,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(foo))))),\n" +
+                        "DEFINE(neverCalled,ROOT(BLOCK(STATEMENT,LOOP(10, CALL(bar))))),\n" +
+                        "CALL(bar)\n" +
+                        ")");
         context.eval(source);
         final CoverageTracker tracker = CoverageInstrument.getTracker(context.getEngine());
         final SourceCoverage[] coverage = tracker.getCoverage();
@@ -96,5 +76,23 @@ public final class CoverageTest {
                     break;
             }
         }
+    }
+
+    private static void assertCoverage(RootCoverage root, int expectedLoaded, int expectedCovered, String name, boolean covered) {
+        Assert.assertEquals("Wrong root name!", name, root.getName());
+        Assert.assertEquals("Unexpected \"" + name + "\" root coverage", covered, root.isCovered());
+        final SectionCoverage[] sectionCoverage = root.getSectionCoverage();
+        Assert.assertEquals("Unexpected number of statements loaded ", expectedLoaded, sectionCoverage.length);
+        Assert.assertEquals("Unexpected number of statements covered", expectedCovered, countCovered(sectionCoverage));
+    }
+
+    private static int countCovered(SectionCoverage[] sectionCoverage) {
+        int count = 0;
+        for (SectionCoverage coverage : sectionCoverage) {
+            if (coverage.isCovered()) {
+                count++;
+            }
+        }
+        return count;
     }
 }

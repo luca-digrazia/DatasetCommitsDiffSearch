@@ -26,12 +26,6 @@ package com.oracle.truffle.tools.coverage;
 
 import com.oracle.truffle.api.source.Source;
 
-/**
- * Coverage data of a particular {@link Source}. Coverage data is organized per {@link RootCoverage
- * root} (e.g. function, method, etc.) contained in this source.
- * 
- * @since 19.3.0
- */
 public final class SourceCoverage {
 
     final Source source;
@@ -42,22 +36,10 @@ public final class SourceCoverage {
         this.roots = roots;
     }
 
-    /**
-     * @return The source this coverage relates to.
-     *
-     * @since 19.3.0
-     */
     public Source getSource() {
         return source;
     }
 
-    /**
-     * @return Coverage data for the
-     *         {@link com.oracle.truffle.api.instrumentation.StandardTags.RootTag roots} in this
-     *         {@link Source}
-     *
-     * @since 19.3.0
-     */
     public RootCoverage[] getRoots() {
         return roots;
     }

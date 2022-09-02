@@ -25,8 +25,11 @@
 package com.oracle.truffle.tools.coverage.impl;
 
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
 
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.tools.coverage.RootCoverage;
@@ -48,6 +51,83 @@ final class CoverageCLI {
         format = getHistogramLineFormat(coverage);
         summaryHeader = String.format(format, "Path", "Statements", "Lines", "Roots");
         summaryHeaderLen = summaryHeader.length();
+    }
+
+    void printLinesOutput() {
+        printLine();
+        printLinesLegend();
+        for (SourceCoverage sourceCoverage : coverage) {
+            final String path = sourceCoverage.getSource().getPath();
+            printLine();
+            printSummaryHeader();
+            final LineCoverage lineCoverage = new LineCoverage(sourceCoverage);
+            out.println(String.format(format, path, statementCoverage(sourceCoverage), lineCoverage(lineCoverage), rootCoverage(sourceCoverage)));
+            out.println();
+            printLinesOfSource(sourceCoverage.getSource(), lineCoverage);
+        }
+        printLine();
+    }
+
+    private void printLinesOfSource(Source source, LineCoverage lineCoverage) {
+        for (int i = 1; i <= source.getLineCount(); i++) {
+            char covered = lineCoverage.getStatementCoverageCharacter(i);
+            char rootCovered = lineCoverage.getRootCoverageCharacter(i);
+            out.println(String.format("%s%s %s", covered, rootCovered, source.getCharacters(i)));
+        }
+    }
+
+    private void printLinesLegend() {
+        out.println("Code coverage per line of code and what percent of each element was covered during execution (per source)");
+        out.println("  + indicates the line is part of a statement that was covered during execution");
+        out.println("  - indicates the line is part of a statement that was not covered during execution");
+        out.println("  p indicates the line is part of a statement that was partially covered during execution");
+        out.println("    e.g. a not-taken branch of a covered if statement");
+        out.println("  ! indicates the line is part of a root that was NOT covered during execution");
+    }
+
+    void printHistogramOutput() {
+        printLine();
+        out.println("Code coverage histogram.");
+        out.println("  Shows what percent of each element was covered during execution");
+        printLine();
+        printSummaryHeader();
+        printLine();
+        for (SourceCoverage sourceCoverage : coverage) {
+            final String path = sourceCoverage.getSource().getPath();
+            final String line = String.format(format, path,
+                            statementCoverage(sourceCoverage),
+                            lineCoverage(new LineCoverage(sourceCoverage, false)),
+                            rootCoverage(sourceCoverage));
+            out.println(line);
+        }
+        printLine();
+    }
+
+    private void sortCoverage() {
+        Arrays.sort(coverage, new Comparator<SourceCoverage>() {
+            @Override
+            public int compare(SourceCoverage o1, SourceCoverage o2) {
+                return o1.getSource().getPath().compareTo(o2.getSource().getPath());
+            }
+        });
+    }
+
+    private void printSummaryHeader() {
+        out.println(summaryHeader);
+    }
+
+    private void printLine() {
+        out.println(String.format("%" + summaryHeaderLen + "s", "").replace(' ', '-'));
+    }
+
+    private List<Source> sortedKeys() {
+        final List<Source> sorted = new ArrayList<>();
+        for (SourceCoverage sourceCoverage : coverage) {
+            sorted.add(sourceCoverage.getSource());
+        }
+        sorted.removeIf(source -> source.getPath() == null);
+        Collections.sort(sorted, (o1, o2) -> o2.getPath().compareTo(o1.getPath()));
+        return sorted;
     }
 
     private static String getHistogramLineFormat(SourceCoverage[] coverage) {
@@ -92,73 +172,6 @@ final class CoverageCLI {
 
     private static String lineCoverage(LineCoverage lineCoverage) {
         return percentFormat(100 * lineCoverage.getCoverage());
-    }
-
-    void printLinesOutput() {
-        printLine();
-        printLinesLegend();
-        for (SourceCoverage sourceCoverage : coverage) {
-            final String path = sourceCoverage.getSource().getPath();
-            printLine();
-            printSummaryHeader();
-            final LineCoverage lineCoverage = new LineCoverage(sourceCoverage);
-            out.println(String.format(format, path, statementCoverage(sourceCoverage), lineCoverage(lineCoverage), rootCoverage(sourceCoverage)));
-            out.println();
-            printLinesOfSource(sourceCoverage.getSource(), lineCoverage);
-        }
-        printLine();
-    }
-
-    private void printLinesOfSource(Source source, LineCoverage lineCoverage) {
-        for (int i = 1; i <= source.getLineCount(); i++) {
-            char covered = lineCoverage.getStatementCoverageCharacter(i);
-            char rootCovered = lineCoverage.getRootCoverageCharacter(i);
-            out.println(String.format("%s%s %s", covered, rootCovered, source.getCharacters(i)));
-        }
-    }
-
-    private void printLinesLegend() {
-        out.println("Code coverage per line of code and what percent of each element was covered during execution (per source)");
-        out.println("  + indicates the line is part of a statement that was covered during execution");
-        out.println("  - indicates the line is part of a statement that was not covered during execution");
-        out.println("  i indicates the line is part of a statement that was incidentally covered during execution");
-        out.println("    e.g. a not-taken branch of a covered if statement");
-        out.println("  ! indicates the line is part of a root that was NOT covered during execution");
-    }
-
-    void printHistogramOutput() {
-        printLine();
-        out.println("Code coverage histogram.");
-        out.println("  Shows what percent of each element was covered during execution");
-        printLine();
-        printSummaryHeader();
-        printLine();
-        for (SourceCoverage sourceCoverage : coverage) {
-            final String path = sourceCoverage.getSource().getPath();
-            final String line = String.format(format, path,
-                            statementCoverage(sourceCoverage),
-                            lineCoverage(new LineCoverage(sourceCoverage, false)),
-                            rootCoverage(sourceCoverage));
-            out.println(line);
-        }
-        printLine();
-    }
-
-    private void sortCoverage() {
-        Arrays.sort(coverage, new Comparator<SourceCoverage>() {
-            @Override
-            public int compare(SourceCoverage o1, SourceCoverage o2) {
-                return o1.getSource().getPath().compareTo(o2.getSource().getPath());
-            }
-        });
-    }
-
-    private void printSummaryHeader() {
-        out.println(summaryHeader);
-    }
-
-    private void printLine() {
-        out.println(String.format("%" + summaryHeaderLen + "s", "").replace(' ', '-'));
     }
 
 }

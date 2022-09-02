@@ -33,15 +33,24 @@ import com.oracle.truffle.tools.coverage.SourceCoverage;
 import com.oracle.truffle.tools.utils.json.JSONArray;
 import com.oracle.truffle.tools.utils.json.JSONObject;
 
-final class JSONPrinter {
+class JSONPrinter {
+
+    JSONPrinter(PrintStream out, SourceCoverage[] coverage) {
+        this.out = out;
+        this.coverage = coverage;
+    }
+
+    void print() {
+        JSONArray output = new JSONArray();
+        for (SourceCoverage sourceCoverage : coverage) {
+            output.put(sourceJSON(sourceCoverage));
+        }
+        out.println(output.toString());
+    }
 
     private final PrintStream out;
-    private final SourceCoverage[] sourceCoverages;
 
-    JSONPrinter(PrintStream out, SourceCoverage[] sourceCoverages) {
-        this.out = out;
-        this.sourceCoverages = sourceCoverages;
-    }
+    private final SourceCoverage[] coverage;
 
     private static JSONObject sourceSectionJson(SourceSection section) {
         JSONObject sourceSection = new JSONObject();
@@ -56,15 +65,14 @@ final class JSONPrinter {
         return sourceSection;
     }
 
-    private static JSONObject sourceJSON(SourceCoverage coverage) {
+    private JSONObject sourceJSON(SourceCoverage coverage) {
         final JSONObject sourceJson = new JSONObject();
-        sourceJson.put("name", coverage.getSource().getName());
         sourceJson.put("path", coverage.getSource().getPath());
         sourceJson.put("roots", rootsJson(coverage.getRoots()));
         return sourceJson;
     }
 
-    private static JSONArray rootsJson(RootCoverage[] coverages) {
+    private JSONArray rootsJson(RootCoverage[] coverages) {
         final JSONArray rootsJson = new JSONArray();
         for (RootCoverage coverage : coverages) {
             rootsJson.put(rootJSON(coverage));
@@ -78,9 +86,6 @@ final class JSONPrinter {
         rootJson.put("source_section", sourceSectionJson(coverage.getSourceSection()));
         rootJson.put("name", coverage.getName());
         rootJson.put("sections", sectionsJson(coverage.getSectionCoverage()));
-        if (coverage.getCount() != -1) {
-            rootJson.put("count", coverage.getCount());
-        }
         return rootJson;
     }
 
@@ -95,18 +100,7 @@ final class JSONPrinter {
     private static JSONObject sectionJson(SectionCoverage coverage) {
         JSONObject sectionJson = new JSONObject();
         sectionJson.put("covered", coverage.isCovered());
-        if (coverage.getCount() != -1) {
-            sectionJson.put("count", coverage.getCount());
-        }
-        sectionJson.put("source_section", sourceSectionJson(coverage.getSourceSection()));
+        sectionJson.put("covered", sourceSectionJson(coverage.getSourceSection()));
         return sectionJson;
-    }
-
-    void print() {
-        JSONArray output = new JSONArray();
-        for (SourceCoverage sourceCoverage : sourceCoverages) {
-            output.put(sourceJSON(sourceCoverage));
-        }
-        out.println(output.toString());
     }
 }
