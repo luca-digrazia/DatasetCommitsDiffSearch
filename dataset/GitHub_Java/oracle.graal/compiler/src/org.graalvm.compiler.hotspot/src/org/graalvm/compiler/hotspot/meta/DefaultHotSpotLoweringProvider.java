@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,33 +24,40 @@
  */
 package org.graalvm.compiler.hotspot.meta;
 
-import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntimeProvider.getArrayBaseOffset;
+import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.compiler.core.common.GraalOptions.AlwaysInlineVTableStubs;
+import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.core.common.GraalOptions.InlineVTableStubs;
 import static org.graalvm.compiler.core.common.GraalOptions.OmitHotExceptionStacktrace;
 import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallsProviderImpl.OSR_MIGRATION_END;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.CLASS_KLASS_LOCATION;
-import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.CLASS_MIRROR_HANDLE_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.CLASS_MIRROR_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.COMPRESSED_HUB_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.DISPLACED_MARK_WORD_LOCATION;
+import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.HOTSPOT_OOP_HANDLE_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.HUB_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.HUB_WRITE_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_LAYOUT_HELPER_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
 import static org.graalvm.word.LocationIdentity.any;
 
-import java.lang.ref.Reference;
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
+import org.graalvm.compiler.core.common.spi.ForeignCallSignature;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
+import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
+import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
@@ -56,18 +65,11 @@ import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import org.graalvm.compiler.hotspot.nodes.BeginLockScopeNode;
-import org.graalvm.compiler.hotspot.nodes.ComputeObjectAddressNode;
-import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePostWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePreWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.G1PostWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.G1PreWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.G1ReferentFieldReadBarrier;
-import org.graalvm.compiler.hotspot.nodes.GetObjectAddressNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotCompressionNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotDirectCallTargetNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotIndirectCallTargetNode;
-import org.graalvm.compiler.hotspot.nodes.SerialArrayRangeWriteBarrier;
-import org.graalvm.compiler.hotspot.nodes.SerialWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.KlassBeingInitializedCheckNode;
+import org.graalvm.compiler.hotspot.nodes.VMErrorNode;
 import org.graalvm.compiler.hotspot.nodes.aot.InitializeKlassNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveConstantNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveDynamicConstantNode;
@@ -78,35 +80,47 @@ import org.graalvm.compiler.hotspot.nodes.type.KlassPointerStamp;
 import org.graalvm.compiler.hotspot.nodes.type.MethodPointerStamp;
 import org.graalvm.compiler.hotspot.replacements.AssertionSnippets;
 import org.graalvm.compiler.hotspot.replacements.ClassGetHubNode;
-import org.graalvm.compiler.hotspot.replacements.HashCodeSnippets;
+import org.graalvm.compiler.hotspot.replacements.FastNotifyNode;
+import org.graalvm.compiler.hotspot.replacements.HotSpotAllocationSnippets;
+import org.graalvm.compiler.hotspot.replacements.HotSpotG1WriteBarrierSnippets;
+import org.graalvm.compiler.hotspot.replacements.HotSpotHashCodeSnippets;
+import org.graalvm.compiler.hotspot.replacements.HotSpotIsArraySnippets;
+import org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil;
+import org.graalvm.compiler.hotspot.replacements.HotSpotSerialWriteBarrierSnippets;
 import org.graalvm.compiler.hotspot.replacements.HubGetClassNode;
-import org.graalvm.compiler.hotspot.replacements.IdentityHashCodeNode;
 import org.graalvm.compiler.hotspot.replacements.InstanceOfSnippets;
 import org.graalvm.compiler.hotspot.replacements.KlassLayoutHelperNode;
 import org.graalvm.compiler.hotspot.replacements.LoadExceptionObjectSnippets;
+import org.graalvm.compiler.hotspot.replacements.LogSnippets;
 import org.graalvm.compiler.hotspot.replacements.MonitorSnippets;
-import org.graalvm.compiler.hotspot.replacements.NewObjectSnippets;
+import org.graalvm.compiler.hotspot.replacements.ObjectCloneSnippets;
+import org.graalvm.compiler.hotspot.replacements.ObjectSnippets;
+import org.graalvm.compiler.hotspot.replacements.RegisterFinalizerSnippets;
 import org.graalvm.compiler.hotspot.replacements.StringToBytesSnippets;
-import org.graalvm.compiler.hotspot.replacements.UnsafeLoadSnippets;
-import org.graalvm.compiler.hotspot.replacements.WriteBarrierSnippets;
+import org.graalvm.compiler.hotspot.replacements.UnsafeCopyMemoryNode;
+import org.graalvm.compiler.hotspot.replacements.UnsafeSnippets;
 import org.graalvm.compiler.hotspot.replacements.aot.ResolveConstantSnippets;
-import org.graalvm.compiler.hotspot.replacements.arraycopy.ArrayCopyNode;
-import org.graalvm.compiler.hotspot.replacements.arraycopy.ArrayCopyWithSlowPathNode;
-import org.graalvm.compiler.hotspot.replacements.arraycopy.ArrayCopySnippets;
+import org.graalvm.compiler.hotspot.replacements.arraycopy.HotSpotArraycopySnippets;
 import org.graalvm.compiler.hotspot.replacements.profiling.ProfileSnippets;
+import org.graalvm.compiler.hotspot.stubs.ForeignCallSnippets;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractDeoptimizeNode;
 import org.graalvm.compiler.nodes.CompressionNode.CompressionOp;
+import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.FixedNode;
+import org.graalvm.compiler.nodes.GetObjectAddressNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoweredCallTargetNode;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.SafepointNode;
 import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
@@ -116,18 +130,27 @@ import org.graalvm.compiler.nodes.calc.IsNullNode;
 import org.graalvm.compiler.nodes.calc.RemNode;
 import org.graalvm.compiler.nodes.debug.StringToBytesNode;
 import org.graalvm.compiler.nodes.debug.VerifyHeapNode;
+import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode;
+import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExceptionKind;
+import org.graalvm.compiler.nodes.DeadEndNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.GetClassNode;
-import org.graalvm.compiler.nodes.extended.GuardedUnsafeLoadNode;
+import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.extended.LoadMethodNode;
 import org.graalvm.compiler.nodes.extended.OSRLocalNode;
 import org.graalvm.compiler.nodes.extended.OSRLockNode;
 import org.graalvm.compiler.nodes.extended.OSRMonitorEnterNode;
 import org.graalvm.compiler.nodes.extended.OSRStartNode;
-import org.graalvm.compiler.nodes.extended.RawLoadNode;
 import org.graalvm.compiler.nodes.extended.StoreHubNode;
+import org.graalvm.compiler.nodes.gc.G1ArrayRangePostWriteBarrier;
+import org.graalvm.compiler.nodes.gc.G1ArrayRangePreWriteBarrier;
+import org.graalvm.compiler.nodes.gc.G1PostWriteBarrier;
+import org.graalvm.compiler.nodes.gc.G1PreWriteBarrier;
+import org.graalvm.compiler.nodes.gc.G1ReferentFieldReadBarrier;
+import org.graalvm.compiler.nodes.gc.SerialArrayRangeWriteBarrier;
+import org.graalvm.compiler.nodes.gc.SerialWriteBarrier;
 import org.graalvm.compiler.nodes.java.ClassIsAssignableFromNode;
 import org.graalvm.compiler.nodes.java.DynamicNewArrayNode;
 import org.graalvm.compiler.nodes.java.DynamicNewInstanceNode;
@@ -135,25 +158,37 @@ import org.graalvm.compiler.nodes.java.InstanceOfDynamicNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.LoadExceptionObjectNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
+import org.graalvm.compiler.nodes.java.MonitorEnterNode;
 import org.graalvm.compiler.nodes.java.MonitorExitNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.graalvm.compiler.nodes.java.NewMultiArrayNode;
-import org.graalvm.compiler.nodes.java.RawMonitorEnterNode;
+import org.graalvm.compiler.nodes.java.RegisterFinalizerNode;
+import org.graalvm.compiler.nodes.java.ValidateNewInstanceClassNode;
 import org.graalvm.compiler.nodes.memory.FloatingReadNode;
-import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.WriteNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
+import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
+import org.graalvm.compiler.replacements.IdentityHashCodeSnippets;
+import org.graalvm.compiler.replacements.IsArraySnippets;
+import org.graalvm.compiler.replacements.arraycopy.ArrayCopyNode;
+import org.graalvm.compiler.replacements.arraycopy.ArrayCopySnippets;
+import org.graalvm.compiler.replacements.arraycopy.ArrayCopyWithDelayedLoweringNode;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
+import org.graalvm.compiler.replacements.nodes.CStringConstant;
+import org.graalvm.compiler.replacements.nodes.LogNode;
+import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.TargetDescription;
@@ -161,6 +196,8 @@ import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaField;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -171,58 +208,158 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 /**
  * HotSpot implementation of {@link LoweringProvider}.
  */
-public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider implements HotSpotLoweringProvider {
+public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider implements HotSpotLoweringProvider {
+
+    /**
+     * Extension API for lowering a node outside the set of core HotSpot compiler nodes.
+     */
+    public interface Extension {
+        Class<? extends Node> getNodeType();
+
+        /**
+         * Lowers {@code n} whose type is guaranteed to be {@link #getNodeType()}.
+         */
+        void lower(Node n, LoweringTool tool);
+
+        /**
+         * Initializes this extension.
+         */
+        void initialize(HotSpotProviders providers,
+                        OptionValues options,
+                        GraalHotSpotVMConfig config,
+                        HotSpotHostForeignCallsProvider foreignCalls,
+                        Iterable<DebugHandlersFactory> factories);
+    }
+
+    /**
+     * Service provider interface for discovering {@link Extension}s.
+     */
+    public interface Extensions {
+        /**
+         * Gets the extensions provided by this object.
+         *
+         * In the context of service caching done when building a libgraal image, implementations of
+         * this method must return a new value each time to avoid sharing extensions between
+         * different {@link DefaultHotSpotLoweringProvider}s.
+         */
+        List<Extension> createExtensions();
+    }
 
     protected final HotSpotGraalRuntimeProvider runtime;
     protected final HotSpotRegistersProvider registers;
     protected final HotSpotConstantReflectionProvider constantReflection;
 
     protected InstanceOfSnippets.Templates instanceofSnippets;
-    protected NewObjectSnippets.Templates newObjectSnippets;
+    protected HotSpotAllocationSnippets.Templates allocationSnippets;
     protected MonitorSnippets.Templates monitorSnippets;
-    protected WriteBarrierSnippets.Templates writeBarrierSnippets;
+    protected HotSpotSerialWriteBarrierSnippets.Templates serialWriteBarrierSnippets;
+    protected HotSpotG1WriteBarrierSnippets.Templates g1WriteBarrierSnippets;
     protected LoadExceptionObjectSnippets.Templates exceptionObjectSnippets;
-    protected UnsafeLoadSnippets.Templates unsafeLoadSnippets;
     protected AssertionSnippets.Templates assertionSnippets;
+    protected LogSnippets.Templates logSnippets;
     protected ArrayCopySnippets.Templates arraycopySnippets;
     protected StringToBytesSnippets.Templates stringToBytesSnippets;
-    protected HashCodeSnippets.Templates hashCodeSnippets;
     protected ResolveConstantSnippets.Templates resolveConstantSnippets;
     protected ProfileSnippets.Templates profileSnippets;
+    protected ObjectSnippets.Templates objectSnippets;
+    protected UnsafeSnippets.Templates unsafeSnippets;
+    protected ObjectCloneSnippets.Templates objectCloneSnippets;
+    protected ForeignCallSnippets.Templates foreignCallSnippets;
+    protected RegisterFinalizerSnippets.Templates registerFinalizerSnippets;
+
+    protected final Map<Class<? extends Node>, Extension> extensions = new HashMap<>();
 
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
-                    HotSpotConstantReflectionProvider constantReflection, TargetDescription target) {
-        super(metaAccess, foreignCalls, target, runtime.getVMConfig().useCompressedOops);
+                    HotSpotConstantReflectionProvider constantReflection, PlatformConfigurationProvider platformConfig, MetaAccessExtensionProvider metaAccessExtensionProvider,
+                    TargetDescription target) {
+        super(metaAccess, foreignCalls, platformConfig, metaAccessExtensionProvider, target, runtime.getVMConfig().useCompressedOops);
         this.runtime = runtime;
         this.registers = registers;
         this.constantReflection = constantReflection;
     }
 
+    public HotSpotGraalRuntimeProvider getRuntime() {
+        return runtime;
+    }
+
+    public HotSpotRegistersProvider getRegisters() {
+        return registers;
+    }
+
+    public HotSpotConstantReflectionProvider getConstantReflection() {
+        return constantReflection;
+    }
+
     @Override
     public void initialize(OptionValues options, Iterable<DebugHandlersFactory> factories, HotSpotProviders providers, GraalHotSpotVMConfig config) {
+        initialize(options, factories, providers, config,
+                        new HotSpotAllocationSnippets.Templates(new HotSpotAllocationSnippets(config, providers.getRegisters()), options, factories, runtime, providers, target, config));
+    }
+
+    public void initialize(OptionValues options, Iterable<DebugHandlersFactory> factories, HotSpotProviders providers, GraalHotSpotVMConfig config,
+                    HotSpotAllocationSnippets.Templates allocationSnippetTemplates) {
         super.initialize(options, factories, runtime, providers, providers.getSnippetReflection());
 
         assert target == providers.getCodeCache().getTarget();
         instanceofSnippets = new InstanceOfSnippets.Templates(options, factories, runtime, providers, target);
-        newObjectSnippets = new NewObjectSnippets.Templates(options, factories, runtime, providers, target, config);
+        allocationSnippets = allocationSnippetTemplates;
         monitorSnippets = new MonitorSnippets.Templates(options, factories, runtime, providers, target, config.useFastLocking);
-        writeBarrierSnippets = new WriteBarrierSnippets.Templates(options, factories, runtime, providers, target, config.useCompressedOops ? config.getOopEncoding() : null);
+        g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, factories, runtime, providers, target, config);
+        serialWriteBarrierSnippets = new HotSpotSerialWriteBarrierSnippets.Templates(options, factories, runtime, providers, target);
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, factories, providers, target);
-        unsafeLoadSnippets = new UnsafeLoadSnippets.Templates(options, factories, providers, target);
         assertionSnippets = new AssertionSnippets.Templates(options, factories, providers, target);
-        arraycopySnippets = new ArrayCopySnippets.Templates(options, factories, runtime, providers, target);
+        logSnippets = new LogSnippets.Templates(options, factories, providers, target);
+        arraycopySnippets = new ArrayCopySnippets.Templates(new HotSpotArraycopySnippets(), options, factories, runtime, providers, providers.getSnippetReflection(), target);
         stringToBytesSnippets = new StringToBytesSnippets.Templates(options, factories, providers, target);
-        hashCodeSnippets = new HashCodeSnippets.Templates(options, factories, providers, target);
+        identityHashCodeSnippets = new IdentityHashCodeSnippets.Templates(new HotSpotHashCodeSnippets(), options, factories, providers, target, HotSpotReplacementsUtil.MARK_WORD_LOCATION);
+        isArraySnippets = new IsArraySnippets.Templates(new HotSpotIsArraySnippets(), options, factories, providers, target);
         resolveConstantSnippets = new ResolveConstantSnippets.Templates(options, factories, providers, target);
-        profileSnippets = new ProfileSnippets.Templates(options, factories, providers, target);
+        objectCloneSnippets = new ObjectCloneSnippets.Templates(options, factories, providers, target);
+        foreignCallSnippets = new ForeignCallSnippets.Templates(options, factories, providers, target);
+        registerFinalizerSnippets = new RegisterFinalizerSnippets.Templates(options, factories, providers, target);
+        if (JavaVersionUtil.JAVA_SPEC >= 11) {
+            objectSnippets = new ObjectSnippets.Templates(options, factories, providers, target);
+        }
+        unsafeSnippets = new UnsafeSnippets.Templates(options, factories, providers, target);
+        if (JavaVersionUtil.JAVA_SPEC >= 11 && GeneratePIC.getValue(options)) {
+            // AOT only introduced in JDK 9
+            profileSnippets = new ProfileSnippets.Templates(options, factories, providers, target);
+        }
+
+        initializeExtensions(options, factories, providers, config);
+    }
+
+    private void initializeExtensions(OptionValues options, Iterable<DebugHandlersFactory> factories, HotSpotProviders providers, GraalHotSpotVMConfig config) throws GraalError {
+        for (Extensions ep : GraalServices.load(Extensions.class)) {
+            for (Extension ext : ep.createExtensions()) {
+                Class<? extends Node> nodeType = ext.getNodeType();
+                Extension old = extensions.put(nodeType, ext);
+                if (old != null) {
+                    throw new GraalError("Two lowering extensions conflict on the handling of %s: %s and %s", nodeType.getName(), old, ext);
+                }
+                ext.initialize(providers, options, config, (HotSpotHostForeignCallsProvider) foreignCalls, factories);
+            }
+        }
+    }
+
+    public HotSpotAllocationSnippets.Templates getAllocationSnippets() {
+        return allocationSnippets;
+    }
+
+    public ArrayCopySnippets.Templates getArraycopySnippets() {
+        return arraycopySnippets;
     }
 
     public MonitorSnippets.Templates getMonitorSnippets() {
         return monitorSnippets;
     }
 
-    @Override
-    public void lower(Node n, LoweringTool tool) {
+    /**
+     * Handles the lowering of {@code n} without delegating to plugins or super.
+     *
+     * @return {@code true} if this method handles lowering of {@code n}
+     */
+    private boolean lowerWithoutDelegation(Node n, LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) n.graph();
         if (n instanceof Invoke) {
             lowerInvoke((Invoke) n, tool, graph);
@@ -244,7 +381,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
                 if (instanceOfNode.allowsNull()) {
                     ValueNode object = instanceOfNode.getValue();
                     LogicNode newTypeCheck = graph.addOrUniqueWithInputs(InstanceOfNode.create(instanceOfNode.type(), object, instanceOfNode.profile(), instanceOfNode.getAnchor()));
-                    LogicNode newNode = LogicNode.or(graph.unique(IsNullNode.create(object)), newTypeCheck, GraalDirectives.UNLIKELY_PROBABILITY);
+                    LogicNode newNode = LogicNode.or(graph.unique(IsNullNode.create(object)), newTypeCheck, BranchProbabilityNode.NOT_LIKELY_PROFILE);
                     instanceOfNode.replaceAndDelete(newNode);
                 }
             }
@@ -254,7 +391,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
                 instanceofSnippets.lower(instanceOfDynamicNode, tool);
             } else {
                 ValueNode mirror = instanceOfDynamicNode.getMirrorOrHub();
-                if (mirror.stamp().getStackKind() == JavaKind.Object) {
+                if (mirror.stamp(NodeView.DEFAULT).getStackKind() == JavaKind.Object) {
                     ClassGetHubNode classGetHub = graph.unique(new ClassGetHubNode(mirror));
                     instanceOfDynamicNode.setMirror(classGetHub);
                 }
@@ -262,8 +399,9 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
                 if (instanceOfDynamicNode.allowsNull()) {
                     ValueNode object = instanceOfDynamicNode.getObject();
                     LogicNode newTypeCheck = graph.addOrUniqueWithInputs(
-                                    InstanceOfDynamicNode.create(graph.getAssumptions(), tool.getConstantReflection(), instanceOfDynamicNode.getMirrorOrHub(), object, false));
-                    LogicNode newNode = LogicNode.or(graph.unique(IsNullNode.create(object)), newTypeCheck, GraalDirectives.UNLIKELY_PROBABILITY);
+                                    InstanceOfDynamicNode.create(graph.getAssumptions(), tool.getConstantReflection(), instanceOfDynamicNode.getMirrorOrHub(), object,
+                                                    false/* null checked below */, instanceOfDynamicNode.isExact()));
+                    LogicNode newNode = LogicNode.or(graph.unique(IsNullNode.create(object)), newTypeCheck, BranchProbabilityNode.NOT_LIKELY_PROFILE);
                     instanceOfDynamicNode.replaceAndDelete(newNode);
                 }
             }
@@ -273,39 +411,43 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             }
         } else if (n instanceof NewInstanceNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                newObjectSnippets.lower((NewInstanceNode) n, registers, tool);
+                getAllocationSnippets().lower((NewInstanceNode) n, tool);
             }
         } else if (n instanceof DynamicNewInstanceNode) {
-            DynamicNewInstanceNode newInstanceNode = (DynamicNewInstanceNode) n;
-            if (newInstanceNode.getClassClass() == null) {
-                JavaConstant classClassMirror = constantReflection.forObject(Class.class);
-                ConstantNode classClass = ConstantNode.forConstant(classClassMirror, tool.getMetaAccess(), graph);
-                newInstanceNode.setClassClass(classClass);
-            }
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                newObjectSnippets.lower(newInstanceNode, registers, tool);
+                getAllocationSnippets().lower((DynamicNewInstanceNode) n, tool);
             }
+        } else if (n instanceof ValidateNewInstanceClassNode) {
+            ValidateNewInstanceClassNode validateNewInstance = (ValidateNewInstanceClassNode) n;
+            if (validateNewInstance.getClassClass() == null) {
+                JavaConstant classClassMirror = constantReflection.asJavaClass(metaAccess.lookupJavaType(Class.class));
+                ConstantNode classClass = ConstantNode.forConstant(classClassMirror, tool.getMetaAccess(), graph);
+                validateNewInstance.setClassClass(classClass);
+            }
+            getAllocationSnippets().lower(validateNewInstance, tool);
         } else if (n instanceof NewArrayNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                newObjectSnippets.lower((NewArrayNode) n, registers, tool);
+                getAllocationSnippets().lower((NewArrayNode) n, tool);
             }
         } else if (n instanceof DynamicNewArrayNode) {
             DynamicNewArrayNode dynamicNewArrayNode = (DynamicNewArrayNode) n;
             if (dynamicNewArrayNode.getVoidClass() == null) {
-                JavaConstant voidClassMirror = constantReflection.forObject(void.class);
+                JavaConstant voidClassMirror = constantReflection.asJavaClass(metaAccess.lookupJavaType(void.class));
                 ConstantNode voidClass = ConstantNode.forConstant(voidClassMirror, tool.getMetaAccess(), graph);
                 dynamicNewArrayNode.setVoidClass(voidClass);
             }
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                newObjectSnippets.lower(dynamicNewArrayNode, registers, tool);
+                getAllocationSnippets().lower(dynamicNewArrayNode, tool);
             }
         } else if (n instanceof VerifyHeapNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                newObjectSnippets.lower((VerifyHeapNode) n, registers, tool);
+                getAllocationSnippets().lower((VerifyHeapNode) n, tool);
             }
-        } else if (n instanceof RawMonitorEnterNode) {
+        } else if (n instanceof MonitorEnterNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                monitorSnippets.lower((RawMonitorEnterNode) n, registers, tool);
+                monitorSnippets.lower((MonitorEnterNode) n, registers, tool);
+            } else {
+                loadHubForMonitorEnterNode((MonitorEnterNode) n, tool, graph);
             }
         } else if (n instanceof MonitorExitNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
@@ -313,30 +455,32 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             }
         } else if (n instanceof ArrayCopyNode) {
             arraycopySnippets.lower((ArrayCopyNode) n, tool);
-        } else if (n instanceof ArrayCopyWithSlowPathNode) {
-            arraycopySnippets.lower((ArrayCopyWithSlowPathNode) n, tool);
+        } else if (n instanceof ArrayCopyWithDelayedLoweringNode) {
+            arraycopySnippets.lower((ArrayCopyWithDelayedLoweringNode) n, tool);
         } else if (n instanceof G1PreWriteBarrier) {
-            writeBarrierSnippets.lower((G1PreWriteBarrier) n, registers, tool);
+            g1WriteBarrierSnippets.lower((G1PreWriteBarrier) n, tool);
         } else if (n instanceof G1PostWriteBarrier) {
-            writeBarrierSnippets.lower((G1PostWriteBarrier) n, registers, tool);
+            g1WriteBarrierSnippets.lower((G1PostWriteBarrier) n, tool);
         } else if (n instanceof G1ReferentFieldReadBarrier) {
-            writeBarrierSnippets.lower((G1ReferentFieldReadBarrier) n, registers, tool);
+            g1WriteBarrierSnippets.lower((G1ReferentFieldReadBarrier) n, tool);
         } else if (n instanceof SerialWriteBarrier) {
-            writeBarrierSnippets.lower((SerialWriteBarrier) n, tool);
+            serialWriteBarrierSnippets.lower((SerialWriteBarrier) n, tool);
         } else if (n instanceof SerialArrayRangeWriteBarrier) {
-            writeBarrierSnippets.lower((SerialArrayRangeWriteBarrier) n, tool);
+            serialWriteBarrierSnippets.lower((SerialArrayRangeWriteBarrier) n, tool);
         } else if (n instanceof G1ArrayRangePreWriteBarrier) {
-            writeBarrierSnippets.lower((G1ArrayRangePreWriteBarrier) n, registers, tool);
+            g1WriteBarrierSnippets.lower((G1ArrayRangePreWriteBarrier) n, tool);
         } else if (n instanceof G1ArrayRangePostWriteBarrier) {
-            writeBarrierSnippets.lower((G1ArrayRangePostWriteBarrier) n, registers, tool);
+            g1WriteBarrierSnippets.lower((G1ArrayRangePostWriteBarrier) n, tool);
         } else if (n instanceof NewMultiArrayNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                newObjectSnippets.lower((NewMultiArrayNode) n, tool);
+                getAllocationSnippets().lower((NewMultiArrayNode) n, tool);
             }
         } else if (n instanceof LoadExceptionObjectNode) {
             exceptionObjectSnippets.lower((LoadExceptionObjectNode) n, registers, tool);
         } else if (n instanceof AssertionNode) {
             assertionSnippets.lower((AssertionNode) n, tool);
+        } else if (n instanceof LogNode) {
+            logSnippets.lower((LogNode) n, tool);
         } else if (n instanceof StringToBytesNode) {
             if (graph.getGuardsStage().areDeoptsFixed()) {
                 stringToBytesSnippets.lower((StringToBytesNode) n, tool);
@@ -356,8 +500,6 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 lowerComputeObjectAddressNode((ComputeObjectAddressNode) n);
             }
-        } else if (n instanceof IdentityHashCodeNode) {
-            hashCodeSnippets.lower((IdentityHashCodeNode) n, tool);
         } else if (n instanceof ResolveDynamicConstantNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 resolveConstantSnippets.lower((ResolveDynamicConstantNode) n, tool);
@@ -376,8 +518,56 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
             }
         } else if (n instanceof ProfileNode) {
             profileSnippets.lower((ProfileNode) n, tool);
+        } else if (n instanceof KlassBeingInitializedCheckNode) {
+            getAllocationSnippets().lower((KlassBeingInitializedCheckNode) n, tool);
+        } else if (n instanceof FastNotifyNode) {
+            if (JavaVersionUtil.JAVA_SPEC < 11) {
+                throw GraalError.shouldNotReachHere("FastNotify is not support prior to 11");
+            }
+            if (graph.getGuardsStage() == GuardsStage.AFTER_FSA) {
+                objectSnippets.lower(n, tool);
+            }
+        } else if (n instanceof UnsafeCopyMemoryNode) {
+            if (graph.getGuardsStage() == GuardsStage.AFTER_FSA) {
+                unsafeSnippets.lower((UnsafeCopyMemoryNode) n, tool);
+            }
+        } else if (n instanceof RegisterFinalizerNode) {
+            lowerRegisterFinalizer((RegisterFinalizerNode) n, tool);
+        } else if (n instanceof DeadEndNode) {
+            lowerDeadEnd((DeadEndNode) n);
         } else {
-            super.lower(n, tool);
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    @SuppressWarnings("try")
+    public void lower(Node n, LoweringTool tool) {
+        try (DebugCloseable context = n.withNodeSourcePosition()) {
+            Class<? extends Node> nodeType = n.getClass();
+            if (!lowerWithoutDelegation(n, tool)) {
+                Extension ext = extensions.get(nodeType);
+                if (ext != null) {
+                    ext.lower(ext.getNodeType().cast(n), tool);
+                } else {
+                    super.lower(n, tool);
+                }
+            } else {
+                Extension ext = extensions.get(nodeType);
+                if (ext != null) {
+                    // This prevents an extension silently being ignored
+                    throw new GraalError("Extension %s is redundant - %s directly handles lowering of %s nodes", ext, getClass().getName(), nodeType.getName());
+                }
+            }
+        }
+    }
+
+    protected void loadHubForMonitorEnterNode(MonitorEnterNode monitor, LoweringTool tool, StructuredGraph graph) {
+        if (monitor.getObjectData() == null) {
+            ValueNode objectNonNull = createNullCheckedValue(monitor.object(), monitor, tool);
+            monitor.setObject(objectNonNull);
+            monitor.setObjectData(graph.addOrUnique(LoadHubNode.create(objectNonNull, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection())));
         }
     }
 
@@ -409,7 +599,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         StructuredGraph graph = n.graph();
         assert !n.getHub().isConstant();
         AddressNode address = createOffsetAddress(graph, n.getHub(), runtime.getVMConfig().klassLayoutHelperOffset);
-        n.replaceAtUsagesAndDelete(graph.unique(new FloatingReadNode(address, KLASS_LAYOUT_HELPER_LOCATION, null, n.stamp(), null, BarrierType.NONE)));
+        n.replaceAtUsagesAndDelete(graph.unique(new FloatingReadNode(address, KLASS_LAYOUT_HELPER_LOCATION, null, n.stamp(NodeView.DEFAULT), null, BarrierType.NONE)));
     }
 
     private void lowerHubGetClassNode(HubGetClassNode n, LoweringTool tool) {
@@ -422,11 +612,13 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         StructuredGraph graph = n.graph();
         assert !hub.isConstant() || GraalOptions.ImmutableCode.getValue(graph.getOptions());
         AddressNode mirrorAddress = createOffsetAddress(graph, hub, vmConfig.classMirrorOffset);
-        FloatingReadNode read = graph.unique(new FloatingReadNode(mirrorAddress, CLASS_MIRROR_LOCATION, null, vmConfig.classMirrorIsHandle ? StampFactory.forKind(target.wordJavaKind) : n.stamp(),
-                        null, BarrierType.NONE));
+        FloatingReadNode read = graph.unique(
+                        new FloatingReadNode(mirrorAddress, CLASS_MIRROR_LOCATION, null, vmConfig.classMirrorIsHandle ? StampFactory.forKind(target.wordJavaKind) : n.stamp(NodeView.DEFAULT),
+                                        null, BarrierType.NONE));
         if (vmConfig.classMirrorIsHandle) {
+            // Read the Object from the OopHandle
             AddressNode address = createOffsetAddress(graph, read, 0);
-            read = graph.unique(new FloatingReadNode(address, CLASS_MIRROR_HANDLE_LOCATION, null, n.stamp(), null, BarrierType.NONE));
+            read = graph.unique(new FloatingReadNode(address, HOTSPOT_OOP_HANDLE_LOCATION, null, n.stamp(NodeView.DEFAULT), null, BarrierType.NONE));
         }
         n.replaceAtUsagesAndDelete(read);
     }
@@ -439,7 +631,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         StructuredGraph graph = n.graph();
         assert !n.getValue().isConstant();
         AddressNode address = createOffsetAddress(graph, n.getValue(), runtime.getVMConfig().klassOffset);
-        FloatingReadNode read = graph.unique(new FloatingReadNode(address, CLASS_KLASS_LOCATION, null, n.stamp(), null, BarrierType.NONE));
+        FloatingReadNode read = graph.unique(new FloatingReadNode(address, CLASS_KLASS_LOCATION, null, n.stamp(NodeView.DEFAULT), null, BarrierType.NONE));
         n.replaceAtUsagesAndDelete(read);
     }
 
@@ -447,11 +639,15 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         if (invoke.callTarget() instanceof MethodCallTargetNode) {
             MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
             NodeInputList<ValueNode> parameters = callTarget.arguments();
-            ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
-            if (!callTarget.isStatic() && receiver.stamp() instanceof ObjectStamp && !StampTool.isPointerNonNull(receiver)) {
-                ValueNode nonNullReceiver = createNullCheckedValue(receiver, invoke.asNode(), tool);
-                parameters.set(0, nonNullReceiver);
-                receiver = nonNullReceiver;
+            ValueNode receiver = parameters.isEmpty() ? null : parameters.get(0);
+
+            if (!callTarget.isStatic()) {
+                assert receiver != null : "non-static call must have a receiver";
+                if (receiver.stamp(NodeView.DEFAULT) instanceof ObjectStamp && !StampTool.isPointerNonNull(receiver)) {
+                    ValueNode nonNullReceiver = createNullCheckedValue(receiver, invoke.asNode(), tool);
+                    parameters.set(0, nonNullReceiver);
+                    receiver = nonNullReceiver;
+                }
             }
             JavaType[] signature = callTarget.targetMethod().getSignature().toParameterTypes(callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
 
@@ -513,23 +709,18 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     @Override
-    protected ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, FixedNode anchor) {
-        /*
-         * Anchor the read of the element klass to the cfg, because it is only valid when arrayClass
-         * is an object class, which might not be the case in other parts of the compiled method.
-         */
-        AddressNode address = createOffsetAddress(graph, arrayHub, runtime.getVMConfig().arrayClassElementOffset);
-        return graph.unique(new FloatingReadNode(address, OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION, null, KlassPointerStamp.klassNonNull(), AbstractBeginNode.prevBegin(anchor)));
-    }
-
-    @Override
-    protected void lowerUnsafeLoadNode(RawLoadNode load, LoweringTool tool) {
-        StructuredGraph graph = load.graph();
-        if (!(load instanceof GuardedUnsafeLoadNode) && !graph.getGuardsStage().allowsFloatingGuards() && addReadBarrier(load)) {
-            unsafeLoadSnippets.lower(load, tool);
-        } else {
-            super.lowerUnsafeLoadNode(load, tool);
+    protected ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, boolean isKnownObjectArray, FixedNode anchor) {
+        GuardingNode guard = null;
+        if (!isKnownObjectArray) {
+            /*
+             * Anchor the read of the element klass to the cfg, because it is only valid when
+             * arrayClass is an object class, which might not be the case in other parts of the
+             * compiled method.
+             */
+            guard = AbstractBeginNode.prevBegin(anchor);
         }
+        AddressNode address = createOffsetAddress(graph, arrayHub, runtime.getVMConfig().arrayClassElementOffset);
+        return graph.unique(new FloatingReadNode(address, OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION, null, KlassPointerStamp.klassNonNull(), guard));
     }
 
     private void lowerLoadMethodNode(LoadMethodNode loadMethodNode) {
@@ -550,17 +741,8 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
     private void lowerStoreHubNode(StoreHubNode storeHub, StructuredGraph graph) {
         WriteNode hub = createWriteHub(graph, storeHub.getObject(), storeHub.getValue());
+        hub.setStateAfter(storeHub.stateAfter());
         graph.replaceFixed(storeHub, hub);
-    }
-
-    @Override
-    public BarrierType fieldInitializationBarrier(JavaKind entryKind) {
-        return (entryKind == JavaKind.Object && !runtime.getVMConfig().useDeferredInitBarriers) ? BarrierType.IMPRECISE : BarrierType.NONE;
-    }
-
-    @Override
-    public BarrierType arrayInitializationBarrier(JavaKind entryKind) {
-        return (entryKind == JavaKind.Object && !runtime.getVMConfig().useDeferredInitBarriers) ? BarrierType.PRECISE : BarrierType.NONE;
     }
 
     private void lowerOSRStartNode(OSRStartNode osrStart) {
@@ -568,7 +750,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         if (graph.getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS) {
             StartNode newStart = graph.add(new StartNode());
             ParameterNode buffer = graph.addWithoutUnique(new ParameterNode(0, StampPair.createSingle(StampFactory.forKind(runtime.getTarget().wordJavaKind))));
-            ForeignCallNode migrationEnd = graph.add(new ForeignCallNode(foreignCalls, OSR_MIGRATION_END, buffer));
+            ForeignCallNode migrationEnd = graph.add(new ForeignCallNode(OSR_MIGRATION_END, buffer));
             migrationEnd.setStateAfter(osrStart.stateAfter());
             newStart.setNext(migrationEnd);
             FixedNode next = osrStart.next();
@@ -586,7 +768,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
                 int size = osrLocal.getStackKind().getSlotCount();
                 int offset = localsOffset - (osrLocal.index() + size - 1) * wordSize;
                 AddressNode address = createOffsetAddress(graph, buffer, offset);
-                ReadNode load = graph.add(new ReadNode(address, any(), osrLocal.stamp(), BarrierType.NONE));
+                ReadNode load = graph.add(new ReadNode(address, any(), osrLocal.stamp(NodeView.DEFAULT), BarrierType.NONE));
                 osrLocal.replaceAndDelete(load);
                 graph.addBeforeFixed(migrationEnd, load);
             }
@@ -609,7 +791,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
                 // load the displaced mark from the osr buffer
                 AddressNode addressDisplacedHeader = createOffsetAddress(graph, buffer, offsetDisplacedHeader);
-                ReadNode loadDisplacedHeader = graph.add(new ReadNode(addressDisplacedHeader, any(), lock.stamp(), BarrierType.NONE));
+                ReadNode loadDisplacedHeader = graph.add(new ReadNode(addressDisplacedHeader, any(), lock.stamp(NodeView.DEFAULT), BarrierType.NONE));
                 graph.addBeforeFixed(migrationEnd, loadDisplacedHeader);
 
                 // we need to initialize the stack slot for the lock
@@ -623,7 +805,7 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
 
                 // load the lock object from the osr buffer
                 AddressNode addressLockObject = createOffsetAddress(graph, buffer, offsetLockObject);
-                ReadNode loadObject = graph.add(new ReadNode(addressLockObject, any(), lock.stamp(), BarrierType.NONE));
+                ReadNode loadObject = graph.add(new ReadNode(addressLockObject, any(), lock.stamp(NodeView.DEFAULT), BarrierType.NONE));
                 lock.replaceAndDelete(loadObject);
                 graph.addBeforeFixed(migrationEnd, loadObject);
             }
@@ -633,74 +815,104 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     static final class Exceptions {
-        protected static final ArrayIndexOutOfBoundsException cachedArrayIndexOutOfBoundsException;
-        protected static final NullPointerException cachedNullPointerException;
+        protected static final EnumMap<BytecodeExceptionKind, RuntimeException> cachedExceptions;
 
         static {
-            cachedArrayIndexOutOfBoundsException = new ArrayIndexOutOfBoundsException();
-            cachedArrayIndexOutOfBoundsException.setStackTrace(new StackTraceElement[0]);
-            cachedNullPointerException = new NullPointerException();
-            cachedNullPointerException.setStackTrace(new StackTraceElement[0]);
+            cachedExceptions = new EnumMap<>(BytecodeExceptionKind.class);
+            cachedExceptions.put(BytecodeExceptionKind.NULL_POINTER, clearStackTrace(new NullPointerException()));
+            cachedExceptions.put(BytecodeExceptionKind.OUT_OF_BOUNDS, clearStackTrace(new ArrayIndexOutOfBoundsException()));
+            cachedExceptions.put(BytecodeExceptionKind.CLASS_CAST, clearStackTrace(new ClassCastException()));
+            cachedExceptions.put(BytecodeExceptionKind.ARRAY_STORE, clearStackTrace(new ArrayStoreException()));
+            cachedExceptions.put(BytecodeExceptionKind.DIVISION_BY_ZERO, clearStackTrace(new ArithmeticException()));
+            cachedExceptions.put(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY,
+                            clearStackTrace(new IllegalArgumentException(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY.getExceptionMessage())));
+        }
+
+        private static RuntimeException clearStackTrace(RuntimeException ex) {
+            ex.setStackTrace(new StackTraceElement[0]);
+            return ex;
         }
     }
 
     public static final class RuntimeCalls {
-        public static final ForeignCallDescriptor CREATE_ARRAY_STORE_EXCEPTION = new ForeignCallDescriptor("createArrayStoreException", ArrayStoreException.class, Object.class);
-        public static final ForeignCallDescriptor CREATE_CLASS_CAST_EXCEPTION = new ForeignCallDescriptor("createClassCastException", ClassCastException.class, Object.class, KlassPointer.class);
-        public static final ForeignCallDescriptor CREATE_NULL_POINTER_EXCEPTION = new ForeignCallDescriptor("createNullPointerException", NullPointerException.class);
-        public static final ForeignCallDescriptor CREATE_OUT_OF_BOUNDS_EXCEPTION = new ForeignCallDescriptor("createOutOfBoundsException", ArrayIndexOutOfBoundsException.class, int.class);
+        public static final EnumMap<BytecodeExceptionKind, ForeignCallSignature> runtimeCalls;
+
+        static {
+            runtimeCalls = new EnumMap<>(BytecodeExceptionKind.class);
+            runtimeCalls.put(BytecodeExceptionKind.ARRAY_STORE, new ForeignCallSignature("createArrayStoreException", ArrayStoreException.class, Object.class));
+            runtimeCalls.put(BytecodeExceptionKind.CLASS_CAST, new ForeignCallSignature("createClassCastException", ClassCastException.class, Object.class, KlassPointer.class));
+            runtimeCalls.put(BytecodeExceptionKind.NULL_POINTER, new ForeignCallSignature("createNullPointerException", NullPointerException.class));
+            runtimeCalls.put(BytecodeExceptionKind.OUT_OF_BOUNDS, new ForeignCallSignature("createOutOfBoundsException", ArrayIndexOutOfBoundsException.class, int.class, int.class));
+            runtimeCalls.put(BytecodeExceptionKind.DIVISION_BY_ZERO, new ForeignCallSignature("createDivisionByZeroException", ArithmeticException.class));
+            runtimeCalls.put(BytecodeExceptionKind.INTEGER_EXACT_OVERFLOW, new ForeignCallSignature("createIntegerExactOverflowException", ArithmeticException.class));
+            runtimeCalls.put(BytecodeExceptionKind.LONG_EXACT_OVERFLOW, new ForeignCallSignature("createLongExactOverflowException", ArithmeticException.class));
+            runtimeCalls.put(BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_ARGUMENT_IS_NOT_AN_ARRAY,
+                            new ForeignCallSignature("createIllegalArgumentExceptionArgumentIsNotAnArray", IllegalArgumentException.class));
+        }
     }
 
-    private boolean throwCachedException(BytecodeExceptionNode node) {
-        Throwable exception;
-        if (node.getExceptionClass() == NullPointerException.class) {
-            exception = Exceptions.cachedNullPointerException;
-        } else if (node.getExceptionClass() == ArrayIndexOutOfBoundsException.class) {
-            exception = Exceptions.cachedArrayIndexOutOfBoundsException;
-        } else {
-            return false;
+    private void throwCachedException(BytecodeExceptionNode node) {
+        if (IS_IN_NATIVE_IMAGE) {
+            throw new InternalError("Can't throw exception from SVM object");
         }
+        Throwable exception = Exceptions.cachedExceptions.get(node.getExceptionKind());
+        assert exception != null;
 
         StructuredGraph graph = node.graph();
         FloatingNode exceptionNode = ConstantNode.forConstant(constantReflection.forObject(exception), metaAccess, graph);
         graph.replaceFixedWithFloating(node, exceptionNode);
-        return true;
     }
 
     private void lowerBytecodeExceptionNode(BytecodeExceptionNode node) {
         if (OmitHotExceptionStacktrace.getValue(node.getOptions())) {
-            if (throwCachedException(node)) {
-                return;
-            }
+            throwCachedException(node);
+            return;
         }
 
-        ForeignCallDescriptor descriptor;
-        if (node.getExceptionClass() == NullPointerException.class) {
-            descriptor = RuntimeCalls.CREATE_NULL_POINTER_EXCEPTION;
-        } else if (node.getExceptionClass() == ArrayIndexOutOfBoundsException.class) {
-            descriptor = RuntimeCalls.CREATE_OUT_OF_BOUNDS_EXCEPTION;
-        } else if (node.getExceptionClass() == ArrayStoreException.class) {
-            descriptor = RuntimeCalls.CREATE_ARRAY_STORE_EXCEPTION;
-        } else if (node.getExceptionClass() == ClassCastException.class) {
-            descriptor = RuntimeCalls.CREATE_CLASS_CAST_EXCEPTION;
-        } else {
-            throw GraalError.shouldNotReachHere();
+        ForeignCallSignature signature = RuntimeCalls.runtimeCalls.get(node.getExceptionKind());
+        if (signature == null) {
+            throw new GraalError("No runtime call available to lower BytecodeExceptionKind " + node.getExceptionKind());
         }
-
+        ForeignCallDescriptor descriptor = foreignCalls.getDescriptor(signature);
         StructuredGraph graph = node.graph();
-        ForeignCallNode foreignCallNode = graph.add(new ForeignCallNode(foreignCalls, descriptor, node.stamp(), node.getArguments()));
+        List<ValueNode> arguments = node.getArguments();
+
+        if (node.getExceptionKind() == BytecodeExceptionKind.CLASS_CAST) {
+            assert arguments.size() == 2;
+            /*
+             * The foreign call expects the second argument to be the hub of the failing type check.
+             * But when creating the BytecodeExceptionNode for dynamic type checks, it is difficult
+             * to get the hub for the java.lang.Class instance in a VM-independent way. So we
+             * convert the Class to the hub at this late stage.
+             *
+             * Note that the hub is null for primitive types. The ClassCastExceptionStub handles the
+             * null value and uses a less verbose exception message in that case.
+             */
+            arguments = Arrays.asList(
+                            arguments.get(0),
+                            graph.addOrUniqueWithInputs(ClassGetHubNode.create(arguments.get(1), metaAccess, constantReflection)));
+        }
+
+        assert descriptor.getArgumentTypes().length == arguments.size();
+        ForeignCallNode foreignCallNode = graph.add(new ForeignCallNode(descriptor, node.stamp(NodeView.DEFAULT), arguments));
+        /*
+         * The original BytecodeExceptionNode has a rethrowException FrameState which isn't suitable
+         * for deopt because the exception to be thrown come from this call so it's not available in
+         * the debug info. The foreign call needs a stateDuring instead so it can deopt with a
+         * pending exception.
+         */
+        foreignCallNode.setStateDuring(node.createStateDuring());
+        // Keep a proper stateAfter for use by FSA
+        foreignCallNode.setStateAfter(node.stateAfter());
         graph.replaceFixedWithFixed(node, foreignCallNode);
     }
 
-    private boolean addReadBarrier(RawLoadNode load) {
-        if (runtime.getVMConfig().useG1GC && load.graph().getGuardsStage() == StructuredGraph.GuardsStage.FIXED_DEOPTS && load.object().getStackKind() == JavaKind.Object &&
-                        load.accessKind() == JavaKind.Object && !StampTool.isPointerAlwaysNull(load.object())) {
-            ResolvedJavaType type = StampTool.typeOrNull(load.object());
-            if (type != null && !type.isArray()) {
-                return true;
-            }
-        }
-        return false;
+    protected void lowerDeadEnd(DeadEndNode deadEnd) {
+        StructuredGraph graph = deadEnd.graph();
+        VMErrorNode vmErrorNode = graph.add(new VMErrorNode(new CStringConstant("DeadEnd"), graph.unique(ConstantNode.forLong(0))));
+        DeoptimizeNode deopt = graph.add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.UnreachedCode));
+        vmErrorNode.setNext(deopt);
+        deadEnd.replaceAndDelete(vmErrorNode);
     }
 
     private ReadNode createReadVirtualMethod(StructuredGraph graph, ValueNode hub, HotSpotResolvedJavaMethod method, ResolvedJavaType receiverType) {
@@ -752,34 +964,8 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     @Override
-    protected BarrierType fieldLoadBarrierType(ResolvedJavaField f) {
-        HotSpotResolvedJavaField loadField = (HotSpotResolvedJavaField) f;
-        BarrierType barrierType = BarrierType.NONE;
-        if (runtime.getVMConfig().useG1GC && loadField.getJavaKind() == JavaKind.Object && metaAccess.lookupJavaType(Reference.class).equals(loadField.getDeclaringClass()) &&
-                        loadField.getName().equals("referent")) {
-            barrierType = BarrierType.PRECISE;
-        }
-        return barrierType;
-    }
-
-    @Override
     public int fieldOffset(ResolvedJavaField f) {
-        HotSpotResolvedJavaField field = (HotSpotResolvedJavaField) f;
-        return field.offset();
-    }
-
-    @Override
-    public int arrayScalingFactor(JavaKind kind) {
-        if (runtime.getVMConfig().useCompressedOops && kind == JavaKind.Object) {
-            return super.arrayScalingFactor(JavaKind.Int);
-        } else {
-            return super.arrayScalingFactor(kind);
-        }
-    }
-
-    @Override
-    public int arrayBaseOffset(JavaKind kind) {
-        return getArrayBaseOffset(kind);
+        return f.getOffset();
     }
 
     @Override
@@ -788,7 +974,16 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
     }
 
     @Override
-    protected final JavaKind getStorageKind(ResolvedJavaField field) {
-        return field.getJavaKind();
+    public ObjectCloneSnippets.Templates getObjectCloneSnippets() {
+        return objectCloneSnippets;
+    }
+
+    @Override
+    public ForeignCallSnippets.Templates getForeignCallSnippets() {
+        return foreignCallSnippets;
+    }
+
+    private void lowerRegisterFinalizer(RegisterFinalizerNode n, LoweringTool tool) {
+        registerFinalizerSnippets.lower(n, tool);
     }
 }
