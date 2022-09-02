@@ -53,7 +53,7 @@ public class IntrinsicReflectionRootNode extends EspressoBaseNode {
             if (inner instanceof VirtualMachineError) {
                 throw (VirtualMachineError) inner;
             }
-            throw EspressoError.shouldNotReachHere(inner + "\n\t in reflected method: " + reflectMethod);
+            throw EspressoError.shouldNotReachHere(inner);
         } catch (Throwable e) {
             // Non-espresso exceptions cannot escape to the guest.
             throw EspressoError.shouldNotReachHere(e);
