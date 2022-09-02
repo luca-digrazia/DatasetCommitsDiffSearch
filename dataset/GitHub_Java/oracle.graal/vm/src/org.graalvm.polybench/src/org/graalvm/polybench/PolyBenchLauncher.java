@@ -89,9 +89,6 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
             this.consumers.add(new ArgumentConsumer("--path", (value, config) -> {
                 config.path = value;
             }));
-            this.consumers.add(new ArgumentConsumer("--class-name", (value, config) -> {
-                config.className = value;
-            }));
             this.consumers.add(new ArgumentConsumer("--mode", (value, config) -> {
                 config.mode = Config.Mode.parse(value);
             }));
@@ -208,17 +205,11 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
     private EvalResult evalSource(Context context, String path) {
         final File file = new File(path);
         if ("jar".equals(getExtension(path))) {
-            // Espresso cannot eval .jar files, instead we load the JAR's main class.            
-            String className = config.className;
-            Value mainKlass = null;
-            if (className != null) {
-                mainKlass = context.getBindings("java").getMember(className);
-            } else {                
-                Value helper = context.getBindings("java").getMember("sun.launcher.LauncherHelper");
-                Value mainClass = helper.invokeMember("checkAndLoadMain", true, 2 /* LM_JAR */, path);
-                mainKlass = mainClass.getMember("static"); // Class -> Klass
-            }
-            return new EvalResult("java", file.getName(), true, file.length(), mainKlass);
+            // Espresso cannot eval .jar files, instead we load the JAR's main class.
+            Value helper = context.getBindings("java").getMember("sun.launcher.LauncherHelper");
+            Value mainClass = helper.invokeMember("checkAndLoadMain", true, 2 /* LM_JAR */, path);
+            Value result = mainClass.getMember("static"); // Class -> Klass
+            return new EvalResult("java", file.getName(), true, file.length(), result);
         } else {
             Source source;
             String language;
