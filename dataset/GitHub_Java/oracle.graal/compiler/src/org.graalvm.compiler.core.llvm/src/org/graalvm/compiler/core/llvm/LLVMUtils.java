@@ -51,7 +51,6 @@ public class LLVMUtils {
     public static final Pointer NULL = null;
     static final int UNTRACKED_POINTER_ADDRESS_SPACE = 0;
     static final int TRACKED_POINTER_ADDRESS_SPACE = 1;
-    public static final long DEFAULT_PATCHPOINT_ID = 0xABCDEF00L;
 
     public static final class DebugLevel {
         public static final int NONE = 0;
@@ -288,7 +287,7 @@ public class LLVMUtils {
 
         @Override
         public String name() {
-            throw unimplemented();
+            return LLVM.LLVMPrintTypeToString(type).getString();
         }
 
         @Override
