@@ -50,7 +50,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.object.DynamicObject;
@@ -132,9 +131,8 @@ public final class SLObjectType extends ObjectType {
 
     @ExportMessage
     @SuppressWarnings("unused")
-    static boolean isMemberInsertable(DynamicObject receiver, String member,
-                    @CachedLibrary("receiver") InteropLibrary receivers) {
-        return !receivers.isMemberExisting(receiver, member);
+    static boolean isMemberInsertable(DynamicObject receiver, String member) {
+        return true;
     }
 
     static boolean shapeCheck(Shape shape, DynamicObject receiver) {
@@ -279,7 +277,7 @@ public final class SLObjectType extends ObjectType {
                         })
         @SuppressWarnings("unused")
         static void writeNewPropertyCached(DynamicObject receiver, String name, Object value,
-                        @Cached("name") String cachedName,
+                        @Cached("name") Object cachedName,
                         @Cached("receiver.getShape()") Shape oldShape,
                         @Cached("lookupLocation(oldShape, name, value)") Location oldLocation,
                         @Cached("defineProperty(oldShape, name, value)") Shape newShape,

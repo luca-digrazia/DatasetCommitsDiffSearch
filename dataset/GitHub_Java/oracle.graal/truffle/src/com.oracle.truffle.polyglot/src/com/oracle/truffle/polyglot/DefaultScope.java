@@ -91,7 +91,7 @@ final class DefaultScope {
         if (identifier == null) {
             return true;
         }
-        if (EngineAccessor.INSTRUMENT.isInputValueSlotIdentifier(identifier)) {
+        if (VMAccessor.INSTRUMENT.isInputValueSlotIdentifier(identifier)) {
             return true;
         }
         return false;

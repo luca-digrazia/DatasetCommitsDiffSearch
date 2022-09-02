@@ -158,7 +158,7 @@ import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
  *
  * @see GenerateLibrary
  * @see CachedLibrary
- * @since 19.0
+ * @since 1.0
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
@@ -168,7 +168,7 @@ public @interface ExportLibrary {
     /***
      * The library class that specifies the messages that are exported.
      *
-     * @since 19.0
+     * @since 1.0
      */
     Class<? extends Library> value();
 
@@ -200,14 +200,14 @@ public @interface ExportLibrary {
      * }
      * </pre>
      *
-     * @since 19.0
+     * @since 1.0
      */
     Class<?> receiverType() default Void.class;
 
     /***
      * Repeat annotation for {@link ExportLibrary}.
      *
-     * @since 19.0
+     * @since 1.0
      */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.TYPE})
@@ -215,7 +215,7 @@ public @interface ExportLibrary {
         /***
          * Repeat value for {@link ExportLibrary}.
          *
-         * @since 19.0
+         * @since 1.0
          */
         ExportLibrary[] value();
 
