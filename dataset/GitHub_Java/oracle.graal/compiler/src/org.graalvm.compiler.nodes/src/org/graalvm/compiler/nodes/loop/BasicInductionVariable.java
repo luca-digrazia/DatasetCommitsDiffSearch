@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,10 +45,10 @@ import org.graalvm.compiler.nodes.calc.SubNode;
 
 public class BasicInductionVariable extends InductionVariable {
 
-    private final ValuePhiNode phi;
-    private final ValueNode init;
-    private ValueNode rawStride;
-    private BinaryArithmeticNode<?> op;
+    protected final ValuePhiNode phi;
+    protected final ValueNode init;
+    protected ValueNode rawStride;
+    protected BinaryArithmeticNode<?> op;
 
     public BasicInductionVariable(LoopEx loop, ValuePhiNode phi, ValueNode init, ValueNode rawStride, BinaryArithmeticNode<?> op) {
         super(loop);
@@ -56,6 +56,11 @@ public class BasicInductionVariable extends InductionVariable {
         this.init = init;
         this.rawStride = rawStride;
         this.op = op;
+    }
+
+    @Override
+    public InductionVariable duplicate() {
+        return new BasicInductionVariable(loop, phi, init, rawStride, (BinaryArithmeticNode<?>) op.copyWithInputs(true));
     }
 
     @Override
@@ -105,13 +110,17 @@ public class BasicInductionVariable extends InductionVariable {
         return init;
     }
 
+    public ValueNode rawStride() {
+        return rawStride;
+    }
+
     @Override
     public ValueNode strideNode() {
         if (op instanceof AddNode) {
             return rawStride;
         }
         if (op instanceof SubNode) {
-            return graph().unique(new NegateNode(rawStride));
+            return graph().addOrUniqueWithInputs(NegateNode.create(rawStride, NodeView.DEFAULT));
         }
         throw GraalError.shouldNotReachHere();
     }
@@ -162,6 +171,9 @@ public class BasicInductionVariable extends InductionVariable {
     @Override
     public ValueNode exitValueNode() {
         Stamp stamp = phi.stamp(NodeView.DEFAULT);
+        if (loop.counted().isInverted()) {
+            return extremumNode(false, stamp);
+        }
         ValueNode maxTripCount = loop.counted().maxTripCountNode();
         if (!maxTripCount.stamp(NodeView.DEFAULT).isCompatible(stamp)) {
             maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph(), NodeView.DEFAULT);
