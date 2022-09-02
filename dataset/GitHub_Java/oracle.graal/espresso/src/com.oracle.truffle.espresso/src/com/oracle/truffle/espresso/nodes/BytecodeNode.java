@@ -1392,12 +1392,11 @@ public final class BytecodeNode extends EspressoMethodNode {
     private BaseQuickNode getBaseQuickNode(int curBCI, int top, int statementIndex, BaseQuickNode quickNode) {
         // block while class redefinition is ongoing
         ClassRedefinition.check();
-        BaseQuickNode result = quickNode;
         synchronized (this) {
             // re-check if node was already replaced by another thread
-            if (result != nodes[readCPI(curBCI)]) {
+            if (quickNode != nodes[readCPI(curBCI)]) {
                 // another thread beat us
-                result = nodes[readCPI(curBCI)];
+                quickNode = nodes[readCPI(curBCI)];
             } else {
                 // other threads might still have beat us but if
                 // so, the resolution failed and so will we below
@@ -1405,11 +1404,11 @@ public final class BytecodeNode extends EspressoMethodNode {
                 char cpi = original.readCPI(curBCI);
                 int nodeOpcode = original.currentBC(curBCI);
                 Method resolutionSeed = resolveMethodNoCache(nodeOpcode, cpi);
-                result = insert(dispatchQuickened(top, curBCI, cpi, nodeOpcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors));
-                nodes[readCPI(curBCI)] = result;
+                quickNode = insert(dispatchQuickened(top, curBCI, cpi, nodeOpcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors));
+                nodes[readCPI(curBCI)] = quickNode;
             }
         }
-        return result;
+        return quickNode;
     }
 
     private Object getReturnValueAsObject(long[] primitives, Object[] refs, int top) {
