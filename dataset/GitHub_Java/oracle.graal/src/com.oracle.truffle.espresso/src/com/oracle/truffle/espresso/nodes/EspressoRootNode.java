@@ -87,14 +87,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         return getMethodNode() instanceof BytecodeNode;
     }
 
-    public final BytecodeNode getBytecodeNode() {
-        if (isBytecodeNode()) {
-            return (BytecodeNode) getMethodNode();
-        } else {
-            return null;
-        }
-    }
-
     private EspressoMethodNode getMethodNode() {
         Node child = methodNode;
         if (child instanceof WrapperNode) {
@@ -133,11 +125,7 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
             // monitor accesses until Espresso has its own monitor handling.
             //
             // synchronized (monitor) {
-            if (isBytecodeNode()) {
-                ((BytecodeNode) getMethodNode()).synchronizedMethodMonitorEnter(frame, monitor);
-            } else {
-                InterpreterToVM.monitorEnter(monitor);
-            }
+            InterpreterToVM.monitorEnter(monitor);
             Object result;
             try {
                 result = methodNode.execute(frame);
@@ -145,15 +133,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
                 InterpreterToVM.monitorExit(monitor);
             }
             return result;
-        }
-
-        private EspressoMethodNode getMethodNode() {
-            Node child = methodNode;
-            if (child instanceof WrapperNode) {
-                child = ((WrapperNode) child).getDelegateNode();
-            }
-            assert !(child instanceof WrapperNode);
-            return (EspressoMethodNode) child;
         }
     }
 
