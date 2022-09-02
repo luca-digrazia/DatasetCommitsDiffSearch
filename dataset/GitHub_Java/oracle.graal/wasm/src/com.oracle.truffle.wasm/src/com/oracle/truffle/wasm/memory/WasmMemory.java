@@ -33,8 +33,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
@@ -205,22 +203,21 @@ public abstract class WasmMemory implements TruffleObject {
         return load_i64(address);
     }
 
-    @ExportMessage(limit = "3")
-    public void writeArrayElement(long index64, Object value, @CachedLibrary("value") InteropLibrary valueLib)
-                    throws InvalidArrayIndexException, UnsupportedMessageException, UnsupportedTypeException {
+    @ExportMessage
+    public void writeArrayElement(long index64, Object value) throws InvalidArrayIndexException, UnsupportedMessageException {
         if (!isArrayElementReadable(index64)) {
             transferToInterpreter();
             throw InvalidArrayIndexException.create(index64);
         }
         long rawValue;
-        if (valueLib.fitsInLong(value)) {
-            rawValue = valueLib.asLong(value);
-        } else if (valueLib.fitsInFloat(value)) {
-            rawValue = Float.floatToRawIntBits(valueLib.asFloat(value));
-        } else if (valueLib.fitsInDouble(value)) {
-            rawValue = Double.doubleToRawLongBits(valueLib.asDouble(value));
+        if (value instanceof Integer || value instanceof Long) {
+            rawValue = ((Number) value).longValue();
+        } else if (value instanceof Float) {
+            rawValue = Float.floatToRawIntBits((Float) value);
+        } else if (value instanceof Double) {
+            rawValue = Double.doubleToRawLongBits((Double) value);
         } else {
-            throw UnsupportedTypeException.create(new Object[]{value});
+            throw UnsupportedMessageException.create();
         }
         long address = index64 * LONG_SIZE;
         store_i64(address, rawValue);

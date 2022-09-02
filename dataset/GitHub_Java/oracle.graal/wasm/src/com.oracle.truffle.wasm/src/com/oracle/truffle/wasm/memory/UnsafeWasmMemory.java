@@ -31,11 +31,12 @@ package com.oracle.truffle.wasm.memory;
 
 import java.lang.reflect.Field;
 
-import com.oracle.truffle.wasm.WasmTracing;
-import com.oracle.truffle.wasm.exception.WasmException;
+import com.oracle.truffle.wasm.exception.WasmTrap;
 import sun.misc.Unsafe;
 
-public class UnsafeWasmMemory extends WasmMemory implements WasmTracing {
+import static com.oracle.truffle.wasm.WasmTracing.trace;
+
+public class UnsafeWasmMemory extends WasmMemory {
     private final Unsafe unsafe;
     private long startAddress;
     private long pageSize;
@@ -60,7 +61,7 @@ public class UnsafeWasmMemory extends WasmMemory implements WasmTracing {
     public void validateAddress(long address, int offset) {
         trace("validating memory address: 0x%016X (%d)", address, address);
         if (address < 0 || address + offset >= this.byteSize()) {
-            throw new WasmException("Requested memory address out-of-bounds");
+            throw new WasmTrap(null, "Requested memory address out-of-bounds");
         }
     }
 
@@ -93,7 +94,7 @@ public class UnsafeWasmMemory extends WasmMemory implements WasmTracing {
     @Override
     public boolean grow(long extraPageSize) {
         if (extraPageSize < 0) {
-            throw new WasmException("Extra size cannot be negative.");
+            throw new WasmTrap(null, "Extra size cannot be negative.");
         }
         long targetSize = byteSize() + extraPageSize * PAGE_SIZE;
         if (maxPageSize >= 0 && targetSize > maxPageSize * PAGE_SIZE) {
@@ -112,6 +113,7 @@ public class UnsafeWasmMemory extends WasmMemory implements WasmTracing {
         return true;
     }
 
+    // Checkstyle: stop
     @Override
     public int load_i32(long address) {
         trace("load.i32 address = %d", address);
@@ -279,6 +281,7 @@ public class UnsafeWasmMemory extends WasmMemory implements WasmTracing {
         trace("store.i64_32 address = %d, value = 0x%08X (%d)", address, value, value);
         unsafe.putInt(startAddress + address, value);
     }
+    // Checkstyle: resume
 
     @Override
     public WasmMemory duplicate() {
