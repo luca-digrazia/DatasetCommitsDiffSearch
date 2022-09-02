@@ -35,6 +35,8 @@ import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.NAME_AND_TY
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.STRING;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.UTF8;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Formatter;
@@ -52,6 +54,7 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.object.DebugCounter;
+import com.sun.xml.internal.messaging.saaj.util.ByteOutputStream;
 
 /**
  * Immutable, shareable constant-pool representation.
