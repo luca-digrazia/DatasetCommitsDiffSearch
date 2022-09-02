@@ -112,7 +112,7 @@ import jdk.vm.ci.meta.SpeculationLog;
 /**
  * Coordinates partial evaluation of a Truffle AST and subsequent compilation via Graal.
  */
-public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
+public abstract class TruffleCompilerImpl implements TruffleCompiler {
 
     protected final Providers lastTierProviders;
     protected final Suites lastTierSuites;
@@ -572,7 +572,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
     public abstract PhaseSuite<HighTierContext> createGraphBuilderSuite();
 
-    @Override
     public PartialEvaluator getPartialEvaluator() {
         return partialEvaluator;
     }
@@ -775,7 +774,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
     protected void afterCodeInstallation(CompilationResult result, InstalledCode installedCode) {
     }
 
-    @Override
     public final SnippetReflectionProvider getSnippetReflection() {
         return snippetReflection;
     }
