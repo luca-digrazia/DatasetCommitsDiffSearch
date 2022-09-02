@@ -52,12 +52,4 @@ public class WebAssemblyInstantiatedSource extends Dictionary {
                         "instance", this.instance,
         });
     }
-
-    public Module module() {
-        return module;
-    }
-
-    public Instance instance() {
-        return instance;
-    }
 }

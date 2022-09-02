@@ -40,12 +40,16 @@
  */
 package org.graalvm.wasm.api;
 
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
+
+@ExportLibrary(InteropLibrary.class)
 public class TableDescriptor extends Dictionary {
     private final TableKind kind;
-    private final Integer initial;
-    private final Integer maximum;
+    private final Long initial;
+    private final Long maximum;
 
-    public TableDescriptor(String kind, Integer initial, Integer maximum) {
+    public TableDescriptor(String kind, Long initial, Long maximum) {
         this.kind = TableKind.parse(kind);
         this.initial = initial;
         this.maximum = maximum;
@@ -54,13 +58,5 @@ public class TableDescriptor extends Dictionary {
                         "initial", this.initial,
                         "maximum", this.maximum,
         });
-    }
-
-    public Integer initial() {
-        return initial;
-    }
-
-    public Integer maximum() {
-        return maximum;
     }
 }

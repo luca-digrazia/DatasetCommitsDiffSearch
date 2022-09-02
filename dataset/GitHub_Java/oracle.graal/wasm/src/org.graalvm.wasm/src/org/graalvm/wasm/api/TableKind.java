@@ -40,6 +40,13 @@
  */
 package org.graalvm.wasm.api;
 
+import com.oracle.truffle.api.CompilerDirectives;
+
 public enum TableKind {
-    anyfunc
+    anyfunc;
+
+    @CompilerDirectives.TruffleBoundary
+    public static TableKind parse(String name) {
+        return valueOf(name);
+    }
 }

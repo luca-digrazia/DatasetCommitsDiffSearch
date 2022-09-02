@@ -41,7 +41,6 @@
 package org.graalvm.wasm.api;
 
 import static com.oracle.truffle.api.CompilerDirectives.transferToInterpreter;
-import static java.lang.Math.toIntExact;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -97,7 +96,7 @@ public class MemoryArrayBuffer implements TruffleObject {
             transferToInterpreter();
             throw InvalidArrayIndexException.create(index);
         }
-        return memory.load_i32_8u(null, toIntExact(index));
+        return memory.load_i32_8u(null, index);
     }
 
     @CompilerDirectives.TruffleBoundary

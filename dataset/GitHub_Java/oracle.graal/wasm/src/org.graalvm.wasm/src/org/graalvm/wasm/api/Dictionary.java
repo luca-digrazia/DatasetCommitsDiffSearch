@@ -100,6 +100,6 @@ public class Dictionary implements TruffleObject {
     @SuppressWarnings({"unused", "static-method"})
     @ExportMessage
     final boolean isMemberReadable(String member) {
-        return members.containsKey(member);
+        return true;
     }
 }

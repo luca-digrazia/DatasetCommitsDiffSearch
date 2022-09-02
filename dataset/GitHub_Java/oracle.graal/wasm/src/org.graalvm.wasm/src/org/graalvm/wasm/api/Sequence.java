@@ -62,31 +62,31 @@ public class Sequence<T> implements TruffleObject {
 
     @SuppressWarnings({"unused"})
     @ExportMessage
-    public boolean hasArrayElements() {
+    boolean hasArrayElements() {
         return true;
     }
 
     @SuppressWarnings({"unused"})
     @ExportMessage
-    public long getArraySize() {
+    long getArraySize() {
         return list.size();
     }
 
     @SuppressWarnings({"unused"})
     @ExportMessage
-    public boolean isArrayElementReadable(long index) {
+    boolean isArrayElementReadable(long index) {
         return index >= 0 && index < getArraySize();
     }
 
     @SuppressWarnings({"unused", "static-method"})
     @ExportMessage
-    public final boolean isArrayElementModifiable(long index) {
+    final boolean isArrayElementModifiable(long index) {
         return false;
     }
 
     @SuppressWarnings({"unused", "static-method"})
     @ExportMessage
-    public final boolean isArrayElementInsertable(long index) {
+    final boolean isArrayElementInsertable(long index) {
         return false;
     }
 

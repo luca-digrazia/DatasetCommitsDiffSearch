@@ -40,40 +40,28 @@
  */
 package org.graalvm.wasm.api;
 
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.nodes.RootNode;
-import org.graalvm.wasm.WasmContext;
-import org.graalvm.wasm.WasmFunctionInstance;
 import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.WasmTable;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
-import org.graalvm.wasm.exception.WasmTrap;
 
 @ExportLibrary(InteropLibrary.class)
 public class Table extends Dictionary {
     private final TableDescriptor descriptor;
     private final WasmTable table;
 
-    public Table(WasmTable table) {
-        this.descriptor = new TableDescriptor(TableKind.anyfunc.name(), table.size(), table.maxSize());
-        this.table = table;
-        addMembers(new Object[]{
-                "descriptor", this.descriptor,
-                "grow", new Executable(args -> grow((Integer) args[0])),
-                "get", new Executable(args -> get((Integer) args[0])),
-                "set", new Executable(args -> set((Integer) args[0], args[1])),
-        });
-    }
-
     public Table(TableDescriptor descriptor) {
-        this(new WasmTable(descriptor.initial(), descriptor.maximum()));
+        this.descriptor = descriptor;
+        // TODO: Instantiate the table.
+        this.table = null;
+        addMembers(new Object[]{
+                        "descriptor", this.descriptor,
+                        "grow", new Executable(args -> grow((Long) args[0])),
+                        "get", new Executable(args -> get((Long) args[0])),
+                        "set", new Executable(args -> set((Long) args[0], args[1])),
+        });
     }
 
     @TruffleBoundary
@@ -81,53 +69,27 @@ public class Table extends Dictionary {
         return new WasmExecutionException(null, "Range error.");
     }
 
-    public WasmTable wasmTable() {
-        return table;
-    }
-
-    public TableDescriptor descriptor() {
-        return descriptor;
-    }
-
-    public int grow(int delta) {
-        final int size = table.size();
+    public long grow(long delta) {
+        final long size = table.size();
         if (!table.grow(delta)) {
             throw rangeError();
         }
         return size;
     }
 
-    public Object get(int index) {
+    public Object get(long index) {
         if (index > table.size()) {
             throw rangeError();
         }
-        final Object function = table.get(index);
+        final Object function = table.get((int) index);
         return function;
     }
 
-    public Object set(int index, Object element) {
+    private Object set(long index, Object function) {
         if (index > table.size()) {
             throw rangeError();
         }
-        table.set(index, new WasmFunctionInstance(null, Truffle.getRuntime().createCallTarget(new RootNode(WasmContext.getCurrent().language()) {
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                if (InteropLibrary.getUncached().isExecutable(element)) {
-                    try {
-                        return InteropLibrary.getUncached().execute(element, frame.getArguments());
-                    } catch (UnsupportedTypeException e) {
-                        throw WasmTrap.format(null, "Table element %s has an unsupported type.", element);
-                    } catch (ArityException e) {
-                        throw WasmTrap.format(null, "Table element %s has unexpected arity.", element);
-                    } catch (UnsupportedMessageException e) {
-                        throw WasmTrap.format(null, "Table element %s is not executable.", element);
-                    }
-                } else {
-                    throw WasmTrap.format(null, "Table element %s is not executable.", element);
-                }
-            }
-        })));
+        table.set((int) index, function);
         return null;
     }
 

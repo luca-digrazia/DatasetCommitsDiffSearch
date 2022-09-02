@@ -56,12 +56,4 @@ public class ModuleExportDescriptor extends Dictionary {
                         "kind", this.kind.name(),
         });
     }
-
-    public String name() {
-        return name;
-    }
-
-    public ImportExportKind kind() {
-        return kind;
-    }
 }
