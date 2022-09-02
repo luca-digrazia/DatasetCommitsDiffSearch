@@ -50,6 +50,8 @@ import com.oracle.truffle.espresso.runtime.dispatch.BaseInterop;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.vm.UnsafeAccess;
 
+import sun.misc.Unsafe;
+
 /**
  * Implementation of the Espresso object model.
  *
@@ -58,19 +60,37 @@ import com.oracle.truffle.espresso.vm.UnsafeAccess;
  * instances of {@link StaticObject}.
  */
 @ExportLibrary(DynamicDispatchLibrary.class)
-public class StaticObject implements TruffleObject, Cloneable {
+public final class StaticObject implements TruffleObject {
 
     public static final StaticObject[] EMPTY_ARRAY = new StaticObject[0];
     public static final StaticObject NULL = new StaticObject();
     public static final String CLASS_TO_STATIC = "static";
 
+    private static final Unsafe UNSAFE = UnsafeAccess.get();
+    private static final byte[] FOREIGN_OBJECT_MARKER = new byte[0];
+
     private final Klass klass; // != PrimitiveKlass
 
-    private final Object arrayOrForeignObject;
+    /**
+     * Stores non-primitive fields only.
+     */
+    private final Object fields;
 
-    private final boolean isForeign;
+    /**
+     * Stores all primitive types contiguously in a single byte array, without any unused bits
+     * between prims (except for 7 bits with booleans). In order to quickly reconstruct a long (for
+     * example), which would require reading 8 bytes and concatenating them, call Unsafe which can
+     * directly read a long.
+     */
+    private final byte[] primitiveFields;
 
     private volatile EspressoLock lock;
+
+    static {
+        // Assert a byte array has the same representation as a boolean array.
+        assert (Unsafe.ARRAY_BYTE_BASE_OFFSET == Unsafe.ARRAY_BOOLEAN_BASE_OFFSET &&
+                        Unsafe.ARRAY_BYTE_INDEX_SCALE == Unsafe.ARRAY_BOOLEAN_INDEX_SCALE);
+    }
 
     // region Constructors
 
@@ -78,37 +98,69 @@ public class StaticObject implements TruffleObject, Cloneable {
     private StaticObject() {
         assert NULL == null : "Only meant for StaticObject.NULL";
         this.klass = null;
-        this.arrayOrForeignObject = null;
-        this.isForeign = false;
+        this.fields = null;
+        this.primitiveFields = null;
+    }
+
+    // Constructor for object copy.
+    private StaticObject(ObjectKlass klass, Object[] fields, byte[] primitiveFields) {
+        assert klass != null;
+        this.klass = klass;
+        this.fields = fields;
+        this.primitiveFields = primitiveFields;
     }
 
     // Constructor for regular objects.
-    protected StaticObject(ObjectKlass klass) {
+    private StaticObject(ObjectKlass klass) {
         assert klass != null;
         assert klass != klass.getMeta().java_lang_Class;
         this.klass = klass;
-        this.arrayOrForeignObject = null;
-        this.isForeign = false;
+        LinkedKlass lk = klass.getLinkedKlass();
+        this.fields = lk.getObjectFieldsCount() > 0 ? new Object[lk.getObjectFieldsCount()] : null;
+        int toAlloc = lk.getInstancePrimitiveToAlloc();
+        this.primitiveFields = toAlloc > 0 ? new byte[toAlloc] : null;
+        initInstanceFields(klass);
     }
 
     // Constructor for Class objects.
-    protected StaticObject(Klass klass) {
+    private StaticObject(Klass klass) {
         ObjectKlass guestClass = klass.getMeta().java_lang_Class;
         this.klass = guestClass;
-        this.arrayOrForeignObject = null;
-        this.isForeign = false;
+        LinkedKlass lgk = guestClass.getLinkedKlass();
+        this.fields = lgk.getObjectFieldsCount() > 0 ? new Object[lgk.getObjectFieldsCount()] : null;
+        int primitiveFieldCount = lgk.getInstancePrimitiveToAlloc();
+        this.primitiveFields = primitiveFieldCount > 0 ? new byte[primitiveFieldCount] : null;
+        initInstanceFields(guestClass);
+        if (klass.getContext().getJavaVersion().modulesEnabled()) {
+            klass.getMeta().java_lang_Class_classLoader.setObject(this, klass.getDefiningClassLoader());
+            setModule(klass);
+        }
+        klass.getMeta().HIDDEN_MIRROR_KLASS.setHiddenObject(this, klass);
+        // Will be overriden by JVM_DefineKlass if necessary.
+        klass.getMeta().HIDDEN_PROTECTION_DOMAIN.setHiddenObject(this, StaticObject.NULL);
     }
 
     // Constructor for static fields storage.
-    protected StaticObject(ObjectKlass klass, @SuppressWarnings("unused") Void unused) {
+    private StaticObject(ObjectKlass klass, @SuppressWarnings("unused") Void unused) {
         assert klass != null;
         this.klass = klass;
-        this.arrayOrForeignObject = null;
-        this.isForeign = false;
+        LinkedKlass lk = klass.getLinkedKlass();
+        this.fields = lk.getStaticObjectFieldsCount() > 0 ? new Object[lk.getStaticObjectFieldsCount()] : null;
+        int toAlloc = lk.getStaticPrimitiveToAlloc();
+        this.primitiveFields = toAlloc > 0 ? new byte[toAlloc] : null;
+        initStaticFields(klass);
     }
 
     /**
      * Constructor for Array objects.
+     *
+     * Current implementation stores the array in lieu of fields. fields being an Object, a char
+     * array can be stored under it without any boxing happening. The array could have been stored
+     * in fields[0], but getting to the array would then require an additional indirection.
+     *
+     * Regular objects still always have an Object[] hiding under fields. In order to preserve the
+     * behavior and avoid casting to Object[] (a non-leaf cast), we perform field accesses with
+     * Unsafe operations.
      */
     private StaticObject(ArrayKlass klass, Object array) {
         this.klass = klass;
@@ -116,16 +168,16 @@ public class StaticObject implements TruffleObject, Cloneable {
         assert array != null;
         assert !(array instanceof StaticObject);
         assert array.getClass().isArray();
-        this.arrayOrForeignObject = array;
-        this.isForeign = false;
+        this.fields = array;
+        this.primitiveFields = null;
     }
 
     private StaticObject(Klass klass, Object foreignObject, @SuppressWarnings("unused") Void unused) {
         this.klass = klass;
         assert foreignObject != null;
         assert !(foreignObject instanceof StaticObject) : "Espresso objects cannot be wrapped";
-        this.arrayOrForeignObject = foreignObject;
-        this.isForeign = true;
+        this.primitiveFields = FOREIGN_OBJECT_MARKER;
+        this.fields = foreignObject;
     }
 
     @ExplodeLoop
@@ -156,28 +208,17 @@ public class StaticObject implements TruffleObject, Cloneable {
 
     public static StaticObject createNew(ObjectKlass klass) {
         assert !klass.isAbstract() && !klass.isInterface();
-        StaticObject newObj = klass.getLinkedKlass().getShape(false).getFactory().create(klass);
-        newObj.initInstanceFields(klass);
+        StaticObject newObj = new StaticObject(klass);
         return trackAllocation(klass, newObj);
     }
 
     public static StaticObject createClass(Klass klass) {
-        ObjectKlass guestClass = klass.getMeta().java_lang_Class;
-        StaticObject newObj = guestClass.getLinkedKlass().getShape(false).getFactory().create(klass);
-        newObj.initInstanceFields(guestClass);
-        if (klass.getContext().getJavaVersion().modulesEnabled()) {
-            klass.getMeta().java_lang_Class_classLoader.setObject(newObj, klass.getDefiningClassLoader());
-            newObj.setModule(klass);
-        }
-        klass.getMeta().HIDDEN_MIRROR_KLASS.setHiddenObject(newObj, klass);
-        // Will be overriden by JVM_DefineKlass if necessary.
-        klass.getMeta().HIDDEN_PROTECTION_DOMAIN.setHiddenObject(newObj, StaticObject.NULL);
+        StaticObject newObj = new StaticObject(klass);
         return trackAllocation(klass, newObj);
     }
 
     public static StaticObject createStatics(ObjectKlass klass) {
-        StaticObject newObj = klass.getLinkedKlass().getShape(true).getFactory().create(klass, null);
-        newObj.initStaticFields(klass);
+        StaticObject newObj = new StaticObject(klass, null);
         return trackAllocation(klass, newObj);
     }
 
@@ -227,19 +268,9 @@ public class StaticObject implements TruffleObject, Cloneable {
         if (getKlass().isArray()) {
             obj = createArray((ArrayKlass) getKlass(), cloneWrappedArray());
         } else {
-            obj = (StaticObject) clone();
+            obj = new StaticObject((ObjectKlass) getKlass(), fields == null ? null : ((Object[]) fields).clone(), primitiveFields == null ? null : primitiveFields.clone());
         }
         return trackAllocation(getKlass(), obj);
-    }
-
-    @Override
-    @TruffleBoundary
-    public Object clone() {
-        try {
-            return super.clone();
-        } catch (CloneNotSupportedException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private static StaticObject trackAllocation(Klass klass, StaticObject obj) {
@@ -247,6 +278,20 @@ public class StaticObject implements TruffleObject, Cloneable {
     }
 
     // endregion Constructors
+
+    // region Accessors for field accesses of non-array, non-foreign objects
+    public Object[] getObjectFieldStorage() {
+        assert !isArray();
+        checkNotForeign();
+        return castExact(fields, Object[].class);
+    }
+
+    public byte[] getPrimitiveFieldStorage() {
+        assert !isArray();
+        checkNotForeign();
+        return primitiveFields;
+    }
+    // endregion Accessors for field accesses of non-array, non-foreign objects
 
     public boolean isString() {
         return StaticObject.notNull(this) && getKlass() == getKlass().getMeta().java_lang_String;
@@ -326,7 +371,7 @@ public class StaticObject implements TruffleObject, Cloneable {
     }
 
     public boolean isForeignObject() {
-        return isForeign;
+        return this.primitiveFields == FOREIGN_OBJECT_MARKER;
     }
 
     public boolean isEspressoObject() {
@@ -335,7 +380,7 @@ public class StaticObject implements TruffleObject, Cloneable {
 
     public Object rawForeignObject() {
         assert isForeignObject();
-        return this.arrayOrForeignObject;
+        return this.fields;
     }
 
     public boolean isStaticStorage() {
@@ -424,7 +469,7 @@ public class StaticObject implements TruffleObject, Cloneable {
     public <T> T unwrap() {
         checkNotForeign();
         assert isArray();
-        return (T) arrayOrForeignObject;
+        return (T) fields;
     }
 
     public <T> T get(int index) {
@@ -433,34 +478,113 @@ public class StaticObject implements TruffleObject, Cloneable {
         return this.<T[]> unwrap()[index];
     }
 
+    public void putObjectUnsafe(StaticObject value, int index) {
+        UNSAFE.putObject(fields, (long) getObjectArrayOffset(index), value);
+    }
+
+    public void putObject(StaticObject value, int index, Meta meta) {
+        putObject(value, index, meta, null);
+    }
+
+    /**
+     * Workaround to avoid casting to Object[] in InterpreterToVM (non-leaf type check).
+     */
+    public void putObject(StaticObject value, int index, Meta meta, BytecodeNode bytecodeNode) {
+        checkNotForeign();
+        assert isArray();
+        if (index >= 0 && index < length()) {
+            // TODO(peterssen): Use different profiles for index-out-of-bounds and array-store
+            // exceptions.
+            putObjectUnsafe(arrayStoreExCheck(value, ((ArrayKlass) klass).getComponentType(), meta, bytecodeNode), index);
+        } else {
+            if (bytecodeNode != null) {
+                bytecodeNode.enterImplicitExceptionProfile();
+            }
+            throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+        }
+    }
+
+    private static StaticObject arrayStoreExCheck(StaticObject value, Klass componentType, Meta meta, BytecodeNode bytecodeNode) {
+        if (StaticObject.isNull(value) || instanceOf(value, componentType)) {
+            return value;
+        } else {
+            if (bytecodeNode != null) {
+                bytecodeNode.enterImplicitExceptionProfile();
+            }
+            throw meta.throwException(meta.java_lang_ArrayStoreException);
+        }
+    }
+
+    public static int getObjectArrayOffset(int index) {
+        return Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * index;
+    }
+
+    public static long getByteArrayOffset(int index) {
+        return Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * (long) index;
+    }
+
+    public void setArrayByte(byte value, int index, Meta meta) {
+        setArrayByte(value, index, meta, null);
+    }
+
+    public void setArrayByte(byte value, int index, Meta meta, BytecodeNode bytecodeNode) {
+        checkNotForeign();
+        assert isArray() && fields instanceof byte[];
+        if (index >= 0 && index < length()) {
+            UNSAFE.putByte(fields, getByteArrayOffset(index), value);
+        } else {
+            if (bytecodeNode != null) {
+                bytecodeNode.enterImplicitExceptionProfile();
+            }
+            throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+        }
+    }
+
+    public byte getArrayByte(int index, Meta meta) {
+        return getArrayByte(index, meta, null);
+    }
+
+    public byte getArrayByte(int index, Meta meta, BytecodeNode bytecodeNode) {
+        checkNotForeign();
+        assert isArray() && fields instanceof byte[];
+        if (index >= 0 && index < length()) {
+            return UNSAFE.getByte(fields, getByteArrayOffset(index));
+        } else {
+            if (bytecodeNode != null) {
+                bytecodeNode.enterImplicitExceptionProfile();
+            }
+            throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+        }
+    }
+
     public int length() {
         checkNotForeign();
         assert isArray();
-        return Array.getLength(arrayOrForeignObject);
+        return Array.getLength(fields);
     }
 
     private Object cloneWrappedArray() {
         checkNotForeign();
         assert isArray();
-        if (arrayOrForeignObject instanceof byte[]) {
+        if (fields instanceof byte[]) {
             return this.<byte[]> unwrap().clone();
         }
-        if (arrayOrForeignObject instanceof char[]) {
+        if (fields instanceof char[]) {
             return this.<char[]> unwrap().clone();
         }
-        if (arrayOrForeignObject instanceof short[]) {
+        if (fields instanceof short[]) {
             return this.<short[]> unwrap().clone();
         }
-        if (arrayOrForeignObject instanceof int[]) {
+        if (fields instanceof int[]) {
             return this.<int[]> unwrap().clone();
         }
-        if (arrayOrForeignObject instanceof float[]) {
+        if (fields instanceof float[]) {
             return this.<float[]> unwrap().clone();
         }
-        if (arrayOrForeignObject instanceof double[]) {
+        if (fields instanceof double[]) {
             return this.<double[]> unwrap().clone();
         }
-        if (arrayOrForeignObject instanceof long[]) {
+        if (fields instanceof long[]) {
             return this.<long[]> unwrap().clone();
         }
         return this.<StaticObject[]> unwrap().clone();
@@ -534,63 +658,5 @@ public class StaticObject implements TruffleObject, Cloneable {
 
     public boolean isArray() {
         return !isNull(this) && getKlass().isArray();
-    }
-
-    // region Factory interface.
-    public interface StaticObjectFactory {
-        StaticObject create(ObjectKlass klass);
-
-        StaticObject create(Klass klass);
-
-        StaticObject create(ObjectKlass klass, Void unused);
-    }
-    // endregion Factory interface.
-
-    public static final class DefaultArrayBasedStaticObject extends StaticObject {
-        public final byte[] primitive;
-        public final Object[] object;
-
-        private DefaultArrayBasedStaticObject(ObjectKlass klass, int primitiveArraySize, int objectArraySize) {
-            super(klass);
-            primitive = new byte[primitiveArraySize];
-            object = new Object[objectArraySize];
-        }
-
-        private DefaultArrayBasedStaticObject(Klass klass, int primitiveArraySize, int objectArraySize) {
-            super(klass);
-            primitive = new byte[primitiveArraySize];
-            object = new Object[objectArraySize];
-        }
-
-        private DefaultArrayBasedStaticObject(ObjectKlass klass, Void unused, int primitiveArraySize, int objectArraySize) {
-            super(klass, unused);
-            primitive = new byte[primitiveArraySize];
-            object = new Object[objectArraySize];
-        }
-    }
-
-    public static final class DefaultArrayBasedStaticObjectFactory implements StaticObjectFactory {
-        private final int primitiveArraySize;
-        private final int objectArraySize;
-
-        public DefaultArrayBasedStaticObjectFactory(int primitiveArraySize, int objectArraySize) {
-            this.primitiveArraySize = primitiveArraySize;
-            this.objectArraySize = objectArraySize;
-        }
-
-        @Override
-        public StaticObject create(ObjectKlass klass) {
-            return new DefaultArrayBasedStaticObject(klass, primitiveArraySize, objectArraySize);
-        }
-
-        @Override
-        public StaticObject create(Klass klass) {
-            return new DefaultArrayBasedStaticObject(klass, primitiveArraySize, objectArraySize);
-        }
-
-        @Override
-        public StaticObject create(ObjectKlass klass, Void unused) {
-            return new DefaultArrayBasedStaticObject(klass, unused, primitiveArraySize, objectArraySize);
-        }
     }
 }
