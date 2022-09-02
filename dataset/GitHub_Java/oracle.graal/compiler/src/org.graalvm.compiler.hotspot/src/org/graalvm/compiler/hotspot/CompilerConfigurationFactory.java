@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.graalvm.collections.EconomicMap;
-import org.graalvm.compiler.core.Instrumentation;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
@@ -129,10 +128,8 @@ public abstract class CompilerConfigurationFactory implements Comparable<Compile
                 for (HotSpotBackendFactory backend : GraalServices.load(HotSpotBackendFactory.class)) {
                     if (backend.getName().equals(backendName)) {
                         Class<? extends Architecture> arch = backend.getArchitecture();
-                        if (arch != null) {
-                            HotSpotBackendFactory oldEntry = backends.put(arch, backend);
-                            assert oldEntry == null || oldEntry == backend : "duplicate Graal backend";
-                        }
+                        HotSpotBackendFactory oldEntry = backends.put(arch, backend);
+                        assert oldEntry == null || oldEntry == backend : "duplicate Graal backend";
                     }
                 }
             }
