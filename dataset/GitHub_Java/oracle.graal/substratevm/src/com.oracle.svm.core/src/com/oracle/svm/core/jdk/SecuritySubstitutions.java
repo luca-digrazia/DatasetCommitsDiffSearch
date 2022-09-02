@@ -39,7 +39,6 @@ import java.security.PrivilegedAction;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.security.ProtectionDomain;
-import java.security.Provider;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -302,12 +301,6 @@ final class Target_javax_crypto_JceSecurity {
     @TargetElement(onlyWith = JDK8OrEarlier.class)
     static void verifyProviderJar(URL var0) {
         throw JceSecurityUtil.shouldNotReach("javax.crypto.JceSecurity.verifyProviderJar(URL)");
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK11OrLater.class)
-    static void verifyProvider(URL codeBase, Provider p) {
-        throw JceSecurityUtil.shouldNotReach("javax.crypto.JceSecurity.verifyProviderJar(URL, Provider)");
     }
 
     @Substitute
