@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,7 +40,10 @@ import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.c.type.CShortPointer;
+import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.PointerBase;
+
+import jdk.vm.ci.services.Services;
 
 final class JNI {
 
@@ -218,7 +221,7 @@ final class JNI {
         @CField("GetStaticMethodID")
         GetStaticMethodID getGetStaticMethodID();
 
-        @CField("CallStaticIntMethodA")
+        @CField("CallStaticBooleanMethodA")
         CallStaticBooleanMethodA getCallStaticBooleanMethodA();
 
         @CField("CallStaticIntMethodA")
@@ -250,6 +253,9 @@ final class JNI {
 
         @CField("GetObjectRefType")
         GetObjectRefType getGetObjectRefType();
+
+        @CField("GetDirectBufferAddress")
+        GetDirectBufferAddress getGetDirectBufferAddress();
     }
 
     interface CallStaticIntMethodA extends CFunctionPointer {
@@ -447,6 +453,11 @@ final class JNI {
         int call(JNIEnv env, JThrowable throwable);
     }
 
+    interface GetDirectBufferAddress extends CFunctionPointer {
+        @InvokeCFunctionPointer
+        VoidPointer call(JNIEnv env, JObject buf);
+    }
+
     static class JNIHeaderDirectives implements CContext.Directives {
         private static final String[] INCLUDES = {"jni.h", "jni_md.h"};
 
@@ -461,10 +472,13 @@ final class JNI {
         }
 
         private static Path[] findJNIHeaders() {
-            Path javaHome = Paths.get(System.getProperty("java.home"));
+            Path javaHome = Paths.get(Services.getSavedProperties().get("java.home"));
             Path includeFolder = javaHome.resolve("include");
             if (!Files.exists(includeFolder)) {
-                javaHome = javaHome.getParent();
+                Path parent = javaHome.getParent();
+                if (parent != null) {
+                    javaHome = parent;
+                }
             }
             includeFolder = javaHome.resolve("include");
             if (!Files.exists(includeFolder)) {
