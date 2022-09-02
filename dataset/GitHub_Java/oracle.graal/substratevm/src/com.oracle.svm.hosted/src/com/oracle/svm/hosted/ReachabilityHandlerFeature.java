@@ -159,19 +159,19 @@ public class ReachabilityHandlerFeature implements Feature {
         Map<Object, Set<Object>> handledTriggers = triggeredHandlers.computeIfAbsent(callback, c -> new IdentityHashMap<>());
         for (Object trigger : triggers) {
             if (trigger instanceof AnalysisType) {
-                Set<AnalysisType> newReachable = access.reachableSubtypes(((AnalysisType) trigger));
+                Set<Class<?>> newReachable = access.reachableSubtypes(((AnalysisType) trigger));
                 Set<Object> prevReachable = handledTriggers.computeIfAbsent(trigger, c -> new HashSet<>());
                 newReachable.removeAll(prevReachable);
-                for (AnalysisType reachable : newReachable) {
-                    toSubtypeCallback(callback).accept(access, reachable.getJavaClass());
+                for (Class<?> reachable : newReachable) {
+                    toSubtypeCallback(callback).accept(access, reachable);
                     prevReachable.add(reachable);
                 }
             } else if (trigger instanceof AnalysisMethod) {
-                Set<AnalysisMethod> newReachable = access.reachableMethodOverrides((AnalysisMethod) trigger);
+                Set<Executable> newReachable = access.reachableMethodOverrides((AnalysisMethod) trigger);
                 Set<Object> prevReachable = handledTriggers.computeIfAbsent(trigger, c -> new HashSet<>());
                 newReachable.removeAll(prevReachable);
-                for (AnalysisMethod reachable : newReachable) {
-                    toOverrideCallback(callback).accept(access, reachable.getJavaMethod());
+                for (Executable reachable : newReachable) {
+                    toOverrideCallback(callback).accept(access, reachable);
                     prevReachable.add(reachable);
                 }
             } else {
