@@ -243,10 +243,8 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
             PlatformNativeLibrarySupport.singleton().addBuiltinPkgNativePrefix("sun_security_ec");
 
             nativeLibraries.addLibrary("sunec", true);
-            if (isPosix()) {
-                /* Library sunec depends on stdc++ */
-                nativeLibraries.addLibrary("stdc++", false);
-            }
+            /* Library sunec depends on stdc++ */
+            nativeLibraries.addLibrary("stdc++", false);
         }
     }
 
