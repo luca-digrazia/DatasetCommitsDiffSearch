@@ -589,11 +589,6 @@ public final class ObjectKlass extends Klass {
         return false;
     }
 
-    public boolean isSealed() {
-        PermittedSubclassesAttribute permittedSubclasses = (PermittedSubclassesAttribute) getAttribute(PermittedSubclassesAttribute.NAME);
-        return permittedSubclasses != null && permittedSubclasses.getClasses().length > 0;
-    }
-
     public boolean permittedSubclassCheck(ObjectKlass k) {
         CompilerAsserts.neverPartOfCompilation();
         if (!getContext().getJavaVersion().java17OrLater()) {
