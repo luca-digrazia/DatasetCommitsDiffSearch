@@ -105,7 +105,6 @@ public class UniverseBuilder {
     private final HostedMetaAccess hMetaAccess;
     private StaticAnalysisResultsBuilder staticAnalysisResultsBuilder;
     private final UnsupportedFeatures unsupportedFeatures;
-    private TypeCheckBuilder typeCheckBuilder;
 
     public UniverseBuilder(AnalysisUniverse aUniverse, AnalysisMetaAccess aMetaAccess, HostedUniverse hUniverse, HostedMetaAccess hMetaAccess,
                     StaticAnalysisResultsBuilder staticAnalysisResultsBuilder, UnsupportedFeatures unsupportedFeatures) {
@@ -147,12 +146,6 @@ public class UniverseBuilder {
             buildSubTypes();
             buildOrderedTypes();
             buildTypeCheckIDs();
-            typeCheckBuilder = new TypeCheckBuilder(hUniverse.orderedTypes, hUniverse.objectType());
-            if (SubstrateOptions.UseLegacyTypeCheck.getValue()) {
-                assert typeCheckBuilder.calculateIDs();
-            } else {
-                typeCheckBuilder.calculateIDs();
-            }
 
             collectDeclaredMethods();
             collectMonitorFieldInfo(bb);
@@ -736,16 +729,11 @@ public class UniverseBuilder {
             startSize += fieldSize;
 
             /*
-             * Set start after bitset/typecheck slots field, if the hybrid class has one. For now,
-             * only DynamicHubs can this field(s).
+             * Set start after bitset field, if the hybrid class has one. For now, only DynamicHubs
+             * can have bitsets.
              */
             if (clazz.equals(hMetaAccess.lookupJavaType(DynamicHub.class))) {
-                if (SubstrateOptions.UseLegacyTypeCheck.getValue()) {
-                    startSize += (hUniverse.numInterfaceBits + Byte.SIZE - 1) / Byte.SIZE;
-                } else {
-                    /* Each type check id slot is 2 bytes. */
-                    startSize += typeCheckBuilder.getNumTypeCheckSlots() * 2;
-                }
+                startSize += (hUniverse.numInterfaceBits + Byte.SIZE - 1) / Byte.SIZE;
             }
         }
 
@@ -1189,7 +1177,6 @@ public class UniverseBuilder {
         ImageSingletons.lookup(DynamicHubSupport.class).setData(referenceMapEncoder.encodeAll());
 
         ObjectLayout ol = ConfigurationValues.getObjectLayout();
-        short[] emptySlots = null;
         for (HostedType type : hUniverse.orderedTypes) {
             int layoutHelper;
             int monitorOffset = 0;
@@ -1241,21 +1228,8 @@ public class UniverseBuilder {
             long referenceMapIndex = referenceMapEncoder.lookupEncoding(referenceMap);
 
             DynamicHub hub = type.getHub();
-            if (SubstrateOptions.UseLegacyTypeCheck.getValue()) {
-                hub.setData(layoutHelper, type.getTypeID(), monitorOffset, hashCodeOffset, type.getAssignableFromMatches(), type.instanceOfBits, vtable, referenceMapIndex, type.isInstantiated());
-            } else {
-                short[] typeCheckSlots;
-                if (type.getWrapped().isReachable()) {
-                    typeCheckSlots = type.getTypeCheckSlots();
-                } else {
-                    if (emptySlots == null) {
-                        emptySlots = new short[typeCheckBuilder.getNumTypeCheckSlots()];
-                    }
-                    typeCheckSlots = emptySlots;
-                }
-                hub.setData(layoutHelper, type.getTypeID(), monitorOffset, hashCodeOffset, type.getTypeCheckStart(), type.getTypeCheckRange(), type.getTypeCheckSlot(), typeCheckSlots,
-                                vtable, referenceMapIndex, type.isInstantiated());
-            }
+            hub.setData(layoutHelper, type.getTypeID(), monitorOffset, hashCodeOffset, type.getAssignableFromMatches(), type.instanceOfBits, vtable, referenceMapIndex,
+                            type.isInstantiated());
         }
     }
 
