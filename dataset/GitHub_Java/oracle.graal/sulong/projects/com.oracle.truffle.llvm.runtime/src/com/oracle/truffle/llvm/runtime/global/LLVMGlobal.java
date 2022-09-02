@@ -33,7 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
@@ -41,15 +41,19 @@ import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public final class LLVMGlobal extends LLVMSymbol {
+public final class LLVMGlobal implements LLVMSymbol {
 
     private final LLVMSourceSymbol sourceSymbol;
     private final boolean readOnly;
 
     @CompilationFinal private String name;
     @CompilationFinal private PointerType type;
+    @CompilationFinal private ExternalLibrary library;
     @CompilationFinal private boolean interopTypeCached;
     @CompilationFinal private LLVMInteropType interopType;
+
+    private final int globalIndex;
+    private final int moduleId;
 
     public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id) {
         if (index < 0) {
@@ -66,19 +70,48 @@ public final class LLVMGlobal extends LLVMSymbol {
     }
 
     private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int globalIndex, int moduleId) {
-        super(name, null, moduleId, globalIndex);
         this.name = name;
         this.type = type;
         this.sourceSymbol = sourceSymbol;
         this.readOnly = readOnly;
 
+        this.library = null;
         this.interopTypeCached = false;
         this.interopType = null;
+        this.globalIndex = globalIndex;
+        this.moduleId = moduleId;
+    }
+
+    public boolean isAvailable() {
+        return moduleId >= 0;
+    }
+
+    public int getIndex() {
+        return globalIndex;
+    }
+
+    public int getID() {
+        return moduleId;
     }
 
     @Override
     public String toString() {
-        return "(" + type + ")" + (getLibrary() == null ? "" : getLibrary().getName() + "::") + name;
+        return "(" + type + ")" + (library == null ? "" : library.getName() + "::") + name;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public ExternalLibrary getLibrary() {
+        return library;
     }
 
     public LLVMInteropType getInteropType(LLVMContext context) {
@@ -101,7 +134,7 @@ public final class LLVMGlobal extends LLVMSymbol {
 
     @Override
     public boolean isDefined() {
-        return getLibrary() != null;
+        return library != null;
     }
 
     public void define(ExternalLibrary newLibrary) {
@@ -114,7 +147,7 @@ public final class LLVMGlobal extends LLVMSymbol {
         assert newType != null && newLibrary != null;
         if (!isDefined()) {
             this.type = newType;
-            setLibrary(newLibrary);
+            this.library = newLibrary;
         } else {
             CompilerDirectives.transferToInterpreter();
             throw new AssertionError("Found multiple definitions of global " + getName() + ".");
@@ -136,12 +169,7 @@ public final class LLVMGlobal extends LLVMSymbol {
     }
 
     @Override
-    public boolean isAlias() {
-        return false;
-    }
-
-    @Override
-    public LLVMFunction asFunction() {
+    public LLVMFunctionDescriptor asFunction() {
         throw new IllegalStateException("Global " + name + " is not a function.");
     }
 
