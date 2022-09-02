@@ -80,7 +80,6 @@ final class HostInteropReflect {
     static final String STATIC_TO_CLASS = "class";
     static final String CLASS_TO_STATIC = "static";
     static final String ADAPTER_SUPER_MEMBER = "super";
-    static final String ADAPTER_DELEGATE_MEMBER = "this";
 
     private HostInteropReflect() {
     }
