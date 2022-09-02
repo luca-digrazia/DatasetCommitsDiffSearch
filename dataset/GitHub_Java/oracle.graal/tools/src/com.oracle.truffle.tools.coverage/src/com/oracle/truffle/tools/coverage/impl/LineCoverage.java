@@ -37,11 +37,6 @@ import com.oracle.truffle.tools.coverage.SourceCoverage;
 
 final class LineCoverage {
 
-    private static final char STATEMENT_NOT = '-';
-    private static final char STATEMENT_YES = '+';
-    private static final char ROOT_PARTLY = '!';
-    private static final char ROOT_NOT = '!';
-    private static final char ROOT_YES = ' ';
     private final Set<SourceSection> loadedSourceSections;
     private final Set<SourceSection> coveredSourceSections;
     private final Set<SourceSection> loadedRootSections;
@@ -52,12 +47,12 @@ final class LineCoverage {
     private final Set<Integer> loadedRootLineNumbers;
     private final Set<Integer> coveredRootLineNumbers;
     private final Set<Integer> nonCoveredRootLineNumbers;
-    private final boolean strictLines;
-    private char statementPartly;
 
-    private LineCoverage(SourceCoverage coverage, boolean strictLines, boolean detailed) {
-        this.strictLines = strictLines;
-        statementPartly = strictLines ? 'i' : '+';
+    LineCoverage(SourceCoverage coverage) {
+        this(coverage, true);
+    }
+
+    LineCoverage(SourceCoverage coverage, boolean detailed) {
         loadedSourceSections = loadedSourceSections(coverage);
         coveredSourceSections = coveredSourceSections(coverage);
         loadedRootSections = detailed ? loadedRootSections(coverage) : null;
@@ -69,14 +64,6 @@ final class LineCoverage {
         loadedRootLineNumbers = detailed ? loadedRootLineNumbers() : null;
         coveredRootLineNumbers = detailed ? coveredRootLineNumbers() : null;
         nonCoveredRootLineNumbers = detailed ? nonCoveredRootLineNumbers() : null;
-    }
-
-    static LineCoverage detailed(SourceCoverage coverage, boolean strictLines) {
-        return new LineCoverage(coverage, strictLines, true);
-    }
-
-    static LineCoverage basic(SourceCoverage coverage, boolean strictLines) {
-        return new LineCoverage(coverage, strictLines, false);
     }
 
     private static char getCoverageChar(int i, char partly, char not, char yes, Set<Integer> loaded, Set<Integer> covered, Set<Integer> nonCovered) {
@@ -147,16 +134,16 @@ final class LineCoverage {
 
     double getCoverage() {
         final int loadedSize = loadedLineNumbers.size();
-        final int nonCoveredSize = strictLines ? nonCoveredLineNumbers.size() : loadedSize - coveredLineNumbers.size();
+        final int nonCoveredSize = nonCoveredLineNumbers.size();
         return ((double) loadedSize - nonCoveredSize) / loadedSize;
     }
 
     char getStatementCoverageCharacter(int i) {
-        return getCoverageChar(i, statementPartly, STATEMENT_NOT, STATEMENT_YES, loadedLineNumbers, coveredLineNumbers, nonCoveredLineNumbers);
+        return getCoverageChar(i, 'i', '-', '+', loadedLineNumbers, coveredLineNumbers, nonCoveredLineNumbers);
     }
 
     char getRootCoverageCharacter(int i) {
-        return getCoverageChar(i, ROOT_PARTLY, ROOT_NOT, ROOT_YES, loadedRootLineNumbers, coveredRootLineNumbers, nonCoveredRootLineNumbers);
+        return getCoverageChar(i, '!', '!', ' ', loadedRootLineNumbers, coveredRootLineNumbers, nonCoveredRootLineNumbers);
     }
 
     private Set<Integer> nonCoveredLineNumbers() {
