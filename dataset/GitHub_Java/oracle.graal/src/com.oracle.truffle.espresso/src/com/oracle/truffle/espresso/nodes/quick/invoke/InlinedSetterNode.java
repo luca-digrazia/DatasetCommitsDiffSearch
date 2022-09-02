@@ -28,8 +28,9 @@ import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
-import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.nodes.helper.AbstractSetFieldNode;
+import com.oracle.truffle.espresso.nodes.quick.QuickNode;
+import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.object.DebugCounter;
 
 public class InlinedSetterNode extends QuickNode {
@@ -44,33 +45,38 @@ public class InlinedSetterNode extends QuickNode {
     final Method inlinedMethod;
     protected final int stackEffect;
     final int slotCount;
+    protected final int statementIndex;
 
     @Child AbstractSetFieldNode setFieldNode;
 
-    InlinedSetterNode(Method inlinedMethod, int top, int opcode, int callerBCI) {
+    InlinedSetterNode(Method inlinedMethod, int top, int opcode, int callerBCI, int statementIndex) {
         super(top, callerBCI);
         this.inlinedMethod = inlinedMethod;
         this.field = getInlinedField(inlinedMethod);
         this.slotCount = field.getKind().getSlotCount();
         this.stackEffect = Bytecodes.stackEffectOf(opcode);
+        this.statementIndex = statementIndex;
         setFieldNode = AbstractSetFieldNode.create(this.field);
         assert field.isStatic() == inlinedMethod.isStatic();
     }
 
-    public static InlinedSetterNode create(Method inlinedMethod, int top, int opCode, int curBCI) {
+    public static InlinedSetterNode create(Method inlinedMethod, int top, int opCode, int curBCI, int statementIndex) {
         setterNodes.inc();
         if (inlinedMethod.isFinalFlagSet() || inlinedMethod.getDeclaringKlass().isFinalFlagSet()) {
-            return new InlinedSetterNode(inlinedMethod, top, opCode, curBCI);
+            return new InlinedSetterNode(inlinedMethod, top, opCode, curBCI, statementIndex);
         } else {
             leafSetterNodes.inc();
-            return new LeafAssumptionSetterNode(inlinedMethod, top, opCode, curBCI);
+            return new LeafAssumptionSetterNode(inlinedMethod, top, opCode, curBCI, statementIndex);
         }
     }
 
     @Override
     public int execute(VirtualFrame frame) {
         BytecodeNode root = getBytecodesNode();
-        setFieldNode.setField(frame, root, top);
+        StaticObject receiver = field.isStatic()
+                        ? field.getDeclaringKlass().tryInitializeAndGetStatics()
+                        : nullCheck(root.popObject(frame, top - 1 - slotCount));
+        setFieldNode.setField(frame, root, receiver, top, statementIndex);
         return -slotCount + stackEffect;
     }
 
@@ -80,7 +86,7 @@ public class InlinedSetterNode extends QuickNode {
     }
 
     private static Field getInlinedField(Method inlinedMethod) {
-        BytecodeStream code = new BytecodeStream(inlinedMethod.getCode());
+        BytecodeStream code = new BytecodeStream(inlinedMethod.getOriginalCode());
         if (inlinedMethod.isStatic()) {
             return inlinedMethod.getRuntimeConstantPool().resolvedFieldAt(inlinedMethod.getDeclaringKlass(), code.readCPI(STATIC_SETTER_BCI));
         } else {

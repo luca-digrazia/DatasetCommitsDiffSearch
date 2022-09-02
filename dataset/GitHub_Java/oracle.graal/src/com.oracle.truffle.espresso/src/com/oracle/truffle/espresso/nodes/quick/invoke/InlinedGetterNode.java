@@ -27,8 +27,8 @@ import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
-import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.nodes.helper.AbstractGetFieldNode;
+import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.object.DebugCounter;
 
@@ -42,24 +42,26 @@ public class InlinedGetterNode extends QuickNode {
 
     final Field field;
     final Method inlinedMethod;
+    protected final int statementIndex;
 
     @Child AbstractGetFieldNode getFieldNode;
 
-    InlinedGetterNode(Method inlinedMethod, int top, int callerBCI) {
+    InlinedGetterNode(Method inlinedMethod, int top, int callerBCI, int statementIndex) {
         super(top, callerBCI);
         this.inlinedMethod = inlinedMethod;
         this.field = getInlinedField(inlinedMethod);
+        this.statementIndex = statementIndex;
         getFieldNode = AbstractGetFieldNode.create(this.field);
         assert field.isStatic() == inlinedMethod.isStatic();
     }
 
-    public static InlinedGetterNode create(Method inlinedMethod, int top, int opCode, int curBCI) {
+    public static InlinedGetterNode create(Method inlinedMethod, int top, int opCode, int curBCI, int statementIndex) {
         getterNodes.inc();
         if (inlinedMethod.isFinalFlagSet() || inlinedMethod.getDeclaringKlass().isFinalFlagSet()) {
-            return new InlinedGetterNode(inlinedMethod, top, curBCI);
+            return new InlinedGetterNode(inlinedMethod, top, curBCI, statementIndex);
         } else {
             leafGetterNodes.inc();
-            return new LeafAssumptionGetterNode(inlinedMethod, top, opCode, curBCI);
+            return new LeafAssumptionGetterNode(inlinedMethod, top, opCode, curBCI, statementIndex);
         }
     }
 
@@ -68,8 +70,8 @@ public class InlinedGetterNode extends QuickNode {
         BytecodeNode root = getBytecodesNode();
         StaticObject receiver = field.isStatic()
                         ? field.getDeclaringKlass().tryInitializeAndGetStatics()
-                        : nullCheck(root.peekAndReleaseObject(frame, top - 1));
-        return (getResultAt() - top) + getFieldNode.getField(frame, root, receiver, getResultAt());
+                        : nullCheck(root.popObject(frame, top - 1));
+        return (getResultAt() - top) + getFieldNode.getField(frame, root, receiver, getResultAt(), statementIndex);
     }
 
     @Override
@@ -82,7 +84,7 @@ public class InlinedGetterNode extends QuickNode {
     }
 
     private static Field getInlinedField(Method inlinedMethod) {
-        BytecodeStream code = new BytecodeStream(inlinedMethod.getCode());
+        BytecodeStream code = new BytecodeStream(inlinedMethod.getOriginalCode());
         if (inlinedMethod.isStatic()) {
             return inlinedMethod.getRuntimeConstantPool().resolvedFieldAt(inlinedMethod.getDeclaringKlass(), code.readCPI(STATIC_GETTER_BCI));
         } else {

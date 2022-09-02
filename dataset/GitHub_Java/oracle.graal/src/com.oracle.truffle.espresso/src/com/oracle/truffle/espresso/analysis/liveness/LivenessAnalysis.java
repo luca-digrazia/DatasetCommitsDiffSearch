@@ -30,7 +30,6 @@ import java.util.BitSet;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.analysis.BlockIterator;
 import com.oracle.truffle.espresso.analysis.DepthFirstBlockIterator;
 import com.oracle.truffle.espresso.analysis.GraphBuilder;
 import com.oracle.truffle.espresso.analysis.Util;
@@ -43,15 +42,16 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.perf.DebugCloseable;
 import com.oracle.truffle.espresso.perf.DebugTimer;
+import com.oracle.truffle.espresso.perf.TimerCollection;
 
 public class LivenessAnalysis {
 
     public static final DebugTimer LIVENESS_TIMER = DebugTimer.create("liveness");
-    public static final DebugTimer BUILDER_TIMER = DebugTimer.create("builder");
-    public static final DebugTimer LOADSTORE_TIMER = DebugTimer.create("loadStore");
-    public static final DebugTimer STATE_TIMER = DebugTimer.create("state");
-    public static final DebugTimer PROPAGATE_TIMER = DebugTimer.create("propagation");
-    public static final DebugTimer ACTION_TIMER = DebugTimer.create("action");
+    public static final DebugTimer BUILDER_TIMER = DebugTimer.create("builder", LIVENESS_TIMER);
+    public static final DebugTimer LOADSTORE_TIMER = DebugTimer.create("loadStore", LIVENESS_TIMER);
+    public static final DebugTimer STATE_TIMER = DebugTimer.create("state", LIVENESS_TIMER);
+    public static final DebugTimer PROPAGATE_TIMER = DebugTimer.create("propagation", LIVENESS_TIMER);
+    public static final DebugTimer ACTION_TIMER = DebugTimer.create("action", LIVENESS_TIMER);
 
     public static final LivenessAnalysis NO_ANALYSIS = new LivenessAnalysis() {
         @Override
@@ -113,28 +113,29 @@ public class LivenessAnalysis {
         if (method.getContext().livenessAnalysisMode == EspressoOptions.LivenessAnalysisMode.DISABLED) {
             return NO_ANALYSIS;
         }
-        try (DebugCloseable liveness = LIVENESS_TIMER.scope()) {
+        TimerCollection scope = method.getContext().getTimers();
+        try (DebugCloseable liveness = LIVENESS_TIMER.scope(scope)) {
             Graph<? extends LinkedBlock> graph;
-            try (DebugCloseable builder = BUILDER_TIMER.scope()) {
+            try (DebugCloseable builder = BUILDER_TIMER.scope(scope)) {
                 graph = GraphBuilder.build(method);
             }
 
             // Transform the graph into a more manageable graph consisting of only the history of
             // load/stores.
             LoadStoreFinder loadStoreClosure;
-            try (DebugCloseable loadStore = LOADSTORE_TIMER.scope()) {
-                loadStoreClosure = new LoadStoreFinder(graph);
-                BlockIterator.analyze(method, graph, loadStoreClosure);
+            try (DebugCloseable loadStore = LOADSTORE_TIMER.scope(scope)) {
+                loadStoreClosure = new LoadStoreFinder(graph, method);
+                loadStoreClosure.analyze();
             }
 
             // Computes the entry/end live sets for each variable for each block.
             BlockBoundaryFinder blockBoundaryFinder;
-            try (DebugCloseable boundary = STATE_TIMER.scope()) {
+            try (DebugCloseable boundary = STATE_TIMER.scope(scope)) {
                 blockBoundaryFinder = new BlockBoundaryFinder(method, loadStoreClosure.result());
                 DepthFirstBlockIterator.analyze(method, graph, blockBoundaryFinder);
             }
 
-            try (DebugCloseable propagation = PROPAGATE_TIMER.scope()) {
+            try (DebugCloseable propagation = PROPAGATE_TIMER.scope(scope)) {
                 // Forces loop ends to inherit the loop entry state, and propagates the changes.
                 LoopPropagatorClosure loopPropagation = new LoopPropagatorClosure(graph, blockBoundaryFinder.result());
                 while (loopPropagation.process(graph)) {
@@ -158,7 +159,7 @@ public class LivenessAnalysis {
 
             // Using the live sets and history, build a set of action for each bci, such that it
             // frees as early as possible each dead local.
-            try (DebugCloseable actionFinder = ACTION_TIMER.scope()) {
+            try (DebugCloseable actionFinder = ACTION_TIMER.scope(scope)) {
                 Builder builder = new Builder(graph, method, blockBoundaryFinder.result());
                 builder.build();
                 boolean compiledCodeOnly = method.getContext().livenessAnalysisMode == EspressoOptions.LivenessAnalysisMode.COMPILED;
@@ -188,8 +189,8 @@ public class LivenessAnalysis {
         private final BlockBoundaryResult helper;
 
         private Builder(Graph<? extends LinkedBlock> graph, Method method, BlockBoundaryResult helper) {
-            this.actions = new LocalVariableAction[method.getCode().length];
-            this.edge = new EdgeAction[method.getCode().length];
+            this.actions = new LocalVariableAction[method.getOriginalCode().length];
+            this.edge = new EdgeAction[method.getOriginalCode().length];
             this.graph = graph;
             this.method = method;
             this.helper = helper;
@@ -208,6 +209,9 @@ public class LivenessAnalysis {
                 // Clear all non-argument locals (and non-used args)
                 processEntryBlock(blockID);
             } else {
+                if (isUnreachable(blockID)) {
+                    return;
+                }
                 // merge the state from all predecessors
                 BitSet mergedEntryState = mergePredecessors(current);
 
@@ -218,6 +222,10 @@ public class LivenessAnalysis {
 
             // Replay history in reverse to seek the last load for each variable.
             replayHistory(blockID);
+        }
+
+        private boolean isUnreachable(int blockID) {
+            return helper.entryFor(blockID) == null;
         }
 
         private void processEntryBlock(int blockID) {
@@ -236,14 +244,22 @@ public class LivenessAnalysis {
         private BitSet mergePredecessors(LinkedBlock current) {
             BitSet mergedEntryState = new BitSet(method.getMaxLocals());
             for (int pred : current.predecessorsID()) {
-                mergedEntryState.or(helper.endFor(pred));
+                BitSet predState = helper.endFor(pred);
+                if (predState != null) {
+                    // reachable predecessor.
+                    mergedEntryState.or(predState);
+                }
             }
             return mergedEntryState;
         }
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "rawtypes"})
         private void killLocalsOnBlockEntry(int blockID, LinkedBlock current, BitSet mergedEntryState) {
             BitSet entryState = helper.entryFor(blockID);
+            if (entryState == null) {
+                // unreachable block.
+                return;
+            }
             mergedEntryState.andNot(entryState);
 
             int nbPredKills = 0;

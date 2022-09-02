@@ -223,9 +223,11 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.RETURN;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.SALOAD;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.SASTORE;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.SIPUSH;
+import static com.oracle.truffle.espresso.bytecode.Bytecodes.SLIM_QUICK;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.SWAP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
+import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.CLASS;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.INTERFACE_METHOD_REF;
 import static com.oracle.truffle.espresso.classfile.Constants.APPEND_FRAME_BOUND;
 import static com.oracle.truffle.espresso.classfile.Constants.CHOP_BOUND;
@@ -246,52 +248,81 @@ import static com.oracle.truffle.espresso.classfile.Constants.SAME_LOCALS_1_STAC
 
 import java.util.Arrays;
 
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.BytecodeLookupSwitch;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.BytecodeTableSwitch;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
-import com.oracle.truffle.espresso.classfile.ClassConstant;
-import com.oracle.truffle.espresso.classfile.CodeAttribute;
+import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
-import com.oracle.truffle.espresso.classfile.FieldRefConstant;
-import com.oracle.truffle.espresso.classfile.InvokeDynamicConstant;
-import com.oracle.truffle.espresso.classfile.MethodRefConstant;
-import com.oracle.truffle.espresso.classfile.PoolConstant;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.StackMapFrame;
-import com.oracle.truffle.espresso.classfile.StackMapTableAttribute;
 import com.oracle.truffle.espresso.classfile.VerificationTypeInfo;
+import com.oracle.truffle.espresso.classfile.attributes.CodeAttribute;
+import com.oracle.truffle.espresso.classfile.attributes.StackMapTableAttribute;
+import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.DynamicConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.FieldRefConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.InvokeDynamicConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.MethodRefConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.PoolConstant;
+import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
+import com.oracle.truffle.espresso.descriptors.Validation;
 import com.oracle.truffle.espresso.impl.ContextAccess;
+import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.perf.DebugCloseable;
+import com.oracle.truffle.espresso.perf.DebugTimer;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.runtime.EspressoException;
 
 /**
- * Should be a complete bytecode verifier. Given the version of the clqssfile from which the method
+ * Should be a complete bytecode verifier. Given the version of the classfile from which the method
  * is taken, the type-checking or type-infering verifier is used.
+ *
+ * Note that stack map tables are used only for classfile version >= 50, and even if stack maps are
+ * given for lesser versions, they are ignored. No fallback for classfile v.50
  */
 public final class MethodVerifier implements ContextAccess {
+    public static final DebugTimer VERIFIER_TIMER = DebugTimer.create("verifier");
+
+    // Class info
+    private final Klass thisKlass;
+    private final RuntimeConstantPool pool;
     private final boolean useStackMaps;
     private final int majorVersion;
-    private final Klass thisKlass;
-    private final BytecodeStream code;
-    private final RuntimeConstantPool pool;
-    private final Symbol<Type>[] sig;
+
+    // Method info
     private final Symbol<Name> methodName;
     private final boolean isStatic;
+    private final Symbol<Type>[] sig;
+
+    // Code info
+    private final BytecodeStream code;
     private final int maxStack;
     private final int maxLocals;
-    private final byte[] verified;
-    private final StackFrame[] stackFrames;
     private final StackMapTableAttribute stackMapTableAttribute;
+    private final ExceptionHandler[] exceptionHandlers;
+
+    // Internal info
+    private final int[] bciStates;
+    private final StackFrame[] stackFrames;
+    private final byte[] handlerStatus;
+
+    // <init> method validation
+    private boolean calledConstructor = false;
+
+    // Instruction stack to visit
+    private final WorkingQueue queue = new WorkingQueue();
 
     Symbol<Type>[] getSig() {
         return sig;
@@ -322,8 +353,29 @@ public final class MethodVerifier implements ContextAccess {
         return thisKlass.getContext();
     }
 
-    // Define all operands that can appear on the stack / locals.
+    private boolean earlierThan49() {
+        return majorVersion < ClassfileParser.JAVA_1_5_VERSION;
+    }
 
+    private boolean earlierThan51() {
+        return majorVersion < ClassfileParser.JAVA_7_VERSION;
+    }
+
+    private boolean earlierThan55() {
+        return majorVersion < ClassfileParser.JAVA_11_VERSION;
+    }
+
+    private boolean version51OrEarlier() {
+        return majorVersion <= ClassfileParser.JAVA_7_VERSION;
+    }
+
+    private boolean version51OrLater() {
+        return majorVersion >= ClassfileParser.JAVA_7_VERSION;
+    }
+
+    // TODO(garcia) intern Operands.
+
+    // Define all operands that can appear on the stack / locals.
     static final PrimitiveOperand Int = new PrimitiveOperand(JavaKind.Int);
     static final PrimitiveOperand Byte = new PrimitiveOperand(JavaKind.Byte);
     static final PrimitiveOperand Char = new PrimitiveOperand(JavaKind.Char);
@@ -334,25 +386,57 @@ public final class MethodVerifier implements ContextAccess {
     static final PrimitiveOperand Void = new PrimitiveOperand(JavaKind.Void);
     static final PrimitiveOperand Invalid = new PrimitiveOperand(JavaKind.Illegal);
 
-    static final ReferenceOperand jlObject = new ReferenceOperand(Symbol.Type.Object, null) {
+    /*
+     * Special handling:
+     *
+     * is same as Byte for java 8 or earlier, becomes its own operand for Java >= 9
+     */
+    final PrimitiveOperand booleanOperand;
+
+    /* Special operand used for BA{LOAD, STORE}. Should never be pushed to stack */
+    static final PrimitiveOperand ByteOrBoolean = new PrimitiveOperand(JavaKind.Byte) {
         @Override
-        Klass getKlass() {
-            if (klass == null) {
-                klass = thisKlass.getMeta().loadKlass(type, StaticObject.NULL);
-                if (klass == null) {
-                    throw new NoClassDefFoundError(type.toString());
+        boolean compliesWith(Operand other) {
+            return other.isTopOperand() || other.getKind() == JavaKind.Boolean || other.getKind() == JavaKind.Byte;
+        }
+
+        @Override
+        Operand mergeWith(Operand other) {
+            if (other == this) {
+                throw EspressoError.shouldNotReachHere("Invalid invariant: ByteOrBoolean operand in stack.");
+            }
+            if (other.isPrimitive()) {
+                if (other == Byte) {
+                    return Byte;
+                }
+                if (other.getKind() == JavaKind.Boolean) {
+                    return other;
                 }
             }
-            return klass;
+            return null;
+        }
+
+        @Override
+        public PrimitiveOperand toStack() {
+            return Byte;
         }
     };
 
-    static final Operand ReturnAddress = new PrimitiveOperand(JavaKind.ReturnAddress);
+    // We want to be able to share this instance between context, so its resolution must be
+    // context-agnostic.
+    static final ReferenceOperand jlObject = new ReferenceOperand(Type.java_lang_Object, null) {
+        @Override
+        Klass getKlass() {
+            // this particular j.l.Object instance does not cache its resolved klass, as most
+            // getKlass calls checks beforehand for Type Object.
+            return EspressoLanguage.getCurrentContext().getMeta().java_lang_Object;
+        }
+    };
 
     static final Operand Null = new Operand(JavaKind.Object) {
         @Override
         boolean compliesWith(Operand other) {
-            return other == Invalid || other.isReference();
+            return other.isTopOperand() || other.isReference();
         }
 
         @Override
@@ -379,81 +463,155 @@ public final class MethodVerifier implements ContextAccess {
         }
 
         @Override
-        boolean isPrimitive() {
-            return false;
-        }
-
-        @Override
         Operand getComponent() {
+            // jvms-4.7.6: aaload
+            // We define the component type of null to be null.
             return this;
         }
     };
 
     private final Operand jlClass;
     private final Operand jlString;
-    private final Operand MethodType;
-    private final Operand MethodHandle;
-    private final Operand Throwable;
+    private final Operand jliMethodType;
+    private final Operand jliMethodHandle;
+    private final Operand jlThrowable;
 
-    static private final byte UNREACHABLE = 0;
-    static private final byte UNSEEN = 1;
-    static private final byte DONE = 2;
-    static private final byte JUMP_TARGET = 3;
+    // Return type of the method
+    private final Operand returnOperand;
+    // Declaring Klass of the method (already loaded)
+    private final Operand thisOperand;
+
+    // Regular BCI states
+
+    // Indicates that a particular BCI should never be reached by normal control flow (e.g.: the
+    // bytecode of a WIDE instruction, or any BCI between two successive instructions)
+    private static final int UNREACHABLE = 0;
+    // Indicates a BCI that has not yet been reached by control flow. After verification, if such a
+    // BCI still exists, it means that this BCI will never be reached during execution.
+    private static final int UNSEEN = 1;
+    // Indicates previous iteration of a verification successfully verified this particular BCI.
+    // Further verification can therefore stop their execution if merging its state into the state
+    // of this BCI is successful.
+    private static final int DONE = 2;
+    // Indicates that a particular BCI is the target of a jump, therefore requiring a stack map to
+    // be provided fo this BCI.
+    private static final int JUMP_TARGET = 4;
+
+    // Exception handler target states
+    private static final byte UNENCOUNTERED = 1;
+    private static final byte NONVERIFIED = 2;
+    private static final byte VERIFIED = 4;
+    private static final byte CALLEDCONSTRUCTOR = 8;
+    private static final byte NOCONSTRUCTORCALLED = 16;
+
+    // JSR BCI states
+    // This state is accompanied by the BCI of the RET instruction that caused it.
+    // It is of the form (ret_bci << 16) | RETURNED_TO
+    private static final byte RETURNED_TO = 64;
+
+    private static final int RETURN_MASK = 0xFFFF0000;
+
+    private static boolean checkStatus(int status, int toCheck) {
+        return (status & toCheck) != 0;
+    }
+
+    private static int setStatus(int status, int toSet) {
+        return (status & RETURN_MASK) | toSet;
+    }
+
+    private void checkAndSetReturnedTo(int target, int retBCI) {
+        if ((bciStates[target] & RETURNED_TO) == RETURNED_TO) {
+            if ((bciStates[target] >>> 16) != retBCI) {
+                throw new VerifyError("Multiple returns to single jsr ");
+            }
+        }
+        bciStates[target] = RETURNED_TO | (retBCI << 16);
+    }
 
     /**
-     * Construct the data structure to perform verification
-     * 
+     * Construct the data structure to perform verification.
+     *
      * @param codeAttribute the code attribute of the method
      * @param m the Espresso method
      */
-
-    private MethodVerifier(CodeAttribute codeAttribute, Method m) {
-        this.code = new BytecodeStream(codeAttribute.getCode());
+    private MethodVerifier(CodeAttribute codeAttribute, Method m, boolean useStackMaps) {
+        // Extract info from codeAttribute
+        this.code = new BytecodeStream(codeAttribute.getOriginalCode());
         this.maxStack = codeAttribute.getMaxStack();
         this.maxLocals = codeAttribute.getMaxLocals();
-        this.pool = m.getRuntimeConstantPool();
-        this.verified = new byte[code.endBCI()];
+        this.bciStates = new int[code.endBCI()];
         this.stackFrames = new StackFrame[code.endBCI()];
+        this.stackMapTableAttribute = codeAttribute.getStackMapFrame();
+        this.majorVersion = codeAttribute.getMajorVersion();
+        this.useStackMaps = useStackMaps;
+
+        // Extract method info
+        this.pool = m.getRuntimeConstantPool();
         this.sig = m.getParsedSignature();
         this.isStatic = m.isStatic();
         this.thisKlass = m.getDeclaringKlass();
         this.methodName = m.getName();
-        this.stackMapTableAttribute = codeAttribute.getStackMapFrame();
-        this.majorVersion = codeAttribute.getMajorVersion();
-        this.useStackMaps = codeAttribute.useStackMaps();
+        this.exceptionHandlers = m.getExceptionHandlers();
 
-        jlClass = new ReferenceOperand(Type.Class, thisKlass);
-        jlString = new ReferenceOperand(Type.String, thisKlass);
-        MethodType = new ReferenceOperand(Type.MethodType, thisKlass);
-        MethodHandle = new ReferenceOperand(Type.MethodHandle, thisKlass);
-        Throwable = new ReferenceOperand(Type.Throwable, thisKlass);
+        this.handlerStatus = new byte[exceptionHandlers.length];
+        Arrays.fill(handlerStatus, UNENCOUNTERED);
+
+        jlClass = new ReferenceOperand(Type.java_lang_Class, thisKlass);
+        jlString = new ReferenceOperand(Type.java_lang_String, thisKlass);
+        jliMethodType = new ReferenceOperand(Type.java_lang_invoke_MethodType, thisKlass);
+        jliMethodHandle = new ReferenceOperand(Type.java_lang_invoke_MethodHandle, thisKlass);
+        jlThrowable = new ReferenceOperand(Type.java_lang_Throwable, thisKlass);
+
+        booleanOperand = getJavaVersion().java9OrLater() ? new PrimitiveOperand(JavaKind.Boolean) : Byte;
+
+        thisOperand = new ReferenceOperand(thisKlass, thisKlass);
+        returnOperand = kindToOperand(Signatures.returnType(sig));
+    }
+
+    private MethodVerifier(CodeAttribute codeAttribute, Method m) {
+        this(codeAttribute, m, codeAttribute.useStackMaps());
     }
 
     /**
-     * Utility for ease of use in Espresso
+     * Utility for ease of use in Espresso.
      *
      * @param m the method to verify
-     * @return true, or throws ClassFormatError or VerifyError.
+     *
+     * @throws VerifyError if verification fails
+     * @throws NoClassDefFoundError if Class loading of an operand fails at any point
+     * @throws ClassFormatError if classfile is malformed
      */
-    public static boolean verify(Method m) {
+    @SuppressWarnings("try")
+    public static void verify(Method m) {
         CodeAttribute codeAttribute = m.getCodeAttribute();
+        assert !((m.isAbstract() || m.isNative()) && codeAttribute != null) : "Abstract method has code: " + m;
         if (codeAttribute == null) {
-            return true;
+            if (m.isAbstract() || m.isNative()) {
+                return;
+            }
+            throw new ClassFormatError("Concrete method has no code attribute: " + m);
         }
-        return new MethodVerifier(codeAttribute, m).verify();
+        try (DebugCloseable t = VERIFIER_TIMER.scope(m.getContext().getTimers())) {
+            new MethodVerifier(codeAttribute, m).verify();
+        }
     }
 
     private void initVerifier() {
-        Arrays.fill(verified, UNREACHABLE);
+        Arrays.fill(bciStates, UNREACHABLE);
         // Mark all reachable code
         int bci = 0;
+        int opcode;
         while (bci < code.endBCI()) {
-            int bc = code.currentBC(bci);
-            if (bc > QUICK) {
-                throw new VerifyError("invalid bytecode: " + bc);
+            opcode = code.currentBC(bci);
+            if (opcode > SLIM_QUICK) {
+                throw new VerifyError("invalid bytecode: " + opcode);
             }
-            verified[bci] = UNSEEN;
+            bciStates[bci] = setStatus(bciStates[bci], UNSEEN);
             bci = code.nextBCI(bci);
+            // Check instruction has enough bytes after it
+            if (bci - 1 >= code.endBCI()) {
+                throw new VerifyError("Incomplete bytecode");
+            }
         }
         bci = 0;
         if (!useStackMaps) {
@@ -461,103 +619,114 @@ public final class MethodVerifier implements ContextAccess {
             // targets have one stack frame declared in the attribute, and if it doesn't, we will
             // see it later.
             while (bci < code.endBCI()) {
-                int bc = code.currentBC(bci);
-                if (Bytecodes.isBranch(bc)) {
+                opcode = code.currentBC(bci);
+                if (Bytecodes.isBranch(opcode)) {
                     int target = code.readBranchDest(bci);
-                    if (verified[target] == UNREACHABLE) {
+                    if (bciStates[target] == UNREACHABLE) {
                         throw new VerifyError("Jump to the middle of an instruction: " + target);
                     }
-                    verified[target] = JUMP_TARGET;
+                    bciStates[target] = setStatus(bciStates[bci], JUMP_TARGET);
                 }
-                if (bc == TABLESWITCH || bc == LOOKUPSWITCH) {
-                    initSwitch(bci, bc);
+                if (opcode == TABLESWITCH || opcode == LOOKUPSWITCH) {
+                    initSwitch(bci, opcode);
                 }
                 bci = code.nextBCI(bci);
+                if (opcode == JSR || opcode == JSR_W) {
+                    bciStates[bci] = JUMP_TARGET;
+                }
             }
         }
     }
 
+    // Traverses the switch to mark jump targets. Also checks that lookup switch keys are sorted.
     private void initSwitch(int bci, int opCode) {
-        switch (opCode) {
-            case LOOKUPSWITCH: {
-                BytecodeLookupSwitch switchHelper = code.getBytecodeLookupSwitch();
-                int low = 0;
-                int high = switchHelper.numberOfCases(bci);
-                int oldKey = 0;
-                boolean init = false;
-                int target;
-                for (int i = low; i < high; i++) {
-                    int newKey = switchHelper.keyAt(bci, i - low);
-                    if (init && newKey <= oldKey) {
-                        throw new VerifyError("Unsorted keys in LOOKUPSWITCH");
-                    }
-                    init = true;
-                    oldKey = newKey;
-                    target = switchHelper.targetAt(bci, i - low);
-                    if (verified[target] == UNREACHABLE) {
-                        throw new VerifyError("Jump to the middle of an instruction: " + target);
-                    }
-                    verified[target] = JUMP_TARGET;
+        if (opCode == LOOKUPSWITCH) {
+            BytecodeLookupSwitch switchHelper = BytecodeLookupSwitch.INSTANCE;
+            int low = 0;
+            int high = switchHelper.numberOfCases(code, bci);
+            int oldKey = 0;
+            boolean init = false;
+            int target;
+            for (int i = low; i < high; i++) {
+                int newKey = switchHelper.keyAt(code, bci, i - low);
+                if (init && newKey <= oldKey) {
+                    throw new VerifyError("Unsorted keys in LOOKUPSWITCH");
                 }
-                target = switchHelper.defaultTarget(bci);
-                if (verified[target] == UNREACHABLE) {
+                init = true;
+                oldKey = newKey;
+                target = switchHelper.targetAt(code, bci, i - low);
+                if (bciStates[target] == UNREACHABLE) {
                     throw new VerifyError("Jump to the middle of an instruction: " + target);
                 }
-                verified[target] = JUMP_TARGET;
+                bciStates[target] = setStatus(bciStates[bci], JUMP_TARGET);
             }
-                return;
-            case TABLESWITCH: {
-                BytecodeTableSwitch switchHelper = code.getBytecodeTableSwitch();
-                int low = switchHelper.lowKey(bci);
-                int high = switchHelper.highKey(bci);
-                int target;
-                // if high == MAX_INT, i < high will always be true. This loop condition is to avoid
-                // an infinite loop in this case.
-                for (int i = low; i != high + 1; i++) {
-                    target = switchHelper.targetAt(bci, i - low);
-                    if (verified[target] == UNREACHABLE) {
-                        throw new VerifyError("Jump to the middle of an instruction: " + target);
-                    }
-                    verified[target] = JUMP_TARGET;
-                }
-                target = switchHelper.defaultTarget(bci);
-                if (verified[target] == UNREACHABLE) {
+            target = switchHelper.defaultTarget(code, bci);
+            if (bciStates[target] == UNREACHABLE) {
+                throw new VerifyError("Jump to the middle of an instruction: " + target);
+            }
+            bciStates[target] = setStatus(bciStates[bci], JUMP_TARGET);
+        } else if (opCode == TABLESWITCH) {
+            BytecodeTableSwitch switchHelper = BytecodeTableSwitch.INSTANCE;
+            int low = switchHelper.lowKey(code, bci);
+            int high = switchHelper.highKey(code, bci);
+            int target;
+            // if high == MAX_INT, i < high will always be true. This loop condition is to avoid
+            // an infinite loop in this case.
+            for (int i = low; i != high + 1; i++) {
+                target = switchHelper.targetAt(code, bci, i - low);
+                if (bciStates[target] == UNREACHABLE) {
                     throw new VerifyError("Jump to the middle of an instruction: " + target);
                 }
-                verified[target] = JUMP_TARGET;
+                bciStates[target] = setStatus(bciStates[bci], JUMP_TARGET);
             }
-                return;
-            default:
-                throw EspressoError.shouldNotReachHere();
+            target = switchHelper.defaultTarget(code, bci);
+            if (bciStates[target] == UNREACHABLE) {
+                throw new VerifyError("Jump to the middle of an instruction: " + target);
+            }
+        } else {
+            throw EspressoError.shouldNotReachHere();
         }
     }
 
+    /**
+     * Constructs the initial stack frame table given the stackMapTableAttribute. If no such
+     * attribute exists, it still constructs the first implicit StackFrame, with the method
+     * arguments in the locals and an empty stack.
+     */
     private void initStackFrames() {
         // First implicit stack frame.
         StackFrame previous = new StackFrame(this);
         assert stackFrames.length > 0;
-        int BCI = 0;
+        int bci = 0;
         boolean first = true;
-        stackFrames[BCI] = previous;
-        if (stackMapTableAttribute == null) {
+        stackFrames[bci] = previous;
+        if (!useStackMaps || stackMapTableAttribute == null) {
             return;
         }
         StackMapFrame[] entries = stackMapTableAttribute.getEntries();
         for (StackMapFrame smf : entries) {
             StackFrame frame = getStackFrame(smf, previous);
-            BCI = BCI + smf.getOffset() + 1;
+            bci = bci + smf.getOffset() + 1;
             if (first) {
-                BCI--;
+                bci--;
                 first = false;
             }
-            stackFrames[BCI] = frame;
+            validateFrameBCI(bci);
+            stackFrames[bci] = frame;
             previous = frame;
-            first = false;
+        }
+        // GR-19627 HotSpot's ad-hoc behavior: StackMapTable indices are range-checked first,
+        // possibly throwing VerifyError. Then, ClassFormatError is thrown if the attribute was
+        // truncated.
+        if (stackMapTableAttribute.isTruncated()) {
+            throw new ClassFormatError("Truncated StackMap attribute in " + getThisKlass() + "." + getMethodName());
         }
     }
 
-    // Constructs a StackFrame object for the verifier from a StackMapFrame obtained from the
-    // parser.
+    /**
+     * Constructs a StackFrame object for the verifier from a StackMapFrame obtained from the
+     * parser.
+     */
     private StackFrame getStackFrame(StackMapFrame smf, StackFrame previous) {
         int frameType = smf.getFrameType();
         if (frameType < SAME_FRAME_BOUND) {
@@ -569,7 +738,7 @@ public final class MethodVerifier implements ContextAccess {
             return res;
         }
         if (frameType < SAME_LOCALS_1_STACK_ITEM_BOUND) {
-            Stack stack = new Stack(2);
+            OperandStack stack = new OperandStack(2);
             stack.push(getOperandFromVerificationType(smf.getStackItem()));
             StackFrame res = new StackFrame(stack, previous.locals);
             res.lastLocal = previous.lastLocal;
@@ -580,7 +749,7 @@ public final class MethodVerifier implements ContextAccess {
             throw new ClassFormatError("Encountered reserved StackMapFrame tag: " + frameType);
         }
         if (frameType == SAME_LOCALS_1_STACK_ITEM_EXTENDED) {
-            Stack stack = new Stack(2);
+            OperandStack stack = new OperandStack(2);
             stack.push(getOperandFromVerificationType(smf.getStackItem()));
             StackFrame res = new StackFrame(stack, previous.locals);
             res.lastLocal = previous.lastLocal;
@@ -591,7 +760,7 @@ public final class MethodVerifier implements ContextAccess {
             int actualLocalOffset = 0;
             for (int i = 0; i < smf.getChopped(); i++) {
                 Operand op = newLocals[previous.lastLocal - actualLocalOffset];
-                if (op == Invalid && (previous.lastLocal - actualLocalOffset - 1 > 0)) {
+                if (op.isTopOperand() && (previous.lastLocal - actualLocalOffset - 1 > 0)) {
                     if (isType2(newLocals[previous.lastLocal - actualLocalOffset - 1])) {
                         actualLocalOffset++;
                     }
@@ -601,7 +770,7 @@ public final class MethodVerifier implements ContextAccess {
             }
             StackFrame res = new StackFrame(Operand.EMPTY_ARRAY, 0, 0, newLocals);
             res.lastLocal = previous.lastLocal - actualLocalOffset;
-            if (res.lastLocal > 0 && newLocals[res.lastLocal] == Invalid && res.lastLocal - 1 > 0 && isType2(newLocals[res.lastLocal - 1])) {
+            if (res.lastLocal > 0 && newLocals[res.lastLocal].isTopOperand() && res.lastLocal - 1 > 0 && isType2(newLocals[res.lastLocal - 1])) {
                 res.lastLocal = res.lastLocal - 1;
             }
             return res;
@@ -646,7 +815,7 @@ public final class MethodVerifier implements ContextAccess {
             return res;
         }
         if (frameType == FULL_FRAME) {
-            Stack fullStack = new Stack(maxStack);
+            OperandStack fullStack = new OperandStack(maxStack);
             for (VerificationTypeInfo vti : smf.getStack()) {
                 fullStack.push(getOperandFromVerificationType(vti));
             }
@@ -665,7 +834,7 @@ public final class MethodVerifier implements ContextAccess {
                 res.lastLocal = -1;
                 return res;
             }
-            if (locals[pos - 1] == Invalid && pos - 2 > 0 && isType2(locals[pos - 2])) {
+            if (locals[pos - 1].isTopOperand() && pos - 2 > 0 && isType2(locals[pos - 2])) {
                 res.lastLocal = pos - 2;
                 return res;
             }
@@ -677,6 +846,7 @@ public final class MethodVerifier implements ContextAccess {
     }
 
     private Operand getOperandFromVerificationType(VerificationTypeInfo vti) {
+        // Note: JSR/RET is mutually exclusive with stack maps.
         switch (vti.getTag()) {
             case ITEM_Bogus:
                 return Invalid;
@@ -695,95 +865,418 @@ public final class MethodVerifier implements ContextAccess {
             case ITEM_Object:
                 return spawnFromType(getTypes().fromName(pool.classAt(vti.getConstantPoolOffset()).getName(pool)));
             case ITEM_NewObject:
-                return new UninitReferenceOperand(getTypes().fromName(pool.classAt(code.readCPI(vti.getNewOffset())).getName(pool)), thisKlass, vti.getNewOffset());
+                int newOffset = vti.getNewOffset();
+                if (newOffset < 0 || newOffset >= code.endBCI() || bciStates[newOffset] == UNREACHABLE) {
+                    throw new ClassFormatError("Invalid BCI reference in stack map!");
+                }
+                if (code.currentBC(newOffset) != NEW) {
+                    throw new ClassFormatError("NewObject in stack map not referencing a NEW instruction! " + Bytecodes.nameOf(code.currentBC(newOffset)));
+                }
+                return new UninitReferenceOperand(getTypes().fromName(pool.classAt(code.readCPI(newOffset)).getName(pool)), thisKlass, newOffset);
             default:
                 throw EspressoError.shouldNotReachHere("Unrecognized VerificationTypeInfo: " + vti);
         }
     }
 
-    // TODO(garcia) implement instruction stack to visit, to avoid stack overflows from recursively
-    // finding fixed points.
+    private static class WorkingQueue {
+        QueueElement first;
+        QueueElement last;
+
+        WorkingQueue() {
+            /* nop */
+        }
+
+        boolean isEmpty() {
+            return first == null;
+        }
+
+        void push(int bci, QueueElement elem) {
+            QueueElement current = lookup(bci);
+            if (current == null) {
+                if (first == null) {
+                    first = elem;
+                    last = first;
+                } else {
+                    last.next = elem;
+                    elem.prev = last;
+                    last = last.next;
+                }
+            } else {
+                // if we are here, we already failed to merge.
+                replace(current, elem);
+            }
+        }
+
+        QueueElement pop() {
+            assert first != null;
+            QueueElement res = first;
+            first = first.next;
+            return res;
+        }
+
+        void replace(QueueElement oldElem, QueueElement newElem) {
+            if (first == oldElem) {
+                first = newElem;
+            }
+            if (last == oldElem) {
+                last = newElem;
+            }
+            newElem.next = oldElem.next;
+            newElem.prev = oldElem.prev;
+            if (oldElem.prev != null) {
+                oldElem.prev.next = newElem;
+            }
+            if (oldElem.next != null) {
+                oldElem.next.prev = newElem;
+            }
+        }
+
+        QueueElement lookup(int bci) {
+            QueueElement current = first;
+            while (current != null && current.bci != bci) {
+                current = current.next;
+            }
+            return current;
+        }
+    }
+
+    private static class QueueElement {
+        final int bci;
+        final StackFrame frame;
+        final boolean constructorCalled;
+
+        QueueElement prev;
+        QueueElement next;
+
+        QueueElement(int bci, StackFrame frame, boolean calledConstructor) {
+            this.bci = bci;
+            this.frame = frame;
+            this.constructorCalled = calledConstructor;
+        }
+    }
 
     /**
-     * Performs the verification for the method associated with this
-     *
-     * @return true or throws ClassFormatError or VerifyError
+     * Performs the verification for the method associated with this MethodVerifier instance.
      */
-    private synchronized boolean verify() {
+    private synchronized void verify() {
+        if (code.endBCI() == 0) {
+            throw new VerifyError("Control flow falls through code end");
+        }
         try {
+            // Marks BCIs in-between opcodes, and marks jump targets.
             initVerifier();
         } catch (IndexOutOfBoundsException e) {
             throw new VerifyError("Invalid jump: " + e.getMessage() + " in method " + thisKlass.getName() + "." + methodName);
         }
-        if (code.endBCI() == 0) {
-            throw new VerifyError("Control flow falls through code end");
+        try {
+            // Extract the initial stack frame, and extract stack maps if available.
+            initStackFrames();
+        } catch (IndexOutOfBoundsException e) {
+            throw new ClassFormatError("Could not construct stackFrames due to invalid maxStack or maxLocals value: " + e.getMessage());
         }
-        int nextBCI = 0;
+
+        // Check that unconditional jumps have stack maps following them.
+        validateUnconditionalJumps();
+
+        // Check that BCIs in exception handlers are legal.
+        validateExceptionHandlers();
+
+        // Perform verification following control-flow.
+        verifyReachableCode();
+
+        // Force verification of unreachable stack maps.
+        verifyUnreachableStackMaps();
+
+    }
+
+    private void validateUnconditionalJumps() {
         if (useStackMaps) {
-            try {
-                initStackFrames();
-            } catch (IndexOutOfBoundsException e) {
-                throw new VerifyError("Could not construct stackFrames due to invalid maxStack or maxLocals value: " + e.getMessage());
+            int bci = 0;
+            int nextBCI;
+            while (bci < code.endBCI()) {
+                nextBCI = code.nextBCI(bci);
+                if (Bytecodes.isStop(code.currentBC(bci))) {
+                    if (nextBCI < code.endBCI() && stackFrames[nextBCI] == null) {
+                        throw new VerifyError("Control flow stop does not have a stack map at next instruction!");
+                    }
+                }
+                bci = nextBCI;
             }
         }
-        Stack stack = new Stack(maxStack);
+    }
+
+    private void validateExceptionHandlers() {
+        for (ExceptionHandler handler : exceptionHandlers) {
+            int startBCI = handler.getHandlerBCI();
+            validateFormatBCI(startBCI);
+            startBCI = handler.getStartBCI();
+            validateFormatBCI(startBCI);
+            int endBCI = handler.getEndBCI();
+            if (endBCI <= startBCI) {
+                throw new ClassFormatError("End BCI of handler is before start BCI");
+            }
+            if (endBCI > code.endBCI()) {
+                throw new ClassFormatError("Control flow falls through code end");
+            }
+            if (endBCI < 0) {
+                throw new ClassFormatError("negative branch target: " + endBCI);
+            }
+            if (handler.catchTypeCPI() != 0) {
+                Klass catchType = pool.resolvedKlassAt(thisKlass, handler.catchTypeCPI());
+                if (!getMeta().java_lang_Throwable.isAssignableFrom(catchType)) {
+                    throw new VerifyError("Illegal exception handler catch type: " + catchType);
+                }
+            }
+
+            if (endBCI != code.endBCI()) {
+                if (bciStates[endBCI] == UNREACHABLE) {
+                    throw new ClassFormatError("Jump to the middle of an instruction: " + endBCI);
+                }
+            }
+        }
+    }
+
+    private void processQueue() {
+        Locals locals;
+        while (!queue.isEmpty()) {
+            QueueElement toVerify = queue.pop();
+            calledConstructor = toVerify.constructorCalled;
+            locals = toVerify.frame.extractLocals();
+            locals.subRoutineModifications = toVerify.frame.subroutineModificationStack;
+            startVerify(toVerify.bci, toVerify.frame.extractStack(maxStack), locals);
+        }
+    }
+
+    private void verifyReachableCode() {
+        // Perform verification of reachable executable code
+        OperandStack stack = new OperandStack(maxStack);
         Locals locals = new Locals(this);
-        while (verified[nextBCI] != DONE || (stackFrames[nextBCI] != null && stack.mergeInto(stackFrames[nextBCI]) != -1)) {
-            if (stackFrames[nextBCI] != null || verified[nextBCI] == JUMP_TARGET) {
+        startVerify(0, stack, locals);
+        do {
+            processQueue();
+            verifyExceptionHandlers();
+        } while (!queue.isEmpty());
+    }
+
+    private void verifyUnreachableStackMaps() {
+        for (int stackBCI = 0; stackBCI < stackFrames.length; stackBCI++) {
+            if (stackFrames[stackBCI] != null && checkStatus(bciStates[stackBCI], UNSEEN)) {
+                queue.push(stackBCI, new QueueElement(stackBCI, stackFrames[stackBCI], true));
+            }
+        }
+        while (!queue.isEmpty()) {
+            processQueue();
+            verifyExceptionHandlers();
+        }
+    }
+
+    // Exception handler status management
+    private static byte setStatus(byte oldStatus, byte newStatus) {
+        return (byte) (newStatus | (oldStatus & (CALLEDCONSTRUCTOR | NOCONSTRUCTORCALLED)));
+    }
+
+    private static boolean isStatus(byte status, byte toCheck) {
+        return (status & toCheck) != 0;
+    }
+
+    private static byte setConstructorStatus(byte oldStatus, byte constructorStatus) {
+        // If there is a path to the handler that has not called a constructor, consider the handler
+        // to have an uninitialized this.
+        if ((oldStatus & NOCONSTRUCTORCALLED) > 0) {
+            return oldStatus;
+        }
+        return (byte) (oldStatus | constructorStatus);
+    }
+
+    private static boolean isCalledConstructor(byte status) {
+        return (status & CALLEDCONSTRUCTOR) > 0;
+    }
+
+    /**
+     * Verifies actually reachable exception handlers, and the handlers they encounter if they were
+     * not already verified.
+     * <p>
+     * This method reaches a fixed point. After execution, all handler will either have been
+     * verified, or are completely unreachable.
+     */
+    private void verifyExceptionHandlers() {
+        boolean redo;
+        boolean updated;
+        do {
+            redo = false;
+            updated = false;
+            for (int i = 0; i < exceptionHandlers.length; i++) {
+                ExceptionHandler handler = exceptionHandlers[i];
+                if (isStatus(handlerStatus[i], NONVERIFIED)) {
+                    updated = redo;
+                    boolean constructorStatus = calledConstructor;
+                    if (isCalledConstructor(handlerStatus[i])) {
+                        calledConstructor = true;
+                    }
+                    verifyHandler(handler);
+                    calledConstructor = constructorStatus;
+                    handlerStatus[i] = setStatus(handlerStatus[i], VERIFIED);
+                } else if (isStatus(handlerStatus[i], UNENCOUNTERED)) {
+                    redo = true;
+                }
+            }
+        } while (redo && updated);
+    }
+
+    private void verifyHandler(ExceptionHandler handler) {
+        int handlerBCI = handler.getHandlerBCI();
+        Locals locals;
+        OperandStack stack;
+        StackFrame frame = stackFrames[handlerBCI];
+        if (frame == null) {
+            // If there is no stack map when verifying a handler, all locals are illegal.
+            Operand[] registers = new Operand[maxLocals];
+            Arrays.fill(registers, Invalid);
+            locals = new Locals(registers);
+            stack = new OperandStack(maxStack);
+            stack.push(new ReferenceOperand(handler.getCatchType(), thisKlass));
+        } else {
+            stack = frame.extractStack(maxStack);
+            locals = frame.extractLocals();
+        }
+        startVerify(handlerBCI, stack, locals);
+    }
+
+    private void branch(int bci, OperandStack stack, Locals locals) {
+        validateBCI(bci);
+        // Try merge
+        StackFrame frame = mergeFrames(stack, locals, stackFrames[bci]);
+        if (frame != stackFrames[bci] || !checkStatus(bciStates[bci], DONE)) {
+            // merge failed or not yet verified bci. mark the bci as not yet verified since
+            // state can change.
+            bciStates[bci] = setStatus(bciStates[bci], JUMP_TARGET);
+            stackFrames[bci] = frame;
+            QueueElement toPush = new QueueElement(bci, frame, calledConstructor);
+            queue.push(bci, toPush);
+        }
+    }
+
+    private void validateBCI(int bci) {
+        if (bci >= code.endBCI()) {
+            throw new VerifyError("Control flow falls through code end");
+        }
+        if (bci < 0) {
+            throw new VerifyError("negative branch target: " + bci);
+        }
+        if (bciStates[bci] == UNREACHABLE) {
+            throw new VerifyError("Jump to the middle of an instruction: " + bci);
+        }
+    }
+
+    private void validateFormatBCI(int bci) {
+        if (bci >= code.endBCI()) {
+            throw new ClassFormatError("Control flow falls through code end");
+        }
+        if (bci < 0) {
+            throw new ClassFormatError("negative branch target: " + bci);
+        }
+        if (bciStates[bci] == UNREACHABLE) {
+            throw new ClassFormatError("Jump to the middle of an instruction: " + bci);
+        }
+    }
+
+    private void validateFrameBCI(int bci) {
+        if (bci >= code.endBCI()) {
+            throw new VerifyError("StackFrame offset falls outside of method");
+        }
+        if (bci < 0) {
+            throw new VerifyError("negative stack frame offset: " + bci);
+        }
+        if (bciStates[bci] == UNREACHABLE) {
+            throw new VerifyError("StackFrame offset falls to the middle of an instruction: " + bci);
+        }
+    }
+
+    /**
+     * Performs the verification loop, starting from bci.
+     * <p>
+     * for each verified bytecode, three verifications are performed:
+     * <p>
+     * - Current stack and locals can merge into the stack frame corresponding to current bytecode.
+     * If not, compute the merge if classfile version < 50
+     * <p>
+     * - Current locals can merge into all current bytecode's exception handlers.
+     * <p>
+     * - Stack and Locals state are legal according to the bytecode.
+     *
+     * @param bci The bci at which we wish to start performing verification
+     * @param seedStack the state of the stack at bci
+     * @param seedLocals the state of the local variables at bci
+     */
+    private void startVerify(int bci, OperandStack seedStack, Locals seedLocals) {
+        OperandStack stack = seedStack;
+        Locals locals = seedLocals;
+        int nextBCI = bci;
+        int previousBCI;
+
+        // Check if constructor was called prior to this branch.
+        boolean constructorCalledStatus = calledConstructor;
+        do {
+            previousBCI = nextBCI;
+            if (stackFrames[nextBCI] != null || checkStatus(bciStates[nextBCI], JUMP_TARGET)) {
+                // Try merge
                 StackFrame frame = mergeFrames(stack, locals, stackFrames[nextBCI]);
                 if (!(frame == stackFrames[nextBCI])) {
+                    // merge failed, mark the bci as not yet verified as state changed
+                    bciStates[nextBCI] = setStatus(bciStates[bci], JUMP_TARGET);
                     stackFrames[nextBCI] = frame;
                 }
+                // Always use the stack frame state
                 stack = frame.extractStack(maxStack);
                 locals = frame.extractLocals();
-                nextBCI = verifySafe(nextBCI, stack, locals);
-            } else {
-                nextBCI = verifySafe(nextBCI, stack, locals);
+                // Propagate subroutine modifications (here, arrays are shared).
+                locals.subRoutineModifications = seedLocals.subRoutineModifications;
             }
-            if (nextBCI >= code.endBCI()) {
-                throw new VerifyError("Control flow falls through code end");
+            // Return condition: a successful merge into an already verified branch target.
+            if (stackFrames[nextBCI] != null && checkStatus(bciStates[nextBCI], DONE)) {
+                // Reset constructor status.
+                calledConstructor = constructorCalledStatus;
+                return;
             }
-        }
-        return true;
+            checkExceptionHandlers(nextBCI, locals);
+            nextBCI = verifySafe(nextBCI, stack, locals);
+            validateBCI(nextBCI);
+        } while (previousBCI != nextBCI);
+        // Reset constructor status.
+        calledConstructor = constructorCalledStatus;
     }
 
-    private boolean branch(int BCI, Stack stack, Locals locals) {
-        if (BCI >= code.endBCI()) {
-            throw new VerifyError("Control flow falls through code end");
-        }
-        if (BCI < 0) {
-            throw new VerifyError("negative branch target: " + BCI);
-        }
-        if (verified[BCI] == UNREACHABLE) {
-            throw new VerifyError("Jump to the middle of an instruction: " + BCI);
-        }
-        StackFrame frame = mergeFrames(stack, locals, stackFrames[BCI]);
-        if (!(frame == stackFrames[BCI])) {
-            verified[BCI] = JUMP_TARGET;
-            stackFrames[BCI] = frame;
-        }
-        if (verified[BCI] == DONE) {
-            return true;
-        }
-        Stack newStack = frame.extractStack(maxStack);
-        Locals newLocals = frame.extractLocals();
-        int nextBCI = BCI;
-        while (verified[nextBCI] != DONE) {
-            nextBCI = verifySafe(nextBCI, newStack, newLocals);
-            if (nextBCI >= code.endBCI()) {
-                throw new VerifyError("Control flow falls through code end");
+    /**
+     * Checks that an instruction can merge into all its handlers.
+     */
+    private void checkExceptionHandlers(int nextBCI, Locals locals) {
+        for (int i = 0; i < exceptionHandlers.length; i++) {
+            ExceptionHandler handler = exceptionHandlers[i];
+            if (nextBCI >= handler.getStartBCI() && nextBCI < handler.getEndBCI()) {
+                OperandStack stack = new OperandStack(1);
+                Symbol<Type> catchType = handler.getCatchType();
+                stack.push(catchType == null ? jlThrowable : new ReferenceOperand(catchType, thisKlass));
+                StackFrame oldFrame = stackFrames[handler.getHandlerBCI()];
+                StackFrame newFrame = mergeFrames(stack, locals, oldFrame);
+                if (isStatus(handlerStatus[i], UNENCOUNTERED) || oldFrame != newFrame) {
+                    handlerStatus[i] = setStatus(handlerStatus[i], NONVERIFIED);
+                }
+                if (calledConstructor) {
+                    handlerStatus[i] = setConstructorStatus(handlerStatus[i], CALLEDCONSTRUCTOR);
+                } else {
+                    handlerStatus[i] = setConstructorStatus(handlerStatus[i], NOCONSTRUCTORCALLED);
+                }
+                stackFrames[handler.getHandlerBCI()] = newFrame;
             }
         }
-        if (verified[BCI] == UNREACHABLE) {
-            throw new VerifyError("Control flow falls between instructions: " + BCI);
-        }
-        return true;
     }
 
-    private int verifySafe(int BCI, Stack stack, Locals locals) {
+    private int verifySafe(int bci, OperandStack stack, Locals locals) {
         try {
-            return verify(BCI, stack, locals);
+            return verify(bci, stack, locals);
         } catch (IndexOutOfBoundsException e) {
+            // At this point, the only appearance of an IndexOutOfBounds should be from stack and
+            // locals access (bci bound checks are done beforehand).
             throw new VerifyError("Inconsistent Stack/Local access: " + e.getMessage() + ", in: " + thisKlass.getType() + "." + methodName);
         }
     }
@@ -797,13 +1290,23 @@ public final class MethodVerifier implements ContextAccess {
             case LONG:          return Long;
             case DOUBLE:        return Double;
             case CLASS:         return jlClass;
-            case STRING:        
-                if (!pc.checkValidity(pool)) {
-                    throw new VerifyError("StringConstant does not point to UTF8Constant.");
+            case STRING:        return jlString;
+            case METHODHANDLE:
+                if (earlierThan51()) {
+                    throw new ClassFormatError("LDC for MethodHandleConstant in classfile version < 51");
                 }
-                return jlString;
-            case METHODHANDLE:  return MethodHandle;
-            case METHODTYPE:    return MethodType;
+                return jliMethodHandle;
+            case METHODTYPE:
+                if (earlierThan51()) {
+                    throw new ClassFormatError("LDC for MethodType in classfile version < 51");
+                }
+                return jliMethodType;
+            case DYNAMIC:
+                if (earlierThan55()) {
+                    throw new ClassFormatError("LDC for Dynamic in classfile version < 55");
+                }
+                DynamicConstant constant = (DynamicConstant) pc;
+                return kindToOperand(constant.getTypeSymbol(pool));
             default:
                 throw new VerifyError("invalid CP load: " + pc.tag());
         }
@@ -811,19 +1314,29 @@ public final class MethodVerifier implements ContextAccess {
         // @formatter:on
     }
 
-    private int verify(int BCI, Stack stack, Locals locals) {
-        if (verified[BCI] == UNREACHABLE) {
-            throw new VerifyError("Jump to the middle of an instruction: " + BCI);
+    /**
+     * Core of the verifier. Performs verification for a single bci, according (mostly) to the JVM
+     * specs
+     *
+     * @param bci The bci of the opcode being verified
+     * @param stack The current state of the stack at the point of verification
+     * @param locals The current state of the local variables at the point of verification
+     * @return The index of the next opcode to verify, or bci if there is no next opcode to verify
+     *         (in case of a return bytecode, for example).
+     */
+    private int verify(int bci, OperandStack stack, Locals locals) {
+        if (bciStates[bci] == UNREACHABLE) {
+            throw new VerifyError("Jump to the middle of an instruction: " + bci);
         }
-        verified[BCI] = DONE;
+        bciStates[bci] = setStatus(bciStates[bci], DONE);
         int curOpcode;
-        curOpcode = code.opcode(BCI);
-        if (!(curOpcode <= QUICK)) {
-            throw new VerifyError("invalid bytecode: " + code.readByte(BCI - 1));
+        curOpcode = code.opcode(bci);
+        if (!(curOpcode <= SLIM_QUICK)) {
+            throw new VerifyError("invalid bytecode: " + code.readUByte(bci));
         }
         // @formatter:off
         // Checkstyle: stop
-        
+
         // EXTREMELY dirty trick to handle WIDE. This is not supposed to be a loop ! (returns on
         // first iteration)
         // Executes a second time ONLY for wide instruction, with curOpcode being the opcode of the
@@ -855,21 +1368,24 @@ public final class MethodVerifier implements ContextAccess {
                 case BIPUSH: stack.pushInt(); break;
                 case SIPUSH: stack.pushInt(); break;
 
-                    
-                case LDC: 
+                case LDC:
                 case LDC_W: {
-                    Operand op = ldcFromTag(pool.at(code.readCPI(BCI)));
+                    PoolConstant pc = poolAt(code.readCPI(bci));
+                    pc.validate(pool);
+                    Operand op = ldcFromTag(pc);
                     if (isType2(op)) {
                         throw new VerifyError("Loading Long or Double with LDC or LDC_W, please use LDC2_W.");
                     }
-                    if ((majorVersion < 49) && !(op == Int || op == Float || op.getType() == jlString.getType())) {
+                    if (earlierThan49() && !(op == Int || op == Float || op.getType() == jlString.getType())) {
                         throw new VerifyError("Loading non Int, Float or String with LDC in classfile version < 49.0");
                     }
                     stack.push(op);
                     break;
                 }
                 case LDC2_W: {
-                    Operand op = ldcFromTag(pool.at(code.readCPI(BCI)));
+                    PoolConstant pc = poolAt(code.readCPI(bci));
+                    pc.validate(pool);
+                    Operand op = ldcFromTag(pc);
                     if (!isType2(op)) {
                         throw new VerifyError("Loading non-Long or Double with LDC2_W, please use LDC or LDC_W.");
                     }
@@ -877,43 +1393,43 @@ public final class MethodVerifier implements ContextAccess {
                     break;
                 }
 
-                case ILOAD: locals.load(code.readLocalIndex(BCI), Int);     stack.pushInt();    break;
-                case LLOAD: locals.load(code.readLocalIndex(BCI), Long);    stack.pushLong();   break;
-                case FLOAD: locals.load(code.readLocalIndex(BCI), Float);   stack.pushFloat();  break;
-                case DLOAD: locals.load(code.readLocalIndex(BCI), Double);  stack.pushDouble(); break;
-                case ALOAD: stack.push(locals.loadRef(code.readLocalIndex(BCI))); break;
-                
+                case ILOAD: locals.load(code.readLocalIndex(bci), Int);     stack.pushInt();    break;
+                case LLOAD: locals.load(code.readLocalIndex(bci), Long);    stack.pushLong();   break;
+                case FLOAD: locals.load(code.readLocalIndex(bci), Float);   stack.pushFloat();  break;
+                case DLOAD: locals.load(code.readLocalIndex(bci), Double);  stack.pushDouble(); break;
+                case ALOAD: stack.push(locals.loadRef(code.readLocalIndex(bci))); break;
+
                 case ILOAD_0:
                 case ILOAD_1:
                 case ILOAD_2:
                 case ILOAD_3: locals.load(curOpcode - ILOAD_0, Int); stack.pushInt(); break;
-                
+
                 case LLOAD_0:
                 case LLOAD_1:
                 case LLOAD_2:
                 case LLOAD_3: locals.load(curOpcode - LLOAD_0, Long); stack.pushLong(); break;
-                
+
                 case FLOAD_0:
                 case FLOAD_1:
                 case FLOAD_2:
                 case FLOAD_3: locals.load(curOpcode - FLOAD_0, Float); stack.pushFloat(); break;
-                
+
                 case DLOAD_0:
                 case DLOAD_1:
                 case DLOAD_2:
                 case DLOAD_3: locals.load(curOpcode - DLOAD_0, Double); stack.pushDouble(); break;
-                
+
                 case ALOAD_0:
                 case ALOAD_1:
                 case ALOAD_2:
                 case ALOAD_3: stack.push(locals.loadRef(curOpcode - ALOAD_0)); break;
-                
+
 
                 case IALOAD: xaload(stack, Int);    break;
                 case LALOAD: xaload(stack, Long);   break;
                 case FALOAD: xaload(stack, Float);  break;
                 case DALOAD: xaload(stack, Double); break;
-                
+
                 case AALOAD: {
                     stack.popInt();
                     Operand op = stack.popArray();
@@ -923,38 +1439,38 @@ public final class MethodVerifier implements ContextAccess {
                     stack.push(op.getComponent());
                     break;
                 }
-                
-                case BALOAD: xaload(stack, Byte);  break;
+
+                case BALOAD: xaload(stack, ByteOrBoolean);  break;
                 case CALOAD: xaload(stack, Char);  break;
                 case SALOAD: xaload(stack, Short); break;
 
-                case ISTORE: stack.popInt();     locals.store(code.readLocalIndex(BCI), Int);    break;
-                case LSTORE: stack.popLong();    locals.store(code.readLocalIndex(BCI), Long);   break;
-                case FSTORE: stack.popFloat();   locals.store(code.readLocalIndex(BCI), Float);  break;
-                case DSTORE: stack.popDouble();  locals.store(code.readLocalIndex(BCI), Double); break;
-                
-                case ASTORE: locals.store(code.readLocalIndex(BCI), stack.popObjOrRA()); break;
+                case ISTORE: stack.popInt();     locals.store(code.readLocalIndex(bci), Int);    break;
+                case LSTORE: stack.popLong();    locals.store(code.readLocalIndex(bci), Long);   break;
+                case FSTORE: stack.popFloat();   locals.store(code.readLocalIndex(bci), Float);  break;
+                case DSTORE: stack.popDouble();  locals.store(code.readLocalIndex(bci), Double); break;
+
+                case ASTORE: locals.store(code.readLocalIndex(bci), stack.popObjOrRA()); break;
 
                 case ISTORE_0:
                 case ISTORE_1:
                 case ISTORE_2:
                 case ISTORE_3: stack.popInt(); locals.store(curOpcode - ISTORE_0, Int); break;
-                
+
                 case LSTORE_0:
                 case LSTORE_1:
                 case LSTORE_2:
                 case LSTORE_3: stack.popLong(); locals.store(curOpcode - LSTORE_0, Long); break;
-                
+
                 case FSTORE_0:
                 case FSTORE_1:
                 case FSTORE_2:
                 case FSTORE_3: stack.popFloat(); locals.store(curOpcode - FSTORE_0, Float); break;
-                
+
                 case DSTORE_0:
                 case DSTORE_1:
                 case DSTORE_2:
                 case DSTORE_3: stack.popDouble(); locals.store(curOpcode - DSTORE_0, Double); break;
-                
+
                 case ASTORE_0:
                 case ASTORE_1:
                 case ASTORE_2:
@@ -964,7 +1480,7 @@ public final class MethodVerifier implements ContextAccess {
                 case LASTORE: xastore(stack, Long);     break;
                 case FASTORE: xastore(stack, Float);    break;
                 case DASTORE: xastore(stack, Double);   break;
-                
+
                 case AASTORE: {
                     Operand toStore = stack.popRef();
                     stack.popInt();
@@ -972,10 +1488,11 @@ public final class MethodVerifier implements ContextAccess {
                     if (array != Null && !array.getComponent().isReference()) {
                         throw new VerifyError("Trying to store " + toStore + " in " + array);
                     }
+                    // Other checks are done at runtime
                     break;
                 }
-                
-                case BASTORE: xastore(stack, Byte); break;
+
+                case BASTORE: xastore(stack, ByteOrBoolean); break;
                 case CASTORE: xastore(stack, Char); break;
                 case SASTORE: xastore(stack, Short); break;
 
@@ -1036,7 +1553,7 @@ public final class MethodVerifier implements ContextAccess {
                 case IXOR: stack.popInt(); stack.popInt(); stack.pushInt(); break;
                 case LXOR: stack.popLong(); stack.popLong(); stack.pushLong(); break;
 
-                case IINC: locals.load(code.readLocalIndex(BCI), Int); break;
+                case IINC: locals.load(code.readLocalIndex(bci), Int); break;
 
                 case I2L: stack.popInt(); stack.pushLong(); break;
                 case I2F: stack.popInt(); stack.pushFloat(); break;
@@ -1059,10 +1576,10 @@ public final class MethodVerifier implements ContextAccess {
                 case I2S: stack.popInt(); stack.pushInt(); break;
 
                 case LCMP: stack.popLong(); stack.popLong(); stack.pushInt(); break;
-                
+
                 case FCMPL:
                 case FCMPG: stack.popFloat(); stack.popFloat(); stack.pushInt(); break;
-                
+
                 case DCMPL:
                 case DCMPG: stack.popDouble(); stack.popDouble(); stack.pushInt(); break;
 
@@ -1071,355 +1588,746 @@ public final class MethodVerifier implements ContextAccess {
                 case IFLT: // fall through
                 case IFGE: // fall through
                 case IFGT: // fall through
-                case IFLE: stack.popInt(); branch(code.readBranchDest(BCI), stack, locals); break;
-                
+                case IFLE: stack.popInt(); branch(code.readBranchDest(bci), stack, locals); break;
+
                 case IF_ICMPEQ: // fall through
                 case IF_ICMPNE: // fall through
                 case IF_ICMPLT: // fall through
                 case IF_ICMPGE: // fall through
                 case IF_ICMPGT: // fall through
-                case IF_ICMPLE: stack.popInt(); stack.popInt(); branch(code.readBranchDest(BCI), stack, locals); break;
-                
+                case IF_ICMPLE: stack.popInt(); stack.popInt(); branch(code.readBranchDest(bci), stack, locals); break;
+
                 case IF_ACMPEQ: // fall through
-                case IF_ACMPNE: stack.popRef(); stack.popRef(); branch(code.readBranchDest(BCI), stack, locals); break;
+                case IF_ACMPNE: stack.popRef(); stack.popRef(); branch(code.readBranchDest(bci), stack, locals); break;
 
                 case GOTO:
-                case GOTO_W: branch(code.readBranchDest(BCI), stack, locals); return BCI;
-                
-                case IFNULL: // fall through
-                case IFNONNULL: stack.popRef(); branch(code.readBranchDest(BCI), stack, locals); break;
-                
-                case JSR: // fall through
-                case JSR_W: {
-                    stack.push(ReturnAddress);
-                    branch(code.readBranchDest(BCI), stack, locals);
-                    // RET will need to branch here to finish the job.
-                    return BCI;
-                }
-                case RET: {
-                    locals.load(code.readLocalIndex(BCI), ReturnAddress);
-                    return BCI;
-                }
-                
-                case TABLESWITCH: {
-                    stack.popInt();
-                    BytecodeTableSwitch switchHelper = code.getBytecodeTableSwitch();
-                    int low = switchHelper.lowKey(BCI);
-                    int high = switchHelper.highKey(BCI);
-                    for (int i = low; i != high + 1; i++) {
-                        branch(switchHelper.targetAt(BCI, i - low), stack, locals);
-                    }
-                    return switchHelper.defaultTarget(BCI);
-                }
-                case LOOKUPSWITCH: {
-                    stack.popInt();
-                    BytecodeLookupSwitch switchHelper = code.getBytecodeLookupSwitch();
-                    int low = 0;
-                    int high = switchHelper.numberOfCases(BCI) - 1;
-                    int previousKey = 0;
-                    if (high > 0) {
-                        previousKey = switchHelper.keyAt(BCI, low);
-                    }
-                    for (int i = low; i <= high; i++) {
-                        int thisKey = switchHelper.keyAt(BCI, i);
-                        if (i > 0 && thisKey <= previousKey) {
-                            throw new VerifyError("Unsorted keys in LookupSwitch");
-                        }
-                        branch(BCI + switchHelper.offsetAt(BCI, i), stack, locals);
-                        previousKey = thisKey;
-                    }
-                    return switchHelper.defaultTarget(BCI);
-                }
-                
-                case IRETURN: stack.popInt(); return BCI;
-                case LRETURN: stack.popLong(); return BCI;
-                case FRETURN: stack.popFloat(); return BCI;
-                case DRETURN: stack.popDouble(); return BCI;
-                case ARETURN: stack.popRef(); return BCI;
-                case RETURN: return BCI; 
-                
-                case GETSTATIC:
-                case GETFIELD: {
-                    // Checkstyle: resume
-                    // @formatter:on
-                    PoolConstant pc = pool.at(code.readCPI(BCI));
-                    if (!(pc instanceof FieldRefConstant)) {
-                        throw new VerifyError();
-                    }
-                    FieldRefConstant frc = (FieldRefConstant) pc;
-                    Symbol<Type> type = frc.getType(pool);
-                    if (curOpcode == GETFIELD) {
-                        Operand fieldHolder = kindToOperand(getTypes().fromName(frc.getHolderKlassName(pool)));
-                        Operand receiver = checkInit(stack, stack.popRef(fieldHolder));
-                        if (receiver.isArrayType()) {
-                            throw new VerifyError("Trying to access field of an array type: " + receiver);
-                        }
-                    }
-                    Operand op = kindToOperand(type);
-                    stack.push(op);
-                    break;
+                case GOTO_W: branch(code.readBranchDest(bci), stack, locals); return bci;
 
+                case IFNULL: // fall through
+                case IFNONNULL: stack.popRef(); branch(code.readBranchDest(bci), stack, locals); break;
+
+                case JSR: // fall through
+                case JSR_W: verifyJSR(bci, stack, locals); return bci;
+
+                case RET: verifyRET(bci, stack, locals); return bci;
+
+                case TABLESWITCH:  return verifyTableSwitch(bci, stack, locals);
+                case LOOKUPSWITCH: return verifyLookupSwitch(bci, stack, locals);
+
+                case IRETURN: {
+                    stack.pop(Int);
+                    if (!returnOperand.getKind().isStackInt()) {
+                        throw new VerifyError("Found an IRETURN when return type is " + returnOperand);
+                    }
+                    return bci;
                 }
+                case LRETURN: doReturn(stack, Long);       return bci;
+                case FRETURN: doReturn(stack, Float);      return bci;
+                case DRETURN: doReturn(stack, Double);     return bci;
+                case ARETURN: stack.popRef(returnOperand); return bci;
+                case RETURN:
+                    if (returnOperand != Void) {
+                        throw new VerifyError("Encountered RETURN, but method return type is not void: " + returnOperand);
+                    }
+                    // Only j.l.Object.<init> can omit calling another initializer.
+                    if (isInstanceInit(methodName) && thisKlass.getType() != Type.java_lang_Object) {
+                        if (!calledConstructor) {
+                            throw new VerifyError("Did not call super() or this() in constructor " + thisKlass.getType() + "." + methodName);
+                        }
+                    }
+                    return bci;
+
+                case GETSTATIC:
+                case GETFIELD: verifyGetField(bci, stack, curOpcode); break;
 
                 case PUTSTATIC:
-                case PUTFIELD: {
-                    PoolConstant pc = pool.at(code.readCPI(BCI));
-                    if (!(pc instanceof FieldRefConstant)) {
-                        throw new VerifyError();
-                    }
-                    FieldRefConstant frc = (FieldRefConstant) pc;
-                    Symbol<Type> type = frc.getType(pool);
-                    Operand op = kindToOperand(type);
-                    stack.pop(op);
-                    if (op.isUninit()) {
-                        throw new VerifyError("Storing uninitialized reference in a field.");
-                    }
-                    if (curOpcode == PUTFIELD) {
-                        Operand fieldHolder = kindToOperand(getTypes().fromName(frc.getHolderKlassName(pool)));
-                        Operand receiver = checkInit(stack, stack.popRef(fieldHolder));
-                        if (receiver.isArrayType()) {
-                            throw new VerifyError("Trying to access field of an array type: " + receiver);
-                        }
-                    }
-                    break;
-                    // @formatter:off
-                    // Checkstyle: stop
-                }
+                case PUTFIELD: verifyPutField(bci, stack, curOpcode); break;
 
-                case INVOKEVIRTUAL:
-                case INVOKESPECIAL:
-                case INVOKESTATIC:
-                case INVOKEINTERFACE:
-                    // Checkstyle: resume
-                    // @formatter:on
-                {
-                    if (curOpcode == INVOKEINTERFACE && code.readByte(BCI + 3) != 0) {
-                        throw new VerifyError("4th byte after INVOKEINTERFACE must be 0.");
-                    }
-                    PoolConstant pc = pool.at(code.readCPI(BCI));
-                    if (!(pc instanceof MethodRefConstant)) {
-                        throw new VerifyError("Invalid CP constant for a MethodRef: " + pc.getClass().getName());
-                    }
-                    MethodRefConstant mrc = (MethodRefConstant) pc;
-                    if (majorVersion <= 51 && curOpcode == INVOKESPECIAL && mrc.tag() == INTERFACE_METHOD_REF) {
-                        throw new VerifyError("Only classfile of version >51 can use INVOKESPECIAL on interface methods");
-                    }
-                    Symbol<Name> calledMethodName = mrc.getName(pool);
-                    if (calledMethodName == Name.CLINIT) {
-                        throw new ClassFormatError("Invocation of class initializer!");
-                    }
-                    if (curOpcode != INVOKESPECIAL && calledMethodName == Name.INIT) {
-                        throw new VerifyError("Invocation of instance initializer with opcode other than INVOKESPECIAL");
-                    }
-                    Symbol<Signature> calledMethodSignature = mrc.getSignature(pool);
-                    Operand[] parsedSig = getOperandSig(calledMethodSignature);
-                    if (parsedSig.length == 0) {
-                        throw new ClassFormatError("Method ref with no return value !");
-                    }
-                    for (int i = parsedSig.length - 2; i >= 0; i--) {
-                        stack.pop(parsedSig[i]);
-                    }
-                    Operand op = getHolderKlassAsOperand(mrc);
+                case INVOKEVIRTUAL:   verifyInvokeVirtual(bci, stack);         break;
+                case INVOKESPECIAL:   verifyInvokeSpecial(bci, stack, locals); break;
+                case INVOKESTATIC:    verifyInvokeStatic(bci, stack);          break;
+                case INVOKEINTERFACE: verifyInvokeInterface(bci, stack);       break;
 
-                    if (curOpcode == INVOKESPECIAL && calledMethodName == Name.INIT) {
-                        UninitReferenceOperand toInit = (UninitReferenceOperand) stack.popUninitRef(op);
-                        if (toInit.newBCI != -1) {
-                            if (code.opcode(toInit.newBCI) != NEW) {
-                                throw new VerifyError("There is no NEW bytecode at BCI: " + toInit.newBCI);
-                            }
-                        } else {
-                            if (methodName != Name.INIT) {
-                                throw new VerifyError("Encountered UninitializedThis outside of Constructor: " + toInit);
-                            }
-                        }
-                        stack.initUninit(toInit);
-                    } else if (curOpcode != INVOKESTATIC) {
-                        checkInit(stack, stack.popRef(op));
-                    }
-                    Operand returnOp = parsedSig[parsedSig.length - 1];
-                    if (!(returnOp == Void)) {
-                        stack.push(returnOp);
-                    }
-                    break;
-                    // @formatter:off
-                    // Checkstyle: stop
-                }
+                case NEW:       verifyNew(bci, stack);               break;
+                case NEWARRAY:  verifyNewPrimitiveArray(bci, stack); break;
+                case ANEWARRAY: verifyNewObjectArray(bci, stack);    break;
 
-                case NEW: {
-                    PoolConstant pc = pool.at(code.readCPI(BCI));
-                    if (!(pc instanceof ClassConstant)) {
-                        throw new VerifyError("Invalid CP constant for a Class: " + pc.toString());
-                    }
-                    ClassConstant cc = (ClassConstant) pc;
-                    Symbol<Type> type = getTypes().fromName(cc.getName(pool));
-                    if (Types.isPrimitive(type) || Types.isArray(type)) {
-                        throw new VerifyError("use NEWARRAY for creating array or primitive type: " + type);
-                    }
-                    Operand op = new UninitReferenceOperand(type, thisKlass, BCI);
-                    stack.push(op);
-                    break;
-                }
-                case NEWARRAY: {
-                    byte jvmType = code.readByte(BCI);
-                    if (jvmType < 4 || jvmType > 11) {
-                        throw new VerifyError("invalid jvmPrimitiveType for NEWARRAY: " + jvmType);
-                    }
-                    stack.popInt();
-                    stack.push(fromJVMType(jvmType));
-                    break;
-                }
-                case ANEWARRAY: {
-                    int CPI = code.readCPI(BCI);
-                    PoolConstant pc = pool.at(CPI);
-                    if (!(pc instanceof ClassConstant)) {
-                        throw new VerifyError("Invalid CP constant for ANEWARRAY: " + pc.toString());
-                    }
-                    ClassConstant cc = (ClassConstant) pc;
-                    Symbol<Type> type = getTypes().fromName(cc.getName(pool));
-                    if (Types.isPrimitive(type)) {
-                        throw new VerifyError("Primitive type for ANEWARRAY: " + type);
-                    }
-                    stack.popInt();
-                    Operand ref = spawnFromType(type);
-                    if (ref.isArrayType()) {
-                        stack.push(new ArrayOperand(ref.getElemental(), ref.getDimensions() + 1));
-                    } else {
-                        stack.push(new ArrayOperand(ref));
-                    }
-                    break;
-                }
-                
-                case ARRAYLENGTH:
-                    stack.popArray();
-                    stack.pushInt();
-                    break;
+                case ARRAYLENGTH: stack.popArray(); stack.pushInt(); break;
 
-                case ATHROW:
-                    stack.popRef(Throwable);
-                    return BCI;
+                case ATHROW: stack.popRef(jlThrowable); return bci;
 
-                case CHECKCAST: {
-                    stack.popRef();
-                    int CPI = code.readCPI(BCI);
-                    PoolConstant pc = pool.at(CPI);
-                    if (!(pc instanceof ClassConstant)) {
-                        throw new VerifyError("Invalid CP constant for ANEWARRAY: " + pc.toString());
-                    }
-                    ClassConstant cc = (ClassConstant) pc;
-                    Symbol<Type> type = getTypes().fromName(cc.getName(pool));
-                    if (Types.isPrimitive(type)) {
-                        throw new VerifyError("Primitive type for ANEWARRAY: " + type);
-                    }
-                    stack.push(spawnFromType(type));
-                    break;
-                }
-                
-                case INSTANCEOF: {
-                    stack.popRef();
-                    int CPI = code.readCPI(BCI);
-                    PoolConstant pc = pool.at(CPI);
-                    if (!(pc instanceof ClassConstant)) {
-                        throw new VerifyError("Invalid CP constant for ANEWARRAY: " + pc.toString());
-                    }
-                    ClassConstant cc = (ClassConstant) pc;
-                    Symbol<Type> type = getTypes().fromName(cc.getName(pool));
-                    if (Types.isPrimitive(type)) {
-                        throw new VerifyError("Primitive type for ANEWARRAY: " + type);
-                    }
-                    stack.pushInt();
-                    break;
-                }
+                case CHECKCAST:  verifyCheckCast(bci, stack);  break;
+                case INSTANCEOF: verifyInstanceOf(bci, stack); break;
 
-                case MONITORENTER:
-                    stack.popRef();
-                    break;
-                case MONITOREXIT:
-                    stack.popRef();
-                    break;
+                case MONITORENTER: stack.popRef(); break;
+                case MONITOREXIT: stack.popRef(); break;
 
                 case WIDE:
-                    curOpcode = code.currentBC(BCI);
+                    curOpcode = code.currentBC(bci);
                     if (!wideOpcodes(curOpcode)) {
                         throw new VerifyError("invalid widened opcode: " + Bytecodes.nameOf(curOpcode));
                     }
                     continue wideEscape;
 
-                case MULTIANEWARRAY: {
-                    PoolConstant pc = pool.at(code.readCPI(BCI));
-                    if (!(pc instanceof ClassConstant)) {
-                        throw new VerifyError("Invalid CP constant for a Class: " + pc.toString());
-                    }
-                    ClassConstant cc = (ClassConstant) pc;
-                    Symbol<Type> type = getTypes().fromName(cc.getName(pool));
-                    if (!Types.isArray(type)) {
-                        throw new VerifyError("Class " + type + " for MULTINEWARRAY is not an array type.");
-                    }
-                    int dim = code.readUByte(BCI + 3);
-                    if (dim <= 0) {
-                        throw new VerifyError("Negative or 0 dimension for MULTIANEWARRAY: " + dim);
-                    }
-                    if (Types.getArrayDimensions(type) < dim) {
-                        throw new VerifyError("Incompatible dimensions from constant pool: " + Types.getArrayDimensions(type) + " and instruction: " + dim);
-                    }
-                    for (int i = 0; i < dim; i++) {
-                        stack.popInt();
-                    }
-                    stack.push(kindToOperand(type));
-                    break;
-                }
+                case MULTIANEWARRAY: verifyMultiNewArray(bci, stack); break;
 
                 case BREAKPOINT: break;
 
-                case INVOKEDYNAMIC: {
-                    if (code.readByte(BCI + 2) != 0 || code.readByte(BCI + 3) != 0) {
-                        throw new VerifyError("bytes 3 and 4 after invokedynamic must be 0.");
-                    }
-                    PoolConstant pc = pool.at(code.readCPI(BCI));
-                    if (!(pc instanceof InvokeDynamicConstant)) {
-                        throw new VerifyError("Invalid CP constant for an InvokeDynamic: " + pc.getClass().getName());
-                    }
+                case INVOKEDYNAMIC: verifyInvokeDynamic(bci, stack); break;
 
-                    InvokeDynamicConstant idc = (InvokeDynamicConstant) pc;
-                    if (!(pool.at(idc.getNameAndTypeIndex()).tag() == ConstantPool.Tag.NAME_AND_TYPE)) {
-                        throw new ClassFormatError("Invalid constant pool !");
-                    }
-                    Symbol<Symbol.Name> name = idc.getName(pool);
-                    if (name == Symbol.Name.INIT || name == Symbol.Name.CLINIT) {
-                        throw new VerifyError("Invalid bootstrap method name: " + name);
-                    }
-                    Operand[] parsedSig = getOperandSig(idc.getSignature(pool));
-                    if (parsedSig.length == 0) {
-                        throw new ClassFormatError("No return descriptor for method");
-                    }
-                    for (int i = parsedSig.length - 2; i >= 0; i--) {
-                        stack.pop(parsedSig[i]);
-                    }
-                    Operand returnKind = parsedSig[parsedSig.length - 1];
-                    if (returnKind != Void) {
-                        stack.push(returnKind);
-                    }
-                    break;
-                }
                 case QUICK: break;
+                case SLIM_QUICK: break;
                 default:
             }
-            // Checkstyle: resume
-            // @formatter:on
-            return code.nextBCI(BCI);
+            return code.nextBCI(bci);
         }
+        // Checkstyle: resume
+        // @formatter:on
+    }
+
+    private void verifyInvokeDynamic(int bci, OperandStack stack) {
+        // Check padding
+        if (code.readByte(bci + 2) != 0 || code.readByte(bci + 3) != 0) {
+            throw new VerifyError("bytes 3 and 4 after invokedynamic must be 0.");
+        }
+        PoolConstant pc = poolAt(code.readCPI(bci));
+
+        // Check CP validity
+        if (pc.tag() != ConstantPool.Tag.INVOKEDYNAMIC) {
+            throw new VerifyError("Invalid CP constant for INVOKEDYNAMIC: " + pc.toString());
+        }
+        pc.validate(pool);
+
+        InvokeDynamicConstant idc = (InvokeDynamicConstant) pc;
+        Symbol<Name> name = idc.getName(pool);
+
+        // Check invokedynamic does not call initializers
+        if (isInstanceInit(name) || isClassInit(name)) {
+            throw new VerifyError("Invalid bootstrap method name: " + name);
+        }
+
+        // Check and pop arguments
+        Operand[] parsedSig = getOperandSig(idc.getSignature(pool));
+        assert parsedSig.length > 0 : "Empty descriptor for method";
+        for (int i = parsedSig.length - 2; i >= 0; i--) {
+            stack.pop(parsedSig[i]);
+        }
+
+        // push result
+        Operand returnKind = parsedSig[parsedSig.length - 1];
+        if (returnKind != Void) {
+            stack.push(returnKind);
+        }
+    }
+
+    private Symbol<Type> getTypeFromPool(int c, String s) {
+        PoolConstant pc = poolAt(c);
+        if (pc.tag() != CLASS) {
+            throw new VerifyError(s + pc.toString());
+        }
+        pc.validate(pool);
+        ClassConstant cc = (ClassConstant) pc;
+        assert Validation.validClassNameEntry(cc.getName(pool));
+        Symbol<Type> type = getTypes().fromName(cc.getName(pool));
+        return type;
+    }
+
+    private void verifyMultiNewArray(int bci, OperandStack stack) {
+        // Check CP validity
+        Symbol<Type> type = getTypeFromPool(code.readCPI(bci), "Invalid CP constant for MULTIANEWARRAY: ");
+        if (!Types.isArray(type)) {
+            throw new VerifyError("Class " + type + " for MULTINEWARRAY is not an array type.");
+        }
+
+        // Check dimensions
+        int dim = code.readUByte(bci + 3);
+        if (dim <= 0) {
+            throw new VerifyError("Negative or 0 dimension for MULTIANEWARRAY: " + dim);
+        }
+        if (Types.getArrayDimensions(type) < dim) {
+            throw new VerifyError("Incompatible dimensions from constant pool: " + Types.getArrayDimensions(type) + " and instruction: " + dim);
+        }
+
+        // Pop lengths
+        for (int i = 0; i < dim; i++) {
+            stack.popInt();
+        }
+
+        // push result
+        stack.push(kindToOperand(type));
+    }
+
+    private void verifyInstanceOf(int bci, OperandStack stack) {
+        // pop receiver
+        stack.popRef();
+
+        // Check CP validity
+        Symbol<Type> type = getTypeFromPool(code.readCPI(bci), "Invalid CP constant for INSTANCEOF: ");
+        if (Types.isPrimitive(type)) {
+            throw new VerifyError("Primitive type for INSTANCEOF: " + type);
+        }
+
+        // push result
+        stack.pushInt();
+    }
+
+    private void verifyCheckCast(int bci, OperandStack stack) {
+        // pop receiver
+        Operand stacKOp = stack.popRef();
+
+        // Check CP validity
+        Symbol<Type> type = getTypeFromPool(code.readCPI(bci), "Invalid CP constant for CHECKCAST: ");
+        if (Types.isPrimitive(type)) {
+            throw new VerifyError("Primitive type for CHECKCAST: " + type);
+        }
+
+        // push new type
+        Operand castOp = spawnFromType(type);
+        if (stacKOp.isUninit() && !castOp.isArrayType()) {
+            stack.push(new UninitReferenceOperand(type, thisKlass, ((UninitReferenceOperand) stacKOp).newBCI));
+        } else {
+            stack.push(castOp);
+        }
+    }
+
+    private void verifyNewObjectArray(int bci, OperandStack stack) {
+        // Check CP validity
+        int cpi = code.readCPI(bci);
+        Symbol<Type> type = getTypeFromPool(cpi, "Invalid CP constant for ANEWARRAY: ");
+        if (Types.isPrimitive(type)) {
+            throw new VerifyError("Primitive type for ANEWARRAY: " + type);
+        }
+
+        // Pop length
+        stack.popInt();
+
+        // push result
+        Operand ref = spawnFromType(type);
+        if (ref.isArrayType()) {
+            stack.push(new ArrayOperand(ref.getElemental(), ref.getDimensions() + 1));
+        } else {
+            stack.push(new ArrayOperand(ref));
+        }
+    }
+
+    private PoolConstant poolAt(int cpi) {
+        if (cpi >= pool.length() || cpi < 0) {
+            throw new VerifyError("Invalid constant pool access at " + cpi + ", pool length: " + pool.length());
+        }
+        return pool.at(cpi);
+    }
+
+    private void verifyNewPrimitiveArray(int bci, OperandStack stack) {
+        byte jvmType = code.readByte(bci);
+        if (jvmType < 4 || jvmType > 11) {
+            throw new VerifyError("invalid jvmPrimitiveType for NEWARRAY: " + jvmType);
+        }
+        stack.popInt();
+        stack.push(fromJVMType(jvmType));
+    }
+
+    private void verifyNew(int bci, OperandStack stack) {
+        // Check CP validity
+        Symbol<Type> type = getTypeFromPool(code.readCPI(bci), "Invalid CP constant for NEW: ");
+        if (Types.isPrimitive(type) || Types.isArray(type)) {
+            throw new VerifyError("use NEWARRAY for creating array or primitive type: " + type);
+        }
+
+        // push result
+        Operand op = new UninitReferenceOperand(type, thisKlass, bci);
+        stack.push(op);
+    }
+
+    private void verifyPutField(int bci, OperandStack stack, int curOpcode) {
+        // Check CP validity
+        PoolConstant pc = poolAt(code.readCPI(bci));
+        if (pc.tag() != ConstantPool.Tag.FIELD_REF) {
+            throw new VerifyError("Invalid CP constant for PUTFIELD: " + pc.toString());
+        }
+        pc.validate(pool);
+
+        // Obtain field info
+        FieldRefConstant frc = (FieldRefConstant) pc;
+        assert Validation.validFieldDescriptor(frc.getType(pool));
+        Symbol<Type> fieldDesc = frc.getType(pool);
+        Operand toPut = stack.pop(kindToOperand(fieldDesc));
+
+        checkInit(toPut);
+        if (curOpcode == PUTFIELD) {
+            // Pop and check verifier
+            assert Validation.validClassNameEntry(frc.getHolderKlassName(pool));
+            Symbol<Type> fieldHolderType = getTypes().fromName(frc.getHolderKlassName(pool));
+            Operand fieldHolder = kindToOperand(fieldHolderType);
+            Operand receiver = checkInitAccess(stack.popRef(fieldHolder), fieldHolder);
+            if (receiver.isArrayType()) {
+                throw new VerifyError("Trying to access field of an array type: " + receiver);
+            }
+            if (!receiver.isUninitThis()) {
+                checkProtectedField(receiver, fieldHolderType, code.readCPI(bci));
+            }
+        }
+    }
+
+    private void verifyGetField(int bci, OperandStack stack, int curOpcode) {
+        // Check CP validity
+        PoolConstant pc = poolAt(code.readCPI(bci));
+        if (pc.tag() != ConstantPool.Tag.FIELD_REF) {
+            throw new VerifyError("Invalid CP constant for GETFIELD: " + pc.toString());
+        }
+        pc.validate(pool);
+
+        // Obtain field info
+        FieldRefConstant frc = (FieldRefConstant) pc;
+        assert Validation.validFieldDescriptor(frc.getType(pool));
+        Symbol<Type> type = frc.getType(pool);
+        if (curOpcode == GETFIELD) {
+            // Pop and check receiver
+            assert Validation.validClassNameEntry(frc.getHolderKlassName(pool));
+            Symbol<Type> fieldHolderType = getTypes().fromName(frc.getHolderKlassName(pool));
+            Operand fieldHolder = kindToOperand(fieldHolderType);
+            Operand receiver = checkInitAccess(stack.popRef(fieldHolder), fieldHolder);
+            checkProtectedField(receiver, fieldHolderType, code.readCPI(bci));
+            if (receiver.isArrayType()) {
+                throw new VerifyError("Trying to access field of an array type: " + receiver);
+            }
+        }
+
+        // push result
+        Operand op = kindToOperand(type);
+        stack.push(op);
+    }
+
+    private int verifyLookupSwitch(int bci, OperandStack stack, Locals locals) {
+        stack.popInt();
+        BytecodeLookupSwitch switchHelper = BytecodeLookupSwitch.INSTANCE;
+        // Padding checks
+        for (int j = bci + 1; j < switchHelper.getAlignedBci(bci); j++) {
+            if (version51OrEarlier() && code.readUByte(j) != 0) {
+                throw new VerifyError("non-zero padding for LOOKUPSWITCH");
+            }
+        }
+        int low = 0;
+        int high = switchHelper.numberOfCases(code, bci) - 1;
+        int previousKey = 0;
+        if (high > 0) {
+            previousKey = switchHelper.keyAt(code, bci, low);
+        }
+
+        // Verify all branches
+        for (int i = low; i <= high; i++) {
+            int thisKey = switchHelper.keyAt(code, bci, i);
+            if (i > 0 && thisKey <= previousKey) {
+                throw new VerifyError("Unsorted keys in LookupSwitch");
+            }
+            branch(bci + switchHelper.offsetAt(code, bci, i), stack, locals);
+            previousKey = thisKey;
+        }
+
+        // Verify default branch
+        return switchHelper.defaultTarget(code, bci);
+    }
+
+    private int verifyTableSwitch(int bci, OperandStack stack, Locals locals) {
+        stack.popInt();
+        BytecodeTableSwitch switchHelper = BytecodeTableSwitch.INSTANCE;
+        // Padding checks
+        for (int j = bci + 1; j < switchHelper.getAlignedBci(bci); j++) {
+            if (version51OrEarlier() && code.readUByte(j) != 0) {
+                throw new VerifyError("non-zero padding for TABLESWITCH");
+            }
+        }
+        int low = switchHelper.lowKey(code, bci);
+        int high = switchHelper.highKey(code, bci);
+
+        // Verify all branches
+        for (int i = low; i != high + 1; i++) {
+            branch(switchHelper.targetAt(code, bci, i - low), stack, locals);
+        }
+
+        // Verify default branch
+        return switchHelper.defaultTarget(code, bci);
+    }
+
+    private void verifyJSR(int bci, OperandStack stack, Locals locals) {
+        if (version51OrLater()) {
+            throw new VerifyError("JSR/RET bytecode in version >= 51");
+        }
+        if (stackFrames[bci] == null) {
+            stackFrames[bci] = spawnStackFrame(stack, locals);
+        }
+        // Push bit vector
+        int targetBCI = code.readBranchDest(bci);
+        stack.push(new ReturnAddressOperand(bci, targetBCI));
+        locals.subRoutineModifications = new SubroutineModificationStack(locals.subRoutineModifications, new boolean[maxLocals], bci);
+        branch(targetBCI, stack, locals);
+        bciStates[bci] = setStatus(bciStates[bci], DONE);
+    }
+
+    private void verifyRET(int bci, OperandStack stack, Locals locals) {
+        if (version51OrLater()) {
+            throw new VerifyError("JSR/RET bytecode in version >= 51");
+        }
+        int pos = 0;
+        ReturnAddressOperand ra = locals.loadReturnAddress(code.readLocalIndex(bci));
+        ReturnAddressOperand prev = null;
+        while (pos < ra.targetBCIs.size()) {
+            prev = ra;
+            int target = ra.targetBCIs.get(pos++);
+            checkAndSetReturnedTo(target, bci);
+            Locals toMerge = getSubroutineReturnLocals(target, locals);
+            branch(code.nextBCI(target), stack, toMerge);
+            // Sanity check: branching did not overwrite the return address being
+            // verified
+            ra = locals.loadReturnAddress(code.readLocalIndex(bci));
+            if (ra != prev) {
+                pos = 0;
+            }
+        }
+    }
+
+    private MethodRefConstant getMethodRefConstant(int bci) {
+        PoolConstant pc = poolAt(code.readCPI(bci));
+        if (!(pc instanceof MethodRefConstant)) {
+            throw new VerifyError("Invalid CP constant for a MethodRef: " + pc.getClass().getName());
+        }
+        pc.validate(pool);
+        return (MethodRefConstant) pc;
+    }
+
+    private static boolean isClassInit(Symbol<Name> calledMethodName) {
+        return Name._clinit_.equals(calledMethodName);
+    }
+
+    private static boolean isInstanceInit(Symbol<Name> calledMethodName) {
+        return Name._init_.equals(calledMethodName);
+    }
+
+    private Operand popSignatureGetReturnOP(OperandStack stack, MethodRefConstant mrc) {
+        Symbol<Signature> calledMethodSignature = mrc.getSignature(pool);
+        Operand[] parsedSig = getOperandSig(calledMethodSignature);
+
+        assert parsedSig.length > 0 : "Method ref with no return value !";
+
+        // Pop arguments
+        for (int i = parsedSig.length - 2; i >= 0; i--) {
+            stack.pop(parsedSig[i]);
+        }
+        return parsedSig[parsedSig.length - 1];
+    }
+
+    private void verifyInvokeInterface(int bci, OperandStack stack) {
+        // Check padding.
+        if (code.readUByte(bci + 4) != 0) {
+            throw new VerifyError("4th byte after INVOKEINTERFACE must be 0.");
+        }
+
+        // Check CP validity
+        MethodRefConstant mrc = getMethodRefConstant(bci);
+
+        // Checks versioning
+        Symbol<Name> calledMethodName = mrc.getName(pool);
+
+        // Check guest is not invoking <clinit>
+        if (isClassInit(calledMethodName)) {
+            throw new VerifyError("Invocation of class initializer!");
+        }
+
+        // Only INVOKESPECIAL can call <init>
+        if (isInstanceInit(calledMethodName)) {
+            throw new VerifyError("Invocation of instance initializer with opcode other than INVOKESPECIAL");
+        }
+
+        Symbol<Signature> calledMethodSignature = mrc.getSignature(pool);
+        Operand[] parsedSig = getOperandSig(calledMethodSignature);
+
+        // Check signature is well formed.
+        assert parsedSig.length > 0 : "Method ref with no return value !";
+
+        // Pop arguments
+        // Check signature conforms with count argument
+        int count = code.readUByte(bci + 3);
+        if (count <= 0) {
+            throw new VerifyError("Invalid count argument for INVOKEINTERFACE: " + count);
+        }
+        int descCount = 1; // Has a receiver.
+        for (int i = parsedSig.length - 2; i >= 0; i--) {
+            descCount++;
+            if (isType2(parsedSig[i])) {
+                descCount++;
+            }
+            stack.pop(parsedSig[i]);
+        }
+        if (count != descCount) {
+            throw new VerifyError("Inconsistent redundant argument count for INVOKEINTERFACE.");
+        }
+
+        assert Validation.validClassNameEntry(mrc.getHolderKlassName(pool));
+        Symbol<Type> methodHolder = getTypes().fromName(mrc.getHolderKlassName(pool));
+
+        Operand methodHolderOp = kindToOperand(methodHolder);
+
+        checkInit(stack.popRef(methodHolderOp));
+
+        Operand returnOp = parsedSig[parsedSig.length - 1];
+        if (!(returnOp == Void)) {
+            stack.push(returnOp);
+        }
+    }
+
+    private void verifyInvokeStatic(int bci, OperandStack stack) {
+        // Check CP validity
+        MethodRefConstant mrc = getMethodRefConstant(bci);
+
+        // Checks versioning
+        if (version51OrEarlier() && mrc.tag() == INTERFACE_METHOD_REF) {
+            throw new VerifyError("invokeStatic refers to an interface method with classfile version " + majorVersion);
+        }
+        Symbol<Name> calledMethodName = mrc.getName(pool);
+
+        // Check guest is not invoking <clinit>
+        assert !isClassInit(calledMethodName) : "Invocation of class initializer!";
+
+        // Only INVOKESPECIAL can call <init>
+        if (isInstanceInit(calledMethodName)) {
+            throw new VerifyError("Invocation of instance initializer with opcode other than INVOKESPECIAL");
+        }
+
+        Operand returnOp = popSignatureGetReturnOP(stack, mrc);
+        assert Validation.validClassNameEntry(mrc.getHolderKlassName(pool));
+
+        if (!(returnOp == Void)) {
+            stack.push(returnOp);
+        }
+    }
+
+    private void verifyInvokeSpecial(int bci, OperandStack stack, Locals locals) {
+        // Check CP validity
+        MethodRefConstant mrc = getMethodRefConstant(bci);
+
+        // Checks versioning
+        if (version51OrEarlier() && mrc.tag() == INTERFACE_METHOD_REF) {
+            throw new VerifyError("invokeSpecial refers to an interface method with classfile version " + majorVersion);
+        }
+        Symbol<Name> calledMethodName = mrc.getName(pool);
+
+        // Check guest is not invoking <clinit>
+        assert !isClassInit(calledMethodName) : "Invocation of class initializer!";
+
+        Operand returnOp = popSignatureGetReturnOP(stack, mrc);
+
+        assert Validation.validClassNameEntry(mrc.getHolderKlassName(pool));
+        Symbol<Type> methodHolder = getTypes().fromName(mrc.getHolderKlassName(pool));
+        Operand methodHolderOp = kindToOperand(methodHolder);
+
+        if (isInstanceInit(calledMethodName)) {
+            UninitReferenceOperand toInit = (UninitReferenceOperand) stack.popUninitRef(methodHolderOp);
+            if (toInit.isUninitThis()) {
+                if (!Name._init_.equals(methodName)) {
+                    throw new VerifyError("Encountered UninitializedThis outside of Constructor: " + toInit);
+                }
+                calledConstructor = true;
+            } else {
+                if (code.opcode(toInit.newBCI) != NEW) {
+                    throw new VerifyError("There is no NEW bytecode at bci: " + toInit.newBCI);
+                }
+                // according to JCK's "vm/classfmt/ins/instr_03608m1" :
+                //
+                // Calling parent's initializer of uninitialized new object is
+                // illegal, but serialization does just that.
+                //
+                // In particular, it generates a class whose method executes NEW
+                // j.l.Number (an abstract class), then calls j.l.Object.<init> on
+                // it.
+                //
+                // A workaround would be to check if the underlying class is
+                // abstract/interface, but that would feel really silly...
+                if (toInit.getType() != methodHolder) {
+                    throw new VerifyError("Calling wrong initializer for a new object.");
+                }
+            }
+            Operand stackOp = stack.initUninit(toInit);
+            locals.initUninit(toInit, stackOp);
+
+            checkProtectedMethod(stackOp, methodHolder, code.readCPI(bci));
+        } else {
+            if (!checkMethodSpecialAccess(methodHolderOp)) {
+                throw new VerifyError("invokespecial must specify a method in this class or a super class");
+            }
+            Operand stackOp = checkInit(stack.popRef(methodHolderOp));
+            /**
+             * 4.10.1.9.invokespecial:
+             *
+             * invokespecial, for other than an instance initialization method, must name a method
+             * in the current class/interface or a superclass / superinterface.
+             */
+            if (!checkReceiverSpecialAccess(stackOp)) {
+                throw new VerifyError("Invalid use of INVOKESPECIAL");
+            }
+        }
+        if (!(returnOp == Void)) {
+            stack.push(returnOp);
+        }
+    }
+
+    private void verifyInvokeVirtual(int bci, OperandStack stack) {
+        // Check CP validity
+        MethodRefConstant mrc = getMethodRefConstant(bci);
+
+        Symbol<Name> calledMethodName = mrc.getName(pool);
+
+        // Check guest is not invoking <clinit>
+        assert !isClassInit(calledMethodName) : "Invocation of class initializer!";
+
+        // Only INVOKESPECIAL can call <init>
+        if (isInstanceInit(calledMethodName)) {
+            throw new VerifyError("Invocation of instance initializer with opcode other than INVOKESPECIAL");
+        }
+
+        Operand returnOp = popSignatureGetReturnOP(stack, mrc);
+
+        assert Validation.validClassNameEntry(mrc.getHolderKlassName(pool));
+        Symbol<Type> methodHolder = getTypes().fromName(mrc.getHolderKlassName(pool));
+
+        Operand methodHolderOp = kindToOperand(methodHolder);
+        Operand stackOp = checkInit(stack.popRef(methodHolderOp));
+
+        // Perform protected method access checks
+        checkProtectedMethod(stackOp, methodHolder, code.readCPI(bci));
+
+        if (!(returnOp == Void)) {
+            stack.push(returnOp);
+        }
+    }
+
+    /**
+     * This is the delicate part for dealing with JSR/RET.
+     * <p>
+     * The main idea is that multiple JSR can lead to a single RET. It is therefore necessary that
+     * the state of the subroutine is the merging from all JSR that lead to it. However, the
+     * opposite is not true: We do not want to merge the subroutine state directly into the state of
+     * the caller. The semantics of JSR say that execution should resume almost as if the subroutine
+     * did not happen.
+     * <p>
+     * In practice, that means that variables that were untouched by the subroutine should be used
+     * as-is when returning.
+     * <p>
+     * Thus, we need to keep track of the variables a subroutine actually modifies, which
+     * corresponds to the subRoutineModifications field in the locals. It is similar to a bit array.
+     * If bit at index i is set, that means that the corresponding subroutine modified local
+     * variable number i.
+     * <p>
+     * The problem is, what if a subroutine calls another one (In case of multiply nested finally
+     * clauses). In order to take that into account, the data structure used is a stack of bit
+     * arrays. Starting a subroutine pushes a new clean bit array on the stack. When returning, the
+     * bit array is popped (call it b1) to obtain the wanted local variables, and once done, if
+     * there is another bit array on the stack (call it b2), merge the two of them (ie: for each
+     * raised bit in b1, raise the corresponding one in b2).
+     * <p>
+     * If the returns jumps over multiple JSRs, pop the stack accordingly. For example:
+     *
+     * <pre>
+     * 0: jsr 4
+     * 3: return
+     * 4: astore_0
+     * 5: jsr 8
+     * 8: astore_1
+     * 9: ret 0
+     * </pre>
+     *
+     * @param target BCI of the JSR instruction we will merge into
+     * @param locals The state of the local variables at the time of the RET instruction
+     * @return the local variables that will be merged into the state at target.
+     */
+    private Locals getSubroutineReturnLocals(int target, Locals locals) {
+        SubroutineModificationStack subRoutineModifications = locals.subRoutineModifications;
+        if (subRoutineModifications == null) {
+            throw new VerifyError("RET outside of a subroutine");
+        }
+        boolean[] subroutineBitArray = subRoutineModifications.subRoutineModifications;
+        SubroutineModificationStack nested = subRoutineModifications.next;
+
+        Locals jsrLocals = stackFrames[target].extractLocals();
+        Operand[] registers = new Operand[maxLocals];
+
+        boolean nestedRet = jsrLocals.subRoutineModifications != null;
+
+        int depthRoutine = locals.subRoutineModifications.depth();
+        int depthRet = nestedRet ? jsrLocals.subRoutineModifications.depth() : 0;
+
+        if (depthRet >= depthRoutine) {
+            throw new VerifyError("RET increases subroutine depth.");
+        }
+
+        while (depthRoutine - depthRet > 1) {
+            for (int i = 0; i < subroutineBitArray.length; i++) {
+                if (subroutineBitArray[i]) {
+                    nested.subRoutineModifications[i] = true;
+                } else if (nested.subRoutineModifications[i]) {
+                    subroutineBitArray[i] = true;
+                }
+            }
+            nested = nested.next;
+            depthRoutine--;
+        }
+
+        for (int i = 0; i < maxLocals; i++) {
+            if (subroutineBitArray[i]) {
+                registers[i] = locals.registers[i];
+                if (nested != null) {
+                    nested.subRoutineModifications[i] = true;
+                }
+            } else {
+                registers[i] = jsrLocals.registers[i];
+            }
+        }
+
+        Locals res = new Locals(registers);
+        res.subRoutineModifications = nested;
+        return res;
+    }
+
+    // Various access checks
+
+    private boolean checkReceiverSpecialAccess(Operand stackOp) {
+        return stackOp.compliesWith(thisOperand) || isMagicAccessor() || checkReceiverHostAccess(stackOp);
+    }
+
+    private boolean checkReceiverHostAccess(Operand stackOp) {
+        if (thisKlass.getHostClass() != null) {
+            return thisKlass.getHostClass().isAssignableFrom(stackOp.getKlass());
+        }
+        return false;
+    }
+
+    private boolean checkMethodSpecialAccess(Operand methodHolder) {
+        return thisOperand.compliesWith(methodHolder) || isMagicAccessor() || checkHostAccess(methodHolder);
+    }
+
+    private boolean isMagicAccessor() {
+        return getMeta().sun_reflect_MagicAccessorImpl.isAssignableFrom(thisOperand.getKlass());
+    }
+
+    /**
+     * Anonymous classes defined on the fly can call protected members of other classes that are not
+     * in their hierarchy. Use their host class to check access.
+     */
+    private boolean checkHostAccess(Operand methodHolder) {
+        if (thisKlass.getHostClass() != null) {
+            return methodHolder.getKlass().isAssignableFrom(thisKlass.getHostClass());
+        }
+        return false;
     }
 
     // Helper methods
 
-    @SuppressWarnings("unused")
-    private static void checkProtected(Operand thisOp, Operand stackOp, Method calledMethod) {
+    private void checkProtectedField(Operand stackOp, Symbol<Type> fieldHolderType, int fieldCPI) {
         /**
          * 4.10.1.8.
-         * 
+         *
          * If the name of a class is not the name of any superclass, it cannot be a superclass, and
          * so it can safely be ignored.
          */
-        if (!thisOp.compliesWith(stackOp)) {
+        if (stackOp.getType() == thisKlass.getType()) {
             return;
         }
         /**
@@ -1428,49 +2336,134 @@ public final class MethodVerifier implements ContextAccess {
          * different run-time package has a protected member named MemberName with descriptor
          * MemberDescriptor, the protected check does not apply.
          */
-        if (thisOp.getKlass().sameRuntimePackage(calledMethod.getDeclaringKlass())) {
+        Klass superKlass = thisKlass.getSuperKlass();
+        while (superKlass != null) {
+            if (superKlass.getType() == fieldHolderType) {
+                final Field field;
+                try {
+                    field = pool.resolvedFieldAt(thisKlass, fieldCPI);
+                } catch (EspressoException e) {
+                    if (getMeta().java_lang_IllegalArgumentException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+                        throw new VerifyError(EspressoException.getMessage(e.getExceptionObject()));
+                    }
+                    throw e;
+                }
+                /**
+                 * If there does exist a protected superclass member in a different run-time
+                 * package, then load MemberClassName; if the member in question is not protected,
+                 * the check does not apply. (Using a superclass member that is not protected is
+                 * trivially correct.)
+                 */
+                if (!field.isProtected()) {
+                    return;
+                }
+                if (!thisKlass.getRuntimePackage().contentEquals(Types.getRuntimePackage(fieldHolderType))) {
+                    if (!stackOp.compliesWith(thisOperand)) {
+                        /**
+                         * Otherwise, use of a member of an object of type Target requires that
+                         * Target be assignable to the type of the current class.
+                         */
+                        throw new VerifyError("Illegal protected field access");
+                    }
+                }
+            }
+            superKlass = superKlass.getSuperKlass();
+        }
+    }
+
+    private void checkProtectedMethod(Operand stackOp, Symbol<Type> methodHolderType, int methodCPI) {
+        /**
+         * 4.10.1.8.
+         *
+         * If the name of a class is not the name of any superclass, it cannot be a superclass, and
+         * so it can safely be ignored.
+         */
+        if (stackOp.getType() == thisKlass.getType()) {
             return;
         }
         /**
-         * Otherwise, use of a member of an object of type Target requires that Target be assignable
-         * to the type of the current class.
+         * If the MemberClassName is the same as the name of a superclass, the class being resolved
+         * may indeed be a superclass. In this case, if no superclass named MemberClassName in a
+         * different run-time package has a protected member named MemberName with descriptor
+         * MemberDescriptor, the protected check does not apply.
          */
-        if (stackOp.compliesWith(thisOp)) {
-            return;
+        Klass superKlass = thisKlass.getSuperKlass();
+        while (superKlass != null) {
+            if (superKlass.getType() == methodHolderType) {
+                final Method method;
+                try {
+                    method = pool.resolvedMethodAt(thisKlass, methodCPI);
+                } catch (EspressoException e) {
+                    if (getMeta().java_lang_IllegalArgumentException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+                        throw new VerifyError(EspressoException.getMessage(e.getExceptionObject()));
+                    }
+                    throw e;
+                }
+                /**
+                 * If there does exist a protected superclass member in a different run-time
+                 * package, then load MemberClassName; if the member in question is not protected,
+                 * the check does not apply. (Using a superclass member that is not protected is
+                 * trivially correct.)
+                 */
+                if (!method.isProtected()) {
+                    return;
+                }
+                if (!thisKlass.getRuntimePackage().contentEquals(Types.getRuntimePackage(methodHolderType))) {
+                    if (stackOp.isArrayType() && Type.java_lang_Object.equals(methodHolderType) && Name.clone.equals(method.getName())) {
+                        // Special case: Arrays pretend to implement Object.clone().
+                        return;
+                    }
+                    if (!stackOp.compliesWith(thisOperand)) {
+                        /**
+                         * Otherwise, use of a member of an object of type Target requires that
+                         * Target be assignable to the type of the current class.
+                         */
+                        throw new VerifyError("Illegal protected field access");
+                    }
+                }
+                return;
+            }
+            superKlass = superKlass.getSuperKlass();
         }
-        throw new VerifyError("Doing weird stuff with protected members");
+    }
+
+    // various helper methods
+
+    private void doReturn(OperandStack stack, Operand toReturn) {
+        Operand op = stack.pop(toReturn);
+        if (!op.compliesWith(returnOperand)) {
+            throw new VerifyError("Invalid return: " + op + ", expected: " + returnOperand);
+        }
     }
 
     static boolean isType2(Operand k) {
         return k == Long || k == Double;
     }
 
-    private Operand checkInit(Stack stack, Operand op) {
+    /**
+     * Checks that a given operand is initialized when accessing fields/methods.
+     */
+    private Operand checkInitAccess(Operand op, Operand holder) {
         if (op.isUninit()) {
-            if (methodName != Name.INIT) {
-                throw new VerifyError("Accessing field or calling method of an uninitialized reference.");
+            if (isInstanceInit(methodName) && holder.getType() == thisKlass.getType()) {
+                return op;
             }
-            return stack.initUninit((UninitReferenceOperand) op);
+            throw new VerifyError("Accessing field or calling method of an uninitialized reference.");
         }
         return op;
     }
 
-    private Operand getHolderKlassAsOperand(MethodRefConstant mrc) {
-        Klass k = pool.resolvedKlassAt(thisKlass, ((MethodRefConstant.Indexes) mrc).getHolderClassIndex());
-        if (k.isArray()) {
-            if (k.getElementalType().isPrimitive()) {
-                return new ArrayOperand(kindToOperand(k.getElementalType().getType()), Types.getArrayDimensions(k.getType()));
-            }
-            return new ArrayOperand(new ReferenceOperand(k.getElementalType(), thisKlass), Types.getArrayDimensions(k.getType()));
+    private static Operand checkInit(Operand op) {
+        if (op.isUninit()) {
+            throw new VerifyError("Accessing field or calling method of an uninitialized reference.");
         }
-        return new ReferenceOperand(k, thisKlass);
+        return op;
     }
 
-    private static Operand fromJVMType(byte jvmType) {
+    private Operand fromJVMType(byte jvmType) {
         // @formatter:off
-        // Checkstyle: stop
         switch (jvmType) {
-            case 4  : return new ArrayOperand(Byte);
+            case 4  : return new ArrayOperand(booleanOperand);
             case 5  : return new ArrayOperand(Char);
             case 6  : return new ArrayOperand(Float);
             case 7  : return new ArrayOperand(Double);
@@ -1481,7 +2474,6 @@ public final class MethodVerifier implements ContextAccess {
             default:
                 throw EspressoError.shouldNotReachHere();
         }
-        // Checkstyle: resume
         // @formatter:on
     }
 
@@ -1495,31 +2487,28 @@ public final class MethodVerifier implements ContextAccess {
     }
 
     private Operand[] getOperandSig(Symbol<Signature> toParse) {
-        try {
-            return getOperandSig(getSignatures().parsed(toParse));
-        } catch (Throwable e) {
-            throw new ClassFormatError("Invalid signature: " + e.getMessage());
-        }
+        return getOperandSig(getSignatures().parsed(toParse));
     }
 
+    /**
+     * Generates an operand from a type.
+     */
     private Operand kindToOperand(Symbol<Type> type) {
         // @formatter:off
-        // Checkstyle: stop
         switch (Types.getJavaKind(type)) {
-            case Boolean:return Byte;
-            case Byte   :return Byte;
-            case Short  :return Short;
-            case Char   :return Char;
-            case Int    :return Int;
-            case Float  :return Float;
-            case Long   :return Long;
-            case Double :return Double;
-            case Void   :return Void;
-            case Object :return spawnFromType(type);
+            case Boolean: return booleanOperand;
+            case Byte   : return Byte;
+            case Short  : return Short;
+            case Char   : return Char;
+            case Int    : return Int;
+            case Float  : return Float;
+            case Long   : return Long;
+            case Double : return Double;
+            case Void   : return Void;
+            case Object : return spawnFromType(type);
             default:
                 throw EspressoError.shouldNotReachHere();
         }
-        // Checkstyle: resume
         // @formatter:on
     }
 
@@ -1531,20 +2520,20 @@ public final class MethodVerifier implements ContextAccess {
         }
     }
 
-    private static void xaload(Stack stack, PrimitiveOperand kind) {
+    private static void xaload(OperandStack stack, PrimitiveOperand kind) {
         stack.popInt();
         Operand op = stack.popArray();
-        if (op != Null && op.getComponent() != kind) {
+        if (op != Null && !kind.compliesWith(op.getComponent())) {
             throw new VerifyError("Loading " + kind + " from " + op + " array.");
         }
-        stack.push(kind);
+        stack.push(kind.toStack());
     }
 
-    private static void xastore(Stack stack, PrimitiveOperand kind) {
+    private static void xastore(OperandStack stack, PrimitiveOperand kind) {
         stack.pop(kind);
         stack.popInt();
         Operand array = stack.popArray();
-        if (array != Null && array.getComponent() != kind) {
+        if (array != Null && !kind.compliesWith(array.getComponent())) {
             throw new VerifyError("got array of type: " + array + ", while storing a " + kind);
         }
     }
@@ -1553,7 +2542,14 @@ public final class MethodVerifier implements ContextAccess {
         return (op >= ILOAD && op <= ALOAD) || (op >= ISTORE && op <= ASTORE) || (op == RET) || (op == IINC);
     }
 
-    public StackFrame mergeFrames(Stack stack, Locals locals, StackFrame stackMap) {
+    /**
+     * Computes the merging of the current stack/local status with the stack frame store in the
+     * table.
+     *
+     * @return if merge succeeds, returns the given stackFrame, else returns a new StackFrame that
+     *         represents the merging.
+     */
+    public StackFrame mergeFrames(OperandStack stack, Locals locals, StackFrame stackMap) {
         if (stackMap == null) {
             if (useStackMaps) {
                 throw new VerifyError("No stack frame on jump target");
@@ -1572,12 +2568,14 @@ public final class MethodVerifier implements ContextAccess {
             for (int i = mergeIndex; i < mergedStack.length; i++) {
                 Operand stackOp = stack.stack[i];
                 Operand frameOp = stackMap.stack[i];
-                if (!stackOp.compliesWith(frameOp)) {
+                if (!stackOp.compliesWithInMerge(frameOp)) {
                     Operand result = stackOp.mergeWith(frameOp);
                     if (result == null) {
                         throw new VerifyError("Cannot merge " + stackOp + " with " + frameOp);
                     }
                     mergedStack[i] = result;
+                } else {
+                    mergedStack[i] = frameOp;
                 }
             }
         }
@@ -1588,30 +2586,40 @@ public final class MethodVerifier implements ContextAccess {
             if (useStackMaps) {
                 throw new VerifyError("Wrong local map frames in class file: " + thisKlass + '.' + methodName);
             }
-            // We can ALWAYS merge locals.
+
             mergedLocals = new Operand[maxLocals];
             Operand[] frameLocals = stackMap.locals;
             System.arraycopy(frameLocals, 0, mergedLocals, 0, mergeIndex);
             for (int i = mergeIndex; i < mergedLocals.length; i++) {
                 Operand localsOp = locals.registers[i];
                 Operand frameOp = frameLocals[i];
-                if (!localsOp.compliesWith(frameOp)) {
+                if (!localsOp.compliesWithInMerge(frameOp)) {
                     Operand result = localsOp.mergeWith(frameOp);
                     if (result == null) {
+                        // We can ALWAYS merge locals. just put Invalid if failure
                         mergedLocals[i] = Invalid;
                     } else {
                         mergedLocals[i] = result;
                     }
+                } else {
+                    mergedLocals[i] = frameOp;
                 }
             }
         }
-        if (mergedStack == null || mergedLocals == null) {
+        // Merge subroutines
+        stackMap.mergeSubroutines(locals.subRoutineModifications);
+        if (mergedStack == null && mergedLocals == null) {
+            // Merge success
             return stackMap;
         }
-        return new StackFrame(mergedStack, stack.size, stack.top, mergedLocals);
+        // Merge failed
+        if (mergedStack == null) {
+            return new StackFrame(stack, mergedLocals, stackMap.subroutineModificationStack);
+        }
+        return new StackFrame(mergedStack, stack.size, stack.top, mergedLocals == null ? locals.registers : mergedLocals, stackMap.subroutineModificationStack);
     }
 
-    public static StackFrame spawnStackFrame(Stack stack, Locals locals) {
+    private static StackFrame spawnStackFrame(OperandStack stack, Locals locals) {
         return new StackFrame(stack, locals);
     }
 }

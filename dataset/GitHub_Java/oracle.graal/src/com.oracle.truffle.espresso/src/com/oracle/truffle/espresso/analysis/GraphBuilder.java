@@ -82,7 +82,7 @@ public final class GraphBuilder {
     private int nBlocks;
 
     private GraphBuilder(Method method) {
-        this.bs = new BytecodeStream(method.getCode());
+        this.bs = new BytecodeStream(method.getOriginalCode());
         this.status = new long[bs.endBCI()];
         this.handlers = method.getExceptionHandlers();
     }
@@ -199,14 +199,13 @@ public final class GraphBuilder {
      * Blocks are assigned, register each handler to the blocks it covers.
      */
     private void registerHandlers() {
-        int pos = 0;
-        for (ExceptionHandler handler : handlers) {
+        for (int hPos = 0; hPos < handlers.length; hPos++) {
+            ExceptionHandler handler = handlers[hPos];
             int currentBlock = readBlockID(handler.getStartBCI());
             do {
-                temporaryBlocks[currentBlock].registerHandler(pos, this);
+                temporaryBlocks[currentBlock].registerHandler(hPos, this);
                 currentBlock++;
-            } while (currentBlock >= nBlocks || temporaryBlocks[currentBlock].end() <= handler.getEndBCI());
-            pos++;
+            } while (currentBlock < nBlocks && temporaryBlocks[currentBlock].end() <= handler.getEndBCI());
         }
     }
 
