@@ -22,6 +22,8 @@
  */
 package com.oracle.truffle.espresso.jni;
 
+import static com.oracle.truffle.espresso.EspressoOptions.SpecCompliancyMode.HOTSPOT;
+
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -51,6 +53,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.EspressoOptions.SpecCompliancyMode;
 import com.oracle.truffle.espresso.ffi.NativeSignature;
 import com.oracle.truffle.espresso.ffi.NativeType;
 import com.oracle.truffle.espresso.ffi.Pointer;
@@ -82,8 +85,6 @@ import com.oracle.truffle.espresso.substitutions.GuestCall;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.InjectMeta;
 import com.oracle.truffle.espresso.substitutions.InjectProfile;
-import com.oracle.truffle.espresso.substitutions.IntrinsicSubstitutor;
-import com.oracle.truffle.espresso.substitutions.JniCollector;
 import com.oracle.truffle.espresso.substitutions.SubstitutionProfiler;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Class;
@@ -147,7 +148,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     private final @Pointer TruffleObject getSizeMax;
 
-    private static final Map<String, IntrinsicSubstitutor.Factory> jniMethods = buildJniMethods();
+    private static final Map<String, JniSubstitutor.Factory> jniMethods = buildJniMethods();
 
     private final WeakHandles<Field> fieldIds = new WeakHandles<>();
     private final WeakHandles<Method> methodIds = new WeakHandles<>();
@@ -184,9 +185,9 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         threadLocalPendingException.set(ex);
     }
 
-    public Callback jniMethodWrapper(IntrinsicSubstitutor.Factory factory) {
-        return new Callback(factory.parameterCount() + 1, new Callback.Function() {
-            @CompilationFinal private IntrinsicSubstitutor subst = null;
+    public Callback jniMethodWrapper(JniSubstitutor.Factory factory) {
+        return new Callback(factory.getParameterCount() + 1, new Callback.Function() {
+            @CompilationFinal private JniSubstitutor subst = null;
 
             @Override
             public Object call(Object... args) {
@@ -216,7 +217,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     @TruffleBoundary
     public TruffleObject lookupJniImpl(String methodName) {
-        IntrinsicSubstitutor.Factory m = jniMethods.get(methodName);
+        JniSubstitutor.Factory m = jniMethods.get(methodName);
         // Dummy placeholder for unimplemented/unknown methods.
         if (m == null) {
             getLogger().log(Level.FINER, "Fetching unknown/unimplemented JNI method: {0}", methodName);
@@ -447,9 +448,9 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         return bb;
     }
 
-    private static Map<String, IntrinsicSubstitutor.Factory> buildJniMethods() {
-        Map<String, IntrinsicSubstitutor.Factory> map = new HashMap<>();
-        for (IntrinsicSubstitutor.Factory method : JniCollector.getCollector()) {
+    private static Map<String, JniSubstitutor.Factory> buildJniMethods() {
+        Map<String, JniSubstitutor.Factory> map = new HashMap<>();
+        for (JniSubstitutor.Factory method : JniCollector.getCollector()) {
             assert !map.containsKey(method.methodName()) : "JniImpl for " + method.methodName() + " already exists";
             map.put(method.methodName(), method);
         }
@@ -681,67 +682,259 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     // region GetStatic*Field
 
+    /**
+     * Converts a boxed value to a boolean.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will take the lower bits that fit in the primitive type or fill upper bits with 0. If the
+     * conversion is not possible, throws {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    private boolean asBoolean(Object value, boolean defaultIfNull) {
+        if (value instanceof Boolean) {
+            return (boolean) value;
+        }
+        return tryBitwiseConversionToLong(value, defaultIfNull) != 0; // == 1?
+    }
+
+    /**
+     * Converts a boxed value to a byte.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will take the lower bits that fit in the primitive type or fill upper bits with 0. If the
+     * conversion is not possible, throws {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    private byte asByte(Object value, boolean defaultIfNull) {
+        if (value instanceof Byte) {
+            return (byte) value;
+        }
+        return (byte) tryBitwiseConversionToLong(value, defaultIfNull);
+    }
+
+    /**
+     * Converts a boxed value to a short.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will take the lower bits that fit in the primitive type or fill upper bits with 0. If the
+     * conversion is not possible, throws {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    private short asShort(Object value, boolean defaultIfNull) {
+        if (value instanceof Short) {
+            return (short) value;
+        }
+        return (short) tryBitwiseConversionToLong(value, defaultIfNull);
+    }
+
+    /**
+     * Converts a boxed value to a char.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will take the lower bits that fit in the primitive type or fill upper bits with 0. If the
+     * conversion is not possible, throws {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    private char asChar(Object value, boolean defaultIfNull) {
+        if (value instanceof Character) {
+            return (char) value;
+        }
+        return (char) tryBitwiseConversionToLong(value, defaultIfNull);
+    }
+
+    /**
+     * Converts a boxed value to an int.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will take the lower bits that fit in the primitive type or fill upper bits with 0. If the
+     * conversion is not possible, throws {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    private int asInt(Object value, boolean defaultIfNull) {
+        if (value instanceof Integer) {
+            return (int) value;
+        }
+        return (int) tryBitwiseConversionToLong(value, defaultIfNull);
+    }
+
+    /**
+     * Converts a boxed value to a float.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will take the lower bits that fit in the primitive type or fill upper bits with 0. If the
+     * conversion is not possible, throws {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    private float asFloat(Object value, boolean defaultIfNull) {
+        if (value instanceof Float) {
+            return (float) value;
+        }
+        return Float.intBitsToFloat((int) tryBitwiseConversionToLong(value, defaultIfNull));
+    }
+
+    /**
+     * Converts a boxed value to a double.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will take the lower bits that fit in the primitive type or fill upper bits with 0. If the
+     * conversion is not possible, throws {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    private double asDouble(Object value, boolean defaultIfNull) {
+        if (value instanceof Double) {
+            return (double) value;
+        }
+        return Double.longBitsToDouble(tryBitwiseConversionToLong(value, defaultIfNull));
+    }
+
+    /**
+     * Converts a boxed value to a long.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will take the lower bits that fit in the primitive type or fill upper bits with 0. If the
+     * conversion is not possible, throws {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    private long asLong(Object value, boolean defaultIfNull) {
+        if (value instanceof Long) {
+            return (long) value;
+        }
+        return tryBitwiseConversionToLong(value, defaultIfNull);
+    }
+
+    /**
+     * Bitwise conversion from a boxed value to a long.
+     * <p>
+     * In {@link SpecCompliancyMode#HOTSPOT HotSpot} compatibility-mode, the conversion is lax and
+     * will fill the upper bits with 0. If the conversion is not possible, throws
+     * {@link EspressoError}.
+     *
+     * @param defaultIfNull if true and value is {@link StaticObject#isNull(StaticObject) guest
+     *            null}, the conversion will return the default value of the primitive type.
+     */
+    @TruffleBoundary
+    private long tryBitwiseConversionToLong(Object value, boolean defaultIfNull) {
+        if (getContext().SpecCompliancyMode == HOTSPOT) {
+            // @formatter:off
+            if (value instanceof Boolean) return ((boolean) value) ? 1 : 0;
+            if (value instanceof Byte) return (byte) value;
+            if (value instanceof Short) return (short) value;
+            if (value instanceof Character) return (char) value;
+            if (value instanceof Integer) return (int) value;
+            if (value instanceof Long) return (long) value;
+            if (value instanceof Float) return Float.floatToRawIntBits((float) value);
+            if (value instanceof Double) return Double.doubleToRawLongBits((double) value);
+            // @formatter:on
+            if (defaultIfNull) {
+                if (value instanceof StaticObject && StaticObject.isNull((StaticObject) value)) {
+                    return 0L;
+                }
+            }
+        }
+        throw EspressoError.shouldNotReachHere("Unexpected primitive value: " + value);
+    }
+
+    @TruffleBoundary
+    private StaticObject hotSpotMaybeNull(Object value) {
+        assert !(value instanceof StaticObject);
+        if (getContext().SpecCompliancyMode == HOTSPOT) {
+            return StaticObject.NULL;
+        }
+        throw EspressoError.shouldNotReachHere("Unexpected object:" + value);
+    }
+
+    private StaticObject asObject(Object value) {
+        if (value instanceof StaticObject) {
+            return (StaticObject) value;
+        }
+        return hotSpotMaybeNull(value);
+    }
+
     @JniImpl
     public @Host(Object.class) StaticObject GetStaticObjectField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsObject(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return (StaticObject) field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
     }
 
     @JniImpl
     public boolean GetStaticBooleanField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsBoolean(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics(), false);
+        Object result = field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return asBoolean(result, false);
     }
 
     @JniImpl
     public byte GetStaticByteField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsByte(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics(), false);
+        Object result = field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return asByte(result, false);
     }
 
     @JniImpl
     public char GetStaticCharField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsChar(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics(), false);
+        Object result = field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return asChar(result, false);
     }
 
     @JniImpl
     public short GetStaticShortField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsShort(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics(), false);
+        Object result = field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return asShort(result, false);
     }
 
     @JniImpl
     public int GetStaticIntField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsInt(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics(), false);
+        Object result = field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return asInt(result, false);
     }
 
     @JniImpl
     public long GetStaticLongField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsLong(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics(), false);
+        Object result = field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return asLong(result, false);
     }
 
     @JniImpl
     public float GetStaticFloatField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsFloat(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics(), false);
+        Object result = field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return asFloat(result, false);
     }
 
     @JniImpl
     public double GetStaticDoubleField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
         assert field.isStatic();
-        return field.getAsDouble(getMeta(), field.getDeclaringKlass().tryInitializeAndGetStatics(), false);
+        Object result = field.get(field.getDeclaringKlass().tryInitializeAndGetStatics());
+        return asDouble(result, false);
     }
 
     // endregion GetStatic*Field
@@ -751,55 +944,63 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public @Host(Object.class) StaticObject GetObjectField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsObject(getMeta(), object);
+        return (StaticObject) field.get(object);
     }
 
     @JniImpl
     public boolean GetBooleanField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsBoolean(getMeta(), object, false);
+        Object result = field.get(object);
+        return asBoolean(result, false);
     }
 
     @JniImpl
     public byte GetByteField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsByte(getMeta(), object, false);
+        Object result = field.get(object);
+        return asByte(result, false);
     }
 
     @JniImpl
     public char GetCharField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsChar(getMeta(), object, false);
+        Object result = field.get(object);
+        return asChar(result, false);
     }
 
     @JniImpl
     public short GetShortField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsShort(getMeta(), object, false);
+        Object result = field.get(object);
+        return asShort(result, false);
     }
 
     @JniImpl
     public int GetIntField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsInt(getMeta(), object, false);
+        Object result = field.get(object);
+        return asInt(result, false);
     }
 
     @JniImpl
     public long GetLongField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsLong(getMeta(), object, false);
+        Object result = field.get(object);
+        return asLong(result, false);
     }
 
     @JniImpl
     public float GetFloatField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsFloat(getMeta(), object, false);
+        Object result = field.get(object);
+        return asFloat(result, false);
     }
 
     @JniImpl
     public double GetDoubleField(StaticObject object, @Handle(Field.class) long fieldId) {
         Field field = fieldIds.getObject(fieldId);
-        return field.getAsDouble(getMeta(), object, false);
+        Object result = field.get(object);
+        return asDouble(result, false);
     }
 
     // endregion Get*Field
@@ -963,63 +1164,63 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public @Host(Object.class) StaticObject CallObjectMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asObject(result);
+        return asObject(result);
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public boolean CallBooleanMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asBoolean(result, true);
+        return asBoolean(result, true);
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public char CallCharMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asChar(result, true);
+        return asChar(result, true);
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public byte CallByteMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asByte(result, true);
+        return asByte(result, true);
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public short CallShortMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asShort(result, true);
+        return asShort(result, true);
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public int CallIntMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asInt(result, true);
+        return asInt(result, true);
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public float CallFloatMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asFloat(result, true);
+        return asFloat(result, true);
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public double CallDoubleMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asDouble(result, true);
+        return asDouble(result, true);
     }
 
     @SuppressWarnings("unused")
     @JniImpl
     public long CallLongMethodVarargs(@Host(Object.class) StaticObject receiver, @Handle(Method.class) long methodId, @Pointer TruffleObject varargsPtr) {
         Object result = callVirtualMethodGeneric(receiver, methodId, varargsPtr);
-        return getMeta().asLong(result, true);
+        return asLong(result, true);
     }
 
     @SuppressWarnings("unused")
@@ -1040,7 +1241,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asObject(result);
+        return asObject(result);
     }
 
     @JniImpl
@@ -1050,7 +1251,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asBoolean(result, true);
+        return asBoolean(result, true);
     }
 
     @JniImpl
@@ -1060,7 +1261,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asChar(result, true);
+        return asChar(result, true);
     }
 
     @JniImpl
@@ -1070,7 +1271,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asByte(result, true);
+        return asByte(result, true);
     }
 
     @JniImpl
@@ -1080,7 +1281,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asShort(result, true);
+        return asShort(result, true);
     }
 
     @JniImpl
@@ -1090,7 +1291,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asInt(result, true);
+        return asInt(result, true);
     }
 
     @JniImpl
@@ -1100,7 +1301,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asFloat(result, true);
+        return asFloat(result, true);
     }
 
     @JniImpl
@@ -1110,7 +1311,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asDouble(result, true);
+        return asDouble(result, true);
     }
 
     @JniImpl
@@ -1120,7 +1321,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asLong(result, true);
+        return asLong(result, true);
     }
 
     @JniImpl
@@ -1143,7 +1344,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asObject(result);
+        return asObject(result);
     }
 
     @JniImpl
@@ -1152,7 +1353,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asBoolean(result, true);
+        return asBoolean(result, true);
     }
 
     @JniImpl
@@ -1161,7 +1362,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asChar(result, true);
+        return asChar(result, true);
     }
 
     @JniImpl
@@ -1170,7 +1371,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asByte(result, true);
+        return asByte(result, true);
     }
 
     @JniImpl
@@ -1179,7 +1380,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asShort(result, true);
+        return asShort(result, true);
     }
 
     @JniImpl
@@ -1188,7 +1389,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asInt(result, true);
+        return asInt(result, true);
     }
 
     @JniImpl
@@ -1197,7 +1398,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asFloat(result, true);
+        return asFloat(result, true);
     }
 
     @JniImpl
@@ -1206,7 +1407,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asDouble(result, true);
+        return asDouble(result, true);
     }
 
     @JniImpl
@@ -1215,7 +1416,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
         Object result = method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return getMeta().asLong(result, true);
+        return asLong(result, true);
     }
 
     @JniImpl
@@ -1510,7 +1711,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         if (getJavaVersion().compactStringsEnabled()) {
             stringChars = (StaticObject) getMeta().java_lang_String_toCharArray.invokeDirect(str);
         } else {
-            stringChars = getMeta().java_lang_String_value.getObject(str);
+            stringChars = ((StaticObject) getMeta().java_lang_String_value.get(str));
         }
         int len = stringChars.length();
         ByteBuffer criticalRegion = allocateDirect(len, JavaKind.Char); // direct byte buffer
@@ -1559,7 +1760,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             StaticObject wrappedChars = (StaticObject) getMeta().java_lang_String_toCharArray.invokeDirect(string);
             chars = wrappedChars.unwrap();
         } else {
-            chars = getMeta().java_lang_String_value.getObject(string).unwrap();
+            chars = ((StaticObject) getMeta().java_lang_String_value.get(string)).unwrap();
         }
         // Add one for zero termination.
         ByteBuffer bb = allocateDirect(chars.length + 1, JavaKind.Char);
@@ -1623,7 +1824,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         if (getJavaVersion().compactStringsEnabled()) {
             chars = getMeta().toHostString(str).toCharArray();
         } else {
-            chars = getMeta().java_lang_String_value.getObject(str).unwrap();
+            chars = ((StaticObject) getMeta().java_lang_String_value.get(str)).unwrap();
         }
         if (start < 0 || start + (long) len > chars.length) {
             throw Meta.throwException(getMeta().java_lang_StringIndexOutOfBoundsException);
@@ -2235,10 +2436,10 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             Method m = null;
             if (method.isConstructor()) {
                 assert InterpreterToVM.instanceOf(declMethod, getMeta().java_lang_reflect_Constructor);
-                m = (Method) getMeta().HIDDEN_CONSTRUCTOR_KEY.getHiddenObject(declMethod);
+                m = (Method) declMethod.getHiddenField(getMeta().HIDDEN_CONSTRUCTOR_KEY);
             } else {
                 assert InterpreterToVM.instanceOf(declMethod, getMeta().java_lang_reflect_Method);
-                m = (Method) getMeta().HIDDEN_METHOD_KEY.getHiddenObject(declMethod);
+                m = (Method) declMethod.getHiddenField(getMeta().HIDDEN_METHOD_KEY);
             }
             if (method == m) {
                 return declMethod;
@@ -2264,7 +2465,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         StaticObject fields = Target_java_lang_Class.getDeclaredFields0(field.getDeclaringKlass().mirror(), false, getMeta());
         for (StaticObject declField : fields.<StaticObject[]> unwrap()) {
             assert InterpreterToVM.instanceOf(declField, getMeta().java_lang_reflect_Field);
-            Field f = (Field) getMeta().HIDDEN_FIELD_KEY.getHiddenObject(declField);
+            Field f = (Field) declField.getHiddenField(getMeta().HIDDEN_FIELD_KEY);
             if (field == f) {
                 return declField;
             }
@@ -2765,7 +2966,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             throw e;
         }
 
-        meta.HIDDEN_PROTECTION_DOMAIN.setHiddenObject(guestClass, protectionDomain);
+        guestClass.setHiddenField(meta.HIDDEN_PROTECTION_DOMAIN, protectionDomain);
         // FindClass should initialize the class.
         guestClass.getMirrorKlass().safeInitialize();
 
