@@ -45,8 +45,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import org.graalvm.wasm.memory.UnsafeWasmMemory;
 import org.graalvm.wasm.memory.WasmMemory;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
+import org.graalvm.wasm.nodes.WasmEmptyRootNode;
 import org.graalvm.options.OptionDescriptors;
 
 @TruffleLanguage.Registration(id = "wasm", name = "WebAssembly", defaultMimeType = "application/wasm", byteMimeTypes = "application/wasm", contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE, fileTypeDetectors = WasmFileDetector.class, //
@@ -65,19 +64,15 @@ public final class WasmLanguage extends TruffleLanguage<WasmContext> {
         final String moduleName = isFirst ? "main" : request.getSource().getName();
         isFirst = false;
         final byte[] data = request.getSource().getBytes().toByteArray();
-        final WasmModule module = context.readModule(moduleName, data);
-        final WasmInstance instance = context.readInstance(module);
-        return Truffle.getRuntime().createCallTarget(new RootNode(this) {
-            @Override
-            public WasmInstance execute(VirtualFrame frame) {
-                return instance;
-            }
-        });
+        WasmModule module = context.readModule(moduleName, data);
+        context.readInstance(module);
+        return Truffle.getRuntime().createCallTarget(new WasmEmptyRootNode(this));
     }
 
     @Override
-    protected Object getScope(WasmContext context) {
-        return context.getScope();
+    @SuppressWarnings("deprecation")
+    protected Iterable<com.oracle.truffle.api.Scope> findTopScopes(WasmContext context) {
+        return context.getTopScopes();
     }
 
     @Override

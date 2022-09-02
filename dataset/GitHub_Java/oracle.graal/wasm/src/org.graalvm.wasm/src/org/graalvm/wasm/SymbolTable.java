@@ -40,20 +40,6 @@
  */
 package org.graalvm.wasm;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import org.graalvm.wasm.api.ValueType;
-import org.graalvm.wasm.collection.ByteArrayList;
-import org.graalvm.wasm.constants.GlobalModifier;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
-import org.graalvm.wasm.memory.ByteArrayWasmMemory;
-import org.graalvm.wasm.memory.UnsafeWasmMemory;
-import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.memory.WasmMemoryException;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -62,6 +48,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
+
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import org.graalvm.wasm.api.ValueType;
+import org.graalvm.wasm.constants.GlobalModifier;
+import org.graalvm.wasm.exception.WasmExecutionException;
+import org.graalvm.wasm.exception.WasmValidationException;
+import org.graalvm.wasm.exception.WasmLinkerException;
+import org.graalvm.wasm.memory.ByteArrayWasmMemory;
+import org.graalvm.wasm.memory.UnsafeWasmMemory;
+import org.graalvm.wasm.memory.WasmMemory;
+import org.graalvm.wasm.memory.WasmMemoryException;
+import org.graalvm.wasm.collection.ByteArrayList;
 
 import static org.graalvm.wasm.WasmUtil.unsignedInt32ToLong;
 
@@ -302,19 +303,19 @@ public abstract class SymbolTable {
     private void checkNotParsed() {
         // The symbol table must be read-only after the module gets linked.
         if (module().isParsed()) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "The engine tried to modify the symbol table after parsing.");
+            throw new WasmValidationException("The engine tried to modify the symbol table after parsing.");
         }
     }
 
     private void checkUniqueExport(String name) {
         if (exportedFunctions.containsKey(name) || exportedGlobals.containsKey(name) || Objects.equals(exportedMemory, name) || Objects.equals(exportedTable, name)) {
-            throw WasmException.create(Failure.UNSPECIFIED_UNLINKABLE, "All export names must be different, but '" + name + "' is exported twice.");
+            throw new WasmLinkerException("All export names must be different, but '" + name + "' is exported twice.");
         }
     }
 
     public void checkFunctionIndex(int funcIndex) {
         if (funcIndex < 0 || funcIndex >= numFunctions) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, String.format("Function index out of bounds: %d should be < %d.", unsignedInt32ToLong(funcIndex), numFunctions));
+            throw new WasmValidationException(String.format("Function index out of bounds: %d should be < %d.", unsignedInt32ToLong(funcIndex), numFunctions));
         }
 
     }
@@ -368,7 +369,7 @@ public abstract class SymbolTable {
         typeOffsets[typeIdx] = typeDataSize;
 
         if (numReturnTypes != 0 && numReturnTypes != 1) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "A function can return at most one result.");
+            throw new WasmValidationException("A function can return at most one result.");
         }
 
         int size = 2 + numParameterTypes + numReturnTypes;
@@ -410,7 +411,7 @@ public abstract class SymbolTable {
     void setEquivalenceClass(int index, int eqClass) {
         checkNotParsed();
         if (typeEquivalenceClasses[index] != NO_EQUIVALENCE_CLASS) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "Type at index " + index + " already has an equivalence class.");
+            throw new WasmValidationException("Type at index " + index + " already has an equivalence class.");
         }
         typeEquivalenceClasses[index] = eqClass;
     }
@@ -426,7 +427,7 @@ public abstract class SymbolTable {
         checkNotParsed();
         ensureFunctionsCapacity(numFunctions);
         if (typeIndex < 0 || typeIndex >= typeCount) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, String.format("Function type out of bounds: %d should be < %d.", unsignedInt32ToLong(typeIndex), typeCount));
+            throw new WasmValidationException(String.format("Function type out of bounds: %d should be < %d.", unsignedInt32ToLong(typeIndex), typeCount));
         }
         final WasmFunction function = new WasmFunction(this, numFunctions, typeIndex, importDescriptor);
         functions[numFunctions] = function;
@@ -455,10 +456,10 @@ public abstract class SymbolTable {
         checkNotParsed();
         WasmFunction start = function(functionIndex);
         if (start.numArguments() != 0) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "Start function cannot take arguments.");
+            throw new WasmValidationException("Start function cannot take arguments.");
         }
         if (start.returnTypeLength() != 0) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "Start function cannot return a value.");
+            throw new WasmValidationException("Start function cannot return a value.");
         }
         this.startFunctionIndex = functionIndex;
     }
@@ -589,7 +590,7 @@ public abstract class SymbolTable {
         } else if (mutability == GlobalModifier.MUTABLE) {
             mutabilityBit = GLOBAL_MUTABLE_BIT;
         } else {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "Invalid mutability: " + mutability);
+            throw new WasmValidationException("Invalid mutability: " + mutability);
         }
         short globalType = (short) (mutabilityBit | valueType);
         globalTypes[index] = globalType;
@@ -608,7 +609,7 @@ public abstract class SymbolTable {
                 instance.setGlobalAddress(index, address);
             });
         } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-            throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Global does not have a valid descriptor: " + global);
+            throw new WasmExecutionException(null, "Global does not have a valid descriptor: " + global);
         }
     }
 
@@ -736,10 +737,10 @@ public abstract class SymbolTable {
 
     private void validateSingleTable() {
         if (importedTableDescriptor != null) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "A table has been already imported in the module.");
+            throw new WasmValidationException("A table has been already imported in the module.");
         }
         if (table != null) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "A table has been already declared in the module.");
+            throw new WasmValidationException("A table has been already declared in the module.");
         }
     }
 
@@ -751,10 +752,10 @@ public abstract class SymbolTable {
         checkNotParsed();
         checkUniqueExport(name);
         if (exportedTable != null) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "A table has been already exported from this module.");
+            throw new WasmValidationException("A table has been already exported from this module.");
         }
         if (!tableExists()) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "No table has been declared or imported, so a table cannot be exported.");
+            throw new WasmValidationException("No table has been declared or imported, so a table cannot be exported.");
         }
         exportedTable = name;
         module().addLinkAction((context, instance) -> context.linker().resolveTableExport(module(), exportedTable));
@@ -804,10 +805,10 @@ public abstract class SymbolTable {
 
     private void validateSingleMemory() {
         if (importedMemoryDescriptor != null) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "Memory has been already imported in the module.");
+            throw new WasmValidationException("Memory has been already imported in the module.");
         }
         if (memory != null) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "Memory has been already declared in the module.");
+            throw new WasmValidationException("Memory has been already declared in the module.");
         }
     }
 
@@ -819,10 +820,10 @@ public abstract class SymbolTable {
         checkNotParsed();
         checkUniqueExport(name);
         if (exportedMemory != null) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "A memory has been already exported from this module.");
+            throw new WasmValidationException("A memory has been already exported from this module.");
         }
         if (!memoryExists()) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "No memory has been declared or imported, so memory cannot be exported.");
+            throw new WasmValidationException("No memory has been declared or imported, so memory cannot be exported.");
         }
         exportedMemory = name;
         module().addLinkAction((context, instance) -> context.linker().resolveMemoryExport(instance, name));

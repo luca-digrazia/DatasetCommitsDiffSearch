@@ -40,25 +40,6 @@
  */
 package org.graalvm.wasm;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
-import org.graalvm.wasm.Linker.ResolutionDag.DataSym;
-import org.graalvm.wasm.Linker.ResolutionDag.ExportMemorySym;
-import org.graalvm.wasm.Linker.ResolutionDag.ImportMemorySym;
-import org.graalvm.wasm.Linker.ResolutionDag.Resolver;
-import org.graalvm.wasm.Linker.ResolutionDag.Sym;
-import org.graalvm.wasm.SymbolTable.FunctionType;
-import org.graalvm.wasm.constants.GlobalModifier;
-import org.graalvm.wasm.exception.WasmLinkerException;
-import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.nodes.WasmBlockNode;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiConsumer;
-
 import static org.graalvm.wasm.Linker.ResolutionDag.CallsiteSym;
 import static org.graalvm.wasm.Linker.ResolutionDag.CodeEntrySym;
 import static org.graalvm.wasm.Linker.ResolutionDag.ElemSym;
@@ -71,22 +52,46 @@ import static org.graalvm.wasm.Linker.ResolutionDag.ImportTableSym;
 import static org.graalvm.wasm.Linker.ResolutionDag.InitializeGlobalSym;
 import static org.graalvm.wasm.Linker.ResolutionDag.NO_RESOLVE_ACTION;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+
+import com.oracle.truffle.api.CallTarget;
+import org.graalvm.wasm.Linker.ResolutionDag.DataSym;
+import org.graalvm.wasm.Linker.ResolutionDag.ExportMemorySym;
+import org.graalvm.wasm.Linker.ResolutionDag.ImportMemorySym;
+import org.graalvm.wasm.Linker.ResolutionDag.Resolver;
+import org.graalvm.wasm.Linker.ResolutionDag.Sym;
+import org.graalvm.wasm.SymbolTable.FunctionType;
+import org.graalvm.wasm.constants.GlobalModifier;
+import org.graalvm.wasm.exception.WasmLinkerException;
+import org.graalvm.wasm.memory.WasmMemory;
+import org.graalvm.wasm.nodes.WasmBlockNode;
+
+import com.oracle.truffle.api.CompilerDirectives;
+
 public class Linker {
-    public enum LinkState {
-        nonLinked,
+    private enum LinkState {
+        notLinked,
         inProgress,
         linked
     }
 
+    private final WasmLanguage language;
     private final ResolutionDag resolutionDag;
+    private @CompilerDirectives.CompilationFinal LinkState linkState;
 
-    Linker() {
+    Linker(WasmLanguage language) {
+        this.language = language;
         this.resolutionDag = new ResolutionDag();
+        this.linkState = LinkState.notLinked;
     }
 
     // TODO: Many of the following methods should work on all the modules in the context, instead of
     // a single one. See which ones and update.
-    public void tryLink(WasmInstance instance) {
+    public void tryLink() {
         // The first execution of a WebAssembly call target will trigger the linking of the modules
         // that are inside the current context (which will happen behind the call boundary).
         // This linking will set this flag to true.
@@ -95,51 +100,47 @@ public class Linker {
         // compilation, and this check will fold away.
         // If the code is compiled synchronously, then this check will persist in the compiled code.
         // We nevertheless invalidate the compiled code that reaches this point.
-        if (instance.isNonLinked()) {
+        if (linkState == LinkState.notLinked) {
             // TODO: Once we support multi-threading, add adequate synchronization here.
-            tryLinkOutsidePartialEvaluation(instance);
+            tryLinkOutsidePartialEvaluation();
             CompilerDirectives.transferToInterpreterAndInvalidate();
         }
     }
 
     @CompilerDirectives.TruffleBoundary
-    private void tryLinkOutsidePartialEvaluation(WasmInstance entryPointInstance) {
+    private void tryLinkOutsidePartialEvaluation() {
         // Some Truffle configurations allow that the code gets compiled before executing the code.
         // We therefore check the link state again.
-        if (entryPointInstance.isNonLinked()) {
+        if (linkState == LinkState.notLinked) {
+            linkState = LinkState.inProgress;
             final WasmContext context = WasmContext.getCurrent();
             Map<String, WasmInstance> instances = context.moduleInstances();
             for (WasmInstance instance : instances.values()) {
-                if (instance.isNonLinked()) {
-                    instance.setLinkInProgress();
-                    for (BiConsumer<WasmContext, WasmInstance> action : instance.module().linkActions()) {
-                        action.accept(context, instance);
-                    }
+                for (BiConsumer<WasmContext, WasmInstance> action : instance.module().linkActions()) {
+                    action.accept(context, instance);
                 }
             }
             linkTopologically();
             assignTypeEquivalenceClasses();
             for (WasmInstance instance : instances.values()) {
-                if (instance.isLinkInProgress()) {
-                    instance.module().setParsed();
-                }
+                instance.module().setParsed();
+                instance.setLinked();
             }
             for (WasmInstance instance : instances.values()) {
-                if (instance.isLinkInProgress()) {
-                    final WasmFunction start = instance.symbolTable().startFunction();
-                    if (start != null) {
-                        instance.target(start.index()).call(new Object[0]);
-                    }
-                    instance.setLinkCompleted();
+                final WasmFunction start = instance.symbolTable().startFunction();
+                if (start != null) {
+                    instance.target(start.index()).call(new Object[0]);
                 }
             }
+            resolutionDag.clear();
+            linkState = LinkState.linked;
         }
     }
 
     private void linkTopologically() {
         final Resolver[] sortedResolutions = resolutionDag.toposort();
         for (Resolver resolver : sortedResolutions) {
-            resolver.runAction();
+            resolver.action.run();
         }
     }
 
@@ -148,24 +149,33 @@ public class Linker {
         final Map<FunctionType, Integer> equivalenceClasses = new HashMap<>();
         int nextEquivalenceClass = SymbolTable.FIRST_EQUIVALENCE_CLASS;
         for (WasmInstance instance : instances.values()) {
-            if (instance.isLinkInProgress()) {
-                final SymbolTable symtab = instance.symbolTable();
-                for (int index = 0; index < symtab.typeCount(); index++) {
-                    FunctionType type = symtab.typeAt(index);
-                    Integer equivalenceClass = equivalenceClasses.get(type);
-                    if (equivalenceClass == null) {
-                        equivalenceClass = nextEquivalenceClass;
-                        equivalenceClasses.put(type, equivalenceClass);
-                        nextEquivalenceClass++;
-                    }
-                    symtab.setEquivalenceClass(index, equivalenceClass);
+            final SymbolTable symtab = instance.symbolTable();
+            for (int index = 0; index < symtab.typeCount(); index++) {
+                FunctionType type = symtab.typeAt(index);
+                Integer equivalenceClass = equivalenceClasses.get(type);
+                if (equivalenceClass == null) {
+                    equivalenceClass = nextEquivalenceClass;
+                    equivalenceClasses.put(type, equivalenceClass);
+                    nextEquivalenceClass++;
                 }
-                for (int index = 0; index < symtab.numFunctions(); index++) {
-                    final WasmFunction function = symtab.function(index);
-                    function.setTypeEquivalenceClass(symtab.equivalenceClass(function.typeIndex()));
-                }
+                symtab.setEquivalenceClass(index, equivalenceClass);
+            }
+            for (int index = 0; index < symtab.numFunctions(); index++) {
+                final WasmFunction function = symtab.function(index);
+                function.setTypeEquivalenceClass(symtab.equivalenceClass(function.typeIndex()));
             }
         }
+    }
+
+    /**
+     * This method reinitializes the state of all global variables in the module.
+     *
+     * The intent is to use this functionality only in the test suite and the benchmark suite.
+     */
+    public void resetModuleState(WasmContext context, WasmInstance instance, boolean zeroMemory) {
+        final BinaryParser reader = new BinaryParser(language, instance.module());
+        reader.resetGlobalState(context, instance);
+        reader.resetMemoryState(context, instance, zeroMemory);
     }
 
     void resolveGlobalImport(WasmContext context, WasmInstance instance, ImportDescriptor importDescriptor, int globalIndex, byte valueType, byte mutability) {
@@ -813,7 +823,7 @@ public class Linker {
         static class Resolver {
             final Sym element;
             final Sym[] dependencies;
-            Runnable action;
+            final Runnable action;
 
             Resolver(Sym element, Sym[] dependencies, Runnable action) {
                 this.element = element;
@@ -824,13 +834,6 @@ public class Linker {
             @Override
             public String toString() {
                 return "Resolver(" + element + ")";
-            }
-
-            public void runAction() {
-                if (this.action != null) {
-                    this.action.run();
-                    this.action = null;
-                }
             }
         }
 
