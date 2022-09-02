@@ -132,7 +132,6 @@ public interface Platform {
      * @since 19.0
      */
     interface WINDOWS extends InternalPlatform.PLATFORM_JNI {
-
     }
 
     /*
