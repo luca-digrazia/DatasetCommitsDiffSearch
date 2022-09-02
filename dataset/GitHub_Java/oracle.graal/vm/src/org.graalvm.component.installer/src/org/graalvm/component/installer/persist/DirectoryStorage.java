@@ -45,7 +45,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -157,7 +156,7 @@ public class DirectoryStorage implements ComponentStorage {
         for (String key : Collections.list((Enumeration<String>) props.propertyNames())) {
             String val = props.getProperty(key, ""); // MOI18N
 
-            String lowerKey = key.toLowerCase(Locale.ENGLISH);
+            String lowerKey = key.toLowerCase();
             if (val.charAt(0) == '"' && val.length() > 1 && val.charAt(val.length() - 1) == '"') { // MOI18N
                 val = val.substring(1, val.length() - 1).trim();
             }
@@ -215,7 +214,6 @@ public class DirectoryStorage implements ComponentStorage {
     @SuppressWarnings("unchecked")
     ComponentInfo loadMetadataFrom(InputStream fileStream) throws IOException {
         ComponentInfo ci;
-        // XX clear 'loaded' field once the loading is over
         loaded = new Properties();
         loaded.load(fileStream);
 
@@ -224,10 +222,9 @@ public class DirectoryStorage implements ComponentStorage {
         String version = getRequiredProperty(BundleConstants.BUNDLE_VERSION);
 
         String license = loaded.getProperty(BundleConstants.BUNDLE_LICENSE_PATH);
-        
+
         ci = new ComponentInfo(id, name, version);
         if (license != null) {
-            SystemUtils.checkCommonRelative(null, license);
             ci.setLicensePath(license);
         }
         for (String s : Collections.list((Enumeration<String>) loaded.propertyNames())) {
@@ -243,7 +240,6 @@ public class DirectoryStorage implements ComponentStorage {
         for (String s : loaded.getProperty(BundleConstants.BUNDLE_WORKDIRS, "").split(":")) {
             String p = s.trim();
             if (!p.isEmpty()) {
-                SystemUtils.checkCommonRelative(null, p);
                 ll.add(p);
             }
         }
@@ -285,7 +281,6 @@ public class DirectoryStorage implements ComponentStorage {
         for (String e : s) {
             String trimmed = e.trim();
             if (!trimmed.isEmpty()) {
-                SystemUtils.checkCommonRelative(null, trimmed);
                 result.add(trimmed);
             }
         }
@@ -321,7 +316,6 @@ public class DirectoryStorage implements ComponentStorage {
             for (String x : files.split(" *, *")) { // NOI18N
                 String t = x.trim();
                 if (!t.isEmpty()) {
-                    SystemUtils.checkCommonRelative(null, t);
                     unsorted.add(t);
                 }
             }
@@ -417,19 +411,12 @@ public class DirectoryStorage implements ComponentStorage {
         Files.write(listFile, entries, StandardOpenOption.CREATE,
                         StandardOpenOption.TRUNCATE_EXISTING);
     }
-    
-    private void checkLicenseID(String licenseID) {
-        if (licenseID.contains("/")) {
-            throw new IllegalArgumentException("Invalid license ID: " + licenseID);
-        }
-    }
 
     @Override
     public Date licenseAccepted(ComponentInfo info, String licenseID) {
-        checkLicenseID(licenseID);
         try {
             String fn = MessageFormat.format(LICENSE_FILE_TEMPLATE, licenseID, info.getId());
-            Path listFile = registryPath.resolve(SystemUtils.fromCommonRelative(fn));
+            Path listFile = registryPath.resolve(SystemUtils.fromCommonString(fn));
             if (!Files.isReadable(listFile)) {
                 return null;
             }
@@ -445,9 +432,8 @@ public class DirectoryStorage implements ComponentStorage {
             clearRecordedLicenses();
             return;
         }
-        checkLicenseID(licenseID);
         String fn = MessageFormat.format(LICENSE_FILE_TEMPLATE, licenseID, info.getId());
-        Path listFile = registryPath.resolve(SystemUtils.fromCommonRelative(fn));
+        Path listFile = registryPath.resolve(SystemUtils.fromCommonString(fn));
         if (listFile == null) {
             throw new IllegalArgumentException(licenseID);
         }
@@ -458,7 +444,7 @@ public class DirectoryStorage implements ComponentStorage {
         if (!Files.isDirectory(dir)) {
             // create the directory
             Files.createDirectories(dir);
-            Path contentsFile = registryPath.resolve(SystemUtils.fromCommonRelative(
+            Path contentsFile = registryPath.resolve(SystemUtils.fromCommonString(
                             MessageFormat.format(LICENSE_CONTENTS_NAME, licenseID)));
             Files.write(contentsFile, Arrays.asList(licenseText.split("\n")));
         }

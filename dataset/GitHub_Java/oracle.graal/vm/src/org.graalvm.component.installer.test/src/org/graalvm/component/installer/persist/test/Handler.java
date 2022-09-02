@@ -68,7 +68,6 @@ public class Handler extends URLStreamHandler {
     public static void clear() {
         bindings.clear();
         connections.clear();
-        httpProxyConnections.clear();
         multiConnections.clear();
         visitedURLs.clear();
     }

@@ -249,7 +249,7 @@ public class ProxyConnectionFactory implements URLConnectionFactory {
                 throw new ConnectException(feedback.l10n("EXC_CannotConnectTo", url));
             }
         } catch (InterruptedException ex) {
-            throw new ConnectException(feedback.l10n("EXC_InterruptedConnectingTo", url));
+            Thread.currentThread().interrupt();
         }
         return res;
     }
