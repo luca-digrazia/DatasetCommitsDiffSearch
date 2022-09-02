@@ -88,9 +88,6 @@ public class SubstrateOptions {
         }
     };
 
-    @Option(help = "Build with Loom JDK") //
-    public static final HostedOptionKey<Boolean> UseLoom = new HostedOptionKey<>(false);
-
     public static final int ForceFallback = 10;
     public static final int Automatic = 5;
     public static final int NoFallback = 0;
@@ -531,24 +528,4 @@ public class SubstrateOptions {
 
     @Option(help = "For internal purposes only. Disables type id result verification even when running with assertions enabled.", stability = OptionStability.EXPERIMENTAL, type = Debug)//
     public static final HostedOptionKey<Boolean> DisableTypeIdResultVerification = new HostedOptionKey<>(false);
-
-    public static boolean areMethodHandlesSupported() {
-        return JavaVersionUtil.JAVA_SPEC >= 11;
-    }
-
-    @Option(help = "", stability = OptionStability.EXPERIMENTAL, type = Expert)//
-    public static final HostedOptionKey<Boolean> EnableSignalAPI = new HostedOptionKey<Boolean>(null) {
-        @Override
-        public Boolean getValueOrDefault(UnmodifiableEconomicMap<OptionKey<?>, Object> values) {
-            if (values.containsKey(this)) {
-                return (Boolean) values.get(this);
-            }
-            return !SharedLibrary.getValueOrDefault(values);
-        }
-
-        @Override
-        public Boolean getValue(OptionValues values) {
-            return getValueOrDefault(values.getMap());
-        }
-    };
 }
