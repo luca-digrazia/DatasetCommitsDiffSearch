@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -43,19 +43,26 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 abstract class LLVMNativeLibraryDefaults {
 
-    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = Object.class)
+    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = Object.class, useForAOT = false)
     static class DefaultLibrary {
 
         @ExportMessage
-        @SuppressWarnings("unused")
         static class IsPointer {
 
+            /**
+             * @param receiver
+             * @see InteropLibrary#isPointer(Object)
+             */
             @Specialization(guards = "interop.isPointer(receiver)")
             static boolean doPointer(Object receiver,
-                            @CachedLibrary("receiver") InteropLibrary interop) {
+                            @CachedLibrary("receiver") @SuppressWarnings("unused") InteropLibrary interop) {
                 return true;
             }
 
+            /**
+             * @param receiver
+             * @see InteropLibrary#isPointer(Object)
+             */
             @Specialization(guards = "!interop.isPointer(receiver)")
             static boolean doOther(Object receiver,
                             @CachedLibrary("receiver") InteropLibrary interop) {
@@ -96,21 +103,32 @@ abstract class LLVMNativeLibraryDefaults {
         }
 
         @ExportMessage
-        @SuppressWarnings("unused")
         static class ToNativePointer {
 
+            /**
+             * @param receiver
+             * @see LLVMNativeLibrary#toNativePointer(Object)
+             */
             @Specialization(guards = "interop.isNull(receiver)")
             static LLVMNativePointer doNull(Object receiver,
-                            @CachedLibrary("receiver") InteropLibrary interop) {
+                            @CachedLibrary("receiver") @SuppressWarnings("unused") InteropLibrary interop) {
                 return LLVMNativePointer.createNull();
             }
 
-            @Specialization(guards = "!interop.isNull(receiver)")
+            @Specialization(guards = {"!interop.isNull(receiver)", "interop.isPointer(receiver)"}, rewriteOn = UnsupportedMessageException.class)
+            static LLVMNativePointer doAlreadyNative(Object receiver,
+                            @CachedLibrary("receiver") InteropLibrary interop) throws UnsupportedMessageException {
+                return LLVMNativePointer.create(interop.asPointer(receiver));
+            }
+
+            @Specialization(replaces = "doAlreadyNative", guards = "!interop.isNull(receiver)")
             static LLVMNativePointer doNotNull(Object receiver,
                             @CachedLibrary("receiver") InteropLibrary interop,
                             @Shared("exception") @Cached BranchProfile exceptionProfile) {
                 try {
-                    interop.toNative(receiver);
+                    if (!interop.isPointer(receiver)) {
+                        interop.toNative(receiver);
+                    }
                     return LLVMNativePointer.create(interop.asPointer(receiver));
                 } catch (UnsupportedMessageException ex) {
                     exceptionProfile.enter();
@@ -121,11 +139,14 @@ abstract class LLVMNativeLibraryDefaults {
 
     }
 
-    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = Long.class)
+    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = Long.class, useForAOT = true, useForAOTPriority = 1)
     static class LongLibrary {
 
+        /**
+         * @param receiver
+         * @see LLVMNativeLibrary#isPointer(Object)
+         */
         @ExportMessage
-        @SuppressWarnings("unused")
         static boolean isPointer(Long receiver) {
             return true;
         }
@@ -138,6 +159,38 @@ abstract class LLVMNativeLibraryDefaults {
         @ExportMessage
         static LLVMNativePointer toNativePointer(Long receiver) {
             return LLVMNativePointer.create(receiver);
+        }
+    }
+
+    @ExportLibrary(value = LLVMNativeLibrary.class, receiverType = byte[].class, useForAOT = true, useForAOTPriority = 1)
+    static class ArrayLibrary {
+
+        /**
+         * @param receiver
+         * @see LLVMNativeLibrary#isPointer(Object)
+         */
+        @ExportMessage
+        static boolean isPointer(byte[] receiver) {
+            return false;
+        }
+
+        /**
+         * @param receiver
+         * @see LLVMNativeLibrary#asPointer(Object)
+         */
+        @ExportMessage
+        static long asPointer(byte[] receiver) throws UnsupportedMessageException {
+            throw UnsupportedMessageException.create();
+        }
+
+        /**
+         * @param receiver
+         * @see LLVMNativeLibrary#asPointer(Object)
+         */
+        @ExportMessage
+        static LLVMNativePointer toNativePointer(byte[] receiver,
+                        @CachedLibrary("receiver") LLVMNativeLibrary self) {
+            throw new LLVMPolyglotException(self, "Cannot convert virtual allocation object to native pointer.");
         }
     }
 }
