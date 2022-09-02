@@ -36,9 +36,7 @@ import java.text.spi.DecimalFormatSymbolsProvider;
 import java.text.spi.NumberFormatProvider;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.IllformedLocaleException;
 import java.util.List;
 import java.util.Locale;
@@ -46,7 +44,6 @@ import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.Objects;
 import java.util.ResourceBundle;
-import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.spi.CalendarDataProvider;
 import java.util.spi.CalendarNameProvider;
@@ -56,7 +53,7 @@ import java.util.spi.LocaleServiceProvider;
 import java.util.spi.TimeZoneNameProvider;
 
 import com.oracle.svm.core.jdk.localization.compression.GzipBundleCompression;
-import com.oracle.svm.core.jdk.localization.substitutions.Target_sun_util_locale_provider_LocaleServiceProviderPool_OptimizedLocaleMode;
+import com.oracle.svm.core.jdk.localization.substitutions.OptimizedModeOnlySubstitutions;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -64,8 +61,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.Substitute;
@@ -139,7 +134,7 @@ public abstract class LocalizationFeature implements Feature {
      */
     protected Locale defaultLocale = Locale.getDefault();
 
-    protected Set<Locale> allLocales;
+    protected List<Locale> allLocales;
 
     protected LocalizationSupport support;
 
@@ -243,7 +238,6 @@ public abstract class LocalizationFeature implements Feature {
         }
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     private LocalizationSupport selectLocalizationSupport() {
         if (optimizedMode) {
             return new OptimizedLocalizationSupport(defaultLocale, allLocales);
@@ -268,33 +262,19 @@ public abstract class LocalizationFeature implements Feature {
     /**
      * @return locale for given tag or null for invalid ones
      */
-    @Platforms(Platform.HOSTED_ONLY.class)
     private static Locale parseLocaleFromTag(String tag) {
         try {
             return new Locale.Builder().setLanguageTag(tag).build();
         } catch (IllformedLocaleException ex) {
-            /*- Custom made locales consisting of at most three parts separated by '-' are also supported */
-            String[] parts = tag.split("-");
-            switch (parts.length) {
-                case 1:
-                    return new Locale(parts[0]);
-                case 2:
-                    return new Locale(parts[0], parts[1]);
-                case 3:
-                    return new Locale(parts[0], parts[1], parts[2]);
-                default:
-                    return null;
-            }
+            return null;
         }
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    private static Set<Locale> processLocalesOption() {
-        Set<Locale> locales = new HashSet<>();
+    private static List<Locale> processLocalesOption() {
         if (Options.IncludeAllLocales.getValue()) {
-            Collections.addAll(locales, Locale.getAvailableLocales());
-            /*- Fallthrough to also allow adding custom locales */
+            return Arrays.asList(Locale.getAvailableLocales());
         }
+        List<Locale> locales = new ArrayList<>();
         List<String> invalid = new ArrayList<>();
         for (String tag : Options.IncludeLocales.getValue().values()) {
             Locale locale = parseLocaleFromTag(tag);
@@ -316,7 +296,6 @@ public abstract class LocalizationFeature implements Feature {
      * analysis. Therefore, we load and register all standard charsets here. Features that require
      * more than this can add additional charsets.
      */
-    @Platforms(Platform.HOSTED_ONLY.class)
     private static void addCharsets() {
         if (Options.AddAllCharsets.getValue()) {
             for (Charset c : Charset.availableCharsets().values()) {
@@ -333,7 +312,6 @@ public abstract class LocalizationFeature implements Feature {
         }
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     public static void addCharset(Charset charset) {
         Map<String, Charset> charsets = ImageSingletons.lookup(LocalizationSupport.class).charsets;
         charsets.put(charset.name().toLowerCase(), charset);
@@ -365,18 +343,16 @@ public abstract class LocalizationFeature implements Feature {
                     CalendarDataProvider.class,
                     CalendarNameProvider.class);
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     protected List<Class<? extends LocaleServiceProvider>> getSpiClasses() {
         return spiClasses;
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     private void addProviders() {
         OptimizedLocalizationSupport optimizedLocalizationSupport = support.asOptimizedSupport();
         for (Class<? extends LocaleServiceProvider> providerClass : getSpiClasses()) {
             LocaleProviderAdapter adapter = Objects.requireNonNull(LocaleProviderAdapter.getAdapter(providerClass, defaultLocale));
             LocaleServiceProvider provider = Objects.requireNonNull(adapter.getLocaleServiceProvider(providerClass));
-            optimizedLocalizationSupport.providerPools.put(providerClass, new Target_sun_util_locale_provider_LocaleServiceProviderPool_OptimizedLocaleMode(provider));
+            optimizedLocalizationSupport.providerPools.put(providerClass, new OptimizedModeOnlySubstitutions.Target_sun_util_locale_provider_LocaleServiceProviderPool(provider));
         }
 
         for (Locale locale : allLocales) {
@@ -393,7 +369,6 @@ public abstract class LocalizationFeature implements Feature {
         }
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     protected void addResourceBundles() {
         for (Locale locale : allLocales) {
             prepareBundle(localeData(java.util.spi.CalendarDataProvider.class, locale).getCalendarData(locale), locale);
@@ -421,12 +396,10 @@ public abstract class LocalizationFeature implements Feature {
         }
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     protected LocaleData localeData(Class<? extends LocaleServiceProvider> providerClass, Locale locale) {
         return ((ResourceBundleBasedAdapter) LocaleProviderAdapter.getAdapter(providerClass, locale)).getLocaleData();
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     private void processRequestedBundle(String input) {
         int splitIndex = input.indexOf('_');
         boolean specificLocaleRequested = splitIndex != -1;
@@ -444,13 +417,11 @@ public abstract class LocalizationFeature implements Feature {
         prepareBundle(baseName, Collections.singletonList(locale));
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     public void prepareBundle(String baseName) {
         prepareBundle(baseName, allLocales);
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public void prepareBundle(String baseName, Collection<Locale> wantedLocales) {
+    public void prepareBundle(String baseName, List<Locale> wantedLocales) {
         if (baseName.isEmpty()) {
             return;
         }
@@ -490,12 +461,10 @@ public abstract class LocalizationFeature implements Feature {
         }
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     protected void prepareBundle(ResourceBundle bundle, Locale locale) {
         prepareBundle(bundle.getBaseBundleName(), bundle, locale);
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     private void prepareBundle(String bundleName, ResourceBundle bundle, Locale locale) {
         trace("Adding bundle " + bundleName);
         /*
@@ -521,7 +490,6 @@ public abstract class LocalizationFeature implements Feature {
      */
     private static final Field PARENT_FIELD = ReflectionUtil.lookupField(ResourceBundle.class, "parent");
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     private static ResourceBundle getParent(ResourceBundle bundle) {
         try {
             return (ResourceBundle) PARENT_FIELD.get(bundle);
@@ -530,7 +498,6 @@ public abstract class LocalizationFeature implements Feature {
         }
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
     protected void trace(String msg) {
         if (trace) {
             // Checkstyle: stop
