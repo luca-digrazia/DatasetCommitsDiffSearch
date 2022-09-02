@@ -30,7 +30,7 @@ import java.security.ProtectionDomain;
 import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.espresso.jni.ModifiedUtf8;
+import com.oracle.truffle.espresso.jni.Utf8;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
 import sun.misc.VM;
@@ -85,11 +85,11 @@ public final class Symbol<T> extends ByteSequence {
         return EMPTY_ARRAY;
     }
 
-    ByteSequence substring(int from) {
+    final ByteSequence substring(int from) {
         return substring(from, length());
     }
 
-    ByteSequence substring(int from, int to) {
+    final ByteSequence substring(int from, int to) {
         assert 0 <= from && from <= to && to <= length();
         if (from == 0 && to == length()) {
             return this;
@@ -102,26 +102,26 @@ public final class Symbol<T> extends ByteSequence {
     }
 
     @Override
-    public byte byteAt(int index) {
+    public final byte byteAt(int index) {
         return value[index];
     }
 
     @Override
-    public String toString() {
+    public final String toString() {
         try {
-            return ModifiedUtf8.toJavaString(value);
+            return Utf8.toJavaString(value);
         } catch (IOException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
     }
 
     @Override
-    public int length() {
+    public final int length() {
         return value.length;
     }
 
     @Override
-    public int offset() {
+    public final int offset() {
         return 0;
     }
 
@@ -228,7 +228,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> packages = StaticSymbols.putName("packages");
         public static final Symbol<Name> packageEnabled = StaticSymbols.putName("packageEnabled");
         public static final Symbol<Name> deflt = StaticSymbols.putName("deflt");
-        public static final Symbol<Name> Null = StaticSymbols.putName("null");
 
         // Polymorphic signature method names
         public static final Symbol<Name> invoke = StaticSymbols.putName("invoke");
@@ -255,7 +254,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> Exceptions = StaticSymbols.putName("Exceptions");
         public static final Symbol<Name> InnerClasses = StaticSymbols.putName("InnerClasses");
         public static final Symbol<Name> LineNumberTable = StaticSymbols.putName("LineNumberTable");
-        public static final Symbol<Name> LocalVariableTable = StaticSymbols.putName("LocalVariableTable");
 
         public static final Symbol<Name> BootstrapMethods = StaticSymbols.putName("BootstrapMethods");
         public static final Symbol<Name> StackMapTable = StaticSymbols.putName("StackMapTable");
@@ -270,6 +268,7 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> SourceFile = StaticSymbols.putName("SourceFile");
         public static final Symbol<Name> Synthetic = StaticSymbols.putName("Synthetic");
         public static final Symbol<Name> Deprecated = StaticSymbols.putName("Deprecated");
+        public static final Symbol<Name> LocalVariableTable = StaticSymbols.putName("LocalVariableTable");
         public static final Symbol<Name> LocalVariableTypeTable = StaticSymbols.putName("LocalVariableTypeTable");
 
         // Hidden field names. Starts with a 0 in order for the names to be illegal identifiers.
@@ -321,7 +320,6 @@ public final class Symbol<T> extends ByteSequence {
 
         public static final Symbol<Type> ClassLoader = StaticSymbols.putType(java.lang.ClassLoader.class);
         public static final Symbol<Type> sun_misc_Launcher_ExtClassLoader = StaticSymbols.putType("Lsun/misc/Launcher$ExtClassLoader;");
-        public static final Symbol<Type> Null = StaticSymbols.putType("LNull;");
 
         // Primitive types. Use JavaKind.getType()?
         public static final Symbol<Type> _boolean = StaticSymbols.putType(boolean.class);
