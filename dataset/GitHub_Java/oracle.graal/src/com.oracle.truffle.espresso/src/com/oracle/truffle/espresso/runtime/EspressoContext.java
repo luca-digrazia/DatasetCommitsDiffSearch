@@ -244,10 +244,6 @@ public final class EspressoContext {
             initializeKnownClass(type);
         }
 
-        // send the VM start event to listeners, e.g. JDWP
-        // before the main thread is started
-        VMEventListeners.getDefault().vmStarted();
-
         createMainThread();
 
         initializeKnownClass(Type.java_lang_ref_Finalizer);

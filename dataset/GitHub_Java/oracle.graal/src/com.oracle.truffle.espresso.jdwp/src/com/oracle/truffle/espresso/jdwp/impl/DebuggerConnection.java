@@ -223,8 +223,9 @@ public class DebuggerConnection implements JDWPCommands {
                 System.err.println("Should not get any reply packet from debugger");
             } else {
                 // process a command packet from debugger
-                JDWPLogger.log("received command(" + packet.cmdSet + "." + packet.cmd + ")", JDWPLogger.LogLevel.PACKET);
-
+                if (JDWPDebuggerController.isDebug(JDWPDebuggerController.Debug.PACKET)) {
+                    System.out.println("received command(" + packet.cmdSet + "." + packet.cmd + ")");
+                }
                 switch (packet.cmdSet) {
                     case JDWP.VirtualMachine.ID: {
                         switch (packet.cmd) {
@@ -285,9 +286,6 @@ public class DebuggerConnection implements JDWPCommands {
                                 break;
                             case JDWP.ReferenceType.SOURCE_FILE.ID:
                                 result = JDWP.ReferenceType.SOURCE_FILE.createReply(packet, context);
-                                break;
-                            case JDWP.ReferenceType.STATUS.ID:
-                                result = JDWP.ReferenceType.STATUS.createReply(packet, context);
                                 break;
                             case JDWP.ReferenceType.INTERFACES.ID:
                                 result = JDWP.ReferenceType.INTERFACES.createReply(packet, context);
@@ -481,7 +479,9 @@ public class DebuggerConnection implements JDWPCommands {
                 }
             }
             if (result != null && result.getReply() != null) {
-                JDWPLogger.log("replying to command(" + packet.cmdSet + "." + packet.cmd + ")", JDWPLogger.LogLevel.PACKET);
+                if (JDWPDebuggerController.isDebug(JDWPDebuggerController.Debug.PACKET)) {
+                    System.out.println("replying to command(" + packet.cmdSet + "." + packet.cmd + ")");
+                }
                 connection.queuePacket(result.getReply());
             } else {
                 System.err.println("no result for command(" + packet.cmdSet + "." + packet.cmd + ")");
