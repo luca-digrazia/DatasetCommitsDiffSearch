@@ -1850,7 +1850,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param r must be in the range 0 to size - 1
      * @param s must be in the range 0 to size - 1
      */
-    protected void sbfm(int size, Register dst, Register src, int r, int s) {
+    public void sbfm(int size, Register dst, Register src, int r, int s) {
         bitfieldInstruction(SBFM, dst, src, r, s, generalFromSize(size));
     }
 
@@ -1992,7 +1992,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param extendType defines how src2 is extended to the same size as src1.
      * @param shiftAmt must be in range 0 to 4.
      */
-    public void sub(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
+    protected void sub(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
         assert !dst.equals(zr);
         assert !src1.equals(zr);
         assert !src2.equals(sp);

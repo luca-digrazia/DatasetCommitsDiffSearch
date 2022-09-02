@@ -218,7 +218,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    protected void sbfm(int size, Register dst, Register src, int r, int s) {
+    public void sbfm(int size, Register dst, Register src, int r, int s) {
         super.sbfm(size, dst, src, r, s);
     }
 
@@ -258,7 +258,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void sub(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
+    protected void sub(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
         super.sub(size, dst, src1, src2, extendType, shiftAmt);
     }
 
