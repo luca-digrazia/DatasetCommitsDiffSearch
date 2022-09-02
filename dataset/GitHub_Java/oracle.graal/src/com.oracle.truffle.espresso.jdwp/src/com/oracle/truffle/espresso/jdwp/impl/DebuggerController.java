@@ -370,11 +370,11 @@ public final class DebuggerController implements ContextsListener {
                     }
                 }
                 // immediately suspend the event thread
-                suspend(null, eventThread, SuspendStrategy.EVENT_THREAD, Collections.singletonList(callBack), null);
+                suspend(null, eventThread, SuspendStrategy.EVENT_THREAD, Collections.singletonList(callBack));
                 break;
             case SuspendStrategy.EVENT_THREAD:
                 // immediately suspend the event thread
-                suspend(null, eventThread, SuspendStrategy.EVENT_THREAD, Collections.singletonList(callBack), null);
+                suspend(null, eventThread, SuspendStrategy.EVENT_THREAD, Collections.singletonList(callBack));
                 break;
         }
     }
@@ -465,7 +465,7 @@ public final class DebuggerController implements ContextsListener {
         truffleContext = con;
     }
 
-    public void suspend(CallFrame currentFrame, Object thread, byte suspendPolicy, List<Callable<Void>> jobs, SteppingInfo steppingInfo) {
+    public void suspend(CallFrame currentFrame, Object thread, byte suspendPolicy, List<Callable<Void>> jobs) {
         JDWPLogger.log("suspending from callback in thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
 
         // before sending any events to debugger, make sure to mark
@@ -482,7 +482,7 @@ public final class DebuggerController implements ContextsListener {
 
                 threadSuspension.suspendThread(thread);
                 runJobs(jobs);
-                suspendEventThread(currentFrame, thread, steppingInfo);
+                suspendEventThread(currentFrame, thread);
                 break;
             case SuspendStrategy.ALL:
                 JDWPLogger.log("Suspend ALL", JDWPLogger.LogLevel.THREAD);
@@ -506,7 +506,7 @@ public final class DebuggerController implements ContextsListener {
                 });
                 threadSuspension.suspendThread(thread);
                 suspendThread.start();
-                suspendEventThread(currentFrame, thread, steppingInfo);
+                suspendEventThread(currentFrame, thread);
                 break;
         }
     }
@@ -521,10 +521,11 @@ public final class DebuggerController implements ContextsListener {
         }
     }
 
-    private void suspendEventThread(CallFrame currentFrame, Object thread, SteppingInfo info) {
+    private void suspendEventThread(CallFrame currentFrame, Object thread) {
         JDWPLogger.log("Suspending event thread: %s with new suspension count: %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
 
         // if during stepping, send a step completed event back to the debugger
+        SteppingInfo info = commandRequestIds.remove(thread);
         if (info != null) {
             eventListener.stepCompleted(info.getRequestId(), info.getSuspendPolicy(), thread, currentFrame);
         }
@@ -590,15 +591,11 @@ public final class DebuggerController implements ContextsListener {
             Object currentThread = getContext().asGuestThread(Thread.currentThread());
             JDWPLogger.log("Suspended at: %s in thread: %s", JDWPLogger.LogLevel.STEPPING, event.getSourceSection().toString(), getThreadName(currentThread));
 
-            SteppingInfo steppingInfo = commandRequestIds.remove(currentThread);
-
-            if (steppingInfo != null) {
+            if (commandRequestIds.get(currentThread) != null) {
                 // get the top frame for chekcing instance filters
                 CallFrame[] callFrames = createCallFrames(ids.getIdAsLong(currentThread), event.getStackFrames(), 1);
                 if (checkExclusionFilters(event, currentThread, callFrames[0])) {
                     JDWPLogger.log("not suspending here: %s", JDWPLogger.LogLevel.STEPPING, event.getSourceSection());
-                    // continue stepping until completed
-                    commandRequestIds.put(currentThread, steppingInfo);
                     return;
                 }
             }
@@ -721,7 +718,7 @@ public final class DebuggerController implements ContextsListener {
             }
 
             // now, suspend the current thread until resumed by e.g. a debugger command
-            suspend(callFrames[0], currentThread, suspendPolicy, jobs, steppingInfo);
+            suspend(callFrames[0], currentThread, suspendPolicy, jobs);
         }
 
         private boolean matchLocation(Pattern[] patterns, CallFrame callFrame) {
