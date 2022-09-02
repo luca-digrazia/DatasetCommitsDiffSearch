@@ -33,7 +33,6 @@ import java.nio.file.attribute.PosixFileAttributeView;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.graalvm.component.installer.model.ComponentRegistry;
-import java.util.Locale;
 
 /**
  *
@@ -55,33 +54,6 @@ public class SystemUtils {
     private static final String DOTDOT = ".."; // NOI18N
 
     private static final String SPLIT_DELIMITER = Pattern.quote(DELIMITER);
-
-    public enum OS {
-        WINDOWS,
-        LINUX,
-        MAC,
-        UNKNOWN;
-
-        /**
-         * Obtain OS enum.
-         */
-        public static OS get() {
-            String osName = System.getProperty("os.name");
-            if (!(osName == null || osName.isEmpty())) {
-                String osNameLower = osName.toLowerCase(Locale.ENGLISH);
-                if (osNameLower.contains("windows")) {
-                    return WINDOWS;
-                }
-                if (osNameLower.contains("linux")) {
-                    return LINUX;
-                }
-                if (osNameLower.contains("mac") || osNameLower.contains("darwin")) {
-                    return MAC;
-                }
-            }
-            return UNKNOWN;
-        }
-    }
 
     /**
      * Creates a proper {@link Path} from string representation. The string representation uses
@@ -162,27 +134,7 @@ public class SystemUtils {
      */
     public static boolean isWindows() {
         String osName = System.getProperty("os.name"); // NOI18N
-        return osName != null && osName.toLowerCase(Locale.ENGLISH).contains("windows");
-    }
-
-    /**
-     * Checks if running on Linux.
-     * 
-     * @return true, if on Linux.
-     */
-    public static boolean isLinux() {
-        String osName = System.getProperty("os.name"); // NOI18N
-        return osName != null && osName.toLowerCase(Locale.ENGLISH).contains("linux");
-    }
-
-    /**
-     * Checks if running on Mac.
-     *
-     * @return true, if on Mac.
-     */
-    public static boolean isMac() {
-        String osName = System.getProperty("os.name"); // NOI18N
-        return osName != null && osName.toLowerCase(Locale.ENGLISH).contains("mac");
+        return osName != null && osName.toLowerCase().contains("windows");
     }
 
     /**
@@ -209,17 +161,6 @@ public class SystemUtils {
         System.arraycopy(comps, 1, comps, 0, l);
         comps[l] = ""; // NOI18N
         return Paths.get(s, comps);
-    }
-
-    public static Path resolveRelative(Path baseDir, String p) {
-        if (baseDir == null) {
-            return null;
-        }
-        if (p == null) {
-            return null;
-        }
-        String[] comps = checkRelativePath(baseDir, p);
-        return baseDir.resolve(fromArray(comps));
     }
 
     public static Path fromCommonRelative(Path base, String p) {

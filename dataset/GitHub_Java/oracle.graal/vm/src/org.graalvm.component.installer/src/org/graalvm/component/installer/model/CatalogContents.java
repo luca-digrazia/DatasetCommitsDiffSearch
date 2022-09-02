@@ -26,20 +26,17 @@ package org.graalvm.component.installer.model;
 
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.graalvm.component.installer.CommonConstants;
-import org.graalvm.component.installer.ComponentCatalog;
+import org.graalvm.component.installer.ComponentCollection;
 import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.Version;
@@ -48,16 +45,15 @@ import org.graalvm.component.installer.Version;
  *
  * @author sdedic
  */
-public final class CatalogContents implements ComponentCatalog {
+public class CatalogContents implements ComponentCollection {
     private static final List<ComponentInfo> NONE = new ArrayList<>();
 
     private final ComponentStorage storage;
     private final Feedback env;
     private final Map<String, List<ComponentInfo>> components = new HashMap<>();
     private final Version graalVersion;
-    private final ComponentRegistry installed;
+
     private final Verifier verifier;
-    private final DownloadInterceptor downloadInterceptor;
 
     /**
      * Allows update to a newer distribution, not just patches. This will cause components from
@@ -66,27 +62,19 @@ public final class CatalogContents implements ComponentCatalog {
      */
     private boolean allowDistUpdate;
 
-    public CatalogContents(Feedback env, ComponentStorage storage, ComponentRegistry inst) {
-        this(env, storage, inst, inst.getGraalVersion());
+    public CatalogContents(Feedback env, ComponentStorage storage, ComponentRegistry installed) {
+        this(env, storage, installed, installed.getGraalVersion());
     }
 
-    public CatalogContents(Feedback env, ComponentStorage storage, ComponentRegistry inst, Version version) {
+    public CatalogContents(Feedback env, ComponentStorage storage, ComponentRegistry installed, Version version) {
         this.storage = storage;
         this.env = env.withBundle(Feedback.class);
-        this.verifier = new Verifier(env, inst, this);
+        this.verifier = new Verifier(env, installed, this);
         this.graalVersion = version;
-        this.installed = inst;
-
         verifier.ignoreExisting(true);
         verifier.setSilent(true);
         verifier.setCollectErrors(true);
         verifier.setVersionMatch(graalVersion.match(Version.Match.Type.SATISFIES));
-
-        if (storage instanceof DownloadInterceptor) {
-            this.downloadInterceptor = (DownloadInterceptor) storage;
-        } else {
-            this.downloadInterceptor = (a, b) -> b;
-        }
     }
 
     public boolean compatibleVersion(ComponentInfo info) {
@@ -296,62 +284,5 @@ public final class CatalogContents implements ComponentCatalog {
             return null;
         }
         return v;
-    }
-
-    @Override
-    public ComponentInfo findComponent(String id, Version.Match vmatch, boolean localOnly) {
-        ComponentInfo ci = installed.loadSingleComponent(id, false);
-        if (ci != null) {
-            if (vmatch.test(ci.getVersion())) {
-                return ci;
-            }
-        }
-        if (localOnly) {
-            return null;
-        }
-        return findComponent(id, vmatch);
-    }
-
-    @Override
-    public Set<String> findDependencies(ComponentInfo start, boolean closure, Boolean inst, Set<ComponentInfo> result) {
-        return findDependencies(start, closure, inst, result, this::findComponent);
-    }
-
-    public interface ComponentQuery {
-        ComponentInfo findComponent(String id, Version.Match vmatch, boolean localOnly);
-    }
-
-    public static Set<String> findDependencies(ComponentInfo start, boolean closure, Boolean inst, Set<ComponentInfo> result, ComponentQuery q) {
-        Set<String> missing = new HashSet<>();
-        Set<String> known = new HashSet<>();
-        Deque<ComponentInfo> buffer = new ArrayDeque<>();
-        buffer.add(start);
-        boolean localOnly = Boolean.TRUE.equals(inst);
-        while (!buffer.isEmpty()) {
-            ComponentInfo c = buffer.poll();
-            Version.Match vm = c.getVersion().match(Version.Match.Type.COMPATIBLE);
-            for (String d : c.getDependencies()) {
-                if (!known.add(d)) {
-                    continue;
-                }
-                ComponentInfo res = q.findComponent(d, vm, localOnly);
-                if (res == null) {
-                    missing.add(d);
-                } else {
-                    if (closure) {
-                        buffer.add(res);
-                    }
-                    if (inst == null || (inst == res.isInstalled())) {
-                        result.add(res);
-                    }
-                }
-            }
-        }
-        return missing.isEmpty() ? null : missing;
-    }
-
-    @Override
-    public DownloadInterceptor getDownloadInterceptor() {
-        return downloadInterceptor;
     }
 }

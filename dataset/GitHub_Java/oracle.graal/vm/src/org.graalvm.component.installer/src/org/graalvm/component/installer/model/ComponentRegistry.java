@@ -26,12 +26,10 @@ package org.graalvm.component.installer.model;
 
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -40,13 +38,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.graalvm.component.installer.CommonConstants;
 import org.graalvm.component.installer.ComponentCollection;
 import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.Version;
 
 /**
@@ -119,17 +114,22 @@ public final class ComponentRegistry implements ComponentCollection {
     }
 
     @Override
-    public ComponentInfo findComponentMatch(String idspec, Version.Match vm, boolean exact) {
+    public ComponentInfo findComponent(String id, Version.Match vm) {
+        return findComponent(id);
+    }
+
+    @Override
+    public ComponentInfo findComponent(String idspec) {
         Version.Match[] vmatch = new Version.Match[1];
         String id = Version.idAndVersion(idspec, vmatch);
         if (!allLoaded) {
-            return loadSingleComponent(id, false, false, exact);
+            return loadSingleComponent(id, false, false);
         }
         ComponentInfo ci = components.get(id);
         if (ci != null) {
             return ci;
         }
-        String fullId = exact ? id : findAbbreviatedId(id);
+        String fullId = findAbbreviatedId(id);
         return fullId == null ? null : components.get(fullId);
     }
 
@@ -137,53 +137,26 @@ public final class ComponentRegistry implements ComponentCollection {
         String candidate = null;
         String lcid = id.toLowerCase(Locale.ENGLISH);
         String end = "." + lcid; // NOI18N
-        Collection<String> ids = getComponentIDs();
-        String ambiguous = null;
-        for (String s : ids) {
+        for (String s : getComponentIDs()) {
             String lcs = s.toLowerCase(Locale.ENGLISH);
             if (lcs.equals(lcid)) {
                 return s;
             }
             if (lcs.endsWith(end)) {
                 if (candidate != null) {
-                    ambiguous = s;
-                } else {
-                    candidate = s;
+                    throw env.failure("COMPONENT_AmbiguousIdFound", null, candidate, s);
                 }
+                candidate = s;
             }
-        }
-        if (ambiguous != null) {
-            throw env.failure("COMPONENT_AmbiguousIdFound", null, candidate, ambiguous);
         }
         return candidate;
     }
-
-    /**
-     * Regexp to extract specification version. Optional {@code "1."} in front, optional
-     * {@code ".micro_patchlevel"} suffix.
-     */
-    private static final Pattern JAVA_VERSION_PATTERN = Pattern.compile("((?:1\\.)?[0-9]+)([._].*)?"); // NOI18N
 
     public Map<String, String> getGraalCapabilities() {
         if (graalAttributes != null) {
             return graalAttributes;
         }
-        Map<String, String> m = storage.loadGraalVersionInfo();
-        String v = m.get(CommonConstants.CAP_JAVA_VERSION);
-        if (v != null) {
-            Matcher rm = JAVA_VERSION_PATTERN.matcher(v);
-            if (rm.matches()) {
-                v = rm.group(1);
-            }
-            int mv = SystemUtils.interpretJavaMajorVersion(v);
-            m = new HashMap<>(m);
-            if (mv < 1) {
-                m.remove(CommonConstants.CAP_JAVA_VERSION);
-            } else {
-                m.put(CommonConstants.CAP_JAVA_VERSION, "" + mv); // NOI18N
-            }
-            graalAttributes = m;
-        }
+        graalAttributes = storage.loadGraalVersionInfo();
         return graalAttributes;
     }
 
@@ -324,7 +297,7 @@ public final class ComponentRegistry implements ComponentCollection {
     }
 
     public ComponentInfo loadSingleComponent(String id, boolean filelist) {
-        return loadSingleComponent(id, filelist, false, false);
+        return loadSingleComponent(id, filelist, false);
     }
 
     @Override
@@ -333,8 +306,8 @@ public final class ComponentRegistry implements ComponentCollection {
         return ci == null ? null : Collections.singletonList(ci);
     }
 
-    ComponentInfo loadSingleComponent(String id, boolean filelist, boolean notFoundFailure, boolean exact) {
-        String fid = exact ? id : findAbbreviatedId(id);
+    ComponentInfo loadSingleComponent(String id, boolean filelist, boolean notFoundFailure) {
+        String fid = findAbbreviatedId(id);
         if (fid == null) {
             if (notFoundFailure) {
                 throw env.failure("REMOTE_UnknownComponentId", null, id);
@@ -487,40 +460,5 @@ public final class ComponentRegistry implements ComponentCollection {
 
     public void verifyAdministratorAccess() throws IOException {
         storage.saveComponent(null);
-    }
-
-    /**
-     * Finds components which depend on the supplied one. Optionally searches recursively, so it
-     * finds the dependency closure.
-     * 
-     * @param recursive create closure of dependent components.
-     * @param startFrom Component whose dependents should be returned.
-     * @return Dependent components or closure thereof, depending on parameters
-     */
-    public Set<ComponentInfo> findDependentComponents(ComponentInfo startFrom, boolean recursive) {
-        if (startFrom == null) {
-            return Collections.emptySet();
-        }
-        Deque<String> toSearch = new ArrayDeque<>();
-        toSearch.add(startFrom.getId());
-        Set<ComponentInfo> result = new HashSet<>();
-
-        while (!toSearch.isEmpty()) {
-            String id = toSearch.poll();
-            for (String cid : getComponentIDs()) {
-                ComponentInfo ci = loadSingleComponent(cid, false, false, true);
-                if (ci.getDependencies().contains(id)) {
-                    result.add(ci);
-                    if (recursive) {
-                        toSearch.add(ci.getId());
-                    }
-                }
-            }
-        }
-        return result;
-    }
-
-    public String getJavaVersion() {
-        return getGraalCapabilities().get(CommonConstants.CAP_JAVA_VERSION);
     }
 }

@@ -38,20 +38,16 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.graalvm.component.installer.Archive;
 import org.graalvm.component.installer.BundleConstants;
 import org.graalvm.component.installer.CommandInput;
-import org.graalvm.component.installer.Commands;
 import org.graalvm.component.installer.CommonConstants;
-import org.graalvm.component.installer.ComponentCatalog;
 import org.graalvm.component.installer.ComponentCollection;
 import org.graalvm.component.installer.ComponentInstaller;
 import org.graalvm.component.installer.ComponentIterable;
 import org.graalvm.component.installer.ComponentParam;
 import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.FileOperations;
 import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.UnknownVersionException;
 import org.graalvm.component.installer.Version;
@@ -59,7 +55,6 @@ import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.model.ComponentRegistry;
 import org.graalvm.component.installer.persist.DirectoryStorage;
 import org.graalvm.component.installer.persist.MetadataLoader;
-import org.graalvm.component.installer.remote.CatalogIterable;
 
 /**
  * Drives the GraalVM core upgrade process.
@@ -93,11 +88,7 @@ public class UpgradeProcess implements AutoCloseable {
 
     final void resetExistingComponents() {
         existingComponents.clear();
-        existingComponents.addAll(input.getLocalRegistry().getComponentIDs().stream().filter((id) -> {
-            ComponentInfo info = input.getLocalRegistry().findComponent(id);
-            // only auto-include the 'leaf' components
-            return info != null && input.getLocalRegistry().findDependentComponents(info, false).isEmpty();
-        }).collect(Collectors.toList()));
+        existingComponents.addAll(input.getLocalRegistry().getComponentIDs());
         existingComponents.remove(BundleConstants.GRAAL_COMPONENT_ID);
     }
 
@@ -129,7 +120,7 @@ public class UpgradeProcess implements AutoCloseable {
 
     public List<ComponentParam> allComponents() throws IOException {
         Set<String> ids = new HashSet<>();
-        ArrayList<ComponentParam> allComps = new ArrayList<>(addedComponents());
+        ArrayList<ComponentParam> allComps = new ArrayList<>();
         for (ComponentParam p : allComps) {
             ids.add(p.createMetaLoader().getComponentInfo().getId());
         }
@@ -139,6 +130,7 @@ public class UpgradeProcess implements AutoCloseable {
             }
             allComps.add(input.existingFiles().createParam(mig.getId(), mig));
         }
+        allComps.addAll(addedComponents());
         return allComps;
     }
 
@@ -286,7 +278,6 @@ public class UpgradeProcess implements AutoCloseable {
         metaLoader = ldr;
 
         GraalVMInstaller gvmInstaller = new GraalVMInstaller(feedback,
-                        input.getFileOperations(),
                         input.getLocalRegistry(), completeInfo, catalog,
                         metaLoader.getArchive());
         gvmInstaller.setCurrentInstallPath(input.getGraalHomePath());
@@ -472,25 +463,23 @@ public class UpgradeProcess implements AutoCloseable {
         }
     }
 
-    protected InstallCommand configureInstallCommand(InstallCommand instCommand) throws IOException {
+    private InstallCommand instCommand;
+
+    public void installAddedComponents() throws IOException {
+        instCommand = new InstallCommand();
+
         List<ComponentParam> params = new ArrayList<>();
         // add migrated components
         params.addAll(allComponents());
         if (params.isEmpty()) {
-            return null;
+            return;
         }
         instCommand.init(new InputDelegate(params), feedback);
         instCommand.setAllowUpgrades(true);
         instCommand.setForce(true);
-        return instCommand;
-    }
 
-    public void installAddedComponents() throws IOException {
         // install all the components
-        InstallCommand ic = configureInstallCommand(new InstallCommand());
-        if (ic != null) {
-            ic.execute();
-        }
+        instCommand.execute();
     }
 
     @Override
@@ -503,27 +492,12 @@ public class UpgradeProcess implements AutoCloseable {
         }
     }
 
-    /**
-     * The class provides a new local registry in the new installation, and a new component
-     * registry, for the target graalvm version.
-     */
     class InputDelegate implements CommandInput {
         private final List<ComponentParam> params;
         private int index;
-        private ComponentCatalog remoteRegistry;
 
         InputDelegate(List<ComponentParam> params) {
             this.params = params;
-        }
-
-        @Override
-        public FileOperations getFileOperations() {
-            return input.getFileOperations();
-        }
-
-        @Override
-        public CatalogFactory getCatalogFactory() {
-            return input.getCatalogFactory();
         }
 
         @Override
@@ -536,13 +510,7 @@ public class UpgradeProcess implements AutoCloseable {
 
                 @Override
                 public ComponentParam createParam(String cmdString, ComponentInfo info) {
-                    return new CatalogIterable.CatalogItemParam(
-                                    getRegistry().getDownloadInterceptor(),
-                                    info,
-                                    info.getName(),
-                                    cmdString,
-                                    feedback,
-                                    input.optValue(Commands.OPTION_NO_DOWNLOAD_PROGRESS) == null);
+                    return input.existingFiles().createParam(cmdString, info);
                 }
 
                 @Override
@@ -617,11 +585,8 @@ public class UpgradeProcess implements AutoCloseable {
         }
 
         @Override
-        public ComponentCatalog getRegistry() {
-            if (remoteRegistry == null) {
-                remoteRegistry = input.getCatalogFactory().createComponentCatalog(this, getLocalRegistry());
-            }
-            return remoteRegistry;
+        public ComponentCollection getRegistry() {
+            return input.getRegistry();
         }
 
         @Override

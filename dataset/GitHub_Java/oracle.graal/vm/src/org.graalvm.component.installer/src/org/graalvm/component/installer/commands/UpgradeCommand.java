@@ -106,12 +106,16 @@ public class UpgradeCommand implements InstallerCommand {
                     mt = Version.Match.Type.INSTALLABLE;
                     s = s.substring(1);
                 }
-                v = Version.fromString(s);
-                if (min.compareTo(v) > 0) {
-                    throw feedback.failure("UPGRADE_CannotDowngrade", null, v.originalString());
-                }
+                v = Version.fromUserString(s);
+                // cannot just compare user vs. graal, must match the user to the list of Graals to
+                // resolve the
+                // uncertaint parts (-x and possible suffix)
                 filter = v.match(mt);
+                if (min.compareTo(v) > 0) {
+                    throw feedback.failure("UPGRADE_CannotDowngrade", null, v.displayString());
+                }
                 input.nextParameter();
+                input.existingFiles().matchVersion(filter);
             } catch (IllegalArgumentException ex) {
                 // not a version, continue with component upgrade
             }
@@ -132,17 +136,19 @@ public class UpgradeCommand implements InstallerCommand {
             feedback.output(allowDistUpgrades ? "UPGRADE_Help" : "UPDATE_Help");
             return 0;
         }
-        ComponentInfo info = configureProcess();
-        boolean workDone;
-        
-        if (allowDistUpgrades) {
-            workDone = helper.installGraalCore(info);
-        } else {
-            workDone = false;
-        }
-        helper.installAddedComponents();
-        if (helper.addedComponents().isEmpty()) {
-            return workDone ? 0 : 1;
+        try (UpgradeProcess h = this.helper) {
+            ComponentInfo info = configureProcess();
+            boolean workDone;
+
+            if (allowDistUpgrades) {
+                workDone = h.installGraalCore(info);
+            } else {
+                workDone = false;
+            }
+            h.installAddedComponents();
+            if (h.addedComponents().isEmpty()) {
+                return workDone ? 0 : 1;
+            }
         }
         return 0;
     }
