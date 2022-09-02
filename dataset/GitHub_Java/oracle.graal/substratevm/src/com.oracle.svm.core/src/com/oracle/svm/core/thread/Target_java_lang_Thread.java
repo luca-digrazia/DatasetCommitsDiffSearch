@@ -28,6 +28,9 @@ import java.security.AccessControlContext;
 import java.util.Map;
 import java.util.Objects;
 
+import org.graalvm.nativeimage.ImageSingletons;
+
+import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
@@ -37,13 +40,12 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.jdk.JDK11OrEarlier;
 import com.oracle.svm.core.jdk.JDK11OrLater;
+import com.oracle.svm.core.jdk.JDK11OrEarlier;
 import com.oracle.svm.core.jdk.JDK14OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.jdk.StackTraceUtils;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicReference;
-import com.oracle.svm.core.monitor.MonitorSupport;
 import com.oracle.svm.core.option.XOptions;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.StackOverflowCheck;
@@ -289,10 +291,14 @@ final class Target_java_lang_Thread {
             return;
         }
 
-        Thread thread = JavaThreads.fromTarget(this);
-        JavaThreads.interrupt(thread);
-        JavaThreads.unpark(thread);
-        JavaThreads.wakeUpVMConditionWaiters(thread);
+        // Cf. os::interrupt(Thread*) from HotSpot, which unparks all of:
+        // (1) thread->_SleepEvent,
+        // (2) ((JavaThread*)thread)->parker()
+        // (3) thread->_ParkEvent
+        JavaThreads.interrupt(JavaThreads.fromTarget(this));
+        JavaThreads.unpark(JavaThreads.fromTarget(this));
+        /* Interrupt anyone waiting on a VMCondVar. */
+        JavaThreads.interruptVMCondVars();
     }
 
     @Substitute
@@ -363,7 +369,7 @@ final class Target_java_lang_Thread {
     @Substitute
     private static boolean holdsLock(Object obj) {
         Objects.requireNonNull(obj);
-        return MonitorSupport.singleton().holdsLock(obj);
+        return ImageSingletons.lookup(MonitorSupport.class).holdsLock(obj);
     }
 
     @Substitute
