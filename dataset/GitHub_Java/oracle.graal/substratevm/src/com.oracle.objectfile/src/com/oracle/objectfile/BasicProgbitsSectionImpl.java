@@ -35,6 +35,7 @@ import com.oracle.objectfile.ObjectFile.Element;
 import com.oracle.objectfile.ObjectFile.ProgbitsSectionImpl;
 import com.oracle.objectfile.ObjectFile.RelocatableSectionImpl;
 import com.oracle.objectfile.ObjectFile.RelocationKind;
+import com.oracle.objectfile.ObjectFile.RelocationRecord;
 import com.oracle.objectfile.ObjectFile.Section;
 
 /**
@@ -113,15 +114,15 @@ public class BasicProgbitsSectionImpl extends BasicElementImpl implements Progbi
     }
 
     @Override
-    public void markRelocationSite(int offset, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend) {
-        ((RelocatableSectionImpl) getElement()).markRelocationSite(offset, ByteBuffer.wrap(getContent()).order(getOwner().getByteOrder()), k, symbolName, useImplicitAddend,
+    public RelocationRecord markRelocationSite(int offset, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend) {
+        return ((RelocatableSectionImpl) getElement()).markRelocationSite(offset, ByteBuffer.wrap(getContent()).order(getOwner().getByteOrder()), k, symbolName, useImplicitAddend,
                         explicitAddend);
     }
 
     @Override
-    public final void markRelocationSite(int offset, ByteBuffer bb, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend) {
+    public final RelocationRecord markRelocationSite(int offset, ByteBuffer bb, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend) {
         assert getContent() == null || bb.array() == getContent();
-        ((RelocatableSectionImpl) getElement()).markRelocationSite(offset, bb, k, symbolName, useImplicitAddend, explicitAddend);
+        return ((RelocatableSectionImpl) getElement()).markRelocationSite(offset, bb, k, symbolName, useImplicitAddend, explicitAddend);
     }
 
     @Override

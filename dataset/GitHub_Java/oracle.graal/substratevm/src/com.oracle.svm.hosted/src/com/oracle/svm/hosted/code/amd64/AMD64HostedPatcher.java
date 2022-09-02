@@ -26,7 +26,7 @@ package com.oracle.svm.hosted.code.amd64;
 
 import java.util.function.Consumer;
 
-import org.graalvm.compiler.asm.Assembler;
+import com.oracle.objectfile.ObjectFile;
 import org.graalvm.compiler.asm.Assembler.CodeAnnotation;
 import org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.OperandDataAnnotation;
 import org.graalvm.compiler.code.CompilationResult;
@@ -35,7 +35,6 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 
-import com.oracle.objectfile.ObjectFile;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
@@ -56,12 +55,12 @@ class AMD64HostedPatcherFeature implements Feature {
     public void afterRegistration(AfterRegistrationAccess access) {
         ImageSingletons.add(PatchConsumerFactory.HostedPatchConsumerFactory.class, new PatchConsumerFactory.HostedPatchConsumerFactory() {
             @Override
-            public Consumer<Assembler.CodeAnnotation> newConsumer(CompilationResult compilationResult) {
-                return new Consumer<Assembler.CodeAnnotation>() {
+            public Consumer<CodeAnnotation> newConsumer(CompilationResult compilationResult) {
+                return new Consumer<CodeAnnotation>() {
                     @Override
-                    public void accept(Assembler.CodeAnnotation annotation) {
+                    public void accept(CodeAnnotation annotation) {
                         if (annotation instanceof OperandDataAnnotation) {
-                            compilationResult.addAnnotation(new AMD64HostedPatcher((OperandDataAnnotation) annotation));
+                            compilationResult.addAnnotation(new AMD64HostedPatcher(annotation.instructionPosition, (OperandDataAnnotation) annotation));
                         }
                     }
                 };
@@ -73,8 +72,8 @@ class AMD64HostedPatcherFeature implements Feature {
 public class AMD64HostedPatcher extends CompilationResult.CodeAnnotation implements HostedPatcher {
     private final OperandDataAnnotation annotation;
 
-    public AMD64HostedPatcher(OperandDataAnnotation annotation) {
-        super(annotation.instructionPosition);
+    public AMD64HostedPatcher(int instructionStartPosition, OperandDataAnnotation annotation) {
+        super(instructionStartPosition);
         this.annotation = annotation;
     }
 
