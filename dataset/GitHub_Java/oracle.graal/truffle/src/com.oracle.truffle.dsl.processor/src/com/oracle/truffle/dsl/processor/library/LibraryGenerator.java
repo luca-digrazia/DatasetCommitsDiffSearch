@@ -81,6 +81,7 @@ import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeParameterElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeVariableElement;
+import javax.lang.model.util.Elements;
 
 public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
 
@@ -163,8 +164,12 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
 
         boolean elseIf = false;
         int index = 0;
+        boolean usesDeprecatedReceiver = false;
+        Elements elements = context1.getEnvironment().getElementUtils();
         for (LibraryDefaultExportData defaultExport : model.getDefaultExports()) {
             TypeMirror defaultProviderReceiverType = defaultExport.getReceiverType();
+            TypeElement defaultProviderReceiverElement = ElementUtils.fromTypeMirror(defaultProviderReceiverType);
+            usesDeprecatedReceiver |= defaultProviderReceiverElement != null && elements.isDeprecated(defaultProviderReceiverElement);
             int ifCount = 0;
             if (ElementUtils.typeEquals(defaultProviderReceiverType, context.getType(Object.class))) {
                 if (elseIf) {
@@ -192,6 +197,9 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
             }
             builder.end(ifCount);
             index++;
+        }
+        if (usesDeprecatedReceiver) {
+            GeneratorUtils.mergeSupressWarnings(getDefault, "deprecation");
         }
         genClass.add(getDefault);
 
@@ -465,22 +473,16 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
                 builder.returnTrue();
             } else {
                 GeneratorUtils.addBoundaryOrTransferToInterpreter(execute, builder);
-                boolean pushEncapsulating = model.isPushEncapsulatingNode();
-
-                if (pushEncapsulating) {
-                    GeneratorUtils.pushEncapsulatingNode(builder, "getParent()");
-                    builder.startTryBlock();
-                }
+                GeneratorUtils.pushEncapsulatingNode(builder, "getParent()");
+                builder.startTryBlock();
                 builder.startReturn().startCall("INSTANCE.getUncached(receiver_)", execute.getSimpleName().toString());
                 for (VariableElement var : execute.getParameters()) {
                     builder.string(var.getSimpleName().toString());
                 }
                 builder.end().end();
-                if (pushEncapsulating) {
-                    builder.end().startFinallyBlock();
-                    GeneratorUtils.popEncapsulatingNode(builder);
-                    builder.end();
-                }
+                builder.end().startFinallyBlock();
+                GeneratorUtils.popEncapsulatingNode(builder);
+                builder.end();
                 ExportsGenerator.injectCachedAssertions(model, execute);
             }
         }
@@ -672,11 +674,10 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
         }
 
         ExportsGenerator exportGenerator = new ExportsGenerator(libraryConstants);
-        Map<String, ExportMessageData> messages = defaultExportsLibrary.getExportedMessages();
-        CodeTypeElement uncachedClass = exportGenerator.createUncached(defaultExportsLibrary, messages);
-        CodeTypeElement cacheClass = exportGenerator.createCached(defaultExportsLibrary, messages);
+        CodeTypeElement uncachedClass = exportGenerator.createUncached(defaultExportsLibrary);
+        CodeTypeElement cacheClass = exportGenerator.createCached(defaultExportsLibrary);
 
-        CodeTypeElement resolvedExports = exportGenerator.createResolvedExports(defaultExportsLibrary, messages, "Default", cacheClass, uncachedClass);
+        CodeTypeElement resolvedExports = exportGenerator.createResolvedExports(defaultExportsLibrary, "Default", cacheClass, uncachedClass);
         resolvedExports.add(cacheClass);
         resolvedExports.add(uncachedClass);
 

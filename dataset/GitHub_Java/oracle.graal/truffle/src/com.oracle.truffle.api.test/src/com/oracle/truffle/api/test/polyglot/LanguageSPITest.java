@@ -288,7 +288,7 @@ public class LanguageSPITest {
     static class Interrupted extends AbstractTruffleException {
 
         @ExportMessage
-        ExceptionType getExceptionType() {
+        public ExceptionType getExceptionType() {
             return ExceptionType.CANCEL;
         }
     }
@@ -309,17 +309,17 @@ public class LanguageSPITest {
 
         @ExportMessage
         @SuppressWarnings("static-method")
-        ExceptionType getExceptionType() {
+        public ExceptionType getExceptionType() {
             return ExceptionType.SYNTAX_ERROR;
         }
 
         @ExportMessage
-        boolean hasSourceLocation() {
+        public boolean hasSourceLocation() {
             return source != null;
         }
 
         @ExportMessage(name = "getSourceLocation")
-        SourceSection getSourceSection() throws UnsupportedMessageException {
+        public SourceSection sourceLocation() throws UnsupportedMessageException {
             if (source == null) {
                 throw UnsupportedMessageException.create();
             }

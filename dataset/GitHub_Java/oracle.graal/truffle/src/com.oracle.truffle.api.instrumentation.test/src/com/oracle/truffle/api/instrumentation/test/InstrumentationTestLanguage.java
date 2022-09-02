@@ -1330,41 +1330,62 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
             private static final long serialVersionUID = 2709459650157465163L;
 
             private final String type;
+            private final ThrowNode throwNode;
 
             TestLanguageException(String type, String message, ThrowNode throwNode) {
-                super(message, throwNode);
+                super(message);
                 this.type = type;
+                this.throwNode = throwNode;
+            }
+
+            @Override
+            public Node getLocation() {
+                return throwNode;
             }
 
             @ExportMessage
-            boolean hasLanguage() {
+            public boolean hasLanguage() {
                 return true;
             }
 
             @ExportMessage
-            Class<? extends TruffleLanguage<?>> getLanguage() {
+            public Class<? extends TruffleLanguage<?>> getLanguage() {
                 return InstrumentationTestLanguage.class;
             }
 
             @ExportMessage
-            ExceptionType getExceptionType() {
+            public ExceptionType getExceptionType() {
                 return ExceptionType.LANGUAGE_ERROR;
             }
 
             @ExportMessage
+            public boolean hasSourceLocation() {
+                return throwNode != null && throwNode.getEncapsulatingSourceSection() != null;
+            }
+
+            @ExportMessage(name = "getSourceLocation")
+            public SourceSection sourceLocation() throws UnsupportedMessageException {
+                SourceSection res;
+                if (throwNode == null || ((res = throwNode.getEncapsulatingSourceSection()) == null)) {
+                    throw UnsupportedMessageException.create();
+                }
+                return res;
+            }
+
+            @ExportMessage
             @SuppressWarnings("unused")
-            Object toDisplayString(boolean allowSideEffects) {
+            public Object toDisplayString(boolean allowSideEffects) {
                 return asString();
             }
 
             @ExportMessage
-            boolean isString() {
+            public boolean isString() {
                 return true;
             }
 
             @ExportMessage
             @TruffleBoundary
-            String asString() {
+            public String asString() {
                 return type + ": " + getMessage();
             }
         }

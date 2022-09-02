@@ -1915,11 +1915,18 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
     }
 
     @SuppressWarnings("serial")
-    @ExportLibrary(InteropLibrary.class)
     static class TestException extends AbstractTruffleException {
 
+        final Node location;
+
         TestException(Node location) {
-            super("test", location);
+            super("test");
+            this.location = location;
+        }
+
+        @Override
+        public Node getLocation() {
+            return location;
         }
     }
 
@@ -2477,13 +2484,13 @@ public class InstrumentationTest extends AbstractInstrumentationTest {
 
         @ExportMessage
         @SuppressWarnings("static-method")
-        boolean isExceptionUnwind() {
+        public boolean isExceptionUnwind() {
             return true;
         }
 
         @ExportMessage
         @SuppressWarnings("static-method")
-        ExceptionType getExceptionType() {
+        public ExceptionType getExceptionType() {
             return ExceptionType.CANCEL;
         }
     }
