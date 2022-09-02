@@ -36,25 +36,20 @@ import java.util.stream.Collectors;
 
 import com.oracle.svm.configure.json.JsonPrintable;
 import com.oracle.svm.configure.json.JsonWriter;
-import com.oracle.svm.core.SubstrateUtil;
-import com.oracle.svm.core.configure.SerializationConfigurationParser;
 
 public class SerializationConfiguration implements JsonPrintable {
 
-    private static final String KEY_SEPARATOR = "|";
-
     private final ConcurrentHashMap<String, Set<String>> serializations = new ConcurrentHashMap<>();
 
-    public void addAll(String serializationTargetClass, String customTargetConstructorClass, Collection<String> checksums) {
-        String serializationKey = serializationTargetClass + (customTargetConstructorClass != null ? KEY_SEPARATOR + customTargetConstructorClass : "");
-        serializations.computeIfAbsent(serializationKey, key -> new LinkedHashSet<>()).addAll(checksums);
+    public void addAll(String serializationTargetClass, Collection<String> checksums) {
+        serializations.computeIfAbsent(serializationTargetClass, key -> new LinkedHashSet<>()).addAll(checksums);
     }
 
     public void add(String serializationTargetClass, String checksum) {
         if (checksum == null) {
-            addAll(serializationTargetClass, null, Collections.emptySet());
+            addAll(serializationTargetClass, Collections.emptySet());
         } else {
-            addAll(serializationTargetClass, null, Collections.singleton(checksum));
+            addAll(serializationTargetClass, Collections.singleton(checksum));
         }
     }
 
@@ -70,17 +65,12 @@ public class SerializationConfiguration implements JsonPrintable {
         for (Map.Entry<String, Set<String>> entry : serializations.entrySet()) {
             writer.append(prefix);
             writer.newline().append('{').newline();
-            String[] serializationKeyValues = SubstrateUtil.split(entry.getKey(), KEY_SEPARATOR, 2);
-            String className = serializationKeyValues[0];
-            writer.quote(SerializationConfigurationParser.NAME_KEY).append(":").quote(className);
-            if (serializationKeyValues.length > 1) {
-                writer.append(",").newline();
-                writer.quote(SerializationConfigurationParser.CUSTOM_TARGET_CONSTRUCTOR_CLASS_KEY).append(":").quote(serializationKeyValues[1]);
-            }
+            String className = entry.getKey();
+            writer.quote("name").append(":").quote(className);
             Set<String> checksums = entry.getValue();
             if (!checksums.isEmpty()) {
                 writer.append(",").newline();
-                writer.quote(SerializationConfigurationParser.CHECKSUM_KEY).append(':');
+                writer.quote("checksum").append(':');
                 if (checksums.size() == 1) {
                     writer.quote(checksums.iterator().next());
                 } else {
