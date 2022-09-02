@@ -34,7 +34,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -61,10 +60,6 @@ public class ClassPredefinitionFeature implements Feature {
     public void afterRegistration(AfterRegistrationAccess arg) {
         ImageSingletons.add(PredefinedClassesSupport.class, new PredefinedClassesSupport());
 
-        /*
-         * NOTE: loading the class predefinition configuration should be done as early as possible
-         * so that their classes are already known for other configuration (reflection, proxies).
-         */
         AfterRegistrationAccessImpl access = (AfterRegistrationAccessImpl) arg;
         PredefinedClassesRegistry registry = new PredefinedClassesRegistryImpl();
         ImageSingletons.add(PredefinedClassesRegistry.class, registry);
@@ -76,8 +71,7 @@ public class ClassPredefinitionFeature implements Feature {
 
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
-        List<String> skipped = new ArrayList<>();
-        List<String> errors = new ArrayList<>();
+        List<String> messages = new ArrayList<>();
         nameToRecord.forEach((name, record) -> {
             if (record.definedClass != null) {
                 /*
@@ -98,21 +92,11 @@ public class ClassPredefinitionFeature implements Feature {
                     msg.append(first ? "" : ", ").append(superRecord.name);
                     first = false;
                 }
-                errors.add(msg.toString());
-            } else if (record.data == null) {
-                skipped.add(record.name);
+                messages.add(msg.toString());
             }
         });
-        if (!skipped.isEmpty()) {
-            int limit = 10;
-            String names = skipped.stream().limit(limit).collect(Collectors.joining(", "));
-            if (skipped.size() > limit) {
-                names += ", ...";
-            }
-            System.out.printf("Skipped %d predefined class(es) because the classpath already contains a class with the same name: %s%n", skipped.size(), names);
-        }
-        if (!errors.isEmpty()) {
-            throw UserError.abort(errors);
+        if (!messages.isEmpty()) {
+            throw UserError.abort(messages);
         }
     }
 
@@ -144,7 +128,7 @@ public class ClassPredefinitionFeature implements Feature {
                 PredefinedClass record = nameToRecord.computeIfAbsent(className, PredefinedClass::new);
                 if (record.canonicalHash != null) {
                     if (!canonicalHash.equals(record.canonicalHash)) {
-                        throw UserError.abort("More than one predefined class with the same name provided: " + className);
+                        throw UserError.abort("More than one pre-defined class with the same name provided: " + className);
                     }
                     if (record.definedClass != null) {
                         PredefinedClassesSupport.registerClass(hash, record.definedClass);
@@ -188,24 +172,25 @@ public class ClassPredefinitionFeature implements Feature {
         }
 
         private void defineClass(PredefinedClass record) {
-            if (NativeImageSystemClassLoader.singleton().forNameOrNull(record.name, false) == null) {
-                record.definedClass = NativeImageSystemClassLoader.singleton().predefineClass(record.name, record.data, 0, record.data.length);
-
-                if (record.aliasHashes != null) {
-                    /*
-                     * Note that we don't register the class with the canonical hash because we only
-                     * use it to unify different representations of the class (to some extent) and
-                     * it is synthetic or equal to another hash anyway.
-                     */
-                    for (String hash : record.aliasHashes) {
-                        PredefinedClassesSupport.registerClass(hash, record.definedClass);
-                    }
-                }
+            if (NativeImageSystemClassLoader.singleton().forNameOrNull(record.name, false) != null) {
+                System.out.println("Warning: skipping predefined class because the classpath already provides a class with name: " + record.name);
+                return;
             }
-            // else: will be reported as skipped
 
+            record.definedClass = NativeImageSystemClassLoader.singleton().predefineClass(record.name, record.data, 0, record.data.length);
             record.data = null;
-            record.aliasHashes = null;
+
+            if (record.aliasHashes != null) {
+                /*
+                 * Note that we don't register the class with the canonical hash because we only use
+                 * it to unify different representations of the class (to some extent) and it is
+                 * synthetic or equal to another hash anyway.
+                 */
+                for (String hash : record.aliasHashes) {
+                    PredefinedClassesSupport.registerClass(hash, record.definedClass);
+                }
+                record.aliasHashes = null;
+            }
 
             if (record.pendingSubtypes != null) {
                 for (PredefinedClass subtype : record.pendingSubtypes) {

@@ -39,9 +39,6 @@ import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.ImageSingletons;
-
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
@@ -79,7 +76,7 @@ class ResourcesHelper {
                 return null;
             }
             URLConnection urlConnection = url.openConnection();
-            Object resource = ImageSingletons.lookup(JDKVersionSpecificResourceBuilder.class).buildResource(resourceName, url, urlConnection);
+            Object resource = JDKVersionSpecificResourceBuilder.buildResource(resourceName, url, urlConnection);
             VMError.guarantee(resource != null);
             return (T) resource;
         } catch (IOException e) {
@@ -203,13 +200,7 @@ public final class Target_java_lang_ClassLoader {
 
     @Substitute
     private Class<?> loadClass(String name) throws ClassNotFoundException {
-        boolean nameValid;
-        if (JavaVersionUtil.JAVA_SPEC < 17) {
-            nameValid = checkName(name);
-        } else {
-            nameValid = checkNameJDK17OrLater(name);
-        }
-        if (!nameValid) {
+        if (!checkName(name)) {
             /*
              * Names that contain `/` or start with '[' are invalid. Calling `ClassLoader.loadClass`
              * to create a `Class` object of an array class is invalid and a
