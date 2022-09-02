@@ -70,7 +70,6 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue.CustomFieldValueComputer
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.hub.ClassForNameSupport;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
@@ -747,17 +746,6 @@ final class Target_jdk_internal_loader_BootLoader {
         } else {
             return null;
         }
-    }
-
-    @Substitute
-    private static Class<?> loadClassOrNull(String name) {
-        return ClassForNameSupport.forNameOrNull(name, false);
-    }
-
-    @SuppressWarnings("unused")
-    @Substitute
-    private static Class<?> loadClass(Target_java_lang_Module module, String name) {
-        return ClassForNameSupport.forNameOrNull(name, false);
     }
 }
 
