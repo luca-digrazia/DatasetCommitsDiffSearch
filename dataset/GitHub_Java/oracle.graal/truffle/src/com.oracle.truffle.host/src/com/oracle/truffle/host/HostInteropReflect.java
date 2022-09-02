@@ -43,7 +43,6 @@ package com.oracle.truffle.host;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
-import java.lang.reflect.Type;
 
 import org.graalvm.collections.EconomicSet;
 
@@ -80,11 +79,11 @@ final class HostInteropReflect {
         return null;
     }
 
-    static boolean isSignature(String name) {
+    private static boolean isSignature(String name) {
         return name.length() > 0 && name.charAt(name.length() - 1) == ')' && name.indexOf('(') != -1;
     }
 
-    static boolean isJNIName(String name) {
+    private static boolean isJNIName(String name) {
         return name.contains("__");
     }
 
@@ -107,7 +106,7 @@ final class HostInteropReflect {
         return classDesc.lookupField(name, onlyStatic);
     }
 
-    static Method functionalInterfaceMethod(Class<?> functionalInterface) {
+    private static Method functionalInterfaceMethod(Class<?> functionalInterface) {
         if (!functionalInterface.isInterface()) {
             return null;
         }
@@ -235,7 +234,7 @@ final class HostInteropReflect {
 
     @CompilerDirectives.TruffleBoundary
     private static Object asTruffleObjectProxy(Object obj, HostContext context) {
-        Object unboxed = context.language.access.toGuestValue(context.internalContext, null, obj);
+        Object unboxed = context.language.access.toGuestValue(context.internalContext, obj);
         if (unboxed != null) {
             return unboxed;
         }
@@ -245,12 +244,12 @@ final class HostInteropReflect {
     @TruffleBoundary
     static Object newAdapterInstance(HostContext hostContext, Class<?> clazz, Object obj) throws IllegalArgumentException {
         if (TruffleOptions.AOT) {
-            throw HostEngineException.unsupported(hostContext.language, "Unsupported target type.");
+            throw HostEngineException.unsupported(hostContext.access, "Unsupported target type.");
         }
         HostClassDesc classDesc = HostClassDesc.forClass(hostContext, clazz);
         AdapterResult adapter = classDesc.getAdapter(hostContext);
         if (!adapter.isAutoConvertible()) {
-            throw HostEngineException.illegalArgument(hostContext.language, "Cannot convert to " + clazz);
+            throw HostEngineException.illegalArgument(hostContext.access, "Cannot convert to " + clazz);
         }
         HostMethodDesc.SingleMethod adapterConstructor = adapter.getValueConstructor();
         Object[] arguments = new Object[]{obj};
@@ -263,7 +262,7 @@ final class HostInteropReflect {
         }
     }
 
-    static boolean isStaticTypeOrInterface(Class<?> t) {
+    private static boolean isStaticTypeOrInterface(Class<?> t) {
         // anonymous classes are private, they should be eliminated elsewhere
         return Modifier.isPublic(t.getModifiers()) && (t.isInterface() || t.isEnum() || Modifier.isStatic(t.getModifiers()));
     }
@@ -306,20 +305,6 @@ final class HostInteropReflect {
     @SuppressWarnings({"unchecked"})
     static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
         throw (E) ex;
-    }
-
-    public static Class<?> getMethodReturnType(Method method) {
-        if (method == null || method.getReturnType() == void.class) {
-            return Object.class;
-        }
-        return method.getReturnType();
-    }
-
-    public static Type getMethodGenericReturnType(Method method) {
-        if (method == null || method.getReturnType() == void.class) {
-            return Object.class;
-        }
-        return method.getGenericReturnType();
     }
 
     static String toNameAndSignature(Method m) {

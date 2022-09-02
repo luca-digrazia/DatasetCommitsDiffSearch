@@ -53,6 +53,7 @@ import java.util.function.Predicate;
 
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractHostAccess;
 import org.graalvm.polyglot.proxy.Proxy;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -77,7 +78,7 @@ import com.oracle.truffle.host.HostLanguage.HostLanguageException;
 
 final class HostContext {
 
-    @CompilationFinal volatile Object internalContext;
+    @CompilationFinal Object internalContext;
     final Map<String, Class<?>> classCache = new HashMap<>();
     final Object topScope = new TopScopeObject(this);
     volatile HostClassLoader classloader;
@@ -86,6 +87,8 @@ final class HostContext {
     private Predicate<String> classFilter;
     private boolean hostClassLoadingAllowed;
     private boolean hostLookupAllowed;
+    final TruffleLanguage.Env env;
+    final AbstractHostAccess access;
 
     @SuppressWarnings("serial") final HostException stackoverflowError = new HostException(new StackOverflowError() {
         @SuppressWarnings("sync-override")
@@ -102,25 +105,25 @@ final class HostContext {
         }
     };
 
-    HostContext(HostLanguage hostLanguage) {
+    HostContext(HostLanguage hostLanguage, TruffleLanguage.Env env) {
         this.language = hostLanguage;
+        this.access = hostLanguage.access;
+        this.env = env;
     }
 
+    /*
+     * This method is invoked once during normal creation and then again after context
+     * preinitialization.
+     */
     @SuppressWarnings("hiding")
     void initialize(Object internalContext, ClassLoader cl, Predicate<String> clFilter, boolean hostCLAllowed, boolean hostLookupAllowed) {
+        if (classloader != null && this.classFilter != null || this.hostClassLoadingAllowed || this.hostLookupAllowed) {
+            throw new AssertionError("must not be used during context preinitialization");
+        }
         this.internalContext = internalContext;
-        assert classloader == null : "must not be used during context preinitialization";
-        // if assertions are not enabled. dispose the previous class loader to be on the safe side
-        disposeClassLoader();
         this.contextClassLoader = cl;
-
-        assert this.classFilter == null : "must not be used during context preinitialization";
         this.classFilter = clFilter;
-
-        assert !this.hostClassLoadingAllowed : "must not be used during context preinitialization";
         this.hostClassLoadingAllowed = hostCLAllowed;
-
-        assert !this.hostLookupAllowed : "must not be used during context preinitialization";
         this.hostLookupAllowed = hostLookupAllowed;
     }
 
@@ -258,8 +261,8 @@ final class HostContext {
         return HostObject.forClass(receiver, this);
     }
 
-    Object toGuestValue(Node parentNode, Object hostValue) {
-        Object result = language.access.toGuestValue(internalContext, parentNode, hostValue);
+    Object toGuestValue(Object hostValue) {
+        Object result = language.access.toGuestValue(internalContext, hostValue);
         if (result != null) {
             return result;
         } else if (isGuestPrimitive(hostValue)) {
@@ -294,18 +297,18 @@ final class HostContext {
 
         @Specialization(guards = "receiver == null")
         Object doNull(HostContext context, @SuppressWarnings("unused") Object receiver) {
-            return context.toGuestValue(this, receiver);
+            return context.toGuestValue(receiver);
         }
 
         @Specialization(guards = {"receiver != null", "receiver.getClass() == cachedReceiver"}, limit = "3")
         Object doCached(HostContext context, Object receiver, @Cached("receiver.getClass()") Class<?> cachedReceiver) {
-            return context.toGuestValue(this, cachedReceiver.cast(receiver));
+            return context.toGuestValue(cachedReceiver.cast(receiver));
         }
 
         @Specialization(replaces = "doCached")
         @TruffleBoundary
         Object doUncached(HostContext context, Object receiver) {
-            return context.toGuestValue(this, receiver);
+            return context.toGuestValue(receiver);
         }
     }
 

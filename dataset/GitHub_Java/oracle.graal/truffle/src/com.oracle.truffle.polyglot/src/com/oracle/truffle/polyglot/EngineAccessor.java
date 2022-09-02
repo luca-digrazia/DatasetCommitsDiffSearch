@@ -729,7 +729,20 @@ final class EngineAccessor extends Accessor {
         public Object enterInternalContext(Node location, Object polyglotLanguageContext) {
             PolyglotContextImpl context = ((PolyglotContextImpl) polyglotLanguageContext);
             PolyglotEngineImpl engine = resolveEngine(location, context);
-            return engine.enter(context);
+            Node useLocation = location;
+            if (useLocation == null) {
+                useLocation = engine.getUncachedLocation();
+            }
+            if (CompilerDirectives.isPartialEvaluationConstant(engine)) {
+                return engine.enter(context, true, useLocation, true, false);
+            } else {
+                return enterInternalContextBoundary(context, useLocation, engine);
+            }
+        }
+
+        @TruffleBoundary
+        private static Object enterInternalContextBoundary(PolyglotContextImpl context, Node location, PolyglotEngineImpl engine) {
+            return engine.enter(context, true, location, true, false);
         }
 
         @Override
@@ -738,7 +751,7 @@ final class EngineAccessor extends Accessor {
             PolyglotContextImpl context = ((PolyglotContextImpl) impl);
             PolyglotEngineImpl engine = resolveEngine(node, context);
             if (CompilerDirectives.isPartialEvaluationConstant(engine)) {
-                engine.leave((PolyglotContextImpl) prev, context);
+                engine.leave((PolyglotContextImpl) prev, context, true);
             } else {
                 leaveInternalContextBoundary(prev, context, engine);
             }
@@ -746,7 +759,7 @@ final class EngineAccessor extends Accessor {
 
         @TruffleBoundary
         private static void leaveInternalContextBoundary(Object prev, PolyglotContextImpl context, PolyglotEngineImpl engine) {
-            engine.leave((PolyglotContextImpl) prev, context);
+            engine.leave((PolyglotContextImpl) prev, context, true);
         }
 
         private static PolyglotEngineImpl resolveEngine(Node node, PolyglotContextImpl context) {

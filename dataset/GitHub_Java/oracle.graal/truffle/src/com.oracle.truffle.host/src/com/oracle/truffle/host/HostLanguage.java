@@ -65,7 +65,7 @@ import com.oracle.truffle.api.nodes.RootNode;
  */
 final class HostLanguage extends TruffleLanguage<HostContext> {
 
-    @CompilationFinal private GuestToHostCodeCache hostToGuestCodeCache;
+    @CompilationFinal private GuestToHostCodeCache guestToHostCache;
     @CompilationFinal HostClassCache hostClassCache; // effectively final
     final AbstractHostAccess access;
     final AbstractPolyglotImpl polyglot;
@@ -87,7 +87,7 @@ final class HostLanguage extends TruffleLanguage<HostContext> {
     @Override
     protected HostContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
         env.registerService(service);
-        return new HostContext(this);
+        return new HostContext(this, env);
     }
 
     @Override
@@ -101,10 +101,10 @@ final class HostLanguage extends TruffleLanguage<HostContext> {
     }
 
     GuestToHostCodeCache getGuestToHostCache() {
-        GuestToHostCodeCache cache = this.hostToGuestCodeCache;
+        GuestToHostCodeCache cache = this.guestToHostCache;
         if (cache == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            hostToGuestCodeCache = cache = new GuestToHostCodeCache(this);
+            guestToHostCache = cache = new GuestToHostCodeCache(this);
         }
         return cache;
     }
@@ -115,7 +115,7 @@ final class HostLanguage extends TruffleLanguage<HostContext> {
             return;
         }
 
-        HostClassCache cache = HostClassCache.findOrInitialize(this, policy, cl);
+        HostClassCache cache = HostClassCache.findOrInitialize(access, api, policy, cl);
         if (this.hostClassCache != null) {
             if (this.hostClassCache.hostAccess.equals(cache.hostAccess)) {
                 /*

@@ -461,7 +461,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         assert isInitialized();
         assert Thread.currentThread() == thread;
         synchronized (context) {
-            PolyglotContextImpl prev = context.engine.enter(context);
+            PolyglotContextImpl prev = context.engine.enter(context, true, language.engine.getUncachedLocation(), true, false);
             lazy.activePolyglotThreads.add(thread);
             return prev;
         }
