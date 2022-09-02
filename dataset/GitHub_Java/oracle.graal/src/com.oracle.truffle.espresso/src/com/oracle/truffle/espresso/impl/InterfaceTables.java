@@ -341,11 +341,11 @@ final class InterfaceTables {
             assert index == m.getVTableIndex();
             return new Entry(Location.SUPERVTABLE, index);
         }
-        index = getDeclaredMethodIndex(thisKlass.getDeclaredMethods(), mname, sig);
+        index = getDeclaredMethodIndex(thisKlass.getDeclaredMethods(), im, mname, sig);
         if (index != -1) {
             return new Entry(Location.DECLARED, index);
         }
-        index = lookupMirandas(mname, sig);
+        index = lookupMirandas(im, mname, sig);
         if (index != -1) {
             return new Entry(Location.MIRANDAS, index);
         }
@@ -356,20 +356,20 @@ final class InterfaceTables {
 
     }
 
-    private static int getDeclaredMethodIndex(Method[] declaredMethod, Symbol<Name> mname, Symbol<Signature> sig) {
+    private static int getDeclaredMethodIndex(Method[] declaredMethod, Method interfMethod, Symbol<Name> mname, Symbol<Signature> sig) {
         for (int i = 0; i < declaredMethod.length; i++) {
             Method m = declaredMethod[i];
-            if (!m.isStatic() && mname == m.getName() && sig == m.getRawSignature()) {
+            if (m.canOverride(interfMethod) && mname == m.getName() && sig == m.getRawSignature()) {
                 return i;
             }
         }
         return -1;
     }
 
-    private int lookupMirandas(Symbol<Name> mname, Symbol<Signature> sig) {
+    private int lookupMirandas(Method interfMethod, Symbol<Name> mname, Symbol<Signature> sig) {
         int pos = 0;
         for (Method m : mirandas) {
-            if (!m.isStatic() && m.getName() == mname && sig == m.getRawSignature()) {
+            if (m.canOverride(interfMethod) && m.getName() == mname && sig == m.getRawSignature()) {
                 return pos;
             }
             pos++;
@@ -379,22 +379,7 @@ final class InterfaceTables {
 
     // helper checks
 
-    /**
-     * Returns the maximally specific method between the two given methods. If they are both
-     * maximally-specific, returns a proxy of the second, to which a poison pill has been set.
-     */
-    public static Method resolveMaximallySpecific(Method m1, Method m2) {
-        boolean b1 = m1.isAbstract();
-        boolean b2 = m2.isAbstract();
-        if (b1 && b2) {
-            return m1;
-        }
-        if (b1) {
-            return m2;
-        }
-        if (b2) {
-            return m1;
-        }
+    private static Method resolveMaximallySpecific(Method m1, Method m2) {
         Klass k1 = m1.getDeclaringKlass();
         Klass k2 = m2.getDeclaringKlass();
         if (k1.isAssignableFrom(k2)) {
@@ -407,6 +392,17 @@ final class InterfaceTables {
             // it). (5.4.3.3.)
             //
             // But if you try to *use* them, specs dictate to fail. (6.5.invoke{virtual,interface})
+            boolean b1 = m1.isAbstract();
+            boolean b2 = m2.isAbstract();
+            if (b1 && b2) {
+                return m1;
+            }
+            if (b1) {
+                return m2;
+            }
+            if (b2) {
+                return m1;
+            }
             Method m = new Method(m2);
             m.setPoisonPill();
             return m;
