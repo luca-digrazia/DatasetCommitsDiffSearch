@@ -79,6 +79,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     private static final String NODE_REWRITING_ASSUMPTION_NAME = "nodeRewritingAssumption";
     static final String CALL_BOUNDARY_METHOD_NAME = "callProxy";
+    static final String CALL_INLINED_METHOD_NAME = "call";
 
     /** The AST to be executed when this call target is called. */
     private final RootNode rootNode;
@@ -143,14 +144,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         this.uninitializedNodeCount = !(rootNode instanceof OSRRootNode) ? tvmci.adoptChildrenAndCount(this.rootNode) : -1;
         this.knownCallNodes = engineData.options.isLegacySplitting() ? null : new ArrayList<>(1);
         tvmci.setCallTarget(rootNode, this);
-    }
-
-    /**
-     * TODO
-     * @return
-     */
-    public static boolean inInlinedCode() {
-        return false;
     }
 
     public Assumption getNodeRewritingAssumption() {

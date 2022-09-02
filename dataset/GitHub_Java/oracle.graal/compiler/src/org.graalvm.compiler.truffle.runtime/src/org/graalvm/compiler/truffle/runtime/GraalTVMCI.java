@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -136,18 +136,14 @@ final class GraalTVMCI extends TVMCI {
         return getOrCreateRuntimeData(rootNode, EngineData.ENGINE_DATA_SUPPLIER);
     }
 
-    static void resetEngineData() {
-        TVMCI.resetFallbackEngineData();
-    }
-
     @Override
     protected void reportPolymorphicSpecialize(Node source) {
         final RootNode rootNode = source.getRootNode();
         final OptimizedCallTarget callTarget = rootNode == null ? null : (OptimizedCallTarget) rootNode.getCallTarget();
-        if (callTarget == null) {
+        if (callTarget == null || callTarget.engineData.options.isLegacySplitting()) {
             return;
         }
-        TruffleSplittingStrategy.newPolymorphicSpecialize(source, callTarget.engine);
+        TruffleSplittingStrategy.newPolymorphicSpecialize(source, callTarget.engineData);
         callTarget.polymorphicSpecialize(source);
     }
 
