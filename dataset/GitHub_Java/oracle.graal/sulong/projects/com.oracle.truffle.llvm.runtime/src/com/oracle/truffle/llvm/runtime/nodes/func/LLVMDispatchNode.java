@@ -36,7 +36,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -178,7 +177,6 @@ public abstract class LLVMDispatchNode extends LLVMNode {
 
     @Specialization(limit = "INLINE_CACHE_SIZE", guards = {"descriptor == cachedDescriptor", "cachedFunctionCode.isNativeFunctionSlowPath()",
                     "haveNativeCtxExt()"}, assumptions = "singleContextAssumption()")
-    @GenerateAOT.Exclude
     protected Object doCachedNativeFunction(@SuppressWarnings("unused") LLVMFunctionDescriptor descriptor,
                     Object[] arguments,
                     @Cached("descriptor") LLVMFunctionDescriptor cachedDescriptor,
@@ -198,7 +196,6 @@ public abstract class LLVMDispatchNode extends LLVMNode {
 
     @Specialization(replaces = "doCachedNativeFunction", guards = {"descriptor.getFunctionCode() == cachedFunctionCode",
                     "cachedFunctionCode.isNativeFunctionSlowPath()"}, assumptions = "singleContextAssumption()")
-    @GenerateAOT.Exclude
     protected Object doCachedNativeCode(@SuppressWarnings("unused") LLVMFunctionDescriptor descriptor,
                     Object[] arguments,
                     @Cached("descriptor.getFunctionCode()") @SuppressWarnings("unused") LLVMFunctionCode cachedFunctionCode,
@@ -226,7 +223,6 @@ public abstract class LLVMDispatchNode extends LLVMNode {
     }
 
     @Specialization(replaces = "doCachedNativeCode", guards = {"descriptor.getFunctionCode().isNativeFunction(resolve)", "haveNativeCtxExt()"})
-    @GenerateAOT.Exclude
     protected Object doNative(LLVMFunctionDescriptor descriptor, Object[] arguments,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
                     @Cached("createFromNativeNode()") LLVMNativeConvertNode fromNative,
@@ -265,7 +261,6 @@ public abstract class LLVMDispatchNode extends LLVMNode {
     }
 
     @Specialization(guards = {"foreigns.isForeign(receiver)"})
-    @GenerateAOT.Exclude
     protected Object doForeign(Object receiver, Object[] arguments,
                     @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns,
                     @CachedLibrary(limit = "3") NativeTypeLibrary natives,
@@ -308,7 +303,6 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         abstract Object execute(Object function, Object interopType, Object[] arguments);
 
         @Specialization(guards = "functionType == cachedType", limit = "5")
-        @GenerateAOT.Exclude
         protected Object doCachedType(Object function, @SuppressWarnings("unused") LLVMInteropType.Function functionType, Object[] arguments,
                         @Cached("functionType") LLVMInteropType.Function cachedType,
                         @CachedLibrary("function") InteropLibrary crossLanguageCall,
@@ -318,7 +312,6 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         }
 
         @Specialization(replaces = "doCachedType", limit = "0")
-        @GenerateAOT.Exclude
         protected Object doGeneric(Object function, LLVMInteropType.Function functionType, Object[] arguments,
                         @CachedLibrary("function") InteropLibrary crossLanguageCall,
                         @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
@@ -348,7 +341,6 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         }
 
         @Specialization(guards = "isNotFunctionType(functionType)", limit = "5")
-        @GenerateAOT.Exclude
         protected Object doUnknownType(Object function, @SuppressWarnings("unused") Object functionType, Object[] arguments,
                         @CachedLibrary("function") InteropLibrary crossLanguageCall,
                         @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
