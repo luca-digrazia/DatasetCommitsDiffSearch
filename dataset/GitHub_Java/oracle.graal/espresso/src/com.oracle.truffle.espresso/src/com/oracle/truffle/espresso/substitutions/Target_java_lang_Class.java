@@ -272,8 +272,8 @@ public final class Target_java_lang_Class {
                                 /* signature */ meta.toGuestString(f.getGenericSignature()),
                                 // FIXME(peterssen): Fill annotations bytes.
                                 /* annotations */ runtimeVisibleAnnotations);
-                meta.HIDDEN_FIELD_KEY.setHiddenObjectField(instance, f);
-                meta.HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS.setHiddenObjectField(instance, runtimeVisibleTypeAnnotations);
+                instance.setHiddenObjectField(meta.HIDDEN_FIELD_KEY, f);
+                instance.setHiddenObjectField(meta.HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS, runtimeVisibleTypeAnnotations);
                 return instance;
             }
         });
@@ -374,8 +374,8 @@ public final class Target_java_lang_Class {
                                 /* annotations */ runtimeVisibleAnnotations,
                                 /* parameterAnnotations */ runtimeVisibleParameterAnnotations);
 
-                meta.HIDDEN_CONSTRUCTOR_KEY.setHiddenObjectField(instance, m);
-                meta.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS.setHiddenObjectField(instance, runtimeVisibleTypeAnnotations);
+                instance.setHiddenObjectField(meta.HIDDEN_CONSTRUCTOR_KEY, m);
+                instance.setHiddenObjectField(meta.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS, runtimeVisibleTypeAnnotations);
 
                 return instance;
             }
@@ -489,8 +489,8 @@ public final class Target_java_lang_Class {
                                 /* parameterAnnotations */ runtimeVisibleParameterAnnotations,
                                 /* annotationDefault */ annotationDefault);
 
-                meta.HIDDEN_METHOD_KEY.setHiddenObjectField(instance, m);
-                meta.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS.setHiddenObjectField(instance, runtimeVisibleTypeAnnotations);
+                instance.setHiddenObjectField(meta.HIDDEN_METHOD_KEY, m);
+                instance.setHiddenObjectField(meta.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS, runtimeVisibleTypeAnnotations);
                 return instance;
             }
         });
@@ -676,7 +676,7 @@ public final class Target_java_lang_Class {
     @Substitution(hasReceiver = true)
     public static @Host(ProtectionDomain.class) StaticObject getProtectionDomain0(@Host(Class.class) StaticObject self,
                     @InjectMeta Meta meta) {
-        StaticObject pd = (StaticObject) meta.HIDDEN_PROTECTION_DOMAIN.getHiddenObjectField(self);
+        StaticObject pd = (StaticObject) self.getHiddenObjectField(meta.HIDDEN_PROTECTION_DOMAIN);
         // The protection domain is not always set e.g. bootstrap (classloader) classes.
         return pd == null ? StaticObject.NULL : pd;
     }
@@ -716,7 +716,7 @@ public final class Target_java_lang_Class {
             return StaticObject.NULL;
         }
         StaticObject cp = InterpreterToVM.newObject(meta.sun_reflect_ConstantPool, false);
-        meta.sun_reflect_ConstantPool_constantPoolOop.setObjectField(cp, self);
+        cp.setObjectField(meta.sun_reflect_ConstantPool_constantPoolOop, self);
         return cp;
     }
 
@@ -794,7 +794,7 @@ public final class Target_java_lang_Class {
         if (klass.isPrimitive()) {
             return StaticObject.NULL;
         }
-        StaticObject signersArray = (StaticObject) meta.HIDDEN_SIGNERS.getHiddenObjectField(self);
+        StaticObject signersArray = (StaticObject) self.getHiddenObjectField(meta.HIDDEN_SIGNERS);
         if (signersArray == null || StaticObject.isNull(signersArray)) {
             return StaticObject.NULL;
         }
@@ -806,7 +806,7 @@ public final class Target_java_lang_Class {
                     @InjectMeta Meta meta) {
         Klass klass = self.getMirrorKlass();
         if (!klass.isPrimitive() && !klass.isArray()) {
-            meta.HIDDEN_SIGNERS.setHiddenObjectField(self, signers);
+            self.setHiddenObjectField(meta.HIDDEN_SIGNERS, signers);
         }
     }
 }
