@@ -29,7 +29,6 @@ import static com.oracle.svm.configure.trace.LazyValueUtils.lazyValue;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import com.oracle.svm.configure.config.ConfigurationMemberKind;
 import com.oracle.svm.configure.config.ConfigurationMethod;
@@ -83,9 +82,7 @@ class ReflectionProcessor extends AbstractProcessor {
             case "getSystemResourceAsStream":
             case "getResources":
             case "getSystemResources":
-                String literal = singleElement(args);
-                String regex = Pattern.quote(literal);
-                resourceConfiguration.add(regex);
+                resourceConfiguration.add(singleElement(args));
                 return;
         }
         String clazz = (String) entry.get("class");

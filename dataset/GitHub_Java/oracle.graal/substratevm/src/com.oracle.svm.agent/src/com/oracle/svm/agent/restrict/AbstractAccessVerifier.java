@@ -24,7 +24,7 @@
  */
 package com.oracle.svm.agent.restrict;
 
-import static com.oracle.svm.jvmtiagentbase.Support.getClassNameOrNull;
+import static com.oracle.svm.agent.Support.getClassNameOrNull;
 
 import org.graalvm.compiler.phases.common.LazyValue;
 
@@ -41,11 +41,7 @@ class AbstractAccessVerifier {
     }
 
     protected boolean shouldApproveWithoutChecks(JNIEnvironment env, JNIObjectHandle callerClass) {
-        return shouldApproveWithoutChecks(lazyClassNameOrNull(env, callerClass));
-    }
-
-    protected boolean shouldApproveWithoutChecks(LazyValue<String> callerClass) {
-        return accessAdvisor.shouldIgnoreCaller(callerClass);
+        return accessAdvisor.shouldIgnore(lazyClassNameOrNull(env, callerClass));
     }
 
     protected static LazyValue<String> lazyClassNameOrNull(JNIEnvironment env, JNIObjectHandle clazz) {
