@@ -50,7 +50,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
     }
 
     public void setBody(WasmBlockNode body) {
-        this.body = insert(body);
+        this.body = body;
     }
 
     @Override
@@ -68,7 +68,8 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
          */
         initializeLocals(frame);
 
-        body.execute(lookupContextReference(WasmLanguage.class).get(), frame);
+        // TODO: Accessing the context like this seems to be quite slow.
+        body.execute(WasmContext.getCurrent(), frame);
 
         long returnValue = pop(frame, 0);
         switch (body.returnTypeId()) {
@@ -76,17 +77,17 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
             case ValueTypes.VOID_TYPE:
                 return WasmVoidResult.getInstance();
             case ValueTypes.I32_TYPE:
-                assert returnValue >>> 32 == 0;
+                Assert.assertEquals(returnValue >>> 32, 0, "Expected i32 value, popped value was larger than 32 bits.");
                 return (int) returnValue;
             case ValueTypes.I64_TYPE:
                 return returnValue;
             case ValueTypes.F32_TYPE:
-                assert returnValue >>> 32 == 0;
+                Assert.assertEquals(returnValue >>> 32, 0, "Expected f32 value, popped value was larger than 32 bits.");
                 return Float.intBitsToFloat((int) returnValue);
             case ValueTypes.F64_TYPE:
                 return Double.longBitsToDouble(returnValue);
             default:
-                assert false;
+                Assert.fail(String.format("Unknown type: 0x%02X", body.returnTypeId()));
                 return null;
         }
     }
@@ -95,7 +96,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
     private void argumentsToLocals(VirtualFrame frame) {
         Object[] args = frame.getArguments();
         int numArgs = body.wasmModule().symbolTable().function(codeEntry().functionIndex()).numArguments();
-        assert args.length == numArgs;
+        Assert.assertEquals(args.length, numArgs, "Invalid number of arguments for function call");
         for (int i = 0; i != numArgs; ++i) {
             FrameSlot slot = codeEntry.localSlot(i);
             FrameSlotKind kind = frame.getFrameDescriptor().getFrameSlotKind(slot);
