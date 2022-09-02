@@ -766,6 +766,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         throw new EspressoExitException(code);
     }
 
+
     @VmImpl
     @JniImpl
     public @Host(Properties.class) StaticObject JVM_InitProperties(@Host(Properties.class) StaticObject properties) {
