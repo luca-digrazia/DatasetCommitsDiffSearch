@@ -29,6 +29,7 @@ import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_6;
 import static com.oracle.truffle.espresso.jni.JniVersion.JNI_VERSION_1_8;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
@@ -45,7 +46,6 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 
-import com.oracle.truffle.espresso.impl.Field;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
@@ -365,7 +365,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     public static boolean JVM_SupportsCX8() {
         try {
             Class<?> klass = Class.forName("java.util.concurrent.atomic.AtomicLong");
-            java.lang.reflect.Field field = klass.getDeclaredField("VM_SUPPORTS_LONG_CAS");
+            Field field = klass.getDeclaredField("VM_SUPPORTS_LONG_CAS");
             field.setAccessible(true);
             return field.getBoolean(null);
         } catch (IllegalAccessException | NoSuchFieldException | ClassNotFoundException e) {
@@ -581,10 +581,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         buf.get(bytes);
 
         // TODO(peterssen): Name is in binary form, but separator can be either / or . .
-        Symbol<Type> type = null;
-        if (name != null) {
-            type = getTypes().fromClassGetName(name);
-        }
+        Symbol<Type> type = getTypes().fromClassGetName(name);
 
         StaticObject clazz = getContext().getRegistries().defineKlass(type, bytes, loader).mirror();
         assert pd != null;
@@ -620,7 +617,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     public long JVM_LoadLibrary(String name) {
         try {
             TruffleObject lib = NativeLibrary.loadLibrary(Paths.get(name));
-            java.lang.reflect.Field f = lib.getClass().getDeclaredField("handle");
+            Field f = lib.getClass().getDeclaredField("handle");
             f.setAccessible(true);
             long handle = (long) f.get(lib);
             handle2Lib.put(handle, lib);
@@ -929,7 +926,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         return guestBox(elem);
     }
 
-    private static @Host(java.lang.reflect.Method.class) StaticObject getGuestReflectiveMethodRoot(@Host(java.lang.reflect.Method.class) StaticObject seed) {
+    private static StaticObject getGuestReflectiveMethodRoot(@Host(java.lang.reflect.Field.class) StaticObject seed) {
         Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
@@ -940,32 +937,6 @@ public final class VM extends NativeEnv implements ContextAccess {
             }
         }
         return curMethod;
-    }
-
-    private static @Host(java.lang.reflect.Constructor.class) StaticObject getGuestReflectiveFieldRoot(@Host(java.lang.reflect.Constructor.class) StaticObject seed) {
-        Meta meta = seed.getKlass().getMeta();
-        StaticObject curField = seed;
-        Field target = null;
-        while (target == null) {
-            target = (Field) curField.getHiddenField(meta.HIDDEN_FIELD_KEY);
-            if (target == null) {
-                curField = (StaticObject) meta.Field_root.get(curField);
-            }
-        }
-        return curField;
-    }
-
-    private static StaticObject getGuestReflectiveConstructorRoot(@Host(java.lang.reflect.Field.class) StaticObject seed) {
-        Meta meta = seed.getKlass().getMeta();
-        StaticObject curConstructor = seed;
-        Method target = null;
-        while (target == null) {
-            target = (Method) curConstructor.getHiddenField(meta.HIDDEN_CONSTRUCTOR_KEY);
-            if (target == null) {
-                curConstructor = (StaticObject) meta.Constructor_root.get(curConstructor);
-            }
-        }
-        return curConstructor;
     }
 
     @VmImpl
@@ -1037,27 +1008,10 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    public @Host(byte[].class) StaticObject JVM_GetMethodTypeAnnotations(@Host(java.lang.reflect.Method.class /* or Constructor */ ) StaticObject guestReflectionMethod) {
-        if (InterpreterToVM.instanceOf(guestReflectionMethod, getMeta().Method)) {
-            StaticObject methodRoot = getGuestReflectiveMethodRoot(guestReflectionMethod);
-            assert methodRoot != null;
-            return (StaticObject) methodRoot.getHiddenField(methodRoot.getKlass().getMeta().HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS);
-        } else if (InterpreterToVM.instanceOf(guestReflectionMethod, getMeta().Constructor)) {
-            StaticObject constructorRoot = getGuestReflectiveConstructorRoot(guestReflectionMethod);
-            assert constructorRoot != null;
-            return (StaticObject) constructorRoot.getHiddenField(constructorRoot.getKlass().getMeta().HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS);
-        } else {
-            throw EspressoError.shouldNotReachHere();
-        }
-    }
-
-    @VmImpl
-    @JniImpl
-    public @Host(byte[].class) StaticObject JVM_GetFieldTypeAnnotations(@Host(java.lang.reflect.Field.class) StaticObject guestReflectionField) {
-        assert InterpreterToVM.instanceOf(guestReflectionField, getMeta().Field);
-        StaticObject fieldRoot = getGuestReflectiveFieldRoot(guestReflectionField);
-        assert fieldRoot != null;
-        return (StaticObject) fieldRoot.getHiddenField(fieldRoot.getKlass().getMeta().HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS);
+    public static Object JVM_GetMethodTypeAnnotations(@Host(Object.class) StaticObject guestReflectionMethod) {
+        StaticObject methodRoot = getGuestReflectiveMethodRoot(guestReflectionMethod);
+        assert methodRoot != null;
+        return methodRoot.getHiddenField(methodRoot.getKlass().getMeta().HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS);
     }
 
     private StaticObject guestBox(Object elem) {

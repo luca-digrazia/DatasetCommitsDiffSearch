@@ -313,6 +313,7 @@ public final class InterpreterToVM implements ContextAccess {
         if (length < 0) {
             throw componentType.getContext().getMeta().throwEx(NegativeArraySizeException.class);
         }
+        assert !componentType.isPrimitive() : "use allocateNativeArray for primitives";
         assert length >= 0;
         StaticObject[] arr = new StaticObject[length];
         Arrays.fill(arr, StaticObject.NULL);
@@ -404,7 +405,7 @@ public final class InterpreterToVM implements ContextAccess {
 
     public static StaticObject newObject(Klass klass) {
         // TODO(peterssen): Accept only ObjectKlass.
-        assert klass != null && !klass.isArray() && !klass.isPrimitive() : klass;
+        assert klass != null && !klass.isArray() && !klass.isPrimitive() && !klass.isAbstract() : klass;
         if (klass.isAbstract() || klass.isInterface()) {
             throw klass.getMeta().throwEx(InstantiationError.class);
         }

@@ -152,8 +152,4 @@ public final class EspressoException extends RuntimeException implements Truffle
         return null;
     }
 
-    @Override
-    public String toString() {
-        return "EspressoException<" + getException() + ": " + getMessage() + ">";
-    }
 }
