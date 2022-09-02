@@ -40,9 +40,12 @@
  */
 package com.oracle.truffle.api.test;
 
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleRuntime;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
@@ -91,6 +94,7 @@ public final class GCUtils {
      * @param ref the reference
      */
     public static void assertGc(final String message, final Reference<?> ref) {
+        cleanRuntimeNativeReferences();
         int blockSize = 100_000;
         final List<byte[]> blocks = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
@@ -112,6 +116,7 @@ public final class GCUtils {
                 blockSize >>>= 1;
             }
             if (i % 10 == 0) {
+                cleanRuntimeNativeReferences();
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException ie) {
@@ -123,9 +128,23 @@ public final class GCUtils {
     }
 
     /**
-     * Performs GC.
+     * Performs GC and possibly frees non HotSpot heap.
      */
     public static void gc() {
+        cleanRuntimeNativeReferences();
         System.gc();
     }
+
+    private static boolean cleanRuntimeNativeReferences() {
+        try {
+            TruffleRuntime runtime = Truffle.getRuntime();
+            Method clearNativeReferences = runtime.getClass().getDeclaredMethod("cleanNativeReferences");
+            clearNativeReferences.setAccessible(true);
+            clearNativeReferences.invoke(null);
+            return true;
+        } catch (ReflectiveOperationException e) {
+            return false;
+        }
+    }
+
 }
