@@ -1,49 +1,59 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.nfi.impl;
+
+import java.util.HashMap;
+import java.util.function.Supplier;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.nfi.impl.LibFFIType.ClosureType;
 import com.oracle.truffle.nfi.impl.LibFFIType.EnvType;
 import com.oracle.truffle.nfi.impl.NativeAllocation.FreeDestructor;
-import com.oracle.truffle.nfi.types.NativeArrayTypeMirror;
-import com.oracle.truffle.nfi.types.NativeFunctionTypeMirror;
-import com.oracle.truffle.nfi.types.NativeSimpleType;
-import com.oracle.truffle.nfi.types.NativeSimpleTypeMirror;
-import com.oracle.truffle.nfi.types.NativeTypeMirror;
-import com.oracle.truffle.nfi.types.NativeTypeMirror.Kind;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Supplier;
+import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
 class NFIContext {
 
+    final NFILanguageImpl language;
     Env env;
 
     private long nativeContext;
@@ -51,6 +61,7 @@ class NFIContext {
 
     @CompilationFinal(dimensions = 1) final LibFFIType[] simpleTypeMap = new LibFFIType[NativeSimpleType.values().length];
     @CompilationFinal(dimensions = 1) final LibFFIType[] arrayTypeMap = new LibFFIType[NativeSimpleType.values().length];
+    @CompilationFinal LibFFIType cachedEnvType;
 
     private final HashMap<Long, ClosureNativePointer> nativePointerMap = new HashMap<>();
 
@@ -60,7 +71,11 @@ class NFIContext {
     @CompilationFinal int RTLD_LOCAL;
     @CompilationFinal int RTLD_LAZY;
     @CompilationFinal int RTLD_NOW;
+    @CompilationFinal int ISOLATED_NAMESPACE;
     // Checkstyle: resume field name check
+
+    // Initialized lazily by native code.
+    private volatile long isolatedNamespaceId;
 
     private static class NativeEnv {
 
@@ -81,7 +96,8 @@ class NFIContext {
         }
     }
 
-    NFIContext(Env env) {
+    NFIContext(NFILanguageImpl language, Env env) {
+        this.language = language;
         this.env = env;
     }
 
@@ -102,10 +118,14 @@ class NFIContext {
     }
 
     void dispose() {
-        disposeNativeContext(nativeContext);
-        nativeContext = 0;
+        if (nativeContext != 0) {
+            disposeNativeContext(nativeContext);
+            nativeContext = 0;
+        }
         nativeEnv.set(null);
-        nativePointerMap.clear();
+        synchronized (nativePointerMap) {
+            nativePointerMap.clear();
+        }
     }
 
     private ClosureNativePointer getClosureNativePointer(long codePointer) {
@@ -140,69 +160,50 @@ class NFIContext {
     }
 
     // called from native
-    TruffleObject getClosureObject(long codePointer) {
+    Object getClosureObject(long codePointer) {
         return LibFFIClosure.newClosureWrapper(getClosureNativePointer(codePointer));
     }
 
+    @TruffleBoundary
     LibFFILibrary loadLibrary(String name, int flags) {
         return LibFFILibrary.create(loadLibrary(nativeContext, name, flags));
     }
 
-    TruffleObject lookupSymbol(LibFFILibrary library, String name) {
-        return LibFFISymbol.create(library, lookup(nativeContext, library.handle, name));
-    }
-
-    LibFFIType lookupArgType(NativeTypeMirror type) {
-        return lookup(type, false);
-    }
-
-    LibFFIType lookupRetType(NativeTypeMirror type) {
-        return lookup(type, true);
+    Object lookupSymbol(LibFFILibrary library, String name) {
+        return LibFFISymbol.create(language, library, name, lookup(nativeContext, library.handle, name));
     }
 
     LibFFIType lookupSimpleType(NativeSimpleType type) {
         return simpleTypeMap[type.ordinal()];
     }
 
-    private LibFFIType lookup(NativeTypeMirror type, boolean asRetType) {
-        switch (type.getKind()) {
-            case SIMPLE:
-                NativeSimpleTypeMirror simpleType = (NativeSimpleTypeMirror) type;
-                return lookupSimpleType(simpleType.getSimpleType());
+    LibFFIType lookupArrayType(NativeSimpleType type) {
+        return arrayTypeMap[type.ordinal()];
+    }
 
-            case ARRAY:
-                NativeArrayTypeMirror arrayType = (NativeArrayTypeMirror) type;
-                NativeTypeMirror elementType = arrayType.getElementType();
-
-                LibFFIType ret = null;
-                if (elementType.getKind() == Kind.SIMPLE) {
-                    ret = arrayTypeMap[((NativeSimpleTypeMirror) elementType).getSimpleType().ordinal()];
-                }
-
-                if (ret == null) {
-                    throw new AssertionError("unsupported array type");
-                } else {
-                    return ret;
-                }
-
-            case FUNCTION:
-                NativeFunctionTypeMirror functionType = (NativeFunctionTypeMirror) type;
-                LibFFISignature signature = LibFFISignature.create(this, functionType.getSignature());
-                return new ClosureType(lookupSimpleType(NativeSimpleType.POINTER), signature, asRetType);
-
-            case ENV:
-                if (asRetType) {
-                    throw new AssertionError("environment pointer can not be used as return type");
-                }
-                return new EnvType(lookupSimpleType(NativeSimpleType.POINTER));
-        }
-        throw new AssertionError("unsupported type");
+    @TruffleBoundary
+    LibFFIType lookupEnvType() {
+        return cachedEnvType;
     }
 
     protected void initializeSimpleType(NativeSimpleType simpleType, int size, int alignment, long ffiType) {
-        assert simpleTypeMap[simpleType.ordinal()] == null : "initializeSimpleType called twice for " + simpleType;
-        simpleTypeMap[simpleType.ordinal()] = LibFFIType.createSimpleType(this, simpleType, size, alignment, ffiType);
-        arrayTypeMap[simpleType.ordinal()] = LibFFIType.createArrayType(this, simpleType);
+        int idx = simpleType.ordinal();
+        int pointerIdx = NativeSimpleType.POINTER.ordinal();
+
+        assert simpleTypeMap[idx] == null : "initializeSimpleType called twice for " + simpleType;
+        if (language.simpleTypeMap[idx] == null) {
+            assert language.arrayTypeMap[idx] == null;
+            language.simpleTypeMap[idx] = LibFFIType.createSimpleTypeInfo(language, simpleType, size, alignment);
+            language.arrayTypeMap[idx] = LibFFIType.createArrayTypeInfo(language.simpleTypeMap[pointerIdx], simpleType);
+            if (idx == pointerIdx) {
+                language.cachedEnvType = new EnvType(language.simpleTypeMap[pointerIdx]);
+            }
+        }
+        simpleTypeMap[idx] = new LibFFIType(language.simpleTypeMap[idx], ffiType);
+        arrayTypeMap[idx] = new LibFFIType(language.arrayTypeMap[idx], simpleTypeMap[pointerIdx].type);
+        if (idx == pointerIdx) {
+            cachedEnvType = new LibFFIType(language.cachedEnvType, simpleTypeMap[pointerIdx].type);
+        }
     }
 
     private native long initializeNativeContext();
@@ -244,17 +245,19 @@ class NFIContext {
 
     private static native ClosureNativePointer allocateClosureVoidRet(long nativeContext, LibFFISignature signature, CallTarget callTarget);
 
-    long prepareSignature(LibFFIType retType, LibFFIType... args) {
-        return prepareSignature(nativeContext, retType, args);
+    long prepareSignature(LibFFIType retType, int argCount, LibFFIType... args) {
+        assert args.length >= argCount;
+        return prepareSignature(nativeContext, retType, argCount, args);
     }
 
-    long prepareSignatureVarargs(LibFFIType retType, int nFixedArgs, LibFFIType... args) {
-        return prepareSignatureVarargs(nativeContext, retType, nFixedArgs, args);
+    long prepareSignatureVarargs(LibFFIType retType, int argCount, int nFixedArgs, LibFFIType... args) {
+        assert args.length >= argCount;
+        return prepareSignatureVarargs(nativeContext, retType, argCount, nFixedArgs, args);
     }
 
-    private static native long prepareSignature(long nativeContext, LibFFIType retType, LibFFIType... args);
+    private static native long prepareSignature(long nativeContext, LibFFIType retType, int argCount, LibFFIType... args);
 
-    private static native long prepareSignatureVarargs(long nativeContext, LibFFIType retType, int nFixedArgs, LibFFIType... args);
+    private static native long prepareSignatureVarargs(long nativeContext, LibFFIType retType, int argCount, int nFixedArgs, LibFFIType... args);
 
     void executeNative(long cif, long functionPointer, byte[] primArgs, int patchCount, int[] patchOffsets, Object[] objArgs, byte[] ret) {
         executeNative(nativeContext, cif, functionPointer, primArgs, patchCount, patchOffsets, objArgs, ret);
@@ -264,7 +267,7 @@ class NFIContext {
         return executePrimitive(nativeContext, cif, functionPointer, primArgs, patchCount, patchOffsets, objArgs);
     }
 
-    TruffleObject executeObject(long cif, long functionPointer, byte[] primArgs, int patchCount, int[] patchOffsets, Object[] objArgs) {
+    Object executeObject(long cif, long functionPointer, byte[] primArgs, int patchCount, int[] patchOffsets, Object[] objArgs) {
         return executeObject(nativeContext, cif, functionPointer, primArgs, patchCount, patchOffsets, objArgs);
     }
 
@@ -275,10 +278,11 @@ class NFIContext {
     private static native long executePrimitive(long nativeContext, long cif, long functionPointer, byte[] primArgs, int patchCount, int[] patchOffsets, Object[] objArgs);
 
     @TruffleBoundary
-    private static native TruffleObject executeObject(long nativeContext, long cif, long functionPointer, byte[] primArgs, int patchCount, int[] patchOffsets, Object[] objArgs);
+    private static native Object executeObject(long nativeContext, long cif, long functionPointer, byte[] primArgs, int patchCount, int[] patchOffsets, Object[] objArgs);
 
     private static native long loadLibrary(long nativeContext, String name, int flags);
 
+    @TruffleBoundary
     private static native long lookup(long nativeContext, long library, String name);
 
     static native void freeLibrary(long library);
