@@ -49,7 +49,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.Node.Child;
-import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -1755,8 +1754,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
+        ByteBuffer bytes = allocateDirect(((StaticObjectArray) array).length(), JavaKind.Boolean);
         boolean[] data = ((StaticObjectArray) array).unwrap();
-        ByteBuffer bytes = allocateDirect(data.length, JavaKind.Boolean);
         for (int i = 0; i < data.length; ++i) {
             bytes.put(data[i] ? (byte) 1 : (byte) 0);
         }
@@ -1856,9 +1855,10 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     // endregion Get*ArrayElements
 
+
     // region Release*ArrayElements
 
-    private void ReleasePrimitiveArrayElements(StaticObject object, long bufPtr, int mode) {
+    private void ReleaseGenericArrayElements(StaticObject object, long bufPtr, int mode) {
         if (mode == 0 || mode == JNI_COMMIT) { // Update array contents.
             StaticObjectArray array = (StaticObjectArray) object;
             StaticObjectClass clazz = (StaticObjectClass) GetObjectClass(array);
@@ -1890,49 +1890,49 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public void ReleaseBooleanArrayElements(StaticObject object, long bufPtr, int mode) {
         assert object.getKlass().getComponentType().getJavaKind() == JavaKind.Boolean;
-        ReleasePrimitiveArrayElements(object, bufPtr, mode);
+        ReleaseGenericArrayElements(object, bufPtr, mode);
     }
 
     @JniImpl
     public void ReleaseByteArrayElements(StaticObject object, long bufPtr, int mode) {
         assert object.getKlass().getComponentType().getJavaKind() == JavaKind.Byte;
-        ReleasePrimitiveArrayElements(object, bufPtr, mode);
+        ReleaseGenericArrayElements(object, bufPtr, mode);
     }
 
     @JniImpl
     public void ReleaseCharArrayElements(StaticObject object, long bufPtr, int mode) {
         assert object.getKlass().getComponentType().getJavaKind() == JavaKind.Char;
-        ReleasePrimitiveArrayElements(object, bufPtr, mode);
+        ReleaseGenericArrayElements(object, bufPtr, mode);
     }
 
     @JniImpl
     public void ReleaseShortArrayElements(StaticObject object, long bufPtr, int mode) {
         assert object.getKlass().getComponentType().getJavaKind() == JavaKind.Short;
-        ReleasePrimitiveArrayElements(object, bufPtr, mode);
+        ReleaseGenericArrayElements(object, bufPtr, mode);
     }
 
     @JniImpl
     public void ReleaseIntArrayElements(StaticObject object, long bufPtr, int mode) {
         assert object.getKlass().getComponentType().getJavaKind() == JavaKind.Int;
-        ReleasePrimitiveArrayElements(object, bufPtr, mode);
+        ReleaseGenericArrayElements(object, bufPtr, mode);
     }
 
     @JniImpl
     public void ReleaseLongArrayElements(StaticObject object, long bufPtr, int mode) {
         assert object.getKlass().getComponentType().getJavaKind() == JavaKind.Long;
-        ReleasePrimitiveArrayElements(object, bufPtr, mode);
+        ReleaseGenericArrayElements(object, bufPtr, mode);
     }
 
     @JniImpl
     public void ReleaseFloatArrayElements(StaticObject object, long bufPtr, int mode) {
         assert object.getKlass().getComponentType().getJavaKind() == JavaKind.Float;
-        ReleasePrimitiveArrayElements(object, bufPtr, mode);
+        ReleaseGenericArrayElements(object, bufPtr, mode);
     }
 
     @JniImpl
     public void ReleaseDoubleArrayElements(StaticObject object, long bufPtr, int mode) {
         assert object.getKlass().getComponentType().getJavaKind() == JavaKind.Double;
-        ReleasePrimitiveArrayElements(object, bufPtr, mode);
+        ReleaseGenericArrayElements(object, bufPtr, mode);
     }
 
     // endregion Release*ArrayElements
