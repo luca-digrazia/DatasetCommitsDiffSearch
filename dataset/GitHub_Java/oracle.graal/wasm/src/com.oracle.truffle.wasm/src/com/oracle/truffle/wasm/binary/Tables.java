@@ -30,18 +30,15 @@
 package com.oracle.truffle.wasm.binary;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.wasm.binary.exception.WasmException;
 
 public class Tables {
     private static final int INITIAL_TABLES_SIZE = 8;
 
-    @CompilationFinal(dimensions = 2) private Object[][] tables;
-    @CompilationFinal(dimensions = 1) private int[] maxsizes;
+    @CompilationFinal(dimensions = 1) private Object[][] tables;
     private int numTables;
 
     public Tables() {
         this.tables = new Object[INITIAL_TABLES_SIZE][];
-        this.maxsizes = new int[INITIAL_TABLES_SIZE];
         this.numTables = 0;
     }
 
@@ -50,9 +47,6 @@ public class Tables {
             final Object[][] nglobals = new Object[tables.length * 2][];
             System.arraycopy(tables, 0, nglobals, 0, tables.length);
             tables = nglobals;
-            final int[] nmaxsizes = new int[maxsizes.length * 2];
-            System.arraycopy(maxsizes, 0, nmaxsizes, 0, maxsizes.length);
-            maxsizes = nmaxsizes;
         }
     }
 
@@ -60,36 +54,15 @@ public class Tables {
         return numTables;
     }
 
-    public int allocateTable(int initSize, int maxSize) {
+    public int allocateTable(int size) {
         ensureCapacity();
-        tables[numTables] = new Object[initSize];
-        maxsizes[numTables] = maxSize;
+        tables[numTables] = new Object[size];
         int idx = numTables;
         numTables++;
         return idx;
     }
 
-    public Object[] table(int index) {
-        assert index < numTables;
-        return tables[index];
-    }
-
-    public int maxSizeOf(int index) {
-        assert index < numTables;
-        return maxsizes[index];
-    }
-
-    public void ensureSizeAtLeast(int index, int targetSize) {
-        final int maxSize = maxSizeOf(index);
-        if (maxSize >= 0 && targetSize > maxSize) {
-            throw new WasmException("Table " + index + " cannot be resized to " + targetSize + ", " +
-                            "declared maximum size is " + maxSize);
-        }
-        Object[] table = tables[index];
-        if (table.length < targetSize) {
-            Object[] ntable = new Object[targetSize];
-            System.arraycopy(table, 0, ntable, 0, table.length);
-            tables[index] = table;
-        }
+    public Object[] table(int i) {
+        return tables[i];
     }
 }

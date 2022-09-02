@@ -38,12 +38,16 @@ import java.util.Map;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.wasm.binary.memory.UnsafeWasmMemory;
+import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.PredefinedModule;
 
 public class WasmContext {
+    private static final long DEFAULT_MEMORY_SIZE = 1 << 28;
+
     private Env env;
     private WasmLanguage language;
-    private Memories memories;
+    private WasmMemory memory;
     private Globals globals;
     private Tables tables;
     private Linker linker;
@@ -56,9 +60,9 @@ public class WasmContext {
     public WasmContext(Env env, WasmLanguage language) {
         this.env = env;
         this.language = language;
+        this.memory = new UnsafeWasmMemory(DEFAULT_MEMORY_SIZE);
         this.globals = new Globals();
         this.tables = new Tables();
-        this.memories = new Memories();
         this.modules = new HashMap<>();
         this.linker = new Linker(language);
         initializePredefinedModules(env);
@@ -73,8 +77,8 @@ public class WasmContext {
         return language;
     }
 
-    public Memories memories() {
-        return memories;
+    public WasmMemory memory() {
+        return memory;
     }
 
     public Globals globals() {

@@ -426,20 +426,21 @@ public class BinaryReader extends BinaryStreamReader {
         // Since in the current version of WebAssembly supports at most one table instance,
         // this loop should be executed at most once.
         for (byte tableIndex = 0; tableIndex != numTables; ++tableIndex) {
-            byte elemType = readElemType();
-            Assert.assertIntEqual(elemType, ReferenceTypes.FUNCREF, "Invalid element type for table.");
-            byte limitsPrefix = readLimitsPrefix();
+            byte elemType = read1();
+            Assert.assertIntEqual(elemType, 0x70, "Invalid element type for table");
+            byte limitsPrefix = read1();
             switch (limitsPrefix) {
-                case LimitsPrefix.NO_MAX: {
+                case 0x00: {
                     int initSize = readUnsignedInt32();  // initial size (in number of entries)
-                    module.symbolTable().allocateTable(language.getContextReference().get(), initSize, -1);
+                    // TODO: Initialize the table.
+                    // module.table().initialize(initSize);
                     break;
                 }
-                case LimitsPrefix.WITH_MAX: {
+                case 0x01: {
                     int initSize = readUnsignedInt32();  // initial size (in number of entries)
                     int maxSize = readUnsignedInt32();  // max size (in number of entries)
-                    Assert.assertIntLessOrEqual(initSize, maxSize, "Initial table size must be smaller or equal than maximum size.");
-                    module.symbolTable().allocateTable(language.getContextReference().get(), initSize, maxSize);
+                    // TODO: Initialize the table.
+                    // module.table().initialize(initSize, maxSize);
                     break;
                 }
                 default:
@@ -451,14 +452,14 @@ public class BinaryReader extends BinaryStreamReader {
     private void readMemorySection() {
         int numMemories = readVectorLength();
         for (int i = 0; i != numMemories; ++i) {
-            byte limitsPrefix = readLimitsPrefix();
+            byte limitsPrefix = read1();
             switch (limitsPrefix) {
-                case LimitsPrefix.NO_MAX: {
+                case 0x00: {
                     /* Return value ignored, as we don't rely on the memory definition for the memory size. */
                     readUnsignedInt32();  // initial size (in Wasm pages)
                     break;
                 }
-                case LimitsPrefix.WITH_MAX: {
+                case 0x01: {
                     /* Return values ignored, as we don't rely on the memory definition for the memory size. */
                     readUnsignedInt32();  // initial size (in Wasm pages)
                     readUnsignedInt32();  // max size (in Wasm pages)
@@ -1404,10 +1405,6 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private byte readElemType() {
-        return read1();
-    }
-
-    private byte readLimitsPrefix() {
         return read1();
     }
 
