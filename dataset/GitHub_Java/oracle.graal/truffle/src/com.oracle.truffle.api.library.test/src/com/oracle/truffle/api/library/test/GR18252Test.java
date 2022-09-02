@@ -49,14 +49,14 @@ import org.junit.Test;
 import org.junit.runners.Parameterized.Parameters;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Exclusive;
+import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.DynamicDispatchLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.test.AbstractParametrizedLibraryTest.TestRun;
 import com.oracle.truffle.api.profiles.BranchProfile;
 
 /*
@@ -102,13 +102,13 @@ public class GR18252Test extends AbstractParametrizedLibraryTest {
 
         @ExportMessage
         public static boolean is(Data receiver,
-                        @Exclusive /* @Shared("profile") */ @Cached BranchProfile profile) {
+                        @Shared("profile") @Cached BranchProfile profile) {
             return false;
         }
 
         @ExportMessage
         public static Object get(Data receiver,
-                        @Exclusive /* @Shared("profile") */ @Cached BranchProfile profile) {
+                        @Shared("profile") @Cached BranchProfile profile) {
             return null;
         }
     }
@@ -117,12 +117,62 @@ public class GR18252Test extends AbstractParametrizedLibraryTest {
     static class BMessages extends AMessages {
 
         @ExportMessage
-        public static boolean is(Data receiver, @Cached BranchProfile profile, @Cached BranchProfile profile1) {
-            return true;
+        public static class Is {
+            @Specialization
+            public static boolean is(Data receiver,
+                            @Cached BranchProfile p0,
+                            @Cached BranchProfile p1) {
+                return true;
+            }
         }
 
         @ExportMessage
         public static Object get(Data receiver) {
+            return receiver.value;
+        }
+    }
+
+    /*
+     * Asserts that this should not generate a shared cached warning.
+     */
+    @ExportLibrary(value = ALibrary.class, receiverType = Data.class)
+    static class CMessagesNoWarn1 extends AMessages {
+
+        @ExportMessage
+        public static boolean is(Data receiver,
+                        @Cached BranchProfile p0,
+                        @Cached BranchProfile p1) {
+            return true;
+        }
+
+    }
+
+    /*
+     * Asserts that this should not generate a shared cached warning.
+     */
+    @ExportLibrary(value = ALibrary.class, receiverType = Data.class)
+    static class CMessagesNoWarn2 extends AMessages {
+
+        @ExportMessage
+        public static class Is {
+            @Specialization
+            public static boolean is(Data receiver,
+                            @Cached BranchProfile profile,
+                            @Cached BranchProfile profile1) {
+                return true;
+            }
+        }
+    }
+
+    /*
+     * Asserts that this should not generate a shared cached warning.
+     */
+    @ExportLibrary(value = ALibrary.class, receiverType = Data.class)
+    static class CMessagesNoWarn3 extends BMessages {
+
+        @ExportMessage
+        public static Object get(Data receiver,
+                        @Cached BranchProfile profile1) {
             return receiver.value;
         }
     }
@@ -150,4 +200,5 @@ public class GR18252Test extends AbstractParametrizedLibraryTest {
         Data dataB = new Data(BMessages.class, "value");
         assertEquals("value", createLibrary(ALibrary.class, dataB).get(dataB));
     }
+
 }
