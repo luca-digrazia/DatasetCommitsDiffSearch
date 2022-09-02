@@ -47,6 +47,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread.State;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.options.OptionValues;
@@ -102,8 +104,6 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Class;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread.State;
 
 /**
  * Espresso implementation of the VM interface (libjvm).
@@ -365,10 +365,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         try {
             Target_java_lang_Thread.fromRunnable(currentThread, getMeta(), (timeout > 0 ? State.TIMED_WAITING : State.WAITING));
             self.wait(timeout);
-        } catch (InterruptedException e) {
-            Target_java_lang_Thread.setInterrupt(currentThread, false);
-            throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
-        } catch (IllegalMonitorStateException | IllegalArgumentException e) {
+        } catch (InterruptedException | IllegalMonitorStateException | IllegalArgumentException e) {
             throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
         } finally {
             Target_java_lang_Thread.toRunnable(currentThread, getMeta(), State.RUNNABLE);
