@@ -23,10 +23,9 @@
 package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.espresso.classfile.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
@@ -44,13 +43,12 @@ public abstract class EspressoMethodNode extends EspressoInstrumentableNode impl
         this.method = method;
     }
 
-    public final Method getMethod() {
-        return method;
+    EspressoMethodNode(EspressoMethodNode original) {
+        this.method = original.method;
     }
 
-    @Override
-    public boolean hasTag(Class<? extends Tag> tag) {
-        return tag == StandardTags.RootTag.class;
+    public final Method getMethod() {
+        return method;
     }
 
     @TruffleBoundary
@@ -85,7 +83,11 @@ public abstract class EspressoMethodNode extends EspressoInstrumentableNode impl
     }
 
     public final Source getSource() {
-        return method.getSource();
+        Source localSource = this.source;
+        if (localSource == null) {
+            this.source = localSource = method.getContext().findOrCreateSource(method);
+        }
+        return localSource;
     }
 
     @Override

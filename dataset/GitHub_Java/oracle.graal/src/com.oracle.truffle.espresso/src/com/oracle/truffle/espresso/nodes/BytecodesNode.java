@@ -227,9 +227,8 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.SWAP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
 
-import java.util.Arrays;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.locks.Lock;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -240,10 +239,13 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
+import com.oracle.truffle.api.instrumentation.ProbeNode;
+import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.CustomNodeCount;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.BytecodeLookupSwitch;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
@@ -256,6 +258,7 @@ import com.oracle.truffle.espresso.classfile.DoubleConstant;
 import com.oracle.truffle.espresso.classfile.FloatConstant;
 import com.oracle.truffle.espresso.classfile.IntegerConstant;
 import com.oracle.truffle.espresso.classfile.InvokeDynamicConstant;
+import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.classfile.LongConstant;
 import com.oracle.truffle.espresso.classfile.MethodHandleConstant;
 import com.oracle.truffle.espresso.classfile.MethodRefConstant;
@@ -275,6 +278,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
@@ -298,7 +302,7 @@ import com.oracle.truffle.object.DebugCounter;
  * bytecode is first processed/executed without growing or shinking the stack and only then the
  * {@code top} of the stack index is adjusted depending on the bytecode stack offset.
  */
-public final class BytecodesNode extends EspressoMethodNode implements CustomNodeCount, InstrumentableNode {
+public final class BytecodesNode extends EspressoMethodNode implements CustomNodeCount {
 
     public static final boolean DEBUG_GENERAL = false;
     public static final boolean DEBUG_THROWN = false;
@@ -329,6 +333,8 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
     private int[][] JSRbci = null;
 
     private final BytecodeStream bs;
+
+    @Child private volatile InstrumentationSupport instrumentation;
 
     @TruffleBoundary
     public BytecodesNode(Method method, FrameDescriptor frameDescriptor) {
@@ -535,8 +541,8 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
 
         int curBCI = 0;
         int top = 0;
-
         initArguments(frame);
+        InstrumentationSupport instrument = this.instrumentation;
 
         loop: while (true) {
             int curOpcode;
@@ -547,10 +553,14 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
                 CompilerAsserts.partialEvaluationConstant(curBCI);
                 CompilerAsserts.partialEvaluationConstant(curOpcode);
 
+                if (instrument != null) {
+                    instrument.notifyBeforeBci(frame, curBCI);
+                }
+
                 // @formatter:off
                 // Checkstyle: stop
-                try {
-                    switch (curOpcode) {
+                    try {
+                       switch (curOpcode) {
                         case NOP: break;
                         case ACONST_NULL: putObject(frame, top, StaticObject.NULL); break;
 
@@ -827,7 +837,8 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
                                 continue loop;
                             }
 
-                            // i could overflow if high == Integer.MAX_VALUE. This loops take that
+                            // i could overflow if high == Integer.MAX_VALUE. This loops take
+                            // that
                             // into account
                             for (int i = low; i != high + 1; ++i) {
                                 if (i == index) {
@@ -878,12 +889,18 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
                         }
                         // @formatter:off
                         // Checkstyle: stop
-                        case IRETURN: return exitMethodAndReturn(peekInt(frame, top - 1));
-                        case LRETURN: return exitMethodAndReturnObject(peekLong(frame, top - 1));
-                        case FRETURN: return exitMethodAndReturnObject(peekFloat(frame, top - 1));
-                        case DRETURN: return exitMethodAndReturnObject(peekDouble(frame, top - 1));
-                        case ARETURN: return exitMethodAndReturnObject(peekObject(frame, top - 1));
-                        case RETURN: return exitMethodAndReturn();
+                        case IRETURN:
+                            return notifyReturn(frame, curBCI, exitMethodAndReturn(peekInt(frame, top - 1)));
+                       case LRETURN:
+                            return notifyReturn(frame, curBCI, exitMethodAndReturnObject(peekLong(frame, top - 1)));
+                        case FRETURN:
+                            return notifyReturn(frame, curBCI, exitMethodAndReturnObject(peekFloat(frame, top - 1)));
+                        case DRETURN:
+                            return notifyReturn(frame, curBCI, exitMethodAndReturnObject(peekDouble(frame, top - 1)));
+                        case ARETURN:
+                             return notifyReturn(frame, curBCI, exitMethodAndReturnObject(peekObject(frame, top - 1)));
+                        case RETURN:
+                            return notifyReturn(frame, curBCI, exitMethodAndReturn());
 
                         // TODO(peterssen): Order shuffled.
                         case GETSTATIC: // fall through
@@ -929,10 +946,14 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
                         default:
                             CompilerAsserts.neverPartOfCompilation();
                             throw EspressoError.shouldNotReachHere(Bytecodes.nameOf(curOpcode));
-                    }
+                       }
+
                     // @formatter:on
                     // Checkstyle: resume
                 } catch (EspressoException | EspressoExitException e) {
+                    if (instrument != null) {
+                        instrument.notifyExceptionInBci(frame, e, curBCI);
+                    }
                     throw e;
                 } catch (OutOfMemoryError e) {
                     CompilerDirectives.transferToInterpreter();
@@ -967,6 +988,9 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     e.printStackTrace();
                     throw EspressoError.shouldNotReachHere("Shouldn't see host exceptions here" + e);
+                }
+                if (instrument != null) {
+                    instrument.notifyAfterBci(frame, curBCI);
                 }
             } catch (EspressoException e) {
                 // CompilerDirectives.transferToInterpreter();
@@ -1083,9 +1107,32 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
 
     }
 
+    private Object notifyReturn(VirtualFrame frame, int curBCI, Object toReturn) {
+        if (instrumentation != null) {
+            instrumentation.notifyAfterBci(frame, curBCI);
+        }
+        return toReturn;
+    }
+
     public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
-        // TODO Auto-generated method stub
-        return super.materializeInstrumentableNodes(materializedTags);
+        InstrumentationSupport info = this.instrumentation;
+        if (info == null && materializedTags.contains(StatementTag.class)) {
+            Lock lock = getLock();
+            lock.lock();
+            try {
+                info = this.instrumentation;
+                // double checked locking
+                if (info == null) {
+                    this.instrumentation = info = insert(new InstrumentationSupport(getMethod()));
+                    // the debug info contains instrumentable nodes so we need to notify for
+                    // instrumentation updates.
+                    notifyInserted(info);
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+        return this;
     }
 
     private boolean takeBranch(VirtualFrame frame, int top, int opCode) {
@@ -2118,4 +2165,112 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
         int codeSize = getMethod().getCodeSize();
         return 2 * codeSize + 1;
     }
+
+    static final class InstrumentationSupport extends Node {
+
+        @Children private final EspressoInstrumentableNode[] statementNodes;
+        private Map<Integer, Integer> hookBCIToNodeIndex;
+
+        InstrumentationSupport(Method method) {
+            LineNumberTable table = method.getLineNumberTable();
+
+            if (table != LineNumberTable.EMPTY) {
+                LineNumberTable.Entry[] entries = table.getEntries();
+                statementNodes = new EspressoInstrumentableNode[entries.length];
+                hookBCIToNodeIndex = new HashMap<>(entries.length);
+
+                for (int i = 0; i < entries.length; i++) {
+                    LineNumberTable.Entry entry = entries[i];
+                    statementNodes[i] = new EspressoStatementNode(entry.getBCI(), entry);
+                    hookBCIToNodeIndex.put(entry.getBCI(), i);
+                }
+            } else {
+                this.statementNodes = null;
+            }
+        }
+
+        final void notifyBeforeBci(VirtualFrame frame, int bci) {
+            EspressoInstrumentableNodeWrapper wrapperNode = getWrapper(bci);
+            if (wrapperNode == null) {
+                return;
+            }
+            EspressoStatementNode statement = (EspressoStatementNode) wrapperNode.getDelegateNode();
+            if (!statement.isBefore(bci)) {
+                return;
+            }
+            ProbeNode probeNode = wrapperNode.getProbeNode();
+            try {
+                probeNode.onEnter(frame);
+            } catch (Throwable t) {
+                Object result = probeNode.onReturnExceptionalOrUnwind(frame, t, false);
+                if (result == ProbeNode.UNWIND_ACTION_REENTER) {
+                    // TODO maybe support this by returning a new bci?
+                    CompilerDirectives.transferToInterpreter();
+                    throw new UnsupportedOperationException();
+                } else if (result != null) {
+                    // ignore result values;
+                    // we are instrumentation statements only.
+                    return;
+                }
+                throw t;
+            }
+        }
+
+        final void notifyExceptionInBci(VirtualFrame frame, Throwable t, int bci) {
+            EspressoInstrumentableNodeWrapper wrapperNode = getWrapper(bci);
+            if (wrapperNode == null) {
+                return;
+            }
+            ProbeNode probeNode = wrapperNode.getProbeNode();
+            probeNode.onReturnExceptionalOrUnwind(frame, t, false);
+        }
+
+        final void notifyAfterBci(VirtualFrame frame, int bci) {
+            EspressoInstrumentableNodeWrapper wrapperNode = getWrapper(bci);
+            if (wrapperNode == null) {
+                return;
+            }
+            EspressoStatementNode statement = (EspressoStatementNode) wrapperNode.getDelegateNode();
+            if (!statement.isAfter(bci)) {
+                return;
+            }
+
+            ProbeNode probeNode = wrapperNode.getProbeNode();
+            try {
+                probeNode.onReturnValue(frame, StaticObject.NULL);
+            } catch (Throwable t) {
+                Object result = probeNode.onReturnExceptionalOrUnwind(frame, t, true);
+                if (result == ProbeNode.UNWIND_ACTION_REENTER) {
+                    // TODO maybe support this by returning a new bci?
+                    CompilerDirectives.transferToInterpreter();
+                    throw new UnsupportedOperationException();
+                } else if (result != null) {
+                    // ignore result values;
+                    // we are instrumentation statements only.
+                    return;
+                }
+                throw t;
+            }
+        }
+
+        private EspressoInstrumentableNodeWrapper getWrapper(int bci) {
+            if (statementNodes == null) {
+                return null;
+            }
+            Integer nodeIndex = hookBCIToNodeIndex.get(bci);
+            if (nodeIndex == null) {
+                return null;
+            }
+
+            EspressoInstrumentableNode node = statementNodes[nodeIndex];
+            if (!(node instanceof EspressoInstrumentableNodeWrapper)) {
+                return null;
+            }
+
+            CompilerAsserts.partialEvaluationConstant(node);
+            return ((EspressoInstrumentableNodeWrapper) node);
+        }
+
+    }
+
 }
