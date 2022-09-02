@@ -53,6 +53,7 @@ import org.graalvm.wasm.constants.ExportIdentifier;
 import org.graalvm.wasm.constants.GlobalModifier;
 import org.graalvm.wasm.constants.ImportIdentifier;
 import org.graalvm.wasm.constants.LimitsPrefix;
+import org.graalvm.wasm.exception.WasmException;
 import org.graalvm.wasm.exception.WasmLinkerException;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.nodes.WasmBlockNode;
@@ -1012,18 +1013,22 @@ public class BinaryParser extends BinaryStreamParser {
 
             // Read the offset expression.
             byte instruction = read1();
-            int offsetAddress = -1;
-            int offsetGlobalIndex = -1;
+            int elemOffset = 0;
             switch (instruction) {
                 case Instructions.I32_CONST: {
-                    offsetAddress = readSignedInt32();
+                    elemOffset = readSignedInt32();
                     readEnd();
+                    // int[] contents = readElemContents();
+                    // module.symbolTable().initializeTableWithFunctions(context, elementOffset, contents);
                     break;
                 }
                 case Instructions.GLOBAL_GET: {
-                    offsetGlobalIndex = readGlobalIndex();
+                    int globalIndex = readGlobalIndex();
                     readEnd();
-                    break;
+                    throw new RuntimeException("Global get in element section not supported.");
+                    // int[] contents = readElemContents();
+                    // final Linker linker = context.linker();
+                    // linker.tryInitializeElements(context, module, index, contents);
                 }
                 default: {
                     Assert.fail(String.format("Invalid instruction for table offset expression: 0x%02X", instruction));
@@ -1034,7 +1039,7 @@ public class BinaryParser extends BinaryStreamParser {
             int segmentLength = readVectorLength();
             final SymbolTable symbolTable = module.symbolTable();
             final Table table = symbolTable.table();
-            if (table == null || offsetGlobalIndex == -1) {
+            if (table != null) {
                 // Note: we do not check if the earlier element segments were executed,
                 // and we do not try to execute the element segments in order,
                 // as we do with data sections and the memory.
@@ -1042,20 +1047,20 @@ public class BinaryParser extends BinaryStreamParser {
                 // Thus, the order in which the element sections are loaded is not important
                 // (also, I did not notice the toolchains overriding the same element slots,
                 // or anything in the spec about that).
+                table.ensureSizeAtLeast(elemOffset + segmentLength);
+                for (int index = 0; index != segmentLength; ++index) {
+                    final int functionIndex = readFunctionIndex();
+                    final WasmFunction function = symbolTable.function(functionIndex);
+                    table.set(elemOffset + index, function);
+                }
+            } else {
                 WasmFunction[] elements = new WasmFunction[segmentLength];
                 for (int index = 0; index != segmentLength; ++index) {
                     final int functionIndex = readFunctionIndex();
                     final WasmFunction function = symbolTable.function(functionIndex);
                     elements[index] = function;
                 }
-                context.linker().resolveElemSegment(context, module, elemSegmentId, offsetAddress, offsetGlobalIndex, segmentLength, elements);
-            } else {
-                table.ensureSizeAtLeast(offsetAddress + segmentLength);
-                for (int index = 0; index != segmentLength; ++index) {
-                    final int functionIndex = readFunctionIndex();
-                    final WasmFunction function = symbolTable.function(functionIndex);
-                    table.set(offsetAddress + index, function);
-                }
+                context.linker().resolveElemSegment(module, elemSegmentId, elemOffset, segmentLength, elements);
             }
         }
     }
@@ -1150,12 +1155,6 @@ public class BinaryParser extends BinaryStreamParser {
                 globals.storeLong(address, value);
                 context.linker().resolveGlobalInitialization(module, globalIndex);
             } else {
-                if (!module.symbolTable().importedGlobals().containsKey(existingIndex)) {
-                    // The current WebAssembly spec says constant expressions can only refer to
-                    // imported globals. We can easily remove this restriction in the future.
-                    Assert.fail("The initializer for global " + globalIndex + " in module '" + module.name() +
-                                    "' refers to a non-imported global.");
-                }
                 context.linker().resolveGlobalInitialization(context, module, globalIndex, existingIndex);
             }
         }
@@ -1168,7 +1167,8 @@ public class BinaryParser extends BinaryStreamParser {
             int memIndex = readUnsignedInt32();
             // At the moment, WebAssembly only supports one memory instance, thus the only valid
             // memory index is 0.
-            Assert.assertIntEqual(memIndex, 0, "Invalid memory index, only the memory index 0 is currently supported.");
+            Assert.assertIntEqual(memIndex, 0, "Invalid memory index, only the memory index 0 is currently supported");
+            long dataOffset = 0;
             byte instruction = read1();
 
             // Data dataOffset expression must be a constant expression with result type i32.
@@ -1176,36 +1176,33 @@ public class BinaryParser extends BinaryStreamParser {
             // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
 
             // Read the offset expression.
-            int offsetAddress = -1;
-            int offsetGlobalIndex = -1;
             switch (instruction) {
                 case Instructions.I32_CONST:
-                    offsetAddress = readSignedInt32();
+                    dataOffset = readSignedInt32();
                     readEnd();
                     break;
                 case Instructions.GLOBAL_GET:
-                    offsetGlobalIndex = readGlobalIndex();
+                    int globalIndex = readGlobalIndex();
                     readEnd();
-                    break;
+                    // TODO: Implement GLOBAL_GET case for data sections (and add tests).
+                    throw new WasmException("GLOBAL_GET in data section not implemented.");
                 default:
                     Assert.fail(String.format("Invalid instruction for data offset expression: 0x%02X", instruction));
-            }
-            // Try to immediately resolve the global's value, if that global is initialized.
-            // Test functions that re-read the data section to reset the memory depend on this,
-            // since they need to avoid re-linking.
-            if (offsetGlobalIndex != -1 && module.symbolTable().isGlobalInitialized(offsetGlobalIndex)) {
-                int offsetGlobalAddress = module.symbolTable().globalAddress(offsetGlobalIndex);
-                offsetAddress = context.globals().loadAsInt(offsetGlobalAddress);
-                offsetGlobalIndex = -1;
             }
 
             // Copy the contents, or schedule a linker task for this.
             int byteLength = readVectorLength();
+            long baseAddress = dataOffset;
             final WasmMemory memory = module.symbolTable().memory();
-            if (memory == null || !allDataSectionsResolved || offsetGlobalIndex != -1) {
-                // A data section can only be resolved after the memory is resolved.
-                // If the data section is offset by a global variable,
-                // then the data section can only be resolved after the global is resolved.
+            if (memory != null && allDataSectionsResolved) {
+                // A data section can be loaded directly into memory only if there are no prior
+                // unresolved data sections.
+                memory.validateAddress(null, baseAddress, byteLength);
+                for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
+                    byte b = read1();
+                    memory.store_i32_8(baseAddress + writeOffset, b);
+                }
+            } else {
                 // When some data section is not resolved, all the later data sections must be
                 // resolved after it.
                 byte[] dataSegment = new byte[byteLength];
@@ -1213,16 +1210,8 @@ public class BinaryParser extends BinaryStreamParser {
                     byte b = read1();
                     dataSegment[writeOffset] = b;
                 }
-                context.linker().resolveDataSegment(context, module, dataSegmentId, offsetAddress, offsetGlobalIndex, byteLength, dataSegment, allDataSectionsResolved);
+                context.linker().resolveDataSegment(module, dataSegmentId, baseAddress, byteLength, dataSegment, allDataSectionsResolved);
                 allDataSectionsResolved = false;
-            } else {
-                // A data section can be loaded directly into memory only if there are no prior
-                // unresolved data sections.
-                memory.validateAddress(null, offsetAddress, byteLength);
-                for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
-                    byte b = read1();
-                    memory.store_i32_8(offsetAddress + writeOffset, b);
-                }
             }
         }
     }
