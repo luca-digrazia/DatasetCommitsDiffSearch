@@ -27,8 +27,8 @@
 package com.oracle.objectfile.debugentry;
 
 public class MethodEntry extends MemberEntry {
-    final TypeEntry[] paramTypes;
-    final String[] paramNames;
+    TypeEntry[] paramTypes;
+    String[] paramNames;
     final boolean isDeoptTarget;
 
     public MethodEntry(FileEntry fileEntry, String methodName, ClassEntry ownerType, TypeEntry valueType, TypeEntry[] paramTypes, String[] paramNames, int modifiers, boolean isDeoptTarget) {

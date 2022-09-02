@@ -65,7 +65,7 @@ public class Range {
      */
     private Range(String symbolName, StringTable stringTable, MethodEntry methodEntry, FileEntry fileEntry, int lo, int hi, int line,
                     Range primary) {
-        this.fileEntry = fileEntry;
+        this.fileEntry = fileEntry; // TODO remove and use fileEntry from MethodEntry
         if (fileEntry != null) {
             stringTable.uniqueDebugString(fileEntry.getFileName());
             stringTable.uniqueDebugString(fileEntry.getPathName());

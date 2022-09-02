@@ -30,7 +30,6 @@ import static com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugFrameSizeCh
 
 import java.lang.reflect.Modifier;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -695,10 +694,9 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
             @Override
             public List<String> paramTypes() {
+                LinkedList<String> paramTypes = new LinkedList<>();
                 Signature signature = hostedMethod.getSignature();
-                int parameterCount = signature.getParameterCount(false);
-                List<String> paramTypes = new ArrayList<>(parameterCount);
-                for (int i = 0; i < parameterCount; i++) {
+                for (int i = 0; i < signature.getParameterCount(false); i++) {
                     paramTypes.add(signature.getParameterType(i, null).toJavaName());
                 }
                 return paramTypes;
@@ -707,10 +705,9 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
             @Override
             public List<String> paramNames() {
                 /* Can only provide blank names for now. */
+                LinkedList<String> paramNames = new LinkedList<>();
                 Signature signature = hostedMethod.getSignature();
-                int parameterCount = signature.getParameterCount(false);
-                List<String> paramNames = new ArrayList<>(parameterCount);
-                for (int i = 0; i < parameterCount; i++) {
+                for (int i = 0; i < signature.getParameterCount(false); i++) {
                     paramNames.add("");
                 }
                 return paramNames;
@@ -989,11 +986,10 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
         @Override
         public List<String> paramTypes() {
+            LinkedList<String> paramTypes = new LinkedList<>();
             Signature signature = hostedMethod.getSignature();
-            int parameterCount = signature.getParameterCount(false);
-            List<String> paramTypes = new ArrayList<>(parameterCount);
-            for (int i = 0; i < parameterCount; i++) {
-                JavaType parameterType = signature.getParameterType(i, null);
+            for (int i = 0; i < signature.getParameterCount(false); i++) {
+                final JavaType parameterType = signature.getParameterType(i, null);
                 paramTypes.add(toJavaName(parameterType));
             }
             return paramTypes;
@@ -1002,10 +998,9 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
         @Override
         public List<String> paramNames() {
             /* Can only provide blank names for now. */
+            LinkedList<String> paramNames = new LinkedList<>();
             Signature signature = hostedMethod.getSignature();
-            int parameterCount = signature.getParameterCount(false);
-            List<String> paramNames = new ArrayList<>(parameterCount);
-            for (int i = 0; i < parameterCount; i++) {
+            for (int i = 0; i < signature.getParameterCount(false); i++) {
                 paramNames.add("");
             }
             return paramNames;
@@ -1152,11 +1147,10 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
         @Override
         public List<String> paramTypes() {
+            LinkedList<String> paramTypes = new LinkedList<>();
             Signature signature = method.getSignature();
-            int parameterCount = signature.getParameterCount(false);
-            List<String> paramTypes = new ArrayList<>(parameterCount);
-            for (int i = 0; i < parameterCount; i++) {
-                JavaType parameterType = signature.getParameterType(i, null);
+            for (int i = 0; i < signature.getParameterCount(false); i++) {
+                final JavaType parameterType = signature.getParameterType(i, null);
                 paramTypes.add(toJavaName(parameterType));
             }
             return paramTypes;
@@ -1165,10 +1159,9 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
         @Override
         public List<String> paramNames() {
             /* Can only provide blank names for now. */
+            LinkedList<String> paramNames = new LinkedList<>();
             Signature signature = method.getSignature();
-            int parameterCount = signature.getParameterCount(false);
-            List<String> paramNames = new ArrayList<>(parameterCount);
-            for (int i = 0; i < parameterCount; i++) {
+            for (int i = 0; i < signature.getParameterCount(false); i++) {
                 paramNames.add("");
             }
             return paramNames;
