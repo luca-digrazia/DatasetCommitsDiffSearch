@@ -45,7 +45,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import com.oracle.svm.hosted.code.CEntryPointData;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -69,6 +68,7 @@ import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.hosted.analysis.Inflation;
 import com.oracle.svm.hosted.c.NativeLibraries;
+import com.oracle.svm.hosted.code.CEntryPointData;
 import com.oracle.svm.hosted.code.CompilationInfoSupport;
 import com.oracle.svm.hosted.code.SharedRuntimeConfigurationBuilder;
 import com.oracle.svm.hosted.image.AbstractBootImage;
@@ -431,25 +431,6 @@ public class FeatureImpl {
         }
     }
 
-    public static class AfterUniverseCreationAccessImpl extends FeatureAccessImpl implements Feature.AfterUniverseCreationAccess {
-        private final HostedUniverse hUniverse;
-        private final HostedMetaAccess hMetaAccess;
-
-        AfterUniverseCreationAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, HostedUniverse hUniverse, HostedMetaAccess hMetaAccess, DebugContext debugContext) {
-            super(featureHandler, imageClassLoader, debugContext);
-            this.hUniverse = hUniverse;
-            this.hMetaAccess = hMetaAccess;
-        }
-
-        public HostedUniverse getUniverse() {
-            return hUniverse;
-        }
-
-        public HostedMetaAccess getMetaAccess() {
-            return hMetaAccess;
-        }
-    }
-
     public static class CompilationAccessImpl extends FeatureAccessImpl implements Feature.CompilationAccess {
 
         protected final AnalysisUniverse aUniverse;
@@ -646,15 +627,16 @@ public class FeatureImpl {
 
     public static class AfterImageWriteAccessImpl extends FeatureAccessImpl implements Feature.AfterImageWriteAccess {
         private final HostedUniverse hUniverse;
-        protected final Path imagePath;
+        protected final LinkerInvocation linkerInvocation;
         protected final Path tempDirectory;
         protected final NativeImageKind imageKind;
 
-        AfterImageWriteAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, HostedUniverse hUniverse, Path imagePath, Path tempDirectory, NativeImageKind imageKind,
+        AfterImageWriteAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, HostedUniverse hUniverse, LinkerInvocation linkerInvocation, Path tempDirectory,
+                        NativeImageKind imageKind,
                         DebugContext debugContext) {
             super(featureHandler, imageClassLoader, debugContext);
             this.hUniverse = hUniverse;
-            this.imagePath = imagePath;
+            this.linkerInvocation = linkerInvocation;
             this.tempDirectory = tempDirectory;
             this.imageKind = imageKind;
         }
@@ -665,7 +647,7 @@ public class FeatureImpl {
 
         @Override
         public Path getImagePath() {
-            return imagePath;
+            return linkerInvocation.getOutputFile();
         }
 
         public Path getTempDirectory() {
@@ -674,6 +656,10 @@ public class FeatureImpl {
 
         public NativeImageKind getImageKind() {
             return imageKind;
+        }
+
+        public List<String> getImageSymbols(boolean onlyGlobal) {
+            return linkerInvocation.getImageSymbols(onlyGlobal);
         }
     }
 }

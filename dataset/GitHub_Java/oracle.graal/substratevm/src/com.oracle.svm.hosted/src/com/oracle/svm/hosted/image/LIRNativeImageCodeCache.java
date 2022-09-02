@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.hosted.image;
 
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +38,6 @@ import org.graalvm.compiler.code.CompilationResult.CodeAnnotation;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
-import org.graalvm.compiler.serviceprovider.BufferUtil;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.graal.pointsto.BigBang;
@@ -184,8 +182,7 @@ public class LIRNativeImageCodeCache extends NativeImageCodeCache {
 
     @Override
     public void writeCode(RelocatableBuffer buffer) {
-        ByteBuffer bufferBytes = buffer.getByteBuffer();
-        int startPos = bufferBytes.position();
+        int startPos = buffer.getPosition();
         /*
          * Compilation start offsets are relative to the beginning of the code cache (since the heap
          * size is not fixed at the time they are computed). This is just startPos, i.e. we start
@@ -195,15 +192,15 @@ public class LIRNativeImageCodeCache extends NativeImageCodeCache {
             HostedMethod method = entry.getKey();
             CompilationResult compilation = entry.getValue();
 
-            BufferUtil.asBaseBuffer(bufferBytes).position(startPos + method.getCodeAddressOffset());
+            buffer.setPosition(startPos + method.getCodeAddressOffset());
             int codeSize = compilation.getTargetCodeSize();
-            bufferBytes.put(compilation.getTargetCode(), 0, codeSize);
+            buffer.putBytes(compilation.getTargetCode(), 0, codeSize);
 
             for (int i = codeSize; i < NumUtil.roundUp(codeSize, SubstrateOptions.codeAlignment()); i++) {
-                bufferBytes.put(CODE_FILLER_BYTE);
+                buffer.putByte(CODE_FILLER_BYTE);
             }
         }
-        BufferUtil.asBaseBuffer(bufferBytes).position(startPos);
+        buffer.setPosition(startPos);
     }
 
     @Override
