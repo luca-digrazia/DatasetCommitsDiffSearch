@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -289,9 +288,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             cmd.add("/INCREMENTAL:NO");
             cmd.add("/NODEFAULTLIB:LIBCMT");
 
-            /* Put .lib and .exp files in a temp dir as we don't usually need them. */
-            cmd.add("/IMPLIB:" + getTempDirectory().resolve(imageName + ".lib"));
-
             if (SubstrateOptions.GenerateDebugInfo.getValue() > 0) {
                 cmd.add("/DEBUG");
 
@@ -455,12 +451,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                 if (status != 0) {
                     String output = String.join(System.lineSeparator(), lines);
                     throw handleLinkerFailure("Linker command exited with " + status, commandLine, output);
-                }
-
-                if (OS.getCurrent() == OS.WINDOWS && !imageKind.isExecutable) {
-                    /* Provide an import library for the built shared library. */
-                    String importLib = imageName + ".lib";
-                    Files.move(inv.getTempDirectory().resolve(importLib), inv.getOutputFile().resolveSibling(importLib), StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException e) {
                 throw handleLinkerFailure(e.toString(), commandLine, null);
