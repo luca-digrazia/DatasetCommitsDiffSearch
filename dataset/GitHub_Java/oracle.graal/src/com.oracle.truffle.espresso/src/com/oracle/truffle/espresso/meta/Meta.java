@@ -723,6 +723,11 @@ public final class Meta implements ContextAccess {
 
     // Checkstyle: resume field name check
 
+    private static boolean isKnownClass(java.lang.Class<?> clazz) {
+        // Cheap check: (host) known classes are loaded by the BCL.
+        return clazz.getClassLoader() == null;
+    }
+
     public static StaticObject box(Meta meta, Object arg) {
         if (arg instanceof Boolean) {
             return meta.boxBoolean((boolean) arg);
@@ -813,11 +818,19 @@ public final class Meta implements ContextAccess {
 
     // endregion Guest exception handling (throw)
 
-    private ObjectKlass knownKlass(Symbol<Type> type) {
-        CompilerAsserts.neverPartOfCompilation();
+    @TruffleBoundary
+    public ObjectKlass knownKlass(Symbol<Type> type) {
         assert !Types.isArray(type);
         assert !Types.isPrimitive(type);
         return (ObjectKlass) getRegistries().loadKlassWithBootClassLoader(type);
+    }
+
+    @TruffleBoundary
+    ObjectKlass knownKlass(java.lang.Class<?> hostClass) {
+        assert isKnownClass(hostClass);
+        assert !hostClass.isPrimitive();
+        // Resolve non-primitive classes using BCL.
+        return knownKlass(getTypes().fromClass(hostClass));
     }
 
     /**
