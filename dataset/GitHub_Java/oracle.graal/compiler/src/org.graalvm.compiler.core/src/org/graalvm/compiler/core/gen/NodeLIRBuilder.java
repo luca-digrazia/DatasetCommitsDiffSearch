@@ -787,15 +787,11 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         assert state != null : "Deopt node=" + deopt + " needs a state ";
         if (deopt instanceof ImplicitNullCheckNode) {
             ImplicitNullCheckNode implicitNullCheck = (ImplicitNullCheckNode) deopt;
-            JavaConstant deoptReasonAndAction = implicitNullCheck.getDeoptReasonAndAction();
-            JavaConstant deoptSpeculation = implicitNullCheck.getDeoptSpeculation();
-            if (deoptSpeculation != null) {
-                assert deoptReasonAndAction != null;
-                assert isValidImplicitLIRFrameState(implicitNullCheck) : "Unsupported implicit exception";
-                return getDebugInfoBuilder().build(deopt, state, exceptionEdge, deoptReasonAndAction, deoptSpeculation);
-            }
+            assert isValidImplicitLIRFrameState(implicitNullCheck) : "Unsupported implicit exception";
+            return getDebugInfoBuilder().build(deopt, state, exceptionEdge, implicitNullCheck.getDeoptReasonAndAction(), implicitNullCheck.getDeoptSpeculation());
+        } else {
+            return getDebugInfoBuilder().build(deopt, state, exceptionEdge, null, null);
         }
-        return getDebugInfoBuilder().build(deopt, state, exceptionEdge, null, null);
     }
 
     private boolean isValidImplicitLIRFrameState(ImplicitNullCheckNode implicitNullCheck) {

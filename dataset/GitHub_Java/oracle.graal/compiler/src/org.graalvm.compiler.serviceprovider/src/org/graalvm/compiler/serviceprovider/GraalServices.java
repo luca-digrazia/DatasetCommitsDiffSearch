@@ -281,7 +281,7 @@ public final class GraalServices {
     /**
      * Returns true if JVMCI supports arbitrary implicit exception dispatch.
      */
-    public static boolean supportsArbitraryImplicitException() {
+    public static boolean supportArbitraryImplicitException() {
         throw shouldNotReachHere();
     }
 
