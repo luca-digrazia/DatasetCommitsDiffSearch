@@ -41,8 +41,6 @@ import org.junit.Test;
  */
 public class InspectorObjectTest {
 
-    private static final String NL = System.lineSeparator();
-
     private ByteArrayOutputStream out;
     private Context context;
     private TruffleObject inspector;
@@ -75,8 +73,8 @@ public class InspectorObjectTest {
         Value testOpen = context.getBindings("sl").getMember("testOpen");
         testOpen.execute(inspector);
         String output = out.toString();
-        Assert.assertTrue(output, output.startsWith("Debugger listening "));
-        Assert.assertTrue(output, output.indexOf("ws://") > 0);
+        Assert.assertTrue(output, output.startsWith("Debugger listening on port"));
+        Assert.assertTrue(output, output.indexOf("ws=") > 0);
         Assert.assertTrue(output, output.indexOf(":" + freePort + "/") > 0);
     }
 
@@ -188,17 +186,17 @@ public class InspectorObjectTest {
                         "}\n");
         Value testSession = context.getBindings("sl").getMember("testSession");
         Value ret = testSession.execute(inspector);
-        Assert.assertEquals("3" + NL +
-                        "l3: A" + NL +
-                        "l1: A" + NL +
-                        "l2: A" + NL +
-                        "6" + NL +
-                        "l3: B" + NL +
-                        "l1: B" + NL +
-                        "l2: B" + NL +
-                        "4 = 3 + 1" + NL +
-                        "l2: BB" + NL +
-                        "3" + NL, out.toString());
+        Assert.assertEquals("3\n" +
+                        "l3: A\n" +
+                        "l1: A\n" +
+                        "l2: A\n" +
+                        "6\n" +
+                        "l3: B\n" +
+                        "l1: B\n" +
+                        "l2: B\n" +
+                        "4 = 3 + 1\n" +
+                        "l2: BB\n" +
+                        "3\n", out.toString());
         Assert.assertTrue(ret.asBoolean());
     }
 
@@ -218,19 +216,14 @@ public class InspectorObjectTest {
                         "    println(\"P: \" + arg.method);\n" +
                         "}\n" +
                         "function listenerAll(arg) {\n" +
-                        "    if (\"Runtime.consoleAPICalled\" == arg.method) {\n" +
-                        "        // print callback\n" +
-                        "        return;\n" +
-                        "    } else {\n" +
-                        "        println(\"All: \" + arg.method);\n" +
-                        "    }\n" +
+                        "    println(\"All: \" + arg.method);\n" +
                         "}\n");
         Value testSession = context.getBindings("sl").getMember("testSession");
         testSession.execute(inspector);
-        Assert.assertEquals("All: Debugger.scriptParsed" + NL +
-                        "All: Debugger.scriptParsed" + NL +
-                        "P: Debugger.paused" + NL +
-                        "All: Debugger.paused" + NL +
-                        "All: Debugger.resumed" + NL, out.toString());
+        Assert.assertEquals("All: Debugger.scriptParsed\n" +
+                        "All: Debugger.scriptParsed\n" +
+                        "P: Debugger.paused\n" +
+                        "All: Debugger.paused\n" +
+                        "All: Debugger.resumed\n", out.toString());
     }
 }

@@ -24,15 +24,6 @@
  */
 package com.oracle.truffle.tools.chromeinspector.test;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import java.util.Collections;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.graalvm.polyglot.Source;
-import org.junit.Test;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
@@ -45,8 +36,7 @@ import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.KeyInfo;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -58,10 +48,16 @@ import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 import com.oracle.truffle.tck.DebuggerTester;
 import com.oracle.truffle.tools.chromeinspector.ScriptsHandler;
 import com.oracle.truffle.tools.chromeinspector.types.Script;
+import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.graalvm.polyglot.Source;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import org.junit.Test;
 
 /**
- * Test that properties that have {@link InteropLibrary#hasMemberReadSideEffects(Object, String)}
- * flag are not read eagerly, but on a request only.
+ * Test that properties that have {@link KeyInfo#READ_SIDE_EFFECTS} flag are not read eagerly, but
+ * on a request only.
  */
 public class LazyAccessInspectDebugTest {
 
@@ -282,34 +278,30 @@ public class LazyAccessInspectDebugTest {
             }
 
             @Override
-            protected boolean hasMembers() {
-                return true;
-            }
-
-            @Override
-            protected Object getMembers(boolean includeInternal) throws UnsupportedMessageException {
+            public Object keys() throws UnsupportedMessageException {
                 return new Keys();
             }
 
             @Override
-            protected boolean isMemberReadable(String member) {
-                return READ_READY.equals(member) || READ_LAZY.equals(member);
+            public int keyInfo(String key) {
+                if (READ_READY.equals(key)) {
+                    return KeyInfo.READABLE | KeyInfo.MODIFIABLE;
+                } else if (READ_LAZY.equals(key)) {
+                    return KeyInfo.READABLE | KeyInfo.READ_SIDE_EFFECTS | KeyInfo.MODIFIABLE;
+                } else {
+                    return KeyInfo.NONE;
+                }
             }
 
             @Override
-            protected boolean hasMemberReadSideEffects(String member) {
-                return READ_LAZY.equals(member);
-            }
-
-            @Override
-            protected Object readMember(String member) throws UnsupportedMessageException, UnknownIdentifierException {
-                if (READ_READY.equals(member)) {
+            public Object read(String key) throws UnsupportedMessageException, UnknownIdentifierException {
+                if (READ_READY.equals(key)) {
                     return 42;
-                } else if (READ_LAZY.equals(member)) {
+                } else if (READ_LAZY.equals(key)) {
                     readLazyFlag.set(true);
                     return 43;
                 } else {
-                    throw UnknownIdentifierException.create(member);
+                    throw UnknownIdentifierException.raise(key);
                 }
             }
         }
@@ -317,32 +309,34 @@ public class LazyAccessInspectDebugTest {
         private static class Keys extends ProxyInteropObject {
 
             @Override
-            protected boolean hasArrayElements() {
+            public boolean hasSize() {
                 return true;
             }
 
             @Override
-            protected long getArraySize() throws UnsupportedMessageException {
+            public int getSize() {
                 return 2;
             }
 
             @Override
-            protected boolean isArrayElementReadable(long index) {
-                return index >= 0 && index < 2;
-            }
-
-            @Override
-            protected Object readArrayElement(long index) throws UnsupportedMessageException, InvalidArrayIndexException {
-                switch ((int) index) {
-                    case 0:
-                        return READ_READY;
-                    case 1:
-                        return READ_LAZY;
-                    default:
-                        throw InvalidArrayIndexException.create(index);
+            public int keyInfo(Number key) {
+                if (key.intValue() == 0 || key.intValue() == 1) {
+                    return KeyInfo.READABLE;
+                } else {
+                    return KeyInfo.NONE;
                 }
             }
 
+            @Override
+            public Object read(Number key) throws UnsupportedMessageException, UnknownIdentifierException {
+                if (key.intValue() == 0) {
+                    return READ_READY;
+                } else if (key.intValue() == 1) {
+                    return READ_LAZY;
+                } else {
+                    throw UnknownIdentifierException.raise(key.toString());
+                }
+            }
         }
     }
 }

@@ -215,47 +215,45 @@ public final class InspectorDebugger extends DebuggerDomain {
         if (script == null) {
             throw new CommandProcessException("Unknown scriptId: " + scriptId);
         }
-        JSONObject json = new JSONObject();
-        JSONArray arr = new JSONArray();
         Source source = script.getSource();
-        if (source.getLength() > 0) {
-            int l1 = start.getLine();
-            int c1 = start.getColumn();
-            if (c1 <= 0) {
-                c1 = -1;
-            }
-            int l2;
-            int c2;
-            if (end != null) {
-                if (source.hasCharacters()) {
-                    int lc = source.getLineCount();
-                    if (end.getLine() > lc) {
-                        l2 = lc;
-                    } else {
-                        l2 = end.getLine();
-                    }
+        int l1 = start.getLine();
+        int c1 = start.getColumn();
+        if (c1 <= 0) {
+            c1 = -1;
+        }
+        int l2;
+        int c2;
+        if (end != null) {
+            if (source.hasCharacters()) {
+                int lc = source.getLineCount();
+                if (end.getLine() > lc) {
+                    l2 = lc;
                 } else {
                     l2 = end.getLine();
                 }
-                c2 = end.getColumn();
-                if (c2 <= 0) {
-                    c2 = -1;
-                }
             } else {
-                l2 = l1;
-                if (c1 == -1) {
-                    c2 = -1;
-                } else if (source.hasCharacters()) {
-                    c2 = source.getLineLength(l2);
-                } else {
-                    c2 = c1 + 1;
-                }
+                l2 = end.getLine();
             }
-            SourceSection range = source.createSection(l1, c1, l2, c2);
-            Iterable<SourceSection> locations = SuspendableLocationFinder.findSuspendableLocations(range, restrictToFunction, ds, context.getEnv());
-            for (SourceSection ss : locations) {
-                arr.put(new Location(scriptId, ss.getStartLine(), ss.getStartColumn()).toJSON());
+            c2 = end.getColumn();
+            if (c2 <= 0) {
+                c2 = -1;
             }
+        } else {
+            l2 = l1;
+            if (c1 == -1) {
+                c2 = -1;
+            } else if (source.hasCharacters()) {
+                c2 = source.getLineLength(l2);
+            } else {
+                c2 = c1 + 1;
+            }
+        }
+        SourceSection range = source.createSection(l1, c1, l2, c2);
+        Iterable<SourceSection> locations = SuspendableLocationFinder.findSuspendableLocations(range, restrictToFunction, ds, context.getEnv());
+        JSONObject json = new JSONObject();
+        JSONArray arr = new JSONArray();
+        for (SourceSection ss : locations) {
+            arr.put(new Location(scriptId, ss.getStartLine(), ss.getStartColumn()).toJSON());
         }
         json.put("locations", arr);
         return new Params(json);
@@ -378,7 +376,6 @@ public final class InspectorDebugger extends DebuggerDomain {
             String scopeType = "block";
             boolean wasFunction = false;
             SourceSection functionSourceSection = null;
-            DebugValue thisValue = null;
             if (dscope == null) {
                 functionSourceSection = sourceSection;
             }
@@ -388,7 +385,6 @@ public final class InspectorDebugger extends DebuggerDomain {
                 } else if (dscope.isFunctionScope()) {
                     scopeType = "local";
                     functionSourceSection = dscope.getSourceSection();
-                    thisValue = dscope.getReceiver();
                     wasFunction = true;
                 }
                 if (dscope.isFunctionScope() || dscope.getDeclaredValues().iterator().hasNext()) {
@@ -418,14 +414,8 @@ public final class InspectorDebugger extends DebuggerDomain {
                 returnObj = context.getRemoteObjectsHandler().getRemote(returnValue);
             }
             SuspendAnchor anchor = (depthAll == 0) ? topAnchor : SuspendAnchor.BEFORE;
-            RemoteObject thisObj;
-            if (thisValue != null) {
-                thisObj = context.getRemoteObjectsHandler().getRemote(thisValue);
-            } else {
-                thisObj = RemoteObject.createNullObject(context.getEnv(), frame.getLanguage());
-            }
-            CallFrame cf = new CallFrame(frame, depth++, script, sourceSection, anchor, functionSourceSection,
-                            thisObj, returnObj, scopes.toArray(new Scope[scopes.size()]));
+            CallFrame cf = new CallFrame(context.getEnv(), frame, depth++, script, sourceSection, anchor, functionSourceSection,
+                            null, returnObj, scopes.toArray(new Scope[scopes.size()]));
             cfs.add(cf);
         }
         return cfs.toArray(new CallFrame[cfs.size()]);
