@@ -55,7 +55,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -226,8 +225,6 @@ public abstract class Accessor {
         public abstract Object unwrapLegacyMetaObjectWrapper(Object receiver);
 
         public abstract boolean isScopeObject(Object receiver);
-
-        public abstract Object createDefaultArrayIterator(Object receiver);
 
     }
 
@@ -516,8 +513,6 @@ public abstract class Accessor {
 
         public abstract boolean isContextClosed(Object polyglotContext);
 
-        public abstract boolean isContextCancelling(Object polyglotContext);
-
         public abstract <T, G> Iterator<T> mergeHostGuestFrames(StackTraceElement[] hostStack, Iterator<G> guestFrames, boolean inHostLanguage, Function<StackTraceElement, T> hostFrameConvertor,
                         Function<G, T> guestFrameConvertor);
 
@@ -540,8 +535,6 @@ public abstract class Accessor {
         public abstract void finalizeStore(Object polyglotEngine);
 
         public abstract Object getEngineLock(Object polyglotEngine);
-
-        public abstract long calculateContextHeapSize(Object polyglotContext, long stopAtBytes, AtomicBoolean cancelled);
     }
 
     public abstract static class LanguageSupport extends Support {
@@ -747,17 +740,9 @@ public abstract class Accessor {
 
         public abstract void notifyContextResetLimit(Object engine, TruffleContext context);
 
-        public abstract void notifyLanguageContextCreate(Object engine, TruffleContext context, LanguageInfo info);
-
         public abstract void notifyLanguageContextCreated(Object engine, TruffleContext context, LanguageInfo info);
 
-        public abstract void notifyLanguageContextCreateFailed(Object engine, TruffleContext context, LanguageInfo info);
-
-        public abstract void notifyLanguageContextInitialize(Object engine, TruffleContext context, LanguageInfo info);
-
         public abstract void notifyLanguageContextInitialized(Object engine, TruffleContext context, LanguageInfo info);
-
-        public abstract void notifyLanguageContextInitializeFailed(Object engine, TruffleContext context, LanguageInfo info);
 
         public abstract void notifyLanguageContextFinalized(Object engine, TruffleContext context, LanguageInfo info);
 
@@ -922,18 +907,6 @@ public abstract class Accessor {
         public abstract void onEngineClosed(Object runtimeData);
 
         public abstract boolean isOSRRootNode(RootNode rootNode);
-
-        public abstract int getObjectAlignment();
-
-        public abstract int getArrayBaseOffset(Class<?> componentType);
-
-        public abstract int getArrayIndexScale(Class<?> componentType);
-
-        public abstract int getBaseInstanceSize(Class<?> type);
-
-        public abstract Object[] getNonPrimitiveResolvedFields(Class<?> type);
-
-        public abstract Object getFieldValue(Object resolvedJavaField, Object obj);
     }
 
     public static final class JDKSupport {
@@ -1040,7 +1013,6 @@ public abstract class Accessor {
             case "com.oracle.truffle.api.impl.DefaultRuntimeAccessor":
             case "org.graalvm.compiler.truffle.runtime.GraalRuntimeAccessor":
             case "org.graalvm.compiler.truffle.runtime.debug.CompilerDebugAccessor":
-            case "com.oracle.truffle.api.dsl.DSLAccessor":
             case "com.oracle.truffle.api.library.LibraryAccessor":// OK, classes allowed to use
                                                                   // accessors
                 break;
