@@ -673,20 +673,12 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private static class Target {
-        final FixedNode entry;
-        final FixedNode originalEntry;
-        final FrameStateBuilder state;
+        FixedNode fixed;
+        FrameStateBuilder state;
 
-        Target(FixedNode entry, FrameStateBuilder state) {
-            this.entry = entry;
+        Target(FixedNode fixed, FrameStateBuilder state) {
+            this.fixed = fixed;
             this.state = state;
-            this.originalEntry = null;
-        }
-
-        Target(FixedNode entry, FrameStateBuilder state, FixedNode originalEntry) {
-            this.entry = entry;
-            this.state = state;
-            this.originalEntry = originalEntry;
         }
     }
 
@@ -2691,7 +2683,7 @@ public class BytecodeParser implements GraphBuilderContext {
         monitorEnter.setStateAfter(createFrameState(bci, monitorEnter));
     }
 
-    protected void genMonitorExit(ValueNode x, ValueNode escapedValue, int bci) {
+    protected void genMonitorExit(ValueNode x, ValueNode escapedReturnValue, int bci) {
         if (frameState.lockDepth(false) == 0) {
             throw bailout("unbalanced monitors: too many exits");
         }
@@ -2700,7 +2692,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (GraphUtil.originalValue(lockedObject) != GraphUtil.originalValue(x)) {
             throw bailout(String.format("unbalanced monitors: mismatch at monitorexit, %s != %s", GraphUtil.originalValue(x), GraphUtil.originalValue(lockedObject)));
         }
-        MonitorExitNode monitorExit = append(new MonitorExitNode(lockedObject, monitorId, escapedValue));
+        MonitorExitNode monitorExit = append(new MonitorExitNode(lockedObject, monitorId, escapedReturnValue));
         monitorExit.setStateAfter(createFrameState(bci, monitorExit));
     }
 
@@ -2810,7 +2802,7 @@ public class BytecodeParser implements GraphBuilderContext {
         }
     }
 
-    private Target checkLoopExit(Target target, BciBlock targetBlock) {
+    private Target checkLoopExit(FixedNode target, BciBlock targetBlock, FrameStateBuilder state) {
         if (currentBlock != null) {
             long exits = currentBlock.loops & ~targetBlock.loops;
             if (exits != 0) {
@@ -2840,7 +2832,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 if (targetBlock instanceof ExceptionDispatchBlock) {
                     bci = ((ExceptionDispatchBlock) targetBlock).deoptBci;
                 }
-                FrameStateBuilder newState = target.state.copy();
+                FrameStateBuilder newState = state.copy();
                 for (BciBlock loop : exitLoops) {
                     LoopBeginNode loopBegin = (LoopBeginNode) getFirstInstruction(loop);
                     LoopExitNode loopExit = graph.add(new LoopExitNode(loopBegin));
@@ -2860,46 +2852,11 @@ public class BytecodeParser implements GraphBuilderContext {
                 // Fortify: Suppress Null Dereference false positive
                 assert lastLoopExit != null;
 
-                if (target.originalEntry == null) {
-                    lastLoopExit.setNext(target.entry);
-                    return new Target(firstLoopExit, newState, target.entry);
-                } else {
-                    target.originalEntry.replaceAtPredecessor(firstLoopExit);
-                    lastLoopExit.setNext(target.originalEntry);
-                    return new Target(target.entry, newState, target.originalEntry);
-                }
+                lastLoopExit.setNext(target);
+                return new Target(firstLoopExit, newState);
             }
         }
-        return target;
-    }
-
-    private Target checkUnwind(FixedNode target, BciBlock targetBlock, FrameStateBuilder state) {
-        if (targetBlock != blockMap.getUnwindBlock()) {
-            return new Target(target, state);
-        }
-        FrameStateBuilder newState = state;
-        newState = newState.copy();
-        newState.setRethrowException(false);
-        if (!method.isSynchronized()) {
-            return new Target(target, newState);
-        }
-        FixedWithNextNode originalLast = lastInstr;
-        FrameStateBuilder originalState = frameState;
-        BeginNode holder = new BeginNode();
-        lastInstr = graph.add(holder);
-        frameState = newState;
-        assert frameState.stackSize() == 1;
-        ValueNode exception = frameState.peekObject();
-        synchronizedEpilogue(BytecodeFrame.AFTER_EXCEPTION_BCI, exception, JavaKind.Void);
-        lastInstr.setNext(target);
-
-        lastInstr = originalLast;
-        frameState = originalState;
-
-        FixedNode result = holder.next();
-        holder.setNext(null);
-        holder.safeDelete();
-        return new Target(result, newState, target);
+        return new Target(target, state);
     }
 
     private FrameStateBuilder getEntryState(BciBlock block) {
@@ -2944,21 +2901,27 @@ public class BytecodeParser implements GraphBuilderContext {
                  * placeholder that later can be replaced with a MergeNode when we see this block
                  * again.
                  */
+                FixedNode targetNode;
                 if (canReuseInstruction && (block.getPredecessorCount() == 1 || !controlFlowSplit) && !block.isLoopHeader() && (currentBlock.loops & ~block.loops) == 0) {
                     setFirstInstruction(block, lastInstr);
                     lastInstr = null;
                 } else {
                     setFirstInstruction(block, graph.add(new BeginNode()));
                 }
-                Target target = checkUnwind(getFirstInstruction(block), block, state);
-                target = checkLoopExit(target, block);
-                FixedNode result = target.entry;
+                targetNode = getFirstInstruction(block);
+                Target target = checkLoopExit(targetNode, block, state);
+                FixedNode result = target.fixed;
                 FrameStateBuilder currentEntryState = target.state == state ? (canReuseState ? state : state.copy()) : target.state;
                 setEntryState(block, currentEntryState);
                 currentEntryState.clearNonLiveLocals(block, liveness, true);
 
-                debug.log("createTarget %s: first visit, result: %s", block, result);
+                debug.log("createTarget %s: first visit, result: %s", block, targetNode);
                 return result;
+            }
+
+            // We already saw this block before, so we have to merge states.
+            if (!getEntryState(block).isCompatibleWith(state)) {
+                throw bailout(String.format("stacks do not match on merge from %d into %s; bytecodes would not verify:%nexpect: %s%nactual: %s", bci(), block, getEntryState(block), state));
             }
 
             if (getFirstInstruction(block) instanceof LoopBeginNode) {
@@ -2969,8 +2932,8 @@ public class BytecodeParser implements GraphBuilderContext {
                  */
                 LoopBeginNode loopBegin = (LoopBeginNode) getFirstInstruction(block);
                 LoopEndNode loopEnd = graph.add(new LoopEndNode(loopBegin));
-                Target target = checkLoopExit(new Target(loopEnd, state), block);
-                FixedNode result = target.entry;
+                Target target = checkLoopExit(loopEnd, block, state);
+                FixedNode result = target.fixed;
                 getEntryState(block).merge(loopBegin, target.state);
 
                 debug.log("createTarget %s: merging backward branch to loop header %s, result: %s", block, loopBegin, result);
@@ -3009,8 +2972,8 @@ public class BytecodeParser implements GraphBuilderContext {
 
             // The EndNode for the newly merged edge.
             EndNode newEnd = graph.add(new EndNode());
-            Target target = checkLoopExit(checkUnwind(newEnd, block, state), block);
-            FixedNode result = target.entry;
+            Target target = checkLoopExit(newEnd, block, state);
+            FixedNode result = target.fixed;
             getEntryState(block).merge(mergeNode, target.state);
             mergeNode.addForwardEnd(newEnd);
 
@@ -3075,15 +3038,15 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private void handleUnwindBlock(ExceptionDispatchBlock block) {
-        if (frameState.lockDepth(false) != 0) {
-            throw bailout("unbalanced monitors: too few exits exiting frame");
-        }
-        assert !frameState.rethrowException();
         if (parent == null) {
             finishPrepare(lastInstr, block.deoptBci, frameState);
+            frameState.setRethrowException(false);
             createUnwind();
         } else {
-            this.unwindValue = frameState.pop(JavaKind.Object);
+            frameState.setRethrowException(false);
+            synchronizedEpilogue(BytecodeFrame.AFTER_EXCEPTION_BCI, null, null);
+            ValueNode exception = frameState.pop(JavaKind.Object);
+            this.unwindValue = exception;
             this.beforeUnwindNode = this.lastInstr;
         }
     }
@@ -3102,6 +3065,7 @@ public class BytecodeParser implements GraphBuilderContext {
     @SuppressWarnings("try")
     private void createUnwind() {
         assert frameState.stackSize() == 1 : frameState;
+        synchronizedEpilogue(BytecodeFrame.AFTER_EXCEPTION_BCI, null, null);
         try (DebugCloseable context = openNodeContext(frameState, BytecodeFrame.UNWIND_BCI)) {
             ValueNode exception = frameState.pop(JavaKind.Object);
             append(new UnwindNode(exception));
@@ -3112,9 +3076,7 @@ public class BytecodeParser implements GraphBuilderContext {
     private void synchronizedEpilogue(int bci, ValueNode currentReturnValue, JavaKind currentReturnValueKind) {
         try (DebugCloseable context = openNodeContext(frameState, bci)) {
             if (method.isSynchronized()) {
-                if (currentReturnValueKind != JavaKind.Void) {
-                    // we are making a state that should look like the state after the return:
-                    // push the return value on the stack
+                if (currentReturnValue != null) {
                     frameState.push(currentReturnValueKind, currentReturnValue);
                 }
                 genMonitorExit(methodSynchronizedObject, currentReturnValue, bci);

@@ -69,7 +69,7 @@ import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 
 import com.oracle.graal.pointsto.infrastructure.SubstitutionProcessor;
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -80,9 +80,7 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
 import com.oracle.svm.hosted.ImageClassLoader;
-import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.c.GraalAccess;
-import com.oracle.svm.hosted.phases.NoClassInitializationPlugin;
 import com.oracle.svm.hosted.snippets.ReflectionPlugins;
 
 import jdk.vm.ci.meta.JavaKind;
@@ -145,7 +143,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         this.supressWarnings = new ArrayList<>();
     }
 
-    public void init(ImageClassLoader loader, MetaAccessProvider originalMetaAccess, SVMHost hostVM) {
+    public void init(ImageClassLoader loader, MetaAccessProvider originalMetaAccess) {
         ResolvedJavaMethod atomicIntegerFieldUpdaterNewUpdaterMethod;
         ResolvedJavaMethod atomicLongFieldUpdaterNewUpdaterMethod;
         ResolvedJavaMethod atomicReferenceFieldUpdaterNewUpdaterMethod;
@@ -181,7 +179,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             neverInlineSet.add(unsafeObjectFieldOffsetFieldMethod);
 
             if (!JavaVersionUtil.Java8OrEarlier) {
-                /* JDK 11 and later have Unsafe.objectFieldOffset(Class, String). */
+                /* JDK-9 introduced Unsafe.objectFieldOffset(Class, String). */
                 Method unsafeObjectClassStringOffset = unsafeClass.getMethod("objectFieldOffset", java.lang.Class.class, String.class);
                 unsafeObjectFieldOffsetClassStringMethod = originalMetaAccess.lookupJavaMethod(unsafeObjectClassStringOffset);
                 noCheckedExceptionsSet.add(unsafeObjectFieldOffsetClassStringMethod);
@@ -235,11 +233,10 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
 
         Plugins plugins = new Plugins(new InvocationPlugins());
         plugins.appendInlineInvokePlugin(inlineInvokePlugin);
-        plugins.setClassInitializationPlugin(new NoClassInitializationPlugin());
 
-        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions, plugins.getInvocationPlugins(), hostVM, false, false);
+        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions, plugins.getInvocationPlugins(), false, false);
 
-        builderPhase = new GraphBuilderPhase(GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true));
+        builderPhase = new GraphBuilderPhase(GraphBuilderConfiguration.getDefault(plugins));
 
         /*
          * Analyzing certain classes leads to false errors. We disable reporting for those classes
@@ -299,17 +296,14 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         if (hostType.isArray()) {
             return;
         }
+
         /* Detect field offset computation in static initializers. */
         ResolvedJavaMethod clinit = hostType.getClassInitializer();
-
-        if (clinit != null && clinit.hasBytecodes()) {
-            /* The following directive links the class and makes clinit available. */
-            try {
-                hostType.getDeclaredConstructors();
-            } catch (NoClassDefFoundError t) {
-                /* This code should be non-intrusive so we just ignore. */
-                return;
-            }
+        /*
+         * Even if clinit.hasBytecodes() returns true, clinit.getCode() can return null when the
+         * type fails to initialize due to verification issues triggered by missing types.
+         */
+        if (clinit != null && clinit.hasBytecodes() && clinit.getCode() != null) {
             DebugContext debug = DebugContext.create(options, DebugHandlersFactory.LOADER);
             try (DebugContext.Scope s = debug.scope("Field offset computation", clinit)) {
                 StructuredGraph clinitGraph = getStaticInitializerGraph(clinit, options, debug);
@@ -332,7 +326,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                 throw debug.handle(e);
             }
         }
-
     }
 
     /**
@@ -781,6 +774,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             String substitutedFieldStr = substitutedField.format("%H.%n");
 
             String msg = "Info:" + substitutionKindStr + " substitution automatically registered for " + substitutedFieldStr + ", target element " + target + ".";
+
             System.out.println(msg);
         }
     }
