@@ -50,6 +50,9 @@ import com.oracle.svm.core.util.VMError;
  * references in the Object, turning this Object from grey to black.
  *
  * This visitor is used during GC and so it must be constructed during native image generation.
+ *
+ * The vanilla visitObject method is not inlined, but there is a visitObjectInline available for
+ * performance critical code.
  */
 public final class GreyToBlackObjectVisitor implements ObjectVisitor {
 
@@ -73,6 +76,7 @@ public final class GreyToBlackObjectVisitor implements ObjectVisitor {
         }
     }
 
+    /** Visit the interior Pointers of an Object. */
     @Override
     @NeverInline("Non-performance critical version")
     public boolean visitObject(final Object o) {
@@ -90,25 +94,30 @@ public final class GreyToBlackObjectVisitor implements ObjectVisitor {
         return true;
     }
 
-    /** A ring buffer of visited objects for diagnostics. */
+    /*
+     * History.
+     */
+
     static final class DiagnosticReporter implements SubstrateUtil.DiagnosticThunk {
 
         static class Options {
-            @Option(help = "Length of GreyToBlackObjectVisitor history for diagnostics. 0 implies no history is kept.") //
+
+            @Option(help = "Keep history of GreyToBlackObjectVisits.  0 implies no history is kept.")//
             static final HostedOptionKey<Integer> GreyToBlackObjectVisitorDiagnosticHistory = new HostedOptionKey<>(0);
         }
 
-        /** The total count of all noted objects, used to compute the current array index. */
+        /** The current value of the history index. */
         private long historyCount;
 
-        /** The history of objects. Kept as pointers to avoid holding references. */
+        /** A history of objects. Kept as Words to avoid holding references. */
         private final Word[] objectHistory;
 
-        /** The history of the headers of the objects in {@link #objectHistory}. */
+        /** A history of the headers of those objects. */
         private final UnsignedWord[] headerHistory;
 
         @Platforms(Platform.HOSTED_ONLY.class)
         DiagnosticReporter() {
+            super();
             this.historyCount = 0;
             this.objectHistory = new Word[getHistoryLength()];
             this.headerHistory = new UnsignedWord[getHistoryLength()];
@@ -126,7 +135,13 @@ public final class GreyToBlackObjectVisitor implements ObjectVisitor {
         /** Note a historical object. */
         public void noteObject(Object o) {
             final int index = countToIndex(historyCount);
+            /*
+             * Converting the object to a Word will require a matching
+             * `KnownIntrinsics.convertUnknownValue(objectEntry, Object.class)` to convert it back
+             * into an Object.
+             */
             objectHistory[index] = Word.objectToUntrackedPointer(o);
+            /* Danger: This read might segfault! Is "carefully" careful enough? */
             headerHistory[index] = ObjectHeaderImpl.readHeaderFromObjectCarefully(o);
             historyCount += 1;
         }
@@ -149,19 +164,23 @@ public final class GreyToBlackObjectVisitor implements ObjectVisitor {
                  */
                 for (int count = 0; count < getHistoryLength(); count += 1) {
                     final int index = countToIndex(historyCount + count);
+                    /* The address of the object. */
                     log.string("  index: ").unsigned(index, 3, Log.RIGHT_ALIGN);
                     final Word objectEntry = objectHistory[index];
                     log.string("  objectEntry: ").hex(objectEntry);
+                    /* The decoding of the object header. */
                     final UnsignedWord headerEntry = headerHistory[index];
                     final UnsignedWord headerHubBits = ObjectHeaderImpl.clearBits(headerEntry);
                     final UnsignedWord headerHeaderBits = ObjectHeaderImpl.getHeaderBitsFromHeaderCarefully(headerEntry);
                     log.string("  headerEntry: ").hex(headerEntry).string(" = ").hex(headerHubBits).string(" | ").hex(headerHeaderBits).string(" / ");
+                    /* Print details about the hub if it looks okay. */
                     final boolean headerInImageHeap = ((headerHubBits.aboveOrEqual(firstRORPointer)) && headerHubBits.belowOrEqual(lastRORPointer));
                     if (headerInImageHeap) {
                         final Pointer hubBitsAsPointer = (Pointer) headerHubBits;
                         final Object hubBitsAsObject = KnownIntrinsics.convertUnknownValue(hubBitsAsPointer.toObject(), Object.class);
                         final DynamicHub hubBitsAsDynamicHub = (DynamicHub) hubBitsAsObject;
                         log.string("  class: ").string(hubBitsAsDynamicHub.getName());
+                        /* Try to get details from the object. */
                         final Object entryAsObject = KnownIntrinsics.convertUnknownValue(objectEntry.toObject(), Object.class);
                         if (LayoutEncoding.isArray(entryAsObject)) {
                             final int length = KnownIntrinsics.readArrayLength(entryAsObject);
@@ -177,9 +196,10 @@ public final class GreyToBlackObjectVisitor implements ObjectVisitor {
         }
 
         private static int getHistoryLength() {
-            return Options.GreyToBlackObjectVisitorDiagnosticHistory.getValue();
+            return Options.GreyToBlackObjectVisitorDiagnosticHistory.getValue().intValue();
         }
 
+        /** Map a counter to the bounds of a history array. */
         private static int countToIndex(long value) {
             return (int) (value % getHistoryLength());
         }

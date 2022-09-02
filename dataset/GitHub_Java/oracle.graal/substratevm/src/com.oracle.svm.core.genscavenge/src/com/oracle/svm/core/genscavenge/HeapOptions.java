@@ -34,7 +34,7 @@ public class HeapOptions {
     @Option(help = "Print the shape of the heap before and after each collection, if +VerboseGC.")//
     public static final RuntimeOptionKey<Boolean> PrintHeapShape = new RuntimeOptionKey<>(false);
 
-    @Option(help = "Print summary GC information after application main method returns.")//
+    @Option(help = "Print summary GC information after main completion")//
     public static final RuntimeOptionKey<Boolean> PrintGCSummary = new RuntimeOptionKey<>(false);
 
     @Option(help = "Print a time stamp at each collection, if +PrintGC or +VerboseGC.")//
@@ -43,10 +43,11 @@ public class HeapOptions {
     @Option(help = "Print the time for each of the phases of each collection, if +VerboseGC.")//
     public static final RuntimeOptionKey<Boolean> PrintGCTimes = new RuntimeOptionKey<>(false);
 
-    @Option(help = "Trace each object promotion (generates significant amounts of output).")//
+    /** This produces a lot of output: be prepared to stream the output to a post-processor. */
+    @Option(help = "Trace each object promotion.")//
     public static final HostedOptionKey<Boolean> TraceObjectPromotion = new HostedOptionKey<>(false);
 
-    @Option(help = "Failed verification of the heap (if enabled) causes termination.")//
+    @Option(help = "Verify the heap before and after each collection.")//
     public static final RuntimeOptionKey<Boolean> HeapVerificationFailureIsFatal = new RuntimeOptionKey<>(true);
 
     @Option(help = "Verify the heap before each collection.")//
@@ -58,10 +59,10 @@ public class HeapOptions {
     @Option(help = "Trace heap verification.")//
     public static final HostedOptionKey<Boolean> TraceHeapVerification = new HostedOptionKey<>(false);
 
-    @Option(help = "Verify stacks before each collection.")//
+    @Option(help = "Verify the stack before each collection.")//
     public static final HostedOptionKey<Boolean> VerifyStackBeforeCollection = new HostedOptionKey<>(false);
 
-    @Option(help = "Verify stacks after each collection.")//
+    @Option(help = "Verify the stack after each collection.")//
     public static final HostedOptionKey<Boolean> VerifyStackAfterCollection = new HostedOptionKey<>(false);
 
     @Option(help = "Trace stack verification.")//
