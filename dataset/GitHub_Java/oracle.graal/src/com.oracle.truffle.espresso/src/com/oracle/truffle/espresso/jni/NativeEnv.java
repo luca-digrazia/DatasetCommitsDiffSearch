@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -102,7 +101,6 @@ public abstract class NativeEnv {
         }
     }
 
-    @CompilerDirectives.TruffleBoundary
     protected static ByteBuffer directByteBuffer(long address, long capacity) {
         ByteBuffer buffer = null;
         try {
@@ -114,7 +112,6 @@ public abstract class NativeEnv {
         return buffer;
     }
 
-    @CompilerDirectives.TruffleBoundary
     protected static long byteBufferAddress(ByteBuffer byteBuffer) {
         try {
             return (long) addressField.get(byteBuffer);
@@ -123,22 +120,22 @@ public abstract class NativeEnv {
         }
     }
 
-    protected static Object defaultValue(String returnType) {
-        if (returnType.equals("boolean"))
+    protected static Object defaultValue(Class<?> returnType) {
+        if (returnType == boolean.class)
             return false;
-        if (returnType.equals("byte"))
+        if (returnType == byte.class)
             return (byte) 0;
-        if (returnType.equals("char"))
+        if (returnType == char.class)
             return (char) 0;
-        if (returnType.equals("short"))
+        if (returnType == short.class)
             return (short) 0;
-        if (returnType.equals("int"))
+        if (returnType == int.class)
             return 0;
-        if (returnType.equals("float"))
+        if (returnType == float.class)
             return 0.0F;
-        if (returnType.equals("double"))
+        if (returnType == double.class)
             return 0.0;
-        if (returnType.equals("long"))
+        if (returnType == long.class)
             return 0L;
         return StaticObject.NULL;
     }

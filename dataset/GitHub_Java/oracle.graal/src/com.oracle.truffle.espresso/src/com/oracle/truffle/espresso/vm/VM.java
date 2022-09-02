@@ -49,7 +49,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso.Utils;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
@@ -766,7 +765,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         throw new EspressoExitException(code);
     }
 
-
     @VmImpl
     @JniImpl
     public @Host(Properties.class) StaticObject JVM_InitProperties(@Host(Properties.class) StaticObject properties) {
@@ -786,19 +784,10 @@ public final class VM extends NativeEnv implements ContextAccess {
         setProperty.invokeWithConversions(properties, "java.class.path", props.classpath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
 
         setProperty.invokeWithConversions(properties, "java.home", props.javaHome().toString());
-        setProperty.invokeWithConversions(properties, "sun.boot.class.path", Utils.stringify(props.bootClasspath()));
-        setProperty.invokeWithConversions(properties, "java.library.path", Utils.stringify(props.javaLibraryPath()));
-        setProperty.invokeWithConversions(properties, "sun.boot.library.path", Utils.stringify(props.bootLibraryPath()));
-        setProperty.invokeWithConversions(properties, "java.ext.dirs", Utils.stringify(props.extDirs()));
-
-        // VM properties.
-        setProperty.invokeWithConversions(properties, "java.vm.specification.version", EspressoProperties.VM_SPECIFICATION_VERSION);
-        setProperty.invokeWithConversions(properties, "java.vm.specification.name", EspressoProperties.VM_SPECIFICATION_NAME);
-        setProperty.invokeWithConversions(properties, "java.vm.specification.vendor", EspressoProperties.VM_SPECIFICATION_VENDOR);
-        setProperty.invokeWithConversions(properties, "java.vm.version", EspressoProperties.VM_VERSION);
-        setProperty.invokeWithConversions(properties, "java.vm.name", EspressoProperties.VM_NAME);
-        setProperty.invokeWithConversions(properties, "java.vm.vendor", EspressoProperties.VM_VENDOR);
-        setProperty.invokeWithConversions(properties, "java.vm.info", EspressoProperties.VM_INFO);
+        setProperty.invokeWithConversions(properties, "sun.boot.class.path", props.bootClasspath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+        setProperty.invokeWithConversions(properties, "java.library.path", props.javaLibraryPath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+        setProperty.invokeWithConversions(properties, "sun.boot.library.path", props.bootLibraryPath().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
+        setProperty.invokeWithConversions(properties, "java.ext.dirs", props.extDirs().stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator)));
 
         return properties;
     }
