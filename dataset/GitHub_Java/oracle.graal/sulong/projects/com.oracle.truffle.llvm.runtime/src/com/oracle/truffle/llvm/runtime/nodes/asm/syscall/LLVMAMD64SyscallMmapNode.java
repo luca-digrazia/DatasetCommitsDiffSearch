@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,10 +29,10 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.asm.syscall;
 
-import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.profiles.ConditionProfile;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
@@ -45,19 +45,28 @@ public abstract class LLVMAMD64SyscallMmapNode extends LLVMSyscallOperationNode 
 
     private final ConditionProfile mapAnonymousProfile = ConditionProfile.createCountingProfile();
 
-    @SuppressWarnings("unused")
+    /**
+     * @param addr
+     * @param len
+     * @param prot
+     * @param flags
+     * @param fildes
+     * @param off
+     * @see #executeGeneric(Object, Object, Object, Object, Object, Object)
+     */
     @Specialization
     protected long doOp(LLVMNativePointer addr, long len, long prot, long flags, long fildes, long off,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+                    @CachedLanguage LLVMLanguage language) {
         if (mapAnonymousProfile.profile((flags & LLVMAMD64Memory.MAP_ANONYMOUS) != 0)) {
-            LLVMNativePointer ptr = memory.allocateMemory(len);
+            LLVMNativePointer ptr = language.getLLVMMemory().allocateMemory(this, len);
             return ptr.asNative();
         }
         return -LLVMAMD64Error.ENOMEM;
     }
 
     @Specialization
-    protected long doOp(long addr, long len, long prot, long flags, long fildes, long off) {
-        return execute(LLVMNativePointer.create(addr), len, prot, flags, fildes, off);
+    protected long doOp(long addr, long len, long prot, long flags, long fildes, long off,
+                    @CachedLanguage LLVMLanguage language) {
+        return doOp(LLVMNativePointer.create(addr), len, prot, flags, fildes, off, language);
     }
 }
