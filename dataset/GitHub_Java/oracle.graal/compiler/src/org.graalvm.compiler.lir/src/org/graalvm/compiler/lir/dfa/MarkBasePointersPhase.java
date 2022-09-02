@@ -69,9 +69,10 @@ public final class MarkBasePointersPhase extends AllocationPhase {
             private BasePointersSet(BasePointersSet other) {
                 variables = new IndexedValueMap(other.variables);
                 // Deep copy.
-                baseDerivedRefs = new HashMap<>(other.baseDerivedRefs.size());
+                baseDerivedRefs = new HashMap<>();
                 for (Map.Entry<Integer, Set<Value>> entry : other.baseDerivedRefs.entrySet()) {
-                    Set<Value> s = new HashSet<>(entry.getValue());
+                    Set<Value> s = new HashSet<>();
+                    s.addAll(entry.getValue());
                     baseDerivedRefs.put(entry.getKey(), s);
                 }
             }
@@ -120,7 +121,8 @@ public final class MarkBasePointersPhase extends AllocationPhase {
                     Set<Value> derivedRefs = baseDerivedRefs.get(k);
                     if (derivedRefs == null) {
                         // Deep copy.
-                        Set<Value> s = new HashSet<>(derivedRefsOther);
+                        Set<Value> s = new HashSet<>();
+                        s.addAll(derivedRefsOther);
                         baseDerivedRefs.put(k, s);
                     } else {
                         derivedRefs.addAll(derivedRefsOther);
