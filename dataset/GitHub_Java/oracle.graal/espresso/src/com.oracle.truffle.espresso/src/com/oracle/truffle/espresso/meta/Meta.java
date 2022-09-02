@@ -24,8 +24,6 @@ package com.oracle.truffle.espresso.meta;
 
 import static com.oracle.truffle.espresso.EspressoOptions.SpecCompliancyMode.HOTSPOT;
 
-import org.graalvm.collections.Pair;
-
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -47,11 +45,6 @@ import com.oracle.truffle.espresso.impl.PrimitiveKlass;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.dispatch.IterableInterop;
-import com.oracle.truffle.espresso.runtime.dispatch.IteratorInterop;
-import com.oracle.truffle.espresso.runtime.dispatch.ListInterop;
-import com.oracle.truffle.espresso.runtime.dispatch.MapEntryInterop;
-import com.oracle.truffle.espresso.runtime.dispatch.MapInterop;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
@@ -65,7 +58,6 @@ public final class Meta implements ContextAccess {
     private final ExceptionDispatch dispatch;
     private final StringConversion stringConversion;
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public Meta(EspressoContext context) {
         CompilerAsserts.neverPartOfCompilation();
         this.context = context;
@@ -618,45 +610,6 @@ public final class Meta implements ContextAccess {
         java_time_ZoneId_getId = java_time_ZoneId.requireDeclaredMethod(Name.getId, Signature.String);
         java_time_ZoneId_of = java_time_ZoneId.requireDeclaredMethod(Name.of, Signature.ZoneId_String);
         assert java_time_ZoneId_of.isStatic();
-
-        java_util_Map = knownKlass(Type.java_util_Map);
-        java_util_Map_get = java_util_Map.requireDeclaredMethod(Name.get, Signature.Object_Object);
-        java_util_Map_put = java_util_Map.requireDeclaredMethod(Name.put, Signature.Object_Object_Object);
-        java_util_Map_size = java_util_Map.requireDeclaredMethod(Name.size, Signature._int);
-        java_util_Map_remove = java_util_Map.requireDeclaredMethod(Name.remove, Signature.Object_Object);
-        java_util_Map_containsKey = java_util_Map.requireDeclaredMethod(Name.containsKey, Signature._boolean_Object);
-        java_util_Map_entrySet = java_util_Map.requireDeclaredMethod(Name.entrySet, Signature.java_util_Set);
-        assert java_util_Map.isInterface();
-
-        java_util_Map_Entry = knownKlass(Type.java_util_Map_Entry);
-        java_util_Map_Entry_getKey = java_util_Map_Entry.requireDeclaredMethod(Name.getKey, Signature.Object);
-        java_util_Map_Entry_getValue = java_util_Map_Entry.requireDeclaredMethod(Name.getValue, Signature.Object);
-        java_util_Map_Entry_setValue = java_util_Map_Entry.requireDeclaredMethod(Name.setValue, Signature.Object_Object);
-
-        java_util_List = knownKlass(Type.java_util_List);
-        java_util_List_get = java_util_List.requireDeclaredMethod(Name.get, Signature.Object_int);
-        java_util_List_set = java_util_List.requireDeclaredMethod(Name.set, Signature.Object_int_Object);
-        java_util_List_size = java_util_List.requireDeclaredMethod(Name.size, Signature._int);
-        assert java_util_List.isInterface();
-
-        java_util_Iterable = knownKlass(Type.java_util_Iterable);
-        java_util_Iterable_iterator = java_util_Iterable.requireDeclaredMethod(Name.iterator, Signature.java_util_Iterator);
-        assert java_util_Iterable.isInterface();
-
-        java_util_Iterator = knownKlass(Type.java_util_Iterator);
-        java_util_Iterator_next = java_util_Iterator.requireDeclaredMethod(Name.next, Signature.Object);
-        java_util_Iterator_hasNext = java_util_Iterator.requireDeclaredMethod(Name.hasNext, Signature._boolean);
-        java_util_Iterator_remove = java_util_Iterator.requireDeclaredMethod(Name.remove, Signature._void);
-        assert java_util_Iterator.isInterface();
-
-        java_util_NoSuchElementException = knownKlass(Type.java_util_NoSuchElementException);
-
-        INTEROP_CLASSES = new Pair[][]{
-                        new Pair[]{Pair.create(java_util_List, ListInterop.class), Pair.create(java_util_Iterable, IterableInterop.class)},
-                        new Pair[]{Pair.create(java_util_Map, MapInterop.class)},
-                        new Pair[]{Pair.create(java_util_Map_Entry, MapEntryInterop.class)},
-                        new Pair[]{Pair.create(java_util_Iterator, IteratorInterop.class)},
-        };
     }
 
     /**
@@ -1154,34 +1107,6 @@ public final class Meta implements ContextAccess {
     public final Method java_time_ZoneId_getId;
     public final Method java_time_ZoneId_of;
 
-    public final ObjectKlass java_util_Map;
-    public final Method java_util_Map_size;
-    public final Method java_util_Map_get;
-    public final Method java_util_Map_put;
-    public final Method java_util_Map_remove;
-    public final Method java_util_Map_containsKey;
-    public final Method java_util_Map_entrySet;
-
-    public final ObjectKlass java_util_Map_Entry;
-    public final Method java_util_Map_Entry_getKey;
-    public final Method java_util_Map_Entry_getValue;
-    public final Method java_util_Map_Entry_setValue;
-
-    public final ObjectKlass java_util_List;
-    public final Method java_util_List_get;
-    public final Method java_util_List_set;
-    public final Method java_util_List_size;
-
-    public final ObjectKlass java_util_Iterable;
-    public final Method java_util_Iterable_iterator;
-
-    public final ObjectKlass java_util_Iterator;
-    public final Method java_util_Iterator_next;
-    public final Method java_util_Iterator_hasNext;
-    public final Method java_util_Iterator_remove;
-
-    public final ObjectKlass java_util_NoSuchElementException;
-
     @CompilationFinal public ObjectKlass java_lang_management_MemoryUsage;
     @CompilationFinal public ObjectKlass sun_management_ManagementFactory;
     @CompilationFinal public Method sun_management_ManagementFactory_createMemoryPool;
@@ -1268,21 +1193,6 @@ public final class Meta implements ContextAccess {
 
     @CompilationFinal(dimensions = 1) //
     public final PrimitiveKlass[] PRIMITIVE_KLASSES;
-
-    /**
-     * Represents all known guest classes with special interop library handling. Each entry in the
-     * array represents mutually exclusive groups of classes. Classes within a single entry are
-     * related by a subclassing relationship, most specific first.
-     * <p>
-     * If a given receiver implements multiple mutually exclusive classes, then its assigned interop
-     * protocol will be the most basic one possible, effectively disabling special handling.
-     * <p>
-     * For example, a class implementing both {@link #java_util_List} and
-     * {@link #java_util_Map_Entry}, which are considered mutually exclusive, will dispatch to the
-     * regular object interop {@link com.oracle.truffle.espresso.runtime.dispatch.EspressoInterop}.
-     */
-    @CompilationFinal(dimensions = 2) //
-    public final Pair<ObjectKlass, Class<?>>[][] INTEROP_CLASSES;
 
     // Checkstyle: resume field name check
 
