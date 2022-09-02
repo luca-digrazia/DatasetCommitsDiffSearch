@@ -116,21 +116,21 @@ import com.oracle.truffle.llvm.runtime.nodes.func.LLVMCallNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugBuilder;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugInitNodeFactory;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugSimpleObjectBuilder;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugTrapNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugTrapNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugWriteNodeFactory;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMFrameValueAccessImpl;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMToDebugDeclarationNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMToDebugValueNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVM80BitFloatLiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMDoubleLiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMFloatLiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMI16LiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMI1LiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMI32LiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMI64LiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMI8LiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMIVarBitLiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMNativePointerLiteralNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVM80BitFloatLiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMDoubleLiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMFloatLiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMI16LiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMI1LiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMI32LiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMI64LiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMI8LiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMIVarBitLiteralNode;
+import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMNativePointerLiteralNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVM80BitFloatDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMIVarBitDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMPointerDirectLoadNodeGen;
@@ -573,12 +573,12 @@ public class CommonNodeFactory {
     }
 
     public static LLVMExpressionNode createFunctionCall(LLVMExpressionNode functionNode, LLVMExpressionNode[] argNodes, FunctionType type) {
-        LLVMExpressionNode callNode = LLVMCallNode.create(type, functionNode, argNodes, true);
+        LLVMExpressionNode callNode = new LLVMCallNode(type, functionNode, argNodes, true);
         return LLVMValueProfilingNode.create(callNode, type.getReturnType());
     }
 
     public static LLVMStatementNode createDebugTrap() {
-        return LLVMDebugTrapNodeGen.create();
+        return new LLVMDebugTrapNode();
     }
 
     public static LLVMDebugValue.Builder createDebugDeclarationBuilder() {
@@ -743,46 +743,46 @@ public class CommonNodeFactory {
             Number c = (Number) constant;
             try {
                 if (Long.compareUnsigned(type.getBitSize(), Long.SIZE) <= 0) {
-                    return LLVMIVarBitLiteralNodeGen.create(LLVMIVarBit.fromLong(((VariableBitWidthType) type).getBitSizeInt(), c.longValue()));
+                    return new LLVMIVarBitLiteralNode(LLVMIVarBit.fromLong(((VariableBitWidthType) type).getBitSizeInt(), c.longValue()));
                 } else {
-                    return LLVMIVarBitLiteralNodeGen.create(LLVMIVarBit.fromBigInteger(((VariableBitWidthType) type).getBitSizeInt(), (BigInteger) c));
+                    return new LLVMIVarBitLiteralNode(LLVMIVarBit.fromBigInteger(((VariableBitWidthType) type).getBitSizeInt(), (BigInteger) c));
                 }
             } catch (TypeOverflowException e) {
                 return Type.handleOverflowExpression(e);
             }
         } else if (type instanceof PointerType || type instanceof FunctionType) {
             if (constant == null) {
-                return LLVMNativePointerLiteralNodeGen.create(LLVMNativePointer.create(0));
+                return new LLVMNativePointerLiteralNode(LLVMNativePointer.create(0));
             } else {
                 throw new AssertionError("Not a Simple Constant: " + constant);
             }
         } else if (type instanceof PrimitiveType) {
             switch (((PrimitiveType) type).getPrimitiveKind()) {
                 case I1:
-                    return LLVMI1LiteralNodeGen.create((boolean) constant);
+                    return new LLVMI1LiteralNode((boolean) constant);
                 case I8:
-                    return LLVMI8LiteralNodeGen.create((byte) constant);
+                    return new LLVMI8LiteralNode((byte) constant);
                 case I16:
-                    return LLVMI16LiteralNodeGen.create((short) constant);
+                    return new LLVMI16LiteralNode((short) constant);
                 case I32:
-                    return LLVMI32LiteralNodeGen.create((int) constant);
+                    return new LLVMI32LiteralNode((int) constant);
                 case FLOAT:
-                    return LLVMFloatLiteralNodeGen.create((float) constant);
+                    return new LLVMFloatLiteralNode((float) constant);
                 case DOUBLE:
-                    return LLVMDoubleLiteralNodeGen.create((double) constant);
+                    return new LLVMDoubleLiteralNode((double) constant);
                 case X86_FP80:
                     if (constant == null) {
-                        return LLVM80BitFloatLiteralNodeGen.create(LLVM80BitFloat.fromLong(0));
+                        return new LLVM80BitFloatLiteralNode(LLVM80BitFloat.fromLong(0));
                     } else {
-                        return LLVM80BitFloatLiteralNodeGen.create(LLVM80BitFloat.fromBytesBigEndian((byte[]) constant));
+                        return new LLVM80BitFloatLiteralNode(LLVM80BitFloat.fromBytesBigEndian((byte[]) constant));
                     }
                 case I64:
-                    return LLVMI64LiteralNodeGen.create((long) constant);
+                    return new LLVMI64LiteralNode((long) constant);
                 default:
                     throw new AssertionError(type);
             }
         } else if (type == MetaType.DEBUG) {
-            return LLVMNativePointerLiteralNodeGen.create(LLVMNativePointer.createNull());
+            return new LLVMNativePointerLiteralNode(LLVMNativePointer.createNull());
         } else {
             throw new AssertionError(type);
         }
