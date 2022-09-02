@@ -71,8 +71,11 @@ public interface BootstrapMethodConstant extends PoolConstant {
         }
 
         @Override
-        public void validate(ConstantPool pool) {
-            pool.nameAndTypeAt(nameAndTypeIndex).validateMethod(pool);
+        public void checkValidity(ConstantPool pool) {
+            if (pool.at(nameAndTypeIndex).tag() != NAME_AND_TYPE) {
+                throw new VerifyError("ill-formed BootstrapMethodConstant");
+            }
+            pool.at(nameAndTypeIndex).checkValidity(pool);
         }
     }
 }

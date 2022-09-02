@@ -26,8 +26,6 @@ import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
-import com.oracle.truffle.espresso.descriptors.Types;
 
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.UTF8;
 
@@ -49,7 +47,7 @@ public interface NameAndTypeConstant extends PoolConstant {
      */
     Symbol<? extends Descriptor> getDescriptor(ConstantPool pool);
 
-    Symbol<Signature> getSignature(ConstantPool pool);
+    Symbol<Symbol.Signature> getSignature(ConstantPool pool);
 
     int getNameIndex();
 
@@ -96,8 +94,8 @@ public interface NameAndTypeConstant extends PoolConstant {
 
         @Override
         @SuppressWarnings("unchecked")
-        public Symbol<Signature> getSignature(ConstantPool pool) {
-            return (Symbol<Signature>) getDescriptor(pool);
+        public Symbol<Symbol.Signature> getSignature(ConstantPool pool) {
+            return (Symbol<Symbol.Signature>) getDescriptor(pool);
         }
 
         @Override
