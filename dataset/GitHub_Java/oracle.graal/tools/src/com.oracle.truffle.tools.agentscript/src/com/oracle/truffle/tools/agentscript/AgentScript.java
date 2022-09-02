@@ -25,25 +25,24 @@
 package com.oracle.truffle.tools.agentscript;
 
 import com.oracle.truffle.api.source.Source;
-import java.util.function.Function;
 import org.graalvm.polyglot.Engine;
 
 /**
  * Programatic access to the scripting agent. Obtain an instance of this interface via its
  * {@link #ID}:
  * <p>
- * {@codesnippet Embedding#createAgentObject}
+ * {@codesnippet AgentObjectFactory#createAgentObject}
  * 
- * and then {@link Function#apply(java.lang.Object) evaluate} {@link org.graalvm.polyglot.Source}
- * scripts written in any language accessing the {@code agent} variable exposed to them. Use
- * {@link #VERSION current version API} when dealing with the {@code agent} variable.
+ * and then {@link #registerAgentScript(com.oracle.truffle.api.source.Source) evaluate scripts} in
+ * any language accessing the {@code agent} variable exposed to them. Use {@link #VERSION current
+ * version API} when dealing with the {@code agent} variable.
  */
 public interface AgentScript {
     /**
-     * The ID of the agent script instrument is {@code "agentscript"}. Use it to obtain access to an
-     * {@link AgentScript} instances inside of your {@link Engine}:
+     * The ID of the agent script instrument. Use it to obtain access to an {@link AgentScript}
+     * instances inside of your {@link Engine}:
      * <p>
-     * {@codesnippet Embedding#createAgentObject}
+     * {@codesnippet AgentObjectFactory#createAgentObject}
      */
     String ID = "agentscript";
 
@@ -55,7 +54,7 @@ public interface AgentScript {
      * <p>
      * {@codesnippet AgentScriptAPI}
      */
-    String VERSION = "0.4";
+    String VERSION = "0.1";
 
     /**
      * Loads an agent script file into the system. The script file may be written in any GraalVM
