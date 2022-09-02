@@ -57,11 +57,11 @@ public final class Polyglot {
     }
 
     @SuppressWarnings("unused")
-    public static Object importObject(String name) {
+    public static Object getBinding(String name) {
         return null;
     }
 
     @SuppressWarnings("unused")
-    public static void exportObject(String name, Object value) {
+    public static void setBinding(String name, Object value) {
     }
 }
