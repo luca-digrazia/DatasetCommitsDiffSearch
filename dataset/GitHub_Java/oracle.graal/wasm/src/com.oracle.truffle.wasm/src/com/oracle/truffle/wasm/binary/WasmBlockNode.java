@@ -108,6 +108,7 @@ import static com.oracle.truffle.wasm.binary.Instructions.I32_SHL;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_S;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SUB;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_WRAP_I64;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_XOR;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_ADD;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_AND;
@@ -143,16 +144,14 @@ import static com.oracle.truffle.wasm.binary.Instructions.IF;
 import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_GET;
 import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_SET;
 import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_TEE;
-import static com.oracle.truffle.wasm.binary.Instructions.LOOP;
 import static com.oracle.truffle.wasm.binary.Instructions.NOP;
 import static com.oracle.truffle.wasm.binary.Instructions.UNREACHABLE;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.wasm.binary.exception.WasmTrap;
 
-public class WasmBlockNode extends WasmNode implements RepeatingNode {
+public class WasmBlockNode extends WasmNode {
     @CompilationFinal private final int startOffset;
     @CompilationFinal private final byte returnTypeId;
     @CompilationFinal private final int initialStackPointer;
@@ -171,7 +170,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @ExplodeLoop
-    public int execute(WasmContext context, VirtualFrame frame) {
+    public int execute(VirtualFrame frame) {
         int nestedControlOffset = 0;
         int byteConstantOffset = initialByteConstantOffset;
         int intConstantOffset = initialIntConstantOffset;
@@ -188,8 +187,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 case BLOCK: {
                     WasmNode block = nestedControlTable[nestedControlOffset];
-                    int unwindCounter = block.execute(context, frame);
-                    if (unwindCounter > 0) {
+                    int unwindCounter = block.execute(frame);
+                    if (unwindCounter > 1) {
                         return unwindCounter - 1;
                     }
                     nestedControlOffset++;
@@ -198,34 +197,10 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byteConstantOffset += block.byteConstantLength();
                     break;
                 }
-                case LOOP: {
-                    WasmNode loopNode = nestedControlTable[nestedControlOffset];
-
-                    /**
-                     * The loopNode is a {@link WasmLoopNode} instance containing an instance of the {@link com.oracle.truffle.api.nodes.LoopNode}.
-                     * The LoopNode instance is created based on the {@link WasmBlockNode} (which implements {@link RepeatingNode})
-                     * for the loop block. When the execute method below is called, a call is made to the Truffle loop
-                     * node {@link com.oracle.truffle.api.nodes.LoopNode#executeLoop(VirtualFrame)} method,
-                     * which executes the loop as long as the return value of the
-                     * {@link WasmBlockNode#execute(VirtualFrame)} method is not -1
-                     * (see the {@link WasmBlockNode#executeRepeating(VirtualFrame)}} method).
-                     */
-                    int unwindCounter = loopNode.execute(context, frame);
-
-                    // The return value of the above call (unwindCounter) will normally indicate where we need to
-                    // branch to after the loop completion (i.e. to the code just after the loop or further out).
-                    // This is not supported yet.
-
-                    nestedControlOffset++;
-                    offset += loopNode.byteLength();
-                    stackPointer += loopNode.returnTypeLength();
-                    byteConstantOffset += loopNode.byteConstantLength();
-                    break;
-                }
                 case IF: {
                     WasmNode ifNode = nestedControlTable[nestedControlOffset];
                     stackPointer--;
-                    int unwindCounter = ifNode.execute(context, frame);
+                    int unwindCounter = ifNode.execute(frame);
                     if (unwindCounter > 1) {
                         return unwindCounter - 1;
                     }
@@ -250,7 +225,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     // Populate the stack with the return values of the current block (the one we are escaping from).
                     unwindStack(frame, stackPointer, continuationStackPointer);
 
-                    return unwindCounter;
+                    // We want to avoid returning 0 here, because the value 0 indicates normal block execution (no branch instruction).
+                    // That's why we increment the unwindCounter, so that the min value that we return is 1.
+                    return unwindCounter + 1;
                 }
                 case BR_IF: {
                     stackPointer--;
@@ -266,7 +243,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                         // Populate the stack with the return values of the current block (the one we are escaping from).
                         unwindStack(frame, stackPointer, continuationStackPointer);
 
-                        return unwindCounter;
+                        // We want to avoid returning 0 here, because the value 0 indicates normal block execution (no branch instruction).
+                        // That's why we increment the unwindCounter, so that the min value that we return is 1.
+                        return unwindCounter + 1;
                     }
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
@@ -1262,7 +1241,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     Assert.fail(format("Unknown opcode: 0x%02X", opcode));
             }
         }
-        return -1;
+        return 0;
     }
 
     private void unwindStack(VirtualFrame frame, int stackPointer, int continuationStackPointer) {
@@ -1272,12 +1251,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
             push(frame, continuationStackPointer, value);
             continuationStackPointer++;
         }
-    }
-
-    @Override
-    public boolean executeRepeating(VirtualFrame frame) {
-        WasmContext context = null; // TODO: Read the context from a thread-local.
-        return execute(context, frame) != -1;
     }
 
     @Override
