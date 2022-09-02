@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -123,7 +123,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
     @Snippet
     public Object allocateArray(DynamicHub hub,
                     int length,
-                    @ConstantParameter int arrayBaseOffset,
+                    @ConstantParameter int headerSize,
                     @ConstantParameter int log2ElementSize,
                     @ConstantParameter boolean fillContents,
                     @ConstantParameter boolean emitMemoryBarrier,
@@ -131,7 +131,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                     @ConstantParameter boolean supportsBulkZeroing,
                     @ConstantParameter AllocationProfilingData profilingData) {
         DynamicHub checkedHub = checkHub(hub);
-        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedHub), WordFactory.nullPointer(), length, arrayBaseOffset, log2ElementSize, fillContents,
+        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, getArrayZeroingStartOffset(),
                         emitMemoryBarrier, maybeUnroll, supportsBulkZeroing, profilingData);
         return piArrayCastToSnippetReplaceeStamp(result, length);
     }
@@ -151,10 +151,10 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
         DynamicHub checkedArrayHub = getCheckedArrayHub(elementType);
 
         int layoutEncoding = checkedArrayHub.getLayoutEncoding();
-        int arrayBaseOffset = getArrayBaseOffset(layoutEncoding);
+        int headerSize = getArrayHeaderSize(layoutEncoding);
         int log2ElementSize = LayoutEncoding.getArrayIndexShift(layoutEncoding);
 
-        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedArrayHub), WordFactory.nullPointer(), length, arrayBaseOffset, log2ElementSize, fillContents,
+        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedArrayHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, getArrayZeroingStartOffset(),
                         emitMemoryBarrier, false, supportsBulkZeroing, profilingData);
         return piArrayCastToSnippetReplaceeStamp(result, length);
     }
@@ -201,7 +201,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
         return result;
     }
 
-    public static DynamicHub checkHub(DynamicHub hub) {
+    private static DynamicHub checkHub(DynamicHub hub) {
         if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, hub != null)) {
             DynamicHub nonNullHub = (DynamicHub) PiNode.piCastNonNull(hub, SnippetAnchorNode.anchor());
             if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, nonNullHub.isInstantiated())) {
@@ -283,6 +283,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
         return SubstrateOptions.AllocatePrefetchStyle.getValue();
     }
 
+    @Fold
     @Override
     protected int getPrefetchLines(boolean isArray) {
         if (isArray) {
@@ -329,7 +330,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
     }
 
     @Override
-    public final int arrayLengthOffset() {
+    protected final int arrayLengthOffset() {
         return ConfigurationValues.getObjectLayout().getArrayLengthOffset();
     }
 
@@ -338,11 +339,16 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
         return ConfigurationValues.getObjectLayout().getAlignment();
     }
 
-    protected static int getArrayBaseOffset(int layoutEncoding) {
+    protected static int getArrayHeaderSize(int layoutEncoding) {
         return (int) LayoutEncoding.getArrayBaseOffset(layoutEncoding).rawValue();
     }
 
-    public static Word encodeAsTLABObjectHeader(DynamicHub hub) {
+    @Fold
+    protected static int getArrayZeroingStartOffset() {
+        return ConfigurationValues.getObjectLayout().getArrayZeroingStartOffset();
+    }
+
+    private static Word encodeAsTLABObjectHeader(DynamicHub hub) {
         return Heap.getHeap().getObjectHeader().encodeAsTLABObjectHeader(hub);
     }
 
@@ -480,14 +486,14 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                 SharedType type = (SharedType) node.elementType().getArrayClass();
                 DynamicHub hub = type.getHub();
                 int layoutEncoding = hub.getLayoutEncoding();
-                int arrayBaseOffset = getArrayBaseOffset(layoutEncoding);
+                int headerSize = getArrayHeaderSize(layoutEncoding);
                 int log2ElementSize = LayoutEncoding.getArrayIndexShift(layoutEncoding);
                 ConstantNode hubConstant = ConstantNode.forConstant(SubstrateObjectConstant.forObject(hub), providers.getMetaAccess(), graph);
 
                 Arguments args = new Arguments(allocateArray, graph.getGuardsStage(), tool.getLoweringStage());
                 args.add("hub", hubConstant);
                 args.add("length", length.isAlive() ? length : graph.addOrUniqueWithInputs(length));
-                args.addConst("arrayBaseOffset", arrayBaseOffset);
+                args.addConst("headerSize", headerSize);
                 args.addConst("log2ElementSize", log2ElementSize);
                 args.addConst("fillContents", node.fillContents());
                 args.addConst("emitMemoryBarrier", node.emitMemoryBarrier());

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,6 @@ import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
@@ -72,7 +71,7 @@ final class GenScavengeAllocationSnippets extends SubstrateAllocationSnippets {
 
     public static void registerLowering(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
                     Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings) {
-        SubstrateAllocationSnippets snippetReceiver = ImageSingletons.lookup(SubstrateAllocationSnippets.class);
+        GenScavengeAllocationSnippets snippetReceiver = new GenScavengeAllocationSnippets();
         GenScavengeAllocationSnippets.Templates allocationSnippets = new GenScavengeAllocationSnippets.Templates(
                         snippetReceiver, options, factories, SnippetCounter.Group.NullFactory, providers, snippetReflection);
         allocationSnippets.registerLowerings(lowerings);
@@ -94,9 +93,8 @@ final class GenScavengeAllocationSnippets extends SubstrateAllocationSnippets {
         DynamicHub hubNonNull = (DynamicHub) PiNode.piCastNonNull(hub, SnippetAnchorNode.anchor());
         int layoutEncoding = hubNonNull.getLayoutEncoding();
         UnsignedWord size = LayoutEncoding.getArraySize(layoutEncoding, length);
-        int fillStartOffset = (int) LayoutEncoding.getArrayBaseOffset(layoutEncoding).rawValue();
         Word objectHeader = encodeAsObjectHeader(hubNonNull, rememberedSet, unaligned);
-        return formatArray(objectHeader, WordFactory.nullPointer(), size, length, memory, fillContents, fillStartOffset,
+        return formatArray(objectHeader, WordFactory.nullPointer(), size, length, memory, fillContents, getArrayZeroingStartOffset(),
                         emitMemoryBarrier, false, supportsBulkZeroing, snippetCounters);
     }
 
@@ -105,12 +103,12 @@ final class GenScavengeAllocationSnippets extends SubstrateAllocationSnippets {
     }
 
     @Override
-    public void initializeObjectHeader(Word memory, Word objectHeader, Word prototypeMarkWord, boolean isArray) {
-        ObjectHeaderImpl.initializeHeaderOfNewObject(memory, objectHeader, isArray);
+    protected void initializeObjectHeader(Word memory, Word objectHeader, Word prototypeMarkWord, boolean isArray) {
+        ObjectHeaderImpl.initializeHeaderOfNewObject(memory, objectHeader);
     }
 
     @Override
-    public boolean useTLAB() {
+    protected boolean useTLAB() {
         return true;
     }
 
@@ -120,22 +118,22 @@ final class GenScavengeAllocationSnippets extends SubstrateAllocationSnippets {
     }
 
     @Override
-    public Word getTLABInfo() {
+    protected Word getTLABInfo() {
         return (Word) ThreadLocalAllocation.regularTLAB.getAddress();
     }
 
     @Override
-    public Word readTlabTop(Word tlabInfo) {
+    protected Word readTlabTop(Word tlabInfo) {
         return ((Descriptor) tlabInfo).getAllocationTop(TLAB_TOP_IDENTITY);
     }
 
     @Override
-    public Word readTlabEnd(Word tlabInfo) {
+    protected Word readTlabEnd(Word tlabInfo) {
         return ((Descriptor) tlabInfo).getAllocationEnd(TLAB_END_IDENTITY);
     }
 
     @Override
-    public void writeTlabTop(Word tlabInfo, Word newTop) {
+    protected void writeTlabTop(Word tlabInfo, Word newTop) {
         ((Descriptor) tlabInfo).setAllocationTop(newTop, TLAB_TOP_IDENTITY);
     }
 
@@ -153,7 +151,7 @@ final class GenScavengeAllocationSnippets extends SubstrateAllocationSnippets {
         private final SnippetInfo formatObject;
         private final SnippetInfo formatArray;
 
-        Templates(SubstrateAllocationSnippets receiver, OptionValues options, Iterable<DebugHandlersFactory> factories,
+        Templates(GenScavengeAllocationSnippets receiver, OptionValues options, Iterable<DebugHandlersFactory> factories,
                         SnippetCounter.Group.Factory groupFactory, Providers providers, SnippetReflectionProvider snippetReflection) {
             super(receiver, options, factories, groupFactory, providers, snippetReflection);
 
