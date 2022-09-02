@@ -83,7 +83,7 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         return getMethodNode() instanceof BytecodeNode;
     }
 
-    private EspressoMethodNode getMethodNode() {
+    private final EspressoMethodNode getMethodNode() {
         Node child = methodNode;
         if (child instanceof WrapperNode) {
             child = ((WrapperNode) child).getDelegateNode();
@@ -98,10 +98,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         } else {
             return new Default(descriptor, methodNode);
         }
-    }
-    
-    public int getCurrentBCI() {
-        return ((BytecodeNode) getMethodNode()).getCurrentBCI();
     }
 
     public int readBCI(FrameInstance frameInstance) {

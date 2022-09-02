@@ -646,7 +646,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return null;
     }
 
-    @TruffleBoundary
     private Method findMethodHandleIntrinsic(Symbol<Name> methodName,
                     Symbol<Signature> signature,
                     MethodHandleIntrinsics.PolySigIntrinsics id,

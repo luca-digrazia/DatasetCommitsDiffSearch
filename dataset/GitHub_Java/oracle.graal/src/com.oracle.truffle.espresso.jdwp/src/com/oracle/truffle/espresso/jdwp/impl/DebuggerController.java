@@ -106,10 +106,6 @@ public class DebuggerController {
         return context;
     }
 
-    public JDWPInstrument getInstrument() {
-        return instrument;
-    }
-
     public SuspendedInfo getSuspendedInfo(Object thread) {
         return suspendedInfos.get(thread);
     }

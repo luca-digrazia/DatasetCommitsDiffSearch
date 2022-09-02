@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,11 @@ package com.oracle.truffle.espresso.meta;
 
 import java.lang.reflect.Array;
 
+import com.oracle.truffle.espresso.jdwp.api.TagConstants;
+import com.oracle.truffle.espresso.descriptors.StaticSymbols;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.Klass;
 
 /**
@@ -62,6 +67,9 @@ public enum JavaKind {
     /** The void kind. */
     Void('V', 14, "void", 0, false, java.lang.Void.TYPE, java.lang.Void.class),
 
+    /** The return address type. */
+    ReturnAddress('r', 98, "return address", 1, false, null, null),
+
     /** The non-type. */
     Illegal('-', 99, "illegal", 0, false, null, null);
 
@@ -72,6 +80,8 @@ public enum JavaKind {
     private final Class<?> boxedJavaClass;
     private final int slotCount;
     private final int basicType;
+    private final Symbol<Type> type;
+    private final Symbol<Name> name;
 
     JavaKind(char typeChar, int basicType, String javaName, int slotCount, boolean isStackInt, Class<?> primitiveJavaClass, Class<?> boxedJavaClass) {
         this.typeChar = typeChar;
@@ -81,6 +91,8 @@ public enum JavaKind {
         this.primitiveJavaClass = primitiveJavaClass;
         this.boxedJavaClass = boxedJavaClass;
         this.basicType = basicType;
+        this.type = (primitiveJavaClass != null) ? StaticSymbols.putType("" + typeChar) : null;
+        this.name = StaticSymbols.putName(javaName);
         assert primitiveJavaClass == null || javaName.equals(primitiveJavaClass.getName());
     }
 
@@ -240,8 +252,9 @@ public enum JavaKind {
                 return Long;
             case 'V':
                 return Void;
+            default:
+                throw new IllegalArgumentException("unknown primitive or void type character: " + ch);
         }
-        throw new IllegalArgumentException("unknown primitive or void type character: " + ch);
     }
 
     /**
@@ -397,6 +410,20 @@ public enum JavaKind {
     }
 
     /**
+     * Returns the Espresso type (symbol) of this kind.
+     *
+     * @return the Espresso type (symbol) of this kind
+     */
+    public Symbol<Type> getType() {
+        return type;
+    }
+
+    public Symbol<Name> getPrimitiveBinaryName() {
+        EspressoError.guarantee(isPrimitive(), "not a primitive");
+        return name;
+    }
+
+    /**
      * Marker interface for types that should be {@linkplain JavaKind#format(Object) formatted} with
      * their {@link Object#toString()} value. Calling {@link Object#toString()} on other objects
      * poses a security risk because it can potentially call user code.
@@ -433,7 +460,7 @@ public enum JavaKind {
                         return "String:\"" + s + '"';
                     }
                 } else if (value instanceof Klass) {
-                    return "JavaType:" + ((Klass) value).getName();
+                    return "JavaType:" + ((Klass) value).getType();
                 } else if (value instanceof Enum) {
                     return MetaUtil.getSimpleName(value.getClass(), true) + ":" + ((Enum<?>) value).name();
                 } else if (value instanceof FormatWithToString) {
@@ -477,4 +504,36 @@ public enum JavaKind {
         return buf.append('}').toString();
     }
 
+    public boolean isSubWord() {
+        return isStackInt || this == Float;
+    }
+
+    public boolean isStackInt() {
+        return isStackInt;
+    }
+
+    public byte toTagConstant() {
+        switch (this) {
+            case Boolean:
+                return TagConstants.BOOLEAN;
+            case Byte:
+                return TagConstants.BYTE;
+            case Short:
+                return TagConstants.SHORT;
+            case Char:
+                return TagConstants.CHAR;
+            case Int:
+                return TagConstants.INT;
+            case Float:
+                return TagConstants.FLOAT;
+            case Long:
+                return TagConstants.LONG;
+            case Double:
+                return TagConstants.DOUBLE;
+            case Object:
+                return TagConstants.OBJECT;
+            default:
+                return -1;
+        }
+    }
 }

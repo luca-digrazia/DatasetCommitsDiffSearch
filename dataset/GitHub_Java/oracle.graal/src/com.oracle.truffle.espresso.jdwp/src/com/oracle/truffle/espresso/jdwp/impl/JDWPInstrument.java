@@ -34,14 +34,13 @@ import java.util.Collection;
 public final class JDWPInstrument extends TruffleInstrument implements Runnable {
 
     public static final String ID = "jdwp";
+    public static final Object suspendStartupLock = new Object();
 
-    public final Object suspendStartupLock = new Object();
     private DebuggerController controller;
     private TruffleInstrument.Env env;
     private JDWPContext context;
     private DebuggerConnection connection;
     private Collection<Thread> activeThreads = new ArrayList<>();
-    private boolean isStarted;
 
     @Override
     protected void onCreate(TruffleInstrument.Env instrumentEnv) {
@@ -98,10 +97,6 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         }
     }
 
-    public void setStarted() {
-        this.isStarted = true;
-    }
-
     @CompilerDirectives.TruffleBoundary
     public void init(JDWPContext jdwpContext) {
         this.context = jdwpContext;
@@ -111,9 +106,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
                 // take all initial commands from the debugger before resuming to main thread
                 synchronized (suspendStartupLock) {
                     try {
-                        while (!isStarted) {
-                            suspendStartupLock.wait();
-                        }
+                        suspendStartupLock.wait();
                     } catch (InterruptedException e) {
                         throw new RuntimeException("JDWP connection interrupted");
                     }
@@ -147,10 +140,6 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
 
     public JDWPContext getContext() {
         return context;
-    }
-
-    public Object getSuspendStartupLock() {
-        return suspendStartupLock;
     }
 
     private static final class Controller extends DebuggerController {

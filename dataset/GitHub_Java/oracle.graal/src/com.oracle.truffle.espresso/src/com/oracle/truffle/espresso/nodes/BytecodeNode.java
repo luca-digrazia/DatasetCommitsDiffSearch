@@ -1009,12 +1009,12 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                         case MONITOREXIT:  monitorExit(frame, nullCheck(peekAndReleaseObject(frame, top - 1))); break;
 
                         case WIDE:
-                            CompilerDirectives.transferToInterpreter();
+                            CompilerAsserts.neverPartOfCompilation();
                             throw EspressoError.shouldNotReachHere("BytecodeStream.currentBC() should never return this bytecode.");
                         case MULTIANEWARRAY: top += allocateMultiArray(frame, top, resolveType(curOpcode, bs.readCPI(curBCI)), bs.readUByte(curBCI + 3)); break;
 
                         case BREAKPOINT:
-                            CompilerDirectives.transferToInterpreter();
+                            CompilerAsserts.neverPartOfCompilation();
                             throw EspressoError.unimplemented(Bytecodes.nameOf(curOpcode) + " not supported.");
 
                         case INVOKEDYNAMIC: top += quickenInvokeDynamic(frame, top, curBCI, curOpcode); break;
@@ -1022,7 +1022,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
 
                         default:
-                            CompilerDirectives.transferToInterpreter();
+                            CompilerAsserts.neverPartOfCompilation();
                             throw EspressoError.shouldNotReachHere(Bytecodes.nameOf(curOpcode));
                     }
 
@@ -1536,7 +1536,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             StaticObject methodType = getConstantPool().resolvedMethodTypeAt(getMethod().getDeclaringKlass(), cpi);
             putObject(frame, top, methodType);
         } else {
-            CompilerDirectives.transferToInterpreter();
+            CompilerAsserts.neverPartOfCompilation();
             throw EspressoError.unimplemented(constant.toString());
         }
     }

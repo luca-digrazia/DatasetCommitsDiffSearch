@@ -60,16 +60,16 @@ import com.oracle.truffle.espresso.classfile.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.classfile.ExceptionsAttribute;
-import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.SourceFileAttribute;
+import com.oracle.truffle.espresso.classfile.LineNumberTable;
+import com.oracle.truffle.espresso.jdwp.api.MethodRef;
+import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jni.Mangle;
 import com.oracle.truffle.espresso.jni.NativeLibrary;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
@@ -214,11 +214,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         this.isLeaf = Truffle.getRuntime().createAssumption();
     }
 
-    public int getRefKind() {
+    public final int getRefKind() {
         return refKind;
     }
 
-    public void initRefKind() {
+    public final void initRefKind() {
         if (isStatic()) {
             this.refKind = REF_invokeStatic;
         } else if (isPrivate() || isConstructor()) {
@@ -231,16 +231,16 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
     }
 
-    public Attribute getAttribute(Symbol<Name> attrName) {
+    public final Attribute getAttribute(Symbol<Name> attrName) {
         return linkedMethod.getAttribute(attrName);
     }
 
     @TruffleBoundary
-    public int bciToLineNumber(int atBCI) {
+    public final int BCItoLineNumber(int atBCI) {
         if (atBCI < 0) {
             return atBCI;
         }
-        return codeAttribute.bciToLineNumber(atBCI);
+        return codeAttribute.BCItoLineNumber(atBCI);
     }
 
     @Override
@@ -248,7 +248,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return declaringKlass.getContext();
     }
 
-    public BootstrapMethodsAttribute getBootstrapMethods() {
+    public final BootstrapMethodsAttribute getBootstrapMethods() {
         return (BootstrapMethodsAttribute) getAttribute(BootstrapMethodsAttribute.NAME);
     }
 
@@ -588,7 +588,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
     }
 
-    public boolean isClassInitializer() {
+    public final boolean isClassInitializer() {
         return Name.CLINIT.equals(getName()) && isStatic();
     }
 
@@ -606,7 +606,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return "EspressoMethod<" + getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature() + ">";
     }
 
-    public JavaKind getReturnKind() {
+    public final JavaKind getReturnKind() {
         return Signatures.returnKind(getParsedSignature());
     }
 
@@ -662,37 +662,37 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     // Polymorphic signature method 'creation'
 
-    Method findIntrinsic(Symbol<Signature> signature, Function<Method, EspressoMethodNode> baseNodeFactory, MethodHandleIntrinsics.PolySigIntrinsics id) {
+    final Method findIntrinsic(Symbol<Signature> signature, Function<Method, EspressoMethodNode> baseNodeFactory, MethodHandleIntrinsics.PolySigIntrinsics id) {
         return getContext().getMethodHandleIntrinsics().findIntrinsic(this, signature, baseNodeFactory, id);
     }
 
-    void setVTableIndex(int i) {
+    final void setVTableIndex(int i) {
         assert (vtableIndex == -1 || vtableIndex == i);
         assert itableIndex == -1;
         CompilerAsserts.neverPartOfCompilation();
         this.vtableIndex = i;
     }
 
-    public int getVTableIndex() {
+    final public int getVTableIndex() {
         return vtableIndex;
     }
 
-    void setITableIndex(int i) {
+    final void setITableIndex(int i) {
         assert (itableIndex == -1 || itableIndex == i);
         assert vtableIndex == -1;
         CompilerAsserts.neverPartOfCompilation();
         this.itableIndex = i;
     }
 
-    public int getITableIndex() {
+    final public int getITableIndex() {
         return itableIndex;
     }
 
-    public boolean hasCode() {
+    public final boolean hasCode() {
         return codeAttribute != null || isNative();
     }
 
-    public boolean isVirtualCall() {
+    public final boolean isVirtualCall() {
         return !isStatic() && !isConstructor() && !isPrivate() && !getDeclaringKlass().isInterface();
     }
 
@@ -720,11 +720,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return declaringKlass.getAttribute(Name.SourceFile) != null;
     }
 
-    public String report(int curBCI) {
-        return "at " + MetaUtil.internalNameToJava(getDeclaringKlass().getType().toString(), true, false) + "." + getName() + "(" + getSourceFile() + ":" + bciToLineNumber(curBCI) + ")";
+    public final String report(int curBCI) {
+        return "at " + MetaUtil.internalNameToJava(getDeclaringKlass().getType().toString(), true, false) + "." + getName() + "(" + getSourceFile() + ":" + BCItoLineNumber(curBCI) + ")";
     }
 
-    public String report() {
+    public final String report() {
         return "at " + MetaUtil.internalNameToJava(getDeclaringKlass().getType().toString(), true, false) + "." + getName() + "(unknown source)";
     }
 
@@ -827,7 +827,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
      * @return the source object associated with this method
      */
 
-    public Source getSource() {
+    public final Source getSource() {
         Source localSource = this.source;
         if (localSource == null) {
             this.source = localSource = getContext().findOrCreateSource(this);
