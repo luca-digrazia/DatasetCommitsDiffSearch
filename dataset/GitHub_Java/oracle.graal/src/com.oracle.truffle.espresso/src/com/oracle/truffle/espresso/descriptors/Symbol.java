@@ -28,7 +28,6 @@ import java.util.Arrays;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.jni.Utf8;
 import com.oracle.truffle.espresso.meta.EspressoError;
-
 import sun.misc.VM;
 
 /**
@@ -205,7 +204,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> LineNumberTable = StaticSymbols.putName("LineNumberTable");
 
         public static final Symbol<Name> BootstrapMethods = StaticSymbols.putName("BootstrapMethods");
-        public static final Symbol<Name> StackMapTable = StaticSymbols.putName("StackMapTable");
         public static final Symbol<Name> ConstantValue = StaticSymbols.putName("ConstantValue");
         public static final Symbol<Name> RuntimeVisibleAnnotations = StaticSymbols.putName("RuntimeVisibleAnnotations");
         public static final Symbol<Name> RuntimeVisibleTypeAnnotations = StaticSymbols.putName("RuntimeVisibleTypeAnnotations");

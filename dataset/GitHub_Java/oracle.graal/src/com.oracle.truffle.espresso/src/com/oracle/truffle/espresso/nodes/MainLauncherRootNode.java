@@ -24,6 +24,7 @@ package com.oracle.truffle.espresso.nodes;
 
 import java.util.function.IntFunction;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
@@ -55,6 +56,11 @@ public class MainLauncherRootNode extends RootNode {
         } catch (EspressoException e) {
             StaticObject guestException = e.getException();
             guestException.getKlass().lookupMethod(Symbol.Name.printStackTrace, Symbol.Signature._void).invokeDirect(guestException);
+            CompilerDirectives.transferToInterpreter();
+            e.printStackTrace();
+            return StaticObject.NULL;
+        } catch (Throwable e) {
+            CompilerDirectives.transferToInterpreter();
             return StaticObject.NULL;
         } finally {
             main.getMeta().Shutdown_shutdown.invokeDirect(null);

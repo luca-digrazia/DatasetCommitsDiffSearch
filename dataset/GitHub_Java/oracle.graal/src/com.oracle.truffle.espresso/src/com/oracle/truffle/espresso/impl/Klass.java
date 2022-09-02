@@ -593,7 +593,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         return InterpreterToVM.newObject(this);
     }
 
-    // TODO(garcia) Symbolify package ?
     @CompilationFinal private String runtimePackage;
 
     public final String getRuntimePackage() {
@@ -616,7 +615,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         return name;
     }
 
-    public boolean sameRuntimePackage(Klass other) {
+    boolean sameRuntimePackage(Klass other) {
         return this.getDefiningClassLoader() == other.getDefiningClassLoader() && this.getRuntimePackage().equals(other.getRuntimePackage());
     }
 }
