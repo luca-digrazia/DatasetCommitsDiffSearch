@@ -231,7 +231,7 @@ public final class Validation {
      *     SignatureDescriptor: ( {FieldDescriptor} ) TypeDescriptor
      * </pre>
      */
-    public static boolean validSignatureDescriptor(ByteSequence bytes, boolean isInitOrClinit) {
+    public static boolean validSignatureDescriptor(ByteSequence bytes, boolean isInit) {
         if (bytes.length() < 3) { // shortest descriptor e.g. ()V
             return false;
         }
@@ -286,7 +286,7 @@ public final class Validation {
         }
         assert bytes.byteAt(index) == ')';
         // Validate return type.
-        if (isInitOrClinit) {
+        if (isInit) {
             return bytes.subSequence(index + 1, bytes.length() - index - 1).contentEquals(Symbol.Type._void);
         } else {
             return validTypeDescriptor(bytes.subSequence(index + 1, bytes.length() - index - 1), true);
