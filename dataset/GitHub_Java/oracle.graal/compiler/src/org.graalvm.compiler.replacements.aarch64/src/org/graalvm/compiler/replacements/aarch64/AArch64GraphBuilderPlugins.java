@@ -60,7 +60,8 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
     @Override
-    public void register(Plugins plugins, Replacements replacements, Architecture arch, boolean registerForeignCallMath, boolean useFMAIntrinsics, OptionValues options) {
+    public void register(Plugins plugins, Replacements replacements, Architecture arch, boolean explicitUnsafeNullChecks, boolean registerForeignCallMath, boolean useFMAIntrinsics,
+                    OptionValues options) {
         register(plugins, replacements, registerForeignCallMath, useFMAIntrinsics, options);
     }
 
