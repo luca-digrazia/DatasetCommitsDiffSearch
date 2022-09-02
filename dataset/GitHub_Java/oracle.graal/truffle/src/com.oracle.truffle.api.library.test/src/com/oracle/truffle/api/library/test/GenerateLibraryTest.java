@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,17 +47,17 @@ import static org.junit.Assert.fail;
 import org.junit.Test;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
-import com.oracle.truffle.api.library.GenerateLibrary.Ignore;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.test.CachedLibraryTest.SimpleDispatchedNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @SuppressWarnings("unused")
@@ -70,6 +70,10 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         public String call(Object receiver) {
             return "default";
         }
+
+        public abstract void abstractMethod(Object receiver);
+
+        public abstract void abstractMethodWithFrame(Object receiver, VirtualFrame frame);
 
     }
 
@@ -87,36 +91,40 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         }
 
         @ExportMessage
+        void abstractMethod() {
+        }
+
+        @ExportMessage
+        void abstractMethodWithFrame(VirtualFrame frame) {
+        }
+
+        @ExportMessage
         boolean accepts(@Cached(value = "this") Sample cachedS) {
             // use identity caches to make it easier to overflow
             return this == cachedS;
         }
 
         @ExportMessage
-        static final String call(Sample s) {
-            if (s.name != null) {
-                return s.name + "_uncached";
-            } else {
-                return "uncached";
-            }
-
-        }
-
-        @ExportMessage
-        static class Call {
-            @Specialization
-            static final String call(Sample s) {
+        static final String call(Sample s, @Cached(value = "0", uncached = "1") int cached) {
+            if (cached == 0) {
                 if (s.name != null) {
                     return s.name + "_cached";
                 } else {
                     return "cached";
                 }
+            } else {
+                if (s.name != null) {
+                    return s.name + "_uncached";
+                } else {
+                    return "uncached";
+                }
             }
+
         }
+
     }
 
     private abstract static class InvalidLibrary extends Library {
-
     }
 
     @Test
@@ -208,13 +216,13 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
     }
 
     @GenerateLibrary
-    @ExpectError("Declared library classes must extend the type com.oracle.truffle.api.library.Library.")
+    @ExpectError("Declared library classes must exactly extend the type com.oracle.truffle.api.library.Library.")
     public static class ErrorLibrary1 {
 
     }
 
     @GenerateLibrary
-    @ExpectError("Declared library classes must extend the type com.oracle.truffle.api.library.Library.")
+    @ExpectError("Declared library classes must exactly extend the type com.oracle.truffle.api.library.Library.")
     public static class ErrorLibrary2 extends Node {
     }
 
@@ -222,7 +230,7 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
     public abstract static class ErrorLibrary3 extends Library {
 
         @ExpectError("Not enough arguments specified for a library message. The first argument of a library method must be of type Object. Add a receiver argument with type Object resolve " +
-                        "this.If this method is not intended to be a library message annotate it with @GenerateLibrary.Ignore.")
+                        "this.If this method is not intended to be a library message then add the private or final modifier to ignore it.")
         public void foobar() {
         }
 
@@ -234,19 +242,9 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         public void bar(String a) {
         }
 
-        @ExpectError("Invalid first argument type Integer specified. The first argument of a library method must be of the same type for all methods. If this method is not intended to be a " +
-                        "library message annotate it with @GenerateLibrary.Ignore.")
+        @ExpectError("Invalid first argument type Integer specified. The first argument of a library method must be of the same type for all methods. " +
+                        "If this method is not intended to be a library message then add the private or final modifier to ignore it.")
         public void baz(Integer a) {
-        }
-
-    }
-
-    @GenerateLibrary
-    @ExpectError("The library does not export any messages. Use public instance methods to declare library messages.")
-    public abstract static class ErrorLibrary5 extends Library {
-
-        @Ignore
-        public void foobar() {
         }
 
     }
@@ -326,6 +324,15 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
     interface ExportsType {
     }
 
+    interface ExportsGenericInterface<T> {
+    }
+
+    class ExportsClass {
+    }
+
+    class ExportsGenericClass<T> {
+    }
+
     @ExpectError("Invalid type. Valid declared type expected.")
     @GenerateLibrary(receiverType = int.class)
     public abstract static class ExportsTypeLibraryError1 extends Library {
@@ -350,7 +357,7 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
 
     }
 
-    @ExportLibrary(value = ExportsTypeLibrary.class, receiverClass = Integer.class)
+    @ExportLibrary(value = ExportsTypeLibrary.class, receiverType = Integer.class)
     public static class ExportsTypeDefaultLibrary {
         @ExportMessage
         static void foo(Integer receiver) {
@@ -365,11 +372,56 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError("Using explicit receiver classes is only supported%")
-    @ExportLibrary(value = ExportsTypeLibrary.class, receiverClass = Double.class)
+    @ExpectError("Using explicit receiver types is only supported%")
+    @ExportLibrary(value = ExportsTypeLibrary.class, receiverType = Double.class)
     public static class InvalidDefaultTypeImpl {
         @ExportMessage
         static void foo(Double receiver) {
+        }
+    }
+
+    @GenerateLibrary()
+    @DefaultExport(ExportsGenericInterfaceDefaultLibrary.class)
+    public abstract static class ExportsGenericInterfaceLibrary extends Library {
+
+        public abstract void foo(ExportsGenericInterface<?> receiver);
+
+    }
+
+    @ExportLibrary(value = ExportsGenericInterfaceLibrary.class, receiverType = ExportsGenericInterface.class)
+    public static class ExportsGenericInterfaceDefaultLibrary {
+        @ExportMessage
+        static void foo(ExportsGenericInterface<?> receiver) {
+        }
+    }
+
+    @DefaultExport(ExportsClassDefaultLibrary.class)
+    @GenerateLibrary(receiverType = ExportsClass.class)
+    public abstract static class ExportsClassLibrary extends Library {
+        public void foo(Object receiver) {
+        }
+    }
+
+    // Tests also that ExportsClassDefaultLibraryGen has methods with proper signatures.
+    @ExportLibrary(value = ExportsClassLibrary.class, receiverType = ExportsClass.class)
+    public static class ExportsClassDefaultLibrary {
+        @ExportMessage
+        static void foo(ExportsClass receiver) {
+        }
+    }
+
+    @GenerateLibrary()
+    @DefaultExport(ExportsGenericClassDefaultLibrary.class)
+    public abstract static class ExportsGenericClassLibrary extends Library {
+
+        public abstract void foo(ExportsGenericClass<?> receiver);
+
+    }
+
+    @ExportLibrary(value = ExportsGenericClassLibrary.class, receiverType = ExportsGenericClass.class)
+    public static class ExportsGenericClassDefaultLibrary {
+        @ExportMessage
+        static void foo(ExportsGenericClass<?> receiver) {
         }
     }
 
@@ -381,8 +433,8 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
 
     }
 
-    @ExpectError("The export receiver class Integer is not compatible with the library receiver type 'Double' of library 'InvalidDefaultReceiverTypeLibrary'. ")
-    @ExportLibrary(value = InvalidDefaultReceiverTypeLibrary.class, receiverClass = Integer.class)
+    @ExpectError("The export receiver type Integer is not compatible with the library receiver type 'Double' of library 'InvalidDefaultReceiverTypeLibrary'. ")
+    @ExportLibrary(value = InvalidDefaultReceiverTypeLibrary.class, receiverType = Integer.class)
     public static class InvalidDefaultReceiverType {
         @ExportMessage
         static void foo(Integer receiver) {
@@ -397,7 +449,9 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError("The following message(s) of library AbstractErrorLibrary1 are abstract and must be exported using:%")
+    @ExpectError({"The following message(s) of library AbstractErrorLibrary1 are abstract and must be exported using:%",
+                    "Exported library AbstractErrorLibrary1 does not export any messages and therefore has no effect. Remove the export declaration to resolve this."
+    })
     @ExportLibrary(AbstractErrorLibrary1.class)
     public static class AbstractErrorTest1 {
     }
@@ -417,6 +471,7 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
     }
 
     // should compile no abstract methods
+    @ExpectError("Exported library AbstractErrorLibrary2 does not export any messages and therefore has no effect. Remove the export declaration to resolve this.")
     @ExportLibrary(AbstractErrorLibrary2.class)
     public static class AbstractErrorTest2 {
     }
@@ -460,6 +515,99 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         @Abstract(ifExported = "asType")
         public Object asType(Object receiver) {
             return receiver;
+        }
+
+    }
+
+    @GenerateLibrary
+    @ExpectError("Declared library classes must exactly extend the type com.oracle.truffle.api.library.Library.")
+    public abstract static class AbstractErrorLibrary6 extends SampleLibrary {
+
+        @Override
+        public String call(Object receiver) {
+            return "default";
+        }
+
+    }
+
+    // test that final methods are ignored
+    @GenerateLibrary
+    public abstract static class AbstractErrorLibrary7 extends Library {
+        public String call(Object receiver, String arg) {
+            return "default";
+        }
+
+        @SuppressWarnings("static-method")
+        public final String call(Object receiver) {
+            return "default";
+        }
+
+    }
+
+    // test that private methods are ignored
+    @GenerateLibrary
+    public abstract static class AbstractErrorLibrary8 extends Library {
+        public String call(Object receiver, String arg) {
+            return "default";
+        }
+
+        @SuppressWarnings("static-method")
+        private String call(Object receiver) {
+            return "default";
+        }
+
+    }
+
+    // test that package-protected duplicate method leads to error
+    @GenerateLibrary
+    public abstract static class AbstractErrorLibrary9 extends Library {
+        @ExpectError("Library message must have a unique name. Two methods with the same name found.If this method is not intended to be a library message then add the private or final modifier to ignore it.")
+        public String call(Object receiver, String arg) {
+            return "default";
+        }
+
+        @SuppressWarnings("static-method")
+        String call(Object receiver) {
+            return "default";
+        }
+
+    }
+
+    // test that protected duplicate method leads to error
+    @GenerateLibrary
+    public abstract static class AbstractErrorLibrary10 extends Library {
+        @ExpectError("Library message must have a unique name. Two methods with the same name found.If this method is not intended to be a library message then add the private or final modifier to ignore it.")
+        public String call(Object receiver, String arg) {
+            return "default";
+        }
+
+        @SuppressWarnings("static-method")
+        protected String call(Object receiver) {
+            return "default";
+        }
+
+    }
+
+    // test that protected duplicate method leads to error
+    @GenerateLibrary
+    public abstract static class AbstractErrorLibrary11 extends Library {
+
+        @SuppressWarnings("static-method")
+        @ExpectError("Library messages must be public.")
+        protected String call(Object receiver) {
+            return "default";
+        }
+
+    }
+
+    // test that non static inner class must be static
+    @GenerateLibrary
+    @ExpectError("Declared inner library classes must be static.")
+    public abstract class AbstractErrorLibrary12 extends Library {
+
+        @SuppressWarnings("static-method")
+        public String call(Object receiver) {
+            return "default";
         }
 
     }

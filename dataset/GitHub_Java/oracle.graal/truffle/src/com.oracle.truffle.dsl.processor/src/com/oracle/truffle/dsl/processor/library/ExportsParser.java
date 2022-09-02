@@ -71,7 +71,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import javax.lang.model.element.AnnotationMirror;
@@ -329,14 +328,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
          * filter elements that come from exports not relevant for this class. Remove all export
          * declarations not relevant for this type.
          */
-        Predicate<? super ExportsLibrary> filterpredicate = (library -> {
-            if (library.isDynamicDispatchTarget()) {
-                // Implicitly export super's library if dynamic dispatched.
-                return true;
-            }
-            return library.isDeclaredInTemplate();
-        });
-        Set<ExportsLibrary> declaredExports = model.getExportedLibraries().values().stream().filter(filterpredicate).collect(Collectors.toSet());
+        Set<ExportsLibrary> declaredExports = model.getExportedLibraries().values().stream().filter(ExportsLibrary::isDeclaredInTemplate).collect(Collectors.toSet());
         model.getExportedLibraries().values().removeIf((e) -> !declaredExports.contains(e));
         exportedElements = exportedElements.stream().filter((e) -> declaredExports.contains(e.getExportsLibrary())).collect(Collectors.toList());
 

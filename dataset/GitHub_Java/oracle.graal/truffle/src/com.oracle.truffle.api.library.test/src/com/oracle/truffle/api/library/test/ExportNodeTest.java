@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,22 +41,25 @@
 package com.oracle.truffle.api.library.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 import java.util.Arrays;
 import java.util.List;
 
 import org.junit.Test;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.test.ExportMethodTest.ExportsTestLibrary4;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @SuppressWarnings({"unused", "hiding"})
@@ -348,11 +351,85 @@ public class ExportNodeTest extends AbstractLibraryTest {
 
     }
 
+    @Test
+    public void testExportFallback() {
+        ExportFallback fallback = new ExportFallback();
+        MultiNodeExportLibrary cachedLib = createCached(MultiNodeExportLibrary.class, fallback);
+        assertEquals("s0", cachedLib.m0(fallback, ExportFallback.TEST_ARG));
+        assertEquals("f0", cachedLib.m0(fallback, ExportFallback.TEST_ARG + "_"));
+        assertEquals("s0", cachedLib.m1(fallback, ExportFallback.TEST_ARG));
+        assertEquals("f0", cachedLib.m1(fallback, ExportFallback.TEST_ARG + "_"));
+    }
+
+    // use inline cache to export multiple nodes. state should be cached.
+    @ExportLibrary(MultiNodeExportLibrary.class)
+    @SuppressWarnings("static-method")
+    static class ExportFallback {
+
+        static final String TEST_ARG = "testArg";
+
+        @ExportMessage
+        static class M0 {
+            @Specialization(guards = "TEST_ARG.equals(arg)")
+            static String s0(ExportFallback receiver, String arg) {
+                return "s0";
+            }
+
+            @Fallback
+            static String f0(ExportFallback receiver, String arg) {
+                return "f0";
+            }
+        }
+
+        @ExportMessage
+        static class M1 {
+
+            @Specialization(guards = "TEST_ARG.equals(arg)")
+            static String s0(ExportFallback receiver, String arg) {
+                return "s0";
+            }
+
+            @Fallback
+            static String f0(ExportFallback receiver, String arg) {
+                return "f0";
+            }
+        }
+
+    }
+
+    @Test
+    public void testWeakReference() {
+        WeakReferenceNodeTest weak = new WeakReferenceNodeTest();
+        MultiNodeExportLibrary cachedLib = createCached(MultiNodeExportLibrary.class, weak);
+        assertEquals("s0", cachedLib.m0(weak, "arg"));
+    }
+
+    @ExportLibrary(MultiNodeExportLibrary.class)
+    public static final class WeakReferenceNodeTest {
+
+        @ExportMessage
+        static class M0 {
+
+            @Specialization(guards = "object == cachedObject", limit = "1")
+            @TruffleBoundary
+            static String s0(@SuppressWarnings("unused") WeakReferenceNodeTest object,
+                            String arg,
+                            @Cached(value = "object", weak = true) WeakReferenceNodeTest cachedObject) {
+                assertNotNull(cachedObject);
+                return "s0";
+            }
+
+        }
+
+    }
+
     // forgot ExportMessage
     @ExportLibrary(ExportNodeLibrary1.class)
-    @ExpectError("The method has the same name 'Foo' as a message in the exported library ExportNodeLibrary1. " +
+    @ExpectError({"The method has the same name 'Foo' as a message in the exported library ExportNodeLibrary1. " +
                     "Did you forget to export it? " +
-                    "Use @ExportMessage to export the message, @Ignore to ignore this warning, rename the method or reduce the visibility of the method to private to resolve this warning.")
+                    "Use @ExportMessage to export the message, @Ignore to ignore this warning, rename the method or reduce the visibility of the method to private to resolve this warning.",
+                    "Exported library ExportNodeLibrary1 does not export any messages and therefore has no effect. Remove the export declaration to resolve this."
+    })
     static class TestObjectError1 {
 
         static class Foo {
@@ -464,8 +541,7 @@ public class ExportNodeTest extends AbstractLibraryTest {
         @ExportMessage
         static class Foo {
 
-            @ExpectError("Method signature (Object) does not match to the expected signature: \n" +
-                            "    void doFoo(TestObjectError10 arg0)")
+            @ExpectError("Method signature (Object) does not match to the expected signature: %")
             @Specialization
             void doFoo(Object receiver) {
             }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,6 +47,8 @@ import org.junit.Test;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
@@ -56,22 +58,37 @@ import com.oracle.truffle.api.library.test.otherPackage.ErrorOtherPackageBaseObj
 import com.oracle.truffle.api.library.test.otherPackage.ErrorOtherPackageBaseObject3;
 import com.oracle.truffle.api.library.test.otherPackage.OtherPackageBaseObject;
 import com.oracle.truffle.api.library.test.otherPackage.OtherPackageLibrary;
+import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 public class ExportSubclassTest extends AbstractLibraryTest {
     @GenerateLibrary
     @SuppressWarnings("unused")
-    public abstract static class ExportSubclassLibrary extends Library {
+    public abstract static class ExportSubclassLibrary1 extends Library {
 
         public String m0(Object receiver) {
             return "m0_default";
         }
 
         public abstract String m1(Object receiver);
+
+        public String m2(Object receiver) {
+            return "m2_default";
+        }
     }
 
-    @ExportLibrary(ExportSubclassLibrary.class)
-    static class BaseClass {
+    @GenerateLibrary
+    @SuppressWarnings("unused")
+    public abstract static class ExportSubclassLibrary2 extends Library {
+
+        public String m2(Object receiver) {
+            return "m2_library2";
+        }
+
+    }
+
+    @ExportLibrary(ExportSubclassLibrary1.class)
+    public static class ExportSubclassBaseClass {
 
         // directly inherit to SubClass1 and SubClass2
         @ExportMessage
@@ -82,35 +99,40 @@ public class ExportSubclassTest extends AbstractLibraryTest {
         @ExportMessage
         static class M1 {
             @Specialization
-            static String doDefault(@SuppressWarnings("unused") BaseClass receiver) {
+            static String doDefault(@SuppressWarnings("unused") ExportSubclassBaseClass receiver) {
                 return "base_m1";
             }
+        }
+
+        @ExportMessage
+        String m2() {
+            return "base_m0";
         }
 
     }
 
     // subclass that re-exports
-    @ExportLibrary(ExportSubclassLibrary.class)
-    static class SubClass1 extends BaseClass {
+    @ExportLibrary(ExportSubclassLibrary1.class)
+    static final class ExportSubclassSubClass1 extends ExportSubclassBaseClass {
 
         @ExportMessage
         static class M0 {
             @Specialization
-            static String doDefault(@SuppressWarnings("unused") SubClass1 receiver) {
+            static String doDefault(@SuppressWarnings("unused") ExportSubclassSubClass1 receiver) {
                 return "sub1_m0";
             }
         }
 
         @SuppressWarnings("static-method")
         @ExportMessage
-        final String m1() {
+        String m1() {
             return "sub1_m1";
         }
 
     }
 
     // subclass that does not re-export
-    static class SubClass2 extends BaseClass {
+    static class ExportSubclassSubClass2 extends ExportSubclassBaseClass {
 
         @Override
         String m0() {
@@ -119,7 +141,7 @@ public class ExportSubclassTest extends AbstractLibraryTest {
 
     }
 
-    @ExportLibrary(ExportSubclassLibrary.class)
+    @ExportLibrary(ExportSubclassLibrary1.class)
     static class ErrorRedirectionBaseClass {
         @ExportMessage
         @ExpectError("Expected parameter count 1 for exported message, but was 0.%")
@@ -128,31 +150,47 @@ public class ExportSubclassTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError("Message redirected from element com.oracle.truffle.api.library.test.ExportSubclassTest.ErrorRedirectionBaseClass.m1():\n" +
-                    "Expected parameter count 1 for exported message, but was 0. Expected signature:%")
-    @ExportLibrary(ExportSubclassLibrary.class)
+    @ExpectError("Message redirected from element ExportSubclassTest.ErrorRedirectionBaseClass.m1():%")
+    @ExportLibrary(ExportSubclassLibrary1.class)
     static class ErrorRedirectionSubClass extends ErrorRedirectionBaseClass {
+
+        @ExportMessage
+        String m2() {
+            return null;
+        }
     }
 
     @ExportLibrary(OtherPackageLibrary.class)
-    @ExpectError("Found invisible exported elements in super type 'ErrorOtherPackageBaseObject1': \n" +
-                    "   - ErrorOtherPackageBaseObject1.m0()\n" +
+    @ExpectError("Found invisible exported elements in super type 'ErrorOtherPackageBaseObject1': %n" +
+                    "   - com.oracle.truffle.api.library.test.otherPackage.ErrorOtherPackageBaseObject1.m0()%n" +
                     "Increase their visibility to resolve this problem.")
     static class InvisibleBaseElement1 extends ErrorOtherPackageBaseObject1 {
+        @ExportMessage
+        String m2() {
+            return null;
+        }
     }
 
     @ExportLibrary(OtherPackageLibrary.class)
-    @ExpectError("Found invisible exported elements in super type 'ErrorOtherPackageBaseObject2': \n" +
-                    "   - M0.doDefault(ErrorOtherPackageBaseObject2)\n" +
+    @ExpectError("Found invisible exported elements in super type 'ErrorOtherPackageBaseObject2': %n" +
+                    "   - com.oracle.truffle.api.library.test.otherPackage.ErrorOtherPackageBaseObject2.M0.doDefault(ErrorOtherPackageBaseObject2)%n" +
                     "Increase their visibility to resolve this problem.")
     static class InvisibleBaseElement2 extends ErrorOtherPackageBaseObject2 {
+        @ExportMessage
+        String m2() {
+            return null;
+        }
     }
 
-    @ExpectError("Found invisible exported elements in super type 'ErrorOtherPackageBaseObject3': \n" +
-                    "   - M0\n" +
+    @ExpectError("Found invisible exported elements in super type 'ErrorOtherPackageBaseObject3': %n" +
+                    "   - com.oracle.truffle.api.library.test.otherPackage.ErrorOtherPackageBaseObject3.M0%n" +
                     "Increase their visibility to resolve this problem.")
     @ExportLibrary(OtherPackageLibrary.class)
     static class InvisibleBaseElement3 extends ErrorOtherPackageBaseObject3 {
+        @ExportMessage
+        String m2() {
+            return null;
+        }
     }
 
     @ExportLibrary(OtherPackageLibrary.class)
@@ -190,11 +228,11 @@ public class ExportSubclassTest extends AbstractLibraryTest {
         assertEquals("m5_default", lib.m5(baseClass));
     }
 
-    @ExportLibrary(ExportSubclassLibrary.class)
-    static class SubClass3 extends BaseClass {
+    @ExportLibrary(ExportSubclassLibrary1.class)
+    static class ExportSubclassSubClass3 extends ExportSubclassBaseClass {
 
-        @ExportMessage(library = ExportSubclassLibrary.class, name = "m0")
-        @ExportMessage(library = ExportSubclassLibrary.class, name = "m1")
+        @ExportMessage(library = ExportSubclassLibrary1.class, name = "m0")
+        @ExportMessage(library = ExportSubclassLibrary1.class, name = "m1")
         String m01(@SuppressWarnings("unused") @Exclusive @Cached("42") int subValue) {
             return "sub3_m01";
         }
@@ -204,17 +242,137 @@ public class ExportSubclassTest extends AbstractLibraryTest {
     @Test
     public void testSubclass() {
         for (int i = 0; i < 4; i++) {
-            ExportSubclassLibrary lib = createCachedDispatch(ExportSubclassLibrary.class, i);
+            ExportSubclassLibrary1 lib = createCachedDispatch(ExportSubclassLibrary1.class, i);
 
-            assertEquals("base_m0", lib.m0(new BaseClass()));
-            assertEquals("sub1_m0", lib.m0(new SubClass1()));
-            assertEquals("sub2_m0", lib.m0(new SubClass2()));
-            assertEquals("sub3_m01", lib.m0(new SubClass3()));
+            assertEquals("base_m0", lib.m0(new ExportSubclassBaseClass()));
+            assertEquals("sub1_m0", lib.m0(new ExportSubclassSubClass1()));
+            assertEquals("sub2_m0", lib.m0(new ExportSubclassSubClass2()));
+            assertEquals("sub3_m01", lib.m0(new ExportSubclassSubClass3()));
 
-            assertEquals("base_m1", lib.m1(new BaseClass()));
-            assertEquals("sub1_m1", lib.m1(new SubClass1()));
-            assertEquals("base_m1", lib.m1(new SubClass2()));
-            assertEquals("sub3_m01", lib.m0(new SubClass3()));
+            assertEquals("base_m1", lib.m1(new ExportSubclassBaseClass()));
+            assertEquals("sub1_m1", lib.m1(new ExportSubclassSubClass1()));
+            assertEquals("base_m1", lib.m1(new ExportSubclassSubClass2()));
+            assertEquals("sub3_m01", lib.m0(new ExportSubclassSubClass3()));
+        }
+    }
+
+    @Test
+    public void testMergedLibraryInheritance() {
+        ExportSubclassLibrary1 lib = createCachedDispatch(ExportSubclassLibrary1.class, 5);
+        assertEquals("m0_default", lib.m0(new MergedLibraryBase()));
+        assertEquals("base_m1", lib.m1(new MergedLibraryBase()));
+
+        assertEquals("sub_m0", lib.m0(new MergedLibrarySub()));
+        assertEquals("base_m1", lib.m1(new MergedLibrarySub()));
+
+    }
+
+    @ExportLibrary(ExportSubclassLibrary1.class)
+    static class MergedLibraryBase implements TruffleObject {
+
+        final Object member = "";
+
+        ExportSubclassLibrary1 firstLib;
+
+        @ExportMessage
+        final String m1(@CachedLibrary("this.member") ExportSubclassLibrary1 lib) {
+            if (firstLib == null) {
+                firstLib = lib;
+            }
+            assert firstLib == lib : "merged library is not shared";
+            return "base_m1";
+        }
+
+    }
+
+    @ExportLibrary(ExportSubclassLibrary1.class)
+    static class MergedLibrarySub extends MergedLibraryBase {
+
+        @ExportMessage
+        final String m0(@CachedLibrary("this.member") ExportSubclassLibrary1 lib) {
+            if (firstLib == null) {
+                firstLib = lib;
+            }
+            assert firstLib == lib : "merged library is not shared";
+            return "sub_m0";
+        }
+    }
+
+    @ExportLibrary(value = ExportSubclassLibrary1.class)
+    static class AcceptsRedeclaredBase extends ExportSubclassBaseClass {
+
+        @ExportMessage
+        boolean accepts() {
+            return true;
+        }
+    }
+
+    @ExportLibrary(value = ExportSubclassLibrary1.class)
+    static class AcceptsRedeclaredSub extends AcceptsRedeclaredBase {
+
+        @ExportMessage(name = "accepts")
+        boolean accepts2() {
+            return true;
+        }
+    }
+
+    @ExportLibrary(value = ExportSubclassLibrary1.class)
+    static class ExportRedirectionBase {
+
+        @ExportMessage
+        String m1() {
+            return "m1_base";
+        }
+    }
+
+    @ExportLibrary(value = ExportSubclassLibrary1.class, delegateTo = "delegate")
+    static class ExportRedirectionSub extends ExportRedirectionBase {
+
+        final Object delegate = null;
+
+        @ExportMessage
+        String m0() {
+            return "m0_sub";
+        }
+    }
+
+    @ExpectError("Class declares @ExportMessage annotations but does not export any libraries. "//
+                    + "Exported messages cannot be resoved without exported library. "//
+                    + "Add @ExportLibrary(MyLibrary.class) to the class ot resolve this.")
+    static class MissingExportLibraryError {
+
+        @ExportMessage
+        boolean accepts() {
+            return true;
+        }
+    }
+
+    @ExpectError("Exported library ExportSubclassLibrary2 does not export any messages and therefore has no effect. Remove the export declaration to resolve this.")
+    @ExportLibrary(ExportSubclassLibrary1.class)
+    @ExportLibrary(ExportSubclassLibrary2.class)
+    static class EmptyExportLibaryDeclarationError {
+
+        @ExportMessage
+        String m1() {
+            return "m1_declaration_error";
+        }
+    }
+
+    static class MissingExportWithBaseTypeError extends ExportRedirectionBase {
+
+        @ExpectError("The @ExportLibrary declaration is missing for this exported message. Add @ExportLibrary(ExportSubclassLibrary1.class) to the enclosing class MissingExportWithBaseTypeError to resolve this.")
+        @ExportMessage
+        String m2() {
+            return "";
+        }
+    }
+
+    @ExpectError("No message 'invalidMessageName' found for library ExportSubclassLibrary1.")
+    static class MissingExportWithBaseTypeInvalidMessageError extends ExportRedirectionBase {
+
+        @ExportMessage
+        String invalidMessageName() {
+            return "";
         }
     }
 

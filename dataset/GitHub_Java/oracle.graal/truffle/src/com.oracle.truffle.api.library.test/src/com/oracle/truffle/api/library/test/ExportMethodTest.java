@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,24 +41,25 @@
 package com.oracle.truffle.api.library.test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 
 import org.junit.Test;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
+import com.oracle.truffle.api.library.test.ExportNodeTest.MultiNodeExportLibrary;
+import com.oracle.truffle.api.library.test.otherPackage.OtherPackageNode;
+import com.oracle.truffle.api.library.test.otherPackage.OtherPackageNode.InnerDSLNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @SuppressWarnings({"unused", "static-method"})
@@ -146,17 +147,6 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
     @Test
     public void test() {
-        CallTarget target = Truffle.getRuntime().createCallTarget(new RootNode(null) {
-            @Override
-            public Object execute(VirtualFrame frame) {
-                CompilerAsserts.neverPartOfCompilation("my message");
-                return null;
-            }
-        });
-        for (int i = 0; i < 10000; i++) {
-            target.call();
-        }
-
         ExportsTestObject1 o = new ExportsTestObject1();
         assertEquals("foo", getUncached(ExportsTestLibrary1.class, o).foo(o, 42));
     }
@@ -212,10 +202,21 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
     // export varargs as non-varargs
     @ExportLibrary(ExportsTestLibrary4.class)
+    static final class ExportsInnerDSLNode {
+
+        @ExportMessage
+        public Object varArgsObject(Object[] args, @Cached InnerDSLNode node) {
+            return args[0];
+        }
+
+    }
+
+    // export varargs as non-varargs
+    @ExportLibrary(ExportsTestLibrary4.class)
     static final class ExportsTestVarArgs {
 
         @ExportMessage
-        public Object varArgsObject(Object[] args, @Cached CachedTestNode node) {
+        public Object varArgsObject(Object[] args, @Cached OtherPackageNode.InnerDSLNode node) {
             return args[0];
         }
 
@@ -259,7 +260,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
     @Test
     public void testExportsInstanceWithCachedNode() {
         ExportsTestInstanceWithCachedNode obj = new ExportsTestInstanceWithCachedNode();
-        assertEquals("cached", AbstractLibraryTest.adopt(createCached(ExportsTestLibrary1.class, obj)).foo(obj, 42));
+        assertEquals("cached", adoptNode(createCached(ExportsTestLibrary1.class, obj)).get().foo(obj, 42));
         assertEquals("uncached", getUncached(ExportsTestLibrary1.class, obj).foo(obj, 42));
     }
 
@@ -314,6 +315,26 @@ public class ExportMethodTest extends AbstractLibraryTest {
         ExportsTestStaticWithLibrary obj = new ExportsTestStaticWithLibrary();
         assertEquals("cached", createCached(ExportsTestLibrary1.class, obj).foo(obj, 42));
         assertEquals("uncached", getUncached(ExportsTestLibrary1.class, obj).foo(obj, 42));
+    }
+
+    @Test
+    public void testWeakReference() {
+        WeakReferenceMethodTest weak = new WeakReferenceMethodTest();
+        MultiNodeExportLibrary cachedLib = createCached(MultiNodeExportLibrary.class, weak);
+        assertEquals("s0", cachedLib.m0(weak, "arg"));
+    }
+
+    @ExportLibrary(MultiNodeExportLibrary.class)
+    public static final class WeakReferenceMethodTest {
+
+        @ExportMessage
+        @TruffleBoundary
+        String m0(String arg,
+                        @Cached(value = "this", weak = true) WeakReferenceMethodTest cachedObject) {
+            assertNotNull(cachedObject);
+            return "s0";
+        }
+
     }
 
     abstract static class NoLibrary extends Library {
@@ -379,7 +400,9 @@ public class ExportMethodTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError("The following message(s) of library ExportsTestLibrary2 are abstract and must be exported %")
+    @ExpectError({"The following message(s) of library ExportsTestLibrary2 are abstract and must be exported %",
+                    "Exported library ExportsTestLibrary2 does not export any messages and therefore has no effect. Remove the export declaration to resolve this."
+    })
     @ExportLibrary(ExportsTestLibrary2.class)
     static class ExportsTestObjectError5 {
 
@@ -387,9 +410,8 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
     @ExportLibrary(ExportsTestLibrary1.class)
     @ExportLibrary(ExportsTestLibrary2.class)
-    @ExpectError({"The following message(s) of library ExportsTestLibrary2 are abstract and must be exported using:%",
-                    "The message name 'foo' is ambiguous for libraries ExportsTestLibrary1 and ExportsTestLibrary2. Disambiguate the library by specifying the library explicitely using " +
-                                    "@ExportMessage(library=Library.class)."})
+    @ExpectError({"The message name 'foo' is ambiguous for libraries ExportsTestLibrary1 and ExportsTestLibrary2. Disambiguate the library by specifying the library explicitely using " +
+                    "@ExportMessage(library=Library.class)."})
     static class ExportsTestObjectError6 {
 
         @ExportMessage
@@ -398,7 +420,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError("No libraries exported. Use @ExportLibrary(MyLibrary.class) on the enclosing type to export libraries.")
+    @ExpectError("Class declares @ExportMessage annotations but does not export any libraries. Exported messages cannot be resoved without exported library. Add @ExportLibrary(MyLibrary.class) to the class ot resolve this.")
     static class ExportsTestObjectError7 {
 
         @ExportMessage
@@ -417,8 +439,9 @@ public class ExportMethodTest extends AbstractLibraryTest {
     }
 
     @ExportLibrary(ExportsTestLibrary3.class)
-    @ExpectError("The method has the same name 'foo1' as a message in the exported library ExportsTestLibrary3. Did you forget to export it? Use @ExportMessage to export the message, @Ignore to " +
-                    "ignore this warning, rename the method or reduce the visibility of the method to private to resolve this warning.")
+    @ExpectError({"The method has the same name 'foo1' as a message in the exported library ExportsTestLibrary3. Did you forget to export it? Use @ExportMessage to export the message, @Ignore to " +
+                    "ignore this warning, rename the method or reduce the visibility of the method to private to resolve this warning.",
+                    "Exported library ExportsTestLibrary3 does not export any messages and therefore has no effect. Remove the export declaration to resolve this."})
     static class ExportsTestObjectError9 {
 
         String foo1() {
@@ -427,6 +450,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
     }
 
+    @ExpectError("Exported library ExportsTestLibrary3 does not export any messages and therefore has no effect. Remove the export declaration to resolve this.")
     @ExportLibrary(ExportsTestLibrary3.class)
     static class ExportsTestObjectError10 {
         @ExportMessage.Ignore
@@ -537,7 +561,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
         }
     }
 
-    @ExpectError("No libraries exported. Use @ExportLibrary(MyLibrary.class) on the enclosing type to export libraries.")
+    @ExpectError("Class declares @ExportMessage annotations but does not export any libraries. Exported messages cannot be resoved without exported library. Add @ExportLibrary(MyLibrary.class) to the class ot resolve this.")
     static class ExportsTestObjectError15 {
         @ExportMessage
         public int intArg(int arg) {
