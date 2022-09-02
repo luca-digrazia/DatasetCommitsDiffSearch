@@ -80,13 +80,14 @@ public class TRegexNFAExecutorNode extends TRegexExecutorNode {
         locals.setIndex(locals.getIndex() - offset);
         int anchoredInitialState = nfa.getAnchoredEntry()[offset].getTarget().getId();
         int unAnchoredInitialState = nfa.getUnAnchoredEntry()[offset].getTarget().getId();
-        if (unAnchoredInitialState != anchoredInitialState && locals.getIndex() == 0) {
+        if (locals.getIndex() == 0) {
             locals.addInitialState(anchoredInitialState);
-        }
-        if (nfa.getState(unAnchoredInitialState) != null) {
+            if (unAnchoredInitialState != anchoredInitialState && nfa.getState(unAnchoredInitialState) != null) {
+                locals.addInitialState(unAnchoredInitialState);
+            }
+        } else if (nfa.getState(unAnchoredInitialState) != null) {
             locals.addInitialState(unAnchoredInitialState);
-        }
-        if (locals.curStatesEmpty()) {
+        } else {
             return null;
         }
         while (true) {
