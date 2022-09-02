@@ -65,10 +65,10 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal(dimensions = 1) private Field[] fieldTable;
 
-    private final int wordFields;
-    private final int staticWordFields;
-    private final int objectFields;
-    private final int staticObjectFields;
+    int wordFields;
+    int staticWordFields;
+    int objectFields;
+    int staticObjectFields;
 
     @CompilationFinal(dimensions = 1) private Field[] staticFieldTable;
 
@@ -76,6 +76,8 @@ public final class ObjectKlass extends Klass {
     private Method[] declaredMethods;
 
     @CompilationFinal(dimensions = 1) private Method[] mirandaMethods;
+
+    @CompilationFinal int mirandasStartIndex;
 
     private final InnerClassesAttribute innerClasses;
 
@@ -416,27 +418,11 @@ public final class ObjectKlass extends Klass {
         return iKlassTable;
     }
 
-    final Method lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature) {
+    final Method lookupVirtualMethod(Symbol<Name> name, Symbol<Symbol.Signature> signature) {
         for (Method m : vtable) {
             if (m.getName() == name && m.getRawSignature() == signature) {
                 return m;
             }
-        }
-        return null;
-    }
-
-    public final Method lookupInterfaceMethod(Symbol<Name> name, Symbol<Signature> signature) {
-        for (Method[] table : itable) {
-            for (Method m : table) {
-                if (!m.isStatic() && !m.isPrivate() && name == m.getName() && signature == m.getRawSignature()) {
-                    return m;
-                }
-            }
-        }
-        assert getSuperKlass().getType() == Type.Object;
-        Method m = getSuperKlass().lookupDeclaredMethod(name, signature);
-        if (m != null && m.isPublic() && !m.isStatic()) {
-            return m;
         }
         return null;
     }

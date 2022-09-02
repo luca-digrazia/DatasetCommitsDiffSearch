@@ -51,6 +51,8 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.runtime.StaticObjectArray;
+import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.object.DebugCounter;
@@ -86,7 +88,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     private volatile ArrayKlass arrayClass;
 
     @CompilationFinal //
-    private StaticObject mirrorCache;
+    private StaticObjectImpl mirrorCache;
 
     public final ObjectKlass[] getSuperInterfaces() {
         return superInterfaces;
@@ -117,7 +119,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         // TODO(peterssen): Make thread-safe.
         if (mirrorCache == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            mirrorCache = new StaticObject(getMeta().Class);
+            mirrorCache = new StaticObjectImpl(getMeta().Class);
             mirrorCache.setHiddenField(getMeta().HIDDEN_MIRROR_KLASS, this);
         }
         return mirrorCache;
@@ -424,18 +426,18 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     }
 
     @TruffleBoundary
-    public StaticObject allocateArray(int length) {
+    public StaticObjectArray allocateArray(int length) {
         return InterpreterToVM.newArray(this, length);
     }
 
     @TruffleBoundary
-    public StaticObject allocateArray(int length, IntFunction<StaticObject> generator) {
+    public StaticObjectArray allocateArray(int length, IntFunction<StaticObject> generator) {
         // TODO(peterssen): Store check is missing.
         StaticObject[] array = new StaticObject[length];
         for (int i = 0; i < array.length; ++i) {
             array[i] = generator.apply(i);
         }
-        return new StaticObject(getArrayClass(), array);
+        return new StaticObjectArray(getArrayClass(), array);
     }
 
     // region Lookup
@@ -513,8 +515,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
                 public EspressoBaseNode apply(Method method) {
                     // TODO(garcia) true access checks
                     ObjectKlass callerKlass = getMeta().Object;
-                    StaticObject appendixBox = new StaticObject(getMeta().Object_array, new Object[1]);
-                    StaticObject memberName = (StaticObject) getMeta().linkMethod.invokeDirect(
+                    StaticObjectArray appendixBox = new StaticObjectArray(getMeta().Object_array, new Object[1]);
+                    StaticObjectImpl memberName = (StaticObjectImpl) getMeta().linkMethod.invokeDirect(
                                     null,
                                     callerKlass.mirror(), (int) REF_invokeVirtual,
                                     getMeta().MethodHandle.mirror(), getMeta().toGuestString(methodName), getMeta().toGuestString(signature),

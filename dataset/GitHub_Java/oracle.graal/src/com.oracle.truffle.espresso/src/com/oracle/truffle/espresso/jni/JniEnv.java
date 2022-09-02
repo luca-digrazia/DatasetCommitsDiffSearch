@@ -69,6 +69,8 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoProperties;
 import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.runtime.StaticObjectArray;
+import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
@@ -533,7 +535,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      */
     @JniImpl
     public long GetFieldID(@Host(Class.class) StaticObject clazz, String name, String type) {
-        Klass klass = clazz.getMirrorKlass();
+        Klass klass = ((StaticObjectImpl) clazz).getMirrorKlass();
         klass.safeInitialize();
         Field field = null;
         Symbol<Name> fieldName = getNames().lookup(name);
@@ -572,7 +574,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      */
     @JniImpl
     public long GetStaticFieldID(@Host(Class.class) StaticObject clazz, String name, String type) {
-        Klass klass = clazz.getMirrorKlass();
+        Klass klass = ((StaticObjectImpl) clazz).getMirrorKlass();
         klass.safeInitialize();
         Field field = null;
         Symbol<Name> fieldName = getNames().lookup(name);
@@ -612,7 +614,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      */
     @JniImpl
     public long GetMethodID(@Host(Class.class) StaticObject clazz, String name, String signature) {
-        Klass klass = clazz.getMirrorKlass();
+        Klass klass = ((StaticObjectImpl) clazz).getMirrorKlass();
         klass.safeInitialize();
         Method method = null;
         Symbol<Name> methodName = getNames().lookup(name);
@@ -648,7 +650,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      */
     @JniImpl
     public long GetStaticMethodID(@Host(Class.class) StaticObject clazz, String name, String signature) {
-        Klass klass = clazz.getMirrorKlass();
+        Klass klass = ((StaticObjectImpl) clazz).getMirrorKlass();
         klass.safeInitialize();
         Method method = null;
         Symbol<Name> methodName = getNames().lookup(name);
@@ -673,63 +675,63 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public Object GetStaticObjectField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return field.get(clazz.getMirrorKlass().getStatics());
+        return field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     @JniImpl
     public boolean GetStaticBooleanField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return (boolean) field.get(clazz.getMirrorKlass().getStatics());
+        return (boolean) field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     @JniImpl
     public byte GetStaticByteField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return (byte) field.get(clazz.getMirrorKlass().getStatics());
+        return (byte) field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     @JniImpl
     public char GetStaticCharField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return (char) field.get(clazz.getMirrorKlass().getStatics());
+        return (char) field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     @JniImpl
     public short GetStaticShortField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return (short) field.get(clazz.getMirrorKlass().getStatics());
+        return (short) field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     @JniImpl
     public int GetStaticIntField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return (int) field.get(clazz.getMirrorKlass().getStatics());
+        return (int) field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     @JniImpl
     public long GetStaticLongField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return (long) field.get(clazz.getMirrorKlass().getStatics());
+        return (long) field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     @JniImpl
     public float GetStaticFloatField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return (float) field.get(clazz.getMirrorKlass().getStatics());
+        return (float) field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     @JniImpl
     public double GetStaticDoubleField(@Host(Class.class) StaticObject clazz, long fieldHandle) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        return (double) field.get(clazz.getMirrorKlass().getStatics());
+        return (double) field.get(((StaticObjectImpl) clazz).getMirrorKlass().getStatics());
     }
 
     // endregion GetStatic*Field
@@ -798,63 +800,63 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public void SetStaticObjectField(@Host(Class.class) StaticObject clazz, long fieldHandle, Object val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     @JniImpl
     public void SetStaticBooleanField(@Host(Class.class) StaticObject clazz, long fieldHandle, boolean val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     @JniImpl
     public void SetStaticByteField(@Host(Class.class) StaticObject clazz, long fieldHandle, byte val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     @JniImpl
     public void SetStaticCharField(@Host(Class.class) StaticObject clazz, long fieldHandle, char val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     @JniImpl
     public void SetStaticShortField(@Host(Class.class) StaticObject clazz, long fieldHandle, short val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     @JniImpl
     public void SetStaticIntField(@Host(Class.class) StaticObject clazz, long fieldHandle, int val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     @JniImpl
     public void SetStaticLongField(@Host(Class.class) StaticObject clazz, long fieldHandle, long val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     @JniImpl
     public void SetStaticFloatField(@Host(Class.class) StaticObject clazz, long fieldHandle, float val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     @JniImpl
     public void SetStaticDoubleField(@Host(Class.class) StaticObject clazz, long fieldHandle, double val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
-        field.set(clazz.getMirrorKlass().getStatics(), val);
+        field.set(((StaticObjectImpl) clazz).getMirrorKlass().getStatics(), val);
     }
 
     // endregion SetStatic*Field
@@ -996,7 +998,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public @Host(Object.class) StaticObject CallNonvirtualObjectMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (StaticObject) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1004,7 +1006,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public boolean CallNonvirtualBooleanMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (boolean) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1012,7 +1014,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public char CallNonvirtualCharMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (char) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1020,7 +1022,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public byte CallNonvirtualByteMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (byte) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1028,7 +1030,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public short CallNonvirtualShortMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (short) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1036,7 +1038,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public int CallNonvirtualIntMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (int) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1044,7 +1046,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public float CallNonvirtualFloatMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (float) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1052,7 +1054,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public double CallNonvirtualDoubleMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (double) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1060,7 +1062,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public long CallNonvirtualLongMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (long) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1068,7 +1070,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public void CallNonvirtualVoidMethodVarargs(@Host(Object.class) StaticObject receiver, @Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1077,7 +1079,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                     long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert !method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (StaticObject) method.invokeDirect(receiver, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1089,7 +1091,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public Object CallStaticObjectMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1097,7 +1099,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public boolean CallStaticBooleanMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (boolean) method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1105,7 +1107,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public char CallStaticCharMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (char) method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1113,7 +1115,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public byte CallStaticByteMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (byte) method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1121,7 +1123,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public short CallStaticShortMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (short) method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1129,7 +1131,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public int CallStaticIntMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (int) method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1137,7 +1139,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public float CallStaticFloatMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (float) method.invokeDirect(null, null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1145,7 +1147,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public double CallStaticDoubleMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (double) method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1153,7 +1155,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public long CallStaticLongMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         return (long) method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
     }
 
@@ -1161,7 +1163,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public void CallStaticVoidMethodVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
         Method method = methodIds.getObject(methodHandle);
         assert method.isStatic();
-        assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        assert (((StaticObjectImpl) clazz).getMirrorKlass()) == method.getDeclaringKlass();
         // System.err.println("CallStaticVoidMethod: " + method);
         method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
         // System.err.println("return CallStaticVoidMethod: " + method);
@@ -1174,7 +1176,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public static void GetBooleanArrayRegion(@Host(boolean[].class) StaticObject array, int start, int len, long bufPtr) {
         ByteBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Byte);
-        boolean[] booleans = array.unwrap();
+        boolean[] booleans = ((StaticObjectArray) array).unwrap();
         for (int i = 0; i < len; ++i) {
             buf.put(booleans[start + i] ? (byte) 1 : (byte) 0);
         }
@@ -1183,43 +1185,43 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public static void GetCharArrayRegion(@Host(char[].class) StaticObject array, int start, int len, long bufPtr) {
         CharBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Char).asCharBuffer();
-        buf.put(array.<char[]> unwrap(), start, len);
+        buf.put(((StaticObjectArray) array).<char[]> unwrap(), start, len);
     }
 
     @JniImpl
     public static void GetByteArrayRegion(@Host(byte[].class) StaticObject array, int start, int len, long bufPtr) {
         ByteBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Byte);
-        buf.put((array).unwrap(), start, len);
+        buf.put(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void GetShortArrayRegion(@Host(short[].class) StaticObject array, int start, int len, long bufPtr) {
         ShortBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Short).asShortBuffer();
-        buf.put((array).unwrap(), start, len);
+        buf.put(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void GetIntArrayRegion(@Host(int[].class) StaticObject array, int start, int len, long bufPtr) {
         IntBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Int).asIntBuffer();
-        buf.put((array).unwrap(), start, len);
+        buf.put(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void GetFloatArrayRegion(@Host(float[].class) StaticObject array, int start, int len, long bufPtr) {
         FloatBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Float).asFloatBuffer();
-        buf.put((array).unwrap(), start, len);
+        buf.put(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void GetDoubleArrayRegion(@Host(double[].class) StaticObject array, int start, int len, long bufPtr) {
         DoubleBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Double).asDoubleBuffer();
-        buf.put((array).unwrap(), start, len);
+        buf.put(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void GetLongArrayRegion(@Host(long[].class) StaticObject array, int start, int len, long bufPtr) {
         LongBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Long).asLongBuffer();
-        buf.put((array).unwrap(), start, len);
+        buf.put(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     // endregion Get*ArrayRegion
@@ -1229,7 +1231,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public static void SetBooleanArrayRegion(@Host(boolean[].class) StaticObject array, int start, int len, long bufPtr) {
         ByteBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Byte);
-        boolean[] booleans = array.unwrap();
+        boolean[] booleans = ((StaticObjectArray) array).unwrap();
         for (int i = 0; i < len; ++i) {
             booleans[start + i] = buf.get() != 0;
         }
@@ -1238,43 +1240,43 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public static void SetCharArrayRegion(@Host(char[].class) StaticObject array, int start, int len, long bufPtr) {
         CharBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Char).asCharBuffer();
-        buf.get(array.<char[]> unwrap(), start, len);
+        buf.get(((StaticObjectArray) array).<char[]> unwrap(), start, len);
     }
 
     @JniImpl
     public static void SetByteArrayRegion(@Host(byte[].class) StaticObject array, int start, int len, long bufPtr) {
         ByteBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Byte);
-        buf.get((array).unwrap(), start, len);
+        buf.get(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void SetShortArrayRegion(@Host(short[].class) StaticObject array, int start, int len, long bufPtr) {
         ShortBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Short).asShortBuffer();
-        buf.get((array).unwrap(), start, len);
+        buf.get(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void SetIntArrayRegion(@Host(int[].class) StaticObject array, int start, int len, long bufPtr) {
         IntBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Int).asIntBuffer();
-        buf.get((array).unwrap(), start, len);
+        buf.get(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void SetFloatArrayRegion(@Host(float[].class) StaticObject array, int start, int len, long bufPtr) {
         FloatBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Float).asFloatBuffer();
-        buf.get((array).unwrap(), start, len);
+        buf.get(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void SetDoubleArrayRegion(@Host(double[].class) StaticObject array, int start, int len, long bufPtr) {
         DoubleBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Double).asDoubleBuffer();
-        buf.get((array).unwrap(), start, len);
+        buf.get(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     @JniImpl
     public static void SetLongArrayRegion(@Host(long[].class) StaticObject array, int start, int len, long bufPtr) {
         LongBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Long).asLongBuffer();
-        buf.get((array).unwrap(), start, len);
+        buf.get(((StaticObjectArray) array).unwrap(), start, len);
     }
 
     // endregion Set*ArrayRegion
@@ -1285,8 +1287,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        StaticObject array = object;
-        StaticObject clazz = GetObjectClass(array);
+        StaticObjectArray array = (StaticObjectArray) object;
+        StaticObjectImpl clazz = (StaticObjectImpl) GetObjectClass(array);
         JavaKind componentKind = clazz.getMirrorKlass().getComponentType().getJavaKind();
         assert componentKind.isPrimitive();
         int length = GetArrayLength(array);
@@ -1335,8 +1337,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public void ReleasePrimitiveArrayCritical(StaticObject object, long carrayPtr, int mode) {
         if (mode == 0 || mode == JNI_COMMIT) { // Update array contents.
-            StaticObject array = object;
-            StaticObject clazz = GetObjectClass(array);
+            StaticObjectArray array = (StaticObjectArray) object;
+            StaticObjectImpl clazz = (StaticObjectImpl) GetObjectClass(array);
             JavaKind componentKind = clazz.getMirrorKlass().getComponentType().getJavaKind();
             assert componentKind.isPrimitive();
             int length = GetArrayLength(array);
@@ -1430,7 +1432,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     @JniImpl
     public Object NewObjectVarargs(@Host(Class.class) StaticObject clazz, long methodHandle, long varargsPtr) {
-        Klass klass = clazz.getMirrorKlass();
+        Klass klass = ((StaticObjectImpl) clazz).getMirrorKlass();
         Method method = methodIds.getObject(methodHandle);
         assert method.isConstructor();
         StaticObject instance = klass.allocateInstance();
@@ -1551,7 +1553,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // always copy since pinning is not supported
         }
-        final StaticObject stringChars = (StaticObject) getMeta().String_value.get(str);
+        final StaticObjectArray stringChars = (StaticObjectArray) getMeta().String_value.get(str);
         int len = stringChars.length();
         ByteBuffer criticalRegion = allocateDirect(len, JavaKind.Char); // direct byte buffer
         // (non-relocatable)
@@ -1638,7 +1640,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public int ThrowNew(@Host(Class.class) StaticObject clazz, String message) {
         // The TLS exception slot will be set by the JNI wrapper.
         // Throwing methods always return the default value, in this case 0 (success).
-        throw getMeta().throwExWithMessage((ObjectKlass) clazz.getMirrorKlass(), getMeta().toGuestString(message));
+        throw getMeta().throwExWithMessage((ObjectKlass) ((StaticObjectImpl) clazz).getMirrorKlass(), getMeta().toGuestString(message));
     }
 
     /**
@@ -1672,9 +1674,9 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    public StaticObject NewObjectArray(int length, @Host(Class.class) StaticObject elementClass, @Host(Object.class) StaticObject initialElement) {
+    public StaticObject NewObjectArray(int length, @Host(Class.class) StaticObjectImpl elementClass, @Host(Object.class) StaticObject initialElement) {
         assert !elementClass.getMirrorKlass().isPrimitive();
-        StaticObject arr = elementClass.getMirrorKlass().allocateArray(length);
+        StaticObjectArray arr = elementClass.getMirrorKlass().allocateArray(length);
         if (length > 0) {
             // Single store check
             getInterpreterToVM().setArrayObject(initialElement, 0, arr);
@@ -1684,13 +1686,13 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    public void SetObjectArrayElement(StaticObject array, int index, @Host(Object.class) StaticObject value) {
+    public void SetObjectArrayElement(StaticObjectArray array, int index, @Host(Object.class) StaticObject value) {
         getInterpreterToVM().setArrayObject(value, index, array);
     }
 
     @JniImpl
     public StaticObject NewString(long unicodePtr, int len) {
-        StaticObject value = StaticObject.wrap(new char[len]);
+        StaticObject value = StaticObjectArray.wrap(new char[len]);
         SetCharArrayRegion(value, 0, len, unicodePtr);
         StaticObject guestString = getMeta().String.allocateInstance();
         getMeta().String_value.set(guestString, value);
@@ -1699,7 +1701,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     @JniImpl
     public void GetStringRegion(@Host(String.class) StaticObject str, int start, int len, long bufPtr) {
-        StaticObject chars = (StaticObject) getMeta().String_value.get(str);
+        StaticObjectArray chars = (StaticObjectArray) getMeta().String_value.get(str);
         CharBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Char).asCharBuffer();
         buf.put(chars.<char[]> unwrap(), start, len);
     }
@@ -1733,7 +1735,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     @JniImpl
     public int RegisterNative(@Host(Class.class) StaticObject clazz, String name, String signature, @NFIType("POINTER") TruffleObject closure) {
-        Symbol<Type> classType = clazz.getMirrorKlass().getType();
+        Symbol<Type> classType = ((StaticObjectImpl) clazz).getMirrorKlass().getType();
 
         Symbol<Signature> sig = getSignatures().getOrCreateValidSignature(signature);
         final TruffleObject boundNative = NativeLibrary.bind(closure, nfiSignature(getSignatures().parsed(sig), true));
@@ -1804,8 +1806,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      */
     @JniImpl
     public static boolean IsAssignableFrom(@Host(Class.class) StaticObject clazz1, @Host(Class.class) StaticObject clazz2) {
-        Klass klass2 = clazz2.getMirrorKlass();
-        return klass2.isAssignableFrom(clazz1.getMirrorKlass());
+        Klass klass2 = ((StaticObjectImpl) clazz2).getMirrorKlass();
+        return klass2.isAssignableFrom(((StaticObjectImpl) clazz1).getMirrorKlass());
     }
 
     /**
@@ -1819,7 +1821,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      *         {@code JNI_FALSE}. <b>A NULL object can be cast to any class.</b>
      */
     @JniImpl
-    public static boolean IsInstanceOf(@Host(Object.class) StaticObject obj, @Host(Class.class) StaticObject clazz) {
+    public static boolean IsInstanceOf(@Host(Object.class) StaticObject obj, @Host(Class.class) StaticObjectImpl clazz) {
         if (StaticObject.isNull(obj)) {
             return true;
         }
@@ -1849,7 +1851,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        boolean[] data = array.unwrap();
+        boolean[] data = ((StaticObjectArray) array).unwrap();
         ByteBuffer bytes = allocateDirect(data.length, JavaKind.Boolean);
         for (int i = 0; i < data.length; ++i) {
             bytes.put(data[i] ? (byte) 1 : (byte) 0);
@@ -1863,7 +1865,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        char[] data = array.unwrap();
+        char[] data = ((StaticObjectArray) array).unwrap();
         ByteBuffer bytes = allocateDirect(data.length, JavaKind.Char);
         CharBuffer elements = bytes.asCharBuffer();
         elements.put(data);
@@ -1876,7 +1878,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        byte[] data = array.unwrap();
+        byte[] data = ((StaticObjectArray) array).unwrap();
         ByteBuffer bytes = allocateDirect(data.length, JavaKind.Byte);
         ByteBuffer elements = bytes;
         elements.put(data);
@@ -1889,7 +1891,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        short[] data = array.unwrap();
+        short[] data = ((StaticObjectArray) array).unwrap();
         ByteBuffer bytes = allocateDirect(data.length, JavaKind.Short);
         ShortBuffer elements = bytes.asShortBuffer();
         elements.put(data);
@@ -1902,7 +1904,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        int[] data = array.unwrap();
+        int[] data = ((StaticObjectArray) array).unwrap();
         ByteBuffer bytes = allocateDirect(data.length, JavaKind.Int);
         IntBuffer elements = bytes.asIntBuffer();
         elements.put(data);
@@ -1915,7 +1917,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        float[] data = array.unwrap();
+        float[] data = ((StaticObjectArray) array).unwrap();
         ByteBuffer bytes = allocateDirect(data.length, JavaKind.Float);
         FloatBuffer elements = bytes.asFloatBuffer();
         elements.put(data);
@@ -1928,7 +1930,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        double[] data = array.unwrap();
+        double[] data = ((StaticObjectArray) array).unwrap();
         ByteBuffer bytes = allocateDirect(data.length, JavaKind.Double);
         DoubleBuffer elements = bytes.asDoubleBuffer();
         elements.put(data);
@@ -1941,7 +1943,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
         }
-        long[] data = array.unwrap();
+        long[] data = ((StaticObjectArray) array).unwrap();
         ByteBuffer bytes = allocateDirect(data.length, JavaKind.Long);
         LongBuffer elements = bytes.asLongBuffer();
         elements.put(data);
@@ -1954,8 +1956,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     private void ReleasePrimitiveArrayElements(StaticObject object, long bufPtr, int mode) {
         if (mode == 0 || mode == JNI_COMMIT) { // Update array contents.
-            StaticObject array = object;
-            StaticObject clazz = GetObjectClass(array);
+            StaticObjectArray array = (StaticObjectArray) object;
+            StaticObjectImpl clazz = (StaticObjectImpl) GetObjectClass(array);
             JavaKind componentKind = clazz.getMirrorKlass().getComponentType().getJavaKind();
             assert componentKind.isPrimitive();
             int length = GetArrayLength(array);

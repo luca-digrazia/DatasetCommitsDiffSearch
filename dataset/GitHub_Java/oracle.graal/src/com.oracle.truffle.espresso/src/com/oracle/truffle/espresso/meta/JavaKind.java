@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@ package com.oracle.truffle.espresso.meta;
 
 import java.lang.reflect.Array;
 
-import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 import com.oracle.truffle.espresso.descriptors.StaticSymbols;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -506,34 +505,5 @@ public enum JavaKind {
 
     public boolean isSubWord() {
         return isStackInt || this == Float;
-    }
-
-    public boolean isStackInt() {
-        return isStackInt;
-    }
-
-    public byte toTagConstant() {
-        switch (this) {
-            case Boolean:
-                return TagConstants.BOOLEAN;
-            case Byte:
-                return TagConstants.BYTE;
-            case Short:
-                return TagConstants.SHORT;
-            case Char:
-                return TagConstants.CHAR;
-            case Int:
-                return TagConstants.INT;
-            case Float:
-                return TagConstants.FLOAT;
-            case Long:
-                return TagConstants.LONG;
-            case Double:
-                return TagConstants.DOUBLE;
-            case Object:
-                return TagConstants.OBJECT;
-            default:
-                return -1;
-        }
     }
 }
