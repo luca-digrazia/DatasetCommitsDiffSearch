@@ -32,6 +32,7 @@ import static com.oracle.svm.core.snippets.KnownIntrinsics.readReturnAddress;
 import java.lang.ref.Reference;
 
 import org.graalvm.compiler.api.replacements.Fold;
+import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform;
@@ -71,6 +72,7 @@ import com.oracle.svm.core.heap.GCCause;
 import com.oracle.svm.core.heap.NoAllocationVerifier;
 import com.oracle.svm.core.heap.ObjectVisitor;
 import com.oracle.svm.core.heap.ReferenceHandler;
+import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.os.CommittedMemoryProvider;
@@ -735,16 +737,16 @@ public final class GCImpl implements GC {
         @SuppressWarnings("try")
         public <T> boolean visitNativeImageHeapRegion(T region, MemoryWalker.NativeImageHeapRegionAccess<T> access) {
             if (access.containsReferences(region) && access.isWritable(region)) {
-                boolean alignedChunks = !access.hasHugeObjects(region);
                 try (Timer timer = timers.blackenImageHeapRoots.open()) {
-                    Pointer cur = (Pointer) access.getStart(region);
-                    Pointer endOfLastObject = cur.add(access.getSize(region));
-                    while (cur.belowThan(endOfLastObject)) {
+                    ImageHeapInfo imageHeapInfo = HeapImpl.getImageHeapInfo();
+                    Pointer cur = Word.objectToUntrackedPointer(imageHeapInfo.firstWritableReferenceObject);
+                    Pointer last = Word.objectToUntrackedPointer(imageHeapInfo.lastWritableReferenceObject);
+                    while (cur.belowOrEqual(last)) {
                         Object obj = cur.toObject();
                         if (obj != null) {
                             greyToBlackObjectVisitor.visitObjectInline(obj);
                         }
-                        cur = HeapImpl.getNextObjectInImageHeapPartition(obj, alignedChunks);
+                        cur = LayoutEncoding.getObjectEnd(obj);
                     }
                 }
             }

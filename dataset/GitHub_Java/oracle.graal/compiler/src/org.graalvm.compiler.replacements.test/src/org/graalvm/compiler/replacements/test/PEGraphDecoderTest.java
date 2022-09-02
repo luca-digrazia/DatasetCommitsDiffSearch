@@ -130,16 +130,16 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
         }
     }
 
-    public interface SingleInterface {
-        SingleInterface increment(long offset);
+    public interface LLVMPointer {
+        LLVMPointer increment(long offset);
     }
 
-    static class SingleInterfaceImpl implements SingleInterface {
+    static class LLVMPointerImpl implements LLVMPointer {
 
         int counter;
 
         @Override
-        public SingleInterfaceImpl increment(long offset) {
+        public LLVMPointerImpl increment(long offset) {
             counter++;
             return this;
         }
@@ -149,11 +149,11 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
     }
 
     @BytecodeParserNeverInline
-    static SingleInterface doIncrement(SingleInterface ptr) {
+    static LLVMPointer doIncrement(LLVMPointer ptr) {
         return ptr.increment(0);
     }
 
-    static void testSingleImplementorDevirtualize(SingleInterface ptr) {
+    static void testSingleImplementorDevirtualize(LLVMPointer ptr) {
         doIncrement(ptr);
     }
 
@@ -163,7 +163,7 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
         // Parse and cache doIncrement before the single implementor is loaded
         test("doIncrement", graphCache);
         // Force loading of the single implementor
-        SingleInterfaceImpl.init();
+        LLVMPointerImpl.init();
         StructuredGraph graph = test("testSingleImplementorDevirtualize", graphCache);
         Assert.assertEquals(0, graph.getNodes().filter(InvokeNode.class).count());
     }
