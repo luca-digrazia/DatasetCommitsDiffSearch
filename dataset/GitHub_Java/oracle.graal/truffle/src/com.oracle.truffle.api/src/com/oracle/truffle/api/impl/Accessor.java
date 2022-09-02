@@ -192,7 +192,11 @@ public abstract class Accessor {
 
         public abstract void setFileSystemContext(SourceBuilder builder, Object fileSystemContext);
 
-        public abstract void invalidateAfterPreinitialiation(Source source);
+        public abstract Runnable createReinitializableKey(TruffleFile truffleFile, String pathInLanguageHome, Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy);
+
+        public abstract Object createLanguageHomeKey(String pathInLanguageHome, Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy);
+
+        public abstract Object createImmutableSourceKey(Object content, String mimeType, String languageId, URL url, URI uri, String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy);
     }
 
     public abstract static class DumpSupport {
@@ -282,7 +286,7 @@ public abstract class Accessor {
 
         public abstract boolean isNativeAccessAllowed(Object polyglotLanguageContext, Env env);
 
-        public abstract boolean inContextPreInitialization(Object polyglotObject);
+        public abstract boolean inContextPreInitialization(Object polyglotLanguageContext);
 
         public abstract Object createInternalContext(Object sourcePolyglotLanguageContext, Map<String, Object> config, TruffleContext spiContext);
 
@@ -415,9 +419,8 @@ public abstract class Accessor {
 
         public abstract String getUnparsedOptionValue(OptionValues optionValues, OptionKey<?> optionKey);
 
-        public abstract String getRelativePathInLanguageHome(TruffleFile truffleFile);
-
-        public abstract void onSourceCreated(Source source);
+        public abstract Object createSourceKey(TruffleFile truffleFile, Object content, String mimeType, String languageId, URL url, URI uri,
+            String name, String path, boolean internal, boolean interactive, boolean cached, boolean legacy);
     }
 
     public abstract static class LanguageSupport {
