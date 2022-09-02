@@ -29,7 +29,6 @@ import static com.oracle.truffle.espresso.vm.InterpreterToVM.instanceOf;
 import java.util.Comparator;
 import java.util.function.IntFunction;
 
-import com.oracle.truffle.espresso.meta.MetaUtil;
 import org.graalvm.collections.EconomicSet;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -270,7 +269,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
 
         @Specialization(guards = "receiver.isArray()")
         static boolean doArray(Klass receiver) {
-            return (receiver.getElementalType().isPrimitive() && receiver.getElementalType().getJavaKind() != JavaKind.Void) || receiver.getElementalType().isConcrete();
+            return receiver.getElementalType().getJavaKind() != JavaKind.Void;
         }
     }
 
@@ -1247,25 +1246,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
 
     public Symbol<Name> getName() {
         return name;
-    }
-
-    public String getExternalName() {
-        // Conversion from internal form.
-        String externalName = MetaUtil.internalNameToJava(type.toString(), true, true);
-
-        // Reflection relies on anonymous classes including a '/' on the name, to avoid generating
-        // (invalid) fast method accessors. See
-        // sun.reflect.misc.ReflectUtil#isVMAnonymousClass(Class<?>).
-        if (isAnonymous()) {
-            externalName = appendID(externalName);
-        }
-        return externalName;
-    }
-
-    @TruffleBoundary
-    private String appendID(String externalName) {
-        // A small improvement over HotSpot here, which uses the class identity hash code.
-        return externalName + "/" + getId(); // VM.JVM_IHashCode(self);
     }
 
     public boolean sameRuntimePackage(Klass other) {
