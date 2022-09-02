@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+import org.graalvm.compiler.truffle.runtime.collection.ArrayQueue;
 import org.graalvm.compiler.truffle.runtime.collection.BTreeQueue;
 import org.graalvm.compiler.truffle.runtime.collection.CustomBlockingQueue;
 
@@ -60,6 +61,7 @@ public class BackgroundCompileQueue {
     protected final GraalTruffleRuntime runtime;
     private final AtomicLong idCounter;
     private volatile ThreadPoolExecutor compilationExecutorService;
+    // private volatile IdlingPriorityBlockingQueue<Runnable> compilationQueue;
     private volatile BlockingQueue<Runnable> compilationQueue;
     private boolean shutdown = false;
     private long delayMillis;
