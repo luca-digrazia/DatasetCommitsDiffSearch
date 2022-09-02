@@ -150,7 +150,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 result = mainFunction.execute();
 
                 // Save context state, and check that it's consistent with the previous one.
-                if (iterationNeedsStateCheck(i)) {
+                if (i < INITIAL_STATE_CHECK_ITERATIONS || i % STATE_CHECK_PERIODICITY == 0) {
                     Object contextState = saveContext.execute();
                     if (firstIterationContextState == null) {
                         firstIterationContextState = contextState;
@@ -160,8 +160,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 }
 
                 // Reset context state.
-                boolean zeroMemory = iterationNeedsStateCheck(i + 1);
-                resetContext.execute(zeroMemory);
+                resetContext.execute();
 
                 validateResult(testCase.data.resultValidator, result, capturedStdout);
             } catch (Throwable t) {
@@ -175,10 +174,6 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         assert capturedStdout != null;
 
         return result;
-    }
-
-    private boolean iterationNeedsStateCheck(int i) {
-        return i < INITIAL_STATE_CHECK_ITERATIONS || i % STATE_CHECK_PERIODICITY == 0;
     }
 
     private void resetStatus(PrintStream oldOut, String icon, String label) {
