@@ -41,6 +41,7 @@ import java.util.Collection;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64Address.Scale;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler;
+import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.amd64.AMD64ArithmeticLIRGenerator;
@@ -304,7 +305,7 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
         }
     }
 
-    protected class SubstrateAMD64LIRGenerator extends AMD64LIRGenerator implements SubstrateLIRGenerator {
+    protected final class SubstrateAMD64LIRGenerator extends AMD64LIRGenerator implements SubstrateLIRGenerator {
 
         public SubstrateAMD64LIRGenerator(LIRKindTool lirKindTool, AMD64ArithmeticLIRGenerator arithmeticLIRGen, MoveFactory moveFactory, Providers providers, LIRGenerationResult lirGenRes) {
             super(lirKindTool, arithmeticLIRGen, moveFactory, providers, lirGenRes);
@@ -600,9 +601,8 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
         @Override
         public void emitBranch(LogicNode node, LabelRef trueSuccessor, LabelRef falseSuccessor, double trueSuccessorProbability) {
             if (node instanceof SafepointCheckNode) {
-                AMD64SafepointCheckOp op = new AMD64SafepointCheckOp();
-                append(op);
-                append(new BranchOp(op.getConditionFlag(), trueSuccessor, falseSuccessor, trueSuccessorProbability));
+                append(new AMD64DecrementingSafepointCheckOp());
+                append(new BranchOp(ConditionFlag.LessEqual, trueSuccessor, falseSuccessor, trueSuccessorProbability));
             } else {
                 super.emitBranch(node, trueSuccessor, falseSuccessor, trueSuccessorProbability);
             }
@@ -861,7 +861,7 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
         return (SubstrateAMD64RegisterConfig) lirGenRes.getRegisterConfig();
     }
 
-    protected static Register getHeapBaseRegister(LIRGenerationResult lirGenRes) {
+    private static Register getHeapBaseRegister(LIRGenerationResult lirGenRes) {
         return getRegisterConfig(lirGenRes).getHeapBaseRegister();
     }
 
@@ -905,7 +905,7 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
         return new SubstrateAMD64NodeLIRBuilder(graph, lirGen, nodeMatchRules);
     }
 
-    protected static boolean useLinearPointerCompression() {
+    private static boolean useLinearPointerCompression() {
         return SubstrateOptions.SpawnIsolates.getValue();
     }
 
