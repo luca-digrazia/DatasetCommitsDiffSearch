@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -36,12 +38,14 @@ import org.graalvm.compiler.nodes.CompressionNode.CompressionOp;
 import org.graalvm.compiler.nodes.type.NarrowOopStamp;
 
 import com.oracle.svm.core.graal.meta.SubstrateMemoryAccessProvider;
+import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.meta.CompressedNullConstant;
-import com.oracle.svm.core.meta.SubstrateObjectConstant;
+import com.oracle.svm.core.meta.CompressibleConstant;
 
 public final class SubstrateNarrowOopStamp extends NarrowOopStamp {
-    private SubstrateNarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, CompressEncoding encoding) {
+    public SubstrateNarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, CompressEncoding encoding) {
         super(type, exactType, nonNull, alwaysNull, encoding);
+        assert getEncoding().equals(ReferenceAccess.singleton().getCompressEncoding()) : "Using a non-default encoding is not supported: reference map support is needed.";
     }
 
     @Override
@@ -55,20 +59,24 @@ public final class SubstrateNarrowOopStamp extends NarrowOopStamp {
 
     @Override
     public Constant readConstant(MemoryAccessProvider memoryAccessProvider, Constant base, long displacement) {
-        SubstrateMemoryAccessProvider provider = (SubstrateMemoryAccessProvider) memoryAccessProvider;
-        SubstrateObjectConstant constant = (SubstrateObjectConstant) provider.readNarrowObjectConstant(base, displacement);
-        assert constant != null && constant.isCompressed();
+        JavaConstant constant = ((SubstrateMemoryAccessProvider) memoryAccessProvider).readNarrowObjectConstant(base, displacement, getEncoding());
+        /*
+         * Hosted memory provider does not handle the reading of stable array (i.e. base describes
+         * an array constant), thus we may see null here as the constant, which is fine according to
+         * the java doc
+         */
+        assert constant == null || ((CompressibleConstant) constant).isCompressed();
         return constant;
     }
 
     @Override
-    public JavaConstant asConstant() {
-        return alwaysNull() ? CompressedNullConstant.COMPRESSED_NULL : null;
+    public JavaConstant nullConstant() {
+        return CompressedNullConstant.COMPRESSED_NULL;
     }
 
     @Override
-    public boolean isCompatible(Constant other) {
-        return other instanceof SubstrateObjectConstant ? ((SubstrateObjectConstant) other).isCompressed() : true;
+    public boolean isCompatible(Constant c) {
+        return c instanceof CompressibleConstant && ((CompressibleConstant) c).isCompressed();
     }
 
     public static Stamp mkStamp(CompressionOp op, Stamp input, CompressEncoding encoding) {
