@@ -37,7 +37,6 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -48,8 +47,6 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.descriptors.ByteSequence;
@@ -117,52 +114,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return false;
     }
 
-    @GenerateUncached
-    abstract static class LookupFieldNode extends Node {
-        static final int LIMIT = 3;
-
-        LookupFieldNode() {
-        }
-
-        public abstract Field execute(Klass klass, String name, boolean onlyStatic);
-
-        @SuppressWarnings("unused")
-        @Specialization(guards = {"onlyStatic == cachedStatic", "klass == cachedKlass", "cachedName.equals(name)"}, limit = "LIMIT")
-        Field doCached(Klass klass, String name, boolean onlyStatic,
-                        @Cached("onlyStatic") boolean cachedStatic,
-                        @Cached("klass") Klass cachedKlass,
-                        @Cached("name") String cachedName,
-                        @Cached("doUncached(klass, name, onlyStatic)") Field cachedField) {
-            assert cachedField == doUncached(klass, name, onlyStatic);
-            return cachedField;
-        }
-
-        @Specialization(replaces = "doCached")
-        @TruffleBoundary
-        Field doUncached(Klass klass, String name, boolean onlyStatic) {
-            for (Field f : klass.getDeclaredFields()) {
-                if (f.isPublic() && f.isStatic() == onlyStatic && name.equals(f.getNameAsString())) {
-                    return f;
-                }
-            }
-            return null;
-        }
-    }
-
     @ExportMessage
-    Object readMember(String member,
-                    @Shared("lookupField") @Cached LookupFieldNode lookupFieldNode,
-                    @Shared("error") @Cached BranchProfile error) throws UnknownIdentifierException {
-
-        Field field = lookupFieldNode.execute(this, member, true);
-        if (field != null) {
-            Object result = field.get(this.tryInitializeAndGetStatics());
-            if (result instanceof StaticObject && ((StaticObject) result).isForeignObject()) {
-                return ((StaticObject) result).rawForeignObject();
-            }
-            return result;
-        }
-
+    final Object readMember(String member) throws UnknownIdentifierException {
         // Klass<T>.class == Class<T>
         if (STATIC_TO_CLASS.equals(member)) {
             return mirror();
@@ -181,7 +134,17 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
             return getSuperKlass();
         }
 
-        error.enter();
+        // Look for public static fields.
+        for (Field f : getDeclaredFields()) {
+            if (f.isPublic() && f.isStatic() && member.equals(f.getNameAsString())) {
+                Object result = f.get(tryInitializeAndGetStatics());
+                if (result instanceof StaticObject && ((StaticObject) result).isForeignObject()) {
+                    return ((StaticObject) result).rawForeignObject();
+                }
+                return result;
+            }
+        }
+
         throw UnknownIdentifierException.create(member);
     }
 
@@ -202,19 +165,16 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     @ExportMessage
-    final void writeMember(String member, Object value,
-                    @Shared("lookupField") @Cached LookupFieldNode lookupFieldNode,
-                    @Shared("error") @Cached BranchProfile error,
-                    @Exclusive @Cached ToEspressoNode toEspressoNode) throws UnknownIdentifierException, UnsupportedTypeException {
-        Field field = lookupFieldNode.execute(this, member, true);
-        // Can only write to non-final fields.
-        if (field != null && !field.isFinalFlagSet()) {
-            Object espressoValue = toEspressoNode.execute(value, field.resolveTypeKlass());
-            field.set(tryInitializeAndGetStatics(), espressoValue);
-        } else {
-            error.enter();
-            throw UnknownIdentifierException.create(member);
+    final void writeMember(String member, Object value, @Exclusive @Cached ToEspressoNode toEspressoNode) throws UnknownIdentifierException, UnsupportedTypeException {
+        // Write to public static non-final fields.
+        for (Field f : getDeclaredFields()) {
+            if (f.isPublic() && f.isStatic() && !f.isFinalFlagSet() && member.equals(f.getNameAsString())) {
+                Object espressoValue = toEspressoNode.execute(value, f.resolveTypeKlass());
+                f.set(tryInitializeAndGetStatics(), espressoValue);
+                return;
+            }
         }
+        throw UnknownIdentifierException.create(member);
     }
 
     @ExportMessage
