@@ -81,7 +81,6 @@ public class LLVMIRBuilder {
             gcRegisterFunction = addFunction("__svm_gc_register", functionType(objectType(), rawPointerType()));
             LLVM.LLVMSetLinkage(gcRegisterFunction, LLVM.LLVMLinkOnceAnyLinkage);
             setAttribute(gcRegisterFunction, LLVM.LLVMAttributeFunctionIndex, "alwaysinline");
-            setAttribute(gcRegisterFunction, LLVM.LLVMAttributeFunctionIndex, "gc-leaf-function");
 
             LLVMBasicBlockRef block = appendBasicBlock("main", gcRegisterFunction);
             positionAtEnd(block);
@@ -107,7 +106,9 @@ public class LLVMIRBuilder {
 
     public void addMainFunction(LLVMTypeRef type) {
         this.function = addFunction(functionName, type);
-        LLVM.LLVMSetGC(function, "statepoint-example");
+        if (trackPointers) {
+            LLVM.LLVMSetGC(function, "statepoint-example");
+        }
         setLinkage(function, LLVM.LLVMExternalLinkage);
         setAttribute(function, LLVM.LLVMAttributeFunctionIndex, "noinline");
     }
@@ -121,27 +122,8 @@ public class LLVMIRBuilder {
     }
 
     void setAttribute(LLVMValueRef func, long index, String attribute) {
-        int kind = LLVM.LLVMGetEnumAttributeKindForName(attribute, attribute.length());
-        LLVMAttributeRef attr;
-        if (kind != 0) {
-            attr = LLVM.LLVMCreateEnumAttribute(context, kind, TRUE);
-        } else {
-            String value = "true";
-            attr = LLVM.LLVMCreateStringAttribute(context, attribute, attribute.length(), value, value.length());
-        }
+        LLVMAttributeRef attr = LLVM.LLVMCreateEnumAttribute(context, LLVM.LLVMGetEnumAttributeKindForName(attribute, attribute.length()), TRUE);
         LLVM.LLVMAddAttributeAtIndex(func, (int) index, attr);
-    }
-
-    void setCallSiteAttribute(LLVMValueRef call, long index, String attribute) {
-        int kind = LLVM.LLVMGetEnumAttributeKindForName(attribute, attribute.length());
-        LLVMAttributeRef attr;
-        if (kind != 0) {
-            attr = LLVM.LLVMCreateEnumAttribute(context, kind, TRUE);
-        } else {
-            String value = "true";
-            attr = LLVM.LLVMCreateStringAttribute(context, attribute, attribute.length(), value, value.length());
-        }
-        LLVM.LLVMAddCallSiteAttribute(call, (int) index, attr);
     }
 
     LLVMBasicBlockRef appendBasicBlock(String name, LLVMValueRef func) {
@@ -302,10 +284,6 @@ public class LLVMIRBuilder {
         return LLVM.LLVMVectorType(type, count);
     }
 
-    private LLVMTypeRef tokenType() {
-        return LLVM.LLVMTokenTypeInContext(context);
-    }
-
     private LLVMTypeRef metadataType() {
         return LLVM.LLVMMetadataTypeInContext(context);
     }
@@ -340,10 +318,6 @@ public class LLVMIRBuilder {
 
     static boolean isRawPointer(LLVMTypeRef type) {
         return isPointer(type) && !isTracked(type);
-    }
-
-    static boolean isVoidType(LLVMTypeRef type) {
-        return LLVM.LLVMGetTypeKind(type) == LLVM.LLVMVoidTypeKind;
     }
 
     static boolean compatibleTypes(LLVMTypeRef a, LLVMTypeRef b) {
@@ -544,31 +518,9 @@ public class LLVMIRBuilder {
     }
 
     LLVMValueRef buildCall(LLVMValueRef callee, long statepointId, LLVMValueRef... args) {
-        LLVMValueRef result;
-        if (trackPointers) {
-            result = buildCall(callee, args);
-            addCallSiteAttribute(result, "statepoint-id", Long.toString(statepointId));
-        } else {
-            LLVMTypeRef calleeType = typeOf(callee);
-            LLVMTypeRef statepointType = functionType(tokenType(), true, longType(), intType(), calleeType, intType(), intType());
-
-            LLVMValueRef[] statepointArgs = new LLVMValueRef[args.length + 7];
-            statepointArgs[0] = constantLong(statepointId);
-            statepointArgs[1] = constantInt(0); /* numPatchBytes */
-            statepointArgs[2] = callee;
-            statepointArgs[3] = constantInt(args.length);
-            statepointArgs[4] = constantInt(0); /* flags */
-            System.arraycopy(args, 0, statepointArgs, 5, args.length);
-            statepointArgs[5 + args.length] = constantLong(0L); /* numTransitionArgs */
-            statepointArgs[6 + args.length] = constantLong(0L); /* numDeoptArgs */
-
-            LLVMValueRef token = buildIntrinsicCall("llvm.experimental.gc.statepoint." + intrinsicType(calleeType), statepointType, statepointArgs);
-
-            LLVMTypeRef resultType = getReturnType(LLVM.LLVMGetElementType(calleeType));
-            LLVMTypeRef gcResultType = functionType(resultType, tokenType());
-            result = buildIntrinsicCall("llvm.experimental.gc.result." + intrinsicType(resultType), gcResultType, token);
-        }
-        return result;
+        LLVMValueRef call = buildCall(callee, args);
+        addCallSiteAttribute(call, "statepoint-id", Long.toString(statepointId));
+        return call;
     }
 
     private void addCallSiteAttribute(LLVMValueRef call, String key, String value) {
