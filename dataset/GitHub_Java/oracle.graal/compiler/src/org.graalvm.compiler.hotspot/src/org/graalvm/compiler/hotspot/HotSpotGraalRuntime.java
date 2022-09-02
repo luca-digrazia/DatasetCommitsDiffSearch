@@ -87,7 +87,6 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.runtime.JVMCIBackend;
-import jdk.vm.ci.services.Services;
 
 //JaCoCo Exclude
 
@@ -96,7 +95,7 @@ import jdk.vm.ci.services.Services;
  */
 public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
-    private static final boolean IS_AOT = Boolean.parseBoolean(Services.getSavedProperties().get("com.oracle.graalvm.isaot"));
+    private static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
 
     private static boolean checkArrayIndexScaleInvariants(MetaAccessProvider metaAccess) {
         assert metaAccess.getArrayIndexScale(JavaKind.Byte) == 1;
@@ -129,6 +128,8 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
      */
     private AtomicReference<OptionValues> optionsRef = new AtomicReference<>();
 
+    private final HotSpotGraalCompiler compiler;
+
     private final DiagnosticsOutputDirectory outputDirectory;
     private final Map<ExceptionAction, Integer> compilationProblemsPerAction;
 
@@ -159,6 +160,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         CompilerConfiguration compilerConfiguration = compilerConfigurationFactory.createCompilerConfiguration();
         compilerConfigurationName = compilerConfigurationFactory.getName();
 
+        compiler = new HotSpotGraalCompiler(jvmciRuntime, this, options);
         if (IS_AOT) {
             management = null;
         } else {
@@ -577,7 +579,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         extra.put(DebugOptions.PrintGraphHost, host);
         extra.put(DebugOptions.PrintGraphPort, port);
         OptionValues compileOptions = new OptionValues(getOptions(), extra);
-        HotSpotGraalCompiler compiler = (HotSpotGraalCompiler) runtime().getCompiler();
         compiler.compileMethod(new HotSpotCompilationRequest(hotSpotMethod, -1, 0L), false, compileOptions);
     }
 
