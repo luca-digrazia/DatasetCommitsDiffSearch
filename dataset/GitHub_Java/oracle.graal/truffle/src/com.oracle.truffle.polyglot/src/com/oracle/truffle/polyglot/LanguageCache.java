@@ -273,16 +273,16 @@ final class LanguageCache implements Comparable<LanguageCache> {
                      * The previous implementation used a `URL.getPath()`, but OS Windows is
                      * offended by leading slash and maybe other irrelevant characters. Therefore,
                      * for JDK 1.7+ a preferred way to go is URL -> URI -> Path.
-                     *
+                     * 
                      * Also, Paths are more strict than Files and URLs, so we can't create an
                      * invalid Path from a random string like "/C:/". This leads us to the
                      * `URISyntaxException` for URL -> URI conversion and
                      * `java.nio.file.InvalidPathException` for URI -> Path conversion.
-                     *
+                     * 
                      * For fixing further bugs at this point, please read
                      * http://tools.ietf.org/html/rfc1738 http://tools.ietf.org/html/rfc2396
                      * (supersedes rfc1738) http://tools.ietf.org/html/rfc3986 (supersedes rfc2396)
-                     *
+                     * 
                      * http://url.spec.whatwg.org/ does not contain URI interpretation. When you
                      * call `URI.toASCIIString()` all reserved and non-ASCII characters are
                      * percent-quoted.
@@ -290,12 +290,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
                     try {
                         Path path;
                         path = Paths.get(((JarURLConnection) connection).getJarFileURL().toURI());
-                        Path parent = path.getParent();
-                        if (parent == null) {
-                            languageHome = null;
-                        } else {
-                            languageHome = parent.toString();
-                        }
+                        languageHome = path.getParent().toString();
                     } catch (URISyntaxException e) {
                         assert false : "Could not resolve path.";
                     }
@@ -439,10 +434,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
     static void resetNativeImageCacheLanguageHomes() {
         for (LanguageCache languageCache : languages(null).values()) {
-            languageCache.languageHome = null;
-        }
-        final ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        for (LanguageCache languageCache : languages(loader).values()) {
             languageCache.languageHome = null;
         }
     }
