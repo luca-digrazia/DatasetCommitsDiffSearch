@@ -61,7 +61,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
-import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
 
 import org.graalvm.options.OptionCategory;
@@ -592,11 +591,8 @@ public abstract class TruffleLanguage<C> {
      * by language dependencies.
      * <p>
      * All threads {@link Env#createThread(Runnable) created} by a language must be stopped and
-     * joined during finalizeContext. The languages are responsible for fulfilling that contract,
-     * otherwise an {@link AssertionError} is thrown. It's not safe to use the
-     * {@link ExecutorService#awaitTermination(long, java.util.concurrent.TimeUnit)} to detect
-     * Thread termination as the polyglot thread may be cancelled before executing the executor
-     * worker.
+     * joined after finalizeContext was called. The languages are responsible for fulfilling that
+     * contract, otherwise an {@link AssertionError} is thrown.
      * <p>
      * Typical implementation looks like:
      *
@@ -3223,7 +3219,7 @@ class TruffleLanguageSnippets {
         }
 
         final Assumption singleThreaded = Truffle.getRuntime().createAssumption();
-        final List<Thread> startedThreads = new ArrayList<>();
+        final Collection<Thread> startedThreads = Collections.synchronizedCollection(new ArrayList<>());
 
     }
 
@@ -3402,15 +3398,15 @@ class TruffleLanguageSnippets {
         @Override
         protected void finalizeContext(Context context) {
             // stop and join all the created Threads
+            Collection<Thread> threadsToJoin;
+            synchronized (context.startedThreads) {
+                threadsToJoin = new ArrayList<>(context.startedThreads);
+            }
             boolean interrupted = false;
-            for (int i = 0; i < context.startedThreads.size();) {
-                Thread threadToJoin  = context.startedThreads.get(i);
+            for (Thread threadToJoin : threadsToJoin) {
+                threadToJoin.interrupt();
                 try {
-                    if (threadToJoin != Thread.currentThread()) {
-                        threadToJoin.interrupt();
-                        threadToJoin.join();
-                    }
-                    i++;
+                    threadToJoin.join();
                 } catch (InterruptedException ie) {
                     interrupted = true;
                 }

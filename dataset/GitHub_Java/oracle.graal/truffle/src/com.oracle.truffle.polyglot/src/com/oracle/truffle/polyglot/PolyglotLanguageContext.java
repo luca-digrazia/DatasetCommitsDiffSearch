@@ -448,8 +448,9 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                                         creatorConfig,
                                         envConfig.getOptionValues(language),
                                         envConfig.getApplicationArguments(language),
-                                        envConfig.publicFileSystemContext,
-                                        envConfig.internalFileSystemContext);
+                                        envConfig.fileSystem,
+                                        envConfig.internalFileSystem,
+                                        context.engine.getFileTypeDetectorsSupplier());
                         Lazy localLazy = new Lazy(lang, envConfig);
                         PolyglotValue.createDefaultValues(getImpl(), this, localLazy.valueCache);
                         checkThreadAccess(localEnv);
@@ -603,7 +604,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 final OptionValuesImpl newOptionValues = newConfig.getOptionValues(language);
                 final Env newEnv = LANGUAGE.patchEnvContext(env, newConfig.out, newConfig.err, newConfig.in,
                                 Collections.emptyMap(), newOptionValues, newConfig.getApplicationArguments(language),
-                                newConfig.publicFileSystemContext, newConfig.internalFileSystemContext);
+                                newConfig.fileSystem, newConfig.internalFileSystem, context.engine.getFileTypeDetectorsSupplier());
                 if (newEnv != null) {
                     env = newEnv;
                     lazy.languageInstance.patchFirstOptions(newOptionValues);
