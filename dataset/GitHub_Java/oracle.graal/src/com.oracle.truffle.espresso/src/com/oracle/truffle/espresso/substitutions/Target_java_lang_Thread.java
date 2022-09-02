@@ -221,15 +221,13 @@ public final class Target_java_lang_Thread {
                 @Override
                 public void run() {
                     try {
-                        try {
-                            // Execute the payload
-                            self.getKlass().vtableLookup(meta.java_lang_Thread_run.getVTableIndex()).invokeDirect(self);
-                            checkDeprecatedState(meta, self);
-                        } catch (EspressoException uncaught) {
-                            Method dispatchUncaughtException = self.getKlass().lookupMethod(Name.dispatchUncaughtException, Signature._void_Throwable);
-                            assert !dispatchUncaughtException.isStatic();
-                            dispatchUncaughtException.invokeDirect(self, uncaught.getExceptionObject());
-                        }
+                        // Execute the payload
+                        self.getKlass().vtableLookup(meta.java_lang_Thread_run.getVTableIndex()).invokeDirect(self);
+                        checkDeprecatedState(meta, self);
+                    } catch (EspressoException uncaught) {
+                        Method dispatchUncaughtException = self.getKlass().lookupMethod(Name.dispatchUncaughtException, Signature._void_Throwable);
+                        assert !dispatchUncaughtException.isStatic();
+                        dispatchUncaughtException.invokeDirect(self, uncaught.getExceptionObject());
                     } catch (EspressoExitException exit) {
                         /* Suppress */
                     } finally {
@@ -254,7 +252,7 @@ public final class Target_java_lang_Thread {
     }
 
     public static void terminate(@Host(Thread.class) StaticObject self, Meta meta) {
-        meta.getContext().unregisterThread(self);
+        terminate(self, null, meta);
     }
 
     private static void terminate(@Host(Thread.class) StaticObject self, DirectCallNode threadExit, Meta meta) {

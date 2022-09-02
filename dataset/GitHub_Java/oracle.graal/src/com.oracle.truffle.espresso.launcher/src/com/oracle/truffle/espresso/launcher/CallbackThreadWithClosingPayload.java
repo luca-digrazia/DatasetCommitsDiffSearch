@@ -26,8 +26,6 @@ package com.oracle.truffle.espresso.launcher;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import org.graalvm.polyglot.PolyglotException;
-
 public final class CallbackThreadWithClosingPayload extends Thread implements
                 Consumer<Supplier<Thread>>,
                 Supplier<Runnable> {
@@ -36,50 +34,15 @@ public final class CallbackThreadWithClosingPayload extends Thread implements
         this.payload = payload;
     }
 
-    /**
-     * The closing payload that needs to be executed by the closing thread. Should just be
-     * context.close(). Used by the VM
-     */
     private final Runnable payload;
-
-    /**
-     * A callback set by the VM. Simply starts and returns the closing thread.
-     */
     private volatile Supplier<Thread> callback;
-
-    /**
-     * Reference to the thread that is closing the context.
-     */
     private volatile Thread closer;
-
-    private int rc = 1;
-
-    public int getExitStatus() {
-        return rc;
-    }
-
-    private final Object closerWaiter = new Object() {
-    };
 
     @Override
     public final void run() {
-        // Initialize Context and run main().
-        try {
-            super.run();
-        } catch (PolyglotException e) {
-            if (!e.isExit()) {
-                e.printStackTrace();
-            } else {
-                rc = e.getExitStatus();
-            }
-        } finally {
-            assert callback != null;
-            // Start the Context closing thread
-            closer = callback.get();
-            synchronized (closerWaiter) {
-                closerWaiter.notifyAll();
-            }
-        }
+        super.run();
+        assert callback != null;
+        closer = callback.get();
     }
 
     @Override
@@ -92,24 +55,21 @@ public final class CallbackThreadWithClosingPayload extends Thread implements
         return getPayload();
     }
 
-    private void setCallback(Supplier<Thread> r) {
+    public void setCallback(Supplier<Thread> r) {
         assert callback == null;
         callback = r;
     }
 
-    private Runnable getPayload() {
+    public Runnable getPayload() {
         return payload;
     }
 
-    // Waits for the closing thread to close the context.
     public void waitForCloser() {
-        synchronized (closerWaiter) {
-            while (closer == null) {
-                try {
-                    closerWaiter.wait();
-                } catch (InterruptedException e) {
-                    /* Spin */
-                }
+        while (closer == null) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                /* Spin */
             }
         }
 

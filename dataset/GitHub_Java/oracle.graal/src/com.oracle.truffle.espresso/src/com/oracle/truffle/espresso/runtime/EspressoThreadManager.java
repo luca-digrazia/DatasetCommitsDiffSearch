@@ -32,7 +32,6 @@ import java.util.function.LongUnaryOperator;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.impl.ContextAccess;
-import com.oracle.truffle.espresso.substitutions.SuppressFBWarnings;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 
 class EspressoThreadManager implements ContextAccess {
@@ -141,13 +140,15 @@ class EspressoThreadManager implements ContextAccess {
         pushThread((int) host.getId(), guest);
     }
 
-    @SuppressFBWarnings(value = "NN", justification = "Removing a thread from the active set is the state change we need.")
     public void unregisterThread(StaticObject thread) {
         activeThreads.remove(thread);
-        Object sync = context.getShutdownSynchronizer();
-        synchronized (sync) {
-            sync.notifyAll();
+        synchronized (context.getSynchronizer()) {
+            context.getSynchronizer().notifyAll();
         }
+    }
+
+    public void unregisterMainThread() {
+        Target_java_lang_Thread.terminate(guestMainThread, getMeta());
     }
 
     /**
