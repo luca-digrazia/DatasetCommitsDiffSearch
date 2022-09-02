@@ -50,8 +50,7 @@ import com.oracle.truffle.llvm.tests.options.TestOptions;
 public class ProcessUtil {
 
     private static final int BUFFER_SIZE = 1024;
-    private static final int PROCESS_WAIT_TIMEOUT = 60 * 1000; // 1 min timeout
-    private static final int JOIN_TIMEOUT = 5 * 1000; // 5 sec timeout
+    private static final int PROCESS_WAIT_TIMEOUT = 60 * 1000; // 1min timeout
 
     /**
      * This class represents the result of a native command executed by the operating system.
@@ -202,14 +201,14 @@ public class ProcessUtil {
         Process process = null;
         try {
             process = Runtime.getRuntime().exec(command);
-            StreamReader readError = StreamReader.read(process.getErrorStream());
-            StreamReader readOutput = StreamReader.read(process.getInputStream());
             boolean success = process.waitFor(PROCESS_WAIT_TIMEOUT, TimeUnit.MILLISECONDS);
             if (!success) {
                 throw new AssertionError("timeout running command: " + command);
             }
+            String readError = readStreamAndClose(process.getErrorStream());
+            String inputStream = readStreamAndClose(process.getInputStream());
             int llvmResult = process.exitValue();
-            return new ProcessResult(command, llvmResult, readError.getResult(), readOutput.getResult());
+            return new ProcessResult(command, llvmResult, readError, inputStream);
         } catch (Exception e) {
             throw new RuntimeException(command + " ", e);
         } finally {
@@ -225,50 +224,15 @@ public class ProcessUtil {
         }
     }
 
-    private static class StreamReader {
-
-        private final Thread thread;
-        private final ByteArrayOutputStream result;
-
-        private IOException exception;
-
-        static StreamReader read(InputStream inputStream) {
-            StreamReader ret = new StreamReader(inputStream);
-            ret.thread.start();
-            return ret;
+    public static String readStreamAndClose(InputStream inputStream) throws IOException {
+        final ByteArrayOutputStream result = new ByteArrayOutputStream();
+        final byte[] buffer = new byte[BUFFER_SIZE];
+        int length;
+        while ((length = inputStream.read(buffer)) != -1) {
+            result.write(buffer, 0, length);
         }
-
-        StreamReader(InputStream inputStream) {
-            this.result = new ByteArrayOutputStream();
-            this.thread = new Thread(new Runnable() {
-
-                @Override
-                public void run() {
-                    try {
-                        final byte[] buffer = new byte[BUFFER_SIZE];
-                        int length;
-                        while ((length = inputStream.read(buffer)) != -1) {
-                            result.write(buffer, 0, length);
-                        }
-                    } catch (IOException ex) {
-                        // re-throw in the other thread
-                        exception = ex;
-                    }
-                }
-            });
-        }
-
-        String getResult() throws IOException {
-            try {
-                thread.join(JOIN_TIMEOUT);
-                result.close();
-            } catch (InterruptedException ex) {
-                // ignore
-            }
-            if (exception != null) {
-                throw exception;
-            }
-            return result.toString();
-        }
+        inputStream.close();
+        result.close();
+        return result.toString();
     }
 }
