@@ -668,6 +668,15 @@ public final class RegexParser {
         Other
     }
 
+    private static boolean inLookBehind(List<RegexStackElem> syntaxStack) {
+        for (RegexStackElem stackElem : syntaxStack) {
+            if (stackElem == RegexStackElem.LookBehindAssertion) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Like {@link #parse(boolean)}, but does not construct any AST, only checks for syntax errors.
      * <p>
@@ -683,11 +692,10 @@ public final class RegexParser {
      */
     private void parseDryRun() throws RegexSyntaxException {
         List<RegexStackElem> syntaxStack = new ArrayList<>();
-        int lookBehindDepth = 0;
         CurTermState curTermState = CurTermState.Null;
         while (lexer.hasNext()) {
             Token token = lexer.next();
-            if (lookBehindDepth > 0 && token.kind != Token.Kind.charClass && token.kind != Token.Kind.groupEnd) {
+            if (inLookBehind(syntaxStack) && token.kind != Token.Kind.charClass && token.kind != Token.Kind.groupEnd) {
                 features.setNonLiteralLookBehindAssertions();
             }
             switch (token.kind) {
@@ -695,21 +703,21 @@ public final class RegexParser {
                     curTermState = CurTermState.Other;
                     break;
                 case dollar:
-                    if (lookBehindDepth > 0 && !flags.isMultiline()) {
+                    if (inLookBehind(syntaxStack) && !flags.isMultiline()) {
                         features.setEndOfStringAssertionsInLookBehind();
                     }
                     curTermState = CurTermState.Other;
                     break;
                 case wordBoundary:
                 case nonWordBoundary:
-                    if (lookBehindDepth > 0) {
+                    if (inLookBehind(syntaxStack)) {
                         features.setWordBoundaryAssertionsInLookBehind();
                     }
                     curTermState = CurTermState.Other;
                     break;
                 case backReference:
                     features.setBackReferences();
-                    if (lookBehindDepth > 0) {
+                    if (inLookBehind(syntaxStack)) {
                         features.setBackReferencesInLookBehind();
                     }
                     curTermState = CurTermState.Other;
@@ -730,7 +738,7 @@ public final class RegexParser {
                             throw syntaxError(ErrorMessages.QUANTIFIER_ON_LOOKBEHIND_ASSERTION);
                         case Other:
                             Token.Quantifier quantifier = (Token.Quantifier) token;
-                            if (lookBehindDepth > 0 && quantifier.getMin() != quantifier.getMax()) {
+                            if (inLookBehind(syntaxStack) && quantifier.getMin() != quantifier.getMax()) {
                                 features.setNonTrivialQuantifiersInLookBehind();
                             }
                             if (quantifier.getMin() > TRegexOptions.TRegexMaxCountedRepetition || quantifier.getMax() > TRegexOptions.TRegexMaxCountedRepetition) {
@@ -752,7 +760,7 @@ public final class RegexParser {
                     if (((Token.LookAheadAssertionBegin) token).isNegated()) {
                         features.setNegativeLookAheadAssertions();
                     }
-                    if (lookBehindDepth > 0) {
+                    if (inLookBehind(syntaxStack)) {
                         features.setLookAheadAssertionsInLookBehind();
                     }
                     syntaxStack.add(RegexStackElem.LookAheadAssertion);
@@ -761,12 +769,11 @@ public final class RegexParser {
                 case lookBehindAssertionBegin:
                     if (((Token.LookBehindAssertionBegin) token).isNegated()) {
                         features.setNegativeLookBehindAssertions();
-                        if (lookBehindDepth > 0) {
+                        if (inLookBehind(syntaxStack)) {
                             features.setNegativeLookBehindAssertionsInLookBehind();
                         }
                     }
                     syntaxStack.add(RegexStackElem.LookBehindAssertion);
-                    lookBehindDepth++;
                     curTermState = CurTermState.Null;
                     break;
                 case groupEnd:
@@ -779,7 +786,6 @@ public final class RegexParser {
                             curTermState = CurTermState.LookAheadAssertion;
                             break;
                         case LookBehindAssertion:
-                            lookBehindDepth--;
                             curTermState = CurTermState.LookBehindAssertion;
                             break;
                         case Group:
