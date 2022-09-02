@@ -325,18 +325,11 @@ public class WordOperationPlugin implements NodePlugin, TypePlugin, InlineInvoke
                 break;
             }
             case READ_HEAP: {
-                assert args.length == 3 || args.length == 4;
+                assert args.length == 3;
                 JavaKind readKind = wordTypes.asKind(wordMethod.getSignature().getReturnType(wordMethod.getDeclaringClass()));
                 AddressNode address = makeAddress(b, args[0], args[1]);
                 BarrierType barrierType = snippetReflection.asObject(BarrierType.class, args[2].asJavaConstant());
-                LocationIdentity location;
-                if (args.length == 3) {
-                    location = any();
-                } else {
-                    assert args[3].isConstant();
-                    location = snippetReflection.asObject(LocationIdentity.class, args[3].asJavaConstant());
-                }
-                b.push(returnKind, readOp(b, readKind, address, location, barrierType, true));
+                b.push(returnKind, readOp(b, readKind, address, any(), barrierType, true));
                 break;
             }
             case WRITE_POINTER:
@@ -518,7 +511,7 @@ public class WordOperationPlugin implements NodePlugin, TypePlugin, InlineInvoke
             return b.add(new NarrowNode(value, 32));
         } else {
             assert toKind == JavaKind.Long;
-            assert value.getStackKind() == JavaKind.Int : value;
+            assert value.getStackKind() == JavaKind.Int;
             if (unsigned) {
                 return b.add(new ZeroExtendNode(value, 64));
             } else {

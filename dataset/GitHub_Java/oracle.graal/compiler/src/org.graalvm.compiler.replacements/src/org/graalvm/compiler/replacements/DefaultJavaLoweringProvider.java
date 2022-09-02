@@ -416,7 +416,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             }
         }
         StructuredGraph graph = math.graph();
-        ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, math.getOperation().foreignCallSignature, math.getX(), math.getY()));
+        ForeignCallNode call = graph.add(new ForeignCallNode(foreignCalls, math.getOperation().foreignCallDescriptor, math.getX(), math.getY()));
         graph.addAfterFixed(tool.lastFixedNode(), call);
         math.replaceAtUsages(call);
     }
@@ -434,7 +434,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             }
         }
         StructuredGraph graph = math.graph();
-        ForeignCallNode call = math.graph().add(new ForeignCallNode(foreignCalls.getDescriptor(math.getOperation().foreignCallSignature), math.getValue()));
+        ForeignCallNode call = math.graph().add(new ForeignCallNode(foreignCalls, math.getOperation().foreignCallDescriptor, math.getValue()));
         graph.addAfterFixed(tool.lastFixedNode(), call);
         math.replaceAtUsages(call);
     }
@@ -475,7 +475,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         ReadNode memoryRead = null;
         BarrierType barrierType = barrierSet.fieldLoadBarrierType(field, getStorageKind(field));
         if (loadField.isVolatile()) {
-            memoryRead = graph.add(new VolatileReadNode(address, loadStamp, barrierType));
+            memoryRead = graph.add(new VolatileReadNode(address, fieldLocationIdentity(field), loadStamp, barrierType));
         } else {
             memoryRead = graph.add(new ReadNode(address, fieldLocationIdentity(field), loadStamp, barrierType));
         }
@@ -767,7 +767,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         AddressNode address = createUnsafeAddress(graph, load.object(), load.offset());
         ReadNode memoryRead = null;
         if (load.isVolatile()) {
-            memoryRead = new VolatileReadNode(address, loadStamp, barrierSet.readBarrierType(load));
+            memoryRead = new VolatileReadNode(address, load.getLocationIdentity(), loadStamp, barrierSet.readBarrierType(load));
         } else {
             memoryRead = new ReadNode(address, load.getLocationIdentity(), loadStamp, barrierSet.readBarrierType(load));
         }

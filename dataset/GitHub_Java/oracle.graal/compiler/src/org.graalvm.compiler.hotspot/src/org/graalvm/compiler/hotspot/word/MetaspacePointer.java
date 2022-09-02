@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,14 +27,13 @@ package org.graalvm.compiler.hotspot.word;
 import static org.graalvm.compiler.hotspot.word.HotSpotOperation.HotspotOpcode.FROM_POINTER;
 import static org.graalvm.compiler.hotspot.word.HotSpotOperation.HotspotOpcode.IS_NULL;
 
-import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.compiler.word.Word.Opcode;
 import org.graalvm.compiler.word.Word.Operation;
 import org.graalvm.word.LocationIdentity;
-import org.graalvm.word.Pointer;
-import org.graalvm.word.Signed;
-import org.graalvm.word.Unsigned;
+import org.graalvm.word.SignedWord;
+import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
 
 /**
@@ -44,14 +45,14 @@ public abstract class MetaspacePointer {
     public abstract boolean isNull();
 
     @HotSpotOperation(opcode = FROM_POINTER)
-    public abstract Pointer asWord();
+    public abstract Word asWord();
 
     /**
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -65,8 +66,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -80,8 +81,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -95,8 +96,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -110,8 +111,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -125,8 +126,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -140,8 +141,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -155,8 +156,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -170,8 +171,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -284,8 +285,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -299,8 +300,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -314,8 +315,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -329,8 +330,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -344,8 +345,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -359,8 +360,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -374,8 +375,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -389,8 +390,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -404,8 +405,8 @@ public abstract class MetaspacePointer {
      * Initializes the memory at address {@code (this + offset)}. Both the base address and offset
      * are in bytes. The memory must be uninitialized or zero prior to this operation.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -419,8 +420,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -533,8 +534,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -547,8 +548,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -561,8 +562,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -575,8 +576,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -589,8 +590,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -603,8 +604,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -617,8 +618,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -631,8 +632,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -645,8 +646,8 @@ public abstract class MetaspacePointer {
      * Reads the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -660,8 +661,8 @@ public abstract class MetaspacePointer {
      * the VM uses compressed oops, and it can be parameterized to allow read barriers (G1 referent
      * field).
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -777,8 +778,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -791,8 +792,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -805,8 +806,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -819,8 +820,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -833,8 +834,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -847,8 +848,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -861,8 +862,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -875,8 +876,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -889,8 +890,8 @@ public abstract class MetaspacePointer {
      * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
      * bytes.
      * <p>
-     * The offset is always treated as a {@link Signed} value. However, the static type is
-     * {@link WordBase} to avoid the frequent casts to of {@link Unsigned} values (where the caller
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
      * knows that the highest-order bit of the unsigned value is never used).
      *
      * @param offset the signed offset for the memory access
@@ -988,4 +989,490 @@ public abstract class MetaspacePointer {
      */
     @Operation(opcode = Opcode.WRITE_POINTER)
     public abstract void writeObject(int offset, Object val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeByteSideEffectFree(WordBase offset, byte val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeCharSideEffectFree(WordBase offset, char val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeShortSideEffectFree(WordBase offset, short val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeIntSideEffectFree(WordBase offset, int val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeLongSideEffectFree(WordBase offset, long val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeFloatSideEffectFree(WordBase offset, float val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeDoubleSideEffectFree(WordBase offset, double val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeWordSideEffectFree(WordBase offset, WordBase val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeObjectSideEffectFree(WordBase offset, Object val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeByteSideEffectFree(int offset, byte val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeCharSideEffectFree(int offset, char val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeShortSideEffectFree(int offset, short val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeIntSideEffectFree(int offset, int val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeLongSideEffectFree(int offset, long val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeFloatSideEffectFree(int offset, float val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeDoubleSideEffectFree(int offset, double val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeWordSideEffectFree(int offset, WordBase val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param locationIdentity the identity of the write
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeObjectSideEffectFree(int offset, Object val, LocationIdentity locationIdentity);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeByteSideEffectFree(WordBase offset, byte val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeCharSideEffectFree(WordBase offset, char val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeShortSideEffectFree(WordBase offset, short val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeIntSideEffectFree(WordBase offset, int val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeLongSideEffectFree(WordBase offset, long val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeFloatSideEffectFree(WordBase offset, float val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeDoubleSideEffectFree(WordBase offset, double val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeWordSideEffectFree(WordBase offset, WordBase val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     * <p>
+     * The offset is always treated as a {@link SignedWord} value. However, the static type is
+     * {@link WordBase} to avoid the frequent casts of {@link UnsignedWord} values (where the caller
+     * knows that the highest-order bit of the unsigned value is never used).
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeObjectSideEffectFree(WordBase offset, Object val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeByteSideEffectFree(int offset, byte val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeCharSideEffectFree(int offset, char val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeShortSideEffectFree(int offset, short val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeIntSideEffectFree(int offset, int val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeLongSideEffectFree(int offset, long val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeFloatSideEffectFree(int offset, float val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeDoubleSideEffectFree(int offset, double val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeWordSideEffectFree(int offset, WordBase val);
+
+    /**
+     * Writes the memory at address {@code (this + offset)}. Both the base address and offset are in
+     * bytes. The write is side-effect free, it is not a part of the JVM state and can be repeated
+     * after deoptimization.
+     *
+     * @param offset the signed offset for the memory access
+     * @param val the value to be written to memory
+     */
+    @Operation(opcode = Opcode.WRITE_POINTER_SIDE_EFFECT_FREE)
+    public abstract void writeObjectSideEffectFree(int offset, Object val);
+
 }
