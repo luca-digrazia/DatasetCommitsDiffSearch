@@ -258,9 +258,7 @@ public final class RegexParser {
                 if (group.size() == 1 && group.getFirstAlternative().size() == 1 && group.getFirstAlternative().getFirstTerm().isPositionAssertion()) {
                     // unwrap positive lookarounds containing only a position assertion
                     removeCurTerm();
-                    PositionAssertion positionAssertion = (PositionAssertion) group.getFirstAlternative().getFirstTerm();
-                    ast.register(positionAssertion);
-                    addTerm(positionAssertion);
+                    addTerm(group.getFirstAlternative().getFirstTerm());
                 } else {
                     int innerPositionAssertion = -1;
                     for (int i = 0; i < group.size(); i++) {
