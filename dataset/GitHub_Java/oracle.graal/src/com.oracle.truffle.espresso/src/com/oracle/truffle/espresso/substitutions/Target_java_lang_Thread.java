@@ -435,10 +435,9 @@ public final class Target_java_lang_Thread {
 
     @TruffleBoundary
     @Substitution(hasReceiver = true)
-    public static void setNativeName(@Host(Object.class) StaticObject self, @Host(String.class) StaticObject name,
-                    @InjectMeta Meta meta) {
+    public static void setNativeName(@Host(Object.class) StaticObject self, @Host(String.class) StaticObject name) {
         Thread hostThread = getHostFromGuestThread(self);
-        hostThread.setName(meta.toHostString(name));
+        hostThread.setName(Meta.toHostString(name));
     }
 
     public static Thread getHostFromGuestThread(@Host(Object.class) StaticObject self) {

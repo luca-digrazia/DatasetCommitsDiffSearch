@@ -380,7 +380,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         try {
             if (context.IsolatedNamespace) {
                 // libeden.so must be the first library loaded in the isolated namespace.
-                loadLibraryInternal(Collections.singletonList(props.espressoLibraryPath()), "eden", true);
+                TruffleObject edenLibrary = loadLibraryInternal(Collections.singletonList(props.espressoLibraryPath()), "eden");
+                EspressoError.guarantee(getUncached().asPointer(edenLibrary) != 0L, "Couldn't load libeden.so to initialize the isolated native namespace");
             }
             nespressoLibrary = loadLibraryInternal(Collections.singletonList(props.espressoLibraryPath()), "nespresso");
             dupClosureRef = NativeLibrary.lookup(nespressoLibrary, "dupClosureRef");
