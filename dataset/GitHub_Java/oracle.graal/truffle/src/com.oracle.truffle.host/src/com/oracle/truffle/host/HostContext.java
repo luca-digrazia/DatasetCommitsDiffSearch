@@ -120,10 +120,18 @@ final class HostContext {
             throw new AssertionError("must not be used during context preinitialization");
         }
         this.internalContext = internalContext;
-        this.contextClassLoader = cl;
+        this.contextClassLoader = resolveClassLoader(cl);
         this.classFilter = clFilter;
         this.hostClassLoadingAllowed = hostCLAllowed;
         this.hostLookupAllowed = hostLookupAllowed;
+    }
+
+    private static ClassLoader resolveClassLoader(ClassLoader cl) {
+        ClassLoader useCl = cl;
+        if (useCl == null) {
+            useCl = TruffleOptions.AOT ? null : Thread.currentThread().getContextClassLoader();
+        }
+        return useCl;
     }
 
     public HostClassCache getHostClassCache() {

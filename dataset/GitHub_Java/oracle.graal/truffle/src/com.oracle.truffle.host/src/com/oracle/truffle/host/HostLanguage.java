@@ -87,7 +87,7 @@ final class HostLanguage extends TruffleLanguage<HostContext> {
     @Override
     protected HostContext createContext(com.oracle.truffle.api.TruffleLanguage.Env env) {
         env.registerService(service);
-        return new HostContext(this, env);
+        return new HostContext(this);
     }
 
     @Override

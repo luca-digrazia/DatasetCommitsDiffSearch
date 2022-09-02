@@ -52,40 +52,47 @@ public class MonitorIdNode extends ValueNode implements IterableNodeType, LIRLow
     /**
      * We use the BCI as an identity for balanced locking.
      */
-    protected int bci;
+    protected final int bci;
 
-    protected boolean identityMerged;
+    /**
+     * Specifies if this is a monitor that was entered on disjoint control flow paths.
+     */
+    protected boolean multipleEntry;
 
     public MonitorIdNode(int lockDepth, int bci) {
-        this(TYPE, lockDepth);
-        this.bci = bci;
+        this(TYPE, lockDepth, bci);
     }
 
-    public MonitorIdNode(int lockDepth, int bci, boolean merged) {
-        this(TYPE, lockDepth);
-        this.bci = bci;
-        this.identityMerged = merged;
+    public MonitorIdNode(int lockDepth, int bci, boolean multipleEntry) {
+        this(TYPE, lockDepth, bci);
+        this.multipleEntry = multipleEntry;
     }
 
     public MonitorIdNode(int lockDepth) {
-        this(TYPE, lockDepth);
+        this(TYPE, lockDepth, -1);
     }
 
-    protected MonitorIdNode(NodeClass<? extends MonitorIdNode> c, int lockDepth) {
+    protected MonitorIdNode(NodeClass<? extends MonitorIdNode> c, int lockDepth, int bci) {
         super(c, StampFactory.forVoid());
         this.lockDepth = lockDepth;
+        this.bci = bci;
     }
 
     public int getBci() {
         return bci;
     }
 
+    public void setMultipleEntry() {
+        this.multipleEntry = true;
+    }
+
     /**
-     * Determines if this monitor ID node is the result of merging two monitor operations that have
-     * been duplicated as a result of e.g. bytecode duplication because of irrecudible loops.
+     * Indicates that the associated monitor operations might have multiple distinct monitorenter
+     * bytecodes for different objects. This violates some assumptions about well formed monitor
+     * operations and may inhibit some high level lock optimizations.
      */
-    public boolean isIdentityMerged() {
-        return identityMerged;
+    public boolean isMultipleEntry() {
+        return multipleEntry;
     }
 
     public int getLockDepth() {
