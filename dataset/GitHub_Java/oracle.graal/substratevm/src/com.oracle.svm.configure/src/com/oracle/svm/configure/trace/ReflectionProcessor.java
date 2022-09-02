@@ -87,7 +87,6 @@ class ReflectionProcessor extends AbstractProcessor {
             return;
         }
         ConfigurationMemberKind memberKind = ConfigurationMemberKind.PUBLIC;
-        boolean unsafeAccess = false;
         String clazzOrDeclaringClass = entry.containsKey("declaring_class") ? (String) entry.get("declaring_class") : clazz;
         switch (function) {
             case "forName": {
@@ -125,14 +124,11 @@ class ReflectionProcessor extends AbstractProcessor {
                 break;
             }
 
-            case "objectFieldOffset":
-                unsafeAccess = true;
-                // fall through
             case "getDeclaredField":
                 memberKind = ConfigurationMemberKind.DECLARED;
                 // fall through
             case "getField": {
-                configuration.getOrCreateType(clazzOrDeclaringClass).addField(singleElement(args), memberKind, unsafeAccess);
+                configuration.getOrCreateType(clazzOrDeclaringClass).addField(singleElement(args), memberKind);
                 break;
             }
 
