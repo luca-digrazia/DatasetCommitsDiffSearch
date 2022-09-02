@@ -306,11 +306,7 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
     @Override
     public ResolvedJavaType getArrayClass() {
         if (hub.getArrayHub() == null) {
-            /*
-             * Returning null is not ideal because it can lead to a subsequent NullPointerException.
-             * But it matches the behavior of HostedType, which also returns null.
-             */
-            return null;
+            throw VMError.shouldNotReachHere("no array class for " + hub.getName() + " available");
         }
         return SubstrateMetaAccess.singleton().lookupJavaTypeFromHub(hub.getArrayHub());
     }
@@ -540,7 +536,6 @@ public class SubstrateType extends NodeClass implements SharedType, Replaced {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     protected Iterable<SubstrateField> getNodeFields() {
         return getNodeFields(null);
     }
