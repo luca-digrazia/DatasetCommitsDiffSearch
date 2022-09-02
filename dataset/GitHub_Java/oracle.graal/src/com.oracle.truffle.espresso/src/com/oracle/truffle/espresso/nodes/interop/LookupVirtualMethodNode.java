@@ -23,9 +23,11 @@
 
 package com.oracle.truffle.espresso.nodes.interop;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
@@ -34,14 +36,10 @@ import com.oracle.truffle.espresso.impl.PrimitiveKlass;
 import com.oracle.truffle.espresso.meta.Meta;
 
 @GenerateUncached
-public abstract class LookupVirtualMethodNode extends AbstractLookupNode {
+public abstract class LookupVirtualMethodNode extends Node {
     static final int LIMIT = 2;
 
     public abstract Method execute(Klass klass, String methodName, int arity);
-
-    public boolean isInvocable(Klass klass, String member) {
-        return doLookup(klass, member, true, false, -1) != null;
-    }
 
     @SuppressWarnings("unused")
     @Specialization
@@ -87,8 +85,34 @@ public abstract class LookupVirtualMethodNode extends AbstractLookupNode {
     }
 
     @Specialization(replaces = "doCached")
+    @TruffleBoundary
     Method doGeneric(ObjectKlass klass, String key, int arity) {
-        return doLookup(klass, key, true, false, arity);
+        Method resolved = null;
+        String methodName;
+        String signature = null;
+        int colonIndex = key.indexOf(':');
+        if (colonIndex >= 0) {
+            String[] split = key.split(":");
+            if (split.length != 2) {
+                return null;
+            }
+            methodName = split[0];
+            signature = split[1];
+        } else {
+            methodName = key;
+        }
+        for (Method m : klass.getVTable()) {
+            if (isCanditate(m)) {
+                if (m.getName().toString().equals(methodName) && m.getParameterCount() == arity &&
+                                (signature == null || m.getSignatureAsString().equals(signature))) {
+                    if (resolved != null) {
+                        return null;
+                    }
+                    resolved = m;
+                }
+            }
+        }
+        return resolved;
     }
 
     protected static ObjectKlass getJLObject(Meta meta) {
@@ -97,11 +121,5 @@ public abstract class LookupVirtualMethodNode extends AbstractLookupNode {
 
     public static boolean isCanditate(Method m) {
         return m.isPublic() && !m.isStatic() && !m.isSignaturePolymorphicDeclared();
-    }
-
-    @Override
-    Method[] getMethodArray(Klass k) {
-        assert k instanceof ObjectKlass;
-        return ((ObjectKlass) k).getVTable();
     }
 }
