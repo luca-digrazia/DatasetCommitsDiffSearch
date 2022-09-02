@@ -53,7 +53,7 @@ public final class LLVMCallNode extends LLVMExpressionNode {
      */
     private static final class IntrinsicDispatch extends Node {
 
-        private final LLVMFunctionDescriptor descriptor;
+        @CompilationFinal private LLVMFunctionDescriptor descriptor;
         @Child private LLVMExpressionNode intrinsic;
 
         IntrinsicDispatch(LLVMFunctionDescriptor descriptor, LLVMExpressionNode[] argumentNodes, FunctionType functionType) {
