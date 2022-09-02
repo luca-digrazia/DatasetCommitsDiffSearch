@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,16 +24,18 @@
  */
 package com.oracle.svm.core.windows;
 
-import com.oracle.svm.core.windows.headers.FileAPI;
-import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.UnsignedWord;
 
+import com.oracle.svm.core.SubstrateDiagnostics;
 import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.log.Log;
+import com.oracle.svm.core.thread.VMThreads;
+import com.oracle.svm.core.windows.headers.FileAPI;
 import com.oracle.svm.core.windows.headers.LibC;
 
 @AutomaticFeature
@@ -41,15 +43,7 @@ import com.oracle.svm.core.windows.headers.LibC;
 class WindowsLogHandlerFeature implements Feature {
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
-        /* An alternative log handler can be set in Feature.duringSetup(). */
-        if (!ImageSingletons.contains(LogHandler.class)) {
-            /*
-             * Install the default log handler in ImageSingletons such that if another feature tries
-             * to install another log handler at a later point it will get an error.
-             */
-            LogHandler logHandler = new WindowsLogHandler();
-            ImageSingletons.add(LogHandler.class, logHandler);
-        }
+        Log.finalizeDefaultLogHandler(new WindowsLogHandler());
     }
 }
 
@@ -73,6 +67,10 @@ public class WindowsLogHandler implements LogHandler {
 
     @Override
     public void fatalError() {
+        if (SubstrateDiagnostics.isInProgress()) {
+            // Delay the shutdown a bit if another thread has something important to report.
+            VMThreads.singleton().nativeSleep(3000);
+        }
         LibC.abort();
     }
 

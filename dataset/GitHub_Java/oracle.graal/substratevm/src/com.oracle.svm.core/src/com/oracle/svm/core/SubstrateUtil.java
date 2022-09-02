@@ -31,7 +31,6 @@ import java.io.FileOutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -39,16 +38,17 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.graalvm.compiler.debug.MethodFilter;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.java.LambdaUtils;
 import org.graalvm.compiler.nodes.BreakpointNode;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.graalvm.util.GuardedAnnotationAccess;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
@@ -59,8 +59,6 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.services.Services;
@@ -403,16 +401,17 @@ public class SubstrateUtil {
         return mangled;
     }
 
-    private static final Method isHiddenMethod = JavaVersionUtil.JAVA_SPEC >= 15 ? ReflectionUtil.lookupMethod(Class.class, "isHidden") : null;
+    /*
+     * This function loads JavaFunction through MethodFilter and this is not allowed in NativeImage.
+     * We put this functionality in a separate class.
+     */
+    public static class NativeImageLoadingShield {
+        @Platforms(Platform.HOSTED_ONLY.class)
+        public static boolean isNeverInline(ResolvedJavaMethod method) {
+            List<String> neverInline = SubstrateOptions.NeverInline.getValue().values();
 
-    public static boolean isHiddenClass(Class<?> javaClass) {
-        if (JavaVersionUtil.JAVA_SPEC >= 15) {
-            try {
-                return (boolean) isHiddenMethod.invoke(javaClass);
-            } catch (IllegalAccessException | InvocationTargetException e) {
-                throw VMError.shouldNotReachHere(e);
-            }
+            return GuardedAnnotationAccess.isAnnotationPresent(method, com.oracle.svm.core.annotate.NeverInline.class) ||
+                            (neverInline != null && neverInline.stream().anyMatch(re -> MethodFilter.parse(re).matches(method)));
         }
-        return false;
     }
 }

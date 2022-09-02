@@ -40,7 +40,6 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.IsolateListenerSupport.IsolateListener;
 import com.oracle.svm.core.SubstrateSegfaultHandler.SingleIsolateSegfaultSetup;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
@@ -51,6 +50,7 @@ import com.oracle.svm.core.c.function.CEntryPointActions;
 import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.graal.nodes.WriteCurrentVMThreadNode;
 import com.oracle.svm.core.graal.nodes.WriteHeapBaseNode;
+import com.oracle.svm.core.graal.snippets.CEntryPointSnippets.IsolateCreationWatcher;
 import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.RuntimeOptionKey;
@@ -66,10 +66,7 @@ class SubstrateSegfaultHandlerFeature implements Feature {
         if (!ImageSingletons.contains(SubstrateSegfaultHandler.class)) {
             return; /* No segfault handler. */
         }
-
-        SingleIsolateSegfaultSetup singleIsolateSegfaultSetup = new SingleIsolateSegfaultSetup();
-        ImageSingletons.add(SingleIsolateSegfaultSetup.class, singleIsolateSegfaultSetup);
-        IsolateListenerSupport.singleton().register(singleIsolateSegfaultSetup);
+        ImageSingletons.add(IsolateCreationWatcher.class, new SingleIsolateSegfaultSetup());
 
         VMError.guarantee(ImageSingletons.contains(RegisterDumper.class));
         RuntimeSupport.getRuntimeSupport().addStartupHook(new SubstrateSegfaultHandlerStartupHook());
@@ -142,26 +139,22 @@ public abstract class SubstrateSegfaultHandler {
     }
 
     private static void dumpInterruptibly(RegisterDumper.Context context) {
-        PointerBase callerIP = RegisterDumper.singleton().getIP(context);
-        LogHandler logHandler = ImageSingletons.lookup(LogHandler.class);
-        String msg = "[ [ SubstrateSegfaultHandler caught a segfault. ] ]";
-        Log log = Log.enterFatalContext(logHandler, (CodePointer) callerIP, msg, null);
-        if (log != null) {
-            log.newline();
-            log.string(msg).newline();
+        Log log = Log.log();
+        log.autoflush(true);
 
-            PointerBase sp = RegisterDumper.singleton().getSP(context);
-            PointerBase ip = RegisterDumper.singleton().getIP(context);
-            SubstrateDiagnostics.print(log, (Pointer) sp, (CodePointer) ip, context);
+        log.newline();
+        log.string("[ [ SubstrateSegfaultHandler caught a segfault. ] ]").newline();
 
-            log.string("Segfault detected, aborting process. Use runtime option -R:-InstallSegfaultHandler if you don't want to use SubstrateSegfaultHandler.").newline();
-            log.newline();
-            Log.exitFatalContext();
-        }
-        logHandler.fatalError();
+        PointerBase sp = RegisterDumper.singleton().getSP(context);
+        PointerBase ip = RegisterDumper.singleton().getIP(context);
+        SubstrateDiagnostics.print(log, (Pointer) sp, (CodePointer) ip, context);
+
+        log.string("Segfault detected, aborting process. Use runtime option -R:-InstallSegfaultHandler if you don't want to use SubstrateSegfaultHandler.").newline();
+        log.newline();
+        ImageSingletons.lookup(LogHandler.class).fatalError();
     }
 
-    static class SingleIsolateSegfaultSetup implements IsolateListener {
+    static class SingleIsolateSegfaultSetup implements IsolateCreationWatcher {
 
         /**
          * Stores the address of the first isolate created. This is meant to attempt to detect the
@@ -173,19 +166,19 @@ public abstract class SubstrateSegfaultHandler {
 
         @Fold
         public static SingleIsolateSegfaultSetup singleton() {
-            return ImageSingletons.lookup(SingleIsolateSegfaultSetup.class);
+            return (SingleIsolateSegfaultSetup) ImageSingletons.lookup(IsolateCreationWatcher.class);
         }
 
         @Override
-        @Uninterruptible(reason = "Thread state not yet set up.")
-        public void afterCreateIsolate(Isolate isolate) {
+        @Uninterruptible(reason = "Called from uninterruptible method")
+        public void registerIsolate(Isolate isolate) {
             PointerBase value = baseIsolate.get().compareAndSwapWord(0, WordFactory.zero(), isolate, LocationIdentity.ANY_LOCATION);
             if (!value.isNull()) {
                 baseIsolate.get().writeWord(0, WordFactory.signed(-1));
             }
         }
 
-        @Uninterruptible(reason = "Thread state not yet set up.")
+        @Uninterruptible(reason = "Called from uninterruptible method")
         public Isolate getIsolate() {
             return baseIsolate.get().readWord(0);
         }
