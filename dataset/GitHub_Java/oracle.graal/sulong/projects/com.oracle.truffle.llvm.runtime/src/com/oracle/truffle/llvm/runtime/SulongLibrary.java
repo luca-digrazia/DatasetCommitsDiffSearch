@@ -217,7 +217,6 @@ public final class SulongLibrary implements TruffleObject {
             if (library.isExecutable()) {
                 return DirectCallNode.create(library.main);
             }
-            CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Cannot create main method for sulong library: " + library.getName());
         }
 
@@ -227,7 +226,6 @@ public final class SulongLibrary implements TruffleObject {
             if (library.isExecutable()) {
                 return call.call(library.main, args);
             }
-            CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Cannot create main method for sulong library: " + library.getName());
         }
     }
