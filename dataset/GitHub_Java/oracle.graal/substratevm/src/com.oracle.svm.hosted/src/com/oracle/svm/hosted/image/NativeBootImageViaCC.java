@@ -42,6 +42,7 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.impl.InternalPlatform;
 
 import com.oracle.objectfile.ObjectFile;
 import com.oracle.objectfile.macho.MachOSymtab;
@@ -55,7 +56,6 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.BeforeImageWriteAccessImpl;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.c.NativeLibraries;
-import com.oracle.svm.hosted.c.codegen.CCompilerInvoker;
 import com.oracle.svm.hosted.c.util.FileUtils;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
@@ -112,9 +112,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                     Files.write(exportedSymbolsPath, exportedSymbols);
                     additionalPreOptions.add("-Wl,--dynamic-list");
                     additionalPreOptions.add("-Wl," + exportedSymbolsPath.toAbsolutePath());
-
-                    // Drop global symbols in linked static libraries: not covered by --dynamic-list
-                    additionalPreOptions.add("-Wl,--exclude-libs,ALL");
                 } catch (IOException e) {
                     VMError.shouldNotReachHere();
                 }
@@ -193,7 +190,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                     throw UserError.abort(OS.getCurrent().name() + " does not support building static executable images.");
                 case SHARED_LIBRARY:
                     cmd.add("-shared");
-                    if (Platform.includedIn(Platform.DARWIN.class)) {
+                    if (Platform.includedIn(InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class)) {
                         cmd.add("-undefined");
                         cmd.add("dynamic_lookup");
                     }
@@ -224,9 +221,8 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
 
         @Override
         public List<String> getCommand() {
-            List<String> compilerCmd = getCompilerCommand(additionalPreOptions);
-
-            List<String> cmd = new ArrayList<>(compilerCmd);
+            ArrayList<String> cmd = new ArrayList<>();
+            cmd.addAll(getCompilerCommand());
             setOutputKind(cmd);
 
             // Add debugging info
@@ -267,7 +263,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             cmd.add("iphlpapi.lib");
             cmd.add("userenv.lib");
 
-            Collections.addAll(cmd, Options.NativeLinkerOption.getValue());
             return cmd;
         }
     }
@@ -339,7 +334,21 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
     public LinkerInvocation write(DebugContext debug, Path outputDirectory, Path tempDirectory, String imageName, BeforeImageWriteAccessImpl config) {
         try (Indent indent = debug.logAndIndent("Writing native image")) {
             // 1. write the relocatable file
-            write(tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
+
+            // Since we're using FileChannel.map, and we can't unmap the file,
+            // we have to copy the file or the linker will fail to open it.
+            if (OS.getCurrent() == OS.WINDOWS) {
+                Path tempFile = tempDirectory.resolve(imageName + ".tmp");
+                write(tempFile);
+                try {
+                    Files.copy(tempFile, tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
+                    // Files.delete(tempFile);
+                } catch (IOException e) {
+                    throw new RuntimeException("Failed to create Object file " + e);
+                }
+            } else {
+                write(tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
+            }
             if (NativeImageOptions.ExitAfterRelocatableImageWrite.getValue()) {
                 return null;
             }
@@ -355,9 +364,20 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             for (Function<LinkerInvocation, LinkerInvocation> fn : config.getLinkerInvocationTransformers()) {
                 inv = fn.apply(inv);
             }
+            List<String> cmd = inv.getCommand();
+            StringBuilder sb = new StringBuilder();
+            for (String s : cmd) {
+                if (s.indexOf(' ') != -1) {
+                    // Quote command line arguments that contain a space
+                    sb.append('\'').append(s).append('\'');
+                } else {
+                    sb.append(s);
+                }
+                sb.append(' ');
+            }
+            String commandLine = sb.toString().trim();
             try (DebugContext.Scope s = debug.scope("InvokeCC")) {
-                List<String> cmd = inv.getCommand();
-                String commandLine = CCompilerInvoker.debugLogCompilerCommand(debug, cmd).toString().trim();
+                debug.log("Running command: %s", sb);
 
                 if (NativeImageOptions.MachODebugInfoTesting.getValue()) {
                     System.out.printf("Testing Mach-O debuginfo generation - SKIP %s%n", commandLine);
@@ -378,7 +398,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                         throw handleLinkerFailure(e.toString(), commandLine, null);
                     }
 
-                    debug.log(DebugContext.VERBOSE_LEVEL, "%s", output);
+                    debug.log("%s", output);
 
                     if (status != 0) {
                         throw handleLinkerFailure("Linker command exited with " + status, commandLine, output.toString());
