@@ -288,11 +288,11 @@ public class GraphDecoder {
         }
 
         /**
-         * Determines if iterations generated when decoding this loop have yet to be processed.
+         * Determines if and iterations generated when decoding this loop have yet to be processed.
          *
          * @return {@code true} if there are iterations to be decoded, {@code false} else
          */
-        public boolean hasIterationsToProcess() {
+        public boolean hasIterationsToProccess() {
             return nextIterationFromLoopEndDuplication != null && !nextIterationFromLoopEndDuplication.isEmpty() ||
                             nextIterationFromLoopExitDuplication != null && !nextIterationFromLoopExitDuplication.isEmpty() ||
                             nextIterationsFromUnrolling != null && !nextIterationsFromUnrolling.isEmpty();
@@ -513,7 +513,7 @@ public class GraphDecoder {
                 }
 
                 /* Finished with a loop. */
-                if (loopScope.hasIterationsToProcess()) {
+                if (loopScope.hasIterationsToProccess()) {
                     loopScope = loopScope.getNextIterationToProcess(true);
                 } else {
                     propagateCreatedNodes(loopScope);
