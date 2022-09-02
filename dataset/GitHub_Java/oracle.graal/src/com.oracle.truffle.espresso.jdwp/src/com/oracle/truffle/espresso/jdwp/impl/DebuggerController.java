@@ -372,12 +372,10 @@ public final class DebuggerController implements ContextsListener {
         return eventListener;
     }
 
-    public boolean enterTruffleContext() {
+    public void enterTruffleContext() {
         if (previous == null && truffleContext != null) {
             previous = truffleContext.enter();
-            return true;
         }
-        return false;
     }
 
     public void leaveTruffleContext() {
