@@ -46,9 +46,9 @@ import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.Snippets;
 
-import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
+import com.oracle.svm.core.graal.snippets.SubstrateAllocationSnippets;
 import com.oracle.svm.core.graal.snippets.SubstrateTemplates;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
@@ -62,9 +62,7 @@ public final class SubstrateArraysCopyOfSnippets extends SubstrateTemplates impl
     private static final SubstrateForeignCallDescriptor[] FOREIGN_CALLS = new SubstrateForeignCallDescriptor[]{ARRAYS_COPY_OF};
 
     public static void registerForeignCalls(Providers providers, SubstrateForeignCallsProvider foreignCalls) {
-        for (SubstrateForeignCallDescriptor descriptor : FOREIGN_CALLS) {
-            foreignCalls.register(new SubstrateForeignCallLinkage(providers, descriptor));
-        }
+        foreignCalls.register(providers, FOREIGN_CALLS);
     }
 
     @SuppressWarnings("unused")
@@ -81,7 +79,7 @@ public final class SubstrateArraysCopyOfSnippets extends SubstrateTemplates impl
         int copiedLength = originalLength < newLength ? originalLength : newLength;
         if (LayoutEncoding.isObjectArray(layoutEncoding)) {
             DynamicHub originalHub = KnownIntrinsics.readHub(original);
-            if (originalHub == hub || hub.isAssignableFromHub(originalHub)) {
+            if (originalHub == hub || DynamicHub.toClass(hub).isAssignableFrom(DynamicHub.toClass(originalHub))) {
                 ArraycopySnippets.objectCopyForward(original, 0, newArray, 0, copiedLength, layoutEncoding);
             } else {
                 ArraycopySnippets.objectStoreCheckCopyForward(original, 0, newArray, 0, copiedLength);
@@ -113,7 +111,7 @@ public final class SubstrateArraysCopyOfSnippets extends SubstrateTemplates impl
     }
 
     protected class ArraysCopyOfLowering implements NodeLoweringProvider<SubstrateArraysCopyOfNode> {
-        private final SnippetInfo arraysCopyOf = snippet(SubstrateArraysCopyOfSnippets.class, "arraysCopyOfSnippet");
+        private final SnippetInfo arraysCopyOf = snippet(SubstrateArraysCopyOfSnippets.class, "arraysCopyOfSnippet", SubstrateAllocationSnippets.ALLOCATION_LOCATIONS);
 
         @Override
         public void lower(SubstrateArraysCopyOfNode node, LoweringTool tool) {

@@ -365,10 +365,6 @@ public class ImplicitExceptions {
         throw new NoSuchMethodError(message);
     }
 
-    public static void throwVerifyError(String message) {
-        throw new VerifyError(message);
-    }
-
     public static void throwVerifyError() {
         throw new VerifyError();
     }
