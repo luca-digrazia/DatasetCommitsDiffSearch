@@ -585,7 +585,7 @@ public class FlatNodeGenFactory {
 
     public List<CodeVariableElement> createUncachedFields() {
         List<CodeVariableElement> fields = new ArrayList<>();
-        List<CacheExpression> cacheExpressions = computeUniqueReferenceCaches(true);
+        List<CacheExpression> cacheExpressions = computeUniqueReferenceCaches();
         for (CacheExpression cache : cacheExpressions) {
             CodeVariableElement supplierField = new CodeVariableElement(modifiers(PRIVATE, FINAL),
                             cache.getReferenceType(), createElementReferenceName(cache));
@@ -755,7 +755,7 @@ public class FlatNodeGenFactory {
         }
 
         if (primaryNode) {
-            List<CacheExpression> cacheExpressions = computeUniqueReferenceCaches(false);
+            List<CacheExpression> cacheExpressions = computeUniqueReferenceCaches();
             for (CacheExpression cache : cacheExpressions) {
                 CodeVariableElement supplierField = new CodeVariableElement(modifiers(PRIVATE),
                                 cache.getReferenceType(), createElementReferenceName(cache));
@@ -874,17 +874,12 @@ public class FlatNodeGenFactory {
         }
     }
 
-    private List<CacheExpression> computeUniqueReferenceCaches(boolean uncached) {
+    private List<CacheExpression> computeUniqueReferenceCaches() {
         List<CacheExpression> cacheExpressions = new ArrayList<>();
         Set<String> computedContextReferences = new HashSet<>();
         Set<String> computedLanguageReferences = new HashSet<>();
         for (NodeData sharedNode : this.sharingNodes) {
-            Collection<SpecializationData> specializations;
-            if (uncached) {
-                specializations = sharedNode.computeUncachedSpecializations(calculateReachableSpecializations(sharedNode));
-            } else {
-                specializations = calculateReachableSpecializations(sharedNode);
-            }
+            List<SpecializationData> specializations = calculateReachableSpecializations(sharedNode);
             for (SpecializationData specialization : specializations) {
                 for (CacheExpression cache : specialization.getCaches()) {
                     if (!cache.isCachedContext() && !cache.isCachedLanguage()) {
