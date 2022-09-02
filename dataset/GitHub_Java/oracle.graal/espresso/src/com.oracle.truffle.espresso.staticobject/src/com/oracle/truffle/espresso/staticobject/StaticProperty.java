@@ -23,42 +23,21 @@
 package com.oracle.truffle.espresso.staticobject;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import java.lang.reflect.Field;
 import sun.misc.Unsafe;
 
 public class StaticProperty {
     private static final Unsafe UNSAFE = getUnsafe();
     private final byte internalKind;
-    @CompilationFinal //
-    private StaticShape<?> shape;
-    @CompilationFinal //
-    private int offset;
+    private final int offset;
 
-    StaticProperty(byte internalKind) {
-        this.internalKind = internalKind;
-    }
-
-    public StaticProperty(StaticPropertyKind kind) {
-        this(getInternalKind(kind));
+    protected StaticProperty(StaticPropertyKind kind, int offset) {
+        this.internalKind = getInternalKind(kind);
+        this.offset = offset;
     }
 
     private static byte getInternalKind(StaticPropertyKind kind) {
         return kind.toByte();
-    }
-
-    void initOffset(int o) {
-        if (this.offset != 0) {
-            throw new RuntimeException("Attempt to reinitialize the offset of a static property. Was it added to more than one builder?");
-        }
-        this.offset = o;
-    }
-
-    void initShape(StaticShape<?> s) {
-        if (this.shape != null) {
-            throw new RuntimeException("Attempt to reinitialize the shape of a static property. Was it added to more than one builder?");
-        }
-        this.shape = s;
     }
 
     /**
@@ -66,10 +45,6 @@ public class StaticProperty {
      */
     public int getOffset() {
         return offset;
-    }
-
-    byte getInternalKind() {
-        return internalKind;
     }
 
     private void checkKind(StaticPropertyKind kind) {
@@ -83,230 +58,230 @@ public class StaticProperty {
     // Object field access
     public final Object getObject(Object obj) {
         checkKind(StaticPropertyKind.Object);
-        return UNSAFE.getObject(shape.getStorage(obj, false), (long) offset);
+        return UNSAFE.getObject(obj, (long) offset);
     }
 
     public final Object getObjectVolatile(Object obj) {
         checkKind(StaticPropertyKind.Object);
-        return UNSAFE.getObjectVolatile(shape.getStorage(obj, false), offset);
+        return UNSAFE.getObjectVolatile(obj, offset);
     }
 
     public final void setObject(Object obj, Object value) {
         checkKind(StaticPropertyKind.Object);
-        UNSAFE.putObject(shape.getStorage(obj, false), (long) offset, value);
+        UNSAFE.putObject(obj, (long) offset, value);
     }
 
     public final void setObjectVolatile(Object obj, Object value) {
         checkKind(StaticPropertyKind.Object);
-        UNSAFE.putObjectVolatile(shape.getStorage(obj, false), offset, value);
+        UNSAFE.putObjectVolatile(obj, offset, value);
     }
 
     public final boolean compareAndSwapObject(Object obj, Object before, Object after) {
         checkKind(StaticPropertyKind.Object);
-        return UNSAFE.compareAndSwapObject(shape.getStorage(obj, false), offset, before, after);
+        return UNSAFE.compareAndSwapObject(obj, offset, before, after);
     }
 
     public final Object getAndSetObject(Object obj, Object value) {
         checkKind(StaticPropertyKind.Object);
-        return UNSAFE.getAndSetObject(shape.getStorage(obj, false), offset, value);
+        return UNSAFE.getAndSetObject(obj, offset, value);
     }
 
     // boolean field access
     public final boolean getBoolean(Object obj) {
         checkKind(StaticPropertyKind.Boolean);
-        return UNSAFE.getBoolean(shape.getStorage(obj, true), (long) offset);
+        return UNSAFE.getBoolean(obj, (long) offset);
     }
 
     public final boolean getBooleanVolatile(Object obj) {
         checkKind(StaticPropertyKind.Boolean);
-        return UNSAFE.getBooleanVolatile(shape.getStorage(obj, true), offset);
+        return UNSAFE.getBooleanVolatile(obj, offset);
     }
 
     public final void setBoolean(Object obj, boolean value) {
         checkKind(StaticPropertyKind.Boolean);
-        UNSAFE.putBoolean(shape.getStorage(obj, true), (long) offset, value);
+        UNSAFE.putBoolean(obj, (long) offset, value);
     }
 
     public final void setBooleanVolatile(Object obj, boolean value) {
         checkKind(StaticPropertyKind.Boolean);
-        UNSAFE.putBooleanVolatile(shape.getStorage(obj, true), offset, value);
+        UNSAFE.putBooleanVolatile(obj, offset, value);
     }
 
     // byte field access
     public final byte getByte(Object obj) {
         checkKind(StaticPropertyKind.Byte);
-        return UNSAFE.getByte(shape.getStorage(obj, true), (long) offset);
+        return UNSAFE.getByte(obj, (long) offset);
     }
 
     public final byte getByteVolatile(Object obj) {
         checkKind(StaticPropertyKind.Byte);
-        return UNSAFE.getByteVolatile(shape.getStorage(obj, true), offset);
+        return UNSAFE.getByteVolatile(obj, offset);
     }
 
     public final void setByte(Object obj, byte value) {
         checkKind(StaticPropertyKind.Byte);
-        UNSAFE.putByte(shape.getStorage(obj, true), (long) offset, value);
+        UNSAFE.putByte(obj, (long) offset, value);
     }
 
     public final void setByteVolatile(Object obj, byte value) {
         checkKind(StaticPropertyKind.Byte);
-        UNSAFE.putByteVolatile(shape.getStorage(obj, true), offset, value);
+        UNSAFE.putByteVolatile(obj, offset, value);
     }
 
     // char field access
     public final char getChar(Object obj) {
         checkKind(StaticPropertyKind.Char);
-        return UNSAFE.getChar(shape.getStorage(obj, true), (long) offset);
+        return UNSAFE.getChar(obj, (long) offset);
     }
 
     public final char getCharVolatile(Object obj) {
         checkKind(StaticPropertyKind.Char);
-        return UNSAFE.getCharVolatile(shape.getStorage(obj, true), offset);
+        return UNSAFE.getCharVolatile(obj, offset);
     }
 
     public final void setChar(Object obj, char value) {
         checkKind(StaticPropertyKind.Char);
-        UNSAFE.putChar(shape.getStorage(obj, true), (long) offset, value);
+        UNSAFE.putChar(obj, (long) offset, value);
     }
 
     public final void setCharVolatile(Object obj, char value) {
         checkKind(StaticPropertyKind.Char);
-        UNSAFE.putCharVolatile(shape.getStorage(obj, true), offset, value);
+        UNSAFE.putCharVolatile(obj, offset, value);
     }
 
     // double field access
     public final double getDouble(Object obj) {
         checkKind(StaticPropertyKind.Double);
-        return UNSAFE.getDouble(shape.getStorage(obj, true), (long) offset);
+        return UNSAFE.getDouble(obj, (long) offset);
     }
 
     public final double getDoubleVolatile(Object obj) {
         checkKind(StaticPropertyKind.Double);
-        return UNSAFE.getDoubleVolatile(shape.getStorage(obj, true), offset);
+        return UNSAFE.getDoubleVolatile(obj, offset);
     }
 
     public final void setDouble(Object obj, double value) {
         checkKind(StaticPropertyKind.Double);
-        UNSAFE.putDouble(shape.getStorage(obj, true), (long) offset, value);
+        UNSAFE.putDouble(obj, (long) offset, value);
     }
 
     public final void setDoubleVolatile(Object obj, double value) {
         checkKind(StaticPropertyKind.Double);
-        UNSAFE.putDoubleVolatile(shape.getStorage(obj, true), offset, value);
+        UNSAFE.putDoubleVolatile(obj, offset, value);
     }
 
     // float field access
     public final float getFloat(Object obj) {
         checkKind(StaticPropertyKind.Float);
-        return UNSAFE.getFloat(shape.getStorage(obj, true), (long) offset);
+        return UNSAFE.getFloat(obj, (long) offset);
     }
 
     public final float getFloatVolatile(Object obj) {
         checkKind(StaticPropertyKind.Float);
-        return UNSAFE.getFloatVolatile(shape.getStorage(obj, true), offset);
+        return UNSAFE.getFloatVolatile(obj, offset);
     }
 
     public final void setFloat(Object obj, float value) {
         checkKind(StaticPropertyKind.Float);
-        UNSAFE.putFloat(shape.getStorage(obj, true), (long) offset, value);
+        UNSAFE.putFloat(obj, (long) offset, value);
     }
 
     public final void setFloatVolatile(Object obj, float value) {
         checkKind(StaticPropertyKind.Float);
-        UNSAFE.putFloatVolatile(shape.getStorage(obj, true), offset, value);
+        UNSAFE.putFloatVolatile(obj, offset, value);
     }
 
     // int field access
     public final int getInt(Object obj) {
         checkKind(StaticPropertyKind.Int);
-        return UNSAFE.getInt(shape.getStorage(obj, true), (long) offset);
+        return UNSAFE.getInt(obj, (long) offset);
     }
 
     public final int getIntVolatile(Object obj) {
         checkKind(StaticPropertyKind.Int);
-        return UNSAFE.getIntVolatile(shape.getStorage(obj, true), offset);
+        return UNSAFE.getIntVolatile(obj, offset);
     }
 
     public final void setInt(Object obj, int value) {
         checkKind(StaticPropertyKind.Int);
-        UNSAFE.putInt(shape.getStorage(obj, true), (long) offset, value);
+        UNSAFE.putInt(obj, (long) offset, value);
     }
 
     public final void setIntVolatile(Object obj, int value) {
         checkKind(StaticPropertyKind.Int);
-        UNSAFE.putIntVolatile(shape.getStorage(obj, true), offset, value);
+        UNSAFE.putIntVolatile(obj, offset, value);
     }
 
     public final boolean compareAndSwapInt(Object obj, int before, int after) {
         checkKind(StaticPropertyKind.Int);
-        return UNSAFE.compareAndSwapInt(shape.getStorage(obj, true), offset, before, after);
+        return UNSAFE.compareAndSwapInt(obj, offset, before, after);
     }
 
     public final int getAndAddInt(Object obj, int value) {
         checkKind(StaticPropertyKind.Int);
-        return UNSAFE.getAndAddInt(shape.getStorage(obj, true), offset, value);
+        return UNSAFE.getAndAddInt(obj, offset, value);
     }
 
     public final int getAndSetInt(Object obj, int value) {
         checkKind(StaticPropertyKind.Int);
-        return UNSAFE.getAndSetInt(shape.getStorage(obj, true), offset, value);
+        return UNSAFE.getAndSetInt(obj, offset, value);
     }
 
     // long field access
     public final long getLong(Object obj) {
         checkKind(StaticPropertyKind.Long);
-        return UNSAFE.getLong(shape.getStorage(obj, true), (long) offset);
+        return UNSAFE.getLong(obj, (long) offset);
     }
 
     public final long getLongVolatile(Object obj) {
         checkKind(StaticPropertyKind.Long);
-        return UNSAFE.getLongVolatile(shape.getStorage(obj, true), offset);
+        return UNSAFE.getLongVolatile(obj, offset);
     }
 
     public final void setLong(Object obj, long value) {
         checkKind(StaticPropertyKind.Long);
-        UNSAFE.putLong(shape.getStorage(obj, true), (long) offset, value);
+        UNSAFE.putLong(obj, (long) offset, value);
     }
 
     public final void setLongVolatile(Object obj, long value) {
         checkKind(StaticPropertyKind.Long);
-        UNSAFE.putLongVolatile(shape.getStorage(obj, true), offset, value);
+        UNSAFE.putLongVolatile(obj, offset, value);
     }
 
     public final boolean compareAndSwapLong(Object obj, long before, long after) {
         checkKind(StaticPropertyKind.Long);
-        return UNSAFE.compareAndSwapLong(shape.getStorage(obj, true), offset, before, after);
+        return UNSAFE.compareAndSwapLong(obj, offset, before, after);
     }
 
     public final long getAndAddLong(Object obj, long value) {
         checkKind(StaticPropertyKind.Long);
-        return UNSAFE.getAndAddLong(shape.getStorage(obj, true), offset, value);
+        return UNSAFE.getAndAddLong(obj, offset, value);
     }
 
     public final long getAndSetLong(Object obj, long value) {
         checkKind(StaticPropertyKind.Long);
-        return UNSAFE.getAndSetLong(shape.getStorage(obj, true), offset, value);
+        return UNSAFE.getAndSetLong(obj, offset, value);
     }
 
     // short field access
     public final short getShort(Object obj) {
         checkKind(StaticPropertyKind.Short);
-        return UNSAFE.getShort(shape.getStorage(obj, true), (long) offset);
+        return UNSAFE.getShort(obj, (long) offset);
     }
 
     public final short getShortVolatile(Object obj) {
         checkKind(StaticPropertyKind.Short);
-        return UNSAFE.getShortVolatile(shape.getStorage(obj, true), offset);
+        return UNSAFE.getShortVolatile(obj, offset);
     }
 
     public final void setShort(Object obj, short value) {
         checkKind(StaticPropertyKind.Short);
-        UNSAFE.putShort(shape.getStorage(obj, true), (long) offset, value);
+        UNSAFE.putShort(obj, (long) offset, value);
     }
 
     public final void setShortVolatile(Object obj, short value) {
         checkKind(StaticPropertyKind.Short);
-        UNSAFE.putShortVolatile(shape.getStorage(obj, true), offset, value);
+        UNSAFE.putShortVolatile(obj, offset, value);
     }
 
     private static Unsafe getUnsafe() {
