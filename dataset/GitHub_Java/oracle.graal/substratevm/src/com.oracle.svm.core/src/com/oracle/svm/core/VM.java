@@ -46,7 +46,6 @@ public final class VM {
         String version = System.getProperty("org.graalvm.version");
         VMError.guarantee(version != null);
         version = VM.class.getName() + valueSeparator + "GraalVM " + version;
-        version += " Java " + JavaVersionUtil.JAVA_SPEC;
         String config = System.getProperty("org.graalvm.config", "");
         if (!config.isEmpty()) {
             version += " " + config;
