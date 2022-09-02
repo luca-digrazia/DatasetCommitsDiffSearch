@@ -106,28 +106,28 @@ final class PolyglotEngineOptions {
 
     @Option(category = OptionCategory.EXPERT, stability = OptionStability.EXPERIMENTAL, help = "" +
                     "On property accesses, the Static Object Model does not perform shape checks and uses unsafe casts")//
-    static final OptionKey<Boolean> RelaxStaticObjectSafetyChecks = new OptionKey<>(false);
+    static final OptionKey<Boolean> RelaxSomSafetyChecks = new OptionKey<>(false);
 
-    enum StaticObjectStorageStrategies {
+    enum SomStrategies {
         DEFAULT,
         ARRAY_BASED,
         FIELD_BASED
     }
 
     @Option(category = OptionCategory.INTERNAL, stability = OptionStability.EXPERIMENTAL, help = "" +
-                    "Set the storage strategy used by the Static Object Model. Accepted values are: ['default', 'array-based', 'field-based']")//
-    static final OptionKey<StaticObjectStorageStrategies> StaticObjectStorageStrategy = new OptionKey<>(StaticObjectStorageStrategies.DEFAULT, new OptionType<>("strategy", new Function<String, StaticObjectStorageStrategies>() {
+                    "Set the storage strategy used by the Static Object Model.")//
+    static final OptionKey<SomStrategies> SomStorageStrategy = new OptionKey<>(SomStrategies.DEFAULT, new OptionType<>("strategy", new Function<String, SomStrategies>() {
         @Override
-        public StaticObjectStorageStrategies apply(String s) {
-            switch (s) {
+        public SomStrategies apply(String s) {
+            switch (s.toLowerCase().replace('_', '-')) {
                 case "default":
-                    return StaticObjectStorageStrategies.DEFAULT;
+                    return SomStrategies.DEFAULT;
                 case "array-based":
-                    return StaticObjectStorageStrategies.ARRAY_BASED;
+                    return SomStrategies.ARRAY_BASED;
                 case "field-based":
-                    return StaticObjectStorageStrategies.FIELD_BASED;
+                    return SomStrategies.FIELD_BASED;
                 default:
-                    throw new IllegalArgumentException("Unexpected value for engine option 'SomStorageStrategy': '" + s + "'. Accepted values are: ['default', 'array-based', 'field-based'].");
+                    throw new IllegalArgumentException("Unexpected value for engine option 'SomStorageStrategy': '" + s + "'. Accepted values are: 'default', 'array-based', and 'field-based'.");
             }
         }
     }));
