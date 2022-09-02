@@ -759,7 +759,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         if (this.isArray() && other.isArray()) {
             return ((ArrayKlass) this).arrayTypeChecks((ArrayKlass) other);
         }
-        if (!this.isArray() && ModifiersProvider.super.isFinalFlagSet()) {
+        if (!this.isArray() && this.isFinalFlagSet()) {
             return this == other;
         }
         if (isInterface()) {
@@ -1227,7 +1227,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     public boolean sameRuntimePackage(Klass other) {
-        if (getDefiningClassLoader() != other.getDefiningClassLoader()) {
+        if (this.getDefiningClassLoader() != other.getDefiningClassLoader()) {
             return false;
         }
         if (getJavaVersion().modulesEnabled()) {
