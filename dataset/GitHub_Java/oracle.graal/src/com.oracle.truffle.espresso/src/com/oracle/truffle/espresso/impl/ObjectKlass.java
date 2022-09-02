@@ -26,7 +26,6 @@ package com.oracle.truffle.espresso.impl;
 import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -43,6 +42,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -56,6 +56,8 @@ public final class ObjectKlass extends Klass {
 
     public static final ObjectKlass[] EMPTY_ARRAY = new ObjectKlass[0];
 
+    public static final JavaKind FIELD_REPRESENTATION = JavaKind.Byte;
+
     private final EnclosingMethodAttribute enclosingMethod;
 
     private final RuntimeConstantPool pool;
@@ -68,10 +70,12 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal(dimensions = 1) //
     private Field[] declaredFields;
 
+    @CompilationFinal(dimensions = 2) private final int[][] leftoverHoles;
     @CompilationFinal(dimensions = 1) private final Field[] fieldTable;
 
-    private final int wordFields;
-    private final int staticWordFields;
+    private final int primitiveFieldTotalByteCount;
+    private final int primitiveStaticFieldTotalByteCount;
+
     private final int objectFields;
     private final int staticObjectFields;
 
@@ -132,10 +136,12 @@ public final class ObjectKlass extends Klass {
         this.staticFieldTable = fieldCR.staticFieldTable;
         this.declaredFields = fieldCR.declaredFields;
 
-        this.wordFields = fieldCR.wordFields;
-        this.staticWordFields = fieldCR.staticWordFields;
+        this.primitiveFieldTotalByteCount = fieldCR.primitiveFieldTotalByteCount;
+        this.primitiveStaticFieldTotalByteCount = fieldCR.primitiveStaticFieldTotalByteCount;
         this.objectFields = fieldCR.objectFields;
         this.staticObjectFields = fieldCR.staticObjectFields;
+
+        this.leftoverHoles = fieldCR.leftoverHoles;
 
         LinkedMethod[] linkedMethods = linkedKlass.getLinkedMethods();
         Method[] methods = new Method[linkedMethods.length];
@@ -381,16 +387,16 @@ public final class ObjectKlass extends Klass {
         return objectFields;
     }
 
-    public int getWordFieldsCount() {
-        return wordFields;
+    public int getPrimitiveFieldTotalByteCount() {
+        return primitiveFieldTotalByteCount;
     }
 
     public int getStaticObjectFieldsCount() {
         return staticObjectFields;
     }
 
-    public int getStaticWordFieldsCount() {
-        return staticWordFields;
+    public int getPrimitiveStaticFieldTotalByteCount() {
+        return primitiveStaticFieldTotalByteCount;
     }
 
     @Override
@@ -433,24 +439,12 @@ public final class ObjectKlass extends Klass {
 
     public final Method itableLookup(Klass interfKlass, int index) {
         assert (index >= 0) : "Undeclared interface method";
-        try {
-            return itable[findITableIndex(interfKlass)][index];
-        } catch (IndexOutOfBoundsException e) {
-            throw getMeta().throwExWithMessage(IncompatibleClassChangeError.class, "Class " + getName() + " does not implement interface " + interfKlass.getName());
-        }
-    }
-
-    private int findITableIndex(Klass interfKlass) {
-        if (itableLength < 5) {
-            for (int i = 0; i < itableLength; i++) {
-                if (iKlassTable[i] == interfKlass) {
-                    return i;
-                }
+        for (int i = 0; i < itableLength; i++) {
+            if (iKlassTable[i] == interfKlass) {
+                return itable[i][index];
             }
-            return -1;
-        } else {
-            return Arrays.binarySearch(iKlassTable, interfKlass, comparator);
         }
+        throw getMeta().throwExWithMessage(IncompatibleClassChangeError.class, "Class " + getName() + " does not implement " + interfKlass.getName());
     }
 
     final Method[][] getItable() {
@@ -461,30 +455,13 @@ public final class ObjectKlass extends Klass {
         return iKlassTable;
     }
 
-    final Method lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, String subclassPackage) {
+    final Method lookupVirtualMethodOverride(Symbol<Name> name, Symbol<Signature> signature) {
         for (Method m : vtable) {
             if (!m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
-                if (m.isProtected() || m.isPublic()) {
-                    return m;
-                } else if (subclassPackage.equals(getRuntimePackage())) {
-                    return m;
-                }
+                return m;
             }
         }
         return null;
-    }
-
-    final List<Method> lookupVirtualMethodOverrides(Symbol<Name> name, Symbol<Signature> signature, String subclassPackage, List<Method> result) {
-        for (Method m : vtable) {
-            if (!m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
-                if (m.isProtected() || m.isPublic()) {
-                    result.add(m);
-                } else if (subclassPackage.equals(getRuntimePackage())) {
-                    result.add(m);
-                }
-            }
-        }
-        return result;
     }
 
     public final Method lookupInterfaceMethod(Symbol<Name> name, Symbol<Signature> signature) {
@@ -565,5 +542,9 @@ public final class ObjectKlass extends Klass {
 
     private void setErroneous() {
         initState = ERRONEOUS;
+    }
+
+    public int[][] getLeftoverHoles() {
+        return leftoverHoles;
     }
 }
