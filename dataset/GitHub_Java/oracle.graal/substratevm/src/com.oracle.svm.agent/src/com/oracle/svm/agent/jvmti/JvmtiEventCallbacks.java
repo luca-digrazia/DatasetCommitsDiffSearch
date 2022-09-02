@@ -40,9 +40,6 @@ public interface JvmtiEventCallbacks extends PointerBase {
     void setVMInit(CFunctionPointer callback);
 
     @CField
-    void setVMDeath(CFunctionPointer callback);
-
-    @CField
     void setBreakpoint(CFunctionPointer callback);
 
     @CField

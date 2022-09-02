@@ -26,7 +26,6 @@ package com.oracle.svm.configure.config;
 
 import java.util.List;
 
-import com.oracle.svm.core.TypeResult;
 import com.oracle.svm.core.configure.ReflectionConfigurationParserDelegate;
 
 public class ParserConfigurationAdapter implements ReflectionConfigurationParserDelegate<ConfigurationType> {
@@ -38,10 +37,9 @@ public class ParserConfigurationAdapter implements ReflectionConfigurationParser
     }
 
     @Override
-    public TypeResult<ConfigurationType> resolveTypeResult(String typeName) {
+    public ConfigurationType resolveType(String typeName) {
         ConfigurationType type = configuration.get(typeName);
-        ConfigurationType result = type != null ? type : new ConfigurationType(typeName);
-        return TypeResult.forType(typeName, result);
+        return (type != null) ? type : new ConfigurationType(typeName);
     }
 
     @Override
@@ -50,8 +48,8 @@ public class ParserConfigurationAdapter implements ReflectionConfigurationParser
     }
 
     @Override
-    public void registerField(ConfigurationType type, String fieldName, boolean finalButWritable, boolean allowUnsafeAccess) {
-        type.addField(fieldName, ConfigurationMemberKind.PRESENT, finalButWritable, allowUnsafeAccess);
+    public void registerField(ConfigurationType type, String fieldName, boolean allowWrite, boolean allowUnsafeAccess) {
+        type.addField(fieldName, ConfigurationMemberKind.PRESENT, allowUnsafeAccess);
     }
 
     @Override

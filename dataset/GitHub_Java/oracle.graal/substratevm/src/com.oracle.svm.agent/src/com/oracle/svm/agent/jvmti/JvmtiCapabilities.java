@@ -43,10 +43,4 @@ public interface JvmtiCapabilities extends PointerBase {
 
     @CBitfield("can_generate_native_method_bind_events")
     void setCanGenerateNativeMethodBindEvents(int value);
-
-    @CBitfield("can_get_bytecodes")
-    void setCanGetBytecodes(int value);
-
-    @CBitfield("can_get_constant_pool")
-    void setCanGetConstantPool(int value);
 }

@@ -51,7 +51,6 @@ public class ConfigurationType implements JsonPrintable {
 
     public ConfigurationType(String qualifiedJavaName) {
         assert qualifiedJavaName.indexOf('/') == -1 : "Requires qualified Java name, not internal representation";
-        assert !qualifiedJavaName.startsWith("[") : "Requires Java source array syntax, for example java.lang.String[]";
         this.qualifiedJavaName = qualifiedJavaName;
     }
 
@@ -59,8 +58,8 @@ public class ConfigurationType implements JsonPrintable {
         return qualifiedJavaName;
     }
 
-    public void addField(String name, ConfigurationMemberKind memberKind, boolean finalButWritable, boolean allowUnsafeAccess) {
-        if (!finalButWritable && !allowUnsafeAccess) {
+    public void addField(String name, ConfigurationMemberKind memberKind, boolean allowUnsafeAccess) {
+        if (!allowUnsafeAccess) {
             if ((memberKind.includes(ConfigurationMemberKind.DECLARED) && haveAllDeclaredFields()) || (memberKind.includes(ConfigurationMemberKind.PUBLIC) && haveAllPublicFields())) {
                 fields = maybeRemove(fields, map -> map.remove(name));
                 return;
@@ -70,8 +69,8 @@ public class ConfigurationType implements JsonPrintable {
             fields = new HashMap<>();
         }
         fields.compute(name, (k, v) -> (v != null)
-                        ? FieldInfo.get(v.getKind().intersect(memberKind), v.isFinalButWritable() || finalButWritable, v.isUnsafeAccessible() || allowUnsafeAccess)
-                        : FieldInfo.get(memberKind, finalButWritable, allowUnsafeAccess));
+                        ? FieldInfo.get(v.getKind().intersect(memberKind), v.isUnsafeAccessible() || allowUnsafeAccess)
+                        : FieldInfo.get(memberKind, allowUnsafeAccess));
     }
 
     public void addMethodsWithName(String name, ConfigurationMemberKind memberKind) {
@@ -226,9 +225,6 @@ public class ConfigurationType implements JsonPrintable {
 
     private static void printField(Map.Entry<String, FieldInfo> entry, JsonWriter w) throws IOException {
         w.append('{').quote("name").append(':').quote(entry.getKey());
-        if (entry.getValue().isFinalButWritable()) {
-            w.append(", ").quote("allowWrite").append(':').append("true");
-        }
         if (entry.getValue().isUnsafeAccessible()) {
             w.append(", ").quote("allowUnsafeAccess").append(':').append("true");
         }
