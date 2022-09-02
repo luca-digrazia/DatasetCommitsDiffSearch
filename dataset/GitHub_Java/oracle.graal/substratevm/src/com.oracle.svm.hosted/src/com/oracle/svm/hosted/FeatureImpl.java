@@ -45,6 +45,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import com.oracle.svm.hosted.code.CEntryPointData;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -68,7 +69,6 @@ import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.hosted.analysis.Inflation;
 import com.oracle.svm.hosted.c.NativeLibraries;
-import com.oracle.svm.hosted.code.CEntryPointData;
 import com.oracle.svm.hosted.code.CompilationInfoSupport;
 import com.oracle.svm.hosted.code.SharedRuntimeConfigurationBuilder;
 import com.oracle.svm.hosted.image.AbstractBootImage;
@@ -627,16 +627,15 @@ public class FeatureImpl {
 
     public static class AfterImageWriteAccessImpl extends FeatureAccessImpl implements Feature.AfterImageWriteAccess {
         private final HostedUniverse hUniverse;
-        protected final LinkerInvocation linkerInvocation;
+        protected final Path imagePath;
         protected final Path tempDirectory;
         protected final NativeImageKind imageKind;
 
-        AfterImageWriteAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, HostedUniverse hUniverse, LinkerInvocation linkerInvocation, Path tempDirectory,
-                        NativeImageKind imageKind,
+        AfterImageWriteAccessImpl(FeatureHandler featureHandler, ImageClassLoader imageClassLoader, HostedUniverse hUniverse, Path imagePath, Path tempDirectory, NativeImageKind imageKind,
                         DebugContext debugContext) {
             super(featureHandler, imageClassLoader, debugContext);
             this.hUniverse = hUniverse;
-            this.linkerInvocation = linkerInvocation;
+            this.imagePath = imagePath;
             this.tempDirectory = tempDirectory;
             this.imageKind = imageKind;
         }
@@ -647,7 +646,7 @@ public class FeatureImpl {
 
         @Override
         public Path getImagePath() {
-            return linkerInvocation.getOutputFile();
+            return imagePath;
         }
 
         public Path getTempDirectory() {
@@ -656,10 +655,6 @@ public class FeatureImpl {
 
         public NativeImageKind getImageKind() {
             return imageKind;
-        }
-
-        public List<String> getImageSymbols(boolean onlyGlobal) {
-            return linkerInvocation.getImageSymbols(onlyGlobal);
         }
     }
 }

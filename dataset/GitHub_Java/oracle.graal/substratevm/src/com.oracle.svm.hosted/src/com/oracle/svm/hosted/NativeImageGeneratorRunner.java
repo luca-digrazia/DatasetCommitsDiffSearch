@@ -353,7 +353,6 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             NativeImageGeneratorRunner.reportFatalError(e);
             return 1;
         } finally {
-            NativeImageGenerator.clearSystemPropertiesForImage();
             ImageSingletonsSupportImpl.HostedManagement.clearInThread();
         }
         totalTimer.print();

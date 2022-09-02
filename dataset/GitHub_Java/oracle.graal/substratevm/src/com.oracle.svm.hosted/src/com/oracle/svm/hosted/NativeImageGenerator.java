@@ -432,7 +432,7 @@ public class NativeImageGenerator {
                 throw UserError.abort("An image build has already been performed with this generator.");
             }
 
-            setSystemPropertiesForImageLate(k);
+            setSystemPropertiesForImage(k);
 
             int maxConcurrentThreads = NativeImageOptions.getMaximumNumberOfConcurrentThreads(new OptionValues(optionProvider.getHostedValues()));
             this.imageBuildPool = createForkJoinPool(maxConcurrentThreads);
@@ -470,15 +470,12 @@ public class NativeImageGenerator {
             }
         } finally {
             shutdownPoolSafe();
+            clearSystemPropertiesForImage();
         }
     }
 
-    protected static void setSystemPropertiesForImageEarly() {
+    private static void setSystemPropertiesForImage(NativeImageKind imageKind) {
         System.setProperty(ImageInfo.PROPERTY_IMAGE_CODE_KEY, ImageInfo.PROPERTY_IMAGE_CODE_VALUE_BUILDTIME);
-    }
-
-    private static void setSystemPropertiesForImageLate(NativeImageKind imageKind) {
-        VMError.guarantee(ImageInfo.inImageBuildtimeCode(), "System property to indicate image build time is set earlier, before listing classes");
         if (imageKind.executable) {
             System.setProperty(ImageInfo.PROPERTY_IMAGE_KIND_KEY, ImageInfo.PROPERTY_IMAGE_KIND_VALUE_EXECUTABLE);
         } else {
@@ -486,7 +483,7 @@ public class NativeImageGenerator {
         }
     }
 
-    protected static void clearSystemPropertiesForImage() {
+    private static void clearSystemPropertiesForImage() {
         System.clearProperty(ImageInfo.PROPERTY_IMAGE_CODE_KEY);
         System.clearProperty(ImageInfo.PROPERTY_IMAGE_KIND_KEY);
     }

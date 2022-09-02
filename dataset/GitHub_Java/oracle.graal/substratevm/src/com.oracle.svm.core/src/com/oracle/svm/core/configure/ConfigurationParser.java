@@ -51,7 +51,7 @@ public abstract class ConfigurationParser {
         throw new JSONParserException(errorMessage);
     }
 
-    protected static String asString(Object value) {
+    static String asString(Object value) {
         if (value instanceof String) {
             return (String) value;
         }
@@ -65,7 +65,7 @@ public abstract class ConfigurationParser {
         throw new JSONParserException("Invalid string value \"" + value + "\" for element '" + propertyName + "'");
     }
 
-    protected static boolean asBoolean(Object value, String propertyName) {
+    static boolean asBoolean(Object value, String propertyName) {
         if (value instanceof Boolean) {
             return (boolean) value;
         }

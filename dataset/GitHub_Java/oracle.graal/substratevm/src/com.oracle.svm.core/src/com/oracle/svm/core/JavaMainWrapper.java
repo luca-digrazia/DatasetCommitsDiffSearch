@@ -240,10 +240,6 @@ public class JavaMainWrapper {
         return arg0truncation;
     }
 
-    public static String getCRuntimeArgument0() {
-        return CTypeConversion.toJavaString(argv.read(0));
-    }
-
     @AutomaticFeature
     public static class ExposeCRuntimeArgumentBlockFeature implements Feature {
         @Override
@@ -256,7 +252,6 @@ public class JavaMainWrapper {
             RuntimeSupport rs = RuntimeSupport.getRuntimeSupport();
             rs.addCommandPlugin(new GetCRuntimeArgumentBlockLengthCommand());
             rs.addCommandPlugin(new SetCRuntimeArgument0Command());
-            rs.addCommandPlugin(new GetCRuntimeArgument0Command());
         }
     }
 
@@ -281,18 +276,6 @@ public class JavaMainWrapper {
         @Override
         public Object apply(Object[] args) {
             return setCRuntimeArgument0((String) args[0]);
-        }
-    }
-
-    private static class GetCRuntimeArgument0Command implements CompilerCommandPlugin {
-        @Override
-        public String name() {
-            return "com.oracle.svm.core.JavaMainWrapper.getCRuntimeArgument0()String";
-        }
-
-        @Override
-        public Object apply(Object[] args) {
-            return getCRuntimeArgument0();
         }
     }
 }
