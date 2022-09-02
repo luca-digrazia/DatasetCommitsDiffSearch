@@ -116,7 +116,7 @@ public class MonitorSupport {
             try {
                 monitorEnterWithoutBlockingCheck(obj);
             } finally {
-                ThreadingSupportImpl.resumeRecurringCallbackAtNextSafepoint();
+                ThreadingSupportImpl.resumeRecurringCallback();
             }
         } finally {
             StackOverflowCheck.singleton().protectYellowZone();
@@ -168,7 +168,7 @@ public class MonitorSupport {
             try {
                 monitorExit0(obj);
             } finally {
-                ThreadingSupportImpl.resumeRecurringCallbackAtNextSafepoint();
+                ThreadingSupportImpl.resumeRecurringCallback();
             }
         } finally {
             StackOverflowCheck.singleton().protectYellowZone();
