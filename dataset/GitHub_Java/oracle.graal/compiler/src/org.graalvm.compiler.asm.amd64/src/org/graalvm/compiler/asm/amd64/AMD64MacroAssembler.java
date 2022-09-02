@@ -240,13 +240,13 @@ public class AMD64MacroAssembler extends AMD64Assembler {
     public void movflt(Register dst, Register src) {
         assert dst.getRegisterCategory().equals(AMD64.XMM) && src.getRegisterCategory().equals(AMD64.XMM);
         if (UseXmmRegToRegMoveAll) {
-            if (isAVX512Register(dst) || isAVX512Register(src)) {
+            if (isAVX512Registers(dst) || isAVX512Registers(src)) {
                 VexMoveOp.VMOVAPS.emit(this, AVXSize.XMM, dst, src);
             } else {
                 movaps(dst, src);
             }
         } else {
-            if (isAVX512Register(dst) || isAVX512Register(src)) {
+            if (isAVX512Registers(dst) || isAVX512Registers(src)) {
                 VexMoveOp.VMOVSS.emit(this, AVXSize.XMM, dst, src);
             } else {
                 movss(dst, src);
@@ -256,7 +256,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
 
     public void movflt(Register dst, AMD64Address src) {
         assert dst.getRegisterCategory().equals(AMD64.XMM);
-        if (isAVX512Register(dst)) {
+        if (isAVX512Registers(dst)) {
             VexMoveOp.VMOVSS.emit(this, AVXSize.XMM, dst, src);
         } else {
             movss(dst, src);
@@ -265,7 +265,7 @@ public class AMD64MacroAssembler extends AMD64Assembler {
 
     public void movflt(AMD64Address dst, Register src) {
         assert src.getRegisterCategory().equals(AMD64.XMM);
-        if (isAVX512Register(src)) {
+        if (isAVX512Registers(src)) {
             VexMoveOp.VMOVSS.emit(this, AVXSize.XMM, dst, src);
         } else {
             movss(dst, src);
@@ -275,13 +275,13 @@ public class AMD64MacroAssembler extends AMD64Assembler {
     public void movdbl(Register dst, Register src) {
         assert dst.getRegisterCategory().equals(AMD64.XMM) && src.getRegisterCategory().equals(AMD64.XMM);
         if (UseXmmRegToRegMoveAll) {
-            if (isAVX512Register(dst) || isAVX512Register(src)) {
+            if (isAVX512Registers(dst) || isAVX512Registers(src)) {
                 VexMoveOp.VMOVAPD.emit(this, AVXSize.XMM, dst, src);
             } else {
                 movapd(dst, src);
             }
         } else {
-            if (isAVX512Register(dst) || isAVX512Register(src)) {
+            if (isAVX512Registers(dst) || isAVX512Registers(src)) {
                 VexMoveOp.VMOVSD.emit(this, AVXSize.XMM, dst, src);
             } else {
                 movsd(dst, src);
@@ -292,20 +292,20 @@ public class AMD64MacroAssembler extends AMD64Assembler {
     public void movdbl(Register dst, AMD64Address src) {
         assert dst.getRegisterCategory().equals(AMD64.XMM);
         if (UseXmmLoadAndClearUpper) {
-            if (isAVX512Register(dst)) {
+            if (isAVX512Registers(dst)) {
                 VexMoveOp.VMOVSD.emit(this, AVXSize.XMM, dst, src);
             } else {
                 movsd(dst, src);
             }
         } else {
-            assert !isAVX512Register(dst);
+            assert !isAVX512Registers(dst);
             movlpd(dst, src);
         }
     }
 
     public void movdbl(AMD64Address dst, Register src) {
         assert src.getRegisterCategory().equals(AMD64.XMM);
-        if (isAVX512Register(src)) {
+        if (isAVX512Registers(src)) {
             VexMoveOp.VMOVSD.emit(this, AVXSize.XMM, dst, src);
         } else {
             movsd(dst, src);
