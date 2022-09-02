@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,13 +29,15 @@
  */
 package com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug;
 
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.debug.LLDBSupport;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugTypeConstants;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -60,16 +62,10 @@ final class LLDBMemoryValue implements LLVMDebugValue {
     @Override
     @TruffleBoundary
     public String describeValue(long bitOffset, int bitSize) {
-        final StringBuilder builder = new StringBuilder();
-        if (isByteAligned(bitSize)) {
-            builder.append(bitSize / Byte.SIZE).append(" byte at ");
-        } else if (bitSize == 1) {
-            builder.append("first bit at ");
-        } else {
-            builder.append(String.valueOf(bitSize)).append(" bits at ");
-        }
-        builder.append(computeAddress(bitOffset));
-        return builder.toString();
+        String value = LLDBSupport.toSizeString(bitSize);
+        value += " at ";
+        value += computeAddress(bitOffset);
+        return value;
     }
 
     @Override
@@ -81,9 +77,9 @@ final class LLDBMemoryValue implements LLVMDebugValue {
     }
 
     private Object loadValue(Type loadtype, int byteOffset) {
-        final LLVMLoadNode loadNode = LLDBSupport.getNodeFactory().createLoad(loadtype, null);
         final LLVMPointer offsetPointer = pointer.increment(byteOffset);
-        return loadNode.executeWithTarget(offsetPointer);
+        CallTarget loadFunction = LLVMLanguage.getLLDBSupport().getLoadFunction(loadtype);
+        return loadFunction.call(offsetPointer);
     }
 
     @Override
@@ -240,15 +236,7 @@ final class LLDBMemoryValue implements LLVMDebugValue {
         }
 
         if (LLVMManagedPointer.isInstance(pointer)) {
-            String address = "<managed pointer>";
-            if (bitOffset != 0) {
-                if (isByteAligned(bitOffset)) {
-                    address += " + " + (bitOffset / Byte.SIZE) + " byte";
-                } else {
-                    address += " + " + bitOffset + " bits";
-                }
-            }
-            return address;
+            return "<managed value>" + (bitOffset == 0 ? "" : " + " + LLDBSupport.toSizeString(bitOffset));
         }
 
         if (LLVMNativePointer.isInstance(pointer)) {
@@ -258,13 +246,7 @@ final class LLDBMemoryValue implements LLVMDebugValue {
                 nativePointer = nativePointer.increment(offset / Byte.SIZE);
                 offset = offset % Byte.SIZE;
             }
-
-            String address = nativePointer.toString();
-            if (offset != 0) {
-                address += " + " + offset + " bits";
-            }
-
-            return address;
+            return nativePointer.toString() + (offset == 0 ? "" : " + " + LLDBSupport.toSizeString(offset));
         }
 
         CompilerDirectives.transferToInterpreter();
@@ -392,22 +374,32 @@ final class LLDBMemoryValue implements LLVMDebugValue {
 
     @Override
     public boolean isAlwaysSafeToDereference(long bitOffset) {
+        if (bitOffset == 0L && LLDBSupport.isNestedManagedPointer(pointer)) {
+            return true;
+        }
+
         final Object pointerRead = readAddress(bitOffset);
         if (LLVMManagedPointer.isInstance(pointerRead)) {
             return LLDBSupport.pointsToObjectAccess(LLVMManagedPointer.cast(pointerRead));
         }
-        return false;
+
+        return LLVMPointer.isInstance(pointerRead) && LLVMPointer.cast(pointerRead).getExportType() != null;
+
     }
 
     @Override
     public LLVMDebugValue dereferencePointer(long bitOffset) {
+        if (bitOffset == 0L && LLDBSupport.isNestedManagedPointer(pointer)) {
+            return new LLDBConstant.Pointer(LLVMPointer.cast(LLVMManagedPointer.cast(pointer).getObject()));
+        }
+
         if (!canRead(bitOffset, LLVMDebugTypeConstants.ADDRESS_SIZE) || !isByteAligned(bitOffset)) {
             return null;
         }
 
         final Object pointerRead = readAddress(bitOffset);
         if (LLVMPointer.isInstance(pointerRead)) {
-            return LLDBSupport.getNodeFactory().createDebugDeclarationBuilder().build(pointerRead);
+            return LLVMLanguage.getLLDBSupport().createDebugDeclarationBuilder().build(pointerRead);
         }
 
         return null;
@@ -416,7 +408,7 @@ final class LLDBMemoryValue implements LLVMDebugValue {
     @Override
     public boolean isInteropValue() {
         if (LLVMManagedPointer.isInstance(pointer)) {
-            return !LLDBSupport.pointsToObjectAccess(LLVMManagedPointer.cast(pointer));
+            return !LLDBSupport.pointsToObjectAccess(LLVMManagedPointer.cast(pointer)) && !LLDBSupport.isNestedManagedPointer(pointer);
         }
         return false;
     }

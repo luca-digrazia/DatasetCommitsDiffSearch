@@ -32,6 +32,8 @@ package com.oracle.truffle.llvm.nodes.intrinsics.llvm.debug;
 import java.math.BigInteger;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
@@ -206,7 +208,12 @@ abstract class LLDBConstant implements LLVMDebugValue {
                 }
             }
 
-            return result.getDebugValue(signed);
+            if (signed) {
+                return result.asBigInteger();
+
+            } else {
+                return result.asUnsignedBigInteger();
+            }
         }
 
         @Override
@@ -336,7 +343,7 @@ abstract class LLDBConstant implements LLVMDebugValue {
                     return false;
                 }
 
-                final Object target = managedPointer.getObject();
+                final TruffleObject target = managedPointer.getObject();
                 return LLVMManagedPointer.isInstance(target);
             }
 
@@ -355,7 +362,7 @@ abstract class LLDBConstant implements LLVMDebugValue {
         @Override
         public Object asInteropValue() {
             if (isInteropValue()) {
-                Object foreign = null;
+                TruffleObject foreign = null;
 
                 if (LLVMNativePointer.isInstance(pointer)) {
                     foreign = LLVMLanguage.getLLVMContextReference().get().getManagedObjectForHandle(LLVMNativePointer.cast(pointer));
@@ -381,7 +388,7 @@ abstract class LLDBConstant implements LLVMDebugValue {
                 return LLVMLanguage.getLLVMContextReference().get().isHandle(LLVMNativePointer.cast(pointer));
 
             } else if (LLVMManagedPointer.isInstance(pointer)) {
-                final Object target = LLVMManagedPointer.cast(pointer).getObject();
+                final TruffleObject target = LLVMManagedPointer.cast(pointer).getObject();
 
                 if (LLVMPointer.isInstance(target)) {
                     return false;
@@ -390,33 +397,10 @@ abstract class LLDBConstant implements LLVMDebugValue {
                     return false;
 
                 } else {
-                    return !(target instanceof LLVMTypedForeignObject);
+                    return !(target instanceof LLVMBoxedPrimitive);
                 }
             } else {
                 throw new IllegalStateException("Unsupported Pointer: " + pointer);
-            }
-        }
-
-        @Override
-        public boolean isManagedPointer() {
-            return LLVMManagedPointer.isInstance(pointer);
-        }
-
-        @Override
-        public Object getManagedPointerBase() {
-            if (LLVMManagedPointer.isInstance(pointer)) {
-                return LLVMManagedPointer.cast(pointer).getObject();
-            } else {
-                return null;
-            }
-        }
-
-        @Override
-        public long getManagedPointerOffset() {
-            if (LLVMManagedPointer.isInstance(pointer)) {
-                return LLVMManagedPointer.cast(pointer).getOffset();
-            } else {
-                return 0;
             }
         }
     }
