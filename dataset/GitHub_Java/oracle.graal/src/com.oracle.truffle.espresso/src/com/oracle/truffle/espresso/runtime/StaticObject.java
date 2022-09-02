@@ -921,7 +921,6 @@ public final class StaticObject implements TruffleObject {
         }
     }
 
-    @TruffleBoundary
     @ExportMessage
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
         checkNotForeign();
