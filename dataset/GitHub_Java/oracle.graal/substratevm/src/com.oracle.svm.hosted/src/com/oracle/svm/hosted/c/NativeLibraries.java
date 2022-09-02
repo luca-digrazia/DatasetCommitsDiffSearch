@@ -30,7 +30,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -151,7 +150,6 @@ public final class NativeLibraries {
         try {
             Path jdkLibDir = Paths.get(System.getProperty("java.home")).resolve("lib").toRealPath();
             if (Files.isDirectory(jdkLibDir)) {
-                List<String> defaultBuiltInLibraries = Arrays.asList(PlatformNativeLibrarySupport.defaultBuiltInLibraries);
                 if (Files.list(jdkLibDir).filter(path -> {
                     if (Files.isDirectory(path)) {
                         return false;
@@ -161,8 +159,8 @@ public final class NativeLibraries {
                         return false;
                     }
                     String lib = libName.substring(libPrefix.length(), libName.length() - libSuffix.length());
-                    return defaultBuiltInLibraries.contains(lib);
-                }).count() == defaultBuiltInLibraries.size()) {
+                    return PlatformNativeLibrarySupport.defaultBuiltInLibraries.contains(lib);
+                }).count() == PlatformNativeLibrarySupport.defaultBuiltInLibraries.size()) {
                     staticLibsDir = jdkLibDir;
                 }
             }
