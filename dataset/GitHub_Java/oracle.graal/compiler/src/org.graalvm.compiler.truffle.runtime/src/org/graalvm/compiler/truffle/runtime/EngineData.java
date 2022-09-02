@@ -254,7 +254,7 @@ public final class EngineData {
         this.splittingGrowthLimit = options.get(SplittingGrowthLimit);
 
         // inlining options
-        this.inlining = options.get(Inlining);
+        this.inlining = options.get(Inlining) && options.get(Mode) != EngineModeEnum.LATENCY;
 
         // compilation options
         this.compilation = options.get(Compilation);
