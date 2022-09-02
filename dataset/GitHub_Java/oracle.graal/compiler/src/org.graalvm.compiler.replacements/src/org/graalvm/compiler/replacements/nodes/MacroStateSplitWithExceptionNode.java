@@ -62,7 +62,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
  *
  * See the documentation of {@link MacroInvokable} for more information.
  *
- * @see MacroInvokable
+ * @see MacroNode
  * @see MacroStateSplitNode
  */
 //@formatter:off
