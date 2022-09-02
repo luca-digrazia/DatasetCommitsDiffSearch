@@ -22,19 +22,35 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.tools.lsp.hacks;
+package org.graalvm.tools.lsp.server.utils;
 
-public final class LanguageSpecificHacks {
-    public static boolean enableLanguageSpecificHacks = true;
+import org.graalvm.tools.lsp.server.utils.NearestSectionsFinder.NodeLocationType;
 
-    public static String normalizeSymbol(String definitionSearchSymbol) {
-        if (enableLanguageSpecificHacks) {
-            int idx = definitionSearchSymbol.indexOf('(');
-            if (idx > -1) {
-                return definitionSearchSymbol.substring(0, idx);
-            }
-        }
-        return definitionSearchSymbol;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.SourceSection;
+
+public final class NearestNode {
+
+    private final Node nearestNode;
+    private final SourceSection sourceSection;
+    private final NodeLocationType locationType;
+
+    public NearestNode(Node nearestNode, SourceSection sourceSection, NodeLocationType locationType) {
+        this.nearestNode = nearestNode;
+        this.sourceSection = sourceSection;
+        this.locationType = locationType;
+    }
+
+    public Node getNode() {
+        return nearestNode;
+    }
+
+    public SourceSection getSourceSection() {
+        return sourceSection;
+    }
+
+    public NodeLocationType getLocationType() {
+        return locationType;
     }
 
 }

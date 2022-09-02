@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,11 +40,11 @@
  */
 package com.oracle.truffle.api.instrumentation;
 
+import com.oracle.truffle.api.Scope;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameSlot;
-import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Set of standard tags usable by language agnostic tools. Language should {@link ProvidedTags
@@ -59,7 +59,7 @@ public final class StandardTags {
     }
 
     @SuppressWarnings({"rawtypes"}) static final Class[] ALL_TAGS = new Class[]{StatementTag.class, CallTag.class, RootTag.class, RootBodyTag.class, ExpressionTag.class, TryBlockTag.class,
-                    ReadVariableTag.class, WriteVariableTag.class};
+                    DeclarationTag.class, ReadVariableTag.class, WriteVariableTag.class};
 
     /**
      * Marks program locations that represent a statement of a language.
@@ -159,8 +159,9 @@ public final class StandardTags {
      * <p>
      * Use case descriptions:
      * <ul>
-     * <li><b>Profiler:</b> Marks body of every root that should be profiled and where local
-     * variables are initialized and ready to be retrieved.</li>
+     * <li><b>Profiler:</b> Marks body of every root that should be profiled and where
+     * {@link Scope#getArguments() arguments} and {@link Scope#getReceiver() receiver object} are
+     * initialized and ready to be retrieved.</li>
      * </ul>
      *
      * The RootBodyTag uses the {@link Tag.Identifier identifier} <code>"ROOT_BODY"</code>. A node
@@ -221,14 +222,13 @@ public final class StandardTags {
      * Marks program locations to be considered as try blocks, that are followed by catch. To
      * determine which exceptions are caught by {@link InstrumentableNode} tagged with this tag, the
      * node might provide a {@link InstrumentableNode#getNodeObject() node object} that has
-     * <code>catches</code> function, which takes a an interop value that returns <code>true</code>
-     * for {@link InteropLibrary#isException(Object)} and returns a boolean value indicating whether
-     * the try block catches the exception, or not. When this block catches all exceptions, no
-     * special node object or catches function needs to be provided.
+     * <code>catches</code> function, which takes a {@link TruffleException#getExceptionObject()}
+     * and returns a boolean return value indicating whether the try block catches the exception, or
+     * not. When this block catches all exceptions, no special node object or catches function needs
+     * to be provided.
      *
      * @since 19.0
      */
-    @SuppressWarnings("deprecation")
     @Tag.Identifier("TRY_BLOCK")
     public static final class TryBlockTag extends Tag {
 
@@ -246,6 +246,96 @@ public final class StandardTags {
     }
 
     /**
+     * Marks program locations to be considered as named declarations of the language elements.
+     * Common examples for declarations are:
+     * <ul>
+     * <li>Namespace declaration
+     * <li>Class declaration
+     * <li>Method declaration
+     * <li>Variable declaration
+     * </ul>
+     * Use case descriptions:
+     * <ul>
+     * <li><b>Language Server Protocol:</b> Marks declarations of language elements to support the
+     * <i>hover</i>, <i>symbols</i> and <i>workspaceSymbols</i> requests.</li>
+     *
+     * To determine the name of the declared language element, it is required that a node tagged
+     * with {@link DeclarationTag} also provides a {@link InstrumentableNode#getNodeObject() node
+     * object} that has a <code>name</code> property. Optionally, it can also have a
+     * <code>kind</code> and <code>container</code>. <code>kind</code> is the type of the language
+     * element, for example "variable", "function", "class" or "package". <code>container</code> is
+     * the name of the namespace in which the language element is declared, for example a class name
+     * of a method declaration. Furthermore, nodes tagged with {@link DeclarationTag} have to
+     * provide a {@link Node#getSourceSection() source section}.
+     *
+     * @since 20.0.0
+     */
+    @Tag.Identifier("DECLARATION")
+    public static final class DeclarationTag extends Tag {
+
+        /**
+         * Property of the node object that contains name of the declared element.
+         *
+         * @since 20.0.0
+         */
+        public static final String NAME = "declarationName";
+
+        /**
+         * Property of the node object that contains kind of the declared element. Like
+         * <code>Variable</code>, <code>Function</code>, <code>Module</code>, <code>Class</code>,
+         * <code>Method</code>, etc.
+         *
+         * @since 20.0.0
+         */
+        public static final String KIND = "declarationKind";
+
+        /**
+         * Type of this declaration. The value is a name of other declared element that represents
+         * type of this declared element.
+         *
+         * @since 20.0.0
+         */
+        public static final String TYPE = "declarationType";
+
+        /**
+         * Description of the declared language element.
+         *
+         * @since 20.0.0
+         */
+        public static final String DESCRIPTION = "declarationDescription";
+
+        /**
+         * Whether this declared element is deprecated. The value of this property is
+         * <code>true</code> or <code>false</code>.
+         *
+         * @since 20.0.0
+         */
+        public static final String DEPRECATED = "declarationDeprecated";
+
+        /**
+         * An optional section of the scope where this declared element is valid. An array of 4
+         * integers is expected: &lt;line:column, line:column&gt;, or an empty array for global
+         * scopes. When not defined, a default scope is created from the end of this node's
+         * SourceSection to the end of the instrumentable parent's SourceSection.
+         *
+         * @since 20.0.0
+         */
+        public static final String SCOPE_SECTION = "declarationScopeSection";
+
+        /**
+         * Property of the node object that contains the container name of the declared element.
+         *
+         * @since 20.0.0
+         */
+        public static final String CONTAINER = "declarationContainer";
+
+        private DeclarationTag() {
+            /* No instances */
+        }
+
+    }
+
+    /**
      * Marks program locations to be considered as reads of variables of the languages.
      * <p>
      * Use case descriptions:
@@ -256,18 +346,8 @@ public final class StandardTags {
      * </ul>
      * To determine the name of the variable, it is required that a node tagged with
      * {@link ReadVariableTag} also provides a {@link InstrumentableNode#getNodeObject() node
-     * object} that has {@link ReadVariableTag#NAME} property. The value of that property is either:
-     * <ul>
-     * <li>a String name of the variable (in that case the node's {@link Node#getSourceSection()
-     * source section} is considered as the variable's source section),
-     * <li>an object that provides name and {@link SourceSection} via
-     * {@link InteropLibrary#asString(Object)} and {@link InteropLibrary#getSourceLocation(Object)}
-     * respectively,
-     * <li>an array of objects when multiple variables are being read, where each array element
-     * provides name and {@link SourceSection} as specified above.
-     * </ul>
-     * Furthermore, nodes tagged with {@link ReadVariableTag} have to provide a
-     * {@link Node#getSourceSection() source section}.
+     * object} that has a <code>name</code> property. Furthermore, nodes tagged with
+     * {@link ReadVariableTag} have to provide a {@link Node#getSourceSection() source section}.
      *
      * @since 20.0.0
      */
@@ -298,19 +378,8 @@ public final class StandardTags {
      * </ul>
      * To determine the name of the variable, it is required that a node tagged with
      * {@link WriteVariableTag} also provides a {@link InstrumentableNode#getNodeObject() node
-     * object} that has {@link WriteVariableTag#NAME} property. The value of that property is
-     * either:
-     * <ul>
-     * <li>a String name of the variable (in that case the node's {@link Node#getSourceSection()
-     * source section} is considered as the variable's source section),
-     * <li>an object that provides name and {@link SourceSection} via
-     * {@link InteropLibrary#asString(Object)} and {@link InteropLibrary#getSourceLocation(Object)}
-     * respectively,
-     * <li>an array of objects when multiple variables are being read, where each array element
-     * provides name and {@link SourceSection} as specified above.
-     * </ul>
-     * Furthermore, nodes tagged with {@link WriteVariableTag} have to provide a
-     * {@link Node#getSourceSection() source section}.
+     * object} that has a <code>name</code> property. Furthermore, nodes tagged with
+     * {@link WriteVariableTag} have to provide a {@link Node#getSourceSection() source section}.
      *
      * @since 20.0.0
      */
@@ -323,6 +392,24 @@ public final class StandardTags {
          * @since 20.0.0
          */
         public static final String NAME = "writeVariableName";
+
+        /**
+         * Type of the variable after write operation. The value is a name of other declared element that represents
+         * type of this variable.
+         *
+         * @since 20.0.0
+         */
+        public static final String TYPE = "writeVariableType";
+
+        /**
+         * An optional section of the scope where the written variable of the given type is valid.
+         * An array of 4 integers is expected: &lt;line:column, line:column&gt;, or an empty array
+         * for global scopes. When not defined, a default scope is created from the end of this
+         * node's SourceSection to the end of the instrumentable parent's SourceSection.
+         *
+         * @since 20.0.0
+         */
+        public static final String SCOPE_SECTION = "writeVariableScopeSection";
 
         private WriteVariableTag() {
             /* No instances */
