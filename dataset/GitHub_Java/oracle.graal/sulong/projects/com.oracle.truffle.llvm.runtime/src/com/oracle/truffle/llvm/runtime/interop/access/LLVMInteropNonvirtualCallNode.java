@@ -59,15 +59,7 @@ public abstract class LLVMInteropNonvirtualCallNode extends LLVMNode {
         return LLVMInteropNonvirtualCallNodeGen.create();
     }
 
-    /**
-     * @param receiver
-     * @param type
-     * @param methodName
-     * @param method
-     * @param context
-     * @param argCount
-     * @param llvmFunction
-     */
+    @SuppressWarnings("unused")
     @Specialization(guards = {"argCount==arguments.length", "llvmFunction!=null", "methodName==method.getName()", "type==method.getObjectClass()", "type==asClazz(receiver)"})
     Object doCached(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments, @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @CachedLibrary(limit = "5") InteropLibrary interop, @Cached(value = "arguments.length", allowUncached = true) int argCount,
@@ -77,13 +69,10 @@ public abstract class LLVMInteropNonvirtualCallNode extends LLVMNode {
         return interop.execute(accessSymbolNode.execute(), arguments);
     }
 
-    /**
-     * @param receiver
-     * @param method
-     */
+    @SuppressWarnings("unused")
     @Specialization
     Object doResolve(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments, @CachedContext(LLVMLanguage.class) LLVMContext context,
-                    @CachedLibrary(limit = "5") InteropLibrary interop)
+                    @CachedLibrary(limit = "5") InteropLibrary interop, @Cached(value = "arguments.length", allowUncached = true) int argCount)
                     throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
         Method newMethod = type.findMethodByArgumentsWithSelf(methodName, arguments);
         LLVMFunction newLLVMFunction = getLLVMFunction(context, newMethod, type);
