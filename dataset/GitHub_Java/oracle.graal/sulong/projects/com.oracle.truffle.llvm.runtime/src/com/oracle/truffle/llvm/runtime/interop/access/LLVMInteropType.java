@@ -359,41 +359,38 @@ public abstract class LLVMInteropType implements TruffleObject {
 
         /**
          * @param ident name (String) of the StructMember
-         * @return an array of long values containing offset and a boolean flag, and the type of the
-         *         struct/class that contains the member named as 'ident'
+         * @return an array of LLVMForeignGetSuperElemPtrNode containing the class access nodes, and
+         *         the type of the struct/class that contains the member named as 'ident'
          * @throws UnknownIdentifierException if neither self class nor parent classes contain a
          *             StructMember with name 'ident'
          */
-        public Pair<long[], Struct> getSuperOffsetInformation(String ident) throws UnknownIdentifierException {
+        public Pair<LLVMForeignGetSuperElemPtrNode[], Struct> getSuperElementPtrChain(String ident) throws UnknownIdentifierException {
             for (StructMember member : members) {
                 if (member.name.equals(ident)) {
-                    return Pair.create(new long[0], this);
+                    return Pair.create(new LLVMForeignGetSuperElemPtrNode[0], this);
                 }
             }
-            Pair<LinkedList<Long>, Struct> pair = getMemberAccessList(ident);
+            Pair<LinkedList<LLVMForeignGetSuperElemPtrNode>, Struct> pair = getMemberAccessList(ident);
             if (pair == null) {
                 throw UnknownIdentifierException.create(ident);
             }
-            long[] arr = pair.getLeft().stream().mapToLong(l -> l).toArray();
+            LLVMForeignGetSuperElemPtrNode[] arr = pair.getLeft().toArray(new LLVMForeignGetSuperElemPtrNode[0]);
             return Pair.create(arr, pair.getRight());
         }
 
         @TruffleBoundary
-        private Pair<LinkedList<Long>, Struct> getMemberAccessList(String ident) throws UnknownIdentifierException {
+        private Pair<LinkedList<LLVMForeignGetSuperElemPtrNode>, Struct> getMemberAccessList(String ident) throws UnknownIdentifierException {
             for (StructMember member : members) {
                 if (member.name.equals(ident)) {
                     return Pair.create(new LinkedList<>(), this);
                 }
             }
             for (ClazzInheritance ci : superclasses) {
-                Pair<LinkedList<Long>, Struct> pair = ci.superClass.getMemberAccessList(ident);
+                Pair<LinkedList<LLVMForeignGetSuperElemPtrNode>, Struct> pair = ci.superClass.getMemberAccessList(ident);
                 if (pair != null) {
                     for (StructMember member : members) {
                         if (member.type.equals(ci.superClass)) {
-                            long offset = ci.virtual ? ci.offset : member.startOffset;
-                            offset <<= 1;
-                            offset |= ci.virtual ? 1 : 0;
-                            pair.getLeft().addFirst(offset);
+                            pair.getLeft().addFirst(LLVMForeignGetSuperElemPtrNode.create(member, ci));
                             return pair;
                         }
                     }
@@ -791,6 +788,8 @@ public abstract class LLVMInteropType implements TruffleObject {
                 return convertArray((LLVMSourceArrayLikeType) type);
             } else if (type instanceof LLVMSourceClassLikeType) {
                 return convertClass((LLVMSourceClassLikeType) type);
+            } else if (type instanceof LLVMSourceStructLikeType) {
+                return convertStruct((LLVMSourceStructLikeType) type);
             } else if (type instanceof LLVMSourceStructLikeType) {
                 return convertStruct((LLVMSourceStructLikeType) type);
             } else if (type instanceof LLVMSourceFunctionType) {
