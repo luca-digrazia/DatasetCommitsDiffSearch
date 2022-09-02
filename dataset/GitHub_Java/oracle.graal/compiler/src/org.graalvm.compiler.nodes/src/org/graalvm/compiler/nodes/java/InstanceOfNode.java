@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,37 +28,47 @@ import static org.graalvm.compiler.nodeinfo.InputType.Anchor;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_8;
 
+import java.util.Objects;
+
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
+import org.graalvm.compiler.graph.Node.NodeIntrinsicFactory;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNegationNode;
 import org.graalvm.compiler.nodes.LogicNode;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.UnaryOpLogicNode;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.calc.ConditionalNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
 import org.graalvm.compiler.nodes.extended.AnchoringNode;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
-import org.graalvm.compiler.nodes.spi.Virtualizable;
-import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.type.StampTool;
 
+import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaTypeProfile;
+import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.TriState;
 
 /**
  * The {@code InstanceOfNode} represents an instanceof test.
+ * <p>
+ * A Java instanceof test normally returns {@code false} when the tested object is {@code null}.
+ * However, if the node {@linkplain #allowsNull() allows null}, the test should return {@code true}
+ * for {@code null} values.
  */
 @NodeInfo(cycles = CYCLES_8, size = SIZE_8)
-public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtualizable {
+@NodeIntrinsicFactory
+public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable {
     public static final NodeClass<InstanceOfNode> TYPE = NodeClass.create(InstanceOfNode.class);
 
-    protected final ObjectStamp checkedStamp;
+    private final ObjectStamp checkedStamp;
 
     private JavaTypeProfile profile;
     @OptionalInput(Anchor) protected AnchoringNode anchor;
@@ -72,6 +84,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
         this.anchor = anchor;
         assert (profile == null) || (anchor != null) : "profiles must be anchored";
         assert checkedStamp != null;
+        assert type() != null;
     }
 
     public static LogicNode createAllowNull(TypeReference type, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
@@ -90,7 +103,7 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
     }
 
     public static LogicNode createHelper(ObjectStamp checkedStamp, ValueNode object, JavaTypeProfile profile, AnchoringNode anchor) {
-        LogicNode synonym = findSynonym(checkedStamp, object);
+        LogicNode synonym = findSynonym(checkedStamp, object, NodeView.DEFAULT);
         if (synonym != null) {
             return synonym;
         } else {
@@ -99,13 +112,9 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
     }
 
     @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
-    }
-
-    @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
-        LogicNode synonym = findSynonym(checkedStamp, forValue);
+        NodeView view = NodeView.from(tool);
+        LogicNode synonym = findSynonym(checkedStamp, forValue, view);
         if (synonym != null) {
             return synonym;
         } else {
@@ -113,8 +122,8 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
         }
     }
 
-    public static LogicNode findSynonym(ObjectStamp checkedStamp, ValueNode object) {
-        ObjectStamp inputStamp = (ObjectStamp) object.stamp();
+    public static LogicNode findSynonym(ObjectStamp checkedStamp, ValueNode object, NodeView view) {
+        ObjectStamp inputStamp = (ObjectStamp) object.stamp(view);
         ObjectStamp joinedStamp = (ObjectStamp) checkedStamp.join(inputStamp);
 
         if (joinedStamp.isEmpty()) {
@@ -126,7 +135,9 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
                 // The check will always succeed, the union of the two stamps is equal to the
                 // checked stamp.
                 return LogicConstantNode.tautology();
-            } else if (checkedStamp.type().equals(meetStamp.type()) && checkedStamp.isExactType() == meetStamp.isExactType() && checkedStamp.alwaysNull() == meetStamp.alwaysNull()) {
+            } else if (checkedStamp.alwaysNull()) {
+                return IsNullNode.create(object);
+            } else if (Objects.equals(checkedStamp.type(), meetStamp.type()) && checkedStamp.isExactType() == meetStamp.isExactType() && checkedStamp.alwaysNull() == meetStamp.alwaysNull()) {
                 assert checkedStamp.nonNull() != inputStamp.nonNull();
                 // The only difference makes the null-ness of the value => simplify the check.
                 if (checkedStamp.nonNull()) {
@@ -135,8 +146,8 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
                     return IsNullNode.create(object);
                 }
             }
+            assert checkedStamp.type() != null;
         }
-
         return null;
     }
 
@@ -149,15 +160,6 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
 
     public JavaTypeProfile profile() {
         return profile;
-    }
-
-    @Override
-    public void virtualize(VirtualizerTool tool) {
-        ValueNode alias = tool.getAlias(getValue());
-        TriState fold = tryFold(alias.stamp());
-        if (fold != TriState.UNKNOWN) {
-            tool.replaceWithValue(LogicConstantNode.forBoolean(fold.isTrue(), graph()));
-        }
     }
 
     @Override
@@ -203,5 +205,40 @@ public class InstanceOfNode extends UnaryOpLogicNode implements Lowerable, Virtu
 
     public AnchoringNode getAnchor() {
         return anchor;
+    }
+
+    public ObjectStamp getCheckedStamp() {
+        return checkedStamp;
+    }
+
+    @NodeIntrinsic
+    public static native boolean doInstanceof(@ConstantNodeParameter ResolvedJavaType type, Object object);
+
+    public static boolean intrinsify(GraphBuilderContext b, ResolvedJavaType type, ValueNode object) {
+        InstanceOfNode node = new InstanceOfNode(StampFactory.objectNonNull(TypeReference.create(b.getAssumptions(), type)), object, null, null);
+        node = b.add(node);
+        b.addPush(JavaKind.Int, ConditionalNode.create(node, NodeView.DEFAULT));
+        return true;
+    }
+
+    @Override
+    public TriState implies(boolean thisNegated, LogicNode other) {
+        if (other instanceof InstanceOfNode) {
+            InstanceOfNode instanceOfNode = (InstanceOfNode) other;
+            if (instanceOfNode.getValue() == getValue()) {
+                if (thisNegated) {
+                    // !X => Y
+                    if (this.getCheckedStamp().meet(instanceOfNode.getCheckedStamp()).equals(this.getCheckedStamp())) {
+                        return TriState.get(false);
+                    }
+                } else {
+                    // X => Y
+                    if (instanceOfNode.getCheckedStamp().meet(this.getCheckedStamp()).equals(instanceOfNode.getCheckedStamp())) {
+                        return TriState.get(true);
+                    }
+                }
+            }
+        }
+        return super.implies(thisNegated, other);
     }
 }

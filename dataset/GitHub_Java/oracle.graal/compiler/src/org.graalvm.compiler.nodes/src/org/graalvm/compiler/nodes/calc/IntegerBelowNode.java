@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,22 +24,24 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import org.graalvm.compiler.core.common.NumUtil;
-import org.graalvm.compiler.core.common.calc.Condition;
+import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
+import org.graalvm.compiler.nodes.LogicNegationNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.CodeUtil;
-import org.graalvm.compiler.options.OptionValues;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.TriState;
 
 @NodeInfo(shortName = "|<|")
 public final class IntegerBelowNode extends IntegerLowerThanNode {
@@ -50,21 +54,23 @@ public final class IntegerBelowNode extends IntegerLowerThanNode {
         assert y.stamp(NodeView.DEFAULT) instanceof IntegerStamp;
     }
 
-    public static LogicNode create(ValueNode x, ValueNode y) {
-        return OP.create(x, y);
+    public static LogicNode create(ValueNode x, ValueNode y, NodeView view) {
+        return OP.create(x, y, view);
     }
 
-    public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, ValueNode x, ValueNode y) {
-        LogicNode value = OP.canonical(constantReflection, metaAccess, options, smallestCompareWidth, OP.getCondition(), false, x, y);
+    public static LogicNode create(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, ValueNode x, ValueNode y,
+                    NodeView view) {
+        LogicNode value = OP.canonical(constantReflection, metaAccess, options, smallestCompareWidth, OP.getCondition(), false, x, y, view);
         if (value != null) {
             return value;
         }
-        return create(x, y);
+        return create(x, y, view);
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), OP.getCondition(), false, forX, forY);
+        NodeView view = NodeView.from(tool);
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), OP.getCondition(), false, forX, forY, view);
         if (value != null) {
             return value;
         }
@@ -73,9 +79,60 @@ public final class IntegerBelowNode extends IntegerLowerThanNode {
 
     public static class BelowOp extends LowerOp {
         @Override
-        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
+        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view) {
             assert newX.stamp(NodeView.DEFAULT) instanceof IntegerStamp && newY.stamp(NodeView.DEFAULT) instanceof IntegerStamp;
             return new IntegerBelowNode(newX, newY);
+        }
+
+        @Override
+        protected LogicNode findSynonym(ValueNode forX, ValueNode forY, NodeView view) {
+            LogicNode result = super.findSynonym(forX, forY, view);
+            if (result != null) {
+                return result;
+            }
+            if (forX.stamp(view) instanceof IntegerStamp) {
+                assert forY.stamp(view) instanceof IntegerStamp;
+                IntegerStamp xStamp = (IntegerStamp) forX.stamp(view);
+                IntegerStamp yStamp = (IntegerStamp) forY.stamp(view);
+                int bits = xStamp.getBits();
+                assert yStamp.getBits() == bits;
+                LogicNode logic = canonicalizeRangeFlip(forX, forY, bits, false, view);
+                if (logic != null) {
+                    return logic;
+                }
+                if (xStamp.isPositive() && forY instanceof ConditionalNode && ((ConditionalNode) forY).condition() instanceof IntegerBelowNode) {
+                    logic = canonicalizeBelowCanonicalOfBelow(forX, (ConditionalNode) forY, view);
+                    if (logic != null) {
+                        return logic;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static LogicNode canonicalizeBelowCanonicalOfBelow(ValueNode forX, ConditionalNode forY, NodeView view) {
+            IntegerBelowNode below = (IntegerBelowNode) forY.condition();
+            ValueNode n = below.getX();
+            if (((IntegerStamp) n.stamp(view)).isPositive() && forY.trueValue().isDefaultConstant() && below.getY().isJavaConstant() && forY.falseValue() instanceof AddNode) {
+                AddNode add = (AddNode) forY.falseValue();
+                if (add.getX() == below.getX() && add.getY().isJavaConstant() && add.getY().asJavaConstant().asLong() < 0 &&
+                                add.getY().asJavaConstant().asLong() == -below.getY().asJavaConstant().asLong()) {
+                    ValueNode c = below.getY();
+                    /*
+                     * We have:
+                     *
+                     * x |<| (n |<| C ? 0 : n - C)
+                     *
+                     * where we know that both x (checked by the caller) and n are non-negative.
+                     * This is the same as:
+                     *
+                     * x < n - C
+                     */
+                    return IntegerLessThanNode.create(forX, SubNode.create(n, c, view), view);
+                }
+            }
+
+            return null;
         }
 
         @Override
@@ -124,13 +181,45 @@ public final class IntegerBelowNode extends IntegerLowerThanNode {
         }
 
         @Override
-        protected Condition getCondition() {
-            return Condition.BT;
+        protected CanonicalCondition getCondition() {
+            return CanonicalCondition.BT;
         }
 
         @Override
         protected IntegerLowerThanNode createNode(ValueNode x, ValueNode y) {
             return new IntegerBelowNode(x, y);
         }
+    }
+
+    @Override
+    public TriState implies(boolean thisNegated, LogicNode other) {
+        if (other instanceof LogicNegationNode) {
+            // Unwrap negations.
+            TriState result = implies(thisNegated, ((LogicNegationNode) other).getValue());
+            if (result.isKnown()) {
+                return TriState.get(!result.toBoolean());
+            }
+        }
+        if (!thisNegated) {
+            if (other instanceof IntegerLessThanNode) {
+                IntegerLessThanNode integerLessThanNode = (IntegerLessThanNode) other;
+                IntegerStamp stampL = (IntegerStamp) this.getY().stamp(NodeView.DEFAULT);
+                // if L >= 0:
+                if (stampL.isPositive()) { // L >= 0
+                    if (this.getX() == integerLessThanNode.getX()) {
+                        // x |<| L implies x < L
+                        if (this.getY() == integerLessThanNode.getY()) {
+                            return TriState.TRUE;
+                        }
+                        // x |<| L implies !(x < 0)
+                        if (integerLessThanNode.getY().isConstant() &&
+                                        IntegerStamp.OPS.getAdd().isNeutral(integerLessThanNode.getY().asConstant())) {
+                            return TriState.FALSE;
+                        }
+                    }
+                }
+            }
+        }
+        return super.implies(thisNegated, other);
     }
 }

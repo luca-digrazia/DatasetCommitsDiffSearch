@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,8 +25,6 @@
 package org.graalvm.compiler.core.phases;
 
 import org.graalvm.compiler.core.common.GraalOptions;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
-import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.loop.phases.ConvertDeoptimizeToGuardPhase;
 import org.graalvm.compiler.loop.phases.LoopFullUnrollPhase;
 import org.graalvm.compiler.loop.phases.LoopPartialUnrollPhase;
@@ -34,8 +32,13 @@ import org.graalvm.compiler.loop.phases.LoopPeelingPhase;
 import org.graalvm.compiler.loop.phases.LoopSafepointEliminationPhase;
 import org.graalvm.compiler.loop.phases.LoopUnswitchingPhase;
 import org.graalvm.compiler.nodes.memory.MemoryMap;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Simplifiable;
+import org.graalvm.compiler.nodes.spi.SimplifierTool;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.phases.BasePhase;
+import org.graalvm.compiler.phases.common.BoxNodeOptimizationPhase;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.ConditionalEliminationPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
@@ -46,9 +49,8 @@ import org.graalvm.compiler.phases.common.ReassociationPhase;
 import org.graalvm.compiler.phases.common.UseTrappingNullChecksPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
-import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
-import org.graalvm.word.LocationIdentity;
+import org.graalvm.compiler.virtual.phases.ea.ReadEliminationPhase;
 
 /**
  * This class enumerates the most important platform-independent optimizations in the GraalVM CE
@@ -67,8 +69,8 @@ public enum CEOptimization {
      *
      * This phase is unconditionally enabled.
      *
-     * @see org.graalvm.compiler.graph.spi.Canonicalizable#canonical(CanonicalizerTool)
-     * @see org.graalvm.compiler.graph.Node#simplify(SimplifierTool)
+     * @see Canonicalizable#canonical(CanonicalizerTool)
+     * @see Simplifiable#simplify(SimplifierTool)
      * @see org.graalvm.compiler.graph.Node.ValueNumberable
      *
      */
@@ -143,14 +145,14 @@ public enum CEOptimization {
     FloatingReads(GraalOptions.OptFloatingReads, FloatingReadPhase.class),
 
     /**
-     * {@link EarlyReadEliminationPhase} tries to remove redundant memory access operations (e.g.,
+     * {@link ReadEliminationPhase} tries to remove redundant memory access operations (e.g.,
      * successive reads of the same Java field are redundant). Its uses a control-flow sensitive
      * analysis.
      *
      * This phase is enabled by default and can be disabled with
      * {@link GraalOptions#OptReadElimination}.
      */
-    ReadElimination(GraalOptions.OptReadElimination, EarlyReadEliminationPhase.class),
+    ReadElimination(GraalOptions.OptReadElimination, ReadEliminationPhase.class),
 
     /**
      * {@link PartialEscapePhase} is a control flow sensitive algorithm that can replace object and
@@ -277,7 +279,16 @@ public enum CEOptimization {
      *
      * This phase is enabled by default and can be disabled with {@link GraalOptions#PartialUnroll}.
      */
-    PartialLoopUnrolling(GraalOptions.PartialUnroll, LoopPartialUnrollPhase.class);
+    PartialLoopUnrolling(GraalOptions.PartialUnroll, LoopPartialUnrollPhase.class),
+
+    /**
+     * {@link BoxNodeOptimizationPhase} is a compiler optimization for Java box operations. The
+     * phase tries to re-use dominating boxed/unboxed values to avoid repetitive boxing while it
+     * respects the caching behavior specified by {@link Integer#valueOf(int)}.
+     *
+     * This phase is enabled by default.
+     */
+    BoxNodeOptimization(null, BoxNodeOptimizationPhase.class);
 
     private final OptionKey<?> option;
     private final Class<? extends BasePhase<?>> optimization;

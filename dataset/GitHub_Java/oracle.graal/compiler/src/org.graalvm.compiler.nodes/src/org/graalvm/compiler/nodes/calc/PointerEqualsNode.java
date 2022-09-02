@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,30 +24,31 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import org.graalvm.compiler.core.common.calc.Condition;
+import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable.BinaryCommutative;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Canonicalizable.BinaryCommutative;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.LogicConstantNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.extended.BoxNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.extended.LoadMethodNode;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
+import org.graalvm.compiler.options.OptionValues;
 
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.TriState;
-import org.graalvm.compiler.options.OptionValues;
 
 @NodeInfo(shortName = "==")
 public class PointerEqualsNode extends CompareNode implements BinaryCommutative<ValueNode> {
@@ -57,8 +60,8 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
         this(TYPE, x, y);
     }
 
-    public static LogicNode create(ValueNode x, ValueNode y) {
-        LogicNode result = findSynonym(x, y);
+    public static LogicNode create(ValueNode x, ValueNode y, NodeView view) {
+        LogicNode result = findSynonym(x, y, view);
         if (result != null) {
             return result;
         }
@@ -66,14 +69,15 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
     }
 
     protected PointerEqualsNode(NodeClass<? extends PointerEqualsNode> c, ValueNode x, ValueNode y) {
-        super(c, Condition.EQ, false, x, y);
-        assert x.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp;
-        assert y.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp;
+        super(c, CanonicalCondition.EQ, false, x, y);
+        assert x.stamp(NodeView.DEFAULT).isPointerStamp();
+        assert y.stamp(NodeView.DEFAULT).isPointerStamp();
     }
 
     @Override
     public Node canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
-        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), Condition.EQ, false, forX, forY);
+        NodeView view = NodeView.from(tool);
+        ValueNode value = OP.canonical(tool.getConstantReflection(), tool.getMetaAccess(), tool.getOptions(), tool.smallestCompareWidth(), CanonicalCondition.EQ, false, forX, forY, view);
         if (value != null) {
             return value;
         }
@@ -87,9 +91,9 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
          * could select a certain method and if so, returns {@code true} if the answer is guaranteed
          * to be false. Otherwise, returns {@code false}.
          */
-        private static boolean isAlwaysFailingVirtualDispatchTest(Condition condition, ValueNode forX, ValueNode forY) {
+        private static boolean isAlwaysFailingVirtualDispatchTest(CanonicalCondition condition, ValueNode forX, ValueNode forY) {
             if (forY.isConstant()) {
-                if (forX instanceof LoadMethodNode && condition == Condition.EQ) {
+                if (forX instanceof LoadMethodNode && condition == CanonicalCondition.EQ) {
                     LoadMethodNode lm = ((LoadMethodNode) forX);
                     if (lm.getMethod().getEncoding().equals(forY.asConstant())) {
                         if (lm.getHub() instanceof LoadHubNode) {
@@ -111,35 +115,60 @@ public class PointerEqualsNode extends CompareNode implements BinaryCommutative<
         }
 
         @Override
-        public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth, Condition condition,
-                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY) {
-            LogicNode result = findSynonym(forX, forY);
+        public LogicNode canonical(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, OptionValues options, Integer smallestCompareWidth,
+                        CanonicalCondition condition,
+                        boolean unorderedIsTrue, ValueNode forX, ValueNode forY, NodeView view) {
+            LogicNode result = findSynonym(forX, forY, view);
             if (result != null) {
                 return result;
             }
             if (isAlwaysFailingVirtualDispatchTest(condition, forX, forY)) {
                 return LogicConstantNode.contradiction();
             }
-            return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY);
+            return super.canonical(constantReflection, metaAccess, options, smallestCompareWidth, condition, unorderedIsTrue, forX, forY, view);
         }
 
         @Override
-        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue) {
+        protected CompareNode duplicateModified(ValueNode newX, ValueNode newY, boolean unorderedIsTrue, NodeView view) {
             return new PointerEqualsNode(newX, newY);
         }
     }
 
-    public static LogicNode findSynonym(ValueNode forX, ValueNode forY) {
+    public static LogicNode findSynonym(ValueNode forX, ValueNode forY, NodeView view) {
         if (GraphUtil.unproxify(forX) == GraphUtil.unproxify(forY)) {
             return LogicConstantNode.tautology();
-        } else if (forX.stamp(NodeView.DEFAULT).alwaysDistinct(forY.stamp(NodeView.DEFAULT))) {
+        } else if (forX.stamp(view).alwaysDistinct(forY.stamp(view))) {
             return LogicConstantNode.contradiction();
-        } else if (((AbstractPointerStamp) forX.stamp(NodeView.DEFAULT)).alwaysNull()) {
-            return IsNullNode.create(forY);
-        } else if (((AbstractPointerStamp) forY.stamp(NodeView.DEFAULT)).alwaysNull()) {
-            return IsNullNode.create(forX);
+        } else if (forX.stamp(view) instanceof AbstractPointerStamp && ((AbstractPointerStamp) forX.stamp(view)).alwaysNull()) {
+            return nullSynonym(forY, forX);
+        } else if (forY.stamp(view) instanceof AbstractPointerStamp && ((AbstractPointerStamp) forY.stamp(view)).alwaysNull()) {
+            return nullSynonym(forX, forY);
+        } else if (forX instanceof BoxNode && forY instanceof BoxNode) {
+            /*
+             * We have a fast path here for box comparisons of constants to avoid wasting time in
+             * PEA / lowering later.
+             */
+            BoxNode boxX = (BoxNode) forX;
+            BoxNode boxY = (BoxNode) forY;
+            if (boxX.getValue().isConstant() && boxY.getValue().isConstant()) {
+                if (boxX.getBoxingKind() != boxY.getBoxingKind()) {
+                    return LogicConstantNode.contradiction();
+                }
+                if (boxX.getValue().asConstant().equals(boxY.getValue().asConstant())) {
+                    return LogicConstantNode.tautology();
+                } else {
+                    return LogicConstantNode.contradiction();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static LogicNode nullSynonym(ValueNode nonNullValue, ValueNode nullValue) {
+        if (nullValue.isConstant()) {
+            return IsNullNode.create(nonNullValue, nullValue.asJavaConstant());
         } else {
-            return null;
+            return IsNullNode.create(nonNullValue);
         }
     }
 

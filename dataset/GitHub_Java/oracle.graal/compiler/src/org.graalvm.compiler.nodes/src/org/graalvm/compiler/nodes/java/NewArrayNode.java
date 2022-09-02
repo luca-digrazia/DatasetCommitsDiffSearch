@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,14 +26,15 @@ package org.graalvm.compiler.nodes.java;
 
 import java.util.Collections;
 
-import org.graalvm.compiler.core.common.calc.Condition;
+import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
+import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Simplifiable;
-import org.graalvm.compiler.graph.spi.SimplifierTool;
+import org.graalvm.compiler.nodes.spi.Simplifiable;
+import org.graalvm.compiler.nodes.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
@@ -95,32 +98,28 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
         ValueNode lengthAlias = tool.getAlias(length());
         if (lengthAlias.asConstant() != null) {
             int constantLength = lengthAlias.asJavaConstant().asInt();
-            if (constantLength >= 0 && constantLength < tool.getMaximumEntryCount()) {
+            if (constantLength >= 0 && constantLength <= tool.getMaximumEntryCount()) {
                 ValueNode[] state = new ValueNode[constantLength];
-                ConstantNode defaultForKind = constantLength == 0 ? null : defaultElementValue();
-                for (int i = 0; i < constantLength; i++) {
-                    state[i] = defaultForKind;
+                if (constantLength > 0) {
+                    ConstantNode defaultForKind = ConstantNode.defaultForKind(tool.getMetaAccessExtensionProvider().getStorageKind(elementType()), graph());
+                    for (int i = 0; i < constantLength; i++) {
+                        state[i] = defaultForKind;
+                    }
                 }
-                VirtualObjectNode virtualObject = createVirtualArrayNode(constantLength);
+
+                VirtualObjectNode virtualObject = new VirtualArrayNode(elementType(), constantLength);
                 tool.createVirtualObject(virtualObject, state, Collections.<MonitorIdNode> emptyList(), false);
                 tool.replaceWithVirtual(virtualObject);
             }
         }
     }
 
-    protected VirtualArrayNode createVirtualArrayNode(int constantLength) {
-        return new VirtualArrayNode(elementType(), constantLength);
-    }
-
-    /* Factored out in a separate method so that subclasses can override it. */
-    protected ConstantNode defaultElementValue() {
-        return ConstantNode.defaultForKind(elementType().getJavaKind(), graph());
-    }
-
     @Override
+    @SuppressWarnings("try")
     public void simplify(SimplifierTool tool) {
         if (hasNoUsages()) {
-            Stamp lengthStamp = length().stamp(NodeView.DEFAULT);
+            NodeView view = NodeView.from(tool);
+            Stamp lengthStamp = length().stamp(view);
             if (lengthStamp instanceof IntegerStamp) {
                 IntegerStamp lengthIntegerStamp = (IntegerStamp) lengthStamp;
                 if (lengthIntegerStamp.isPositive()) {
@@ -131,10 +130,12 @@ public class NewArrayNode extends AbstractNewArrayNode implements VirtualizableA
             // Should be areFrameStatesAtSideEffects but currently SVM will complain about
             // RuntimeConstraint
             if (graph().getGuardsStage().allowsFloatingGuards()) {
-                LogicNode lengthNegativeCondition = CompareNode.createCompareNode(graph(), Condition.LT, length(), ConstantNode.forInt(0, graph()), tool.getConstantReflection());
-                // we do not have a non-deopting path for that at the moment so action=None.
-                FixedGuardNode guard = graph().add(new FixedGuardNode(lengthNegativeCondition, DeoptimizationReason.RuntimeConstraint, DeoptimizationAction.None, true));
-                graph().replaceFixedWithFixed(this, guard);
+                try (DebugCloseable context = this.withNodeSourcePosition()) {
+                    LogicNode lengthNegativeCondition = CompareNode.createCompareNode(graph(), CanonicalCondition.LT, length(), ConstantNode.forInt(0, graph()), tool.getConstantReflection(), view);
+                    // we do not have a non-deopting path for that at the moment so action=None.
+                    FixedGuardNode guard = graph().add(new FixedGuardNode(lengthNegativeCondition, DeoptimizationReason.RuntimeConstraint, DeoptimizationAction.None, true));
+                    graph().replaceFixedWithFixed(this, guard);
+                }
             }
         }
     }

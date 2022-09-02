@@ -36,13 +36,13 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
+import org.graalvm.compiler.nodes.spi.Simplifiable;
+import org.graalvm.compiler.nodes.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.StructuredGraph.FrameStateVerificationFeature;
 import org.graalvm.compiler.nodes.memory.MemoryPhiNode;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
-import org.graalvm.compiler.nodes.spi.Simplifiable;
-import org.graalvm.compiler.nodes.spi.SimplifierTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
 /**
@@ -223,46 +223,41 @@ public abstract class AbstractMergeNode extends BeginStateSplitNode implements I
                 }
             }
             graph().reduceTrivialMerge(this);
-        }
-    }
-
-    @SuppressWarnings("try")
-    public static boolean duplicateReturnThroughMerge(MergeNode merge) {
-        assert merge.graph() != null;
-        FixedNode next = merge.next();
-        if (next instanceof ReturnNode) {
-            ReturnNode returnNode = (ReturnNode) next;
-            if (merge.anchored().isNotEmpty() || returnNode.getMemoryMap() != null) {
-                return false;
+        } else if (currentNext instanceof ReturnNode) {
+            ReturnNode returnNode = (ReturnNode) currentNext;
+            if (anchored().isNotEmpty() || returnNode.getMemoryMap() != null) {
+                return;
             }
-            List<PhiNode> phis = merge.phis().snapshot();
+            List<PhiNode> phis = phis().snapshot();
             for (PhiNode phi : phis) {
                 for (Node usage : phi.usages()) {
                     if (usage != returnNode && !(usage instanceof FrameState)) {
-                        return false;
+                        return;
                     }
                 }
             }
-            ValuePhiNode returnValuePhi = returnNode.result() == null || !merge.isPhiAtMerge(returnNode.result()) ? null : (ValuePhiNode) returnNode.result();
-            List<EndNode> endNodes = merge.forwardEnds().snapshot();
+
+            ValuePhiNode returnValuePhi = returnNode.result() == null || !isPhiAtMerge(returnNode.result()) ? null : (ValuePhiNode) returnNode.result();
+            List<EndNode> endNodes = forwardEnds().snapshot();
             for (EndNode end : endNodes) {
                 try (DebugCloseable position = returnNode.withNodeSourcePosition()) {
-                    ReturnNode newReturn = merge.graph().add(new ReturnNode(returnValuePhi == null ? returnNode.result() : returnValuePhi.valueAt(end)));
+                    ReturnNode newReturn = graph().add(new ReturnNode(returnValuePhi == null ? returnNode.result() : returnValuePhi.valueAt(end)));
+                    if (tool != null) {
+                        tool.addToWorkList(end.predecessor());
+                    }
                     end.replaceAtPredecessor(newReturn);
                 }
             }
-            GraphUtil.killCFG(merge);
+            GraphUtil.killCFG(this);
             for (EndNode end : endNodes) {
                 end.safeDelete();
             }
             for (PhiNode phi : phis) {
-                if (phi.isAlive() && phi.hasNoUsages()) {
+                if (tool.allUsagesAvailable() && phi.isAlive() && phi.hasNoUsages()) {
                     GraphUtil.killWithUnusedFloatingInputs(phi);
                 }
             }
-            return true;
         }
-        return false;
     }
 
     protected boolean verifyState() {

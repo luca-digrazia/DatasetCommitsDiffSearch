@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -40,13 +42,15 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeSuccessorList;
-import org.graalvm.compiler.graph.spi.SimplifierTool;
+import org.graalvm.compiler.nodes.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.ControlSplitNode;
 import org.graalvm.compiler.nodes.NodeView;
+import org.graalvm.compiler.nodes.ProfileData.BranchProbabilityData;
+import org.graalvm.compiler.nodes.ProfileData.SwitchProbabilityData;
 import org.graalvm.compiler.nodes.ValueNode;
 
 import jdk.vm.ci.meta.Constant;
@@ -68,9 +72,9 @@ public abstract class SwitchNode extends ControlSplitNode {
     @Successor protected NodeSuccessorList<AbstractBeginNode> successors;
     @Input protected ValueNode value;
 
-    // do not change the contents of these arrays:
-    protected final double[] keyProbabilities;
+    // do not change the contents of keySuccessors, nor of profileData.getKeyProbabilities()
     protected final int[] keySuccessors;
+    protected SwitchProbabilityData profileData;
 
     /**
      * Constructs a new Switch.
@@ -78,20 +82,25 @@ public abstract class SwitchNode extends ControlSplitNode {
      * @param value the instruction that provides the value to be switched over
      * @param successors the list of successors of this switch
      */
-    protected SwitchNode(NodeClass<? extends SwitchNode> c, ValueNode value, AbstractBeginNode[] successors, int[] keySuccessors, double[] keyProbabilities) {
+    protected SwitchNode(NodeClass<? extends SwitchNode> c, ValueNode value, AbstractBeginNode[] successors, int[] keySuccessors, SwitchProbabilityData profileData) {
         super(c, StampFactory.forVoid());
-        assert value.stamp(NodeView.DEFAULT).getStackKind().isNumericInteger() || value.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp : value.stamp(NodeView.DEFAULT) + " key not supported by SwitchNode";
-        assert keySuccessors.length == keyProbabilities.length;
+        assert value.stamp(NodeView.DEFAULT).getStackKind().isNumericInteger() || value.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp : value.stamp(NodeView.DEFAULT) +
+                        " key not supported by SwitchNode";
+        assert keySuccessors.length == profileData.getKeyProbabilities().length;
         this.successors = new NodeSuccessorList<>(this, successors);
         this.value = value;
         this.keySuccessors = keySuccessors;
-        this.keyProbabilities = keyProbabilities;
+        this.profileData = profileData;
         assert assertProbabilities();
+    }
+
+    protected double[] getKeyProbabilities() {
+        return profileData.getKeyProbabilities();
     }
 
     private boolean assertProbabilities() {
         double total = 0;
-        for (double d : keyProbabilities) {
+        for (double d : getKeyProbabilities()) {
             total += d;
             assert d >= 0.0 : "Cannot have negative probabilities in switch node: " + d;
         }
@@ -109,17 +118,19 @@ public abstract class SwitchNode extends ControlSplitNode {
         double sum = 0;
         for (int i = 0; i < keySuccessors.length; i++) {
             if (successors.get(keySuccessors[i]) == successor) {
-                sum += keyProbabilities[i];
+                sum += getKeyProbabilities()[i];
             }
         }
         return sum;
     }
 
     @Override
-    public boolean setProbability(AbstractBeginNode successor, double value) {
-        assert value <= 1.0 && value >= 0.0 : value;
+    public boolean setProbability(AbstractBeginNode successor, BranchProbabilityData successorProfileData) {
+        double newProbability = successorProfileData.getDesignatedSuccessorProbability();
+        assert newProbability <= 1.0 && newProbability >= 0.0 : newProbability;
         assert assertProbabilities();
 
+        double[] keyProbabilities = getKeyProbabilities().clone();
         double sum = 0;
         double otherSum = 0;
         for (int i = 0; i < keySuccessors.length; i++) {
@@ -135,7 +146,7 @@ public abstract class SwitchNode extends ControlSplitNode {
             return false;
         }
 
-        double delta = value - sum;
+        double delta = newProbability - sum;
 
         for (int i = 0; i < keySuccessors.length; i++) {
             if (successors.get(keySuccessors[i]) == successor) {
@@ -144,8 +155,14 @@ public abstract class SwitchNode extends ControlSplitNode {
                 keyProbabilities[i] = Math.max(0.0, keyProbabilities[i] - (delta * keyProbabilities[i]) / otherSum);
             }
         }
+        profileData = SwitchProbabilityData.create(keyProbabilities, profileData.getProfileSource().combine(successorProfileData.getProfileSource()));
         assert assertProbabilities();
         return true;
+    }
+
+    @Override
+    public SwitchProbabilityData getProfileData() {
+        return profileData;
     }
 
     public ValueNode value() {
@@ -191,7 +208,14 @@ public abstract class SwitchNode extends ControlSplitNode {
      * Returns the probability of the key at the given index.
      */
     public double keyProbability(int i) {
-        return keyProbabilities[i];
+        return getKeyProbabilities()[i];
+    }
+
+    /**
+     * Returns the probability of taking the default branch.
+     */
+    public double defaultProbability() {
+        return getKeyProbabilities()[getKeyProbabilities().length - 1];
     }
 
     /**
@@ -227,7 +251,7 @@ public abstract class SwitchNode extends ControlSplitNode {
 
     @Override
     public AbstractBeginNode getPrimarySuccessor() {
-        return this.defaultSuccessor();
+        return null;
     }
 
     /**
@@ -280,4 +304,7 @@ public abstract class SwitchNode extends ControlSplitNode {
         }
     }
 
+    public int[] getKeySuccessors() {
+        return keySuccessors.clone();
+    }
 }

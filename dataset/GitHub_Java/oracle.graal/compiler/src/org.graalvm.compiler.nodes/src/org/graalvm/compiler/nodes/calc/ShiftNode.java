@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,16 +26,14 @@ package org.graalvm.compiler.nodes.calc;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
-
-import java.io.Serializable;
-import java.util.function.Function;
+import static org.graalvm.compiler.nodes.calc.BinaryArithmeticNode.getArithmeticOpTable;
 
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.ShiftOp;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ArithmeticOperation;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -53,25 +53,21 @@ public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticOper
 
     @SuppressWarnings("rawtypes") public static final NodeClass<ShiftNode> TYPE = NodeClass.create(ShiftNode.class);
 
-    protected interface SerializableShiftFunction<T> extends Function<ArithmeticOpTable, ShiftOp<T>>, Serializable {
-    }
-
-    protected final SerializableShiftFunction<OP> getOp;
-
     /**
      * Creates a new shift operation.
      *
      * @param x the first input value
      * @param s the second input value
      */
-    protected ShiftNode(NodeClass<? extends ShiftNode<OP>> c, SerializableShiftFunction<OP> getOp, ValueNode x, ValueNode s) {
-        super(c, getOp.apply(ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT))).foldStamp(x.stamp(NodeView.DEFAULT), (IntegerStamp) s.stamp(NodeView.DEFAULT)), x, s);
+    protected ShiftNode(NodeClass<? extends ShiftNode<OP>> c, ShiftOp<OP> opForStampComputation, ValueNode x, ValueNode s) {
+        super(c, opForStampComputation.foldStamp(x.stamp(NodeView.DEFAULT), (IntegerStamp) s.stamp(NodeView.DEFAULT)), x, s);
         assert ((IntegerStamp) s.stamp(NodeView.DEFAULT)).getBits() == 32;
-        this.getOp = getOp;
     }
 
+    protected abstract ShiftOp<OP> getOp(ArithmeticOpTable table);
+
     protected final ShiftOp<OP> getOp(ValueNode forValue) {
-        return getOp.apply(ArithmeticOpTable.forStamp(forValue.stamp(NodeView.DEFAULT)));
+        return getOp(getArithmeticOpTable(forValue));
     }
 
     @Override
@@ -94,6 +90,7 @@ public abstract class ShiftNode<OP> extends BinaryNode implements ArithmeticOper
         return this;
     }
 
+    @SuppressWarnings("unused")
     public static <OP> ValueNode canonical(ShiftOp<OP> op, Stamp stamp, ValueNode forX, ValueNode forY, NodeView view) {
         if (forX.isConstant() && forY.isConstant()) {
             JavaConstant amount = forY.asJavaConstant();

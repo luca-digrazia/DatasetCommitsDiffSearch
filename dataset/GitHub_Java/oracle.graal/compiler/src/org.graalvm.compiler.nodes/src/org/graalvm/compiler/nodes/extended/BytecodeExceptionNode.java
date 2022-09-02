@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.nodes.extended;
 
-import static org.graalvm.compiler.nodeinfo.InputType.Memory;
-import static org.graalvm.compiler.nodeinfo.InputType.Value;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_8;
 
@@ -55,8 +53,7 @@ import jdk.vm.ci.meta.MetaAccessProvider;
  * either a {@linkplain ForeignCallDescriptor foreign} call or a pre-allocated exception object.
  */
 // @formatter:off
-@NodeInfo(allowedUsageTypes = {Value, Memory},
-          cycles = CYCLES_8,
+@NodeInfo(cycles = CYCLES_8,
           cyclesRationale = "Node will be lowered to a foreign call.",
           size = SIZE_8)
 // @formatter:on

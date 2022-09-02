@@ -28,7 +28,7 @@ import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -98,18 +98,4 @@ public abstract class BinaryOpLogicNode extends LogicNode implements LIRLowerabl
     public abstract Stamp getSucceedingStampForY(boolean negated, Stamp xStamp, Stamp yStamp);
 
     public abstract TriState tryFold(Stamp xStamp, Stamp yStamp);
-
-    @Override
-    public TriState implies(boolean thisNegated, LogicNode other) {
-        if (other instanceof LogicNegationNode) {
-            return flip(this.implies(thisNegated, ((LogicNegationNode) other).getValue()));
-        }
-        if (getClass() == other.getClass()) {
-            BinaryOpLogicNode binOp = (BinaryOpLogicNode) other;
-            if (getX() == binOp.getX() && getY() == binOp.getY()) {
-                return TriState.get(!thisNegated);
-            }
-        }
-        return super.implies(thisNegated, other);
-    }
 }

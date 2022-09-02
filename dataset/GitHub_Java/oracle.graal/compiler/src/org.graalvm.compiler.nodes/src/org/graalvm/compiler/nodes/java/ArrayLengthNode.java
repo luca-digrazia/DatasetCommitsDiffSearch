@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,29 +27,38 @@ package org.graalvm.compiler.nodes.java;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_2;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
+import org.graalvm.compiler.core.common.type.AbstractObjectStamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.graph.Node.NodeIntrinsicFactory;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
+import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
+import org.graalvm.compiler.nodes.NodeView;
+import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.spi.ArrayLengthProvider;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
 import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
 
 import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
  * The {@code ArrayLength} instruction gets the length of an array.
  */
 @NodeInfo(cycles = CYCLES_2, size = SIZE_1)
+@NodeIntrinsicFactory
 public final class ArrayLengthNode extends FixedWithNextNode implements Canonicalizable.Unary<ValueNode>, Lowerable, Virtualizable {
 
     public static final NodeClass<ArrayLengthNode> TYPE = NodeClass.create(ArrayLengthNode.class);
@@ -70,12 +79,12 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
     }
 
     public static ValueNode create(ValueNode forValue, ConstantReflectionProvider constantReflection) {
-        if (forValue instanceof NewArrayNode) {
-            NewArrayNode newArray = (NewArrayNode) forValue;
+        if (forValue instanceof AbstractNewArrayNode) {
+            AbstractNewArrayNode newArray = (AbstractNewArrayNode) forValue;
             return newArray.length();
         }
 
-        ValueNode length = readArrayLengthConstant(forValue, constantReflection);
+        ValueNode length = readArrayLength(forValue, constantReflection);
         if (length != null) {
             return length;
         }
@@ -84,6 +93,9 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forValue) {
+        if (forValue.isNullConstant()) {
+            return new DeoptimizeNode(DeoptimizationAction.InvalidateReprofile, DeoptimizationReason.NullCheckException);
+        }
         ValueNode length = readArrayLength(forValue, tool.getConstantReflection());
         if (length != null) {
             return length;
@@ -97,32 +109,32 @@ public final class ArrayLengthNode extends FixedWithNextNode implements Canonica
      * @return a node representing the length of {@code array} or null if it is not available
      */
     public static ValueNode readArrayLength(ValueNode originalArray, ConstantReflectionProvider constantReflection) {
-        ValueNode length = GraphUtil.arrayLength(originalArray, ArrayLengthProvider.FindLengthMode.CANONICALIZE_READ);
-        if (length != null) {
-            return length;
+        return GraphUtil.arrayLength(originalArray, ArrayLengthProvider.FindLengthMode.CANONICALIZE_READ, constantReflection);
+    }
+
+    public static boolean intrinsify(GraphBuilderContext b, ValueNode array) {
+        ValueNode anchoredArray;
+        AbstractObjectStamp arrayStamp = (AbstractObjectStamp) array.stamp(NodeView.DEFAULT);
+        if (!arrayStamp.isAlwaysArray() || !arrayStamp.nonNull()) {
+            /*
+             * Reading the length must not float above a check whether the object is actually an
+             * array. Every correct usage of the intrinsic must have a null check and an is-array
+             * check beforehand. But it might not be reflected in the stamp, in which case we anchor
+             * the array to the current block.
+             */
+            anchoredArray = b.add(new PiNode(array, arrayStamp.asAlwaysArray().asNonNull(), b.add(new BeginNode())));
+        } else {
+            anchoredArray = array;
         }
-        return readArrayLengthConstant(originalArray, constantReflection);
+
+        b.addPush(JavaKind.Int, new ArrayLengthNode(anchoredArray));
+        return true;
     }
 
-    private static ValueNode readArrayLengthConstant(ValueNode originalArray, ConstantReflectionProvider constantReflection) {
-        ValueNode array = GraphUtil.unproxify(originalArray);
-        if (constantReflection != null && array.isConstant() && !array.isNullConstant()) {
-            JavaConstant constantValue = array.asJavaConstant();
-            if (constantValue != null && constantValue.isNonNull()) {
-                Integer constantLength = constantReflection.readArrayLength(constantValue);
-                if (constantLength != null) {
-                    return ConstantNode.forInt(constantLength);
-                }
-            }
-        }
-        return null;
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
-    }
-
+    /**
+     * Returns the length of the given array. It does not check if the provided object is an array,
+     * so the caller has to check that beforehand.
+     */
     @NodeIntrinsic
     public static native int arrayLength(Object array);
 

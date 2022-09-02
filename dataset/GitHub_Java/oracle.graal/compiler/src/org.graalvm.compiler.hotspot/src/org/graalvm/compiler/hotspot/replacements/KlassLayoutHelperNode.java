@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,29 +27,29 @@ package org.graalvm.compiler.hotspot.replacements;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_1;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.graph.Node.NodeIntrinsicFactory;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
@@ -55,6 +57,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * information in {@code klass}.
  */
 @NodeInfo(cycles = CYCLES_1, size = SIZE_1)
+@NodeIntrinsicFactory
 public final class KlassLayoutHelperNode extends FloatingNode implements Canonicalizable, Lowerable {
 
     public static final NodeClass<KlassLayoutHelperNode> TYPE = NodeClass.create(KlassLayoutHelperNode.class);
@@ -72,8 +75,7 @@ public final class KlassLayoutHelperNode extends FloatingNode implements Canonic
         return canonical(null, config, klass, stamp, constantReflection, metaAccess);
     }
 
-    @SuppressWarnings("unused")
-    public static boolean intrinsify(GraphBuilderContext b, ResolvedJavaMethod method, @InjectedNodeParameter GraalHotSpotVMConfig config, ValueNode klass) {
+    public static boolean intrinsify(GraphBuilderContext b, @InjectedNodeParameter GraalHotSpotVMConfig config, ValueNode klass) {
         ValueNode valueNode = create(config, klass, b.getConstantReflection(), b.getMetaAccess());
         b.push(JavaKind.Int, b.append(valueNode));
         return true;
@@ -83,7 +85,7 @@ public final class KlassLayoutHelperNode extends FloatingNode implements Canonic
     public boolean inferStamp() {
         if (klass instanceof LoadHubNode) {
             LoadHubNode hub = (LoadHubNode) klass;
-            Stamp hubStamp = hub.getValue().stamp();
+            Stamp hubStamp = hub.getValue().stamp(NodeView.DEFAULT);
             if (hubStamp instanceof ObjectStamp) {
                 ObjectStamp objectStamp = (ObjectStamp) hubStamp;
                 ResolvedJavaType type = objectStamp.type();
@@ -108,7 +110,7 @@ public final class KlassLayoutHelperNode extends FloatingNode implements Canonic
         if (tool.allUsagesAvailable() && hasNoUsages()) {
             return null;
         } else {
-            return canonical(this, config, klass, stamp(), tool.getConstantReflection(), tool.getMetaAccess());
+            return canonical(this, config, klass, stamp(NodeView.DEFAULT), tool.getConstantReflection(), tool.getMetaAccess());
         }
     }
 
@@ -123,7 +125,7 @@ public final class KlassLayoutHelperNode extends FloatingNode implements Canonic
         }
         if (klass instanceof LoadHubNode) {
             LoadHubNode hub = (LoadHubNode) klass;
-            Stamp hubStamp = hub.getValue().stamp();
+            Stamp hubStamp = hub.getValue().stamp(NodeView.DEFAULT);
             if (hubStamp instanceof ObjectStamp) {
                 ObjectStamp ostamp = (ObjectStamp) hubStamp;
                 HotSpotResolvedObjectType type = (HotSpotResolvedObjectType) ostamp.type();
@@ -138,11 +140,6 @@ public final class KlassLayoutHelperNode extends FloatingNode implements Canonic
             self = new KlassLayoutHelperNode(config, klass);
         }
         return self;
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
     }
 
     public ValueNode getHub() {

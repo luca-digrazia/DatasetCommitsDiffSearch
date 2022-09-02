@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,7 +33,7 @@ import org.graalvm.compiler.core.common.type.AbstractObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.calc.ConvertNode;
@@ -41,6 +43,7 @@ import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.nodes.type.StampTool;
 
 import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.Value;
 
@@ -68,13 +71,17 @@ public abstract class CompressionNode extends UnaryNode implements ConvertNode, 
 
     @Override
     public Stamp foldStamp(Stamp newStamp) {
-        assert newStamp.isCompatible(getValue().stamp());
-        return mkStamp(newStamp);
+        assert newStamp.isCompatible(getValue().stamp(NodeView.DEFAULT));
+        return stamp.improveWith(mkStamp(newStamp));
     }
 
     protected abstract Constant compress(Constant c);
 
     protected abstract Constant uncompress(Constant c);
+
+    public JavaConstant nullConstant() {
+        return JavaConstant.NULL_POINTER;
+    }
 
     @Override
     public Constant convert(Constant c, ConstantReflectionProvider constantReflection) {
@@ -124,7 +131,8 @@ public abstract class CompressionNode extends UnaryNode implements ConvertNode, 
             }
 
             ConstantNode constant = (ConstantNode) forValue;
-            return ConstantNode.forConstant(stamp(), convert(constant.getValue(), tool.getConstantReflection()), constant.getStableDimension(), constant.isDefaultStable(), tool.getMetaAccess());
+            return ConstantNode.forConstant(stamp(NodeView.DEFAULT), convert(constant.getValue(), tool.getConstantReflection()), constant.getStableDimension(), constant.isDefaultStable(),
+                            tool.getMetaAccess());
         } else if (forValue instanceof CompressionNode) {
             CompressionNode other = (CompressionNode) forValue;
             if (op != other.op && encoding.equals(other.encoding)) {
@@ -137,8 +145,8 @@ public abstract class CompressionNode extends UnaryNode implements ConvertNode, 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         boolean nonNull;
-        if (value.stamp() instanceof AbstractObjectStamp) {
-            nonNull = StampTool.isPointerNonNull(value.stamp());
+        if (stamp instanceof AbstractObjectStamp) {
+            nonNull = StampTool.isPointerNonNull(stamp);
         } else {
             // metaspace pointers are never null
             nonNull = true;

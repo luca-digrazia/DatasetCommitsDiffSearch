@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,19 +31,13 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
-import org.graalvm.compiler.nodes.java.AbstractNewObjectNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
+import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
-import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
-import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.junit.Test;
 
-/**
- * Tests {@link AbstractNewObjectNode#simplify(org.graalvm.compiler.graph.spi.SimplifierTool)}.
- *
- */
 public class PoorMansEATest extends GraalCompilerTest {
     public static class A {
         public A obj;
@@ -67,8 +61,8 @@ public class PoorMansEATest extends GraalCompilerTest {
             StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
             HighTierContext highTierContext = getDefaultHighTierContext();
             createInliningPhase().apply(graph, highTierContext);
-            PhaseContext context = new PhaseContext(getProviders());
-            new LoweringPhase(new CanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
+            CoreProviders context = getProviders();
+            new LoweringPhase(createCanonicalizerPhase(), LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, context);
 
             // remove framestates in order to trigger the simplification.
             cleanup: for (FrameState fs : graph.getNodes(FrameState.TYPE).snapshot()) {
@@ -80,7 +74,7 @@ public class PoorMansEATest extends GraalCompilerTest {
                     }
                 }
             }
-            new CanonicalizerPhase().apply(graph, context);
+            createCanonicalizerPhase().apply(graph, context);
         } catch (Throwable e) {
             throw debug.handle(e);
         }

@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,30 +29,37 @@ import java.nio.ByteOrder;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 
 import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Produces the platform dependent first or second half of a long or double value.
+ * Produces the platform dependent first or second half of a long or double value as an int.
  */
 @NodeInfo(cycles = NodeCycles.CYCLES_2)
-public class UnpackEndianHalfNode extends UnaryNode implements Lowerable {
+public final class UnpackEndianHalfNode extends UnaryNode implements Lowerable {
     public static final NodeClass<UnpackEndianHalfNode> TYPE = NodeClass.create(UnpackEndianHalfNode.class);
 
     private final boolean firstHalf;
 
-    public UnpackEndianHalfNode(ValueNode value, JavaKind kind, boolean firstHalf) {
-        super(TYPE, StampFactory.forKind(kind), value);
-        assert kind == JavaKind.Int || kind == JavaKind.Float;
+    protected UnpackEndianHalfNode(ValueNode value, boolean firstHalf) {
+        super(TYPE, StampFactory.forKind(JavaKind.Int), value);
         assert value.getStackKind() == JavaKind.Double || value.getStackKind() == JavaKind.Long : "unexpected kind " + value.getStackKind();
         this.firstHalf = firstHalf;
+    }
+
+    @SuppressWarnings("unused")
+    public static ValueNode create(ValueNode value, boolean firstHalf, NodeView view) {
+        if (value.isConstant() && value.asConstant().isDefaultForKind()) {
+            return ConstantNode.defaultForKind(JavaKind.Int);
+        }
+        return new UnpackEndianHalfNode(value, firstHalf);
     }
 
     public boolean isFirstHalf() {
@@ -59,26 +68,21 @@ public class UnpackEndianHalfNode extends UnaryNode implements Lowerable {
 
     @Override
     public Node canonical(CanonicalizerTool tool, ValueNode forValue) {
-        if (forValue.isConstant() && forValue.asConstant().isDefaultForKind()) {
+        if (forValue.isDefaultConstant()) {
             return ConstantNode.defaultForKind(stamp.getStackKind());
         }
         return this;
     }
 
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
-    }
-
     public void lower(ByteOrder byteOrder) {
         ValueNode result = value;
-        if (result.getStackKind() == JavaKind.Double) {
+        if (value.getStackKind() == JavaKind.Double) {
             result = graph().unique(new ReinterpretNode(JavaKind.Long, value));
         }
-        if (byteOrder == ByteOrder.LITTLE_ENDIAN) {
+        if ((byteOrder == ByteOrder.BIG_ENDIAN) == firstHalf) {
             result = graph().unique(new UnsignedRightShiftNode(result, ConstantNode.forInt(32, graph())));
         }
-        result = IntegerConvertNode.convert(result, StampFactory.forKind(JavaKind.Int), graph());
+        result = IntegerConvertNode.convert(result, StampFactory.forKind(JavaKind.Int), graph(), NodeView.DEFAULT);
         replaceAtUsagesAndDelete(result);
     }
 }

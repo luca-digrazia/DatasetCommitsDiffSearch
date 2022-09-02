@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2014, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,16 +32,16 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.ConvertNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
+import org.graalvm.compiler.nodes.extended.HubGetClassNodeInterface;
 import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -52,7 +54,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * also used by {@link ClassGetHubNode} to eliminate chains of {@code klass._java_mirror._klass}.
  */
 @NodeInfo(cycles = CYCLES_1, size = SIZE_1)
-public final class HubGetClassNode extends FloatingNode implements Lowerable, Canonicalizable, ConvertNode {
+public final class HubGetClassNode extends FloatingNode implements Lowerable, Canonicalizable, ConvertNode, HubGetClassNodeInterface {
     public static final NodeClass<HubGetClassNode> TYPE = NodeClass.create(HubGetClassNode.class);
     @Input protected ValueNode hub;
 
@@ -61,6 +63,7 @@ public final class HubGetClassNode extends FloatingNode implements Lowerable, Ca
         this.hub = hub;
     }
 
+    @Override
     public ValueNode getHub() {
         return hub;
     }
@@ -71,7 +74,7 @@ public final class HubGetClassNode extends FloatingNode implements Lowerable, Ca
             return null;
         } else {
             MetaAccessProvider metaAccess = tool.getMetaAccess();
-            if (metaAccess != null && hub.isConstant() && !GraalOptions.ImmutableCode.getValue(graph().getOptions())) {
+            if (metaAccess != null && hub.isConstant() && !GraalOptions.ImmutableCode.getValue(tool.getOptions())) {
                 ResolvedJavaType exactType = tool.getConstantReflection().asJavaType(hub.asConstant());
                 if (exactType != null) {
                     return ConstantNode.forConstant(tool.getConstantReflection().asJavaClass(exactType), metaAccess);
@@ -79,11 +82,6 @@ public final class HubGetClassNode extends FloatingNode implements Lowerable, Ca
             }
             return this;
         }
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
     }
 
     @NodeIntrinsic

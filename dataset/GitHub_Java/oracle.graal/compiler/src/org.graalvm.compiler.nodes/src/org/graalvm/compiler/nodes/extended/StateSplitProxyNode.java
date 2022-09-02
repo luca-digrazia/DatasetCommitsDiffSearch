@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,8 +29,8 @@ import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
 
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.FrameState;
@@ -37,6 +39,9 @@ import org.graalvm.compiler.nodes.ValueNode;
 
 /**
  * This node provides a state split along with the functionality of {@link FixedValueAnchorNode}.
+ * This is used to capture a state for deoptimization when a node has side effects which aren't
+ * easily represented. The anchored value is usually part of the FrameState since this forces uses
+ * of the value below this node so they will consume this frame state instead of an earlier one.
  */
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 public final class StateSplitProxyNode extends FixedValueAnchorNode implements Canonicalizable, StateSplit {
@@ -44,6 +49,19 @@ public final class StateSplitProxyNode extends FixedValueAnchorNode implements C
     public static final NodeClass<StateSplitProxyNode> TYPE = NodeClass.create(StateSplitProxyNode.class);
 
     @OptionalInput(InputType.State) FrameState stateAfter;
+    /**
+     * Disallows elimination of this node until after the FrameState has been consumed.
+     */
+    private final boolean delayElimination;
+
+    public StateSplitProxyNode(ValueNode object) {
+        this(object, false);
+    }
+
+    public StateSplitProxyNode(ValueNode object, boolean delayElimination) {
+        super(TYPE, object);
+        this.delayElimination = delayElimination;
+    }
 
     @Override
     public FrameState stateAfter() {
@@ -62,13 +80,9 @@ public final class StateSplitProxyNode extends FixedValueAnchorNode implements C
         return true;
     }
 
-    public StateSplitProxyNode(ValueNode object) {
-        super(TYPE, object);
-    }
-
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        if (object.isConstant()) {
+        if (!delayElimination && (object != null && object.isConstant()) || stateAfter == null) {
             return object;
         }
         return this;

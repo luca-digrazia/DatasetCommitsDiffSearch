@@ -116,14 +116,9 @@ public abstract class AbstractFixedGuardNode extends DeoptimizingFixedWithNextNo
 
     @Override
     public void simplify(SimplifierTool tool) {
-        boolean simplifiedNegation = false;
         while (condition instanceof LogicNegationNode) {
             LogicNegationNode negation = (LogicNegationNode) condition;
             setCondition(negation.getValue(), !negated);
-            simplifiedNegation = true;
-        }
-        if (simplifiedNegation) {
-            tool.addToWorkList(condition);
         }
     }
 

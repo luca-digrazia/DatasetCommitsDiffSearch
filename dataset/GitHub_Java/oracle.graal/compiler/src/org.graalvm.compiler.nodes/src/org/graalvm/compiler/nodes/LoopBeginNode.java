@@ -63,8 +63,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
     protected LoopType loopType;
     protected int unrollFactor;
     protected boolean osrLoop;
-    protected boolean stripMinedOuter;
-    protected boolean stripMinedInner;
     /**
      * Flag to indicate that this loop must not be detected as a counted loop.
      */
@@ -118,26 +116,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
             }
         }
         disableCounted = disableCountedBasedOnSpeculation;
-    }
-
-    public boolean canEndsSafepoint() {
-        return canEndsSafepoint;
-    }
-
-    public void setStripMinedInner(boolean stripMinedInner) {
-        this.stripMinedInner = stripMinedInner;
-    }
-
-    public void setStripMinedOuter(boolean stripMinedOuter) {
-        this.stripMinedOuter = stripMinedOuter;
-    }
-
-    public boolean isStripMinedInner() {
-        return stripMinedInner;
-    }
-
-    public boolean isStripMinedOuter() {
-        return stripMinedOuter;
     }
 
     public boolean canNeverOverflow() {

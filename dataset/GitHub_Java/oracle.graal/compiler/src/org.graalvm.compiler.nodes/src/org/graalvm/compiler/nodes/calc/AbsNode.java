@@ -56,7 +56,7 @@ public final class AbsNode extends UnaryArithmeticNode<Abs> implements Arithmeti
         if (synonym != null) {
             return synonym;
         }
-        return new AbsNode(value);
+        return new NegateNode(value);
     }
 
     protected static ValueNode findSynonym(ValueNode forValue, NodeView view) {
@@ -64,14 +64,6 @@ public final class AbsNode extends UnaryArithmeticNode<Abs> implements Arithmeti
         ValueNode synonym = UnaryArithmeticNode.findSynonym(forValue, absOp);
         if (synonym != null) {
             return synonym;
-        }
-        if (forValue instanceof AbsNode) {
-            return forValue;
-        }
-        // abs(-x) => abs(x)
-        if (forValue instanceof NegateNode) {
-            NegateNode negate = (NegateNode) forValue;
-            return AbsNode.create(negate.getValue(), view);
         }
         return null;
     }
@@ -87,9 +79,8 @@ public final class AbsNode extends UnaryArithmeticNode<Abs> implements Arithmeti
         if (ret != this) {
             return ret;
         }
-        ValueNode synonym = findSynonym(forValue, NodeView.from(tool));
-        if (synonym != null) {
-            return synonym;
+        if (forValue instanceof AbsNode) {
+            return forValue;
         }
         return this;
     }

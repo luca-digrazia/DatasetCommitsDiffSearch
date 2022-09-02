@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,13 +25,15 @@
 //JaCoCo Exclude
 package org.graalvm.compiler.nodes.java;
 
+import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
+
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -96,8 +100,13 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonic
     @Override
     public Node canonical(CanonicalizerTool tool) {
         if (elementType.isConstant()) {
+            if (GeneratePIC.getValue(tool.getOptions())) {
+                // Can't fold for AOT, because the resulting NewArrayNode will be missing its
+                // ResolveConstantNode for the array class.
+                return this;
+            }
             ResolvedJavaType type = tool.getConstantReflection().asJavaType(elementType.asConstant());
-            if (type != null && !throwsIllegalArgumentException(type)) {
+            if (type != null && !throwsIllegalArgumentException(type) && tool.getMetaAccessExtensionProvider().canConstantFoldDynamicAllocation(type.getArrayClass())) {
                 return createNewArrayNode(type);
             }
         }
@@ -115,6 +124,13 @@ public class DynamicNewArrayNode extends AbstractNewArrayNode implements Canonic
 
     public static boolean throwsIllegalArgumentException(ResolvedJavaType elementType) {
         return elementType.getJavaKind() == JavaKind.Void;
+    }
+
+    @NodeIntrinsic
+    private static native Object newArray(Class<?> componentType, int length, @ConstantNodeParameter boolean fillContents);
+
+    public static Object newArray(Class<?> componentType, int length) {
+        return newArray(componentType, length, true);
     }
 
     @NodeIntrinsic

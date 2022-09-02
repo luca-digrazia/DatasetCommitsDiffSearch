@@ -28,10 +28,8 @@ import static org.graalvm.compiler.nodeinfo.InputType.Guard;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_0;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
 
-import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
-import org.graalvm.compiler.graph.NodeBitMap;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.nodes.spi.Canonicalizable;
@@ -87,30 +85,6 @@ public final class MultiGuardNode extends FloatingNode implements GuardingNode, 
                 return new MultiGuardNode(list.toArray(new ValueNode[0]));
             }
         }
-
-        // if the guard contains duplicates we want to create a de-duplicated guard
-        NodeBitMap guardsSeen = new NodeBitMap(graph());
-        boolean duplicatesFound = false;
-        for (ValueNode guard : guards) {
-            if (guardsSeen.isMarked(guard)) {
-                duplicatesFound = true;
-                break;
-            }
-            guardsSeen.mark(guard);
-        }
-        if (duplicatesFound) {
-            EconomicSet<ValueNode> uniqueGuards = EconomicSet.create();
-            for (ValueNode guard : guards) {
-                uniqueGuards.add(guard);
-            }
-
-            if (uniqueGuards.size() == 1) {
-                return uniqueGuards.iterator().next();
-            }
-
-            return new MultiGuardNode(uniqueGuards.toArray(new ValueNode[uniqueGuards.size()]));
-        }
-
         return this;
     }
 

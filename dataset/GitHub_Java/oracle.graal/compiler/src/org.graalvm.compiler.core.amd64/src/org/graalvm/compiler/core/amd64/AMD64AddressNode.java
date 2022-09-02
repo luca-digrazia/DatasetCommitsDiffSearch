@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,11 +27,19 @@ package org.graalvm.compiler.core.amd64;
 
 import org.graalvm.compiler.asm.amd64.AMD64Address.Scale;
 import org.graalvm.compiler.core.common.LIRKind;
+import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.graph.NodeClass;
+import org.graalvm.compiler.nodes.spi.Simplifiable;
+import org.graalvm.compiler.nodes.spi.SimplifierTool;
 import org.graalvm.compiler.lir.amd64.AMD64AddressValue;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
+import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.LoopBeginNode;
+import org.graalvm.compiler.nodes.NodeView;
+import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
@@ -42,7 +52,7 @@ import jdk.vm.ci.meta.Value;
  * optional.
  */
 @NodeInfo
-public class AMD64AddressNode extends AddressNode implements LIRLowerable {
+public class AMD64AddressNode extends AddressNode implements Simplifiable, LIRLowerable {
 
     public static final NodeClass<AMD64AddressNode> TYPE = NodeClass.create(AMD64AddressNode.class);
 
@@ -64,6 +74,28 @@ public class AMD64AddressNode extends AddressNode implements LIRLowerable {
         this.scale = Scale.Times1;
     }
 
+    public void canonicalizeIndex(SimplifierTool tool) {
+        if (index instanceof AddNode && ((IntegerStamp) index.stamp(NodeView.DEFAULT)).getBits() == 64) {
+            AddNode add = (AddNode) index;
+            ValueNode valX = add.getX();
+            if (valX instanceof PhiNode) {
+                PhiNode phi = (PhiNode) valX;
+                if (phi.merge() instanceof LoopBeginNode) {
+                    LoopBeginNode loopNode = (LoopBeginNode) phi.merge();
+                    if (!loopNode.isSimpleLoop()) {
+                        ValueNode valY = add.getY();
+                        if (valY instanceof ConstantNode) {
+                            int addBy = valY.asJavaConstant().asInt();
+                            displacement = displacement + scale.value * addBy;
+                            replaceFirstInput(index, phi);
+                            tool.addToWorkList(index);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @Override
     public void generate(NodeLIRBuilderTool gen) {
         LIRGeneratorTool tool = gen.getLIRGeneratorTool();
@@ -73,7 +105,9 @@ public class AMD64AddressNode extends AddressNode implements LIRLowerable {
 
         AllocatableValue baseReference = LIRKind.derivedBaseFromValue(baseValue);
         AllocatableValue indexReference;
-        if (scale.equals(Scale.Times1)) {
+        if (index == null) {
+            indexReference = null;
+        } else if (scale.equals(Scale.Times1)) {
             indexReference = LIRKind.derivedBaseFromValue(indexValue);
         } else {
             if (LIRKind.isValue(indexValue)) {
@@ -83,7 +117,7 @@ public class AMD64AddressNode extends AddressNode implements LIRLowerable {
             }
         }
 
-        LIRKind kind = LIRKind.combineDerived(tool.getLIRKind(stamp()), baseReference, indexReference);
+        LIRKind kind = LIRKind.combineDerived(tool.getLIRKind(stamp(NodeView.DEFAULT)), baseReference, indexReference);
         gen.setResult(this, new AMD64AddressValue(kind, baseValue, indexValue, scale, displacement));
     }
 
@@ -132,5 +166,10 @@ public class AMD64AddressNode extends AddressNode implements LIRLowerable {
     @Override
     public long getMaxConstantDisplacement() {
         return displacement;
+    }
+
+    @Override
+    public void simplify(SimplifierTool tool) {
+        canonicalizeIndex(tool);
     }
 }

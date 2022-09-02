@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,12 +24,15 @@
  */
 package org.graalvm.compiler.nodes.calc;
 
+import static org.graalvm.compiler.nodes.calc.BinaryArithmeticNode.getArithmeticOpTable;
+
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
+import org.graalvm.compiler.core.common.type.ArithmeticOpTable.ShiftOp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.ShiftOp.Shl;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -37,7 +40,9 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 
+import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.PrimitiveConstant;
 
 @NodeInfo(shortName = "<<")
 public final class LeftShiftNode extends ShiftNode<Shl> {
@@ -45,7 +50,7 @@ public final class LeftShiftNode extends ShiftNode<Shl> {
     public static final NodeClass<LeftShiftNode> TYPE = NodeClass.create(LeftShiftNode.class);
 
     public LeftShiftNode(ValueNode x, ValueNode y) {
-        super(TYPE, ArithmeticOpTable::getShl, x, y);
+        super(TYPE, getArithmeticOpTable(x).getShl(), x, y);
     }
 
     public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
@@ -60,6 +65,11 @@ public final class LeftShiftNode extends ShiftNode<Shl> {
     }
 
     @Override
+    protected ShiftOp<Shl> getOp(ArithmeticOpTable table) {
+        return table.getShl();
+    }
+
+    @Override
     public ValueNode canonical(CanonicalizerTool tool, ValueNode forX, ValueNode forY) {
         ValueNode ret = super.canonical(tool, forX, forY);
         if (ret != this) {
@@ -67,6 +77,28 @@ public final class LeftShiftNode extends ShiftNode<Shl> {
         }
 
         return canonical(this, getArithmeticOp(), stamp(NodeView.DEFAULT), forX, forY);
+    }
+
+    /**
+     * Try to rewrite the current node to a {@linkplain MulNode} iff the
+     * {@linkplain LeftShiftNode#getX()} and {@linkplain LeftShiftNode#getY()} inputs represent
+     * numeric integers and {@linkplain LeftShiftNode#getY()} is a constant value. The resulting
+     * {@linkplain MulNode} replaces the current node in the {@linkplain LeftShiftNode#graph()}.
+     */
+    public void tryReplaceWithMulNode() {
+        if (this.getY().isConstant()) {
+            Constant c = getY().asConstant();
+            if (c instanceof PrimitiveConstant && ((PrimitiveConstant) c).getJavaKind().isNumericInteger()) {
+                IntegerStamp xStamp = (IntegerStamp) getX().stamp(NodeView.DEFAULT);
+                IntegerStamp yStamp = (IntegerStamp) getY().stamp(NodeView.DEFAULT);
+                IntegerStamp selfStamp = (IntegerStamp) stamp(NodeView.DEFAULT);
+                if (xStamp.getBits() == yStamp.getBits() && xStamp.getBits() == selfStamp.getBits()) {
+                    long i = ((PrimitiveConstant) c).asLong();
+                    long multiplier = (long) Math.pow(2, i);
+                    replaceAtUsages(graph().addOrUnique(new MulNode(getX(), ConstantNode.forIntegerStamp(getY().stamp(NodeView.DEFAULT), multiplier, graph()))));
+                }
+            }
+        }
     }
 
     private static ValueNode canonical(LeftShiftNode leftShiftNode, ArithmeticOpTable.ShiftOp<Shl> op, Stamp stamp, ValueNode forX, ValueNode forY) {
