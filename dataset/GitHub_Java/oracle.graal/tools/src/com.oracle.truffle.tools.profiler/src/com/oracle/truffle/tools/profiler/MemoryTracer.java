@@ -295,7 +295,6 @@ public final class MemoryTracer implements Closeable {
     @Override
     public synchronized void close() {
         assert Thread.holdsLock(this);
-        closed = true;
         if (stacksBinding != null) {
             stacksBinding.dispose();
             stacksBinding = null;
