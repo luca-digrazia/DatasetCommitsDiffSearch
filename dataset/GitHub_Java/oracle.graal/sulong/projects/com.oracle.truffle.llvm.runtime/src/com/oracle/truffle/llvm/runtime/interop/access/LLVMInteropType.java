@@ -81,7 +81,7 @@ import com.oracle.truffle.llvm.runtime.types.Type;
  * Describes how foreign interop should interpret values.
  */
 @ExportLibrary(InteropLibrary.class)
-@ExportLibrary(value = LLVMAsForeignLibrary.class, useForAOT = false)
+@ExportLibrary(LLVMAsForeignLibrary.class)
 public abstract class LLVMInteropType implements TruffleObject {
 
     public static final LLVMInteropType.Value UNKNOWN = Value.primitive(null, 0);
