@@ -52,8 +52,6 @@ import org.graalvm.compiler.graph.NodeList;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.FixedNode;
-import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.FullInfopointNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -315,7 +313,7 @@ public class SubstrateGraphBuilderPlugins {
              * values written in the array.
              */
             List<Class<?>> classList = new ArrayList<>();
-            FixedNode successor = unwrapNode(newArray.next());
+            FixedNode successor = newArray.next();
             while (successor instanceof StoreIndexedNode) {
                 StoreIndexedNode store = (StoreIndexedNode) successor;
                 assert GraphUtil.originalValue(store.array()).equals(newArray);
@@ -333,7 +331,11 @@ public class SubstrateGraphBuilderPlugins {
                     classList = null;
                     break;
                 }
-                successor = unwrapNode(store.next());
+                successor = store.next();
+                if (successor instanceof DeoptEntryNode) {
+                    assert ((HostedMethod) successor.graph().method()).isDeoptTarget();
+                    successor = ((DeoptEntryNode) successor).next();
+                }
             }
 
             /*
@@ -345,19 +347,6 @@ public class SubstrateGraphBuilderPlugins {
             return classList != null && classList.size() == newArrayLength ? classList.toArray(new Class<?>[0]) : null;
         }
         return null;
-    }
-
-    /**
-     * Unwrap FullInfopointNode and DeoptEntryNode since they are not important for the Class[]
-     * elements analysis and they can obscure the control flow.
-     */
-    private static FixedNode unwrapNode(FixedNode node) {
-        FixedNode successor = node;
-        while (successor instanceof FullInfopointNode || successor instanceof DeoptEntryNode) {
-            assert !(successor instanceof DeoptEntryNode) || ((HostedMethod) successor.graph().method()).isDeoptTarget();
-            successor = ((FixedWithNextNode) successor).next();
-        }
-        return successor;
     }
 
     private static void registerAtomicUpdaterPlugins(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, InvocationPlugins plugins, boolean analysis) {

@@ -130,7 +130,7 @@ class HeapChunkProvider {
             zap(result, HeapPolicy.getProducedHeapChunkZapWord());
         }
 
-        HeapPolicy.youngUsedBytes.addAndGet(chunkSize);
+        HeapPolicy.bytesAllocatedSinceLastCollection.addAndGet(chunkSize);
 
         log().string("  result chunk: ").hex(result).string("  ]").newline();
         return result;
@@ -272,7 +272,7 @@ class HeapChunkProvider {
             zap(result, HeapPolicy.getProducedHeapChunkZapWord());
         }
 
-        HeapPolicy.youngUsedBytes.addAndGet(chunkSize);
+        HeapPolicy.bytesAllocatedSinceLastCollection.addAndGet(chunkSize);
 
         log().string("  returns ").hex(result).string("  ]").newline();
         return result;
