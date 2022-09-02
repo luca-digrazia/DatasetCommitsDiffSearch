@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -141,11 +143,11 @@ public final class ComputeBlockOrder {
                 double unscheduledSum = 0.0;
                 for (T pred : mostLikelySuccessor.getPredecessors()) {
                     if (pred.getLinearScanNumber() == -1) {
-                        unscheduledSum += pred.probability();
+                        unscheduledSum += pred.getRelativeFrequency();
                     }
                 }
 
-                if (unscheduledSum > block.probability() / PENALTY_VERSUS_UNSCHEDULED) {
+                if (unscheduledSum > block.getRelativeFrequency() / PENALTY_VERSUS_UNSCHEDULED) {
                     // Add this merge only after at least one additional predecessor gets scheduled.
                     visitedBlocks.clear(mostLikelySuccessor.getId());
                     return null;
@@ -162,8 +164,6 @@ public final class ComputeBlockOrder {
     private static <T extends AbstractBlockBase<T>> void addPathToCodeEmittingOrder(T initialBlock, List<T> order, PriorityQueue<T> worklist, BitSet visitedBlocks) {
         T block = initialBlock;
         while (block != null) {
-            // Skip loop headers if there is only a single loop end block to
-            // make the backward jump be a conditional jump.
             if (!skipLoopHeader(block)) {
 
                 // Align unskipped loop headers as they are the target of the backward jump.
@@ -180,20 +180,29 @@ public final class ComputeBlockOrder {
                 // Add the header immediately afterwards.
                 addBlock(loop.getHeader(), order);
 
-                // Make sure the loop successors of the loop header are aligned
-                // as they are the target
-                // of the backward jump.
-                for (T successor : loop.getHeader().getSuccessors()) {
-                    if (successor.getLoopDepth() == block.getLoopDepth()) {
-                        successor.setAlign(true);
+                // for inverted loops (they always have a single loop end) do not align the header
+                // successor block if its a trivial loop, since thats the loop end again
+                boolean alignSucc = true;
+                if (loop.isInverted() && loop.getBlocks().size() < 2) {
+                    alignSucc = false;
+                }
+
+                if (alignSucc) {
+                    // Make sure the loop successors of the loop header are aligned
+                    // as they are the target
+                    // of the backward jump.
+                    for (T successor : loop.getHeader().getSuccessors()) {
+                        if (successor.getLoopDepth() == block.getLoopDepth()) {
+                            successor.setAlign(true);
+                        }
                     }
                 }
             }
-
             T mostLikelySuccessor = findAndMarkMostLikelySuccessor(block, visitedBlocks);
             enqueueSuccessors(block, worklist, visitedBlocks);
             block = mostLikelySuccessor;
         }
+
     }
 
     /**
@@ -210,8 +219,8 @@ public final class ComputeBlockOrder {
     private static <T extends AbstractBlockBase<T>> T findAndMarkMostLikelySuccessor(T block, BitSet visitedBlocks) {
         T result = null;
         for (T successor : block.getSuccessors()) {
-            assert successor.probability() >= 0.0 : "Probabilities must be positive";
-            if (!visitedBlocks.get(successor.getId()) && successor.getLoopDepth() >= block.getLoopDepth() && (result == null || successor.probability() >= result.probability())) {
+            assert successor.getRelativeFrequency() >= 0.0 : "Relative frequencies must be positive";
+            if (!visitedBlocks.get(successor.getId()) && successor.getLoopDepth() >= block.getLoopDepth() && (result == null || successor.getRelativeFrequency() >= result.getRelativeFrequency())) {
                 result = successor;
             }
         }
@@ -253,17 +262,21 @@ public final class ComputeBlockOrder {
      * Comparator for sorting blocks based on loop depth and probability.
      */
     private static class BlockOrderComparator<T extends AbstractBlockBase<T>> implements Comparator<T> {
+        private static final double EPSILON = 1E-6;
 
         @Override
         public int compare(T a, T b) {
-            // Loop blocks before any loop exit block.
-            int diff = b.getLoopDepth() - a.getLoopDepth();
-            if (diff != 0) {
-                return diff;
+            // Loop blocks before any loop exit block. The only exception are blocks that are
+            // (almost) impossible to reach.
+            if (a.getRelativeFrequency() > EPSILON && b.getRelativeFrequency() > EPSILON) {
+                int diff = b.getLoopDepth() - a.getLoopDepth();
+                if (diff != 0) {
+                    return diff;
+                }
             }
 
             // Blocks with high probability before blocks with low probability.
-            if (a.probability() > b.probability()) {
+            if (a.getRelativeFrequency() > b.getRelativeFrequency()) {
                 return -1;
             } else {
                 return 1;

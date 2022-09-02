@@ -283,8 +283,10 @@ public class LoopFragmentInside extends LoopFragment {
 
             mergeEarlyLoopExits(graph, mainLoopBegin, mainCounted, new2OldPhis, loop);
 
+            AbstractBeginNode propagate = loopTest.trueSuccessor() == mainCounted.getBody() ? trueSuccessor : falseSuccessor;
+
             // remove if test
-            graph.removeSplitPropagate(newSegmentLoopTest, loopTest.trueSuccessor() == mainCounted.getBody() ? trueSuccessor : falseSuccessor);
+            graph.removeSplitPropagate(newSegmentLoopTest, propagate);
 
             graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "Before placing segment");
             if (mainCounted.getBody().next() instanceof LoopEndNode) {
@@ -292,7 +294,23 @@ public class LoopFragmentInside extends LoopFragment {
             } else {
                 AbstractBeginNode newSegmentBegin = getDuplicatedNode(mainLoopBegin);
                 FixedNode newSegmentFirstNode = newSegmentBegin.next();
-                EndNode newSegmentEnd = getBlockEnd((FixedNode) getDuplicatedNode(mainLoopBegin.loopEnds().first().predecessor()));
+                FixedNode newSegmentEnd = null;
+
+                if (loop.counted().isInverted() && loop.counted().getBody().next() != loop.counted().getLimitTest()) {
+                    Node oldBodyLastNodeBeforeInvertedTest = loop.counted().getLimitTest().predecessor();
+                    FixedNode f = ((FixedNode) getDuplicatedNode(oldBodyLastNodeBeforeInvertedTest));
+                    while (f instanceof FixedWithNextNode) {
+                        FixedNode next = ((FixedWithNextNode) f).next();
+                        if (next == null) {
+                            break;
+                        }
+                        f = next;
+                    }
+                    newSegmentEnd = f;
+                } else {
+                    newSegmentEnd = getBlockEnd((FixedNode) getDuplicatedNode(mainLoopBegin.loopEnds().first().predecessor()));
+                }
+
                 FixedWithNextNode newSegmentLastNode = (FixedWithNextNode) newSegmentEnd.predecessor();
                 LoopEndNode loopEndNode = mainLoopBegin.getSingleLoopEnd();
                 FixedWithNextNode lastCodeNode = (FixedWithNextNode) loopEndNode.predecessor();
@@ -310,7 +328,6 @@ public class LoopFragmentInside extends LoopFragment {
                 newSegmentEnd.safeDelete();
             }
             graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "After placing segment");
-
             return (CompareNode) loopTest.condition();
         } else {
             throw GraalError.shouldNotReachHere("Cannot unroll inverted loop");

@@ -57,7 +57,7 @@ public final class AssertionNode extends FixedWithNextNode implements Lowerable,
 
     protected final boolean compileTimeAssertion;
     protected final String message;
-    private boolean printOnly;
+    private boolean printAssertionAlways;
 
     public AssertionNode(@ConstantNodeParameter boolean compileTimeAssertion, ValueNode condition, @ConstantNodeParameter String message, @ConstantNodeParameter Object msgArg1,
                     @ConstantNodeParameter Object msgArg2,
@@ -70,12 +70,12 @@ public final class AssertionNode extends FixedWithNextNode implements Lowerable,
         this.l2 = l2;
     }
 
-    public void setPrintOnly(boolean printAssertionAlways) {
-        this.printOnly = printAssertionAlways;
+    public void setPrintAssertionAlways(boolean printAssertionAlways) {
+        this.printAssertionAlways = printAssertionAlways;
     }
 
-    public boolean isPrintOnly() {
-        return printOnly;
+    public boolean isPrintAssertionAlways() {
+        return printAssertionAlways;
     }
 
     public ValueNode getL1() {
