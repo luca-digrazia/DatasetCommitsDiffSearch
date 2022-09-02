@@ -62,10 +62,6 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
                 }
             }
 
-            if (targetKlass.isAbstract()) {
-                throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException, "Cannot cast a foreign object to an abstract class: " + targetKlass.getTypeAsString());
-            }
-
             if (targetKlass.isAssignableFrom(value.getKlass())) {
                 return value;
             }
