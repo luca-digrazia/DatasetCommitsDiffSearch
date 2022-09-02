@@ -85,13 +85,7 @@ public class BackgroundCompileQueue {
             // NOTE: the value from the first Engine compiling wins for now
             int threads = callTarget.getOptionValue(PolyglotCompilerOptions.CompilerThreads);
             if (threads == 0) {
-                // Old behavior, use either 1 or 2 compiler threads.
-                int availableProcessors = Runtime.getRuntime().availableProcessors();
-                if (availableProcessors >= 4) {
-                    threads = 2;
-                }
-            } else if (threads < 0) {
-                // Scale compiler threads depending on how many processors are available.
+                // No manual selection made, check how many processors are available.
                 int availableProcessors = Runtime.getRuntime().availableProcessors();
 
                 // @formatter:off
