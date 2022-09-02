@@ -41,6 +41,7 @@ import java.util.ServiceLoader;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.oracle.svm.core.OS;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.model.ConfigurationContainer;
 import org.apache.maven.model.Plugin;
@@ -59,7 +60,6 @@ import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
 
-import com.oracle.svm.core.OS;
 import com.oracle.svm.driver.NativeImage;
 
 @Mojo(name = "native-image", defaultPhase = LifecyclePhase.PACKAGE)
@@ -77,9 +77,6 @@ public class NativeImageMojo extends AbstractMojo {
 
     @Parameter(property = "mainClass")//
     private String mainClass;
-
-    @Parameter(property = "imageName")//
-    private String imageName;
 
     @Parameter(property = "buildArgs")//
     private String buildArgs;
@@ -335,6 +332,9 @@ public class NativeImageMojo extends AbstractMojo {
     }
 
     private List<String> getBuildArgs() {
+        if (mainClass != null && mainClass.isEmpty()) {
+            mainClass = null;
+        }
         if (mainClass == null) {
             mainClass = consumeExecutionsNodeValue("org.apache.maven.plugins:maven-shade-plugin", "transformers", "transformer", "mainClass");
         }
@@ -346,14 +346,11 @@ public class NativeImageMojo extends AbstractMojo {
         }
 
         List<String> list = new ArrayList<>();
-        if (buildArgs != null && !buildArgs.isEmpty()) {
-            list.addAll(Arrays.asList(buildArgs.split(" ")));
-        }
-        if (mainClass != null && !mainClass.equals(".")) {
+        if (mainClass != null) {
             list.add("-H:Class=" + mainClass);
         }
-        if (imageName != null) {
-            list.add("-H:Name=" + imageName);
+        if (buildArgs != null && !buildArgs.isEmpty()) {
+            list.addAll(Arrays.asList(buildArgs.split(" ")));
         }
         return list;
     }
