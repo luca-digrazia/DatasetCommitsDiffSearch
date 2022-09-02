@@ -57,7 +57,7 @@ public class LanguageContextFreedTest {
     private static final int COMPILATION_THRESHOLD = 10;
 
     private static final AtomicReference<OptimizedCallTarget> currentTarget = new AtomicReference<>();
-    private static final AtomicReference<TruffleLanguage.Env> currentLangContext = new AtomicReference<>();
+    private static final AtomicReference<LanguageContext> currentLangContext = new AtomicReference<>();
 
     @Test
     public void testLanguageContexFreedNoSharing() {
@@ -106,17 +106,23 @@ public class LanguageContextFreedTest {
         GCUtils.assertGc("Language context should be freed when polyglot Context is closed.", langContextRef);
     }
 
-    public abstract static class Base extends TruffleLanguage<TruffleLanguage.Env> {
+    private static class LanguageContext {
+
+        LanguageContext() {
+        }
+    }
+
+    public abstract static class Base extends TruffleLanguage<LanguageContext> {
 
         @Override
-        protected Env createContext(Env env) {
-            return env;
+        protected LanguageContext createContext(Env env) {
+            return new LanguageContext();
         }
 
         @Override
         protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
             String id = request.getSource().getCharacters().toString();
-            Class<? extends TruffleLanguage<Env>> accessLanguage;
+            Class<? extends TruffleLanguage<LanguageContext>> accessLanguage;
             switch (id) {
                 case Shared.ID:
                     accessLanguage = Shared.class;
@@ -129,7 +135,7 @@ public class LanguageContextFreedTest {
             }
             TruffleRuntime runtime = Truffle.getRuntime();
             OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(new RootNode(this) {
-                @CompilationFinal ContextReference<Env> ref;
+                @CompilationFinal ContextReference<LanguageContext> ref;
 
                 @SuppressWarnings("unchecked")
                 @Override
@@ -138,7 +144,7 @@ public class LanguageContextFreedTest {
                         CompilerDirectives.transferToInterpreterAndInvalidate();
                         ref = lookupContextReference(accessLanguage);
                     }
-                    Env ctx = ref.get();
+                    LanguageContext ctx = ref.get();
                     CompilerAsserts.partialEvaluationConstant(ctx);
                     currentLangContext.set(ctx);
                     return true;
