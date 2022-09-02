@@ -572,6 +572,7 @@ public final class Meta implements ContextAccess {
     public final Field HIDDEN_THREAD_BLOCKED_COUNT;
     public final Field HIDDEN_THREAD_WAITED_COUNT;
 
+
     public final Field Thread_group;
     public final Field Thread_name;
     public final Field Thread_priority;

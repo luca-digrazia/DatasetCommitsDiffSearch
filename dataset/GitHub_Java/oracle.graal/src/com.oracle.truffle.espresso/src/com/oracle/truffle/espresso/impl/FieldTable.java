@@ -66,6 +66,7 @@ class FieldTable {
 
     private static int indexFromKind(JavaKind kind) {
         // @formatter:off
+        // Checkstyle: stop
         switch (kind) {
             case Boolean: return 7;
             case Byte   : return 6;
@@ -79,6 +80,7 @@ class FieldTable {
                 throw EspressoError.shouldNotReachHere();
         }
         // @formatter:on
+        // Checkstyle: resume
     }
 
     public static CreationResult create(ObjectKlass superKlass, ObjectKlass thisKlass, LinkedKlass linkedKlass) {
