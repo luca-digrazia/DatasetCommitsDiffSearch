@@ -23,30 +23,30 @@
 
 package com.oracle.truffle.espresso.runtime;
 
-import java.lang.reflect.Array;
-import java.util.ArrayList;
-
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.impl.ArrayKlass;
-import com.oracle.truffle.espresso.impl.ObjectKlass;
-import com.oracle.truffle.espresso.jdwp.api.CallFrame;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
-import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
-import com.oracle.truffle.espresso.jdwp.api.JDWPSetup;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 import com.oracle.truffle.espresso.jdwp.api.VMListener;
-import com.oracle.truffle.espresso.jdwp.impl.DebuggerController;
+import com.oracle.truffle.espresso.jdwp.api.JDWPSetup;
+import com.oracle.truffle.espresso.jdwp.api.MethodRef;
+import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.jdwp.api.Ids;
+import com.oracle.truffle.espresso.jdwp.api.CallFrame;
+import com.oracle.truffle.espresso.jdwp.api.TagConstants;
+import com.oracle.truffle.espresso.impl.ArrayKlass;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
+import com.oracle.truffle.espresso.jdwp.impl.DebuggerController;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
+
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 
 public final class JDWPContextImpl implements JDWPContext {
 
@@ -211,13 +211,13 @@ public final class JDWPContextImpl implements JDWPContext {
                     tag = TagConstants.STRING;
                 } else if (staticObject.getKlass().isArray()) {
                     tag = TagConstants.ARRAY;
-                } else if (context.getMeta().Thread.isAssignableFrom(staticObject.getKlass())) {
+                } else if (JAVA_LANG_THREAD.equals(staticObject.getKlass().getType().toString())) {
                     tag = TagConstants.THREAD;
-                } else if (context.getMeta().ThreadGroup.isAssignableFrom(staticObject.getKlass())) {
+                } else if (JAVA_LANG_THREAD_GROUP.equals(staticObject.getKlass().getType().toString())) {
                     tag = TagConstants.THREAD_GROUP;
                 } else if (staticObject.getKlass() == context.getMeta().Class) {
                     tag = TagConstants.CLASS_OBJECT;
-                } else if (context.getMeta().ClassLoader.isAssignableFrom(staticObject.getKlass())) {
+                } else if (JAVA_LANG_CLASS_LOADER.equals(staticObject.getKlass().getType().toString())) {
                     tag = TagConstants.CLASS_LOADER;
                 }
             }

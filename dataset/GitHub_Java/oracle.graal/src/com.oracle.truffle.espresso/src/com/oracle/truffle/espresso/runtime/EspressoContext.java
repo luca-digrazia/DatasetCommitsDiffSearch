@@ -499,7 +499,7 @@ public final class EspressoContext {
 
     public JniEnv getJNI() {
         if (jniEnv == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CompilerAsserts.neverPartOfCompilation();
             jniEnv = JniEnv.create(this);
         }
         return jniEnv;
