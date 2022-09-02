@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.loop.phases;
 
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.loop.LoopEx;
@@ -46,27 +45,25 @@ public class LoopFullUnrollPhase extends LoopPhase<LoopPolicies> {
 
     @Override
     protected void run(StructuredGraph graph, CoreProviders context) {
-        if (GraalOptions.FullUnroll.getValue(graph.getOptions())) {
-            DebugContext debug = graph.getDebug();
-            if (graph.hasLoops()) {
-                boolean peeled;
-                do {
-                    peeled = false;
-                    final LoopsData dataCounted = new LoopsData(graph);
-                    dataCounted.detectedCountedLoops();
-                    for (LoopEx loop : dataCounted.countedLoops()) {
-                        if (getPolicies().shouldFullUnroll(loop)) {
-                            debug.log("FullUnroll %s", loop);
-                            LoopTransformations.fullUnroll(loop, context, canonicalizer);
-                            FULLY_UNROLLED_LOOPS.increment(debug);
-                            debug.dump(DebugContext.DETAILED_LEVEL, graph, "FullUnroll %s", loop);
-                            peeled = true;
-                            break;
-                        }
+        DebugContext debug = graph.getDebug();
+        if (graph.hasLoops()) {
+            boolean peeled;
+            do {
+                peeled = false;
+                final LoopsData dataCounted = new LoopsData(graph);
+                dataCounted.detectedCountedLoops();
+                for (LoopEx loop : dataCounted.countedLoops()) {
+                    if (getPolicies().shouldFullUnroll(loop)) {
+                        debug.log("FullUnroll %s", loop);
+                        LoopTransformations.fullUnroll(loop, context, canonicalizer);
+                        FULLY_UNROLLED_LOOPS.increment(debug);
+                        debug.dump(DebugContext.DETAILED_LEVEL, graph, "FullUnroll %s", loop);
+                        peeled = true;
+                        break;
                     }
-                    dataCounted.deleteUnusedNodes();
-                } while (peeled);
-            }
+                }
+                dataCounted.deleteUnusedNodes();
+            } while (peeled);
         }
     }
 

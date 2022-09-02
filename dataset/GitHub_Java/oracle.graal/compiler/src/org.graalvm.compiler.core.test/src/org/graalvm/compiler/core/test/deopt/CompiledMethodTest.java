@@ -71,7 +71,7 @@ public class CompiledMethodTest extends GraalCompilerTest {
             }
         }
 
-        InstalledCode compiledMethod = getCode(javaMethod, graph, true);
+        InstalledCode compiledMethod = getCode(javaMethod, graph);
         try {
             Object result = compiledMethod.executeVarargs("1", "2", "3");
             if (!"1-2-3".equals(result)) {

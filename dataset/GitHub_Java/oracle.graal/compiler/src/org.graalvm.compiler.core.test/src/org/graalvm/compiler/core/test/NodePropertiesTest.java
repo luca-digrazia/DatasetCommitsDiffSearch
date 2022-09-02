@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,7 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
-import org.graalvm.compiler.phases.common.CanonicalizerPhase.CustomSimplification;
+import org.graalvm.compiler.phases.common.CanonicalizerPhase.CustomCanonicalizer;
 import org.graalvm.compiler.phases.contract.NodeCostUtil;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.junit.Assert;
@@ -162,23 +162,19 @@ public class NodePropertiesTest extends GraalCompilerTest {
     @Test
     public void testCanonicalizationExample() {
         HighTierContext htc = getDefaultHighTierContext();
-        ImprovementSavingCalculator c1 = new ImprovementSavingCalculator();
+        ImprovementSavingCanonicalizer c1 = new ImprovementSavingCanonicalizer();
         StructuredGraph g1 = parseForCompile(getResolvedJavaMethod("test1Snippet"));
-        CanonicalizerPhase canonicalizer1 = this.createCanonicalizerPhase();
-        canonicalizer1.setCustomSimplification(c1);
-        canonicalizer1.apply(g1, htc);
-        ImprovementSavingCalculator c2 = new ImprovementSavingCalculator();
+        new CanonicalizerPhase(c1).apply(g1, htc);
+        ImprovementSavingCanonicalizer c2 = new ImprovementSavingCanonicalizer();
         StructuredGraph g2 = parseForCompile(getResolvedJavaMethod("test2Snippet"));
-        CanonicalizerPhase canonicalizer2 = this.createCanonicalizerPhase();
-        canonicalizer2.setCustomSimplification(c2);
-        canonicalizer2.apply(g2, htc);
+        new CanonicalizerPhase(c2).apply(g2, htc);
         Assert.assertEquals(0, c1.savedCycles);
         Assert.assertEquals(0, c2.savedCycles);
     }
 
-    private void prepareGraphForLoopFrequencies(StructuredGraph g, HighTierContext htc) {
+    private static void prepareGraphForLoopFrequencies(StructuredGraph g, HighTierContext htc) {
         // let canonicalizer work away branch probability nodes
-        createCanonicalizerPhase().apply(g, htc);
+        new CanonicalizerPhase().apply(g, htc);
         // recompute the loop frequencies
         ComputeLoopFrequenciesClosure.compute(g);
     }
@@ -246,8 +242,8 @@ public class NodePropertiesTest extends GraalCompilerTest {
         StructuredGraph g1 = parseForCompile(getResolvedJavaMethod("test1Snippet"));
         StructuredGraph g2 = parseForCompile(getResolvedJavaMethod("test2Snippet"));
         HighTierContext htc = getDefaultHighTierContext();
-        createCanonicalizerPhase().apply(g1, htc);
-        createCanonicalizerPhase().apply(g2, htc);
+        new CanonicalizerPhase().apply(g1, htc);
+        new CanonicalizerPhase().apply(g2, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         GraphCostPhase gc2 = new GraphCostPhase();
         gc1.apply(g1, htc);
@@ -261,7 +257,7 @@ public class NodePropertiesTest extends GraalCompilerTest {
     public void testExpectUntrusted() {
         StructuredGraph g1 = parseForCompile(getResolvedJavaMethod("untrused01"));
         HighTierContext htc = getDefaultHighTierContext();
-        createCanonicalizerPhase().apply(g1, htc);
+        new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
     }
@@ -270,7 +266,7 @@ public class NodePropertiesTest extends GraalCompilerTest {
     public void testArrayLoad() {
         StructuredGraph g1 = parseForCompile(getResolvedJavaMethod("arrayLoadTest"));
         HighTierContext htc = getDefaultHighTierContext();
-        createCanonicalizerPhase().apply(g1, htc);
+        new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
         Assert.assertEquals(15, gc1.finalCycles, 25);
@@ -280,7 +276,7 @@ public class NodePropertiesTest extends GraalCompilerTest {
     public void testArrayStore() {
         StructuredGraph g1 = parseForCompile(getResolvedJavaMethod("arrayStoreTest"));
         HighTierContext htc = getDefaultHighTierContext();
-        createCanonicalizerPhase().apply(g1, htc);
+        new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
         Assert.assertEquals(15, gc1.finalCycles, 25);
@@ -290,7 +286,7 @@ public class NodePropertiesTest extends GraalCompilerTest {
     public void testFieldLoad() {
         StructuredGraph g1 = parseForCompile(getResolvedJavaMethod("fieldLoad"));
         HighTierContext htc = getDefaultHighTierContext();
-        createCanonicalizerPhase().apply(g1, htc);
+        new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
         Assert.assertEquals(15, gc1.finalCycles, 25);
@@ -300,13 +296,13 @@ public class NodePropertiesTest extends GraalCompilerTest {
     public void testFieldStore() {
         StructuredGraph g1 = parseForCompile(getResolvedJavaMethod("fieldStore"));
         HighTierContext htc = getDefaultHighTierContext();
-        createCanonicalizerPhase().apply(g1, htc);
+        new CanonicalizerPhase().apply(g1, htc);
         GraphCostPhase gc1 = new GraphCostPhase();
         gc1.apply(g1, htc);
         Assert.assertEquals(15, gc1.finalCycles, 25);
     }
 
-    static class ImprovementSavingCalculator implements CustomSimplification {
+    static class ImprovementSavingCanonicalizer extends CustomCanonicalizer {
         private int savedCycles;
 
         @Override

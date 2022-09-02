@@ -24,12 +24,17 @@
  */
 package org.graalvm.compiler.core.test;
 
+import static java.lang.reflect.Modifier.isProtected;
+import static java.lang.reflect.Modifier.isPublic;
+
+import java.lang.reflect.Field;
+
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
+import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.phases.VerifyPhase;
-import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -41,10 +46,10 @@ import sun.misc.Unsafe;
  * Checks that the {@link Unsafe} singleton instance is only accessed via well known classes such as
  * {@link GraalUnsafeAccess}.
  */
-public class VerifyUnsafeAccess extends VerifyPhase<PhaseContext> {
+public class VerifyUnsafeAccess extends VerifyPhase<CoreProviders> {
 
     @Override
-    protected boolean verify(StructuredGraph graph, PhaseContext context) {
+    protected void verify(StructuredGraph graph, CoreProviders context) {
         MetaAccessProvider metaAccess = context.getMetaAccess();
         final ResolvedJavaType unsafeType = metaAccess.lookupJavaType(Unsafe.class);
 
@@ -53,14 +58,25 @@ public class VerifyUnsafeAccess extends VerifyPhase<PhaseContext> {
         String holderUnqualified = caller.format("%h");
         String packageName = holderQualified.equals(holderUnqualified) ? "" : holderQualified.substring(0, holderQualified.length() - holderUnqualified.length() - 1);
         if ((holderQualified.equals(GraalUnsafeAccess.class.getName()) ||
-                        holderQualified.equals("org.graalvm.compiler.truffle.runtime.UnsafeAccess") ||
                         holderQualified.equals("jdk.vm.ci.hotspot.UnsafeAccess")) &&
                         caller.getName().equals("initUnsafe")) {
-            // This is the blessed way access Unsafe in Graal, GraalTruffleRuntime and JVMCI
-            return true;
-        } else if (packageName.startsWith("com.oracle.truffle")) {
-            // Truffle does not depend on Graal and so cannot use GraalUnsafeAccess
-            return true;
+            // This is the blessed way access Unsafe in Graal and JVMCI
+            return;
+        } else if (packageName.startsWith("com.oracle.truffle") || packageName.startsWith("org.graalvm.compiler.truffle.runtime")) {
+            // Truffle and GraalTruffleRuntime do not depend on Graal and so cannot use
+            // GraalUnsafeAccess
+            return;
+        }
+
+        if (caller.getSignature().getReturnType(caller.getDeclaringClass()).equals(unsafeType)) {
+            if (caller.isPublic()) {
+                if (holderQualified.equals(GraalUnsafeAccess.class.getName()) && caller.getName().equals("getUnsafe")) {
+                    // pass
+                } else {
+                    throw new VerificationError("Cannot leak Unsafe from public method %s",
+                                    caller.format("%H.%n(%p)"));
+                }
+            }
         }
 
         for (InstanceOfNode node : graph.getNodes().filter(InstanceOfNode.class)) {
@@ -86,7 +102,15 @@ public class VerifyUnsafeAccess extends VerifyPhase<PhaseContext> {
                 }
             }
         }
+    }
 
-        return true;
+    @Override
+    public void verifyClass(Class<?> c, MetaAccessProvider metaAccess) {
+        for (Field field : c.getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+            if (field.getType() == Unsafe.class && (isPublic(modifiers) || isProtected(modifiers))) {
+                throw new VerificationError("Field of type %s must be private or package-private: %s", Unsafe.class.getName(), field);
+            }
+        }
     }
 }

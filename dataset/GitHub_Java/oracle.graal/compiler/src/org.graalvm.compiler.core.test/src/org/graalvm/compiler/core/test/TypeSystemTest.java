@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,6 +41,7 @@ import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
+import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.ConditionalEliminationPhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
 import org.junit.Assert;
@@ -187,13 +188,13 @@ public class TypeSystemTest extends GraalCompilerTest {
          * reference graph.
          */
         new ConditionalEliminationPhase(false).apply(graph, getProviders());
-        createCanonicalizerPhase().apply(graph, getProviders());
+        new CanonicalizerPhase().apply(graph, getProviders());
         // a second canonicalizer is needed to process nested MaterializeNodes
-        createCanonicalizerPhase().apply(graph, getProviders());
+        new CanonicalizerPhase().apply(graph, getProviders());
         StructuredGraph referenceGraph = parseEager(referenceSnippet, AllowAssumptions.NO);
         new ConditionalEliminationPhase(false).apply(referenceGraph, getProviders());
-        this.createCanonicalizerPhase().apply(referenceGraph, getProviders());
-        this.createCanonicalizerPhase().apply(referenceGraph, getProviders());
+        new CanonicalizerPhase().apply(referenceGraph, getProviders());
+        new CanonicalizerPhase().apply(referenceGraph, getProviders());
         assertEquals(referenceGraph, graph);
     }
 
@@ -243,8 +244,8 @@ public class TypeSystemTest extends GraalCompilerTest {
 
     private <T extends Node> void testHelper(String snippet, Class<T> clazz) {
         StructuredGraph graph = parseEager(snippet, AllowAssumptions.NO);
-        createCanonicalizerPhase().apply(graph, getProviders());
-        createCanonicalizerPhase().apply(graph, getProviders());
+        new CanonicalizerPhase().apply(graph, getProviders());
+        new CanonicalizerPhase().apply(graph, getProviders());
         DebugContext debug = graph.getDebug();
         debug.dump(DebugContext.BASIC_LEVEL, graph, "Graph " + snippet);
         Assert.assertFalse("shouldn't have nodes of type " + clazz, graph.getNodes().filter(clazz).iterator().hasNext());

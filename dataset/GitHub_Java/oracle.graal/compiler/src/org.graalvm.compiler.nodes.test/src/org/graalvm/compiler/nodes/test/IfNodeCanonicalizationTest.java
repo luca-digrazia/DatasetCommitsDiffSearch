@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -67,19 +67,19 @@ public class IfNodeCanonicalizationTest extends GraalCompilerTest {
                     for (byte d : testValues) {
                         values[3] = d;
                         value = 2;
-                        super.test("testSnippet1", values);
+                        super.test("testSnippet1", values, true);
+                        super.test("testSnippet1", values, false);
                     }
                 }
             }
         }
     }
 
-    public int testSnippet1(byte[] values) {
+    public int testSnippet1(byte[] values, boolean test) {
         int v = values[0] - values[1];
-        if (v < 0) {
-            value = 2;
+        if (test) {
+            v = values[2] - values[3];
         }
-        v = values[3] - values[2];
         if (v < 0) {
             value = 1;
         }
@@ -156,12 +156,13 @@ public class IfNodeCanonicalizationTest extends GraalCompilerTest {
         StructuredGraph graph = parseEager(name, AllowAssumptions.YES);
 
         CoreProviders context = getProviders();
-        CanonicalizerPhase canonicalizer = createCanonicalizerPhase();
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
         new ConvertDeoptimizeToGuardPhase().apply(graph, context);
         graph.clearAllStateAfter();
         graph.setGuardsStage(StructuredGraph.GuardsStage.AFTER_FSA);
         canonicalizer.apply(graph, context);
 
+        // new DominatorConditionalEliminationPhase(true).apply(graph, context);
         new IterativeConditionalEliminationPhase(canonicalizer, true).apply(graph, context);
         canonicalizer.apply(graph, context);
         canonicalizer.apply(graph, context);

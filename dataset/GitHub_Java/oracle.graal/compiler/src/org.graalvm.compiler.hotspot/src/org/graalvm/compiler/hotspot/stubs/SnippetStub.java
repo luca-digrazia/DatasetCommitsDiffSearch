@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -102,7 +102,7 @@ public abstract class SnippetStub extends Stub implements Snippets {
 
             new RemoveValueProxyPhase().apply(graph);
             graph.setGuardsStage(GuardsStage.FLOATING_GUARDS);
-            CanonicalizerPhase canonicalizer = CanonicalizerPhase.create();
+            CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
             canonicalizer.apply(graph, providers);
             new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER).apply(graph, providers);
         } catch (Throwable e) {
