@@ -51,15 +51,7 @@ final class JLine3Feature implements Feature {
 @TargetClass(className = "org.jline.terminal.impl.jna.JnaSupportImpl", onlyWith = JLine3Feature.IsEnabled.class)
 final class Target_org_jline_terminal_impl_jna_JnaSupportImpl_open {
     @Substitute
-    protected Object open() {
-        throw new RuntimeException();
-    }
-}
-
-@TargetClass(className = "org.mozilla.universalchardet.UniversalDetector", onlyWith = JLine3Feature.IsEnabled.class)
-final class Target_org_mozilla_universalchardet_UniversalDetector {
-    @Substitute
-    Target_org_mozilla_universalchardet_UniversalDetector() {
+    protected static Object open() {
         throw new RuntimeException();
     }
 }
