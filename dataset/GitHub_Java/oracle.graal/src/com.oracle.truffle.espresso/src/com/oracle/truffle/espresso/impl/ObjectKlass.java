@@ -331,7 +331,7 @@ public final class ObjectKlass extends Klass {
     public void initialize() {
         if (!isInitialized()) { // Skip synchronization and locks if already init.
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            verify();
+            verifyKlass();
             actualInit();
         }
     }
@@ -656,8 +656,7 @@ public final class ObjectKlass extends Klass {
         return null;
     }
 
-    @Override
-    public void verify() {
+    private void verifyKlass() {
         if (!isVerified()) {
             synchronized (this) {
                 if (!isVerifyingOrVerified()) {
@@ -692,10 +691,10 @@ public final class ObjectKlass extends Klass {
                     throw getMeta().throwEx(VerifyError.class);
                 }
                 if (getSuperKlass() != null) {
-                    getSuperKlass().verify();
+                    getSuperKlass().verifyKlass();
                 }
                 for (ObjectKlass interf : getSuperInterfaces()) {
-                    interf.verify();
+                    interf.verifyKlass();
                 }
                 if (getMeta().MagicAccessorImpl.isAssignableFrom(this)) {
                     // Hotspot comment:
