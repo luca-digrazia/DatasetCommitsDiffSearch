@@ -81,7 +81,7 @@ public final class OptimizedCompilationProfile {
     @CompilationFinal private boolean callProfiled;
 
     public OptimizedCompilationProfile(OptionValues options) {
-        boolean compileImmediately = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.CompileImmediately);
+        boolean compileImmediately = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompileImmediately);
         int callThreshold = TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleMinInvokeThreshold);
         int callAndLoopThreshold = PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.CompilationThreshold);
         assert callThreshold >= 0;
