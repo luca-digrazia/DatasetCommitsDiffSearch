@@ -102,8 +102,7 @@ public class TypeAccessChecker {
     }
 
     private static boolean isClassPublic(JNIEnvironment env, String classname) {
-        try (CTypeConversion.CCharPointerHolder cname = toCString(classname.replace(".", "/"))) {
-            // todo this call fails
+        try (CTypeConversion.CCharPointerHolder cname = toCString(classname)) {
             JNIObjectHandle clazz = jniFunctions().getFindClass().invoke(env, cname.get());
             if (nullHandle().equal(clazz) || clearException(env)) {
                 return false;
