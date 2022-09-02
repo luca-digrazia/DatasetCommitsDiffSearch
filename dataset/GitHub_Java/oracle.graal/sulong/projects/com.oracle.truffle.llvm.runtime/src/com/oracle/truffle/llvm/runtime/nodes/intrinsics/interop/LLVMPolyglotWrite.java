@@ -33,7 +33,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -68,7 +67,6 @@ public final class LLVMPolyglotWrite {
         }
 
         @Specialization
-        @GenerateAOT.Exclude
         protected void doIntrinsic(LLVMManagedPointer target, Object id, Object value,
                         @Cached LLVMAsForeignNode asForeign,
                         @CachedLibrary(limit = "3") InteropLibrary foreignWrite,
@@ -119,7 +117,6 @@ public final class LLVMPolyglotWrite {
         }
 
         @Specialization
-        @GenerateAOT.Exclude
         protected Object doIntrinsic(LLVMManagedPointer target, int id, Object value,
                         @Cached LLVMAsForeignNode asForeign,
                         @CachedLibrary(limit = "3") InteropLibrary foreignWrite) {
