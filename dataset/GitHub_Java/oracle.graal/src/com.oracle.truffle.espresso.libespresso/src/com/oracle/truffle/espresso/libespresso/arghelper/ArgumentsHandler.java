@@ -30,7 +30,6 @@ import java.io.PrintStream;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionType;
 import org.graalvm.polyglot.Context;
@@ -59,16 +58,11 @@ public class ArgumentsHandler {
     private final boolean experimental;
 
     private boolean helpVM = false;
-    private boolean helpTools = false;
-    private boolean helpLanguages = false;
-
-    private boolean helpExpert = false;
-    private boolean helpInternal = false;
 
     public ArgumentsHandler(Context.Builder builder, JNIJavaVMInitArgs args) {
         this.nativeAccess = new Native(this);
         this.modulePropertyCounter = new ModulePropertyCounter(builder);
-        this.polyglotAccess = new PolyglotArgs(builder, this);
+        this.polyglotAccess = new PolyglotArgs(builder);
         this.experimental = checkExperimental(args);
     }
 
@@ -167,29 +161,11 @@ public class ArgumentsHandler {
         polyglotAccess.argumentProcessingDone();
     }
 
-    public void help(String arg) {
-        switch (arg) {
-            case "--help:vm":
-                helpVM = true;
-                break;
-            case "--help:tools":
-                helpTools = true;
-                break;
-            case "--help:languages":
-                helpLanguages = true;
-                break;
-            case "--help:internal":
-                helpInternal = true;
-                break;
-            case "--help:expert":
-                helpExpert = true;
-                break;
-            default:
-                abort("Unrecognized option: '" + arg + "'.");
-        }
+    public void helpVM() {
+        helpVM = true;
     }
 
-    void printRaw(String category) {
+    void printOptionCategory(String category) {
         out.println(category);
     }
 
@@ -197,29 +173,13 @@ public class ArgumentsHandler {
         out.println(getHelpLine(option, description));
     }
 
-    void printLauncherOption(String option, String description, int indentation) {
-        out.println(getHelpLine(option, description, indentation, LAUNCHER_OPTIONS_INDENT));
-    }
-
     static boolean isBooleanOption(OptionDescriptor descriptor) {
         return descriptor.getKey().getType().equals(OptionType.defaultType(Boolean.class));
     }
 
     private void printHelp() {
-        boolean help = false;
         if (helpVM) {
             nativeAccess.printNativeHelp();
-            help = true;
-        }
-        if (helpTools) {
-            polyglotAccess.printToolsHelp(getHelpCategory());
-            help = true;
-        }
-        if (helpLanguages) {
-            polyglotAccess.printLanguageHelp(getHelpCategory());
-            help = true;
-        }
-        if (help) {
             System.exit(0);
         }
     }
@@ -266,15 +226,5 @@ public class ArgumentsHandler {
             }
         }
         return sb.toString();
-    }
-
-    private OptionCategory getHelpCategory() {
-        if (helpInternal) {
-            return OptionCategory.INTERNAL;
-        } else if (helpExpert) {
-            return OptionCategory.EXPERT;
-        } else {
-            return OptionCategory.USER;
-        }
     }
 }
