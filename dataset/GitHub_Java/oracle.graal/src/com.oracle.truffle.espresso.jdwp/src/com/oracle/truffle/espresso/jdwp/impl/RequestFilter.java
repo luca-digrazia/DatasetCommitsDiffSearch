@@ -34,7 +34,7 @@ public class RequestFilter {
     private KlassRef[] klassRefPatterns;
     private int nextIndex;
     private boolean stepping;
-    private int count = 0;
+    private int eventLimit = Integer.MAX_VALUE;
     private Object thread;
 
     public RequestFilter(int requestId, byte eventKind, int modifiers) {
@@ -70,6 +70,10 @@ public class RequestFilter {
         nextIndex++;
     }
 
+    public KlassRef[] getKlassRefPatterns() {
+        return klassRefPatterns;
+    }
+
     public boolean isKlassExcluded(KlassRef klass) {
         for (Pattern pattern : classExcludePatterns) {
             if (pattern != null) {
@@ -81,12 +85,8 @@ public class RequestFilter {
         return false;
     }
 
-    public void addEventCount(int count) {
-        this.count = count;
-    }
-
-    public int getIgnoreCount() {
-        return count;
+    public void addEventLimit(int count) {
+        this.eventLimit = count;
     }
 
     public void addThread(Object thread) {
