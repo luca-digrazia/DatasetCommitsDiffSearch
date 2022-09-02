@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,12 +27,7 @@ package org.graalvm.compiler.hotspot.meta;
 import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.JavaCall;
 import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.JavaCallee;
 import static org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_ALL_CALLER_SAVE_REGISTERS;
-import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Reexecutability.NOT_REEXECUTABLE;
-import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Reexecutability.REEXECUTABLE;
-import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF_NO_VZERO;
-import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
-import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.MARK_WORD_LOCATION;
-import static org.graalvm.word.LocationIdentity.any;
+import static org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.Transition.SAFEPOINT;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,14 +35,13 @@ import java.util.List;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
-import org.graalvm.compiler.core.common.spi.ForeignCallSignature;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage;
+import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.Reexecutability;
 import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.RegisterEffect;
+import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.Transition;
 import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkageImpl;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Reexecutability;
-import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition;
 import org.graalvm.compiler.hotspot.stubs.ForeignCallStub;
 import org.graalvm.compiler.hotspot.stubs.Stub;
 import org.graalvm.compiler.options.OptionValues;
@@ -66,23 +60,17 @@ import jdk.vm.ci.meta.MetaAccessProvider;
  */
 public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignCallsProvider {
 
-    public static final LocationIdentity[] NO_LOCATIONS = {};
+    public static final ForeignCallDescriptor OSR_MIGRATION_END = new ForeignCallDescriptor("OSR_migration_end", void.class, long.class);
+    public static final ForeignCallDescriptor IDENTITY_HASHCODE = new ForeignCallDescriptor("identity_hashcode", int.class, Object.class);
+    public static final ForeignCallDescriptor VERIFY_OOP = new ForeignCallDescriptor("verify_oop", Object.class, Object.class);
+    public static final ForeignCallDescriptor LOAD_AND_CLEAR_EXCEPTION = new ForeignCallDescriptor("load_and_clear_exception", Object.class, Word.class);
 
-    public static final HotSpotForeignCallDescriptor OSR_MIGRATION_END = new HotSpotForeignCallDescriptor(LEAF_NO_VZERO, NOT_REEXECUTABLE, NO_LOCATIONS, "OSR_migration_end", void.class, long.class);
-    public static final HotSpotForeignCallDescriptor IDENTITY_HASHCODE = new HotSpotForeignCallDescriptor(SAFEPOINT, NOT_REEXECUTABLE, MARK_WORD_LOCATION, "identity_hashcode", int.class,
-                    Object.class);
-    public static final HotSpotForeignCallDescriptor VERIFY_OOP = new HotSpotForeignCallDescriptor(LEAF_NO_VZERO, REEXECUTABLE, NO_LOCATIONS, "verify_oop", Object.class,
-                    Object.class);
-    public static final HotSpotForeignCallDescriptor LOAD_AND_CLEAR_EXCEPTION = new HotSpotForeignCallDescriptor(LEAF_NO_VZERO, NOT_REEXECUTABLE, any(), "load_and_clear_exception", Object.class,
-                    Word.class);
-
-    public static final HotSpotForeignCallDescriptor TEST_DEOPTIMIZE_CALL_INT = new HotSpotForeignCallDescriptor(SAFEPOINT, REEXECUTABLE, any(), "test_deoptimize_call_int", int.class, int.class);
+    public static final ForeignCallDescriptor TEST_DEOPTIMIZE_CALL_INT = new ForeignCallDescriptor("test_deoptimize_call_int", int.class, int.class);
 
     protected final HotSpotJVMCIRuntime jvmciRuntime;
     protected final HotSpotGraalRuntimeProvider runtime;
 
-    protected final EconomicMap<ForeignCallSignature, HotSpotForeignCallLinkage> foreignCalls = EconomicMap.create();
-    protected final EconomicMap<ForeignCallSignature, HotSpotForeignCallDescriptor> signatureMap = EconomicMap.create();
+    protected final EconomicMap<ForeignCallDescriptor, HotSpotForeignCallLinkage> foreignCalls = EconomicMap.create();
     protected final MetaAccessProvider metaAccess;
     protected final CodeCacheProvider codeCache;
     protected final WordTypes wordTypes;
@@ -100,9 +88,16 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
      * Registers the linkage for a foreign call.
      */
     public HotSpotForeignCallLinkage register(HotSpotForeignCallLinkage linkage) {
-        assert !foreignCalls.containsKey(linkage.getDescriptor().getSignature()) : "already registered linkage for " + linkage.getDescriptor();
-        foreignCalls.put(linkage.getDescriptor().getSignature(), linkage);
+        assert !foreignCalls.containsKey(linkage.getDescriptor()) : "already registered linkage for " + linkage.getDescriptor();
+        foreignCalls.put(linkage.getDescriptor(), linkage);
         return linkage;
+    }
+
+    /**
+     * Return true if the descriptor has already been registered.
+     */
+    public boolean isRegistered(ForeignCallDescriptor descriptor) {
+        return foreignCalls.containsKey(descriptor);
     }
 
     /**
@@ -116,7 +111,7 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
      * @param killedLocations the memory locations killed by the stub call
      */
     public HotSpotForeignCallLinkage registerStubCall(
-                    HotSpotForeignCallDescriptor descriptor,
+                    ForeignCallDescriptor descriptor,
                     Transition transition,
                     Reexecutability reexecutability,
                     RegisterEffect effect,
@@ -134,17 +129,6 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
                         killedLocations));
     }
 
-    public HotSpotForeignCallLinkage registerStubCall(
-                    ForeignCallSignature signature,
-                    Transition transition,
-                    Reexecutability reexecutability,
-                    RegisterEffect effect,
-                    LocationIdentity... killedLocations) {
-        HotSpotForeignCallDescriptor descriptor = new HotSpotForeignCallDescriptor(signature, transition, reexecutability, killedLocations);
-        signatureMap.put(signature, descriptor);
-        return registerStubCall(descriptor, transition, reexecutability, effect, killedLocations);
-    }
-
     /**
      * Creates and registers the linkage for a foreign call. All foreign calls are assumed to have
      * the effect {@link RegisterEffect#DESTROYS_ALL_CALLER_SAVE_REGISTERS} since they are outside
@@ -160,16 +144,14 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
      * @param killedLocations the memory locations killed by the foreign call
      */
     public HotSpotForeignCallLinkage registerForeignCall(
-                    HotSpotForeignCallDescriptor descriptor,
+                    ForeignCallDescriptor descriptor,
                     long address,
                     CallingConvention.Type outgoingCcType,
                     Transition transition,
                     Reexecutability reexecutability,
                     LocationIdentity... killedLocations) {
         Class<?> resultType = descriptor.getResultType();
-        if (address == 0) {
-            throw new IllegalArgumentException("address must be non-zero");
-        }
+        assert address != 0 : descriptor;
         assert transition != SAFEPOINT || resultType.isPrimitive() || Word.class.isAssignableFrom(resultType) : "non-leaf foreign calls must return objects in thread local storage: " + descriptor;
         return register(HotSpotForeignCallLinkageImpl.create(metaAccess,
                         codeCache,
@@ -201,7 +183,7 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
      */
     public void linkForeignCall(OptionValues options,
                     HotSpotProviders providers,
-                    HotSpotForeignCallDescriptor descriptor,
+                    ForeignCallDescriptor descriptor,
                     long address,
                     boolean prependThread,
                     Transition transition,
@@ -220,10 +202,12 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
     public static final boolean PREPEND_THREAD = true;
     public static final boolean DONT_PREPEND_THREAD = !PREPEND_THREAD;
 
+    public static final LocationIdentity[] NO_LOCATIONS = {};
+
     @Override
     public HotSpotForeignCallLinkage lookupForeignCall(ForeignCallDescriptor descriptor) {
         assert foreignCalls != null : descriptor;
-        HotSpotForeignCallLinkage callTarget = foreignCalls.get(descriptor.getSignature());
+        HotSpotForeignCallLinkage callTarget = foreignCalls.get(descriptor);
         if (callTarget == null) {
             throw GraalError.shouldNotReachHere("missing implementation for runtime call: " + descriptor);
         }
@@ -232,17 +216,32 @@ public abstract class HotSpotForeignCallsProviderImpl implements HotSpotForeignC
     }
 
     @Override
-    public HotSpotForeignCallDescriptor getDescriptor(ForeignCallSignature signature) {
-        HotSpotForeignCallDescriptor descriptor = signatureMap.get(signature);
-        assert descriptor != null : signature;
-        return descriptor;
+    public boolean isAvailable(ForeignCallDescriptor descriptor) {
+        return foreignCalls.containsKey(descriptor);
     }
 
-    HotSpotForeignCallDescriptor createDescriptor(ForeignCallSignature signature, Transition transition, Reexecutability reexecutability, LocationIdentity... killLocations) {
-        assert signatureMap.get(signature) == null;
-        HotSpotForeignCallDescriptor descriptor = new HotSpotForeignCallDescriptor(signature, transition, reexecutability, killLocations);
-        signatureMap.put(signature, descriptor);
-        return descriptor;
+    @Override
+    public boolean isReexecutable(ForeignCallDescriptor descriptor) {
+        assert foreignCalls.containsKey(descriptor) : "unknown foreign call: " + descriptor;
+        return foreignCalls.get(descriptor).isReexecutable();
+    }
+
+    @Override
+    public boolean canDeoptimize(ForeignCallDescriptor descriptor) {
+        assert foreignCalls.containsKey(descriptor) : "unknown foreign call: " + descriptor;
+        return foreignCalls.get(descriptor).needsDebugInfo();
+    }
+
+    @Override
+    public boolean isGuaranteedSafepoint(ForeignCallDescriptor descriptor) {
+        assert foreignCalls.containsKey(descriptor) : "unknown foreign call: " + descriptor;
+        return foreignCalls.get(descriptor).isGuaranteedSafepoint();
+    }
+
+    @Override
+    public LocationIdentity[] getKilledLocations(ForeignCallDescriptor descriptor) {
+        assert foreignCalls.containsKey(descriptor) : "unknown foreign call: " + descriptor;
+        return foreignCalls.get(descriptor).getKilledLocations();
     }
 
     @Override
