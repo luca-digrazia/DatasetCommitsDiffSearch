@@ -39,6 +39,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.wasm.binary.exception.WasmExecutionException;
 
 @NodeInfo(language = "wasm", description = "The root node of all WebAssembly functions")
 public class WasmRootNode extends RootNode implements WasmNodeInterface {
@@ -109,7 +110,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
     @ExplodeLoop
     private void argumentsToLocals(VirtualFrame frame) {
         Object[] args = frame.getArguments();
-        int numArgs = body.module().symbolTable().function(codeEntry().functionIndex()).numArguments();
+        int numArgs = body.wasmModule().symbolTable().function(codeEntry().functionIndex()).numArguments();
         assert args.length == numArgs;
         for (int i = 0; i != numArgs; ++i) {
             FrameSlot slot = codeEntry.localSlot(i);
@@ -145,7 +146,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
     @ExplodeLoop
     private void initializeLocals(VirtualFrame frame) {
-        int numArgs = body.module().symbolTable().function(codeEntry().functionIndex()).numArguments();
+        int numArgs = body.wasmModule().symbolTable().function(codeEntry().functionIndex()).numArguments();
         for (int i = numArgs; i != body.codeEntry().numLocals(); ++i) {
             byte type = body.codeEntry().localType(i);
             switch (type) {
