@@ -1328,7 +1328,7 @@ public class NativeImageGenerator {
                 // On SVM, the economy configuration requires a canonicalization run at the end of
                 // mid tier.
                 it = midTier.findLastPhase();
-                it.add(CanonicalizerPhase.create());
+                it.add(new CanonicalizerPhase());
             } else {
                 ListIterator<BasePhase<? super MidTierContext>> it = midTier.findPhase(DeoptimizationGroupingPhase.class);
                 it.previous();
