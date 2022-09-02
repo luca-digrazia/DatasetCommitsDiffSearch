@@ -42,7 +42,7 @@ import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 
 @ValueType
-@ExportLibrary(value = DynamicDispatchLibrary.class, useForAOT = true)
+@ExportLibrary(DynamicDispatchLibrary.class)
 final class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer {
 
     static final LLVMPointerImpl NULL = new LLVMPointerImpl(null, 0, null);
@@ -72,7 +72,7 @@ final class LLVMPointerImpl implements LLVMManagedPointer, LLVMNativePointer {
 
     @Override
     public boolean isSame(LLVMPointer o) {
-        LLVMPointerImpl other = (LLVMPointerImpl) o; // cannot fail, there is only one subclass
+        LLVMPointerImpl other = (LLVMPointerImpl) o; // can not fail, there is only one subclass
         return this.object == other.object && this.offset == other.offset;
     }
 
