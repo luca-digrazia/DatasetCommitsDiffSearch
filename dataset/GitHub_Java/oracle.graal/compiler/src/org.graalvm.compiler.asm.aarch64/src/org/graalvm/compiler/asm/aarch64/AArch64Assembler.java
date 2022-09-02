@@ -2135,7 +2135,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src1 general purpose register. May not be null or stackpointer.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
-    public void asr(int size, Register dst, Register src1, Register src2) {
+    protected void asr(int size, Register dst, Register src1, Register src2) {
         dataProcessing2SourceOp(ASRV, dst, src1, src2, generalFromSize(size));
     }
 
@@ -2147,7 +2147,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src1 general purpose register. May not be null or stackpointer.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
-    public void lsl(int size, Register dst, Register src1, Register src2) {
+    protected void lsl(int size, Register dst, Register src1, Register src2) {
         dataProcessing2SourceOp(LSLV, dst, src1, src2, generalFromSize(size));
     }
 
@@ -2159,7 +2159,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param src1 general purpose register. May not be null or stackpointer.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
-    public void lsr(int size, Register dst, Register src1, Register src2) {
+    protected void lsr(int size, Register dst, Register src1, Register src2) {
         dataProcessing2SourceOp(LSRV, dst, src1, src2, generalFromSize(size));
     }
 
