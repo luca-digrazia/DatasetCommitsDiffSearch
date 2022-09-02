@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -68,6 +68,7 @@ import com.oracle.truffle.regex.tregex.parser.ast.InnerLiteral;
 import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.QuantifiableTerm;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexASTSubtreeRootNode;
+import com.oracle.truffle.regex.tregex.parser.flavors.RubyFlavor;
 
 import java.util.List;
 
@@ -88,9 +89,9 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
     private final boolean ignoreCase;
     private final boolean unicode;
     /**
-     * Should a backreference to an unmatched capture group succeed or fail?
+     * Should a backreference to an unmatched capture group succeed?
      */
-    private final boolean backrefWithNullTargetFails;
+    private final boolean backrefWithNullTargetSucceeds;
     /**
      * Should the empty check in {@code exitZeroWidth} quantifier guards also check the contents of
      * capture groups? If the capture groups were modified, the empty check passes, even if only the
@@ -123,9 +124,9 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         this.forward = !(subtree instanceof LookBehindAssertion);
         this.ignoreCase = nfaMap.getAst().getFlags().isIgnoreCase();
         this.unicode = nfaMap.getAst().getFlags().isUnicode();
-        this.backrefWithNullTargetFails = nfaMap.getAst().getOptions().getFlavor().backreferencesToUnmatchedGroupsFail();
-        this.monitorCaptureGroupsInEmptyCheck = nfaMap.getAst().getOptions().getFlavor().emptyChecksMonitorCaptureGroups();
-        this.transitionMatchesStepByStep = nfaMap.getAst().getOptions().getFlavor().emptyChecksMonitorCaptureGroups();
+        this.backrefWithNullTargetSucceeds = nfaMap.getAst().getOptions().getFlavor() != RubyFlavor.INSTANCE;
+        this.monitorCaptureGroupsInEmptyCheck = nfaMap.getAst().getOptions().getFlavor() == RubyFlavor.INSTANCE;
+        this.transitionMatchesStepByStep = nfaMap.getAst().getOptions().getFlavor() == RubyFlavor.INSTANCE;
         this.loneSurrogates = nfaMap.getAst().getProperties().hasLoneSurrogates();
         this.nQuantifiers = nfaMap.getAst().getQuantifierCount().getCount();
         this.nZeroWidthQuantifiers = nfaMap.getAst().getZeroWidthQuantifiables().size();
@@ -653,7 +654,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
                     int start = getBackRefBoundary(locals, transition, target.getBackRefNumber() * 2, index);
                     int end = getBackRefBoundary(locals, transition, target.getBackRefNumber() * 2 + 1, index);
                     if (start < 0 || end < 0) {
-                        return !backrefWithNullTargetFails;
+                        return backrefWithNullTargetSucceeds;
                     }
                     return matchBackReferenceSimple(locals, start, end, index);
                 } else {
@@ -763,7 +764,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
                 if (canInlineBackReferenceIntoTransition()) {
                     int start = getBackRefBoundary(locals, transition, target.getBackRefNumber() * 2, index);
                     int end = getBackRefBoundary(locals, transition, target.getBackRefNumber() * 2 + 1, index);
-                    if ((start < 0 || end < 0) && backrefWithNullTargetFails) {
+                    if ((start < 0 || end < 0) && !backrefWithNullTargetSucceeds) {
                         return false;
                     }
                     if (!matchBackReferenceSimple(locals, start, end, index)) {
@@ -910,9 +911,6 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
 
     private int matchBackReferenceGeneric(TRegexBacktrackingNFAExecutorLocals locals, int backrefStart, int backrefEnd) {
         assert ignoreCase || loneSurrogates;
-        if (backrefWithNullTargetFails && (backrefStart < 0 || backrefEnd < 0)) {
-            return -1;
-        }
         int index = locals.getIndex();
         int inputLength = locals.getMaxIndex();
         int iBR = isForward() ? backrefStart : backrefEnd;
