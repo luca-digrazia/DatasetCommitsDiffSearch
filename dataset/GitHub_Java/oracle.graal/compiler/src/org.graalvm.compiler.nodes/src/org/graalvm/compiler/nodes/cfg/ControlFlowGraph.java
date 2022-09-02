@@ -317,9 +317,6 @@ public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                     dominator = ((dominator == null) ? pred : commonDominatorRaw(dominator, pred));
                 }
             }
-            // Fortify: Suppress Null Dereference false positive (every block apart from the first
-            // is guaranteed to have a predecessor)
-            assert dominator != null;
 
             // Set dominator.
             block.setDominator(dominator);
