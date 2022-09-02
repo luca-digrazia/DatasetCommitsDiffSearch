@@ -37,7 +37,7 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.ReferenceType;
+import javax.lang.model.type.PrimitiveType;
 
 public class JniImplProcessor extends EspressoProcessor {
     // @JniImpl
@@ -71,13 +71,13 @@ public class JniImplProcessor extends EspressoProcessor {
 
     static class JniHelper extends SubstitutionHelper {
         final String jniNativeSignature;
-        final List<Boolean> referenceTypes;
+        final List<Boolean> nonPrimitives;
         final String returnType;
         final boolean isStatic;
 
-        public JniHelper(String jniNativeSignature, List<Boolean> referenceTypes, String returnType, boolean isStatic) {
+        public JniHelper(String jniNativeSignature, List<Boolean> nonPrimitives, String returnType, boolean isStatic) {
             this.jniNativeSignature = jniNativeSignature;
-            this.referenceTypes = referenceTypes;
+            this.nonPrimitives = nonPrimitives;
             this.returnType = returnType;
             this.isStatic = isStatic;
         }
@@ -131,8 +131,8 @@ public class JniImplProcessor extends EspressoProcessor {
             String targetMethodName = jniMethod.getSimpleName().toString();
             // Obtain the host types of the parameters
             List<String> espressoTypes = new ArrayList<>();
-            List<Boolean> referenceTypes = new ArrayList<>();
-            getEspressoTypes(jniMethod, espressoTypes, referenceTypes);
+            List<Boolean> nonPrimitives = new ArrayList<>();
+            getEspressoTypes(jniMethod, espressoTypes, nonPrimitives);
             // Spawn the name of the Substitutor we will create.
             String substitutorName = getSubstitutorClassName(className, targetMethodName, espressoTypes);
             if (!classes.contains(substitutorName)) {
@@ -143,7 +143,7 @@ public class JniImplProcessor extends EspressoProcessor {
                 // Check if we need to call an instance method
                 boolean isStatic = jniMethod.getModifiers().contains(Modifier.STATIC);
                 // Spawn helper
-                JniHelper helper = new JniHelper(jniNativeSignature, referenceTypes, returnType, isStatic);
+                JniHelper helper = new JniHelper(jniNativeSignature, nonPrimitives, returnType, isStatic);
                 // Create the contents of the source file
                 String classFile = spawnSubstitutor(
                                 className,
@@ -155,12 +155,12 @@ public class JniImplProcessor extends EspressoProcessor {
         }
     }
 
-    private static void getEspressoTypes(ExecutableElement inner, List<String> parameterTypeNames, List<Boolean> referenceTypes) {
+    private static void getEspressoTypes(ExecutableElement inner, List<String> parameterTypeNames, List<Boolean> nonPrimitives) {
         for (VariableElement parameter : inner.getParameters()) {
             String arg = parameter.asType().toString();
             String result = extractSimpleType(arg);
             parameterTypeNames.add(result);
-            referenceTypes.add(parameter.asType() instanceof ReferenceType);
+            nonPrimitives.add(!(parameter.asType() instanceof PrimitiveType));
         }
     }
 
@@ -217,7 +217,7 @@ public class JniImplProcessor extends EspressoProcessor {
         StringBuilder str = new StringBuilder();
         JniHelper h = (JniHelper) helper;
         str.append(IMPORT_JNI_ENV);
-        if (h.referenceTypes.contains(true)) {
+        if (h.nonPrimitives.contains(true)) {
             str.append(IMPORT_INTEROP_LIBRARY);
         }
         if (parameterTypeName.contains("StaticObject") || h.returnType.equals("void")) {
@@ -252,7 +252,7 @@ public class JniImplProcessor extends EspressoProcessor {
         str.append(TAB_1).append(PUBLIC_FINAL_OBJECT).append(INVOKE);
         int argIndex = 0;
         for (String type : parameterTypes) {
-            boolean isNonPrimitive = h.referenceTypes.get(argIndex);
+            boolean isNonPrimitive = h.nonPrimitives.get(argIndex);
             str.append(extractArg(argIndex++, type, isNonPrimitive, 1, TAB_2));
         }
         switch (h.returnType) {
