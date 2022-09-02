@@ -118,6 +118,7 @@ public final class RawStructureLayoutPlanner extends NativeInfoTreeVisitor {
     @Override
     protected void visitRawPointerToInfo(RawPointerToInfo info) {
         info.getSizeInfo().setProperty(getSizeInBytes(info.getAnnotatedElement()));
+        assert info.getSignednessInfo() == null;
     }
 
     private void computeSize(StructFieldInfo info) {

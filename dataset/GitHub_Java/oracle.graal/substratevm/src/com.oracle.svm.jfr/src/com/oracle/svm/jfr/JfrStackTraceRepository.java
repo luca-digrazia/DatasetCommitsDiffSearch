@@ -30,6 +30,7 @@ import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
+import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.struct.RawField;
 import org.graalvm.nativeimage.c.struct.RawPointerTo;
 import org.graalvm.nativeimage.c.struct.RawStructure;
@@ -89,7 +90,7 @@ public class JfrStackTraceRepository implements JfrRepository {
                 fillInStackTrace(stackTrace, maxFrames, skipCount);
                 return table.add(stackTrace);
             } finally {
-                ImageSingletons.lookup(UnmanagedMemorySupport.class).free(stackTrace.getStackFrames());
+                UnmanagedMemory.free(stackTrace.getStackFrames());
             }
         }
         return 0L;
@@ -224,7 +225,7 @@ public class JfrStackTraceRepository implements JfrRepository {
                 }
 
                 // Allocation failed, so free all other memory as well.
-                ImageSingletons.lookup(UnmanagedMemorySupport.class).free(stackTraceOnHeap);
+                UnmanagedMemory.free(stackTraceOnHeap);
             }
             return WordFactory.nullPointer();
         }

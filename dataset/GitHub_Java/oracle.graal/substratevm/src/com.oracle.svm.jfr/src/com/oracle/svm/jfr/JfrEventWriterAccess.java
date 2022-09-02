@@ -32,15 +32,11 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 
-import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.jfr.internal.EventWriter;
 import sun.misc.Unsafe;
 
-/**
- * Used to access the Java event writer class, see {@link jdk.jfr.internal.EventWriter}.
- */
 public final class JfrEventWriterAccess implements Feature {
     private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
 
@@ -54,27 +50,22 @@ public final class JfrEventWriterAccess implements Feature {
     private JfrEventWriterAccess() {
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static void setStartPosition(EventWriter writer, long value) {
         UNSAFE.putLong(writer, UNSAFE.objectFieldOffset(startPosition), value);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static void setStartPositionAddress(EventWriter writer, long value) {
         UNSAFE.putLong(writer, UNSAFE.objectFieldOffset(startPositionAddress), value);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static void setCurrentPosition(EventWriter writer, long value) {
         UNSAFE.putLong(writer, UNSAFE.objectFieldOffset(currentPosition), value);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static void setMaxPosition(EventWriter writer, long value) {
         UNSAFE.putLong(writer, UNSAFE.objectFieldOffset(maxPosition), value);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static void setValid(EventWriter writer, boolean value) {
         UNSAFE.putBooleanVolatile(writer, UNSAFE.objectFieldOffset(valid), value);
     }
