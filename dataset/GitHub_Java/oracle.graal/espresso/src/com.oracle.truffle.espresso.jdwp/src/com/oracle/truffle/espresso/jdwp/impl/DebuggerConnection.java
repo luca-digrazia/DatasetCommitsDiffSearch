@@ -112,7 +112,7 @@ public final class DebuggerConnection implements Commands {
                 try {
                     command.wait();
                 } catch (InterruptedException e) {
-                    JDWP.LOGGER.warning(() -> "could not submit debugger command due to " +  e.getMessage());
+                    JDWPLogger.log("could not submit debugger command due to %s", JDWPLogger.LogLevel.ALL, e.getMessage());
                 }
             }
         }
@@ -212,7 +212,7 @@ public final class DebuggerConnection implements Commands {
                     processPacket(Packet.fromByteArray(connection.readPacket()));
                 } catch (IOException e) {
                     if (!Thread.currentThread().isInterrupted()) {
-                        JDWP.LOGGER.warning(() -> "Failed to process jdwp packet with message: " + e.getMessage());
+                        JDWPLogger.log("Failed to process jdwp packet with message: %s", JDWPLogger.LogLevel.ALL, e.getMessage());
                     }
                 } catch (ConnectionClosedException e) {
                     // we closed the session, so let the thread run dry
@@ -226,10 +226,10 @@ public final class DebuggerConnection implements Commands {
             try {
                 if (packet.flags == Packet.Reply) {
                     // result packet from debugger!
-                    JDWP.LOGGER.warning(() -> "Should not get any reply packet from debugger");
+                    JDWPLogger.log("Should not get any reply packet from debugger", JDWPLogger.LogLevel.PACKET);
                 } else {
                     // process a command packet from debugger
-                    JDWP.LOGGER.fine(() -> "received command(" + packet.cmdSet + "." + packet.cmd + ")");
+                    JDWPLogger.log("received command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
 
                     switch (packet.cmdSet) {
                         case JDWP.VirtualMachine.ID: {
@@ -598,8 +598,8 @@ public final class DebuggerConnection implements Commands {
                 }
                 handleReply(packet, result);
             } catch (Throwable t) {
-                JDWP.LOGGER.warning(() -> "[Internal error]: " + t.getClass());
-                JDWP.LOGGER.throwing(DebuggerConnection.class.getName(), "processPacket", t);
+                JDWPLogger.log("[Internal error]: %s", JDWPLogger.LogLevel.ALL, t.getClass());
+                JDWPLogger.throwing(JDWPLogger.LogLevel.ALL, t);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.errorCode(ErrorCodes.INTERNAL);
                 handleReply(packet, new CommandResult(reply));
@@ -624,15 +624,14 @@ public final class DebuggerConnection implements Commands {
                     }
                 }
             } catch (Exception e) {
-                JDWP.LOGGER.warning(() -> "Failed to run future for command(" + packet.cmdSet + "." + packet.cmd + ")");
-                JDWP.LOGGER.throwing(DebuggerConnection.class.getName(), "handleReply", e);
+                JDWPLogger.log("Failed to run future for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
             }
         }
         if (result.getReply() != null) {
-            JDWP.LOGGER.fine(() -> "replying to command(" + packet.cmdSet + "." + packet.cmd + ")");
+            JDWPLogger.log("replying to command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
             connection.queuePacket(result.getReply());
         } else {
-            JDWP.LOGGER.warning(() -> "no result for command(" + packet.cmdSet + "." + packet.cmd + ")");
+            JDWPLogger.log("no result for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
         }
         // run post futures after sending the reply
         if (result.getPostFutures() != null) {
@@ -643,8 +642,7 @@ public final class DebuggerConnection implements Commands {
                     }
                 }
             } catch (Exception e) {
-                JDWP.LOGGER.warning(() -> "Failed to run future for command(" + packet.cmdSet + "." + packet.cmd + ")");
-                JDWP.LOGGER.throwing(DebuggerConnection.class.getName(), "handleReply", e);
+                JDWPLogger.log("Failed to run future for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
             }
         }
     }
