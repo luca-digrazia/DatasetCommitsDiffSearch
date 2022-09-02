@@ -90,8 +90,7 @@ public class MethodHandleFeature implements Feature {
     private Method methodHandleInternalMemberName;
     private Method memberNameGetDeclaringClass;
     private Method memberNameGetName;
-    private Method memberNameIsMethod;
-    private Method memberNameIsConstructor;
+    private Method memberNameIsInvocable;
     private Method memberNameIsField;
     private Method memberNameGetParameterTypes;
     private Field methodHandleInternalForm;
@@ -118,8 +117,7 @@ public class MethodHandleFeature implements Feature {
         Class<?> memberNameClass = access.findClassByName("java.lang.invoke.MemberName");
         memberNameGetDeclaringClass = ReflectionUtil.lookupMethod(memberNameClass, "getDeclaringClass");
         memberNameGetName = ReflectionUtil.lookupMethod(memberNameClass, "getName");
-        memberNameIsMethod = ReflectionUtil.lookupMethod(memberNameClass, "isMethod");
-        memberNameIsConstructor = ReflectionUtil.lookupMethod(memberNameClass, "isConstructor");
+        memberNameIsInvocable = ReflectionUtil.lookupMethod(memberNameClass, "isInvocable");
         memberNameIsField = ReflectionUtil.lookupMethod(memberNameClass, "isField");
         memberNameGetParameterTypes = ReflectionUtil.lookupMethod(memberNameClass, "getParameterTypes");
 
@@ -344,15 +342,12 @@ public class MethodHandleFeature implements Feature {
     private void registerMemberName(Object memberName) {
         try {
             Class<?> declaringClass = (Class<?>) memberNameGetDeclaringClass.invoke(memberName);
-            boolean isMethod = (boolean) memberNameIsMethod.invoke(memberName);
-            boolean isConstructor = (boolean) memberNameIsConstructor.invoke(memberName);
+            String name = (String) memberNameGetName.invoke(memberName);
+            boolean isInvocable = (boolean) memberNameIsInvocable.invoke(memberName);
             boolean isField = (boolean) memberNameIsField.invoke(memberName);
-            String name = (isMethod || isField) ? (String) memberNameGetName.invoke(memberName) : null;
-            Class<?>[] paramTypes = (isMethod || isConstructor) ? (Class<?>[]) memberNameGetParameterTypes.invoke(memberName) : null;
-            if (isMethod) {
+            if (isInvocable) {
+                Class<?>[] paramTypes = (Class<?>[]) memberNameGetParameterTypes.invoke(memberName);
                 RuntimeReflection.register(declaringClass.getDeclaredMethod(name, paramTypes));
-            } else if (isConstructor) {
-                RuntimeReflection.register(declaringClass.getDeclaredConstructor(paramTypes));
             } else if (isField) {
                 RuntimeReflection.register(declaringClass.getDeclaredField(name));
             }
