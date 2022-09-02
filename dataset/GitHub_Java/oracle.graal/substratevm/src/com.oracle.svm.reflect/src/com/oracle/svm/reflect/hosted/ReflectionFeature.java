@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,102 +24,70 @@
  */
 package com.oracle.svm.reflect.hosted;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.util.function.BooleanSupplier;
-
-import org.graalvm.compiler.options.Option;
-import org.graalvm.nativeimage.Feature;
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 
-import com.oracle.svm.core.RuntimeReflection.RuntimeReflectionSupport;
+import com.oracle.graal.pointsto.meta.AnalysisUniverse;
+import com.oracle.svm.core.ParsingReason;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.SubstrateOptionsParser;
-import com.oracle.svm.core.util.UserError;
+import com.oracle.svm.core.configure.ConfigurationFiles;
+import com.oracle.svm.core.configure.ReflectionConfigurationParser;
+import com.oracle.svm.core.graal.GraalFeature;
+import com.oracle.svm.hosted.FallbackFeature;
 import com.oracle.svm.hosted.FeatureImpl.DuringSetupAccessImpl;
-import com.oracle.svm.hosted.config.ReflectionConfigurationParser;
-import com.oracle.svm.hosted.option.HostedOptionParser;
+import com.oracle.svm.hosted.FeatureImpl.FeatureAccessImpl;
+import com.oracle.svm.hosted.ImageClassLoader;
+import com.oracle.svm.hosted.analysis.Inflation;
+import com.oracle.svm.hosted.config.ConfigurationParserUtils;
+import com.oracle.svm.hosted.snippets.ReflectionPlugins;
+import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
+import com.oracle.svm.reflect.helpers.ReflectionProxy;
+import com.oracle.svm.util.ModuleSupport;
 
 @AutomaticFeature
-public final class ReflectionFeature implements Feature {
+public final class ReflectionFeature implements GraalFeature {
 
-    public static class Options {
-        @Option(help = "Enable support for reflection at run time")//
-        public static final HostedOptionKey<Boolean> ReflectionEnabled = new HostedOptionKey<>(true);
-
-        @Option(help = "file:doc-files/ReflectionConfigurationFilesHelp.txt")//
-        public static final HostedOptionKey<String> ReflectionConfigurationFiles = new HostedOptionKey<>("");
-
-        @Option(help = "Resources describing program elements to be made available for reflection (see ReflectionConfigurationFiles).")//
-        public static final HostedOptionKey<String> ReflectionConfigurationResources = new HostedOptionKey<>("");
-    }
-
-    public static class IsEnabled implements BooleanSupplier {
-        @Override
-        public boolean getAsBoolean() {
-            return ImageSingletons.contains(ReflectionFeature.class);
-        }
-    }
-
-    public static class IsDisabled implements BooleanSupplier {
-        @Override
-        public boolean getAsBoolean() {
-            return !ImageSingletons.contains(ReflectionFeature.class);
-        }
-    }
-
-    @Override
-    public boolean isInConfiguration(IsInConfigurationAccess access) {
-        Boolean result = Options.ReflectionEnabled.getValue();
-        if (!result && (!Options.ReflectionConfigurationFiles.getValue().isEmpty() || !Options.ReflectionConfigurationResources.getValue().isEmpty())) {
-            throw UserError.abort("The options " + Options.ReflectionConfigurationFiles.getName() + " and " + Options.ReflectionConfigurationResources.getName() +
-                            " can only be used when the option " + Options.ReflectionEnabled.getName() + " is set to true");
-        }
-        return result;
-
-    }
+    private AnnotationSubstitutionProcessor annotationSubstitutions;
 
     private ReflectionDataBuilder reflectionData;
+    private ImageClassLoader loader;
+    private AnalysisUniverse aUniverse;
+    private int loadedConfigurations;
+
+    @Override
+    public void afterRegistration(AfterRegistrationAccess access) {
+        ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "jdk.internal.reflect", false);
+        ModuleSupport.openModuleByClass(ReflectionProxy.class, null);
+
+        reflectionData = new ReflectionDataBuilder((FeatureAccessImpl) access);
+        ImageSingletons.add(RuntimeReflectionSupport.class, reflectionData);
+    }
 
     @Override
     public void duringSetup(DuringSetupAccess a) {
         DuringSetupAccessImpl access = (DuringSetupAccessImpl) a;
+        aUniverse = access.getUniverse();
 
-        ReflectionSubstitution subst = new ReflectionSubstitution(access.getMetaAccess().getWrapped(), access.getImageClassLoader());
+        ReflectionSubstitution subst = new ReflectionSubstitution(access.getMetaAccess().getWrapped(), access.getHostVM().getClassInitializationSupport(), access.getImageClassLoader());
         access.registerSubstitutionProcessor(subst);
         ImageSingletons.add(ReflectionSubstitution.class, subst);
 
-        reflectionData = new ReflectionDataBuilder();
-        ImageSingletons.add(RuntimeReflectionSupport.class, reflectionData);
+        access.registerObjectReplacer(new ReflectionObjectReplacer(access.getMetaAccess()));
 
-        ReflectionConfigurationParser parser = new ReflectionConfigurationParser(reflectionData, access.getImageClassLoader());
-        String configFiles = Options.ReflectionConfigurationFiles.getValue();
-        if (!configFiles.isEmpty()) {
-            for (String file : configFiles.split(",")) {
-                try {
-                    parser.parseAndRegister(file);
-                } catch (Exception e) {
-                    throw UserError.abort("Could not parse reflection configuration file \"" + file + "\". Verify that the file exists and its contents match the expected schema (see " +
-                                    HostedOptionParser.HOSTED_OPTION_PREFIX + SubstrateOptionsParser.PRINT_FLAGS_OPTION_NAME + " for option " + Options.ReflectionConfigurationFiles.getName() +
-                                    ").\n" + e.toString());
-                }
-            }
+        if (!ImageSingletons.contains(ReflectionSubstitutionType.Factory.class)) {
+            ImageSingletons.add(ReflectionSubstitutionType.Factory.class, new ReflectionSubstitutionType.Factory());
         }
-        String configResources = Options.ReflectionConfigurationResources.getValue();
-        if (!configResources.isEmpty()) {
-            for (String resource : configResources.split(",")) {
-                InputStream stream = access.getImageClassLoader().findResourceByName(resource);
-                try (Reader reader = new InputStreamReader(stream)) {
-                    parser.parseAndRegister(reader);
-                } catch (Exception e) {
-                    throw UserError.abort("Could not parse reflection configuration resource \"" + resource + "\". Verify that the resource exists and its contents match the expected schema (see " +
-                                    HostedOptionParser.HOSTED_OPTION_PREFIX + SubstrateOptionsParser.PRINT_FLAGS_OPTION_NAME + " for option " + Options.ReflectionConfigurationResources.getName() +
-                                    ").\n" + e.toString());
-                }
-            }
-        }
+
+        ReflectionConfigurationParser<Class<?>> parser = ConfigurationParserUtils.create(reflectionData, access.getImageClassLoader());
+        loadedConfigurations = ConfigurationParserUtils.parseAndRegisterConfigurations(parser, access.getImageClassLoader(), "reflection",
+                        ConfigurationFiles.Options.ReflectionConfigurationFiles, ConfigurationFiles.Options.ReflectionConfigurationResources,
+                        ConfigurationFiles.REFLECTION_NAME);
+
+        loader = access.getImageClassLoader();
+        annotationSubstitutions = ((Inflation) access.getBigBang()).getAnnotationSubstitutionProcessor();
     }
 
     @Override
@@ -128,5 +98,22 @@ public final class ReflectionFeature implements Feature {
     @Override
     public void afterAnalysis(AfterAnalysisAccess access) {
         reflectionData.afterAnalysis();
+    }
+
+    @Override
+    public void beforeCompilation(BeforeCompilationAccess access) {
+        if (!ImageSingletons.contains(FallbackFeature.class)) {
+            return;
+        }
+        FallbackFeature.FallbackImageRequest reflectionFallback = ImageSingletons.lookup(FallbackFeature.class).reflectionFallback;
+        if (reflectionFallback != null && loadedConfigurations == 0) {
+            throw reflectionFallback;
+        }
+    }
+
+    @Override
+    public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, Plugins plugins, ParsingReason reason) {
+        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions,
+                        plugins.getClassInitializationPlugin(), plugins.getInvocationPlugins(), aUniverse, reason);
     }
 }
