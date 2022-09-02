@@ -35,24 +35,21 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeSet;
-import org.graalvm.tools.insight.Insight;
+import java.util.WeakHashMap;
 
 final class HeapGenerator {
     private final HeapUtils.HprofGenerator generator;
     private final Map<TreeSet<String>, ClassInstance> classes = new HashMap<>();
     private final Map<String, ClassInstance> languages = new HashMap<>();
-    private final Map<Object, Integer> objects = new IdentityHashMap<>();
-    private final Map<SourceKey, Integer> sources = new HashMap<>();
-    private final Map<SourceSectionKey, Integer> sourceSections = new HashMap<>();
+    private final Map<Object, Integer> objects = new WeakHashMap<>();
+    private final Map<SourceKey, Integer> sources = new WeakHashMap<>();
+    private final Map<SourceSectionKey, Integer> sourceSections = new WeakHashMap<>();
     private final LinkedList<Dump> pending = new LinkedList<>();
     private ClassInstance sourceSectionClass;
     private Integer unreachable;
@@ -164,7 +161,7 @@ final class HeapGenerator {
             }
             sb.append("]");
         } catch (UnsupportedMessageException cannotDumpMembers) {
-            sb.append(" in ").append(iop.toDisplayString(obj));
+            sb.append(" in " + iop.toDisplayString(obj));
         }
         throw new HeapException(sb.toString());
     }
@@ -194,7 +191,7 @@ final class HeapGenerator {
                 threadBuilder = seg.newThread(rootName + "#" + ++frames);
             }
 
-            int sourceId = dumpSource(iop, seg, source);
+            int sourceId = dumpSource(iop, seg, source, srcName);
             int sectionId = dumpSourceSection(seg, sourceId, charIndex, charLength);
             int localFrame = dumpObject(iop, seg, "frame:" + rootName, frame, depth);
             threadBuilder.addStackFrame(language, rootName, srcName, line == null ? -1 : line, localFrame, sectionId);
@@ -222,12 +219,8 @@ final class HeapGenerator {
         if (depth <= 0) {
             return unreachable;
         }
-        if (iop.isString(obj)) {
-            try {
-                return seg.dumpString(iop.asString(obj));
-            } catch (UnsupportedMessageException ex) {
-                throw new HeapException(ex);
-            }
+        if (obj instanceof String) {
+            return seg.dumpString((String) obj);
         }
         if (!(obj instanceof TruffleObject)) {
             return seg.dumpPrimitive(obj);
@@ -240,7 +233,7 @@ final class HeapGenerator {
         objects.put(obj, builder.id());
         pending.add(() -> {
             for (String n : clazz.names()) {
-                final Object v = iop.readMember(obj, n);
+                final Object v = readMember(iop, obj, n);
                 int vId = dumpObject(iop, seg, null, v, depth - 1);
                 builder.put(n, vId);
             }
@@ -289,15 +282,6 @@ final class HeapGenerator {
         return clazz;
     }
 
-    /**
-     * Dumps source section so it looks like {@link SourceSection} in a regular Java Heap Dump.
-     * 
-     * @param seg segment to write heap data to
-     * @param sourceId object id of the source the section belongs to
-     * @param charIndex 0-based index of initial character of the section in the source
-     * @param charLength number of characters in the section
-     * @throws IOException when I/O fails
-     */
     private int dumpSourceSection(HeapDump seg, int sourceId, Integer charIndex, Integer charLength) throws IOException {
         if (sourceSectionClass == null) {
             sourceSectionClass = seg.newClass("com.oracle.truffle.api.source.SourceSection").addField("source", Object.class).addField("charIndex", int.class).addField("charLength",
@@ -312,20 +296,7 @@ final class HeapGenerator {
         return id;
     }
 
-    /**
-     * Dumps source so it looks like {@link Source} in a regular Java Heap Dump.
-     * 
-     * @param iop interop library to use
-     * @param seg segment to write heap data to
-     * @param source object representing the {@code SourceInfo} object defined by {@link Insight}
-     *            specification
-     * @return instance id of the dumped object representing the source
-     * @throws IOException when I/O fails
-     * @throws UnsupportedMessageException for example if the source object isn't properly
-     *             represented
-     */
-    private int dumpSource(InteropLibrary iop, HeapDump seg, Object source) throws IOException, UnsupportedMessageException {
-        String srcName = asStringOrNull(iop, source, "name");
+    private int dumpSource(InteropLibrary iop, HeapDump seg, Object source, String srcName) throws IOException, UnsupportedMessageException {
         String mimeType = asStringOrNull(iop, source, "mimeType");
         String uri = asStringOrNull(iop, source, "uri");
         String characters = asStringOrNull(iop, source, "characters");
