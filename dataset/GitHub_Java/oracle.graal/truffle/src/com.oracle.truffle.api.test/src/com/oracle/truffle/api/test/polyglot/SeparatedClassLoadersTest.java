@@ -63,6 +63,7 @@ public class SeparatedClassLoadersTest {
     public void sdkAndTruffleAPIInSeparateClassLoaders() throws Exception {
         final ProtectionDomain sdkDomain = Engine.class.getProtectionDomain();
         Assume.assumeNotNull(sdkDomain);
+        Assume.assumeNotNull(sdkDomain.getCodeSource());
         URL sdkURL = sdkDomain.getCodeSource().getLocation();
         Assume.assumeNotNull(sdkURL);
 
