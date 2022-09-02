@@ -53,8 +53,12 @@ final class HotSpotThreadLocalHandshake extends ThreadLocalHandshake {
         }
     }
 
-    static void doHandshake(Node node) {
-        INSTANCE.processHandshake(node);
+    static void doHandshake() {
+        INSTANCE.processHandshake(null);
+    }
+
+    static void doPoll() {
+        INSTANCE.poll(null);
     }
 
     @Override

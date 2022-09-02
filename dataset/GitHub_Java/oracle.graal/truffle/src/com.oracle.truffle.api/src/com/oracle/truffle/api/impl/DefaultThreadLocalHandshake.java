@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,36 +40,45 @@
  */
 package com.oracle.truffle.api.impl;
 
-import com.oracle.truffle.api.TruffleSafepoint;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.LoopNode;
-import com.oracle.truffle.api.nodes.RepeatingNode;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public final class DefaultLoopNode extends LoopNode {
+import com.oracle.truffle.api.nodes.Node;
 
-    @Child private RepeatingNode repeatNode;
+final class DefaultThreadLocalHandshake extends ThreadLocalHandshake {
 
-    public DefaultLoopNode(RepeatingNode repeatNode) {
-        this.repeatNode = repeatNode;
+    static final DefaultThreadLocalHandshake INSTANCE = new DefaultThreadLocalHandshake();
+    private static final ThreadLocal<TruffleSafepointImpl> STATE = ThreadLocal.withInitial(() -> INSTANCE.getThreadState(Thread.currentThread()));
+
+    /*
+     * Number of active pending threads. Allows to check the active threads more efficiently.
+     */
+    private static final AtomicInteger PENDING_COUNT = new AtomicInteger();
+
+    private DefaultThreadLocalHandshake() {
     }
 
     @Override
-    public RepeatingNode getRepeatingNode() {
-        return repeatNode;
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public void executeLoop(VirtualFrame frame) {
-        execute(frame);
-    }
-
-    @Override
-    public Object execute(VirtualFrame frame) {
-        Object status;
-        while (repeatNode.shouldContinue((status = repeatNode.executeRepeatingWithValue(frame)))) {
-            TruffleSafepoint.poll(this);
+    public void poll(Node enclosingNode) {
+        int count = PENDING_COUNT.get();
+        assert count >= 0 : "inconsistent pending state";
+        if (count > 0) {
+            INSTANCE.processHandshake(enclosingNode);
         }
-        return status;
     }
+
+    @Override
+    public TruffleSafepointImpl getCurrent() {
+        return STATE.get();
+    }
+
+    @Override
+    protected void setPending(Thread t) {
+        PENDING_COUNT.incrementAndGet();
+    }
+
+    @Override
+    protected void clearPending() {
+        PENDING_COUNT.decrementAndGet();
+    }
+
 }

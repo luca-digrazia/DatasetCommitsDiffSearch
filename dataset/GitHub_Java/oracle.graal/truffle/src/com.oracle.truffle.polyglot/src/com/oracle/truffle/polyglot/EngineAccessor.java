@@ -63,6 +63,7 @@ import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
@@ -84,7 +85,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ContextLocal;
 import com.oracle.truffle.api.ContextThreadLocal;
 import com.oracle.truffle.api.InstrumentInfo;
-import com.oracle.truffle.api.ThreadLocalAction;
+import com.oracle.truffle.api.ThreadLocalAccess;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleFile;
@@ -727,23 +728,19 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public Object enterInternalContext(Node location, Object polyglotLanguageContext) {
+        public Object enterInternalContext(Node node, Object polyglotLanguageContext) {
             PolyglotContextImpl context = ((PolyglotContextImpl) polyglotLanguageContext);
-            PolyglotEngineImpl engine = resolveEngine(location, context);
-            Node useLocation = location;
-            if (useLocation == null) {
-                useLocation = engine.getUncachedLocation();
-            }
+            PolyglotEngineImpl engine = resolveEngine(node, context);
             if (CompilerDirectives.isPartialEvaluationConstant(engine)) {
-                return engine.enter(context, useLocation, true);
+                return engine.enter(context);
             } else {
-                return enterInternalContextBoundary(context, useLocation, engine);
+                return enterInternalContextBoundary(context, engine);
             }
         }
 
         @TruffleBoundary
-        private static Object enterInternalContextBoundary(PolyglotContextImpl context, Node location, PolyglotEngineImpl engine) {
-            return engine.enter(context, location, true);
+        private static Object enterInternalContextBoundary(PolyglotContextImpl context, PolyglotEngineImpl engine) {
+            return engine.enter(context);
         }
 
         @Override
@@ -1395,21 +1392,9 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public Future<Void> submitThreadLocal(Object polyglotContext, Object sourcePolyglotObject, Thread[] threads, ThreadLocalAction action, boolean needsEnter) {
-            String componentId;
-            if (sourcePolyglotObject instanceof PolyglotInstrument) {
-                componentId = ((PolyglotInstrument) sourcePolyglotObject).getId();
-            } else if (sourcePolyglotObject instanceof PolyglotLanguageContext) {
-                componentId = ((PolyglotLanguageContext) sourcePolyglotObject).language.getId();
-            } else {
-                throw CompilerDirectives.shouldNotReachHere("Invalid source component");
-            }
-            return ((PolyglotContextImpl) polyglotContext).threadLocalActions.submit(threads, componentId, action, needsEnter);
-        }
-
-        @Override
-        public Object getContext(Object polyglotLanguageContext) {
-            return ((PolyglotLanguageContext) polyglotLanguageContext).context;
+        public Future<Void> runThreadLocal(Object polyglotLanguageContext, Thread[] threads, Consumer<ThreadLocalAccess> action, boolean async) {
+            PolyglotContextImpl context = ((PolyglotLanguageContext) polyglotLanguageContext).context;
+            return PolyglotSafepointManager.runThreadLocal(context, threads, action, async);
         }
     }
 

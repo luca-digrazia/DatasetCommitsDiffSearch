@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -110,7 +110,6 @@ public @interface TruffleFromLibGraal {
         IsTrivial(boolean.class, Object.class),
         IsTruffleBoundary(boolean.class, Object.class, long.class),
         IsValueType(boolean.class, Object.class, long.class),
-        InliningData(Object.class, Object.class),
         Log(void.class, Object.class, String.class, Object.class, String.class),
         OnCodeInstallation(void.class, Object.class, Object.class, long.class),
         OnCompilationFailed(void.class, Object.class, Supplier.class, boolean.class, boolean.class, boolean.class, boolean.class),
