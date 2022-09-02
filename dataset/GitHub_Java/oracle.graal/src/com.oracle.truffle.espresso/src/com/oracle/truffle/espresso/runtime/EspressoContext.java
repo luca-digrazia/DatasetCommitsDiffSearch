@@ -48,6 +48,8 @@ import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.nodes.BytecodeNode;
+import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
@@ -55,13 +57,15 @@ import com.oracle.truffle.espresso.vm.VM;
 public final class EspressoContext {
 
     private final EspressoLanguage language;
+
     private final TruffleLanguage.Env env;
+
+    // Must be initialized after the context instance creation.
+    @CompilationFinal //
+    private InterpreterToVM interpreterToVM;
+
     private final StringTable strings;
     private final ClassRegistries registries;
-    private final Substitutions substitutions;
-
-    // TODO(peterssen): Map host threads to guest threads, should not be public.
-    public final ConcurrentHashMap<Thread, StaticObject> host2guest = new ConcurrentHashMap<>();
 
     private boolean initialized = false;
 
@@ -69,12 +73,15 @@ public final class EspressoContext {
     private String[] mainArguments;
     private Source mainSourceFile;
 
-    // Must be initialized after the context instance creation.
-    @CompilationFinal private InterpreterToVM interpreterToVM;
-    @CompilationFinal private Meta meta;
-    @CompilationFinal private JniEnv jniEnv;
-    @CompilationFinal private VM vm;
-    @CompilationFinal private EspressoProperties vmProperties;
+    @CompilationFinal //
+    private Meta meta;
+
+    @CompilationFinal //
+    private JniEnv jniEnv;
+
+    @CompilationFinal //
+    private VM vm;
+    private Substitutions substitutions;
 
     public EspressoContext(TruffleLanguage.Env env, EspressoLanguage language) {
         this.env = env;
@@ -132,7 +139,9 @@ public final class EspressoContext {
     }
 
     public EspressoProperties getVmProperties() {
-        assert vmProperties != null;
+        if (vmProperties == null) {
+            throw EspressoError.shouldNotReachHere();
+        }
         return vmProperties;
     }
 
@@ -156,6 +165,8 @@ public final class EspressoContext {
     public Meta getMeta() {
         return meta;
     }
+
+    public final ConcurrentHashMap<Thread, StaticObject> host2guest = new ConcurrentHashMap<>();
 
     private void spawnVM() {
 
@@ -229,6 +240,8 @@ public final class EspressoContext {
         // Lock object used by NIO.
         meta.Thread_blockerLock.set(mainThread, meta.Object.allocateInstance());
     }
+
+    private EspressoProperties vmProperties;
 
     private void initVmProperties() {
         vmProperties = EspressoProperties.getDefault().processOptions(getEnv().getOptions());
