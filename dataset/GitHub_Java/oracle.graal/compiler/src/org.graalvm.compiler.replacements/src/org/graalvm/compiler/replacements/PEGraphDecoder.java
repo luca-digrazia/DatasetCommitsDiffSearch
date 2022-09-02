@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -796,11 +796,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         if (specialCallTarget != null) {
             callTarget.setTargetMethod(specialCallTarget);
             callTarget.setInvokeKind(InvokeKind.Special);
-        }
-        if (callTarget.invokeKind().isInterface()) {
-            Invoke invoke = invokeData.invoke;
-            ResolvedJavaType contextType = methodScope.method.getDeclaringClass();
-            MethodCallTargetNode.tryDevirtualizeInterfaceCall(callTarget.receiver(), callTarget.targetMethod(), null, graph.getAssumptions(), contextType, callTarget, invoke.asNode());
         }
 
         if (tryInvocationPlugin(methodScope, loopScope, invokeData, callTarget)) {
