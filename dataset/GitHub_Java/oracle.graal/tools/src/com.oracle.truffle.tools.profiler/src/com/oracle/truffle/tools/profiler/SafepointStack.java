@@ -197,7 +197,6 @@ final class SafepointStack {
             this.endTime = 0L;
         }
 
-        @SuppressWarnings("unused")
         List<StackTraceEntry> createEntries(SourceSectionFilter filter) {
             List<StackTraceEntry> entries = new ArrayList<>(nextFrameIndex);
             for (int i = 0; i < nextFrameIndex; i++) {
@@ -205,7 +204,7 @@ final class SafepointStack {
                 RootNode root = ((RootCallTarget) target).getRootNode();
                 SourceSection sourceSection = root.getSourceSection();
                 // TODO: Figure out how to filter source sections with only a root node.
-                if (sourceSection != null /* && filter.includes(root, sourceSection) */) {
+                if (sourceSection != null /*&& filter.includes(root, sourceSection)*/) {
                     entries.add(new StackTraceEntry(TAGS, sourceSection, root, root, states[i]));
                 }
             }
@@ -277,7 +276,7 @@ final class SafepointStack {
         }
     }
 
-    private void stackOverflowed(boolean visitorOverflowed) {
-        this.overflowed |= visitorOverflowed;
+    private void stackOverflowed(boolean overflowed) {
+        this.overflowed |= overflowed;
     }
 }
