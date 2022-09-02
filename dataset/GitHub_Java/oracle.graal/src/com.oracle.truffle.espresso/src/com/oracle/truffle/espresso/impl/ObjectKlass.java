@@ -671,7 +671,7 @@ public final class ObjectKlass extends Klass {
             method = lookupMirandas(methodName, signature);
         }
         if (method == null && getType() == Type.MethodHandle) {
-            method = lookupPolysigMethod(methodName, signature);
+            method = lookupPolysigMethod(methodName, signature, accessingKlass);
         }
         if (method == null && getSuperKlass() != null) {
             method = getSuperKlass().lookupMethod(methodName, signature, accessingKlass);

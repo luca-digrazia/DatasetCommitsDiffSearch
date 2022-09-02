@@ -123,9 +123,4 @@ public final class RuntimeConstantPool extends ConstantPool {
     public int getMajorVersion() {
         return pool.getMajorVersion();
     }
-
-    @Override
-    public int getMinorVersion() {
-        return pool.getMinorVersion();
-    }
 }

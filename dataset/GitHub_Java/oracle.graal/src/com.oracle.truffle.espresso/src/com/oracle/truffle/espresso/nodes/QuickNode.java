@@ -66,6 +66,6 @@ public abstract class QuickNode extends Node {
 
     @Override
     public SourceSection getSourceSection() {
-        return getBytecodesNode().getEncapsulatingSourceSection();
+        return getBytecodesNode().getSourceSectionAtBCI(callerBCI);
     }
 }
