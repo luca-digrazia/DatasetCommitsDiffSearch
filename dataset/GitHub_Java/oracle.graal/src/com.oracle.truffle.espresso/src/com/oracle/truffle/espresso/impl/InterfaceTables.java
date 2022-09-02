@@ -31,7 +31,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 
 /**
  * 3 pass interface table constructor helper:
@@ -61,7 +60,6 @@ final class InterfaceTables {
     private final ObjectKlass thisKlass;
     private final ObjectKlass superKlass;
     private final ObjectKlass[] superInterfaces;
-    private final Method[] declaredMethods;
     private final ArrayList<Entry[]> tmpTables = new ArrayList<>();
     private final ArrayList<ObjectKlass> tmpKlassTable = new ArrayList<>();
     private final ArrayList<Method> mirandas = new ArrayList<>();
@@ -123,11 +121,10 @@ final class InterfaceTables {
         }
     }
 
-    private InterfaceTables(ObjectKlass thisKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, Method[] declaredMethods) {
+    private InterfaceTables(ObjectKlass thisKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces) {
         this.thisKlass = thisKlass;
         this.superKlass = superKlass;
         this.superInterfaces = superInterfaces;
-        this.declaredMethods = declaredMethods;
     }
 
     /**
@@ -185,31 +182,31 @@ final class InterfaceTables {
      */
     // checkstyle: resume
     // @formatter:on
-    public static CreationResult create(ObjectKlass thisKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, Method[] declaredMethods) {
-        return new InterfaceTables(thisKlass, superKlass, superInterfaces, declaredMethods).create();
+    public static CreationResult create(ObjectKlass thisKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces) {
+        return new InterfaceTables(thisKlass, superKlass, superInterfaces).create();
     }
 
     /**
      * Performs second and third step of itable creation.
      * 
-     * @param vtable the vtable of the klass for which we are creating an itable
-     * @param mirandas the mirandas of the klass for which we are creating an itable
-     * @param declaredMethods the declared methods of the klass for which we are creating an itable
+     * @param thisKlass the klass for which we are creating an itable
      * @param tables The helper table obtained from first step
      * @param iklassTable the interfaces directly and indirectly implemented by thisKlass
      * @return the final itable
      */
-    public static Method[][] fixTables(Method[] vtable, Method[] mirandas, Method[] declaredMethods, Entry[][] tables, ObjectKlass[] iklassTable) {
+    public static Method[][] fixTables(ObjectKlass thisKlass, Entry[][] tables, ObjectKlass[] iklassTable) {
         ArrayList<Method[]> tmpTables = new ArrayList<>();
+        Method[] vtable = thisKlass.getVTable();
+        Method[] mirandas = thisKlass.getMirandaMethods();
 
         // Second step
         // Remember here that the interfaces are sorted, most specific at the end.
         for (int i = iklassTable.length - 1; i >= 0; i--) {
-            fixVTable(tables[i], vtable, mirandas, declaredMethods, iklassTable[i].getInterfaceMethodsTable());
+            fixVTable(tables[i], vtable, mirandas, thisKlass.getDeclaredMethods(), iklassTable[i].getInterfaceMethodsTable());
         }
         // Third step
         for (Entry[] entries : tables) {
-            tmpTables.add(getITable(entries, vtable, mirandas, declaredMethods));
+            tmpTables.add(getITable(entries, vtable, mirandas, thisKlass.getDeclaredMethods()));
         }
         return tmpTables.toArray(EMPTY_METHOD_DUAL_ARRAY);
     }
@@ -241,7 +238,7 @@ final class InterfaceTables {
                 Method im = interfMethods[i];
                 Symbol<Name> mname = im.getName();
                 Symbol<Signature> sig = im.getRawSignature();
-                res[i] = lookupLocation(im, mname, sig, interf.getDefiningClassLoader());
+                res[i] = lookupLocation(im, mname, sig);
             }
             tmpTables.add(res);
             tmpKlassTable.add(interf);
@@ -333,22 +330,22 @@ final class InterfaceTables {
 
     // lookup helpers
 
-    private Entry lookupLocation(Method im, Symbol<Name> mname, Symbol<Signature> sig, StaticObject classLoader) {
+    private Entry lookupLocation(Method im, Symbol<Name> mname, Symbol<Signature> sig) {
         Method m = null;
         int index = -1;
         if (superKlass != null) {
-            index = superKlass.lookupVirtualMethod(mname, sig, thisKlass, classLoader);
+            index = superKlass.lookupVirtualMethod(mname, sig, thisKlass);
         }
         if (index != -1) {
             m = superKlass.vtableLookup(index);
             assert index == m.getVTableIndex();
             return new Entry(Location.SUPERVTABLE, index);
         }
-        index = getDeclaredMethodIndex(declaredMethods, im, mname, sig);
+        index = getDeclaredMethodIndex(thisKlass.getDeclaredMethods(), mname, sig);
         if (index != -1) {
             return new Entry(Location.DECLARED, index);
         }
-        index = lookupMirandas(im, mname, sig);
+        index = lookupMirandas(mname, sig);
         if (index != -1) {
             return new Entry(Location.MIRANDAS, index);
         }
@@ -359,20 +356,20 @@ final class InterfaceTables {
 
     }
 
-    private static int getDeclaredMethodIndex(Method[] declaredMethod, Method interfMethod, Symbol<Name> mname, Symbol<Signature> sig) {
+    private static int getDeclaredMethodIndex(Method[] declaredMethod, Symbol<Name> mname, Symbol<Signature> sig) {
         for (int i = 0; i < declaredMethod.length; i++) {
             Method m = declaredMethod[i];
-            if (m.canOverride(interfMethod) && mname == m.getName() && sig == m.getRawSignature()) {
+            if (!m.isStatic() && mname == m.getName() && sig == m.getRawSignature()) {
                 return i;
             }
         }
         return -1;
     }
 
-    private int lookupMirandas(Method interfMethod, Symbol<Name> mname, Symbol<Signature> sig) {
+    private int lookupMirandas(Symbol<Name> mname, Symbol<Signature> sig) {
         int pos = 0;
         for (Method m : mirandas) {
-            if (m.canOverride(interfMethod) && m.getName() == mname && sig == m.getRawSignature()) {
+            if (!m.isStatic() && m.getName() == mname && sig == m.getRawSignature()) {
                 return pos;
             }
             pos++;
