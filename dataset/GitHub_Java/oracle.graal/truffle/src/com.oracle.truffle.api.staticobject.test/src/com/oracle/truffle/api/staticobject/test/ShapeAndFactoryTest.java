@@ -41,43 +41,22 @@
 package com.oracle.truffle.api.staticobject.test;
 
 import com.oracle.truffle.api.staticobject.StaticShape;
-import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.experimental.theories.DataPoints;
-import org.junit.experimental.theories.Theories;
-import org.junit.experimental.theories.Theory;
-import org.junit.runner.RunWith;
 
 import java.util.regex.Pattern;
 
-@RunWith(Theories.class)
-public class ShapeAndFactoryTest extends StaticObjectModelTest {
-    @DataPoints //
-    public static TestEnvironment[] environments;
+public class ShapeAndFactoryTest extends StaticObjectTest {
 
-    @BeforeClass
-    public static void setup() {
-        environments = new TestEnvironment[]{new TestEnvironment(true), new TestEnvironment(false)};
-    }
-
-    @AfterClass
-    public static void teardown() {
-        for (TestEnvironment env : environments) {
-            env.close();
-        }
-    }
-
-    @Theory
-    public void correct(TestEnvironment te) {
-        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+    @Test
+    public void correct() {
+        StaticShape.Builder b = StaticShape.newBuilder(this);
         b.build(CustomStaticObject.class, CustomFactoryInterface.class);
     }
 
-    @Theory
-    public void wrongFinalClone(TestEnvironment te) {
-        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+    @Test
+    public void wrongFinalClone() {
+        StaticShape.Builder b = StaticShape.newBuilder(this);
         try {
             b.build(WrongCloneCustomStaticObject.class, WrongCloneFactoryInterface.class);
             Assert.fail();
@@ -86,9 +65,9 @@ public class ShapeAndFactoryTest extends StaticObjectModelTest {
         }
     }
 
-    @Theory
-    public void wrongFactoryArgs(TestEnvironment te) {
-        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+    @Test
+    public void wrongFactoryArgs() {
+        StaticShape.Builder b = StaticShape.newBuilder(this);
         try {
             b.build(CustomStaticObject.class, WrongArgsFactoryInterface.class);
             Assert.fail();
@@ -97,9 +76,9 @@ public class ShapeAndFactoryTest extends StaticObjectModelTest {
         }
     }
 
-    @Theory
-    public void wrongFactoryReturnType(TestEnvironment te) {
-        StaticShape.Builder b = StaticShape.newBuilder(te.testLanguage);
+    @Test
+    public void wrongFactoryReturnType() {
+        StaticShape.Builder b = StaticShape.newBuilder(this);
         try {
             b.build(CustomStaticObject.class, WrongReturnTypeFactoryInterface.class);
             Assert.fail();
@@ -147,10 +126,5 @@ public class ShapeAndFactoryTest extends StaticObjectModelTest {
 
     public interface WrongReturnTypeFactoryInterface {
         String create(int i, Object o);
-    }
-
-    @Test
-    public void dummy() {
-        // to make sure this file is recognized as a test
     }
 }

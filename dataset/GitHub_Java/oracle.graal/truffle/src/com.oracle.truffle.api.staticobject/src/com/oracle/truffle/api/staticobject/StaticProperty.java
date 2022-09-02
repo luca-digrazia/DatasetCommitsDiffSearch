@@ -67,7 +67,6 @@ import java.lang.reflect.Field;
  *
  * @see DefaultStaticProperty
  * @see StaticShape.Builder#property(StaticProperty)
- * @since 21.3.0
  */
 public abstract class StaticProperty {
     private static final Unsafe UNSAFE = getUnsafe();
@@ -88,7 +87,6 @@ public abstract class StaticProperty {
      *
      * @param kind the kind of static property
      * @param storeAsFinal if this property value can be stored in a final field
-     * @since 21.3.0
      */
     protected StaticProperty(StaticPropertyKind kind, boolean storeAsFinal) {
         byte internalKind = getInternalKind(kind);
@@ -102,7 +100,6 @@ public abstract class StaticProperty {
      * method is constant in time.
      *
      * @return the static property identifier
-     * @since 21.3.0
      */
     protected abstract String getId();
 
@@ -154,7 +151,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Object} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final Object getObject(Object obj) {
         checkKind(StaticPropertyKind.Object);
@@ -171,7 +167,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Object} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final Object getObjectVolatile(Object obj) {
         checkKind(StaticPropertyKind.Object);
@@ -188,7 +183,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Object} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setObject(Object obj, Object value) {
         checkKind(StaticPropertyKind.Object);
@@ -205,7 +199,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Object} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setObjectVolatile(Object obj, Object value) {
         checkKind(StaticPropertyKind.Object);
@@ -225,7 +218,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Object} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final boolean compareAndSwapObject(Object obj, Object expect, Object update) {
         checkKind(StaticPropertyKind.Object);
@@ -242,7 +234,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Object} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final Object getAndSetObject(Object obj, Object value) {
         checkKind(StaticPropertyKind.Object);
@@ -260,7 +251,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Boolean} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final boolean getBoolean(Object obj) {
         checkKind(StaticPropertyKind.Boolean);
@@ -277,7 +267,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Boolean} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final boolean getBooleanVolatile(Object obj) {
         checkKind(StaticPropertyKind.Boolean);
@@ -294,7 +283,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Boolean} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setBoolean(Object obj, boolean value) {
         checkKind(StaticPropertyKind.Boolean);
@@ -311,7 +299,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Boolean} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setBooleanVolatile(Object obj, boolean value) {
         checkKind(StaticPropertyKind.Boolean);
@@ -329,7 +316,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Byte} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final byte getByte(Object obj) {
         checkKind(StaticPropertyKind.Byte);
@@ -346,7 +332,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Byte} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final byte getByteVolatile(Object obj) {
         checkKind(StaticPropertyKind.Byte);
@@ -363,7 +348,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Byte} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setByte(Object obj, byte value) {
         checkKind(StaticPropertyKind.Byte);
@@ -380,7 +364,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Byte} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setByteVolatile(Object obj, byte value) {
         checkKind(StaticPropertyKind.Byte);
@@ -398,7 +381,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Char} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final char getChar(Object obj) {
         checkKind(StaticPropertyKind.Char);
@@ -415,7 +397,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Char} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final char getCharVolatile(Object obj) {
         checkKind(StaticPropertyKind.Char);
@@ -432,7 +413,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Char} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setChar(Object obj, char value) {
         checkKind(StaticPropertyKind.Char);
@@ -449,7 +429,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Char} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setCharVolatile(Object obj, char value) {
         checkKind(StaticPropertyKind.Char);
@@ -467,7 +446,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Double} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final double getDouble(Object obj) {
         checkKind(StaticPropertyKind.Double);
@@ -484,7 +462,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Double} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final double getDoubleVolatile(Object obj) {
         checkKind(StaticPropertyKind.Double);
@@ -501,7 +478,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Double} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setDouble(Object obj, double value) {
         checkKind(StaticPropertyKind.Double);
@@ -518,7 +494,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Double} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setDoubleVolatile(Object obj, double value) {
         checkKind(StaticPropertyKind.Double);
@@ -536,7 +511,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Float} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final float getFloat(Object obj) {
         checkKind(StaticPropertyKind.Float);
@@ -553,7 +527,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Float} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final float getFloatVolatile(Object obj) {
         checkKind(StaticPropertyKind.Float);
@@ -570,7 +543,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Float} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setFloat(Object obj, float value) {
         checkKind(StaticPropertyKind.Float);
@@ -587,7 +559,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Float} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setFloatVolatile(Object obj, float value) {
         checkKind(StaticPropertyKind.Float);
@@ -605,7 +576,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Int} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final int getInt(Object obj) {
         checkKind(StaticPropertyKind.Int);
@@ -622,7 +592,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Int} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final int getIntVolatile(Object obj) {
         checkKind(StaticPropertyKind.Int);
@@ -639,7 +608,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Int} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setInt(Object obj, int value) {
         checkKind(StaticPropertyKind.Int);
@@ -656,7 +624,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Int} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setIntVolatile(Object obj, int value) {
         checkKind(StaticPropertyKind.Int);
@@ -675,7 +642,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Int} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final boolean compareAndSwapInt(Object obj, int expect, int update) {
         checkKind(StaticPropertyKind.Int);
@@ -692,7 +658,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Int} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final int getAndAddInt(Object obj, int delta) {
         checkKind(StaticPropertyKind.Int);
@@ -709,7 +674,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Int} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final int getAndSetInt(Object obj, int value) {
         checkKind(StaticPropertyKind.Int);
@@ -727,7 +691,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Long} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final long getLong(Object obj) {
         checkKind(StaticPropertyKind.Long);
@@ -744,7 +707,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Long} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final long getLongVolatile(Object obj) {
         checkKind(StaticPropertyKind.Long);
@@ -761,7 +723,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Long} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setLong(Object obj, long value) {
         checkKind(StaticPropertyKind.Long);
@@ -778,7 +739,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Long} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setLongVolatile(Object obj, long value) {
         checkKind(StaticPropertyKind.Long);
@@ -797,7 +757,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Long} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final boolean compareAndSwapLong(Object obj, long expect, long update) {
         checkKind(StaticPropertyKind.Long);
@@ -814,7 +773,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Long} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final long getAndAddLong(Object obj, long delta) {
         checkKind(StaticPropertyKind.Long);
@@ -831,7 +789,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Long} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final long getAndSetLong(Object obj, long value) {
         checkKind(StaticPropertyKind.Long);
@@ -849,7 +806,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Short} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final short getShort(Object obj) {
         checkKind(StaticPropertyKind.Short);
@@ -866,7 +822,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Short} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final short getShortVolatile(Object obj) {
         checkKind(StaticPropertyKind.Short);
@@ -883,7 +838,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Short} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setShort(Object obj, short value) {
         checkKind(StaticPropertyKind.Short);
@@ -900,7 +854,6 @@ public abstract class StaticProperty {
      * @throws IllegalArgumentException if the static property kind is not
      *             {@link StaticPropertyKind#Short} or obj does not have a {@link StaticShape}
      *             compatible with this static property
-     * @since 21.3.0
      */
     public final void setShortVolatile(Object obj, short value) {
         checkKind(StaticPropertyKind.Short);

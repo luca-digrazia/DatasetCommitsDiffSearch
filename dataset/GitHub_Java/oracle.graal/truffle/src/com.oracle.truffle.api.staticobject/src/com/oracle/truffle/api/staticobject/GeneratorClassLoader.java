@@ -40,15 +40,17 @@
  */
 package com.oracle.truffle.api.staticobject;
 
-final class GeneratorClassLoader extends ClassLoader {
-    private final Class<?> referenceClass;
+import java.security.ProtectionDomain;
 
-    GeneratorClassLoader(Class<?> referenceClass) {
-        super(referenceClass.getClassLoader());
-        this.referenceClass = referenceClass;
+final class GeneratorClassLoader extends ClassLoader {
+    private final ProtectionDomain pd;
+
+    GeneratorClassLoader(ClassLoader parent, ProtectionDomain pd) {
+        super(parent);
+        this.pd = pd;
     }
 
     Class<?> defineGeneratedClass(String name, byte[] b, int off, int len) throws ClassFormatError {
-        return defineClass(name, b, off, len, referenceClass.getProtectionDomain());
+        return defineClass(name, b, off, len, pd);
     }
 }

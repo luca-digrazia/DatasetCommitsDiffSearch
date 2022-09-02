@@ -41,11 +41,7 @@
 package com.oracle.truffle.api.staticobject;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleOptions;
-import org.graalvm.options.OptionValues;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
@@ -59,7 +55,7 @@ import java.util.Objects;
  * A StaticShape is an immutable descriptor of the layout of a static object and is a good entry
  * point to learn about the Static Object Model. Here is an overview:
  * <ul>
- * <li>{@link StaticShape#newBuilder(TruffleLanguage)} returns a {@link StaticShape.Builder} object
+ * <li>{@link StaticShape#newBuilder(ClassLoaderCache)} returns a {@link StaticShape.Builder} object
  * that can be used to {@linkplain StaticShape.Builder#property(StaticProperty) register}
  * {@linkplain StaticProperty static properties} and to generate a new static shape by calling one
  * of its {@linkplain Builder#build() build methods}.
@@ -79,7 +75,7 @@ import java.util.Objects;
  * {@linkplain StaticProperty static properties} to check that the receiver object matches the
  * expected shape.
  * 
- * @see StaticShape#newBuilder(TruffleLanguage)
+ * @see StaticShape#newBuilder(ClassLoaderCache)
  * @see StaticShape.Builder
  * @see StaticProperty
  * @see DefaultStaticProperty
@@ -89,23 +85,16 @@ import java.util.Objects;
  *            allocate static objects
  */
 public abstract class StaticShape<T> {
-    enum StorageStrategy {
-        ARRAY_BASED,
-        FIELD_BASED
-    }
-
     protected static final Unsafe UNSAFE = getUnsafe();
     protected final Class<?> storageClass;
-    protected final boolean safetyChecks;
     @CompilationFinal //
     protected T factory;
 
-    StaticShape(Class<?> storageClass, boolean safetyChecks, PrivilegedToken privilegedToken) {
+    StaticShape(Class<?> storageClass, PrivilegedToken privilegedToken) {
+        this.storageClass = storageClass;
         if (privilegedToken == null) {
             throw new AssertionError("Only known implementations can create subclasses of " + StaticShape.class.getName());
         }
-        this.storageClass = storageClass;
-        this.safetyChecks = safetyChecks;
     }
 
     /**
@@ -121,18 +110,22 @@ public abstract class StaticShape<T> {
      * {@link StaticShape#getFactory()}, users can call the accessor methods defined in
      * {@link StaticProperty} to get and set property values stored in a static object instance.
      *
-     * @param language an instance of the {@link TruffleLanguage} that uses the Static Object Model
+     * @param clc a class that can be used to cache the class loader instance used to load classes
+     *            that extend the static object {@linkplain StaticShape.Builder#build(Class, Class)
+     *            super class} and implement the corresponding {@linkplain Builder#build() default}
+     *            or {@linkplain StaticShape.Builder#build(Class, Class) user-defined} factory
+     *            interface. This argument will be removed once the code of the Static Object Model
+     *            is moved to Truffle
      * @return a new static shape builder
-     * @throws NullPointerException if language is null
      * 
      * @see StaticShape
      * @see StaticProperty
      * @see DefaultStaticProperty
      * @see DefaultStaticObjectFactory
+     * @see ClassLoaderCache
      */
-    public static Builder newBuilder(TruffleLanguage<?> language) {
-        Objects.requireNonNull(language);
-        return new Builder(language);
+    public static Builder newBuilder(ClassLoaderCache clc) {
+        return new Builder(clc);
     }
 
     final void setFactory(T factory) {
@@ -159,15 +152,11 @@ public abstract class StaticShape<T> {
 
     abstract Object getStorage(Object obj, boolean primitive);
 
-    final <U> U cast(Object obj, Class<U> type) {
-        if (safetyChecks) {
-            try {
-                return type.cast(obj);
-            } catch (ClassCastException e) {
-                throw new IllegalArgumentException("Object '" + obj + "' of class '" + obj.getClass().getName() + "' does not have the expected shape", e);
-            }
-        } else {
-            return SomAccessor.RUNTIME.unsafeCast(obj, type, true, false, false);
+    static <T> T cast(Object obj, Class<T> type) {
+        try {
+            return type.cast(obj);
+        } catch (ClassCastException e) {
+            throw new IllegalArgumentException("Object '" + obj + "' of class '" + obj.getClass().getName() + "' does not have the expected shape", e);
         }
     }
 
@@ -196,15 +185,15 @@ public abstract class StaticShape<T> {
      * Builder class to construct {@link StaticShape} instances. The builder instance is not
      * thread-safe and must not be used from multiple threads at the same time.
      *
-     * @see StaticShape#newBuilder(TruffleLanguage)
+     * @see StaticShape#newBuilder(ClassLoaderCache)
      */
     public static final class Builder {
         private static final char[] FORBIDDEN_CHARS = new char[]{'.', ';', '[', '/'};
         private final HashMap<String, StaticProperty> staticProperties = new LinkedHashMap<>();
-        private final TruffleLanguage<?> language;
+        private final ClassLoaderCache clc;
 
-        Builder(TruffleLanguage<?> language) {
-            this.language = language;
+        Builder(ClassLoaderCache clc) {
+            this.clc = clc;
         }
 
         /**
@@ -263,7 +252,7 @@ public abstract class StaticShape<T> {
         public <T> StaticShape<T> build(StaticShape<T> parentShape) {
             Objects.requireNonNull(parentShape);
             GeneratorClassLoader gcl = getOrCreateClassLoader(parentShape.getFactoryInterface());
-            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, parentShape, getStorageStrategy());
+            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, parentShape);
             return build(sg, parentShape);
         }
 
@@ -302,14 +291,13 @@ public abstract class StaticShape<T> {
         public <T> StaticShape<T> build(Class<?> superClass, Class<T> factoryInterface) {
             validateClasses(factoryInterface, superClass);
             GeneratorClassLoader gcl = getOrCreateClassLoader(factoryInterface);
-            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, superClass, factoryInterface, getStorageStrategy());
+            ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(gcl, superClass, factoryInterface);
             return build(sg, null);
         }
 
         private <T> StaticShape<T> build(ShapeGenerator<T> sg, StaticShape<T> parentShape) {
             CompilerAsserts.neverPartOfCompilation();
-            boolean safetyChecks = !SomAccessor.LANGUAGE.areSomSafetyChecksRelaxed(language);
-            StaticShape<T> shape = sg.generateShape(parentShape, staticProperties.values(), safetyChecks);
+            StaticShape<T> shape = sg.generateShape(parentShape, staticProperties.values());
             for (StaticProperty staticProperty : staticProperties.values()) {
                 staticProperty.initShape(shape);
             }
@@ -317,13 +305,13 @@ public abstract class StaticShape<T> {
         }
 
         private GeneratorClassLoader getOrCreateClassLoader(Class<?> referenceClass) {
-            ClassLoader cl = SomAccessor.LANGUAGE.getSomClassloader(language);
+            ClassLoader cl = clc.getClassLoader();
             if (cl == null) {
                 cl = new GeneratorClassLoader(referenceClass.getClassLoader(), referenceClass.getProtectionDomain());
-                SomAccessor.LANGUAGE.setSomClassloader(language, cl);
+                clc.setClassLoader(cl);
             }
             if (!GeneratorClassLoader.class.isInstance(cl)) {
-                throw new RuntimeException("The Truffle language instance associated to this Builder returned an unexpected class loader");
+                throw new RuntimeException("The ClassLoaderCache associated to this Builder returned an unexpected class loader");
             }
             return (GeneratorClassLoader) cl;
         }
@@ -380,23 +368,6 @@ public abstract class StaticShape<T> {
                 }
             }
             return null;
-        }
-
-        private StorageStrategy getStorageStrategy() {
-            String strategy = SomAccessor.LANGUAGE.getSomStorageStrategy(language);
-            switch (strategy) {
-                case "default":
-                    return TruffleOptions.AOT ? StorageStrategy.ARRAY_BASED : StorageStrategy.FIELD_BASED;
-                case "array-based":
-                    return StorageStrategy.ARRAY_BASED;
-                case "field-based":
-                    if (TruffleOptions.AOT) {
-                        throw new IllegalArgumentException("The field-based storage strategy is not yet supported on Native Image");
-                    }
-                    return StorageStrategy.FIELD_BASED;
-                default:
-                    throw new IllegalArgumentException("Should not reach here. Unexpected storage strategy: " + strategy);
-            }
         }
     }
 

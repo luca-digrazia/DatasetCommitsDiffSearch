@@ -53,13 +53,15 @@ import static com.oracle.truffle.api.staticobject.StaticPropertyKind.N_PRIMITIVE
 
 final class ArrayBasedStaticShape<T> extends StaticShape<T> {
     private static final PrivilegedToken TOKEN = new ArrayBasedPrivilegedToken();
+    @CompilationFinal //
+    private static Boolean enableShapeChecks;
     @CompilationFinal(dimensions = 1) //
     private final StaticShape<T>[] superShapes;
     private final ArrayBasedPropertyLayout propertyLayout;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private ArrayBasedStaticShape(ArrayBasedStaticShape<T> parentShape, Class<?> storageClass, ArrayBasedPropertyLayout propertyLayout, boolean safetyChecks) {
-        super(TOKEN, storageClass, safetyChecks);
+    private ArrayBasedStaticShape(ArrayBasedStaticShape<T> parentShape, Class<?> storageClass, ArrayBasedPropertyLayout propertyLayout) {
+        super(storageClass, TOKEN);
         if (parentShape == null) {
             superShapes = new StaticShape[]{this};
         } else {
@@ -71,12 +73,29 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
         this.propertyLayout = propertyLayout;
     }
 
+    public static boolean shapeChecks() {
+        if (enableShapeChecks == null) {
+            initializeShapeChecks();
+        }
+        return enableShapeChecks;
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private static synchronized void initializeShapeChecks() {
+        if (enableShapeChecks == null) {
+            // Eventually this will become a context option.
+            // For now we store its value in a static field that is initialized on first usage to
+            // avoid that it gets initialized at native-image build time.
+            enableShapeChecks = Boolean.getBoolean("com.oracle.truffle.api.staticobject.ShapeChecks");
+        }
+    }
+
     static <T> ArrayBasedStaticShape<T> create(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass, ArrayBasedStaticShape<T> parentShape,
-                    Collection<StaticProperty> staticProperties, int byteArrayOffset, int objectArrayOffset, int shapeOffset, boolean checkShapes) {
+                    Collection<StaticProperty> staticProperties, int byteArrayOffset, int objectArrayOffset, int shapeOffset) {
         try {
             ArrayBasedPropertyLayout parentPropertyLayout = parentShape == null ? null : parentShape.getPropertyLayout();
             ArrayBasedPropertyLayout propertyLayout = new ArrayBasedPropertyLayout(parentPropertyLayout, staticProperties, byteArrayOffset, objectArrayOffset, shapeOffset);
-            ArrayBasedStaticShape<T> shape = new ArrayBasedStaticShape<>(parentShape, generatedStorageClass, propertyLayout, checkShapes);
+            ArrayBasedStaticShape<T> shape = new ArrayBasedStaticShape<>(parentShape, generatedStorageClass, propertyLayout);
             T factory = generatedFactoryClass.cast(
                             generatedFactoryClass.getConstructor(Object.class, int.class, int.class).newInstance(shape, propertyLayout.getPrimitiveArraySize(), propertyLayout.getObjectArraySize()));
             shape.setFactory(factory);
@@ -89,7 +108,7 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
     @Override
     Object getStorage(Object obj, boolean primitive) {
         Object receiverObject = cast(obj, storageClass);
-        if (safetyChecks) {
+        if (shapeChecks()) {
             checkShape(receiverObject);
         }
         return UNSAFE.getObject(receiverObject, (long) (primitive ? propertyLayout.byteArrayOffset : propertyLayout.objectArrayOffset));

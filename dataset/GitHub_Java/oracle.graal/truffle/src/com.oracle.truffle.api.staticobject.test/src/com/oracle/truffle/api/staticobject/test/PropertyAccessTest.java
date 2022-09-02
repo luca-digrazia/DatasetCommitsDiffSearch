@@ -55,7 +55,7 @@ import org.junit.experimental.theories.Theory;
 import org.junit.runner.RunWith;
 
 @RunWith(Theories.class)
-public class PropertyAccessTest extends StaticObjectModelTest {
+public class PropertyAccessTest extends StaticObjectTest {
     @DataPoints //
     public static TestDescriptor[] descriptors;
 
@@ -177,7 +177,7 @@ public class PropertyAccessTest extends StaticObjectModelTest {
 
     @Theory
     public void correctAccessors(TestDescriptor descriptor) {
-        StaticShape.Builder builder = StaticShape.newBuilder(testLanguage);
+        StaticShape.Builder builder = StaticShape.newBuilder(this);
         StaticProperty property = new DefaultStaticProperty("property", descriptor.kind, false);
         builder.property(property);
         StaticShape<DefaultStaticObjectFactory> shape = builder.build();
@@ -196,7 +196,7 @@ public class PropertyAccessTest extends StaticObjectModelTest {
     public void wrongAccessors(TestDescriptor expectedDescriptor, TestDescriptor actualDescriptor) {
         Assume.assumeFalse(expectedDescriptor.equals(actualDescriptor));
 
-        StaticShape.Builder builder = StaticShape.newBuilder(testLanguage);
+        StaticShape.Builder builder = StaticShape.newBuilder(this);
         StaticProperty property = new DefaultStaticProperty("property", expectedDescriptor.kind, false);
         builder.property(property);
         StaticShape<DefaultStaticObjectFactory> shape = builder.build();
@@ -221,12 +221,12 @@ public class PropertyAccessTest extends StaticObjectModelTest {
     @Theory
     @SuppressWarnings("unused")
     public void wrongShape(TestDescriptor descriptor) {
-        StaticShape.Builder b1 = StaticShape.newBuilder(testLanguage);
+        StaticShape.Builder b1 = StaticShape.newBuilder(this);
         StaticProperty p1 = new DefaultStaticProperty("property", descriptor.kind, false);
         b1.property(p1);
         StaticShape<DefaultStaticObjectFactory> s1 = b1.build();
 
-        StaticShape.Builder b2 = StaticShape.newBuilder(testLanguage);
+        StaticShape.Builder b2 = StaticShape.newBuilder(this);
         StaticProperty p2 = new DefaultStaticProperty("property", descriptor.kind, false);
         b2.property(p2);
         StaticShape<DefaultStaticObjectFactory> s2 = b2.build();
@@ -247,7 +247,7 @@ public class PropertyAccessTest extends StaticObjectModelTest {
     @Test
     @SuppressWarnings("unused")
     public void wrongObject() {
-        StaticShape.Builder builder = StaticShape.newBuilder(testLanguage);
+        StaticShape.Builder builder = StaticShape.newBuilder(this);
         StaticProperty property = new DefaultStaticProperty("property", StaticPropertyKind.Int, false);
         builder.property(property);
         StaticShape<DefaultStaticObjectFactory> shape = builder.build();

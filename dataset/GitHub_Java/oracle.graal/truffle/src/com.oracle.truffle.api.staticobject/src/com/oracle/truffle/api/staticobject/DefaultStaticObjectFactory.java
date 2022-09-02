@@ -44,7 +44,6 @@ package com.oracle.truffle.api.staticobject;
  * A trivial static object factory that allocates static objects of type {@link Object}.
  *
  * @see StaticShape.Builder#build()
- * @since 21.3.0
  */
 public interface DefaultStaticObjectFactory {
     /**
@@ -52,7 +51,6 @@ public interface DefaultStaticObjectFactory {
      * no arguments.
      *
      * @return the new static object instance
-     * @since 21.3.0
      */
     Object create();
 }
