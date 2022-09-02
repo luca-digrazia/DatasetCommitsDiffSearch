@@ -32,11 +32,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import com.oracle.svm.hosted.c.info.RawPointerToInfo;
 import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.c.CContext;
 
-import com.oracle.svm.hosted.c.DirectivesExtension;
 import com.oracle.svm.hosted.c.info.ConstantInfo;
 import com.oracle.svm.hosted.c.info.ElementInfo;
 import com.oracle.svm.hosted.c.info.EnumConstantInfo;
@@ -59,7 +56,6 @@ public class QueryCodeWriter extends InfoTreeVisitor {
     private final CSourceCodeWriter writer;
 
     private final List<Object> elementForLineNumber;
-    private final boolean isWindows;
 
     private final String formatSInt64;
     private final String formatUInt64;
@@ -71,7 +67,7 @@ public class QueryCodeWriter extends InfoTreeVisitor {
     public QueryCodeWriter(Path tempDirectory) {
         writer = new CSourceCodeWriter(tempDirectory);
         elementForLineNumber = new ArrayList<>();
-        isWindows = Platform.includedIn(Platform.WINDOWS.class);
+        boolean isWindows = Platform.includedIn(Platform.WINDOWS.class);
 
         String formatL64 = "%" + (isWindows ? "ll" : "l");
         formatSInt64 = formatL64 + "d";
@@ -109,10 +105,8 @@ public class QueryCodeWriter extends InfoTreeVisitor {
 
     @Override
     protected void visitNativeCodeInfo(NativeCodeInfo nativeCodeInfo) {
-        CContext.Directives directives = nativeCodeInfo.getDirectives();
-
         /* Write general macro definitions. */
-        List<String> macroDefinitions = directives.getMacroDefinitions();
+        List<String> macroDefinitions = nativeCodeInfo.getDirectives().getMacroDefinitions();
         if (!macroDefinitions.isEmpty()) {
             macroDefinitions.forEach(writer::appendMacroDefinition);
             writer.appendln();
@@ -123,27 +117,15 @@ public class QueryCodeWriter extends InfoTreeVisitor {
         writer.writeCStandardHeaders();
         writer.appendln();
 
-        /* Workaround missing bool type in old cl.exe. */
-        if (isWindows) {
-            writer.appendln("#ifndef bool");
-            writer.appendln("#define bool char");
-            writer.appendln("#define false ((bool)0)");
-            writer.appendln("#define true  ((bool)1)");
-            writer.appendln("#endif");
-            writer.appendln("");
-        }
-
         /* Inject CContext specific C header file snippet. */
-        if (directives instanceof DirectivesExtension) {
-            List<String> headerSnippet = ((DirectivesExtension) directives).getHeaderSnippet();
-            if (!headerSnippet.isEmpty()) {
-                headerSnippet.forEach(writer::appendln);
-                writer.appendln();
-            }
+        List<String> headerSnippet = nativeCodeInfo.getDirectives().getHeaderSnippet();
+        if (!headerSnippet.isEmpty()) {
+            headerSnippet.forEach(writer::appendln);
+            writer.appendln();
         }
 
         /* CContext specific header file inclusions. */
-        List<String> headerFiles = directives.getHeaderFiles();
+        List<String> headerFiles = nativeCodeInfo.getDirectives().getHeaderFiles();
         if (!headerFiles.isEmpty()) {
             writer.includeFiles(headerFiles);
             writer.appendln();
@@ -310,11 +292,6 @@ public class QueryCodeWriter extends InfoTreeVisitor {
             writer.outdent();
             writer.indents().appendln("}");
         }
-    }
-
-    @Override
-    protected void visitRawPointerToInfo(RawPointerToInfo pointerToInfo) {
-        /* Nothing to do, do not visit children. */
     }
 
     @Override
