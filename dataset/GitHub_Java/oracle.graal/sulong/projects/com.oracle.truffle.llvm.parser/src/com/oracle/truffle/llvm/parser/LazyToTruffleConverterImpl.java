@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.parser;
 import java.io.PrintWriter;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashSet;
 import java.util.List;
@@ -64,7 +63,6 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.Instruction;
 import com.oracle.truffle.llvm.parser.nodes.LLVMBitcodeInstructionVisitor;
 import com.oracle.truffle.llvm.parser.nodes.LLVMRuntimeDebugInformation;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
-import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.LazyToTruffleConverter;
@@ -278,63 +276,6 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         }
     }
 
-    private static boolean functionParameterHasByValueAttribute(FunctionParameter parameter) {
-        if (parameter.getParameterAttribute() != null) {
-            for (Attribute a : parameter.getParameterAttribute().getAttributes()) {
-                if (a instanceof KnownAttribute && ((KnownAttribute) a).getAttr() == Kind.BYVAL) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private static final Long[] EMPTY_LONGS_ARRAY = {};
-
-    private LLVMExpressionNode getTargetAddress(LLVMExpressionNode baseAddress, Type targetType, Type sourceType, List<Long> indices) {
-        LLVMExpressionNode[] indexNodes = new LLVMExpressionNode[indices.size()];
-
-        for (int i = indices.size() - 1; i >= 0; i--) {
-            indexNodes[i] = runtime.getNodeFactory().createLiteral(indices.get(i).longValue(), PrimitiveType.I64);
-        }
-
-        PrimitiveType[] indexTypes = new PrimitiveType[indices.size()];
-        Arrays.fill(indexTypes, PrimitiveType.I64);
-
-        LLVMExpressionNode nestedGEPs = CommonNodeFactory.createNestedElementPointerNode(
-                        runtime.getNodeFactory(),
-                        dataLayout,
-                        indexNodes,
-                        indices.toArray(EMPTY_LONGS_ARRAY),
-                        indexTypes,
-                        baseAddress,
-                        sourceType);
-
-        return nestedGEPs;
-    }
-
-    private void copyStructArgumentsToFrame(List<LLVMStatementNode> initializers, NodeFactory nodeFactory, FrameSlot slot, int argIndex, PointerType topLevelPointerType, Type currentType,
-                    List<Long> indices) {
-        if (currentType instanceof StructureType) {
-            StructureType t = (StructureType) currentType;
-
-            for (int i = 0; i < t.getNumberOfElements(); i++) {
-                Type memberType = t.getElementType(i);
-
-                List<Long> newIndices = new ArrayList<>(indices);
-                newIndices.add((long) i);
-
-                copyStructArgumentsToFrame(initializers, nodeFactory, slot, argIndex, topLevelPointerType, memberType, newIndices);
-            }
-        } else {
-            LLVMExpressionNode targetAddress = getTargetAddress(CommonNodeFactory.createFrameRead(topLevelPointerType, slot), currentType, topLevelPointerType.getPointeeType(), indices);
-            LLVMExpressionNode sourceAddress = getTargetAddress(nodeFactory.createFunctionArgNode(argIndex, topLevelPointerType), currentType, topLevelPointerType.getPointeeType(), indices);
-            LLVMExpressionNode sourceLoadNode = CommonNodeFactory.createLoad(currentType, sourceAddress);
-            LLVMStatementNode storeNode = nodeFactory.createStore(targetAddress, sourceLoadNode, currentType);
-            initializers.add(storeNode);
-        }
-    }
-
     private List<LLVMStatementNode> copyArgumentsToFrame(FrameDescriptor frame) {
         NodeFactory nodeFactory = runtime.getNodeFactory();
         List<FunctionParameter> parameters = method.getParameters();
@@ -342,33 +283,31 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         LLVMExpressionNode stackPointerNode = nodeFactory.createFunctionArgNode(0, PrimitiveType.I64);
         formalParamInits.add(nodeFactory.createFrameWrite(PointerType.VOID, stackPointerNode, frame.findFrameSlot(LLVMStack.FRAME_ID)));
 
-        // There's a struct return type.
         int argIndex = 1;
         if (method.getType().getReturnType() instanceof StructureType) {
             argIndex++;
         }
-
         for (FunctionParameter parameter : parameters) {
+            LLVMExpressionNode parameterNode = nodeFactory.createFunctionArgNode(argIndex++, parameter.getType());
             FrameSlot slot = LLVMSymbolReadResolver.findOrAddFrameSlot(frame, parameter);
-
-            if (parameter.getType() instanceof PointerType && functionParameterHasByValueAttribute(parameter)) {
-                // It's a struct passed as a pointer but originally passed by value (because LLVM
-                // and/or ABI), treat it as such.
-                PointerType pointerType = (PointerType) parameter.getType();
-                Type pointeeType = pointerType.getPointeeType();
-                GetStackSpaceFactory allocaFactory = GetStackSpaceFactory.createAllocaFactory();
-                LLVMExpressionNode allocation = allocaFactory.createGetStackSpace(nodeFactory, pointeeType);
-
-                formalParamInits.add(nodeFactory.createFrameWrite(pointerType, allocation, slot));
-
-                List<Long> indices = new ArrayList<>();
-                copyStructArgumentsToFrame(formalParamInits, nodeFactory, slot, argIndex++, pointerType, pointeeType, indices);
+            if (isStructByValue(parameter)) {
+                Type type = ((PointerType) parameter.getType()).getPointeeType();
+                formalParamInits.add(nodeFactory.createFrameWrite(parameter.getType(), nodeFactory.createCopyStructByValue(type, GetStackSpaceFactory.createAllocaFactory(), parameterNode), slot));
             } else {
-                LLVMExpressionNode parameterNode = nodeFactory.createFunctionArgNode(argIndex++, parameter.getType());
                 formalParamInits.add(nodeFactory.createFrameWrite(parameter.getType(), parameterNode, slot));
             }
         }
-
         return formalParamInits;
+    }
+
+    private static boolean isStructByValue(FunctionParameter parameter) {
+        if (parameter.getType() instanceof PointerType && parameter.getParameterAttribute() != null) {
+            for (Attribute a : parameter.getParameterAttribute().getAttributes()) {
+                if (a instanceof KnownAttribute && ((KnownAttribute) a).getAttr() == Kind.BYVAL) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
