@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -281,28 +281,6 @@ public final class CompilerDirectives {
          * @since 0.27
          */
         boolean allowInlining() default false;
-    }
-
-    /**
-     * Marks a method that is an implementation of a Truffle interpreter,
-     * and which should receive additional optimization budget.
-     *
-     * @since 21.0
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
-    public @interface TruffleInterpreter {
-    }
-
-    /**
-     * Marks a method that is called from a Truffle interpreter,
-     * but is not called frequently and is not important for interpreter performance.
-     *
-     * @since 21.0
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
-    public @interface TruffleInterpreterBoundary {
     }
 
     /**
