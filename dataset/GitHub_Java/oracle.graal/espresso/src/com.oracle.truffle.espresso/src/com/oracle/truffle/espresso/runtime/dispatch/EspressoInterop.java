@@ -92,7 +92,7 @@ public class EspressoInterop extends BaseInterop {
 
     static Object unwrapForeign(Object receiver) {
         if (receiver instanceof StaticObject && ((StaticObject) receiver).isForeignObject()) {
-            return ((StaticObject) receiver).rawForeignObject(getMeta().getEspressoLanguage());
+            return ((StaticObject) receiver).rawForeignObject();
         }
         return receiver;
     }
@@ -1168,21 +1168,24 @@ public class EspressoInterop extends BaseInterop {
                     @CachedLibrary("receiver") InteropLibrary receiverLibrary, @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
         receiver.checkNotForeign();
         if (receiverLibrary.isInstant(receiver)) {
-            StaticObject instant;
             Meta meta = receiver.getKlass().getMeta();
-            if (instanceOf(receiver, meta.java_time_ZonedDateTime)) {
-                instant = (StaticObject) meta.java_time_ZonedDateTime_toInstant.invokeDirect(receiver);
+            if (instanceOf(receiver, meta.java_time_Instant)) {
+                long seconds = (long) meta.java_time_Instant_seconds.get(receiver);
+                int nanos = (int) meta.java_time_Instant_nanos.get(receiver);
+                return Instant.ofEpochSecond(seconds, nanos);
+            } else if (instanceOf(receiver, meta.java_time_ZonedDateTime)) {
+                StaticObject instant = (StaticObject) meta.java_time_ZonedDateTime_toInstant.invokeDirect(receiver);
+                // Interop library should be compatible.
+                assert receiverLibrary.accepts(instant);
+                return asInstant(instant, receiverLibrary, error);
             } else if (instanceOf(receiver, meta.java_util_Date)) {
                 int index = meta.java_util_Date_toInstant.getVTableIndex();
                 Method virtualToInstant = receiver.getKlass().vtableLookup(index);
-                instant = (StaticObject) virtualToInstant.invokeDirect(receiver);
-            } else {
-                instant = receiver;
+                StaticObject instant = (StaticObject) virtualToInstant.invokeDirect(receiver);
+                // Interop library should be compatible.
+                assert receiverLibrary.accepts(instant);
+                return asInstant(instant, receiverLibrary, error);
             }
-            assert instanceOf(instant, meta.java_time_Instant);
-            long seconds = (long) meta.java_time_Instant_seconds.get(instant);
-            int nanos = (int) meta.java_time_Instant_nanos.get(instant);
-            return Instant.ofEpochSecond(seconds, nanos);
         }
         error.enter();
         throw UnsupportedMessageException.create();
