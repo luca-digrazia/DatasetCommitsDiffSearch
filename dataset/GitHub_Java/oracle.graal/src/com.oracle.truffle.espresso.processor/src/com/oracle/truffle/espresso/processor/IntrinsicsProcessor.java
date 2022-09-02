@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.processor;
 
-import java.util.List;
-
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
@@ -31,6 +29,8 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ReferenceType;
+import java.util.List;
 
 public abstract class IntrinsicsProcessor extends EspressoProcessor {
     static final String JNI_PACKAGE = "com.oracle.truffle.espresso.jni";
@@ -59,14 +59,12 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         }
     }
 
-    void getEspressoTypes(ExecutableElement inner, List<String> parameterTypeNames, List<Boolean> referenceTypes) {
+    static void getEspressoTypes(ExecutableElement inner, List<String> parameterTypeNames, List<Boolean> referenceTypes) {
         for (VariableElement parameter : inner.getParameters()) {
-            if (isActualParameter(parameter)) {
-                String arg = parameter.asType().toString();
-                String result = extractSimpleType(arg);
-                parameterTypeNames.add(result);
-                referenceTypes.add((!parameter.asType().getKind().isPrimitive()));
-            }
+            String arg = parameter.asType().toString();
+            String result = extractSimpleType(arg);
+            parameterTypeNames.add(result);
+            referenceTypes.add((parameter.asType() instanceof ReferenceType));
         }
     }
 
@@ -79,23 +77,26 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
             first = false;
         }
         for (VariableElement param : method.getParameters()) {
-            if (isActualParameter(param)) {
-                first = checkFirst(sb, first);
-                // Override NFI type.
-                AnnotationMirror nfi = getAnnotation(param.asType(), nfiType);
-                if (nfi != null) {
-                    AnnotationValue value = nfi.getElementValues().get(nfiTypeValueElement);
-                    if (value != null) {
-                        sb.append(NativeSimpleType.valueOf(((String) value.getValue()).toUpperCase()));
-                    } else {
-                        sb.append(classToType(param.asType().toString()));
-                    }
+            if (!first) {
+                sb.append(", ");
+            } else {
+                first = false;
+            }
+
+            // Override NFI type.
+            AnnotationMirror nfi = getAnnotation(param.asType(), nfiType);
+            if (nfi != null) {
+                AnnotationValue value = nfi.getElementValues().get(nfiTypeValueElement);
+                if (value != null) {
+                    sb.append(NativeSimpleType.valueOf(((String) value.getValue()).toUpperCase()));
                 } else {
-                    sb.append(classToType(param.asType().toString()));
+                    sb.append(classToType(param.asType().toString(), false));
                 }
+            } else {
+                sb.append(classToType(param.asType().toString(), false));
             }
         }
-        sb.append("): ").append(classToType(returnType));
+        sb.append("): ").append(classToType(returnType, true));
         return sb.toString();
     }
 
@@ -104,9 +105,9 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         String obj = ARGS_NAME + "[" + (index + startAt) + "]";
         if (isNonPrimitive) {
             if (!clazz.equals("StaticObject")) {
-                return decl + genIsNull(obj) + " ? " + "null" + " : " + castTo(obj, clazz) + ";\n";
+                return decl + genIsNull(obj) + " ? " + (clazz.equals("StaticObject") ? STATIC_OBJECT_NULL : "null") + " : " + castTo(obj, clazz) + ";\n";
             }
-            return decl + "env.getHandles().get(Math.toIntExact((long) " + obj + "))" + ";\n";
+            return decl + castTo("env.getHandles().get(Math.toIntExact((long) " + obj + "))", clazz) + ";\n"; // genIsNull(obj) + " ? " + (clazz.equals("StaticObject") ? STATIC_OBJECT_NULL : "null") + " : " + castTo(obj, clazz) + ";\n";
         }
         switch (clazz) {
             case "boolean":
@@ -118,20 +119,24 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         }
     }
 
-    String extractInvocation(String className, String methodName, int nParameters, boolean isStatic, SubstitutionHelper helper) {
+    String extractInvocation(String className, String methodName, int nParameters, boolean isStatic) {
         StringBuilder str = new StringBuilder();
         if (isStatic) {
             str.append(className).append(".").append(methodName).append("(");
         } else {
             str.append(ENV_NAME).append(".").append(methodName).append("(");
         }
-        boolean first = true;
+        boolean notFirst = false;
         for (int i = 0; i < nParameters; i++) {
-            first = checkFirst(str, first);
+            if (notFirst) {
+                str.append(", ");
+            } else {
+                notFirst = true;
+            }
             str.append(ARG_NAME).append(i);
         }
-        first = appendInvocationMetaInformation(str, first, helper);
         str.append(")"); // ;\n");
         return str.toString();
     }
+
 }

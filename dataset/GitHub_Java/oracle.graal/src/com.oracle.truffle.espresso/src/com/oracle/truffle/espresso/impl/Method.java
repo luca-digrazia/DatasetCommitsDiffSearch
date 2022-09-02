@@ -339,10 +339,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
         int argCount = Signatures.parameterCount(signature, false);
         for (int i = 0; i < argCount; ++i) {
-            sb.append(", ").append(Utils.kindToType(Signatures.parameterKind(signature, i)));
+            sb.append(", ").append(Utils.kindToType(Signatures.parameterKind(signature, i), true));
         }
 
-        sb.append("): ").append(Utils.kindToType(Signatures.returnKind(signature)));
+        sb.append("): ").append(Utils.kindToType(Signatures.returnKind(signature), false));
 
         return sb.toString();
     }

@@ -71,8 +71,7 @@ public class VMImplProcessor extends IntrinsicsProcessor {
         final boolean isStatic;
         final boolean isJni;
 
-        public VMHelper(EspressoProcessor processor, ExecutableElement method, String jniNativeSignature, List<Boolean> referenceTypes, String returnType, boolean isStatic, boolean isJni) {
-            super(processor, method);
+        public VMHelper(String jniNativeSignature, List<Boolean> referenceTypes, String returnType, boolean isStatic, boolean isJni) {
             this.jniNativeSignature = jniNativeSignature;
             this.referenceTypes = referenceTypes;
             this.returnType = returnType;
@@ -83,38 +82,38 @@ public class VMImplProcessor extends IntrinsicsProcessor {
 
     private void processElement(Element method) {
         assert method.getKind() == ElementKind.METHOD;
-        ExecutableElement VMmethod = (ExecutableElement) method;
-        assert VMmethod.getEnclosingElement().getKind() == ElementKind.CLASS;
-        TypeElement declaringClass = (TypeElement) VMmethod.getEnclosingElement();
+        ExecutableElement jniMethod = (ExecutableElement) method;
+        assert jniMethod.getEnclosingElement().getKind() == ElementKind.CLASS;
+        TypeElement declaringClass = (TypeElement) jniMethod.getEnclosingElement();
         if (declaringClass.getQualifiedName().toString().equals(SUBSTITUTION_PACKAGE + "." + VM)) {
             String className = VM;
             // Extract the class name.
             // Obtain the name of the method to be substituted in.
-            String targetMethodName = VMmethod.getSimpleName().toString();
+            String targetMethodName = jniMethod.getSimpleName().toString();
             // Obtain the host types of the parameters
             List<String> espressoTypes = new ArrayList<>();
             List<Boolean> referenceTypes = new ArrayList<>();
-            getEspressoTypes(VMmethod, espressoTypes, referenceTypes);
+            getEspressoTypes(jniMethod, espressoTypes, referenceTypes);
             // Spawn the name of the Substitutor we will create.
             String substitutorName = getSubstitutorClassName(className, targetMethodName, espressoTypes);
             if (!classes.contains(substitutorName)) {
                 // Obtain the fully qualified guest return type of the method.
-                String returnType = extractReturnType(VMmethod);
+                String returnType = extractReturnType(jniMethod);
                 // Check if this VM method has the @JniImpl annotation
-                boolean isJni = getAnnotation(VMmethod, jniImpl) != null;
+                boolean isJni = getAnnotation(jniMethod, jniImpl) != null;
                 // Obtain the jniNativeSignature
-                String jniNativeSignature = jniNativeSignature(VMmethod, returnType, isJni);
+                String jniNativeSignature = jniNativeSignature(jniMethod, returnType, isJni);
                 // Check if we need to call an instance method
-                boolean isStatic = VMmethod.getModifiers().contains(Modifier.STATIC);
+                boolean isStatic = jniMethod.getModifiers().contains(Modifier.STATIC);
                 // Spawn helper
-                VMHelper h = new VMHelper(this, (ExecutableElement) method, jniNativeSignature, referenceTypes, returnType, isStatic, isJni);
+                VMHelper h = new VMHelper(jniNativeSignature, referenceTypes, returnType, isStatic, isJni);
                 // Create the contents of the source file
                 String classFile = spawnSubstitutor(
                                 className,
                                 targetMethodName,
                                 espressoTypes,
                                 h);
-                commitSubstitution(VMmethod, substitutorName, classFile);
+                commitSubstitution(jniMethod, substitutorName, classFile);
             }
         }
     }
@@ -143,7 +142,7 @@ public class VMImplProcessor extends IntrinsicsProcessor {
         StringBuilder str = new StringBuilder();
         VMHelper h = (VMHelper) helper;
         str.append(IMPORT_VM);
-        if (parameterTypeName.contains("String")) {
+        if (h.referenceTypes.contains(true)) {
             str.append(IMPORT_INTEROP_LIBRARY);
         }
         if (parameterTypeName.contains("StaticObject") || h.returnType.equals("void")) {
@@ -157,17 +156,18 @@ public class VMImplProcessor extends IntrinsicsProcessor {
     }
 
     @Override
-    String generateFactoryConstructorBody(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
+    String generateConstructor(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         VMHelper h = (VMHelper) helper;
-        str.append(TAB_3).append("super(\n");
-        str.append(TAB_4).append(generateString(targetMethodName)).append(",\n");
-        str.append(TAB_4).append(generateString(h.jniNativeSignature)).append(",\n");
-        str.append(TAB_4).append(parameterTypeName.size()).append(",\n");
-        str.append(TAB_4).append(generateString(h.returnType)).append(",\n");
-        str.append(TAB_4).append(h.isJni).append("\n");
-        str.append(TAB_3).append(");\n");
-        str.append(TAB_2).append("}\n");
+        str.append(TAB_1).append("private ").append(className).append("() {\n");
+        str.append(TAB_2).append("super(\n");
+        str.append(TAB_3).append(generateString(targetMethodName)).append(",\n");
+        str.append(TAB_3).append(generateString(h.jniNativeSignature)).append(",\n");
+        str.append(TAB_3).append(parameterTypeName.size()).append(",\n");
+        str.append(TAB_3).append(generateString(h.returnType)).append(",\n");
+        str.append(TAB_3).append(h.isJni).append("\n");
+        str.append(TAB_2).append(");\n");
+        str.append(TAB_1).append("}\n");
         return str.toString();
     }
 
@@ -183,22 +183,21 @@ public class VMImplProcessor extends IntrinsicsProcessor {
         }
         switch (h.returnType) {
             case "char":
-                str.append(TAB_2).append("return ").append("(short) ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");
+                str.append(TAB_2).append("return ").append("(short) ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic)).append(";\n");
                 break;
             case "boolean":
-                str.append(TAB_2).append("boolean b = ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");
+                str.append(TAB_2).append("boolean b = ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic)).append(";\n");
                 str.append(TAB_2).append("return b ? (byte) 1 : (byte) 0;\n");
                 break;
             case "void":
-                str.append(TAB_2).append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");
+                str.append(TAB_2).append(extractInvocation(className, targetMethodName, argIndex, h.isStatic)).append(";\n");
                 str.append(TAB_2).append("return ").append(STATIC_OBJECT_NULL).append(";\n");
                 break;
             case "StaticObject":
-                str.append(TAB_2).append("return ").append(
-                                "(long) env.getHandles().createLocal(" + extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper) + ")").append(";\n");
+                str.append(TAB_2).append("return ").append("(long) env.getHandles().createLocal(" + extractInvocation(className, targetMethodName, argIndex, h.isStatic) + ")").append(";\n");
                 break;
             default:
-                str.append(TAB_2).append("return " + extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");
+                str.append(TAB_2).append("return " + extractInvocation(className, targetMethodName, argIndex, h.isStatic)).append(";\n");
         }
         str.append(TAB_1).append("}\n");
         str.append("}");
