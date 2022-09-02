@@ -39,13 +39,11 @@ import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
-import org.graalvm.compiler.truffle.common.TruffleInliningData;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.BackgroundCompileQueue;
 import org.graalvm.compiler.truffle.runtime.CompilationTask;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platform.HOSTED_ONLY;
 import org.graalvm.nativeimage.Platforms;
@@ -59,6 +57,7 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionValues;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.stack.SubstrateStackIntrospection;
 import com.oracle.svm.hosted.c.GraalAccess;
 import com.oracle.svm.truffle.TruffleSupport;
@@ -280,7 +279,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
         }
 
         try {
-            doCompile(optimizedCallTarget, new SingleThreadedCompilationTask(optimizedCallTarget, lastTierCompilation));
+            doCompile(optimizedCallTarget, lastTierCompilation ? SingleThreadedCompilationTask.lastTier : SingleThreadedCompilationTask.firstTier);
         } catch (com.oracle.truffle.api.OptimizationFailedException e) {
             if (optimizedCallTarget.getOptionValue(PolyglotCompilerOptions.CompilationExceptionsArePrinted)) {
                 Log.log().string(printStackTraceToString(e));
@@ -334,8 +333,9 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     protected <T> T asObject(Class<T> type, JavaConstant constant) {
-        return SubstrateObjectConstant.asObject(type, constant);
+        return (T) KnownIntrinsics.convertUnknownValue(SubstrateObjectConstant.asObject(type, constant), Object.class);
     }
 
     @Override
@@ -385,11 +385,10 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
      */
     private static class SingleThreadedCompilationTask implements TruffleCompilationTask {
         private final boolean lastTierCompilation;
-        private final boolean hasNextTier;
-        TruffleInlining inlining = new TruffleInlining();
+        static SingleThreadedCompilationTask firstTier = new SingleThreadedCompilationTask(false);
+        static SingleThreadedCompilationTask lastTier = new SingleThreadedCompilationTask(true);
 
-        SingleThreadedCompilationTask(OptimizedCallTarget optimizedCallTarget, boolean lastTierCompilation) {
-            this.hasNextTier = optimizedCallTarget.engine.firstTierOnly || lastTierCompilation;
+        SingleThreadedCompilationTask(boolean lastTierCompilation) {
             this.lastTierCompilation = lastTierCompilation;
         }
 
@@ -403,16 +402,5 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
         public boolean isLastTier() {
             return lastTierCompilation;
         }
-
-        @Override
-        public TruffleInliningData inliningData() {
-            return inlining;
-        }
-
-        @Override
-        public boolean hasNextTier() {
-            return hasNextTier;
-        }
-
     }
 }
