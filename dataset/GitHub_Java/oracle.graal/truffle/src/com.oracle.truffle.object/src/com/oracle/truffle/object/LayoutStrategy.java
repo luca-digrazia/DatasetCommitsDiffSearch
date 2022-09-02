@@ -49,6 +49,7 @@ import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.LocationFactory;
 import com.oracle.truffle.api.object.Property;
+import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.object.ShapeImpl.BaseAllocator;
 import com.oracle.truffle.object.Transition.AddPropertyTransition;
 import com.oracle.truffle.object.Transition.DirectReplacePropertyTransition;
@@ -66,14 +67,16 @@ public abstract class LayoutStrategy {
     protected LayoutStrategy() {
     }
 
+    private static final LocationFactory DEFAULT_LOCATION_FACTORY = new LocationFactory() {
+        public Location createLocation(Shape shape, Object value) {
+            return ((ShapeImpl) shape).allocator().locationForValue(value, true, value != null);
+        }
+    };
+
     /** @since 0.18 */
-    protected final LocationFactory getDefaultLocationFactory() {
-        return getDefaultLocationFactory(0);
+    protected LocationFactory getDefaultLocationFactory() {
+        return DEFAULT_LOCATION_FACTORY;
     }
-
-    protected abstract LocationFactory getDefaultLocationFactory(long putFlags);
-
-    protected abstract int getLocationOrdinal(Location location);
 
     /** @since 0.17 or earlier */
     protected abstract boolean updateShape(DynamicObject object);
@@ -195,17 +198,11 @@ public abstract class LayoutStrategy {
     protected void objectRemoveProperty(DynamicObjectImpl object, Property property, ShapeImpl currentShape) {
         ShapeImpl oldShape = currentShape;
         ShapeImpl newShape = oldShape.removeProperty(property);
-
         reshapeAfterDelete(object, oldShape, newShape, ShapeImpl.findCommonAncestor(oldShape, newShape));
     }
 
     /** @since 0.17 or earlier */
     protected void reshapeAfterDelete(DynamicObjectImpl object, ShapeImpl oldShape, ShapeImpl newShape, ShapeImpl deletedParentShape) {
-        if (oldShape.isShared()) {
-            object.setShapeAndGrow(oldShape, newShape);
-            return;
-        }
-
         DynamicObject original = object.cloneWithShape(oldShape);
         object.setShapeAndResize(newShape);
         object.copyProperties(original, deletedParentShape);
@@ -218,60 +215,35 @@ public abstract class LayoutStrategy {
 
     /** @since 0.17 or earlier */
     protected ShapeImpl removeProperty(ShapeImpl shape, Property property) {
-        boolean direct = shape.isShared();
-        RemovePropertyTransition transition = new RemovePropertyTransition(property, direct);
+        assert !shape.isShared();
+        RemovePropertyTransition transition = new RemovePropertyTransition(property);
         ShapeImpl cachedShape = shape.queryTransition(transition);
         if (cachedShape != null) {
             return ensureValid(cachedShape);
         }
 
-        if (direct) {
-            return directRemoveProperty(shape, property, transition);
-        }
-
-        return indirectRemoveProperty(shape, property, transition);
-    }
-
-    /**
-     * Removes a property by rewinding and replaying property transitions; moves any subsequent
-     * property locations to fill in the gap.
-     */
-    private ShapeImpl indirectRemoveProperty(ShapeImpl shape, Property property, RemovePropertyTransition transition) {
         ShapeImpl owningShape = getShapeFromProperty(shape, property.getKey());
-        if (owningShape == null) {
+        if (owningShape != null) {
+            List<Transition> transitionList = new ArrayList<>();
+            ShapeImpl current = shape;
+            while (current != owningShape) {
+                if (!(current.getTransitionFromParent() instanceof Transition.DirectReplacePropertyTransition) ||
+                                !((Transition.DirectReplacePropertyTransition) current.getTransitionFromParent()).getPropertyBefore().getKey().equals(property.getKey())) {
+                    transitionList.add(current.getTransitionFromParent());
+                }
+                current = current.parent;
+            }
+            ShapeImpl newShape = owningShape.parent;
+            for (ListIterator<Transition> iterator = transitionList.listIterator(transitionList.size()); iterator.hasPrevious();) {
+                Transition previous = iterator.previous();
+                newShape = applyTransition(newShape, previous, true);
+            }
+
+            shape.addIndirectTransition(transition, newShape);
+            return newShape;
+        } else {
             return null;
         }
-
-        List<Transition> transitionList = new ArrayList<>();
-        for (ShapeImpl current = shape; current != owningShape; current = current.parent) {
-            Transition transitionFromParent = current.getTransitionFromParent();
-            if (transitionFromParent instanceof Transition.DirectReplacePropertyTransition &&
-                            ((Transition.DirectReplacePropertyTransition) transitionFromParent).getPropertyBefore().getKey().equals(property.getKey())) {
-                continue;
-            } else {
-                transitionList.add(transitionFromParent);
-            }
-        }
-
-        ShapeImpl newShape = owningShape.parent;
-        for (ListIterator<Transition> iterator = transitionList.listIterator(transitionList.size()); iterator.hasPrevious();) {
-            Transition previous = iterator.previous();
-            newShape = applyTransition(newShape, previous, true);
-        }
-
-        shape.addIndirectTransition(transition, newShape);
-        return newShape;
-    }
-
-    /**
-     * Removes a property without moving property locations, leaving a gap that is lost forever.
-     */
-    private static ShapeImpl directRemoveProperty(ShapeImpl shape, Property property, RemovePropertyTransition transition) {
-        PropertyMap newPropertyMap = shape.getPropertyMap().removeCopy(property);
-        ShapeImpl newShape = shape.createShape(shape.getLayout(), shape.sharedData, shape, shape.objectType, newPropertyMap, transition, shape.allocator(), shape.flags);
-
-        shape.addDirectTransition(transition, newShape);
-        return newShape;
     }
 
     protected ShapeImpl directReplaceProperty(ShapeImpl shape, Property oldProperty, Property newProperty) {
