@@ -54,15 +54,17 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.CallableFromNative;
 import com.oracle.truffle.espresso.substitutions.GenerateNativeEnv;
+import com.oracle.truffle.espresso.substitutions.GenerateNativeEnv.PrependEnv;
 import com.oracle.truffle.espresso.substitutions.InjectMeta;
 import com.oracle.truffle.espresso.substitutions.InjectProfile;
+import com.oracle.truffle.espresso.substitutions.IntrinsicSubstitutor;
 import com.oracle.truffle.espresso.substitutions.JavaType;
 import com.oracle.truffle.espresso.substitutions.SubstitutionProfiler;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 
-@GenerateNativeEnv(target = ManagementImpl.class, prependEnv = true)
+@GenerateNativeEnv(target = ManagementImpl.class)
+@PrependEnv
 public final class Management extends NativeEnv {
     // Partial/incomplete implementation disclaimer!
     //
@@ -201,11 +203,9 @@ public final class Management extends NativeEnv {
         }
     }
 
-    private final static List<CallableFromNative.Factory> MANAGEMENT_IMPL_FACTORIES = ManagementImplCollector.getInstances(CallableFromNative.Factory.class);
-
     @Override
-    protected List<CallableFromNative.Factory> getCollector() {
-        return MANAGEMENT_IMPL_FACTORIES;
+    protected List<IntrinsicSubstitutor.Factory> getCollector() {
+        return ManagementCollector.getCollector();
     }
 
     @Override

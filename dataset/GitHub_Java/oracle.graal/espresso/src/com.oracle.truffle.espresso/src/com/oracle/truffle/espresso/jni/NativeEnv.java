@@ -23,8 +23,6 @@
 
 package com.oracle.truffle.espresso.jni;
 
-import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -50,8 +48,8 @@ import com.oracle.truffle.espresso.ffi.nfi.NativeUtils;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.EspressoException;
-import com.oracle.truffle.espresso.substitutions.CallableFromNative;
 import com.oracle.truffle.espresso.substitutions.GenerateNativeEnv;
+import com.oracle.truffle.espresso.substitutions.IntrinsicSubstitutor;
 
 /**
  * Subclasses of this class are implementation of native interfaces (for example, {@link JniEnv} or
@@ -66,7 +64,8 @@ import com.oracle.truffle.espresso.substitutions.GenerateNativeEnv;
  * {@link com.oracle.truffle.espresso.substitutions.GenerateNativeEnv}, and implementing the native
  * interface methods, along with annotating them with the annotation given to
  * {@link GenerateNativeEnv#target()}.</li>
- * <li>Implementing the {@link #getCollector()} method.</li>
+ * <li>Implementing the {@link #getCollector()} method, by calling into the corresponding
+ * Collector.getCollector() method (/ex: {@link JniEnvCollector#getCollector()}</li>
  * <li>Finally, implement the interface in native code (most likely in mokapot. See the management
  * implementation there for reference.)</li>
  */
@@ -78,7 +77,7 @@ public abstract class NativeEnv implements ContextAccess {
     private final InteropLibrary uncached = InteropLibrary.getFactory().getUncached();
 
     private final Set<@Pointer TruffleObject> nativeClosures = Collections.newSetFromMap(new IdentityHashMap<>());
-    private Map<String, CallableFromNative.Factory> methods;
+    private Map<String, IntrinsicSubstitutor.Factory> methods;
 
     // region Exposed interface
     public JNIHandles getHandles() {
@@ -100,7 +99,7 @@ public abstract class NativeEnv implements ContextAccess {
     // endregion Exposed interface
 
     // region Initialization helper
-    protected abstract List<CallableFromNative.Factory> getCollector();
+    protected abstract List<IntrinsicSubstitutor.Factory> getCollector();
 
     protected TruffleObject initializeAndGetEnv(TruffleObject initializeFunctionPointer, Object... extraArgs) {
         return initializeAndGetEnv(false, initializeFunctionPointer, extraArgs);
@@ -125,22 +124,10 @@ public abstract class NativeEnv implements ContextAccess {
         return res;
     }
 
-    public static <T> List<T> instantiateAs(List<Class<?>> classes, Class<T> target) {
-        List<T> factories = new ArrayList<>();
-        for (Class<?> clazz : classes) {
-            try {
-                factories.add(target.cast(clazz.getDeclaredConstructor().newInstance()));
-            } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
-                throw EspressoError.shouldNotReachHere(e);
-            }
-        }
-        return factories;
-    }
-
-    private Map<String, CallableFromNative.Factory> buildMethodsMap() {
-        Map<String, CallableFromNative.Factory> map = new HashMap<>();
-        for (CallableFromNative.Factory method : getCollector()) {
-            EspressoError.guarantee(!map.containsKey(method.methodName()), "Substitution for " + method + " already exists");
+    private Map<String, IntrinsicSubstitutor.Factory> buildMethodsMap() {
+        Map<String, IntrinsicSubstitutor.Factory> map = new HashMap<>();
+        for (IntrinsicSubstitutor.Factory method : getCollector()) {
+            assert !map.containsKey(method.methodName()) : "Substitution for " + method + " already exists";
             map.put(method.methodName(), method);
         }
         return Collections.unmodifiableMap(map);
@@ -188,14 +175,14 @@ public abstract class NativeEnv implements ContextAccess {
         return getNativeAccess().createNativeClosure(callback, NativeSignature.create(NativeType.POINTER, NativeType.POINTER));
     }
 
-    private CallableFromNative.Factory lookupFactory(String methodName) {
+    private IntrinsicSubstitutor.Factory lookupFactory(String methodName) {
         assert methods != null;
         return methods.get(methodName);
     }
 
     @TruffleBoundary
     private TruffleObject lookupIntrinsic(String methodName) {
-        CallableFromNative.Factory factory = lookupFactory(methodName);
+        IntrinsicSubstitutor.Factory factory = lookupFactory(methodName);
         // Dummy placeholder for unimplemented/unknown methods.
         if (factory == null) {
             String envName = NativeEnv.this.getClass().getSimpleName();
@@ -222,10 +209,10 @@ public abstract class NativeEnv implements ContextAccess {
 
     }
 
-    private Callback intrinsicWrapper(CallableFromNative.Factory factory) {
+    private Callback intrinsicWrapper(IntrinsicSubstitutor.Factory factory) {
         int extraArg = (factory.prependEnv()) ? 1 : 0;
         return new Callback(factory.parameterCount() + extraArg, new Callback.Function() {
-            @CompilerDirectives.CompilationFinal private CallableFromNative subst = null;
+            @CompilerDirectives.CompilationFinal private IntrinsicSubstitutor subst = null;
 
             @Override
             public Object call(Object... args) {

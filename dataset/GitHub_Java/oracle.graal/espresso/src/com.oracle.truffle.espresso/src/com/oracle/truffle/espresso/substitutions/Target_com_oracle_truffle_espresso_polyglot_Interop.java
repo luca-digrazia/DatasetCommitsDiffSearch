@@ -24,11 +24,8 @@ package com.oracle.truffle.espresso.substitutions;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.ArityException;
@@ -49,8 +46,6 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-
-import java.nio.ByteOrder;
 
 @EspressoSubstitutions
 public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
@@ -105,7 +100,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @see InteropLibrary#asBoolean(Object)
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     abstract static class AsBoolean extends Node {
         static final int LIMIT = 4;
 
@@ -147,7 +142,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @see InteropLibrary#asString(Object)
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(String.class) StaticObject asString(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return meta.toGuestString(UNCACHED.asString(unwrap(receiver)));
@@ -250,7 +245,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @see InteropLibrary#asByte(Object)
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static byte asByte(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.asByte(unwrap(receiver));
@@ -266,7 +261,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @see InteropLibrary#asShort(Object)
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static short asShort(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.asShort(unwrap(receiver));
@@ -282,7 +277,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @see InteropLibrary#asInt(Object)
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static int asInt(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.asInt(unwrap(receiver));
@@ -298,7 +293,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @see InteropLibrary#asLong(Object)
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static long asLong(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.asLong(unwrap(receiver));
@@ -314,7 +309,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @see InteropLibrary#asFloat(Object)
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static float asFloat(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.asFloat(unwrap(receiver));
@@ -330,7 +325,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @see InteropLibrary#asDouble(Object)
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static double asDouble(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.asDouble(unwrap(receiver));
@@ -378,7 +373,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 19.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(RuntimeException.class) StaticObject throwException(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             throw UNCACHED.throwException(unwrap(receiver));
@@ -395,7 +390,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/ExceptionType;") StaticObject getExceptionType(
                     @JavaType(Object.class) StaticObject receiver,
                     @InjectMeta Meta meta) {
@@ -428,7 +423,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static boolean isExceptionIncompleteSource(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.isExceptionIncompleteSource(unwrap(receiver));
@@ -448,7 +443,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static int getExceptionExitStatus(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.getExceptionExitStatus(unwrap(receiver));
@@ -480,7 +475,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getExceptionCause(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             Object cause = UNCACHED.getExceptionCause(unwrap(receiver));
@@ -518,7 +513,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getExceptionMessage(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             Object message = UNCACHED.getExceptionMessage(unwrap(receiver));
@@ -529,7 +524,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
             // TODO(peterssen): Cannot wrap as String even if the foreign object is String-like.
             // Executing String methods, that rely on it having a .value field is not supported yet
             // in Espresso.
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, message, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, message, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -562,7 +557,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getExceptionStackTrace(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             Object stackTrace = UNCACHED.getExceptionStackTrace(unwrap(receiver));
@@ -570,7 +565,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
                 return (StaticObject) stackTrace;
             }
             // Return foreign object as an opaque j.l.Object.
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, stackTrace, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, stackTrace, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -618,7 +613,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
              * ambiguous and inefficient. The caller is responsible to re-wrap or convert the result
              * as needed.
              */
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, value, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, value, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -631,7 +626,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 19.0
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static long getArraySize(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.getArraySize(unwrap(receiver));
@@ -805,14 +800,14 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.1
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getMetaObject(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             Object metaObject = UNCACHED.getMetaObject(unwrap(receiver));
             if (metaObject instanceof StaticObject) {
                 return (StaticObject) metaObject;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, metaObject, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, metaObject, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -835,7 +830,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
         if (displayString instanceof StaticObject) {
             return (StaticObject) displayString;
         }
-        return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, displayString, UNCACHED);
+        return StaticObject.createForeign(meta.java_lang_Object, displayString, UNCACHED);
     }
 
     /**
@@ -886,14 +881,14 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.1
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getMetaQualifiedName(@JavaType(Object.class) StaticObject metaObject, @InjectMeta Meta meta) {
         try {
             Object qualifiedName = UNCACHED.getMetaQualifiedName(unwrap(metaObject));
             if (qualifiedName instanceof StaticObject) {
                 return (StaticObject) qualifiedName;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, qualifiedName, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, qualifiedName, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -910,14 +905,14 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.1
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getMetaSimpleName(@JavaType(Object.class) StaticObject metaObject, @InjectMeta Meta meta) {
         try {
             Object simpleName = UNCACHED.getMetaSimpleName(unwrap(metaObject));
             if (simpleName instanceof StaticObject) {
                 return (StaticObject) simpleName;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, simpleName, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, simpleName, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -937,7 +932,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.1
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static boolean isMetaInstance(@JavaType(Object.class) StaticObject receiver, @JavaType(Object.class) StaticObject instance, @InjectMeta Meta meta) {
         try {
             return UNCACHED.isMetaInstance(unwrap(receiver), unwrap(instance));
@@ -1032,7 +1027,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.2
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static int identityHashCode(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.identityHashCode(unwrap(receiver));
@@ -1083,14 +1078,14 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 19.0
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getMembers(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             Object value = UNCACHED.getMembers(unwrap(receiver));
             if (value instanceof StaticObject) {
                 return (StaticObject) value;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, value, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, value, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -1133,7 +1128,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
             if (value instanceof StaticObject) {
                 return (StaticObject) value;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, value, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, value, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -1271,7 +1266,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
             if (result instanceof StaticObject) {
                 return (StaticObject) result;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, result, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, result, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -1342,7 +1337,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 19.0
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static long asPointer(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             return UNCACHED.asPointer(unwrap(receiver));
@@ -1399,7 +1394,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
             if (result instanceof StaticObject) {
                 return (StaticObject) result;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, result, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, result, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -1441,7 +1436,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
             if (result instanceof StaticObject) {
                 return (StaticObject) result;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, result, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, result, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -1473,14 +1468,14 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getExecutableName(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             Object result = UNCACHED.getExecutableName(unwrap(receiver));
             if (result instanceof StaticObject) {
                 return (StaticObject) result;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, result, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, result, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -1512,14 +1507,14 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
      * @since 20.3
      */
     @Substitution
-    @Throws(others = @JavaType(internalName = "Lcom/oracle/truffle/espresso/polyglot/UnsupportedMessageException;"))
+    @Throws(UnsupportedMessageException.class)
     public static @JavaType(Object.class) StaticObject getDeclaringMetaObject(@JavaType(Object.class) StaticObject receiver, @InjectMeta Meta meta) {
         try {
             Object result = UNCACHED.getDeclaringMetaObject(unwrap(receiver));
             if (result instanceof StaticObject) {
                 return (StaticObject) result;
             }
-            return StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, result, UNCACHED);
+            return StaticObject.createForeign(meta.java_lang_Object, result, UNCACHED);
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
         }
@@ -1585,7 +1580,7 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
                     backingArray[i] = (StaticObject) value; // no need to re-type
                 } else {
                     // TODO(peterssen): Wrap with precise types.
-                    backingArray[i] = StaticObject.createForeign(meta.getEspressoLanguage(), meta.java_lang_Object, value, UNCACHED);
+                    backingArray[i] = StaticObject.createForeign(meta.java_lang_Object, value, UNCACHED);
                 }
             }
             StaticObject suppliedValues = StaticObject.wrap(backingArray, meta);

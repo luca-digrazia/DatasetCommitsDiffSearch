@@ -23,27 +23,58 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 @EspressoSubstitutions
-public class Target_sun_launcher_LauncherHelper {
+public final class Target_sun_launcher_LauncherHelper {
     private static final String helpMessage = "Additional Java-on-Truffle commands:\n" +
-                    "";
+                    "    --polyglot    Run with all other guest languages accessible.\n" +
+                    "    --native      Run using the native launcher with limited access to Java libraries (default).\n" +
+                    "    --jvm         Run on the Java Virtual Machine with access to Java libraries (Unsupported).\n" +
+                    "    --vm.[option] Pass options to the host VM. To see available options, use '--help:vm'.\n" +
+                    "    --log.file=<String>\n" +
+                    "                  Redirect guest languages logging into a given file.\n" +
+                    "    --log.[logger].level=<String>\n" +
+                    "                  Set language log level to OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST or ALL.\n" +
+                    "    --version:graalvm\n" +
+                    "                  Print GraalVM version information and exit.\n" +
+                    "    --show-version:graalvm\n" +
+                    "                  Print GraalVM version information and continue execution.\n" +
+                    "    --help:vm     Print options for the host VM.\n" +
+                    "    --help:languages\n" +
+                    "                  Print options for all installed languages.\n" +
+                    "    --help:tools  Print options for all installed tools.\n" +
+                    "    --help:engine Print options for the Truffle engine.\n" +
+                    "    --help:expert Print additional options for experts.\n" +
+                    "    --help:internal\n" +
+                    "                  Print internal options for debugging language implementations and tools.";
 
     @Substitution
-    public static void printHelpMessage(boolean printToStderr,
-                    @GuestCall(target = "sun_launcher_LauncherHelper_printHelpMessage", original = true) DirectCallNode printHelpMessage,
-                    @GuestCall(target = "java_io_PrintStream_println") DirectCallNode println,
-                    @InjectMeta Meta meta) {
-        // Init output stream and print original help message
-        printHelpMessage.call(printToStderr);
+    abstract static class PrintHelpMessage extends Node {
+        abstract void execute(boolean printToStderr);
 
-        // Append espresso specific help
-        StaticObject stream = meta.sun_launcher_LauncherHelper.tryInitializeAndGetStatics().getField(meta.sun_launcher_LauncherHelper_ostream);
-        if (!StaticObject.isNull(stream)) {
-            println.call(stream, meta.toGuestString(helpMessage));
+        @Specialization
+        void doCached(boolean printToStderr,
+                        @CachedContext(EspressoLanguage.class) EspressoContext context,
+                        @Cached("create(context.getMeta().sun_launcher_LauncherHelper_printHelpMessage.getCallTargetNoSubstitution())") DirectCallNode originalPrintHelpMessage,
+                        @Cached("create(context.getMeta().java_io_PrintStream_println.getCallTarget())") DirectCallNode println) {
+            Meta meta = context.getMeta();
+            // Init output stream and print original help message
+            originalPrintHelpMessage.call(printToStderr);
+
+            // Append espresso specific help
+            StaticObject stream = meta.sun_launcher_LauncherHelper_ostream.getObject(meta.sun_launcher_LauncherHelper.tryInitializeAndGetStatics());
+            if (!StaticObject.isNull(stream)) {
+                println.call(stream, meta.toGuestString(helpMessage));
+            }
         }
     }
 }
