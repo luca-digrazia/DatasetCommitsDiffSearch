@@ -31,7 +31,7 @@ import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.perf.DebugCounter;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.JavaType;
+import com.oracle.truffle.espresso.substitutions.Host;
 
 /**
  * A {@link GuestClassRegistry} maps class names to resolved {@link Klass} instances. Each class
@@ -63,16 +63,16 @@ public final class GuestClassRegistry extends ClassRegistry {
     private final Method loadClass;
     private final Method addClass;
 
-    public GuestClassRegistry(EspressoContext context, @JavaType(ClassLoader.class) StaticObject classLoader) {
+    public GuestClassRegistry(EspressoContext context, @Host(ClassLoader.class) StaticObject classLoader) {
         super(context);
         assert StaticObject.notNull(classLoader) : "cannot be the BCL";
         this.classLoader = classLoader;
         this.loadClass = classLoader.getKlass().lookupMethod(Name.loadClass, Signature.Class_String);
         this.addClass = classLoader.getKlass().lookupMethod(Name.addClass, Signature._void_Class);
         if (getJavaVersion().modulesEnabled()) {
-            StaticObject unnamedModule = getMeta().java_lang_ClassLoader_unnamedModule.getObject(classLoader);
+            StaticObject unnamedModule = classLoader.getField(getMeta().java_lang_ClassLoader_unnamedModule);
             initUnnamedModule(unnamedModule);
-            getMeta().HIDDEN_MODULE_ENTRY.setHiddenObject(unnamedModule, getUnnamedModule());
+            unnamedModule.setHiddenField(getMeta().HIDDEN_MODULE_ENTRY, getUnnamedModule());
         }
     }
 
@@ -89,7 +89,7 @@ public final class GuestClassRegistry extends ClassRegistry {
     }
 
     @Override
-    public @JavaType(ClassLoader.class) StaticObject getClassLoader() {
+    public @Host(ClassLoader.class) StaticObject getClassLoader() {
         return classLoader;
     }
 
