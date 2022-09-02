@@ -1263,7 +1263,6 @@ public final class BytecodeNode extends EspressoMethodNode {
                         }
                         BaseQuickNode quickNode = nodes[readCPI(curBCI)];
                         if (quickNode.removedByRedefintion()) {
-                            CompilerDirectives.transferToInterpreterAndInvalidate();
                             quickNode = getBaseQuickNode(curBCI, top, statementIndex, quickNode);
                         }
                         top += quickNode.execute(frame, primitives, refs);
@@ -1389,6 +1388,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         }
     }
 
+    @TruffleBoundary
     private BaseQuickNode getBaseQuickNode(int curBCI, int top, int statementIndex, BaseQuickNode quickNode) {
         // block while class redefinition is ongoing
         ClassRedefinition.check();
