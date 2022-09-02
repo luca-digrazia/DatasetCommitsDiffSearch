@@ -139,7 +139,8 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
         return method.isNull() || typeAccessChecker.isMethodAccessible(env, clazz, name, signature, method, declaring);
     }
 
-    public JNIObjectHandle filterGetClasses(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle array, WordSupplier<JNIObjectHandle> elementClass, JNIObjectHandle callerClass) {
+    public JNIObjectHandle filterGetClasses(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle array, WordSupplier<JNIObjectHandle> elementClass, boolean declaredOnly,
+                    JNIObjectHandle callerClass) {
         if (shouldApproveWithoutChecks(env, clazz, callerClass)) {
             return array;
         }
