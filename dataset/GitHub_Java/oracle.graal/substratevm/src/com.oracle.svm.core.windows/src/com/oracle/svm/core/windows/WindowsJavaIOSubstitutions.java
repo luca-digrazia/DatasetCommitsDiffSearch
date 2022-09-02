@@ -41,6 +41,7 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
 import com.oracle.svm.core.log.Log;
+import com.oracle.svm.core.util.VMError;
 
 @Platforms(Platform.WINDOWS.class)
 @AutomaticFeature
@@ -49,11 +50,20 @@ class WindowsJavaIOSubstituteFeature implements Feature {
 
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
-        JNIRuntimeAccess.register(access.findClassByName("java.io.WinNTFileSystem"));
         try {
-            JNIRuntimeAccess.register(FileDescriptor.class.getDeclaredField("handle"));
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
+            JNIRuntimeAccess.register(java.lang.String.class);
+            JNIRuntimeAccess.register(access.findClassByName("java.io.WinNTFileSystem"));
+
+            JNIRuntimeAccess.register(java.io.IOException.class.getDeclaredConstructor(String.class));
+
+            JNIRuntimeAccess.register(java.io.File.class.getDeclaredField("path"));
+            JNIRuntimeAccess.register(java.io.FileOutputStream.class.getDeclaredField("fd"));
+            JNIRuntimeAccess.register(java.io.FileInputStream.class.getDeclaredField("fd"));
+            JNIRuntimeAccess.register(java.io.FileDescriptor.class.getDeclaredField("fd"));
+            JNIRuntimeAccess.register(java.io.FileDescriptor.class.getDeclaredField("handle"));
+            JNIRuntimeAccess.register(java.io.RandomAccessFile.class.getDeclaredField("fd"));
+        } catch (NoSuchFieldException | NoSuchMethodException e) {
+            VMError.shouldNotReachHere("WindowsJavaIOSubstitutionFeature: Error registering class or method: ", e);
         }
     }
 }
