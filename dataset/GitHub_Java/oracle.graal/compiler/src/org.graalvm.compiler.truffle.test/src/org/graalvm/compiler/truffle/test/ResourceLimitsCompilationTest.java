@@ -35,7 +35,6 @@ import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.java.AtomicReadAndAddNode;
-import org.graalvm.compiler.nodes.java.LoweredAtomicReadAndAddNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.WriteNode;
@@ -204,7 +203,7 @@ public class ResourceLimitsCompilationTest extends PartialEvaluationTest {
                 Assert.assertEquals(1, countNodes(graph, MethodCallTargetNode.TYPE));
                 Assert.assertEquals(6, countNodes(graph, AtomicReadAndAddNode.TYPE));
                 compile(target, graph);
-                Assert.assertEquals(6, countNodes(graph, LoweredAtomicReadAndAddNode.TYPE));
+                Assert.assertEquals(6, countNodes(graph, AtomicReadAndAddNode.TYPE));
                 Assert.assertEquals(1, countNodes(graph, InvokeWithExceptionNode.TYPE));
             }
         }
