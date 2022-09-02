@@ -581,13 +581,7 @@ public final class EspressoContext {
         if (getEnv().getOptions().hasBeenSet(EspressoOptions.JavaAgent)) {
             agents.registerAgent("instrument", getEnv().getOptions().get(EspressoOptions.JavaAgent), false);
         }
-        if (getEnv().getOptions().get(EspressoOptions.EnableAgents)) {
-            agents.initialize();
-        } else {
-            if (!agents.isEmpty()) {
-                getLogger().warning("Agents support is currently disabled in Espresso. Ignoring passed agent options.");
-            }
-        }
+        agents.initialize();
     }
 
     private void initVmProperties() {
@@ -690,6 +684,19 @@ public final class EspressoContext {
             allocationReporter.onReturnValue(object, 0, AllocationReporter.SIZE_UNKNOWN);
         }
         return object;
+    }
+
+    public boolean needsVerify(StaticObject classLoader) {
+        switch (Verify) {
+            case NONE:
+                return false;
+            case REMOTE:
+                return !StaticObject.isNull(classLoader);
+            case ALL:
+                return true;
+            default:
+                return true;
+        }
     }
 
     public void prepareDispose() {

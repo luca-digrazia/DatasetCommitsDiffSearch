@@ -130,7 +130,7 @@ public final class CodeAttribute extends Attribute {
                 return (LocalVariableTable) attr;
             }
         }
-        return LocalVariableTable.EMPTY_LVT;
+        return LocalVariableTable.EMPTY;
     }
 
     public LocalVariableTable getLocalvariableTypeTable() {
@@ -139,7 +139,7 @@ public final class CodeAttribute extends Attribute {
                 return (LocalVariableTable) attr;
             }
         }
-        return LocalVariableTable.EMPTY_LVTT;
+        return LocalVariableTable.EMPTY;
     }
 
     public int bciToLineNumber(int bci) {
