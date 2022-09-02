@@ -967,7 +967,6 @@ public class AMD64ArithmeticLIRGenerator extends ArithmeticLIRGenerator implemen
     @Override
     public Variable emitFusedMultiplyAdd(Value a, Value b, Value c) {
         Variable result = getLIRGen().newVariable(LIRKind.combine(a, b, c));
-        assert ((AMD64Kind) a.getPlatformKind()).isXMM() && ((AMD64Kind) b.getPlatformKind()).isXMM() && ((AMD64Kind) c.getPlatformKind()).isXMM();
         assert a.getPlatformKind().equals(b.getPlatformKind());
         assert b.getPlatformKind().equals(c.getPlatformKind());
 
