@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,18 @@
  */
 package com.oracle.truffle.espresso.descriptors;
 
+import static java.lang.Math.max;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 
 /**
@@ -56,6 +59,42 @@ public final class Signatures {
         this.types = types;
     }
 
+    /**
+     * Converts a regular signature to a basic one.
+     *
+     * @param raw Signature to convert
+     * @param keepLastArg Whether or not to erase the last parameter.
+     * @return A basic signature corresponding to @sig
+     */
+    @SuppressWarnings({"unchecked"})
+    public Symbol<Signature> toBasic(Symbol<Signature> raw, boolean keepLastArg) {
+        Symbol<Type>[] sig = parsed(raw);
+        int pcount = parameterCount(sig, false);
+        int params = max(pcount - (keepLastArg ? 0 : 1), 0);
+        List<Symbol<Type>> buf = new ArrayList<>();
+        for (int i = 0; i < params; i++) {
+            Symbol<Type> t = parameterType(sig, i);
+            if (i == params - 1 && keepLastArg) {
+                buf.add(t);
+            } else {
+                buf.add(toBasic(t));
+            }
+        }
+
+        Symbol<Type> rtype = toBasic(returnType(sig));
+        return makeRaw(rtype, buf.toArray(Symbol.EMPTY_ARRAY));
+    }
+
+    private static Symbol<Type> toBasic(Symbol<Type> t) {
+        if (t == Type.java_lang_Object || Types.isArray(t)) {
+            return Type.java_lang_Object;
+        } else if (t == Type._int || t == Type._short || t == Type._boolean || t == Type._char) {
+            return Type._int;
+        } else {
+            return t;
+        }
+    }
+
     public Symbol<Signature> lookupValidSignature(String signatureString) {
         if (!isValid(signatureString)) {
             return null;
@@ -63,7 +102,7 @@ public final class Signatures {
         return symbols.symbolify(ByteSequence.create(signatureString));
     }
 
-    public final Types getTypes() {
+    public Types getTypes() {
         return types;
     }
 
@@ -121,7 +160,7 @@ public final class Signatures {
     }
 
     @SuppressWarnings("unchecked")
-    public static Symbol<Signature> check(Symbol<? extends Symbol.Descriptor> descriptor) {
+    public static Symbol<Signature> check(Symbol<? extends Descriptor> descriptor) {
         assert isValid((Symbol<Signature>) descriptor);
         return (Symbol<Signature>) descriptor;
     }
@@ -156,6 +195,7 @@ public final class Signatures {
      * Gets the number of local variable slots used by the parameters only in this parsed signature.
      * Long and double parameters use two slots, all other parameters use one slot.
      */
+    @ExplodeLoop
     public static int slotsForParameters(final Symbol<Type>[] signature) {
         int slots = 0;
         int count = parameterCount(signature, false);
@@ -180,9 +220,9 @@ public final class Signatures {
         return endIndex == signature.length();
     }
 
-    public static boolean isValid(String signatureString) {
+    public static boolean isValid(@SuppressWarnings("unused") String signatureString) {
+        // TODO(peterssen): Implement FAST validation.
         return true;
-        // throw EspressoError.unimplemented();
     }
 
     public static Symbol<Signature> verify(Symbol<Signature> signature) {
@@ -208,15 +248,16 @@ public final class Signatures {
         return signature[paramIndex];
     }
 
+    @SuppressWarnings({"varargs", "rawtypes"})
     @SafeVarargs
-    public final Symbol<Type>[] makeParsed(Symbol<Type> returnType, Symbol<Type>... parameterTypes) {
+    public static final Symbol<Type>[] makeParsedUncached(Symbol<Type> returnType, Symbol<Type>... parameterTypes) {
         final Symbol<Type>[] signature = Arrays.copyOf(parameterTypes, parameterTypes.length + 1);
         signature[signature.length - 1] = returnType;
-        throw EspressoError.unimplemented();
+        return signature;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes)"})
-    public final Symbol<Signature> makeRaw(Class<?> returnClass, Class<?>... parameterClasses) {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public Symbol<Signature> makeRaw(Class<?> returnClass, Class<?>... parameterClasses) {
         Symbol<Type>[] parameterTypes = new Symbol[parameterClasses.length];
         for (int i = 0; i < parameterClasses.length; ++i) {
             parameterTypes[i] = getTypes().fromClass(parameterClasses[i]);
@@ -263,6 +304,7 @@ public final class Signatures {
         return signatureString;
     }
 
+    @SafeVarargs
     static byte[] buildSignatureBytes(Symbol<Type> returnType, Symbol<Type>... parameterTypes) {
         if (parameterTypes == null || parameterTypes.length == 0) {
             byte[] bytes = new byte[/* () */ 2 + returnType.length()];
@@ -293,7 +335,6 @@ public final class Signatures {
     }
 
     public Symbol<Type>[] parsed(Symbol<Signature> signature) {
-        // TODO(peterssen): Cache parsed signatures.
         return parsedSignatures.computeIfAbsent(signature, new Function<Symbol<Signature>, Symbol<Type>[]>() {
             @Override
             public Symbol<Type>[] apply(Symbol<Signature> key) {
