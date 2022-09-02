@@ -110,9 +110,9 @@ public abstract class BaseSuiteHarness {
      */
     protected void validateResults(Path referenceBinary, ProcessUtil.ProcessResult referenceResult,
                     Path candidateBinary, ProcessUtil.ProcessResult candidateResult) {
-        String testCaseDescription = candidateBinary.getFileName().toString() + " in " + getTestDirectory().toAbsolutePath().toString();
+        String testName = candidateBinary.getFileName().toString() + " in " + getTestDirectory().toAbsolutePath().toString();
         try {
-            Assert.assertEquals(testCaseDescription, referenceResult, candidateResult);
+            Assert.assertEquals(testName, referenceResult, candidateResult);
         } catch (AssertionError e) {
             throw fail(getTestName(), e);
         }

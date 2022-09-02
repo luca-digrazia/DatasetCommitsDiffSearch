@@ -29,7 +29,8 @@
  */
 package com.oracle.truffle.llvm.tests;
 
-import java.nio.file.Paths;
+import java.io.File;
+import java.nio.file.Path;
 import java.util.Collection;
 
 import org.junit.AfterClass;
@@ -42,16 +43,17 @@ import com.oracle.truffle.llvm.tests.options.TestOptions;
 @RunWith(Parameterized.class)
 public final class NWCCSuite extends BaseSuiteHarness {
 
-    public static final String TEST_DISTRIBUTION = "SULONG_NWCC_TEST_SUITE";
-    public static final String SOURCE = "NWCC_SUITE";
+    private static final Path NWCC_SUITE_DIR = new File(TestOptions.EXTERNAL_TEST_SUITE_PATH).toPath();
+    private static final Path NWCC_SOURCE_DIR = new File(TestOptions.TEST_SOURCE_PATH).toPath();
+    private static final Path NWCC_CONFIG_DIR = new File(TestOptions.TEST_CONFIG_PATH).toPath();
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
-        return ExternalTestCaseCollector.collectTestCases(NWCCSuite.class, TEST_DISTRIBUTION);
+        return ExternalTestCaseCollector.collectTestCases(NWCC_CONFIG_DIR, NWCC_SUITE_DIR, NWCC_SOURCE_DIR);
     }
 
     @AfterClass
     public static void printStatistics() {
-        printStatistics("NWCC", Paths.get(TestOptions.getSourcePath(SOURCE)), TestCaseCollector.getConfigDirectory(NWCCSuite.class), f -> true);
+        printStatistics("NWCC", NWCC_SOURCE_DIR, NWCC_CONFIG_DIR, f -> true);
     }
 }

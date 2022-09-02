@@ -29,14 +29,14 @@
  */
 package com.oracle.truffle.llvm.tests;
 
-import java.io.IOException;
-import java.nio.file.Files;
+import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collection;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.HashSet;
+import java.util.function.Predicate;
 
+import org.junit.AfterClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
@@ -44,17 +44,35 @@ import org.junit.runners.Parameterized.Parameters;
 import com.oracle.truffle.llvm.tests.options.TestOptions;
 
 @RunWith(Parameterized.class)
-public final class InlineAssemblyTest extends BaseSuiteHarness {
+public final class GCCSuite extends BaseSuiteHarness {
 
-    private static final Path ASSEMBLY_SUITE_DIR = Paths.get(TestOptions.TEST_SUITE_PATH, "..", "tests", "inlineassemblytests");
+    private static final Path GCC_SUITE_DIR = new File(TestOptions.EXTERNAL_TEST_SUITE_PATH).toPath();
+    private static final Path GCC_SOURCE_DIR = new File(TestOptions.TEST_SOURCE_PATH).toPath();
+    private static final Path GCC_CONFIG_DIR = new File(TestOptions.TEST_CONFIG_PATH).toPath();
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
-        try (Stream<Path> files = Files.walk(ASSEMBLY_SUITE_DIR)) {
-            return files.filter(BaseTestHarness.isExecutable).map(f -> f.getParent()).map(f -> new Object[]{f, f.toString().substring(ASSEMBLY_SUITE_DIR.toString().length() + 1)}).collect(
-                            Collectors.toList());
-        } catch (IOException e) {
-            throw new AssertionError("Test cases not found", e);
-        }
+        return ExternalTestCaseCollector.collectTestCases(GCC_CONFIG_DIR, GCC_SUITE_DIR, GCC_SOURCE_DIR);
+    }
+
+    @Override
+    protected Predicate<String> filterFileName() {
+        return s -> !s.endsWith("clangcpp_O0.bc");
+    }
+
+    @AfterClass
+    public static void printStatistics() {
+        HashSet<Path> ignoredFolders = new HashSet<>();
+        ignoredFolders.add(Paths.get("gcc-5.2.0/gcc/testsuite/gcc.c-torture/compile"));
+        ignoredFolders.add(Paths.get("gcc-5.2.0/gcc/testsuite/gfortran.fortran-torture/compile"));
+        ignoredFolders.add(Paths.get("gcc-5.2.0/gcc/testsuite/objc/compile"));
+        ignoredFolders.add(Paths.get("gcc-5.2.0/gcc/testsuite/gcc.dg/noncompile"));
+
+        printStatistics("GCC", GCC_SOURCE_DIR, GCC_CONFIG_DIR, f -> !f.toString().contains("/compile/") && !f.toString().contains("/noncompile/"));
+
+        // gcc torture execute only
+        printStatistics("gcc.c-torture/execute", Paths.get(GCC_SOURCE_DIR.toAbsolutePath().toString(), "gcc-5.2.0/gcc/testsuite/gcc.c-torture/execute"),
+                        Paths.get(GCC_CONFIG_DIR.toAbsolutePath().toString(), "gcc.c-torture", "execute"),
+                        t -> true);
     }
 }
