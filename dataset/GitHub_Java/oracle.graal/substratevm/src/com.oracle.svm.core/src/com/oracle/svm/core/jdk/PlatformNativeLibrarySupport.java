@@ -142,24 +142,16 @@ public abstract class PlatformNativeLibrarySupport {
 
     public abstract PointerBase findBuiltinSymbol(String name);
 
-    private boolean firstIsolate = false;
-
-    /** @see #isFirstIsolate() */
-    public void setIsFirstIsolate() {
-        firstIsolate = true;
-    }
-
     /**
-     * Indicates if the current isolate is the first isolate in this process and whether it is
-     * therefore responsible for initializing any built-in libraries that are explicitly or
-     * implicitly shared between the isolates of the process (for example, because they have a
-     * single native state that does not distinguish between isolates). This method is called before
-     * {@link #initializeBuiltinLibraries()}, which can then use {@link #isFirstIsolate()}.
+     * Initializes built-in libraries that are explicitly or implicitly shared between the isolates
+     * of a process (for example, because they have a single native state that does not distinguish
+     * between isolate). This method is called exactly once per process, during the creation of the
+     * first isolate in the process, followed by a call to {@link #initializeBuiltinLibraries()}.
      */
-    protected boolean isFirstIsolate() {
-        return firstIsolate;
+    public boolean initializeSharedBuiltinLibrariesOnce() {
+        return true;
     }
 
-    /** Initializes built-in libraries during isolate creation. */
+    /** Initializes built-in libraries for the current isolate, during its creation. */
     public abstract boolean initializeBuiltinLibraries();
 }

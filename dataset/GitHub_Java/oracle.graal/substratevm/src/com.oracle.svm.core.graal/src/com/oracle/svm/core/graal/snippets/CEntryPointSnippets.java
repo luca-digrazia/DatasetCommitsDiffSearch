@@ -232,9 +232,7 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
         int state = unsafe.getInt(initStateAddr);
         if (state != FirstIsolateInitStates.SUCCESSFUL) {
             firstIsolate = unsafe.compareAndSwapInt(null, initStateAddr, FirstIsolateInitStates.UNINITIALIZED, FirstIsolateInitStates.IN_PROGRESS);
-            if (firstIsolate) {
-                PlatformNativeLibrarySupport.singleton().setIsFirstIsolate();
-            } else {
+            if (!firstIsolate) {
                 while (state == FirstIsolateInitStates.IN_PROGRESS) { // spin-wait for first isolate
                     state = unsafe.getIntVolatile(null, initStateAddr);
                 }
@@ -244,12 +242,13 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
             }
         }
 
-        boolean success = PlatformNativeLibrarySupport.singleton().initializeBuiltinLibraries();
-
-        if (firstIsolate) { // let other isolates (if any) initialize now
+        boolean success = true;
+        if (firstIsolate) {
+            success = PlatformNativeLibrarySupport.singleton().initializeSharedBuiltinLibrariesOnce();
             state = success ? FirstIsolateInitStates.SUCCESSFUL : FirstIsolateInitStates.FAILED;
             unsafe.putIntVolatile(null, initStateAddr, state);
         }
+        success = success && PlatformNativeLibrarySupport.singleton().initializeBuiltinLibraries();
         if (!success) {
             return CEntryPointErrors.ISOLATE_INITIALIZATION_FAILED;
         }
