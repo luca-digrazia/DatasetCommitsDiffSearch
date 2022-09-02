@@ -216,18 +216,16 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private final int initialStackPointer;
     @CompilationFinal private final int initialByteConstantOffset;
     @CompilationFinal private final int initialIntConstantOffset;
-    @CompilationFinal private final int initialNumericLiteralOffset;
     @CompilationFinal(dimensions = 1) WasmNode[] nestedControlTable;
     @CompilationFinal(dimensions = 1) DirectCallNode[] callNodeTable;
 
-    public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int initialIntConstantOffset, int initialNumericLiteralOffset) {
-        super(wasmModule, codeEntry, -1, -1, -1);
+    public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int initialIntConstantOffset) {
+        super(wasmModule, codeEntry, -1, -1);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
         this.initialStackPointer = initialStackPointer;
         this.initialByteConstantOffset = initialByteConstantOffset;
         this.initialIntConstantOffset = initialIntConstantOffset;
-        this.initialNumericLiteralOffset = initialNumericLiteralOffset;
         this.nestedControlTable = null;
         this.callNodeTable = null;
     }
@@ -238,7 +236,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
         int callNodeOffset = 0;
         int byteConstantOffset = initialByteConstantOffset;
         int intConstantOffset = initialIntConstantOffset;
-        int numericLiteralOffset = initialNumericLiteralOffset;
         int stackPointer = initialStackPointer;
         int offset = startOffset;
         while (offset < startOffset + byteLength()) {
@@ -263,8 +260,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     offset += block.byteLength();
                     stackPointer += block.returnTypeLength();
                     byteConstantOffset += block.byteConstantLength();
-                    intConstantOffset += block.intConstantLength();
-                    numericLiteralOffset += block.numericLiteralLength();
                     break;
                 }
                 case LOOP: {
@@ -288,8 +283,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     offset += loopNode.byteLength();
                     stackPointer += loopNode.returnTypeLength();
                     byteConstantOffset += loopNode.byteConstantLength();
-                    intConstantOffset += loopNode.intConstantLength();
-                    numericLiteralOffset += loopNode.numericLiteralLength();
                     break;
                 }
                 case IF: {
@@ -303,8 +296,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     offset += ifNode.byteLength();
                     stackPointer += ifNode.returnTypeLength();
                     byteConstantOffset += ifNode.byteConstantLength();
-                    intConstantOffset += ifNode.intConstantLength();
-                    numericLiteralOffset += ifNode.numericLiteralLength();
                     break;
                 }
                 case ELSE:
@@ -312,12 +303,12 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case END:
                     break;
                 case BR: {
-                    int unwindCounter = codeEntry().numericLiteralAsInt(numericLiteralOffset);
+                    int unwindCounter = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
 
                     // Reset the stack pointer to the target block stack pointer.
                     int continuationStackPointer = codeEntry().intConstant(intConstantOffset);
-                    // Technically, we should increment the intConstantOffset and numericLiteralOffset at this point,
-                    // but since we are returning, it does not really matter.
+                    // Technically, we should increment the intConstantOffset at this point, but since we are returning,
+                    // it does not really matter.
 
                     // Populate the stack with the return values of the current block (the one we are escaping from).
                     unwindStack(frame, stackPointer, continuationStackPointer);
@@ -328,27 +319,25 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     stackPointer--;
                     int cond = popInt(frame, stackPointer);
                     if (cond != 0) {
-                        int unwindCounter = codeEntry().numericLiteralAsInt(numericLiteralOffset);
+                        int unwindCounter = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
 
                         // Reset the stack pointer to the target block stack pointer.
                         int continuationStackPointer = codeEntry().intConstant(intConstantOffset);
-                        // Technically, we should increment the intConstantOffset and numericLiteralOffset at this point,
-                        // but since we are returning, it does not really matter.
+                        // Technically, we should increment the intConstantOffset at this point, but since we are returning,
+                        // it does not really matter.
 
                         // Populate the stack with the return values of the current block (the one we are escaping from).
                         unwindStack(frame, stackPointer, continuationStackPointer);
 
                         return unwindCounter;
                     }
-                    numericLiteralOffset++;
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
                     break;
                 }
                 case CALL: {
-                    int functionIndex = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int functionIndex = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
@@ -412,8 +401,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case LOCAL_GET: {
-                    int index = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
@@ -447,8 +435,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case LOCAL_SET: {
-                    int index = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
@@ -482,8 +469,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case LOCAL_TEE: {
-                    int index = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
@@ -525,8 +511,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case GLOBAL_GET: {
-                    int index = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
@@ -560,8 +545,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case GLOBAL_SET: {
-                    int index = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int index = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
@@ -611,12 +595,12 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case I64_LOAD32_S:
                 case I64_LOAD32_U: {
                     /* The memAlign hint is not currently used or taken into account. */
+                    int memAlign = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte memAlignConstantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += memAlignConstantLength;
 
-                    int memOffset = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int memOffset = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte memOffsetConstantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += memOffsetConstantLength;
@@ -728,12 +712,12 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case I64_STORE_16:
                 case I64_STORE_32: {
                     /* The memAlign hint is not currently used or taken into account. */
+                    int memAlign = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte memAlignConstantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += memAlignConstantLength;
 
-                    int memOffset = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int memOffset = BinaryStreamReader.peekUnsignedInt32(codeEntry().data(), offset, null);
                     byte memOffsetConstantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += memOffsetConstantLength;
@@ -838,8 +822,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case I32_CONST: {
-                    int value = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int value = BinaryStreamReader.peekSignedInt32(codeEntry().data(), offset, null);
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
@@ -848,8 +831,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case I64_CONST: {
-                    long value = codeEntry().numericLiteral(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    long value = BinaryStreamReader.peekSignedInt64(codeEntry().data(), offset, null);
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
@@ -1472,8 +1454,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case F32_CONST: {
-                    int value = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    int value = BinaryStreamReader.peekFloatAsInt32(codeEntry().data(), offset);
                     offset += 4;
                     pushInt(frame, stackPointer, value);
                     stackPointer++;
@@ -1592,8 +1573,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case F64_CONST: {
-                    long value = codeEntry().numericLiteral(numericLiteralOffset);
-                    numericLiteralOffset++;
+                    long value = BinaryStreamReader.peekFloatAsInt64(codeEntry().data(), offset);
                     offset += 8;
                     push(frame, stackPointer, value);
                     stackPointer++;
