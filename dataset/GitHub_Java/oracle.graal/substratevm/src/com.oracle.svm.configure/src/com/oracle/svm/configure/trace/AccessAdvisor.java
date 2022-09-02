@@ -34,40 +34,26 @@ import com.oracle.svm.configure.filters.RuleNode;
  */
 public final class AccessAdvisor {
 
-    /** Filter to ignore accesses that <em>originate in</em> methods of these internal classes. */
-    private static final RuleNode internalCallerFilter;
-
-    /** Filter to ignore <em>accesses of</em> these classes and their members without a caller. */
-    private static final RuleNode accessWithoutCallerFilter;
-
+    private static final RuleNode internalsFilter;
     static {
-        internalCallerFilter = RuleNode.createRoot();
-        internalCallerFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
-        internalCallerFilter.addOrGetChildren("java.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.security.auth.**", RuleNode.Inclusion.Include);
-        internalCallerFilter.addOrGetChildren("sun.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("jdk.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("org.graalvm.compiler.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("org.graalvm.libgraal.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.removeRedundantNodes();
-
-        accessWithoutCallerFilter = RuleNode.createRoot();
-        accessWithoutCallerFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
-        accessWithoutCallerFilter.addOrGetChildren("jdk.vm.ci.**", RuleNode.Inclusion.Exclude);
-        accessWithoutCallerFilter.addOrGetChildren("org.graalvm.compiler.**", RuleNode.Inclusion.Exclude);
-        accessWithoutCallerFilter.addOrGetChildren("org.graalvm.libgraal.**", RuleNode.Inclusion.Exclude);
-        accessWithoutCallerFilter.addOrGetChildren("java.lang.String[]", RuleNode.Inclusion.Exclude);
-        // ^ String[]: for command-line argument arrays created before Java main method is called
-        accessWithoutCallerFilter.removeRedundantNodes();
+        internalsFilter = RuleNode.createRoot();
+        internalsFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
+        internalsFilter.addOrGetChildren("java.**", RuleNode.Inclusion.Exclude);
+        internalsFilter.addOrGetChildren("javax.**", RuleNode.Inclusion.Exclude);
+        internalsFilter.addOrGetChildren("javax.security.auth.**", RuleNode.Inclusion.Include);
+        internalsFilter.addOrGetChildren("sun.**", RuleNode.Inclusion.Exclude);
+        internalsFilter.addOrGetChildren("com.sun.**", RuleNode.Inclusion.Exclude);
+        internalsFilter.addOrGetChildren("jdk.**", RuleNode.Inclusion.Exclude);
+        internalsFilter.addOrGetChildren("org.graalvm.compiler.**", RuleNode.Inclusion.Exclude);
+        internalsFilter.addOrGetChildren("org.graalvm.libgraal.**", RuleNode.Inclusion.Exclude);
+        internalsFilter.removeRedundantNodes();
     }
 
-    public static RuleNode copyBuiltinCallerFilterTree() {
-        return internalCallerFilter.copy();
+    public static RuleNode copyBuiltinFilterTree() {
+        return internalsFilter.copy();
     }
 
-    private RuleNode callerFilter = internalCallerFilter;
+    private RuleNode callerFilter = internalsFilter;
     private boolean heuristicsEnabled = true;
     private boolean isInLivePhase = false;
     private int launchPhase = 0;
@@ -89,21 +75,12 @@ public final class AccessAdvisor {
         isInLivePhase = live;
     }
 
-    public boolean shouldIgnore(LazyValue<String> queriedClass, LazyValue<String> callerClass) {
-        if (heuristicsEnabled && !isInLivePhase) {
-            return true;
-        }
-        if (filterExcludesCaller(callerClass.get())) {
-            return true;
-        }
-        if (callerClass.get() == null) {
-            return !accessWithoutCallerFilter.treeIncludes(queriedClass.get());
-        }
-        return false;
+    public boolean shouldIgnoreCaller(LazyValue<String> qualifiedClass) {
+        return (heuristicsEnabled && !isInLivePhase) || filterExcludesCaller(qualifiedClass.get());
     }
 
     public boolean shouldIgnoreJniMethodLookup(LazyValue<String> queriedClass, LazyValue<String> name, LazyValue<String> signature, LazyValue<String> callerClass) {
-        assert !shouldIgnore(queriedClass, callerClass) : "must have been checked before";
+        assert !shouldIgnoreCaller(callerClass) : "must have been checked before";
         if (!heuristicsEnabled) {
             return false;
         }
@@ -127,6 +104,16 @@ public final class AccessAdvisor {
                 return true;
             }
         }
+        // Ignore libjvmcicompiler internal JNI calls:
+        // * jdk.vm.ci.services.Services.getJVMCIClassLoader
+        // * org.graalvm.compiler.hotspot.management.libgraal.runtime.SVMToHotSpotEntryPoints
+        if (callerClass.get() == null && "jdk.vm.ci.services.Services".equals(queriedClass.get()) && "getJVMCIClassLoader".equals(name.get()) &&
+                        "()Ljava/lang/ClassLoader;".equals(signature.get())) {
+            return true;
+        }
+        if (callerClass.get() == null && "org.graalvm.compiler.hotspot.management.libgraal.runtime.SVMToHotSpotEntryPoints".equals(queriedClass.get())) {
+            return true;
+        }
         /*
          * NOTE: JVM invocations cannot be reliably filtered with callerClass == null because these
          * could also be calls in a manually launched thread which is attached to JNI, but is not
@@ -135,14 +122,38 @@ public final class AccessAdvisor {
         return false;
     }
 
-    public boolean shouldIgnoreLoadClass(LazyValue<String> queriedClass, LazyValue<String> callerClass) {
-        assert !shouldIgnore(queriedClass, callerClass) : "must have been checked before";
+    public boolean shouldIgnoreJniClassLookup(LazyValue<String> name, LazyValue<String> callerClass) {
+        assert !shouldIgnoreCaller(callerClass) : "must have been checked before";
         if (!heuristicsEnabled) {
             return false;
         }
+        // Ignore libjvmcicompiler internal JNI calls: jdk.vm.ci.services.Services
+        if (callerClass.get() == null && "jdk.vm.ci.services.Services".equals(name.get())) {
+            return true;
+        }
+        return false;
+    }
+
+    public boolean shouldIgnoreJniNewObjectArray(LazyValue<String> arrayClass, LazyValue<String> callerClass) {
+        assert !shouldIgnoreCaller(callerClass) : "must have been checked before";
+        if (!heuristicsEnabled) {
+            return false;
+        }
+        if (callerClass.get() == null && "[Ljava.lang.String;".equals(arrayClass.get())) {
+            /*
+             * For command-line argument arrays created before the Java main method is called. We
+             * cannot detect this only via launchPhase on Java 8.
+             */
+            return true;
+        }
+        return false;
+    }
+
+    public boolean shouldIgnoreLoadClass(LazyValue<String> callerClass) {
+        assert !shouldIgnoreCaller(callerClass) : "must have been checked before";
         /*
-         * Without a caller, we always assume that the class loader was invoked directly by the VM,
-         * which indicates a system class (compiler, JVMCI, etc.) that we shouldn't need in our
+         * Without a caller, we assume that the class loader was invoked directly by the VM, which
+         * indicates a system class (compiler, JVMCI, etc.) that we shouldn't need in our
          * configuration. The class loader could also have been called via JNI in a manually
          * attached native thread without Java frames, but that is unusual.
          */
