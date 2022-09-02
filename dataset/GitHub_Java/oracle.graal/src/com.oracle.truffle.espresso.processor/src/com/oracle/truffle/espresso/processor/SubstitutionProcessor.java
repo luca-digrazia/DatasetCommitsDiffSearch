@@ -76,7 +76,7 @@ public class SubstitutionProcessor extends EspressoProcessor {
         super(SUBSTITUTION_PACKAGE, SUBSTITUTOR, COLLECTOR, COLLECTOR_INSTANCE_NAME);
     }
 
-    static class SubstitutorHelper extends SubstitutionHelper {
+    private static class SubstitutorHelper extends SubstitutionHelper {
         final String targetClassName;
         final String guestMethodName;
         final List<String> guestTypeNames;
