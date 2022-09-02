@@ -26,8 +26,6 @@ package com.oracle.truffle.espresso.runtime;
 import java.lang.reflect.Array;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 import com.oracle.truffle.api.TruffleLanguage;
@@ -38,7 +36,6 @@ import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
-import com.oracle.truffle.espresso.impl.ChangePacket;
 import com.oracle.truffle.espresso.impl.ClassRedefinition;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
@@ -68,13 +65,13 @@ public final class JDWPContextImpl implements JDWPContext {
     public static final String JAVA_LANG_STRING = "Ljava/lang/String;";
 
     private final EspressoContext context;
-    private final Ids ids;
+    private final Ids<Object> ids;
     private JDWPSetup setup;
     private VMListener eventListener = new EmptyListener();
 
     public JDWPContextImpl(EspressoContext context) {
         this.context = context;
-        this.ids = new Ids(StaticObject.NULL);
+        this.ids = new Ids<>(StaticObject.NULL);
         this.setup = new JDWPSetup();
     }
 
@@ -96,7 +93,7 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public Ids getIds() {
+    public Ids<Object> getIds() {
         return ids;
     }
 
@@ -156,7 +153,7 @@ public final class JDWPContextImpl implements JDWPContext {
                 case "F":
                     return new KlassRef[]{context.getMeta()._float};
                 default:
-                    throw new IllegalStateException("invalid primitive component type " + slashName);
+                    throw new RuntimeException("invalid primitive component type " + slashName);
             }
         } else if (slashName.startsWith("[")) {
             // array type
@@ -630,68 +627,12 @@ public final class JDWPContextImpl implements JDWPContext {
 
     @Override
     public int redefineClasses(RedefineInfo[] redefineInfos) {
-        try {
-            // list of sub classes that needs to refresh things like vtable
-            List<ObjectKlass> refreshSubClasses = new ArrayList<>();
-
-            // first, detect all changes to all classes
-            List<ChangePacket> changePackets = ClassRedefinition.detectClassChanges(redefineInfos, context);
-
-            // We have to redefine super classes prior to subclasses
-            Collections.sort(changePackets, new HierarchyComparator());
-
-            // begin redefine transaction
-            ClassRedefinition.begin();
-            for (ChangePacket packet : changePackets) {
-                int result = ClassRedefinition.redefineClass(packet, getIds(), refreshSubClasses);
-                if (result != 0) {
-                    return result;
-                }
+        for (RedefineInfo redefineInfo : redefineInfos) {
+            int result = ClassRedefinition.redefineClass((Klass) redefineInfo.getKlass(), redefineInfo.getClassBytes(), context, getIds());
+            if (result != 0) {
+                return result;
             }
-            // refresh subclasses when needed
-            Collections.sort(refreshSubClasses, new SubClassHierarchyComparator());
-            for (ObjectKlass subKlass : refreshSubClasses) {
-                subKlass.onSuperKlassUpdate();
-            }
-        } finally {
-            ClassRedefinition.end();
         }
         return 0;
-    }
-
-    private static class HierarchyComparator implements Comparator<ChangePacket> {
-        public int compare(ChangePacket packet1, ChangePacket packet2) {
-            Klass k1 = (Klass) packet1.info.getKlass();
-            Klass k2 = (Klass) packet2.info.getKlass();
-            // we need to do this check because isAssignableFrom is true in this case
-            // and we would get an order that doesn't exist
-            if (k1.equals(k2)) {
-                return 0;
-            }
-            if (k1.isAssignableFrom(k2)) {
-                return -1;
-            } else if (k2.isAssignableFrom(k1)) {
-                return 1;
-            }
-            // no hierarchy
-            return 0;
-        }
-    }
-
-    private static class SubClassHierarchyComparator implements Comparator<ObjectKlass> {
-        public int compare(ObjectKlass k1, ObjectKlass k2) {
-            // we need to do this check because isAssignableFrom is true in this case
-            // and we would get an order that doesn't exist
-            if (k1.equals(k2)) {
-                return 0;
-            }
-            if (k1.isAssignableFrom(k2)) {
-                return -1;
-            } else if (k2.isAssignableFrom(k1)) {
-                return 1;
-            }
-            // no hierarchy
-            return 0;
-        }
     }
 }
