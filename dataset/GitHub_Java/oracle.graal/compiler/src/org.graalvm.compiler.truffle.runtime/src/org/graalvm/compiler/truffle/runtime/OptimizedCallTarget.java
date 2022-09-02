@@ -695,7 +695,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                 }
             }
             if (task != null) {
-                runtime().getListener().onCompilationQueued(this, lastTierCompilation ? 2 : 1);
+                runtime().getListener().onCompilationQueued(this);
                 return maybeWaitForTask(task);
             }
         }
@@ -818,9 +818,8 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             /* no cancellation necessary if the call target was initialized */
             return false;
         }
-        CompilationTask task = this.compilationTask;
         if (cancelAndResetCompilationTask()) {
-            runtime().getListener().onCompilationDequeued(this, null, reason, task.isFirstTier() ? 1 : 2);
+            runtime().getListener().onCompilationDequeued(this, null, reason);
             return true;
         }
         return false;
@@ -1022,11 +1021,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             if (isValidLastTier()) {
                 String callsThresholdInFirstTier = String.format("%7d/%5d", getCallCount(), engine.callThresholdInFirstTier);
                 String loopsThresholdInFirstTier = String.format("%7d/%5d", getCallCount(), engine.callAndLoopThresholdInFirstTier);
-                properties.put("Tier", "2");
+                properties.put("Tier", "Last");
                 properties.put("Calls/Thres", callsThresholdInFirstTier);
                 properties.put("CallsAndLoop/Thres", loopsThresholdInFirstTier);
             } else {
-                properties.put("Tier", "1");
+                properties.put("Tier", "First");
                 properties.put("Calls/Thres", callsThresholdInInterpreter);
                 properties.put("CallsAndLoop/Thres", loopsThresholdInInterpreter);
             }

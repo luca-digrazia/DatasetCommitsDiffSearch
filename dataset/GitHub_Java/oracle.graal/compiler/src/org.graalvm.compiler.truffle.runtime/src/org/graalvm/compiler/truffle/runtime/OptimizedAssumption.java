@@ -295,7 +295,7 @@ public final class OptimizedAssumption extends AbstractAssumption implements For
         if (message != null && !message.isEmpty()) {
             sb.append("' with message '").append(message);
         }
-        logger.log(Level.INFO, sb.append("'").toString());
+        logger.log(Level.INFO, sb.toString());
     }
 
     private static void logStackTrace(OptionValues engineOptions, TruffleLogger logger) {

@@ -130,7 +130,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                 baseLoopCount = 0;
             }
         } else if (GraalCompilerDirectives.inFirstTier()) {
-            long iterationsCompleted = 0;
+            int iterationsCompleted = 0;
             Object status;
             try {
                 while (repeatableNode.shouldContinue((status = repeatableNode.executeRepeatingWithValue(frame)))) {
@@ -142,7 +142,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                 }
             } finally {
                 if (firstTierBackedgeCounts && iterationsCompleted > 1) {
-                    reportParentLoopCount(toIntOrMaxInt(iterationsCompleted));
+                    reportParentLoopCount(iterationsCompleted);
                 }
             }
             return status;
@@ -158,12 +158,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         }
     }
 
-    static int toIntOrMaxInt(long i) {
-        return i > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) i;
-    }
-
     private Object profilingLoop(VirtualFrame frame) {
-        long iterations = 0;
+        int iterations = 0;
         try {
             Object status;
             while (repeatableNode.shouldContinue(status = repeatableNode.executeRepeatingWithValue(frame))) {
@@ -177,8 +173,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             // The status returned here is different than CONTINUE_LOOP_STATUS.
             return status;
         } finally {
-            baseLoopCount = toIntOrMaxInt(baseLoopCount + iterations);
-            reportParentLoopCount(toIntOrMaxInt(iterations));
+            baseLoopCount += iterations;
+            reportParentLoopCount(iterations);
         }
     }
 
@@ -191,9 +187,6 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
     final void reportChildLoopCount(int iterations) {
         baseLoopCount += iterations;
-        if (baseLoopCount < 0) {
-            baseLoopCount = Integer.MAX_VALUE;
-        }
     }
 
     /**
@@ -211,7 +204,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     }
 
     private Object compilingLoop(VirtualFrame frame) {
-        long iterations = 0;
+        int iterations = 0;
         try {
             Object status;
             do {
@@ -231,8 +224,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             } while (repeatableNode.shouldContinue(status = repeatableNode.executeRepeatingWithValue(frame)));
             return status;
         } finally {
-            baseLoopCount = toIntOrMaxInt(baseLoopCount + iterations);
-            reportParentLoopCount(toIntOrMaxInt(iterations));
+            baseLoopCount += iterations;
+            reportParentLoopCount(iterations);
         }
     }
 
