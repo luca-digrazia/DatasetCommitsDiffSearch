@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.hosted.c.function;
 
-import com.oracle.svm.core.ParsingReason;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -66,7 +65,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 @AutomaticFeature
 public class CEntryPointSupport implements GraalFeature {
     @Override
-    public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, InvocationPlugins invocationPlugins, ParsingReason reason) {
+    public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, InvocationPlugins invocationPlugins, boolean analysis, boolean hosted) {
         registerEntryPointActionsPlugins(invocationPlugins);
         registerCurrentIsolatePlugins(invocationPlugins);
     }
