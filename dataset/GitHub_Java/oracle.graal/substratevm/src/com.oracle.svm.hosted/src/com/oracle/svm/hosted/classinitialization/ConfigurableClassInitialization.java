@@ -363,11 +363,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         return getTraceString(initializedClasses.get(clazz));
     }
 
-    public static Map<Class<?>, StackTraceElement[]> getInitializedClasses() {
-        return initializedClasses;
-    }
-
-    public static String getTraceString(StackTraceElement[] trace) {
+    private static String getTraceString(StackTraceElement[] trace) {
         StringBuilder b = new StringBuilder();
 
         for (int i = 0; i < trace.length; i++) {

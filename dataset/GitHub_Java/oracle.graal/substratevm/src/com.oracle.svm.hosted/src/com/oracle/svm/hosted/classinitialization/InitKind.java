@@ -60,20 +60,13 @@ public enum InitKind {
         return SEPARATOR + name().toLowerCase();
     }
 
-    Consumer<String> stringConsumer(ClassInitializationSupport support, String origin) {
-        String prefix = "from ";
-        String reason = origin == null ? prefix + "the command line" : prefix + origin;
+    Consumer<String> stringConsumer(ClassInitializationSupport support) {
         if (this == RUN_TIME) {
-            return name -> support.initializeAtRunTime(name, reason);
+            return name -> support.initializeAtRunTime(name, "from the command line");
         } else if (this == RERUN) {
-            return name -> support.rerunInitialization(name, reason);
+            return name -> support.rerunInitialization(name, "from the command line");
         } else {
-            return name -> {
-                if (name.equals("")) {
-                    System.err.println("--initialize-at-build-time without arguments has been deprecated and will be removed in GraalVM 22.0.");
-                }
-                support.initializeAtBuildTime(name, reason);
-            };
+            return name -> support.initializeAtBuildTime(name, "from the command line");
         }
     }
 
