@@ -22,6 +22,8 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
+import java.util.Arrays;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -69,7 +71,7 @@ public final class NativeMethodNode extends EspressoMethodNode {
         } else {
             if (!Types.isPrimitive(espressoType)) {
                 assert arg instanceof StaticObject;
-                return (long) env.getHandles().createLocal((StaticObject) arg);
+                return (/* @Word */ long) env.getHandles().createLocal((StaticObject) arg);
             }
             return arg;
         }
@@ -112,6 +114,16 @@ public final class NativeMethodNode extends EspressoMethodNode {
         } finally {
             env.getHandles().popFramesIncluding(nativeFrame);
         }
+    }
+
+    @TruffleBoundary
+    private void logOut(Object[] argsWithEnv, Object result) {
+        System.err.println("Return from native " + getMethod() + Arrays.toString(argsWithEnv) + " -> " + result);
+    }
+
+    @TruffleBoundary
+    private void logIn(Object[] argsWithEnv) {
+        System.err.println("Calling native " + getMethod() + Arrays.toString(argsWithEnv));
     }
 
     @TruffleBoundary
