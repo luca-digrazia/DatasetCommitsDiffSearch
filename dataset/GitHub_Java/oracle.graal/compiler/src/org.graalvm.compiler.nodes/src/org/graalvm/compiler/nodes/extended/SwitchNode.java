@@ -80,8 +80,8 @@ public abstract class SwitchNode extends ControlSplitNode {
      * @param value the instruction that provides the value to be switched over
      * @param successors the list of successors of this switch
      */
-    protected SwitchNode(NodeClass<? extends SwitchNode> c, ValueNode value, AbstractBeginNode[] successors, int[] keySuccessors, double[] keyProbabilities, ProfileSource profileSource) {
-        super(c, StampFactory.forVoid(), profileSource);
+    protected SwitchNode(NodeClass<? extends SwitchNode> c, ValueNode value, AbstractBeginNode[] successors, int[] keySuccessors, double[] keyProbabilities) {
+        super(c, StampFactory.forVoid());
         assert value.stamp(NodeView.DEFAULT).getStackKind().isNumericInteger() || value.stamp(NodeView.DEFAULT) instanceof AbstractPointerStamp : value.stamp(NodeView.DEFAULT) +
                         " key not supported by SwitchNode";
         assert keySuccessors.length == keyProbabilities.length;
@@ -119,7 +119,7 @@ public abstract class SwitchNode extends ControlSplitNode {
     }
 
     @Override
-    public boolean setProbability(AbstractBeginNode successor, double value, ProfileSource profileSource) {
+    public boolean setProbability(AbstractBeginNode successor, double value) {
         assert value <= 1.0 && value >= 0.0 : value;
         assert assertProbabilities();
 
@@ -148,7 +148,6 @@ public abstract class SwitchNode extends ControlSplitNode {
             }
         }
         assert assertProbabilities();
-        this.profileSource = profileSource;
         return true;
     }
 
