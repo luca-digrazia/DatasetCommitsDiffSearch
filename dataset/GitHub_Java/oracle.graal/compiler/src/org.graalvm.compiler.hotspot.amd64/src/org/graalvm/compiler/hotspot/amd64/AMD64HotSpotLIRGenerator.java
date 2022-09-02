@@ -341,7 +341,7 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
     }
 
     protected Register[] getSaveableRegisters() {
-        return getResult().getRegisterAllocationConfig().getAllocatableRegisters().toArray();
+        return getRegisterConfig().getAllocatableRegisters().toArray();
     }
 
     protected void emitRestoreRegisters(AMD64SaveRegistersOp save) {
