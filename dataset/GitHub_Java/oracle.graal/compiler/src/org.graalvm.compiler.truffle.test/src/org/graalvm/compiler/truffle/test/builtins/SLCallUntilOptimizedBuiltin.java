@@ -24,9 +24,11 @@
  */
 package org.graalvm.compiler.truffle.test.builtins;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
+import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.IndirectCallNode;

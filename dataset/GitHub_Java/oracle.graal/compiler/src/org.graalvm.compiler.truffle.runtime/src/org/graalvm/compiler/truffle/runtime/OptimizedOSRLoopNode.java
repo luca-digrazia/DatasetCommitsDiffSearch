@@ -195,7 +195,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                 if (target == null) {
                     return CONTINUE_LOOP_STATUS;
                 }
-                if (!target.isCompiling()) {
+                if (!target.isSubmittedForCompilation()) {
                     if (target.isValid()) {
                         return callOSR(target, frame);
                     }
@@ -260,23 +260,6 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     public final boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
         invalidateOSRTarget(newNode, reason);
         return false;
-    }
-
-    private void callNodeReplacedOnOSRTarget(Node oldNode, Node newNode, CharSequence reason) {
-        atomic(new Runnable() {
-            @Override
-            public void run() {
-                OptimizedCallTarget target = compiledOSRLoop;
-                if (target != null) {
-                    if (invalidationBackoff < 0) { // TODO can we ever backoff from invalidation if the tree was rewritten?
-                        throw new IllegalArgumentException("Invalid OSR invalidation backoff.");
-                    }
-                    baseLoopCount = Math.min(osrThreshold - invalidationBackoff, baseLoopCount);
-                    compiledOSRLoop = null;
-                    target.nodeReplaced(oldNode, newNode, reason);
-                }
-            }
-        });
     }
 
     private void invalidateOSRTarget(Object source, CharSequence reason) {
