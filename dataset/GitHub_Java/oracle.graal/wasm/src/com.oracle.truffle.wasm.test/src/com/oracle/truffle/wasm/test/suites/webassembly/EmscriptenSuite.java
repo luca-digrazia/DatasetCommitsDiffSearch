@@ -30,15 +30,18 @@
 package com.oracle.truffle.wasm.test.suites.webassembly;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import org.junit.Test;
 
 import com.oracle.truffle.wasm.test.WasmSuiteBase;
+import com.oracle.truffle.wasm.test.options.WasmTestOptions;
 
 public class EmscriptenSuite extends WasmSuiteBase {
     @Override
-    protected String testResource() {
-        return "emcc";
+    protected Path testDirectory() {
+        return Paths.get(WasmTestOptions.TEST_SOURCE_PATH, "emcc");
     }
 
     @Override
@@ -46,7 +49,6 @@ public class EmscriptenSuite extends WasmSuiteBase {
         return super.includedExternalModules() + ",env:emscripten";
     }
 
-    @Override
     @Test
     public void test() throws IOException {
         // This is here just to make mx aware of the test suite class.

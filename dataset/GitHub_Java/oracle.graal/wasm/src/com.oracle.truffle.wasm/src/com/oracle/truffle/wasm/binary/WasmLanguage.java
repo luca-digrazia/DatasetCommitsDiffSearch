@@ -33,8 +33,9 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import org.graalvm.options.OptionDescriptors;
 
-@TruffleLanguage.Registration(id = "wasm", name = "WebAssembly", defaultMimeType = "application/wasm", byteMimeTypes = "application/wasm", contextPolicy = TruffleLanguage.ContextPolicy.SHARED, fileTypeDetectors = WasmFileDetector.class)
+@TruffleLanguage.Registration(id = "wasm", name = "WebAssembly", defaultMimeType = "application/wasm", byteMimeTypes = "application/wasm", contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE, fileTypeDetectors = WasmFileDetector.class)
 public final class WasmLanguage extends TruffleLanguage<WasmContext> {
 
     @Override
@@ -48,15 +49,31 @@ public final class WasmLanguage extends TruffleLanguage<WasmContext> {
     }
 
     @Override
-    protected CallTarget parse(ParsingRequest request) throws Exception {
-        BinaryReader reader = new BinaryReader(this, request.getSource().getName(), request.getSource().getBytes().toByteArray());
+    protected CallTarget parse(ParsingRequest request) {
+        final WasmContext context = getContextReference().get();
+        final String moduleName = request.getSource().getName();
+        final byte[] data = request.getSource().getBytes().toByteArray();
+        final WasmModule module = new WasmModule(moduleName, data);
+        final BinaryReader reader = new BinaryReader(this, module, data);
         reader.readModule();
-        System.out.println(Truffle.getRuntime().toString());
-        return Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootCallNode(this));
+        context.linker().link(module);
+        context.registerModule(module);
+        // TODO: Should this return an initialization function? Or a start function?
+        return Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootNode(this));
     }
 
     @Override
     protected Iterable<Scope> findTopScopes(WasmContext context) {
         return context.getTopScopes();
     }
+
+    @Override
+    protected OptionDescriptors getOptionDescriptors() {
+        return new WasmOptionsOptionDescriptors();
+    }
+
+    public static WasmContext getCurrentContext() {
+        return getCurrentContext(WasmLanguage.class);
+    }
+
 }
