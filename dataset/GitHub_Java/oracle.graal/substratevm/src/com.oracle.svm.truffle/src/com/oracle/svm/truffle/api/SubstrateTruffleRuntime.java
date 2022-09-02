@@ -131,6 +131,9 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
             compileQueue = TruffleSupport.singleton().createBackgroundCompileQueue(this);
         }
         if (callTarget.engine.traceTransferToInterpreter) {
+            if (!SubstrateOptions.IncludeNodeSourcePositions.getValue()) {
+                Log.log().string("Warning: TraceTruffleTransferToInterpreter cannot print stack traces. Build image with -H:+IncludeNodeSourcePositions to enable stack traces.").newline();
+            }
             RuntimeOptionValues.singleton().update(Deoptimizer.Options.TraceDeoptimization, true);
         }
         installDefaultListeners();
