@@ -1638,7 +1638,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // always copy since pinning is not supported
         }
-        byte[] bytes = ModifiedUtf8.asUtf(getMeta().toHostString(str), true);
+        byte[] bytes = ModifiedUtf8.asUtf(Meta.toHostString(str), true);
         ByteBuffer region = allocateDirect(bytes.length);
         region.put(bytes);
         return byteBufferPointer(region);
@@ -1729,7 +1729,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public void GetStringRegion(@Host(String.class) StaticObject str, int start, int len, @Pointer TruffleObject bufPtr) {
         char[] chars;
         if (getJavaVersion().compactStringsEnabled()) {
-            chars = getMeta().toHostString(str).toCharArray();
+            chars = Meta.toHostString(str).toCharArray();
         } else {
             chars = ((StaticObject) getMeta().java_lang_String_value.get(str)).unwrap();
         }
@@ -1741,18 +1741,17 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    public int GetStringUTFLength(@Host(String.class) StaticObject string) {
-        return ModifiedUtf8.utfLength(getMeta().toHostString(string));
+    public static int GetStringUTFLength(@Host(String.class) StaticObject string) {
+        return ModifiedUtf8.utfLength(Meta.toHostString(string));
     }
 
     @JniImpl
     public void GetStringUTFRegion(@Host(String.class) StaticObject str, int start, int len, @Pointer TruffleObject bufPtr) {
-        int length = ModifiedUtf8.utfLength(getMeta().toHostString(str));
+        int length = ModifiedUtf8.utfLength(Meta.toHostString(str));
         if (start < 0 || start + (long) len > length) {
             throw Meta.throwException(getMeta().java_lang_StringIndexOutOfBoundsException);
         }
-        byte[] bytes = ModifiedUtf8.asUtf(getMeta().toHostString(str), start, len, true); // always
-                                                                                          // 0
+        byte[] bytes = ModifiedUtf8.asUtf(Meta.toHostString(str), start, len, true); // always 0
         // terminated.
         ByteBuffer buf = directByteBuffer(bufPtr, bytes.length, JavaKind.Byte);
         buf.put(bytes);
