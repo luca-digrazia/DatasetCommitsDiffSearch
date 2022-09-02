@@ -93,6 +93,7 @@ public class CompilationTask {
 
     private final boolean useProfilingInfo;
     private final boolean shouldRetainLocalVariables;
+    private final OptionValues options;
 
     final class HotSpotCompilationWrapper extends CompilationWrapper<HotSpotCompilationRequestResult> {
         private final EventProvider.CompilationEvent compilationEvent;
@@ -179,14 +180,14 @@ public class CompilationTask {
             HotSpotResolvedJavaMethod method = getMethod();
             int entryBCI = getEntryBCI();
             final boolean isOSR = entryBCI != JVMCICompiler.INVOCATION_ENTRY_BCI;
-            CompilationStatistics stats = CompilationStatistics.create(debug.getOptions(), method, isOSR);
+            CompilationStatistics stats = CompilationStatistics.create(options, method, isOSR);
 
-            final CompilationPrinter printer = CompilationPrinter.begin(debug.getOptions(), compilationId, method, entryBCI);
+            final CompilationPrinter printer = CompilationPrinter.begin(options, compilationId, method, entryBCI);
 
             try (DebugContext.Scope s = debug.scope("Compiling", new DebugDumpScope(getIdString(), true))) {
                 // Begin the compilation event.
                 compilationEvent.begin();
-                result = compiler.compile(method, entryBCI, useProfilingInfo, shouldRetainLocalVariables, compilationId, debug);
+                result = compiler.compile(method, entryBCI, useProfilingInfo, shouldRetainLocalVariables, compilationId, options, debug);
             } catch (Throwable e) {
                 throw debug.handle(e);
             } finally {
@@ -210,21 +211,20 @@ public class CompilationTask {
 
     }
 
-    public CompilationTask(HotSpotJVMCIRuntime jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean installAsDefault) {
-        this(jvmciRuntime, compiler, request, useProfilingInfo, false, installAsDefault);
+    public CompilationTask(HotSpotJVMCIRuntime jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean installAsDefault,
+                    OptionValues options) {
+        this(jvmciRuntime, compiler, request, useProfilingInfo, false, installAsDefault, options);
     }
 
     public CompilationTask(HotSpotJVMCIRuntime jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean shouldRetainLocalVariables,
-                    boolean installAsDefault) {
+                    boolean installAsDefault, OptionValues options) {
         this.jvmciRuntime = jvmciRuntime;
         this.compiler = compiler;
         this.compilationId = new HotSpotCompilationIdentifier(request);
         this.useProfilingInfo = useProfilingInfo;
         this.shouldRetainLocalVariables = shouldRetainLocalVariables;
         this.installAsDefault = installAsDefault;
-    }
 
-    public OptionValues filterOptions(OptionValues options) {
         /*
          * Disable inlining if HotSpot has it disabled unless it's been explicitly set in Graal.
          */
@@ -243,7 +243,7 @@ public class CompilationTask {
                 newOptions = new OptionValues(options, m);
             }
         }
-        return newOptions;
+        this.options = newOptions;
     }
 
     public HotSpotResolvedJavaMethod getMethod() {
@@ -309,8 +309,7 @@ public class CompilationTask {
      */
     public static final TimerKey CodeInstallationTime = DebugContext.timer("CodeInstallation");
 
-    public HotSpotCompilationRequestResult runCompilation(OptionValues initialOptions) {
-        OptionValues options = filterOptions(initialOptions);
+    public HotSpotCompilationRequestResult runCompilation() {
         SnippetReflectionProvider snippetReflection = compiler.getGraalRuntime().getHostProviders().getSnippetReflection();
         try (DebugContext debug = DebugContext.create(options, new GraalDebugHandlersFactory(snippetReflection))) {
             return runCompilation(debug);
