@@ -272,8 +272,7 @@ public abstract class LLVMDispatchBasicBlockNode extends LLVMExpressionNode {
             } else if (controlFlowNode instanceof LLVMResumeNode) {
                 LLVMResumeNode resumeNode = (LLVMResumeNode) controlFlowNode;
                 assert noPhisNecessary(resumeNode);
-                // Caused a compilation error: "Partial evaluation did not reduce value to a constant"
-                // nullDeadSlots(frame, bb.nullableAfter);
+                nullDeadSlots(frame, bb.nullableAfter);
                 resumeNode.execute(frame);
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new IllegalStateException("must not reach here");

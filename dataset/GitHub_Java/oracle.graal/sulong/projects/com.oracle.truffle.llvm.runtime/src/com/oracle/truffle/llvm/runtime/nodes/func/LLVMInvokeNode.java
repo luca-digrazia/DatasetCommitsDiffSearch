@@ -80,7 +80,7 @@ public abstract class LLVMInvokeNode extends LLVMControlFlowNode {
             this.unwindPhiNode = unwindPhiNode;
 
             this.argumentNodes = argumentNodes;
-            this.dispatchNode = LLVMDispatchNodeGen.create(type, null);
+            this.dispatchNode = LLVMDispatchNodeGen.create(type);
         }
 
         @Override
