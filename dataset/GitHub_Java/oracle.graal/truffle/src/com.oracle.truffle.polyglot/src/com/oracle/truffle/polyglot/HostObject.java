@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -662,27 +662,16 @@ final class HostObject implements TruffleObject {
     }
 
     @ExportMessage
-    abstract static class GetArraySize {
-
-        @Specialization(guards = {"isArray.execute(receiver)"}, limit = "1")
-        protected static long doArray(HostObject receiver,
-                        @Shared("isArray") @Cached IsArrayNode isArray) {
-            return Array.getLength(receiver.obj);
+    long getArraySize(@Shared("isArray") @Cached IsArrayNode isArray,
+                    @Shared("isList") @Cached IsListNode isList,
+                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
+        if (isArray.execute(this)) {
+            return Array.getLength(obj);
+        } else if (isList.execute(this)) {
+            return getListSize();
         }
-
-        @Specialization(guards = {"isList.execute(receiver)"}, limit = "1")
-        protected static long doList(HostObject receiver,
-                        @Shared("isList") @Cached IsListNode isList) {
-            return receiver.getListSize();
-        }
-
-        @Specialization(guards = {"!isArray.execute(receiver)", "!isList.execute(receiver)"}, limit = "1")
-        protected static long doNotArrayOrList(HostObject receiver,
-                        @Shared("isArray") @Cached IsArrayNode isArray,
-                        @Shared("isList") @Cached IsListNode isList) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-
+        error.enter();
+        throw UnsupportedMessageException.create();
     }
 
     // region Buffer Messages
@@ -725,8 +714,7 @@ final class HostObject implements TruffleObject {
     private static boolean isPEFriendlyBuffer(ByteBuffer buffer) {
         final Class<? extends ByteBuffer> clazz = buffer.getClass();
         final boolean result = CompilerDirectives.isPartialEvaluationConstant(clazz) &&
-                        clazz == HEAP_BYTE_BUFFER_CLASS || clazz == HEAP_BYTE_BUFFER_R_CLASS ||
-                        clazz == DIRECT_BYTE_BUFFER_CLASS || clazz == DIRECT_BYTE_BUFFER_R_CLASS;
+                        (clazz == HEAP_BYTE_BUFFER_CLASS || clazz == HEAP_BYTE_BUFFER_R_CLASS || clazz == DIRECT_BYTE_BUFFER_CLASS || clazz == DIRECT_BYTE_BUFFER_R_CLASS);
         assert result : "Unexpected Buffer subclass";
         return result;
     }
@@ -734,7 +722,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public byte readBufferByte(long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -744,7 +733,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Byte.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             return isPEFriendlyBuffer(buffer) ? buffer.get((int) index) : getBufferByteBoundary(buffer, (int) index);
         } catch (IndexOutOfBoundsException e) {
             error.enter();
@@ -760,7 +749,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferByte(long index, byte value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -770,7 +760,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Byte.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             if (isPEFriendlyBuffer(buffer)) {
                 buffer.put((int) index, value);
             } else {
@@ -780,6 +770,7 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Byte.BYTES);
         } catch (ReadOnlyBufferException e) {
+            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -792,7 +783,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public short readBufferShort(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -802,7 +794,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Short.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final short result = isPEFriendlyBuffer(buffer) ? buffer.getShort((int) index) : getBufferShortBoundary(buffer, (int) index);
@@ -822,7 +814,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferShort(ByteOrder order, long index, short value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -832,7 +825,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Short.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -845,6 +838,7 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Short.BYTES);
         } catch (ReadOnlyBufferException e) {
+            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -857,7 +851,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public int readBufferInt(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -867,7 +862,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Integer.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final int result = isPEFriendlyBuffer(buffer) ? buffer.getInt((int) index) : getBufferIntBoundary(buffer, (int) index);
@@ -887,7 +882,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferInt(ByteOrder order, long index, int value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -897,7 +893,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Integer.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -910,6 +906,7 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Integer.BYTES);
         } catch (ReadOnlyBufferException e) {
+            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -922,7 +919,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public long readBufferLong(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -932,7 +930,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Long.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final long result = isPEFriendlyBuffer(buffer) ? buffer.getLong((int) index) : getBufferLongBoundary(buffer, (int) index);
@@ -952,7 +950,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferLong(ByteOrder order, long index, long value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -962,7 +961,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Long.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -975,6 +974,7 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Long.BYTES);
         } catch (ReadOnlyBufferException e) {
+            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -987,7 +987,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public float readBufferFloat(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -997,7 +998,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Float.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final float result = isPEFriendlyBuffer(buffer) ? buffer.getFloat((int) index) : getBufferFloatBoundary(buffer, (int) index);
@@ -1017,7 +1018,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferFloat(ByteOrder order, long index, float value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -1027,7 +1029,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Float.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -1040,6 +1042,7 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Float.BYTES);
         } catch (ReadOnlyBufferException e) {
+            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -1052,7 +1055,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public double readBufferDouble(ByteOrder order, long index,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException, InvalidBufferOffsetException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws UnsupportedMessageException, InvalidBufferOffsetException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -1062,7 +1066,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Double.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             final double result = isPEFriendlyBuffer(buffer) ? buffer.getDouble((int) index) : getBufferDoubleBoundary(buffer, (int) index);
@@ -1082,7 +1086,8 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     public void writeBufferDouble(ByteOrder order, long index, double value,
                     @Shared("isBuffer") @Cached IsBufferNode isBuffer,
-                    @Shared("error") @Cached BranchProfile error) throws InvalidBufferOffsetException, UnsupportedMessageException {
+                    @Shared("error") @Cached BranchProfile error,
+                    @Shared("classProfile") @Cached("createClassProfile()") ValueProfile classProfile) throws InvalidBufferOffsetException, UnsupportedMessageException {
         if (!isBuffer.execute(this)) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -1092,7 +1097,7 @@ final class HostObject implements TruffleObject {
             throw InvalidBufferOffsetException.create(index, Double.BYTES);
         }
         try {
-            final ByteBuffer buffer = (ByteBuffer) obj;
+            final ByteBuffer buffer = (ByteBuffer) classProfile.profile(obj);
             final ByteOrder originalOrder = buffer.order();
             buffer.order(order);
             if (isPEFriendlyBuffer(buffer)) {
@@ -1105,6 +1110,7 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Double.BYTES);
         } catch (ReadOnlyBufferException e) {
+            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
