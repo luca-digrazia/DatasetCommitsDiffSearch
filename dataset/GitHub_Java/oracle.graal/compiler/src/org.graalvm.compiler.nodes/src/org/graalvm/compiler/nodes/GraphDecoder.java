@@ -659,8 +659,7 @@ public class GraphDecoder {
         makeFixedNodeInputs(methodScope, loopScope, node);
         readProperties(methodScope, node);
 
-        if ((node instanceof IfNode || node instanceof SwitchNode) &&
-                        earlyCanonicalization(methodScope, successorAddScope, nodeOrderId, node)) {
+        if (earlyCanonicalization(methodScope, successorAddScope, nodeOrderId, node)) {
             return loopScope;
         }
 
