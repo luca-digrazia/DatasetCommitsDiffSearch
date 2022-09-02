@@ -91,7 +91,7 @@ public abstract class ObjectScanner {
             fields = fieldsList;
         }
         for (AnalysisField field : fields) {
-            if (Modifier.isStatic(field.getModifiers()) && field.getJavaKind() == JavaKind.Object && field.isInImageHeap()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.getJavaKind() == JavaKind.Object && field.isAccessed()) {
                 execute(exec, () -> scanRootField(field));
             }
         }
@@ -341,7 +341,7 @@ public abstract class ObjectScanner {
             if (type.isInstanceClass()) {
                 /* Scan constant's instance fields. */
                 for (AnalysisField field : type.getInstanceFields(true)) {
-                    if (field.getJavaKind() == JavaKind.Object && field.isInImageHeap()) {
+                    if (field.getJavaKind() == JavaKind.Object && field.isAccessed()) {
                         assert !Modifier.isStatic(field.getModifiers());
                         scanField(field, entry.constant, entry);
                     }
