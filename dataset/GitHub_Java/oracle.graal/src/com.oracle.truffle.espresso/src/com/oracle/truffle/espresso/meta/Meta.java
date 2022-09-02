@@ -46,10 +46,6 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-import com.oracle.truffle.espresso.vm.UnsafeAccess;
-import com.oracle.truffle.object.DebugCounter;
-
-import sun.misc.Unsafe;
 
 /**
  * Introspection API to access the guest world from the host. Provides seamless conversions from
@@ -167,8 +163,6 @@ public final class Meta implements ContextAccess {
         java_lang_String_hashCode = java_lang_String.lookupDeclaredMethod(Name.hashCode, Signature._int);
         java_lang_String_length = java_lang_String.lookupDeclaredMethod(Name.length, Signature._int);
         java_lang_String_toCharArray = java_lang_String.lookupDeclaredMethod(Name.toCharArray, Signature._char_array);
-        java_lang_String_charAt = java_lang_String.lookupDeclaredMethod(Name.charAt, Signature._char);
-        java_lang_String_indexOf = java_lang_String.lookupDeclaredMethod(Name.indexOf, Signature._int_int_int);
 
         java_lang_Throwable = knownKlass(Type.java_lang_Throwable);
         java_lang_Throwable_getStackTrace = java_lang_Throwable.lookupDeclaredMethod(Name.getStackTrace, Signature.StackTraceElement_array);
@@ -242,7 +236,6 @@ public final class Meta implements ContextAccess {
 
         java_lang_ClassLoader = knownKlass(Type.java_lang_ClassLoader);
         java_lang_ClassLoader$NativeLibrary = knownKlass(Type.java_lang_ClassLoader$NativeLibrary);
-        java_lang_ClassLoader_checkPackageAccess = java_lang_ClassLoader.lookupDeclaredMethod(Name.checkPackageAccess, Signature.Class_PermissionDomain);
         java_lang_ClassLoader$NativeLibrary_getFromClass = java_lang_ClassLoader$NativeLibrary.lookupDeclaredMethod(Name.getFromClass, Signature.Class);
         java_lang_ClassLoader_findNative = java_lang_ClassLoader.lookupDeclaredMethod(Name.findNative, Signature._long_ClassLoader_String);
         java_lang_ClassLoader_getSystemClassLoader = java_lang_ClassLoader.lookupDeclaredMethod(Name.getSystemClassLoader, Signature.ClassLoader);
@@ -250,6 +243,12 @@ public final class Meta implements ContextAccess {
         java_lang_ClassLoader_unnamedModule = java_lang_ClassLoader.lookupDeclaredField(Name.unnamedModule, Type.java_lang_Module);
         java_lang_ClassLoader_name = java_lang_ClassLoader.lookupDeclaredField(Name.name, Type.java_lang_String);
         HIDDEN_CLASS_LOADER_REGISTRY = java_lang_ClassLoader.lookupHiddenField(Name.HIDDEN_CLASS_LOADER_REGISTRY);
+
+        java_lang_ClassLoader_getResourceAsStream = java_lang_ClassLoader.lookupMethod(Name.getResourceAsStream, Signature.InputStream_String);
+        java_lang_ClassLoader_loadClass = java_lang_ClassLoader.lookupMethod(Name.loadClass, Signature.Class_String);
+        java_io_InputStream = knownKlass(Type.java_io_InputStream);
+        java_io_InputStream_read = java_io_InputStream.lookupMethod(Name.read, Signature._int_byte_array_int_int);
+        java_io_InputStream_close = java_io_InputStream.lookupMethod(Name.close, Signature._void);
 
         // Guest reflection.
         java_lang_reflect_Executable = knownKlass(Type.java_lang_reflect_Executable);
@@ -420,6 +419,7 @@ public final class Meta implements ContextAccess {
         java_lang_AssertionStatusDirectives_deflt = java_lang_AssertionStatusDirectives.lookupField(Name.deflt, Type._boolean);
 
         java_lang_Class_classRedefinedCount = java_lang_Class.lookupField(Name.classRedefinedCount, Type._int);
+        java_lang_Class_name = java_lang_Class.lookupField(Name.name, Type.java_lang_String);
 
         // Classes and Members that differ from Java 8 to 11
 
@@ -613,6 +613,7 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_Class_forName_String;
     public final Method java_lang_Class_forName_String_boolean_ClassLoader;
     public final Field java_lang_Class_classRedefinedCount;
+    public final Field java_lang_Class_name;
 
     // Primitives.
     public final PrimitiveKlass _boolean;
@@ -672,19 +673,18 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_String_hashCode;
     public final Method java_lang_String_length;
     public final Method java_lang_String_toCharArray;
-    public final Method java_lang_String_charAt;
-    public final Method java_lang_String_indexOf;
 
     public final ObjectKlass java_lang_ClassLoader;
     public final Field java_lang_ClassLoader_parent;
     public final Field java_lang_ClassLoader_unnamedModule;
     public final Field java_lang_ClassLoader_name;
     public final ObjectKlass java_lang_ClassLoader$NativeLibrary;
-    public final Method java_lang_ClassLoader_checkPackageAccess;
     public final Method java_lang_ClassLoader$NativeLibrary_getFromClass;
     public final Method java_lang_ClassLoader_findNative;
     public final Method java_lang_ClassLoader_getSystemClassLoader;
     public final Field HIDDEN_CLASS_LOADER_REGISTRY;
+    public final Method java_lang_ClassLoader_getResourceAsStream;
+    public final Method java_lang_ClassLoader_loadClass;
 
     public final ObjectKlass jdk_internal_loader_ClassLoaders$PlatformClassLoader;
 
@@ -801,6 +801,10 @@ public final class Meta implements ContextAccess {
 
     public final ObjectKlass java_security_PrivilegedActionException;
     public final Method java_security_PrivilegedActionException_init_Exception;
+
+    public final ObjectKlass java_io_InputStream;
+    public final Method java_io_InputStream_read;
+    public final Method java_io_InputStream_close;
 
     // Array support.
     public final ObjectKlass java_lang_Cloneable;
@@ -1198,14 +1202,13 @@ public final class Meta implements ContextAccess {
      *
      * @param type The symbolic type.
      * @param classLoader The class loader
-     * @param protectionDomain
      * @return The asked Klass.
      * @throws NoClassDefFoundError guest exception is no representation of type can be found.
      */
     @TruffleBoundary
-    public Klass loadKlassOrFail(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader, StaticObject protectionDomain) {
+    public Klass loadKlassOrFail(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
         assert classLoader != null : "use StaticObject.NULL for BCL";
-        Klass k = loadKlassOrNull(type, classLoader, protectionDomain);
+        Klass k = loadKlassOrNull(type, classLoader);
         if (k == null) {
             throw throwException(java_lang_NoClassDefFoundError);
         }
@@ -1213,20 +1216,20 @@ public final class Meta implements ContextAccess {
     }
 
     /**
-     * Same as {@link #loadKlassOrFail(Symbol, StaticObject, StaticObject)}, except this method
-     * returns null instead of throwing if class is not found. Note that this mthod can still throw
-     * due to other errors (class file malformed, etc...)
+     * Same as {@link #loadKlassOrFail(Symbol, StaticObject)}, except this method returns null
+     * instead of throwing if class is not found. Note that this mthod can still throw due to other
+     * errors (class file malformed, etc...)
      *
-     * @see #loadKlassOrFail(Symbol, StaticObject, StaticObject)
+     * @see #loadKlassOrFail(Symbol, StaticObject)
      */
     @TruffleBoundary
-    public Klass loadKlassOrNull(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader, StaticObject protectionDomain) {
-        return getRegistries().loadKlass(type, classLoader, protectionDomain);
+    public Klass loadKlassOrNull(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
+        return getRegistries().loadKlass(type, classLoader);
     }
 
     @TruffleBoundary
     private ObjectKlass loadKlassWithBootClassLoader(Symbol<Type> type) {
-        return (ObjectKlass) getRegistries().loadKlass(type, StaticObject.NULL, StaticObject.NULL);
+        return (ObjectKlass) getRegistries().loadKlass(type, StaticObject.NULL);
     }
 
     public Klass resolvePrimitive(Symbol<Type> type) {
@@ -1268,10 +1271,9 @@ public final class Meta implements ContextAccess {
      *
      * @param type The symbolic type
      * @param classLoader The class loader of the constant pool holder.
-     * @param protectionDomain
      * @return The asked Klass, or null if no representation can be found.
      */
-    public Klass resolveSymbolOrNull(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader, StaticObject protectionDomain) {
+    public Klass resolveSymbolOrNull(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
         assert classLoader != null : "use StaticObject.NULL for BCL";
         // Resolution only resolves references. Bypass loading for primitives.
         Klass k = resolvePrimitive(type);
@@ -1279,23 +1281,23 @@ public final class Meta implements ContextAccess {
             return k;
         }
         if (Types.isArray(type)) {
-            Klass elemental = resolveSymbolOrNull(getTypes().getElementalType(type), classLoader, protectionDomain);
+            Klass elemental = resolveSymbolOrNull(getTypes().getElementalType(type), classLoader);
             if (elemental == null) {
                 return null;
             }
             return elemental.getArrayClass(Types.getArrayDimensions(type));
         }
-        return loadKlassOrNull(type, classLoader, protectionDomain);
+        return loadKlassOrNull(type, classLoader);
     }
 
     /**
-     * Same as {@link #resolveSymbolOrNull(Symbol, StaticObject, StaticObject)}, except this throws
-     * an exception of the given klass if the representation for the type can not be found.
+     * Same as {@link #resolveSymbolOrNull(Symbol, StaticObject)}, except this throws an exception
+     * of the given klass if the representation for the type can not be found.
      *
-     * @see #resolveSymbolOrNull(Symbol, StaticObject, StaticObject)
+     * @see #resolveSymbolOrNull(Symbol, StaticObject)
      */
-    public Klass resolveSymbolOrFail(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader, ObjectKlass exception, StaticObject protectionDomain) {
-        Klass k = resolveSymbolOrNull(type, classLoader, protectionDomain);
+    public Klass resolveSymbolOrFail(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader, ObjectKlass exception) {
+        Klass k = resolveSymbolOrNull(type, classLoader);
         if (k == null) {
             throw throwException(exception);
         }
@@ -1303,20 +1305,19 @@ public final class Meta implements ContextAccess {
     }
 
     /**
-     * Same as {@link #resolveSymbolOrFail(Symbol, StaticObject, ObjectKlass, StaticObject)}, but
-     * throws {@link NoClassDefFoundError} by default..
+     * Same as {@link #resolveSymbolOrFail(Symbol, StaticObject, ObjectKlass)}, but throws
+     * {@link NoClassDefFoundError} by default..
      */
-    public Klass resolveSymbolOrFail(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader, StaticObject protectionDomain) {
-        return resolveSymbolOrFail(type, classLoader, java_lang_NoClassDefFoundError, protectionDomain);
+    public Klass resolveSymbolOrFail(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
+        return resolveSymbolOrFail(type, classLoader, java_lang_NoClassDefFoundError);
     }
 
     /**
-     * Resolves the symbol using {@link #resolveSymbolOrFail(Symbol, StaticObject, StaticObject)},
-     * and applies access checking, possibly throwing {@link IllegalAccessError}.
+     * Resolves the symbol using {@link #resolveSymbolOrFail(Symbol, StaticObject)}, and applies
+     * access checking, possibly throwing {@link IllegalAccessError}.
      */
     public Klass resolveSymbolAndAccessCheck(Symbol<Type> type, Klass accessingKlass) {
-        assert accessingKlass != null;
-        Klass klass = resolveSymbolOrFail(type, accessingKlass.getDefiningClassLoader(), java_lang_NoClassDefFoundError, accessingKlass.protectionDomain());
+        Klass klass = resolveSymbolOrFail(type, accessingKlass.getDefiningClassLoader(), java_lang_NoClassDefFoundError);
         if (!Klass.checkAccess(klass.getElementalType(), accessingKlass)) {
             throw Meta.throwException(java_lang_IllegalAccessError);
         }
@@ -1439,53 +1440,36 @@ public final class Meta implements ContextAccess {
 
     private static class HostJava {
 
-        private static final DebugCounter NEW_STRING = DebugCounter.create("New String");
-        private static final DebugCounter GET_STRING_VALUE = DebugCounter.create("Get string value");
-
-        private static final boolean hostCompactString;
-        private static final Unsafe UNSAFE = UnsafeAccess.get();
-
-        private static final long String_value_offset;
-        private static final long String_hash_offset;
+        private static final java.lang.reflect.Field String_value;
+        private static final java.lang.reflect.Field String_hash;
 
         static {
             try {
-                String_value_offset = UNSAFE.objectFieldOffset(String.class.getDeclaredField("value"));
-                String_hash_offset = UNSAFE.objectFieldOffset(String.class.getDeclaredField("hash"));
-                hostCompactString = !System.getProperty("java.version").startsWith("1.");
+                String_value = String.class.getDeclaredField("value");
+                String_value.setAccessible(true);
+                String_hash = String.class.getDeclaredField("hash");
+                String_hash.setAccessible(true);
             } catch (NoSuchFieldException e) {
                 throw EspressoError.shouldNotReachHere(e);
             }
         }
 
         private static char[] getStringValue(String s) {
-            GET_STRING_VALUE.inc();
-            if (hostCompactString) {
-                char[] chars = new char[s.length()];
-                s.getChars(0, s.length(), chars, 0);
-                return chars;
-            } else {
-                return (char[]) UNSAFE.getObject(s, String_value_offset);
-            }
+            char[] chars = new char[s.length()];
+            s.getChars(0, s.length(), chars, 0);
+            return chars;
         }
 
         private static int getStringHash(String s) {
-            return UNSAFE.getInt(s, String_hash_offset);
+            try {
+                return (int) String_hash.get(s);
+            } catch (IllegalAccessException e) {
+                throw EspressoError.shouldNotReachHere(e);
+            }
         }
 
         private static String createString(final char[] value) {
-            NEW_STRING.inc();
-            if (hostCompactString) {
-                return new String(value);
-            } else {
-                try {
-                    String str = (String) UNSAFE.allocateInstance(String.class);
-                    UNSAFE.putObject(str, String_value_offset, value);
-                    return str;
-                } catch (Throwable e) {
-                    throw EspressoError.shouldNotReachHere();
-                }
-            }
+            return new String(value);
         }
     }
 

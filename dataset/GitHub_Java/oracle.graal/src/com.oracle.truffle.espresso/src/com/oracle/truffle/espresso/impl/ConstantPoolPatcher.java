@@ -27,13 +27,12 @@ import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.descriptors.ByteSequence;
 import com.oracle.truffle.espresso.jni.ModifiedUtf8;
 
-import java.lang.instrument.IllegalClassFormatException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 
 public class ConstantPoolPatcher {
-    public static void getDirectInnerClassNames(String fileSystemName, byte[] bytes, ArrayList<String> innerNames) throws IllegalClassFormatException {
+    public static void getDirectInnerClassNames(String fileSystemName, byte[] bytes, ArrayList<String> innerNames) {
         ClassfileStream stream = new ClassfileStream(bytes, null);
 
         // skip magic and version - 8 bytes
@@ -88,13 +87,13 @@ public class ConstantPoolPatcher {
                     stream.readU2();
                     break;
                 default:
-                    throw new IllegalClassFormatException();
+                    break;
             }
             i++;
         }
     }
 
-    public static byte[] patchConstantPool(byte[] bytes, Map<String, String> rules) throws IllegalClassFormatException {
+    public static byte[] patchConstantPool(byte[] bytes, Map<String, String> rules) {
         byte[] result = Arrays.copyOf(bytes, bytes.length);
         ClassfileStream stream = new ClassfileStream(bytes, null);
 
@@ -175,7 +174,7 @@ public class ConstantPoolPatcher {
                     stream.readU2();
                     break;
                 default:
-                    throw new IllegalClassFormatException();
+                    break;
             }
             i++;
         }
