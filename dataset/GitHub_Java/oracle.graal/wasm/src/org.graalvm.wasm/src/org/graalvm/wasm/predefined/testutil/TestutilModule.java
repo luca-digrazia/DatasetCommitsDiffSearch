@@ -68,9 +68,7 @@ public class TestutilModule extends BuiltinModule {
     private static Path createTemporaryDirectory() {
         try {
             if (Options.KEEP_TEMP_FILES.equals("true")) {
-                final Path directory = Paths.get("./test-output/");
-                directory.toFile().mkdirs();
-                return directory;
+                return Paths.get(".");
             } else {
                 final Path tempDirectory = Files.createTempDirectory("temp-dir-");
                 tempDirectory.toFile().deleteOnExit();
