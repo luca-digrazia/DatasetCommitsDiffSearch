@@ -144,8 +144,9 @@ public abstract class VirtualObjectNode extends ValueNode implements LIRLowerabl
      * <li>The number of bytes actually occupied by the entry is equal to the number of bytes of the
      * access kind
      */
-    public boolean canVirtualizeRead(ValueNode entry, int index, JavaKind accessKind, VirtualizerTool tool) {
-        return !entry.isIllegalConstant() && entry.getStackKind() == accessKind.getStackKind() &&
+    public boolean canVirtualizeLargeByteArrayUnsafeRead(ValueNode entry, int index, JavaKind accessKind, VirtualizerTool tool) {
+        return (tool.canVirtualizeLargeByteArrayUnsafeAccess() || accessKind == JavaKind.Byte) &&
+                        !entry.isIllegalConstant() && entry.getStackKind() == accessKind.getStackKind() &&
                         isVirtualByteArrayAccess(accessKind) &&
                         accessKind.getByteCount() == ((VirtualArrayNode) this).byteArrayEntryByteCount(index, tool);
     }

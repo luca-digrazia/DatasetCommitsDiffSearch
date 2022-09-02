@@ -35,15 +35,14 @@ import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.Compi
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.MapCursor;
-import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.Snippet;
@@ -143,7 +142,7 @@ public class SymbolicSnippetEncoder {
      * A mapping from the method substitution method to the original method name. The string key and
      * values are produced using {@link #methodKey(ResolvedJavaMethod)}.
      */
-    private final EconomicMap<String, String> originalMethods = EconomicMap.create();
+    private final Map<String, String> originalMethods = new ConcurrentHashMap<>();
 
     private final HotSpotReplacementsImpl originalReplacements;
 
@@ -156,11 +155,11 @@ public class SymbolicSnippetEncoder {
     /**
      * All the graphs parsed so far.
      */
-    private EconomicMap<String, StructuredGraph> preparedSnippetGraphs = EconomicMap.create();
+    private Map<String, StructuredGraph> preparedSnippetGraphs = new HashMap<>();
 
-    private EconomicSet<MethodSubstitutionPlugin> knownPlugins = EconomicSet.create();
+    private Set<MethodSubstitutionPlugin> knownPlugins = new HashSet<>();
 
-    private EconomicSet<InvocationPlugin> conditionalPlugins = EconomicSet.create();
+    private Set<InvocationPlugin> conditionalPlugins = new HashSet<>();
 
     private int preparedPlugins = 0;
 
@@ -290,36 +289,19 @@ public class SymbolicSnippetEncoder {
         preparedSnippetGraphs.put(plugin.toString() + context, subst);
     }
 
-    public static class EncodedSnippets {
-        private final byte[] snippetEncoding;
-        private final Object[] snippetObjects;
-        private final NodeClass<?>[] snippetNodeClasses;
-        private final UnmodifiableEconomicMap<String, Integer> snippetStartOffsets;
-        private final UnmodifiableEconomicMap<String, String> originalMethods;
+    static class EncodedSnippets {
+        private byte[] snippetEncoding;
+        private Object[] snippetObjects;
+        private NodeClass<?>[] snippetNodeClasses;
+        private Map<String, Integer> snippetStartOffsets;
+        private Map<String, String> originalMethods;
 
-        EncodedSnippets(byte[] snippetEncoding, Object[] snippetObjects, NodeClass<?>[] snippetNodeClasses, UnmodifiableEconomicMap<String, Integer> snippetStartOffsets,
-                        UnmodifiableEconomicMap<String, String> originalMethods) {
+        EncodedSnippets(byte[] snippetEncoding, Object[] snippetObjects, NodeClass<?>[] snippetNodeClasses, Map<String, Integer> snippetStartOffsets, Map<String, String> originalMethods) {
             this.snippetEncoding = snippetEncoding;
             this.snippetObjects = snippetObjects;
             this.snippetNodeClasses = snippetNodeClasses;
             this.snippetStartOffsets = snippetStartOffsets;
             this.originalMethods = originalMethods;
-        }
-
-        public byte[] getSnippetEncoding() {
-            return snippetEncoding;
-        }
-
-        public NodeClass<?>[] getSnippetNodeClasses() {
-            return snippetNodeClasses;
-        }
-
-        public UnmodifiableEconomicMap<String, Integer> getSnippetStartOffsets() {
-            return snippetStartOffsets;
-        }
-
-        public UnmodifiableEconomicMap<String, String> getOriginalMethods() {
-            return originalMethods;
         }
 
         StructuredGraph getMethodSubstitutionGraph(MethodSubstitutionPlugin plugin, ResolvedJavaMethod original, ReplacementsImpl replacements, IntrinsicContext.CompilationContext context,
@@ -530,7 +512,7 @@ public class SymbolicSnippetEncoder {
      */
     @SuppressWarnings("try")
     private synchronized EncodedSnippets maybeEncodeSnippets(OptionValues options) {
-        EconomicSet<MethodSubstitutionPlugin> plugins = this.knownPlugins;
+        Set<MethodSubstitutionPlugin> plugins = this.knownPlugins;
         if (preparedPlugins != plugins.size()) {
             for (MethodSubstitutionPlugin plugin : plugins) {
                 ResolvedJavaMethod original = plugin.getOriginalMethod(originalReplacements.getProviders().getMetaAccess());
@@ -541,12 +523,12 @@ public class SymbolicSnippetEncoder {
             }
             preparedPlugins = plugins.size();
         }
-        EconomicMap<String, StructuredGraph> graphs = this.preparedSnippetGraphs;
+        Map<String, StructuredGraph> graphs = this.preparedSnippetGraphs;
         if (encodedGraphs != graphs.size()) {
             DebugContext debug = openDebugContext("SnippetEncoder", null, options);
             try (DebugContext.Scope scope = debug.scope("SnippetSupportEncode")) {
                 encodedGraphs = graphs.size();
-                for (StructuredGraph graph : graphs.getValues()) {
+                for (StructuredGraph graph : graphs.values()) {
                     for (Node node : graph.getNodes()) {
                         node.setNodeSourcePosition(null);
                     }
@@ -555,7 +537,6 @@ public class SymbolicSnippetEncoder {
             }
         }
         return null;
-
     }
 
     synchronized void registerSnippet(ResolvedJavaMethod method, ResolvedJavaMethod original, Object receiver, boolean trackNodeSourcePosition, OptionValues options) {
@@ -576,7 +557,7 @@ public class SymbolicSnippetEncoder {
 
     private synchronized EncodedSnippets encodeSnippets(DebugContext debug) {
         GraphEncoder encoder = new GraphEncoder(HotSpotJVMCIRuntime.runtime().getHostJVMCIBackend().getTarget().arch, debug);
-        for (StructuredGraph graph : preparedSnippetGraphs.getValues()) {
+        for (StructuredGraph graph : preparedSnippetGraphs.values()) {
             encoder.prepare(graph);
         }
         encoder.finishPrepare();
@@ -584,12 +565,11 @@ public class SymbolicSnippetEncoder {
         byte[] snippetEncoding;
         Object[] snippetObjects;
         NodeClass<?>[] snippetNodeClasses;
-        EconomicMap<String, Integer> snippetStartOffsets;
+        Map<String, Integer> snippetStartOffsets;
 
-        snippetStartOffsets = EconomicMap.create();
-        MapCursor<String, StructuredGraph> cursor = preparedSnippetGraphs.getEntries();
-        while (cursor.advance()) {
-            snippetStartOffsets.put(cursor.getKey(), encoder.encode(cursor.getValue()));
+        snippetStartOffsets = new HashMap<>();
+        for (Map.Entry<String, StructuredGraph> entry : preparedSnippetGraphs.entrySet()) {
+            snippetStartOffsets.put(entry.getKey(), encoder.encode(entry.getValue()));
         }
         snippetEncoding = encoder.getEncoding();
         snippetObjects = encoder.getObjects();
@@ -1135,7 +1115,7 @@ public class SymbolicSnippetEncoder {
                 return false;
             }
             InvocationPlugin plugin = graphBuilderConfig.getPlugins().getInvocationPlugins().lookupInvocation(targetMethod);
-            if (plugin != null && conditionalPlugins.contains(plugin)) {
+            if (conditionalPlugins.contains(plugin)) {
                 // Because supporting arbitrary plugins in the context of encoded graphs is complex
                 // we disallow it. This limitation can be worked around through the use of method
                 // substitutions.

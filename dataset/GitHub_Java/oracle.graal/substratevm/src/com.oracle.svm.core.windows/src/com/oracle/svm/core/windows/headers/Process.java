@@ -78,10 +78,7 @@ public class Process {
     public static native int STACK_SIZE_PARAM_IS_A_RESERVATION();
 
     @CFunction
-    public static native int ResumeThread(WinBase.HANDLE hThread);
-
-    @CFunction(transition = Transition.NO_TRANSITION)
-    public static native int GetExitCodeThread(WinBase.HANDLE hThread, CIntPointer lpExitCode);
+    public static native int ResumeThread(WinBase.HANDLE osThreadHandle);
 
     @CFunction
     public static native int SwitchToThread();
