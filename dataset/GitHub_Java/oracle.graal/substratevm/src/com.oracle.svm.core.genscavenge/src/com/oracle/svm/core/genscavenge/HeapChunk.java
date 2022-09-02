@@ -33,12 +33,9 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.struct.RawField;
 import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.c.struct.UniqueLocationIdentity;
-import org.graalvm.word.ComparableWord;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
-import org.graalvm.word.SignedWord;
 import org.graalvm.word.UnsignedWord;
-import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.MemoryWalker;
 import com.oracle.svm.core.annotate.AlwaysInline;
@@ -61,14 +58,14 @@ import com.oracle.svm.core.option.HostedOptionKey;
  * information about the HeapChunk. HeapChunks do not have any instance methods: instead they have
  * static methods that take the HeapChunk.Header as a parameter.
  * <p>
- * HeapChunks maintain offsets of the current allocation point (top) with them, and the limit (end)
+ * HeapChunks maintain Pointers to the current allocation point (top) with them, and the limit (end)
  * where Objects can be allocated. Subclasses of HeapChunks can add additional fields as needed.
  * <p>
  * HeapChunks maintain some fields that would otherwise have to be maintained in per-HeapChunk
  * memory by the Space that contains them. For example, the fields for linking lists of HeapChunks
  * in a Space is kept in each HeapChunk rather than in some storage outside the HeapChunk.
  * <p>
- * For fields that are maintained as more-specifically-typed offsets by leaf "sub-classes",
+ * For fields that are maintained as more-specifically-typed Pointers by leaf "sub-classes",
  * HeapChunk defines the generic (Pointer) "get" methods, and only the "sub-classes" define "set"
  * methods that store more-specifically-typed Pointers, for type safety.
  * <p>
@@ -100,34 +97,29 @@ final class HeapChunk {
     private interface HeaderPadding extends PointerBase {
     }
 
-    /**
-     * The header of a chunk. All locations are given as offsets relative to the start of this
-     * chunk, including the links to the previous and next chunk in the linked list in which this
-     * chunk is inserted. This is necessary because the runtime addresses are not yet known for the
-     * chunks in the image heap, and relocations need to be avoided.
-     */
     @RawStructure
     public interface Header<T extends Header<T>> extends HeaderPadding {
+
         /**
-         * Offset of the memory available for allocation, i.e., the end of the last allocated object
-         * in the chunk.
+         * Pointer to the memory available for allocation, i.e., the end of the last allocated
+         * object in the chunk.
          */
         @RawField
         @UniqueLocationIdentity
-        UnsignedWord getTopOffset();
+        Pointer getTop();
 
         @RawField
         @UniqueLocationIdentity
-        void setTopOffset(UnsignedWord newTop);
+        void setTop(Pointer newTop);
 
-        /** Offset of the limit of memory available for allocation. */
+        /** Pointer to limit of the memory available for allocation, i.e., the end of the memory. */
         @RawField
         @UniqueLocationIdentity
-        UnsignedWord getEndOffset();
+        Pointer getEnd();
 
         @RawField
         @UniqueLocationIdentity
-        void setEndOffset(UnsignedWord newEnd);
+        void setEnd(Pointer newEnd);
 
         /**
          * The Space this HeapChunk is part of.
@@ -145,127 +137,23 @@ final class HeapChunk {
         @PinnedObjectField
         void setSpace(Space newSpace);
 
-        /**
-         * Address offset of the previous HeapChunk relative to this chunk's address in a
-         * doubly-linked list of chunks.
-         */
+        /** The previous HeapChunk in the doubly-linked list maintained by the Space. */
         @RawField
         @UniqueLocationIdentity
-        SignedWord getOffsetToPreviousChunk();
+        T getPrevious();
 
         @RawField
         @UniqueLocationIdentity
-        void setOffsetToPreviousChunk(SignedWord newPrevious);
+        void setPrevious(T newPrevious);
 
-        /**
-         * Address offset of the next HeapChunk relative to this chunk's address in a doubly-linked
-         * list of chunks.
-         */
+        /** The next HeapChunk in the doubly-linked list maintained by the Space. */
         @RawField
         @UniqueLocationIdentity
-        SignedWord getOffsetToNextChunk();
+        T getNext();
 
         @RawField
         @UniqueLocationIdentity
-        void setOffsetToNextChunk(SignedWord newNext);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static UnsignedWord getTopOffset(Header<?> that) {
-        assert getTopPointer(that).isNonNull() : "Not safe: top currently points to NULL.";
-        return that.getTopOffset();
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static Pointer getTopPointer(Header<?> that) {
-        return asPointer(that).add(that.getTopOffset());
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static void setTopPointer(Header<?> that, Pointer newTop) {
-        // Note that the address arithmetic also works for newTop == NULL, e.g. in TLAB allocation
-        that.setTopOffset(newTop.subtract(asPointer(that)));
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    static void setTopPointerCarefully(Header<?> that, Pointer newTop) {
-        assert getTopPointer(that).isNonNull() : "Not safe: top currently points to NULL.";
-        assert getTopPointer(that).belowOrEqual(newTop) : "newTop too low.";
-        assert newTop.belowOrEqual(getEndPointer(that)) : "newTop too high.";
-        setTopPointer(that, newTop);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static UnsignedWord getEndOffset(Header<?> that) {
-        return that.getEndOffset();
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static Pointer getEndPointer(Header<?> that) {
-        return asPointer(that).add(getEndOffset(that));
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static void setEndOffset(Header<?> that, UnsignedWord newEnd) {
-        that.setEndOffset(newEnd);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static Space getSpace(Header<?> that) {
-        return that.getSpace();
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static void setSpace(Header<?> that, Space newSpace) {
-        that.setSpace(newSpace);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static <T extends Header<T>> T getPrevious(Header<T> that) {
-        return pointerFromOffset(that, that.getOffsetToPreviousChunk());
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static <T extends Header<T>> void setPrevious(Header<T> that, T newPrevious) {
-        that.setOffsetToPreviousChunk(offsetFromPointer(that, newPrevious));
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static <T extends Header<T>> T getNext(Header<T> that) {
-        return pointerFromOffset(that, that.getOffsetToNextChunk());
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static <T extends Header<T>> void setNext(Header<T> that, T newNext) {
-        that.setOffsetToNextChunk(offsetFromPointer(that, newNext));
-    }
-
-    /**
-     * Converts from an offset to a pointer, where a zero offset translates to {@code NULL}. This is
-     * necessary for treating image heap chunks, where addresses at runtime are not yet known.
-     */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    @SuppressWarnings("unchecked")
-    private static <T extends PointerBase> T pointerFromOffset(Header<?> that, ComparableWord offset) {
-        T pointer = WordFactory.nullPointer();
-        if (offset.notEqual(WordFactory.zero())) {
-            pointer = (T) ((SignedWord) that).add((SignedWord) offset);
-        }
-        return pointer;
-    }
-
-    /**
-     * Converts from a pointer to an offset, where {@code NULL} translates to zero. This method is
-     * used only at runtime and in contexts where technically, special treatment of {@code NULL} is
-     * not necessary because it would be covered by the arithmetic, but it is done for consistency.
-     */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private static SignedWord offsetFromPointer(Header<?> that, PointerBase pointer) {
-        SignedWord offset = WordFactory.zero();
-        if (pointer.isNonNull()) {
-            offset = ((SignedWord) pointer).subtract((SignedWord) that);
-        }
-        return offset;
+        void setNext(T newNext);
     }
 
     @NeverInline("Not performance critical")
@@ -276,7 +164,7 @@ final class HeapChunk {
     @AlwaysInline("GC performance")
     public static boolean walkObjectsFromInline(Header<?> that, Pointer startOffset, ObjectVisitor visitor) {
         Pointer offset = startOffset;
-        while (offset.belowThan(getTopPointer(that))) { // crucial: top can move, so always re-read
+        while (offset.belowThan(that.getTop())) {
             Object obj = offset.toObject();
             if (!visitor.visitObjectInline(obj)) {
                 return false;
@@ -288,7 +176,14 @@ final class HeapChunk {
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static UnsignedWord availableObjectMemory(Header<?> that) {
-        return that.getEndOffset().subtract(that.getTopOffset());
+        return that.getEnd().subtract(that.getTop());
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    static void setTopCarefully(Header<?> that, Pointer newTop) {
+        assert that.getTop().belowOrEqual(newTop) : "newTop too low.";
+        assert newTop.belowOrEqual(that.getEnd()) : "newTop too high.";
+        that.setTop(newTop);
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -327,18 +222,18 @@ final class HeapChunk {
 
         @Override
         public UnsignedWord getSize(T heapChunk) {
-            return HeapChunk.getEndOffset(heapChunk);
+            return heapChunk.getEnd().subtract(getStart(heapChunk));
         }
 
         @Override
         public UnsignedWord getAllocationEnd(T heapChunk) {
-            return HeapChunk.getTopPointer(heapChunk);
+            return heapChunk.getTop();
         }
 
         @Override
         public String getRegion(T heapChunk) {
             /* This method knows too much about spaces, especially the "free" space. */
-            Space space = getSpace(heapChunk);
+            Space space = heapChunk.getSpace();
             String result;
             if (space == null) {
                 result = "free";
@@ -354,13 +249,13 @@ final class HeapChunk {
 
     static boolean verifyObjects(Header<?> that, Pointer start) {
         Log trace = HeapVerifier.getTraceLog().string("[HeapChunk.verify:");
-        trace.string("  that:  ").hex(that).string("  start: ").hex(start).string("  top: ").hex(getTopPointer(that)).string("  end: ").hex(getEndPointer(that));
+        trace.string("  that:  ").hex(that).string("  start: ").hex(start).string("  top: ").hex(that.getTop()).string("  end: ").hex(that.getEnd());
         Pointer p = start;
-        while (p.belowThan(getTopPointer(that))) {
+        while (p.belowThan(that.getTop())) {
             if (!HeapImpl.getHeapImpl().getHeapVerifier().verifyObjectAt(p)) {
                 Log witness = HeapImpl.getHeapImpl().getHeapVerifier().getWitnessLog().string("[HeapChunk.verify:");
-                witness.string("  that:  ").hex(that).string("  start: ").hex(start).string("  top: ").hex(getTopPointer(that)).string("  end: ").hex(getEndPointer(that));
-                witness.string("  space: ").string(getSpace(that).getName());
+                witness.string("  that:  ").hex(that).string("  start: ").hex(start).string("  top: ").hex(that.getTop()).string("  end: ").hex(that.getEnd());
+                witness.string("  space: ").string(that.getSpace().getName());
                 witness.string("  object at p: ").hex(p).string("  fails to verify").string("]").newline();
                 trace.string("  returns false]").newline();
                 return false;

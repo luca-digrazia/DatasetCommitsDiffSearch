@@ -96,7 +96,6 @@ final class Timers {
     final Timer cheneyScanFromRoots = new Timer("cheneyScanFromRoots");
     final Timer cheneyScanFromDirtyRoots = new Timer("cheneyScanFromDirtyRoots");
     final Timer collection = new Timer("collection");
-    final Timer cleanCodeCache = new Timer("cleanCodeCache");
     final Timer referenceObjects = new Timer("referenceObjects");
     final Timer promotePinnedObjects = new Timer("promotePinnedObjects");
     final Timer rootScan = new Timer("rootScan");
@@ -128,7 +127,6 @@ final class Timers {
         blackenImageHeapRoots.reset();
         blackenDirtyCardRoots.reset();
         scanGreyObjects.reset();
-        cleanCodeCache.reset();
         referenceObjects.reset();
         releaseSpaces.reset();
         verifyAfter.reset();
@@ -153,7 +151,6 @@ final class Timers {
             logOneTimer(log, "          ", blackenImageHeapRoots);
             logOneTimer(log, "          ", blackenDirtyCardRoots);
             logOneTimer(log, "          ", scanGreyObjects);
-            logOneTimer(log, "      ", cleanCodeCache);
             logOneTimer(log, "      ", referenceObjects);
             logOneTimer(log, "      ", releaseSpaces);
             logOneTimer(log, "    ", verifyAfter);
