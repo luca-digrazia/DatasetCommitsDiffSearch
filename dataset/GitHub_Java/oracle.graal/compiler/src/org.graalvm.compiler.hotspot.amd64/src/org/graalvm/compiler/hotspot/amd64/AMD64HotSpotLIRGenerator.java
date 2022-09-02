@@ -138,11 +138,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         return config.maxVectorSize;
     }
 
-    @Override
-    protected int getAVX3Threshold() {
-        return config.useAVX3Threshold;
-    }
-
     /**
      * Utility for emitting the instruction to save RBP.
      */
@@ -547,11 +542,6 @@ public class AMD64HotSpotLIRGenerator extends AMD64LIRGenerator implements HotSp
         Value speculation = emitJavaConstant(getMetaAccess().encodeSpeculation(SpeculationLog.NO_SPECULATION));
         moveDeoptValuesToThread(actionAndReason, speculation);
         append(new AMD64HotSpotDeoptimizeCallerOp());
-    }
-
-    @Override
-    public void emitDeoptimizeWithExceptionInCaller(Value exception) {
-        append(new AMD64HotSpotDeoptimizeWithExceptionCallerOp(config, exception));
     }
 
     @Override
