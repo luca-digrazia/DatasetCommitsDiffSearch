@@ -515,44 +515,38 @@ public class NativeImage {
         }
     }
 
-    protected ArrayList<String> createFallbackBuildArgs() {
-        ArrayList<String> buildArgs = new ArrayList<>();
-        Collection<String> fallbackSystemProperties = customJavaArgs.stream()
-                        .filter(s -> s.startsWith("-D"))
-                        .collect(Collectors.toCollection(LinkedHashSet::new));
-        for (String property : fallbackSystemProperties) {
-            buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorSystemProperty) + property);
-        }
-
-        List<String> fallbackExecutorJavaArgs = imageBuilderArgs.stream()
-                        .filter(s -> s.startsWith(oHFallbackExecutorJavaArg))
-                        .collect(Collectors.toList());
-        for (String fallbackExecutorJavaArg : fallbackExecutorJavaArgs) {
-            buildArgs.add(fallbackExecutorJavaArg);
-        }
-
-        buildArgs.add(oH + "+" + SubstrateOptions.ParseRuntimeOptions.getName());
-        String classpathString = imageClasspath.stream()
-                        .map(imagePath::relativize)
-                        .map(ImageClassLoader::classpathToString)
-                        .collect(Collectors.joining(File.pathSeparator));
-        buildArgs.add(oHPath + imagePath.toString());
-        buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorClasspath) + classpathString);
-        buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorMainClass) + mainClass);
-        buildArgs.add(FallbackExecutor.class.getName());
-        buildArgs.add(imageName);
-
-        defaultOptionHandler.addFallbackBuildArgs(buildArgs);
-        return buildArgs;
-    }
-
     private static final class FallbackBuildConfiguration implements InvocationHandler {
         private final NativeImage original;
         private final List<String> buildArgs;
 
         private FallbackBuildConfiguration(NativeImage original) {
             this.original = original;
-            this.buildArgs = original.createFallbackBuildArgs();
+
+            buildArgs = new ArrayList<>();
+            Collection<String> fallbackSystemProperties = original.customJavaArgs.stream()
+                            .filter(s -> s.startsWith("-D"))
+                            .collect(Collectors.toCollection(LinkedHashSet::new));
+            for (String property : fallbackSystemProperties) {
+                buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorSystemProperty) + property);
+            }
+
+            List<String> fallbackExecutorJavaArgs = original.imageBuilderArgs.stream()
+                            .filter(s -> s.startsWith(original.oHFallbackExecutorJavaArg))
+                            .collect(Collectors.toList());
+            for (String fallbackExecutorJavaArg : fallbackExecutorJavaArgs) {
+                buildArgs.add(fallbackExecutorJavaArg);
+            }
+
+            buildArgs.add(oH + "+" + SubstrateOptions.ParseRuntimeOptions.getName());
+            String classpathString = original.imageClasspath.stream()
+                            .map(original.imagePath::relativize)
+                            .map(ImageClassLoader::classpathToString)
+                            .collect(Collectors.joining(File.pathSeparator));
+            buildArgs.add(original.oHPath + original.imagePath.toString());
+            buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorClasspath) + classpathString);
+            buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorMainClass) + original.mainClass);
+            buildArgs.add(FallbackExecutor.class.getName());
+            buildArgs.add(original.imageName);
         }
 
         static BuildConfiguration create(NativeImage imageName) {
@@ -1163,7 +1157,7 @@ public class NativeImage {
             try {
                 nativeImage.prepareImageBuildArgs();
             } catch (NativeImageError e) {
-                throw showError("Requirements for building native images are not fulfilled", nativeImage.isVerbose() ? e : null);
+                throw showError("Requirements for building native images are not fulfilled", nativeImage.verbose ? e : null);
             }
             int buildStatus = nativeImage.completeImageBuild();
             if (buildStatus == 2) {

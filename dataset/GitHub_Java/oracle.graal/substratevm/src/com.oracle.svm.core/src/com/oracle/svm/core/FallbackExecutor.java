@@ -62,8 +62,6 @@ public class FallbackExecutor {
         public static final HostedOptionKey<String> FallbackExecutorClasspath = new HostedOptionKey<>(null);
         @Option(help = "Internal option used to specify java arguments for FallbackExecutor.")//
         public static final HostedOptionKey<String[]> FallbackExecutorJavaArg = new HostedOptionKey<>(null);
-        @Option(help = "Internal option used to specify runtime java arguments for FallbackExecutor.")//
-        public static final HostedOptionKey<String[]> FallbackExecutorRuntimeJavaArg = new HostedOptionKey<>(null);
     }
 
     public static void main(String[] args) {
@@ -80,12 +78,6 @@ public class FallbackExecutor {
         if (properties != null) {
             for (String p : properties) {
                 command.add(p);
-            }
-        }
-        String[] runtimeArgs = Options.FallbackExecutorRuntimeJavaArg.getValue();
-        if (runtimeArgs != null) {
-            for (String arg : runtimeArgs) {
-                command.add(arg);
             }
         }
         command.add("-D" + ImageInfo.PROPERTY_IMAGE_KIND_KEY + "=fallback-" + ImageInfo.PROPERTY_IMAGE_KIND_VALUE_EXECUTABLE);
