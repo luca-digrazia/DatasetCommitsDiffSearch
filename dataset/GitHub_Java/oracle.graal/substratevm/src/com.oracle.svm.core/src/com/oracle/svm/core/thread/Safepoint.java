@@ -41,7 +41,6 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.LocationIdentity;
-import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateOptions;
@@ -66,7 +65,6 @@ import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescripto
 import com.oracle.svm.core.snippets.SubstrateForeignCallTarget;
 import com.oracle.svm.core.thread.VMThreads.ActionOnTransitionToJavaSupport;
 import com.oracle.svm.core.thread.VMThreads.StatusSupport;
-import com.oracle.svm.core.threadlocal.FastThreadLocal;
 import com.oracle.svm.core.threadlocal.FastThreadLocalFactory;
 import com.oracle.svm.core.threadlocal.FastThreadLocalInt;
 import com.oracle.svm.core.threadlocal.VMThreadLocalInfos;
@@ -313,7 +311,7 @@ public final class Safepoint {
      * value.</li>
      * </ul>
      */
-    static final FastThreadLocalInt safepointRequested = FastThreadLocalFactory.createInt().setMaxOffset(FastThreadLocal.FIRST_CACHE_LINE);
+    static final FastThreadLocalInt safepointRequested = FastThreadLocalFactory.createInt();
 
     /** The value to reset a thread's {@link #safepointRequested} value to after a safepoint. */
     static final int THREAD_REQUEST_RESET = Integer.MAX_VALUE;
@@ -525,7 +523,6 @@ public final class Safepoint {
         }
 
         private volatile int safepointState;
-        private volatile UnsignedWord safepointId;
 
         /** The thread requesting a safepoint. */
         private volatile IsolateThread requestingThread;
@@ -562,7 +559,6 @@ public final class Safepoint {
             waitForSafepoints(reason);
             Statistics.setFrozenNanos();
             safepointState = AT_SAFEPOINT;
-            safepointId = safepointId.add(1);
             return lock;
         }
 
@@ -809,11 +805,6 @@ public final class Safepoint {
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
         protected boolean isFrozen() {
             return safepointState == AT_SAFEPOINT;
-        }
-
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-        protected UnsignedWord getSafepointId() {
-            return safepointId;
         }
 
         /** A sample method to execute in a VMOperation. */
