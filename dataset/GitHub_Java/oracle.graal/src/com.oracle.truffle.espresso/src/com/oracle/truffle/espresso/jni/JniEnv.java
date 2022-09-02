@@ -120,17 +120,17 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @TruffleBoundary
-    public StaticObject getPendingException() {
+    public final StaticObject getPendingException() {
         return threadLocalPendingException.get();
     }
 
     @TruffleBoundary
-    public void clearPendingException() {
+    public final void clearPendingException() {
         threadLocalPendingException.clear();
     }
 
     @TruffleBoundary
-    public void setPendingException(StaticObject ex) {
+    public final void setPendingException(StaticObject ex) {
         assert StaticObject.notNull(ex) && getMeta().Throwable.isAssignableFrom(ex.getKlass());
         threadLocalPendingException.set(ex);
     }
@@ -147,7 +147,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                     // Arrays.toString(shiftedArgs));
                     return m.invoke(JniEnv.this, args);
                 } catch (EspressoException targetEx) {
-                    setPendingException(targetEx.getExceptionObject());
+                    setPendingException(targetEx.getException());
                     return defaultValue(m.returnType());
                 } catch (StackOverflowError | OutOfMemoryError e) {
                     // This will most likely SOE again. Nothing we can do about that
@@ -199,7 +199,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
         private final long nativePointer;
 
-        VarArgsImpl(long nativePointer) {
+        public VarArgsImpl(long nativePointer) {
             this.nativePointer = nativePointer;
         }
 
@@ -395,7 +395,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @Override
-    public EspressoContext getContext() {
+    public final EspressoContext getContext() {
         return context;
     }
 
@@ -414,8 +414,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         }
         assert jniEnvPtr == 0L;
     }
-
-    // Checkstyle: stop method name check
 
     /**
      * <h3>jint GetVersion(JNIEnv *env);</h3>
@@ -1507,7 +1505,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         try {
             return (StaticObject) getMeta().Class_forName_String.invokeDirect(null, internalName);
         } catch (EspressoException e) {
-            if (InterpreterToVM.instanceOf(e.getExceptionObject(), getMeta().ClassNotFoundException)) {
+            if (InterpreterToVM.instanceOf(e.getException(), getMeta().ClassNotFoundException)) {
                 throw getMeta().throwExWithMessage(NoClassDefFoundError.class, e.getMessage());
             }
             throw e;
@@ -1588,7 +1586,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     private ByteBuffer allocateDirect(int capacity) {
-        ByteBuffer bb = ByteBuffer.allocateDirect(capacity).order(ByteOrder.nativeOrder());
+        ByteBuffer bb = ByteBuffer.allocateDirect(capacity) //
+                        .order(ByteOrder.nativeOrder());
         long address = byteBufferAddress(bb);
         nativeBuffers.put(address, bb);
         return bb;
@@ -1600,7 +1599,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
             isCopyBuf.put((byte) 1); // always copy since pinning is not supported
         }
-        byte[] bytes = ModifiedUtf8.asUtf(Meta.toHostString(str), true);
+        byte[] bytes = Utf8.asUTF(Meta.toHostString(str), true);
         ByteBuffer region = allocateDirect(bytes.length);
         region.put(bytes);
         return byteBufferAddress(region);
@@ -1752,8 +1751,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         try {
             InterpreterToVM.monitorExit(object);
         } catch (EspressoException e) {
-            assert InterpreterToVM.instanceOf(e.getExceptionObject(), getMeta().IllegalMonitorStateException);
-            getThreadLocalPendingException().set(e.getExceptionObject());
+            assert InterpreterToVM.instanceOf(e.getException(), getMeta().IllegalMonitorStateException);
+            getThreadLocalPendingException().set(e.getException());
             return JNI_ERR;
         }
         return JNI_OK;
@@ -1854,7 +1853,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         Substitutions.EspressoRootNodeFactory factory = new Substitutions.EspressoRootNodeFactory() {
             @Override
             public EspressoRootNode spawnNode(Method method) {
-                return EspressoRootNode.create(null, new NativeRootNode(boundNative, method, true));
+                return new EspressoRootNode(method, new NativeRootNode(boundNative, method, true));
             }
         };
         Symbol<Type> classType = clazz.getMirrorKlass().getType();
@@ -1864,17 +1863,16 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     @JniImpl
     public static int GetStringUTFLength(@Host(String.class) StaticObject string) {
-        return ModifiedUtf8.utfLength(Meta.toHostString(string));
+        return Utf8.UTFLength(Meta.toHostString(string));
     }
 
     @JniImpl
     public void GetStringUTFRegion(@Host(String.class) StaticObject str, int start, int len, long bufPtr) {
-        int length = ModifiedUtf8.utfLength(Meta.toHostString(str));
+        int length = Utf8.UTFLength(Meta.toHostString(str));
         if (start < 0 || start + (long) len > length) {
             throw getMeta().throwEx(StringIndexOutOfBoundsException.class);
         }
-        byte[] bytes = ModifiedUtf8.asUtf(Meta.toHostString(str), start, len, true); // always 0
-                                                                                     // terminated.
+        byte[] bytes = Utf8.asUTF(Meta.toHostString(str), start, len, true); // always 0 terminated.
         ByteBuffer buf = directByteBuffer(bufPtr, bytes.length, JavaKind.Byte);
         buf.put(bytes);
     }
@@ -2261,11 +2259,11 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      * a reference to the object.
      *
      * The clazz argument must not refer to an array class.
-     *
+     * 
      * @param clazz a Java class object.
-     *
+     * 
      *            Returns a Java object, or NULL if the object cannot be constructed.
-     *
+     * 
      *            Throws InstantiationException if the class is an interface or an abstract class.
      * @throws OutOfMemoryError if the system runs out of memory.
      */
@@ -2334,7 +2332,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      *
      * @param clazz a Java class object.
      *
-     *            Returns 0 on success; returns a negative value on failure.
+     *            Returns “0” on success; returns a negative value on failure.
      */
     @JniImpl
     public int UnregisterNatives(@Host(Class.class) StaticObject clazz) {
@@ -2412,6 +2410,4 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
         throw EspressoError.shouldNotReachHere("Field not found " + field);
     }
-
-    // Checkstyle: resume method name check
 }
