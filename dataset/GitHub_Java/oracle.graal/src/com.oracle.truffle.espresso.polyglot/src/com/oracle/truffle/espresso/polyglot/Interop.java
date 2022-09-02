@@ -67,9 +67,6 @@ public final class Interop {
      * <code>false</code>. Most object oriented languages have one or many values representing null
      * values. Invoking this message does not cause any observable side-effects.
      *
-     * Foreign objects for which this method returns <code>true</code> behave the same as Java
-     * <code>null</code>, but its identity is preserved.
-     *
      * @since 21.0
      */
     public static native boolean isNull(Object receiver);
@@ -81,10 +78,6 @@ public final class Interop {
     /**
      * Returns <code>true</code> if the receiver represents a <code>boolean</code> like value, else
      * <code>false</code>. Invoking this message does not cause any observable side-effects.
-     *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as <code>boolean</code> or {@link Boolean}
-     * (casting to a boxed type always preserves identity).
      *
      * @see #asBoolean(Object)
      * @since 21.0
@@ -109,10 +102,6 @@ public final class Interop {
     /**
      * Returns <code>true</code> if the receiver represents a <code>string</code> value, else
      * <code>false</code>. Invoking this message does not cause any observable side-effects.
-     *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as {@link String}; in this particular
-     * case the the conversion is eager and does not preserves identity.
      *
      * @see #asString(Object)
      * @since 21.0
@@ -162,10 +151,6 @@ public final class Interop {
      * in a Java byte primitive without loss of precision, else <code>false</code>. Invoking this
      * message does not cause any observable side-effects.
      *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as <code>byte</code> or {@link Byte}
-     * (casting to a boxed type always preserves identity).
-     *
      * @see #isNumber(Object)
      * @see #asByte(Object)
      * @since 21.0
@@ -176,10 +161,6 @@ public final class Interop {
      * Returns <code>true</code> if the receiver represents a <code>number</code> and its value fits
      * in a Java short primitive without loss of precision, else <code>false</code>. Invoking this
      * message does not cause any observable side-effects.
-     *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as <code>short</code> or {@link Short}
-     * (casting to a boxed type always preserves identity).
      *
      * @see #isNumber(Object)
      * @see #asShort(Object)
@@ -192,10 +173,6 @@ public final class Interop {
      * in a Java int primitive without loss of precision, else <code>false</code>. Invoking this
      * message does not cause any observable side-effects.
      *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as <code>int</code> or {@link Integer}
-     * (casting to a boxed type always preserves identity).
-     *
      * @see #isNumber(Object)
      * @see #asInt(Object)
      * @since 21.0
@@ -206,10 +183,6 @@ public final class Interop {
      * Returns <code>true</code> if the receiver represents a <code>number</code> and its value fits
      * in a Java long primitive without loss of precision, else <code>false</code>. Invoking this
      * message does not cause any observable side-effects.
-     *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as <code>long</code> or {@link Long} (casting
-     * to a boxed type always preserves identity).
      *
      * @see #isNumber(Object)
      * @see #asLong(Object)
@@ -222,10 +195,6 @@ public final class Interop {
      * in a Java float primitive without loss of precision, else <code>false</code>. Invoking this
      * message does not cause any observable side-effects.
      *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as <code>float</code> or {@link Float}
-     * (casting to a boxed type always preserves identity).
-     *
      * @see #isNumber(Object)
      * @see #asFloat(Object)
      * @since 21.0
@@ -236,10 +205,6 @@ public final class Interop {
      * Returns <code>true</code> if the receiver represents a <code>number</code> and its value fits
      * in a Java double primitive without loss of precision, else <code>false</code>. Invoking this
      * message does not cause any observable side-effects.
-     *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as <code>double</code> or {@link Double}
-     * (casting to a boxed type always preserves identity).
      *
      * @see #isNumber(Object)
      * @see #asDouble(Object)
@@ -327,14 +292,9 @@ public final class Interop {
      * Returns <code>true</code> if the receiver value represents a throwable exception/error.
      * Invoking this message does not cause any observable side-effects. Returns <code>false</code>
      * by default.
-     *
      * <p>
      * Objects must only return <code>true</code> if they support {@link #throwException} as well.
      * If this method is implemented then also {@link #throwException(Object)} must be implemented.
-     *
-     * Foreign objects for which this method returns <code>true</code>, can be
-     * {@link Polyglot#cast(Class, Object) polyglot-casted} as {@link ForeignException}; identity is
-     * preserved.
      *
      * @see #throwException(Object)
      * @since 21.0
