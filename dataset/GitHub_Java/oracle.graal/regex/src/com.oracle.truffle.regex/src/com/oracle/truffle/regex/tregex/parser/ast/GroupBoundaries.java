@@ -81,14 +81,13 @@ public class GroupBoundaries implements JsonConvertible {
         }
     }
 
-    private static final byte[] EMPTY_BYTE_ARRAY = {};
-    private static final short[] EMPTY_SHORT_ARRAY = {};
+    private static final byte[] EMPTY_ARRAY = {};
 
     private final CompilationFinalBitSet updateIndices;
     private final CompilationFinalBitSet clearIndices;
     private final int cachedHash;
-    @CompilationFinal(dimensions = 1) private short[] updateArray;
-    @CompilationFinal(dimensions = 1) private short[] clearArray;
+    @CompilationFinal(dimensions = 1) private byte[] updateArray;
+    @CompilationFinal(dimensions = 1) private byte[] clearArray;
 
     GroupBoundaries(CompilationFinalBitSet updateIndices, CompilationFinalBitSet clearIndices) {
         this.updateIndices = updateIndices;
@@ -160,45 +159,20 @@ public class GroupBoundaries implements JsonConvertible {
         }
     }
 
-    public byte[] updatesToByteArray() {
-        return indicesToByteArray(updateIndices);
+    public void materializeArrays() {
+        if (updateArray == null) {
+            updateArray = indicesToArray(updateIndices);
+            clearArray = indicesToArray(clearIndices);
+        }
     }
 
-    public byte[] clearsToByteArray() {
-        return indicesToByteArray(clearIndices);
-    }
-
-    private static byte[] indicesToByteArray(CompilationFinalBitSet indices) {
+    private static byte[] indicesToArray(CompilationFinalBitSet indices) {
         if (indices.isEmpty()) {
-            return EMPTY_BYTE_ARRAY;
+            return EMPTY_ARRAY;
         }
         final byte[] array = new byte[indices.numberOfSetBits()];
         writeIndicesToArray(indices, array, 0);
         return array;
-    }
-
-    public void materializeArrays() {
-        if (updateArray == null) {
-            updateArray = indicesToShortArray(updateIndices);
-            clearArray = indicesToShortArray(clearIndices);
-        }
-    }
-
-    private static short[] indicesToShortArray(CompilationFinalBitSet indices) {
-        if (indices.isEmpty()) {
-            return EMPTY_SHORT_ARRAY;
-        }
-        final short[] array = new short[indices.numberOfSetBits()];
-        writeIndicesToArray(indices, array, 0);
-        return array;
-    }
-
-    private static void writeIndicesToArray(CompilationFinalBitSet indices, final short[] array, int offset) {
-        int i = offset;
-        for (int j : indices) {
-            assert j < (1 << 16);
-            array[i++] = (short) j;
-        }
     }
 
     /**
@@ -217,6 +191,14 @@ public class GroupBoundaries implements JsonConvertible {
      */
     public CompilationFinalBitSet getClearIndices() {
         return clearIndices;
+    }
+
+    public byte[] getUpdateIndicesArray() {
+        return updateArray;
+    }
+
+    public byte[] getClearIndicesArray() {
+        return clearArray;
     }
 
     public boolean hasIndexUpdates() {
@@ -268,11 +250,11 @@ public class GroupBoundaries implements JsonConvertible {
 
     @ExplodeLoop
     public void apply(int[] array, int offset, int index) {
-        for (short i : clearArray) {
-            array[offset + Short.toUnsignedInt(i)] = -1;
+        for (byte i : clearArray) {
+            array[offset + Byte.toUnsignedInt(i)] = -1;
         }
-        for (short i : updateArray) {
-            array[offset + Short.toUnsignedInt(i)] = index;
+        for (byte i : updateArray) {
+            array[offset + Byte.toUnsignedInt(i)] = index;
         }
     }
 
