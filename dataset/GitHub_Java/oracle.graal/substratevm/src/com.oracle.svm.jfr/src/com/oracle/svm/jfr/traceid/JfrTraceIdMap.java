@@ -73,6 +73,7 @@ public class JfrTraceIdMap {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     void setId(int index, long id) {
+        assert traceIDs[index] == -1;
         traceIDs[index] = id;
     }
 }

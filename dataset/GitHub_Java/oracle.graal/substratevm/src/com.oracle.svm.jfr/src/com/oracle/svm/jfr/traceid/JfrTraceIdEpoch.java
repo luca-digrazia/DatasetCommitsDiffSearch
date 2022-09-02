@@ -26,9 +26,8 @@
 package com.oracle.svm.jfr.traceid;
 
 //Checkstyle: allow reflection
-
-import java.lang.reflect.Field;
-
+import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.util.ReflectionUtil;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.word.Word;
@@ -37,18 +36,10 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
-
-import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.thread.VMOperation;
-import com.oracle.svm.util.ReflectionUtil;
-
 import sun.misc.Unsafe;
 
-/**
- * Class holding the current JFR epoch. JFR uses an epoch system to safely separate constant pool
- * entries between adjacent chunks. Used to get the current or previous epoch and switch from one
- * epoch to another across an uninterruptible safepoint operation.
- */
+import java.lang.reflect.Field;
+
 public class JfrTraceIdEpoch {
     private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     private static final Field EPOCH_FIELD = ReflectionUtil.lookupField(JfrTraceIdEpoch.class, "epoch");
@@ -66,6 +57,7 @@ public class JfrTraceIdEpoch {
     public static final long EPOCH_1_METHOD_AND_CLASS_BITS = (METHOD_AND_CLASS_BITS << EPOCH_1_SHIFT);
 
     private boolean epoch;
+    private volatile boolean changedTag;
 
     @Fold
     public static JfrTraceIdEpoch getInstance() {
@@ -73,8 +65,7 @@ public class JfrTraceIdEpoch {
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public JfrTraceIdEpoch() {
-    }
+    public JfrTraceIdEpoch() { }
 
     public long getEpochAddress() {
         UnsignedWord epochFieldOffset = WordFactory.unsigned(UNSAFE.objectFieldOffset(EPOCH_FIELD));
@@ -83,18 +74,38 @@ public class JfrTraceIdEpoch {
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public void changeEpoch() {
-        assert VMOperation.isInProgressAtSafepoint();
         epoch = !epoch;
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public boolean isChangedTag() {
+        return changedTag;
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public void setChangedTag(boolean changedTag) {
+        this.changedTag = changedTag;
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public boolean hasChangedTag() {
+        if (isChangedTag()) {
+            setChangedTag(false);
+            return true;
+        }
+        return false;
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public void setChangedTag() {
+        if (!isChangedTag()) {
+            setChangedTag(true);
+        }
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     long thisEpochBit() {
         return epoch ? EPOCH_1_BIT : EPOCH_0_BIT;
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    long previousEpochBit() {
-        return epoch ? EPOCH_0_BIT : EPOCH_1_BIT;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
