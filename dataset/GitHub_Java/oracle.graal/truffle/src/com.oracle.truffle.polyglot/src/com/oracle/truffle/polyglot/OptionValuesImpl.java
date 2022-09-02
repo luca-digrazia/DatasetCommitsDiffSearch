@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,10 +46,12 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
+import org.graalvm.options.OptionStability;
 import org.graalvm.options.OptionValues;
 
 final class OptionValuesImpl implements OptionValues {
@@ -65,17 +67,20 @@ final class OptionValuesImpl implements OptionValues {
     private final PolyglotEngineImpl engine;
     private final OptionDescriptors descriptors;
     private final Map<OptionKey<?>, Object> values;
+    private final Map<OptionKey<?>, String> unparsedValues;
 
-    OptionValuesImpl(PolyglotEngineImpl engine, OptionDescriptors descriptors) {
+    OptionValuesImpl(PolyglotEngineImpl engine, OptionDescriptors descriptors, boolean preserveUnparsedValues) {
+        Objects.requireNonNull(descriptors);
         this.engine = engine;
         this.descriptors = descriptors;
         this.values = new HashMap<>();
+        this.unparsedValues = preserveUnparsedValues ? new HashMap<>() : null;
     }
 
     @Override
     public int hashCode() {
         int result = 31 + descriptors.hashCode();
-        result = 31 * result + engine.hashCode();
+        result = 31 * result + Objects.hashCode(engine);
         result = 31 * result + values.hashCode();
         return result;
     }
@@ -127,29 +132,73 @@ final class OptionValuesImpl implements OptionValues {
         }
     }
 
-    public void putAll(Map<String, String> providedValues) {
+    public void putAll(Map<String, String> providedValues, boolean allowExperimentalOptions) {
         for (String key : providedValues.keySet()) {
-            put(key, providedValues.get(key));
+            put(key, providedValues.get(key), allowExperimentalOptions);
         }
     }
 
-    public void put(String key, String value) {
-        OptionDescriptor descriptor = findDescriptor(key);
-        values.put(descriptor.getKey(), descriptor.getKey().getType().convert(value));
+    public void put(String key, String value, boolean allowExperimentalOptions) {
+        OptionDescriptor descriptor = findDescriptor(key, allowExperimentalOptions);
+        OptionKey<?> optionKey = descriptor.getKey();
+        Object previousValue;
+        if (values.containsKey(optionKey)) {
+            previousValue = values.get(optionKey);
+        } else {
+            previousValue = optionKey.getDefaultValue();
+        }
+        String name = descriptor.getName();
+        String suffix = null;
+        if (descriptor.isOptionMap()) {
+            suffix = key.substring(name.length());
+            assert suffix.isEmpty() || suffix.startsWith(".");
+            if (suffix.startsWith(".")) {
+                suffix = suffix.substring(1);
+            }
+        }
+        Object convertedValue;
+        try {
+            convertedValue = optionKey.getType().convert(previousValue, suffix, value);
+        } catch (IllegalArgumentException e) {
+            throw PolyglotEngineException.illegalArgument(e);
+        }
+        values.put(descriptor.getKey(), convertedValue);
+        if (unparsedValues != null) {
+            unparsedValues.put(descriptor.getKey(), value);
+        }
     }
 
     private OptionValuesImpl(OptionValuesImpl copy) {
         this.engine = copy.engine;
         this.values = new HashMap<>(copy.values);
         this.descriptors = copy.descriptors;
+        this.unparsedValues = copy.unparsedValues;
     }
 
+    private <T> boolean contains(OptionKey<T> optionKey) {
+        for (OptionDescriptor descriptor : descriptors) {
+            if (descriptor.getKey() == optionKey) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public boolean hasBeenSet(OptionKey<?> optionKey) {
+        assert contains(optionKey);
         return values.containsKey(optionKey);
     }
 
     OptionValuesImpl copy() {
         return new OptionValuesImpl(this);
+    }
+
+    void copyInto(OptionValuesImpl target) {
+        if (!target.values.isEmpty()) {
+            throw new IllegalStateException("Values must be empty.");
+        }
+        target.values.putAll(values);
     }
 
     public OptionDescriptors getDescriptors() {
@@ -159,6 +208,7 @@ final class OptionValuesImpl implements OptionValues {
     @SuppressWarnings("unchecked")
     @Override
     public <T> T get(OptionKey<T> optionKey) {
+        assert contains(optionKey);
         Object value = values.get(optionKey);
         if (value == null) {
             return optionKey.getDefaultValue();
@@ -166,10 +216,10 @@ final class OptionValuesImpl implements OptionValues {
         return (T) value;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <T> void set(OptionKey<T> optionKey, T value) {
-        optionKey.getType().validate(value);
-        values.put(optionKey, value);
+        throw new UnsupportedOperationException("OptionValues#set() is no longer supported");
     }
 
     @Override
@@ -177,12 +227,28 @@ final class OptionValuesImpl implements OptionValues {
         return !values.isEmpty();
     }
 
-    private OptionDescriptor findDescriptor(String key) {
+    String getUnparsedOptionValue(OptionKey<?> key) {
+        if (unparsedValues == null) {
+            throw new IllegalStateException("Unparsed values are not supported");
+        }
+        return unparsedValues.get(key);
+    }
+
+    private OptionDescriptor findDescriptor(String key, boolean allowExperimentalOptions) {
         OptionDescriptor descriptor = descriptors.get(key);
         if (descriptor == null) {
             throw failNotFound(key);
         }
+        if (!allowExperimentalOptions && descriptor.getStability() == OptionStability.EXPERIMENTAL) {
+            throw failExperimental(key);
+        }
         return descriptor;
+    }
+
+    private static RuntimeException failExperimental(String key) {
+        final String message = String.format("Option '%s' is experimental and must be enabled with allowExperimentalOptions(boolean) in Context.Builder or Engine.Builder. ", key) +
+                        "Do not use experimental options in production environments.";
+        return PolyglotEngineException.illegalArgument(message);
     }
 
     private RuntimeException failNotFound(String key) {
@@ -214,7 +280,7 @@ final class OptionValuesImpl implements OptionValues {
                 msg.format("%n    %s=<%s>", match.getName(), match.getKey().getType().getName());
             }
         }
-        throw new IllegalArgumentException(msg.toString());
+        throw PolyglotEngineException.illegalArgument(msg.toString());
     }
 
     /**
