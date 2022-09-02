@@ -43,16 +43,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.multithreading.UtilCConstants;
 import org.graalvm.collections.EconomicMap;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
@@ -87,29 +85,9 @@ import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
-import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMContext {
-    // the long-key is the thread-id
-    public final ConcurrentMap<Long, Object> retValStorage;
-    public final ConcurrentMap<Long, Thread> threadStorage;
-
-    // list with all created threads for the case that a thread id doest not stay runtime unique
-    public final List<Thread> createdThreads;
-
-    public final List<LLVMPointer> onceStorage;
-
-    public int curKeyVal;
-    public final Object keyLockObj;
-    public final ConcurrentMap<Integer, ConcurrentMap<Long, LLVMPointer>> keyStorage;
-    public final ConcurrentMap<Integer, LLVMPointer> destructorStorage;
-
-    public final Object callTargetLock;
-    public CallTarget pthreadCallTarget;
-    public final UtilCConstants pthreadConstants;
-
     private final List<Path> libraryPaths = new ArrayList<>();
     private final Object libraryPathsLock = new Object();
     @CompilationFinal private Path internalLibraryPath;
@@ -125,8 +103,6 @@ public final class LLVMContext {
     private final Object globalsStoreLock = new Object();
 
     private final String languageHome;
-
-    private DataLayout dataLayout;
 
     private final List<LLVMThread> runningThreads = new ArrayList<>();
     @CompilationFinal private LLVMThreadingStack threadingStack;
@@ -154,7 +130,6 @@ public final class LLVMContext {
 
     private final LLVMSourceContext sourceContext;
 
-    private final LLVMLanguage language;
     private final Env env;
     private final LLVMScope globalScope;
     private final DynamicLinkChain dynamicLinkChain;
@@ -172,6 +147,9 @@ public final class LLVMContext {
 
     private boolean initialized;
     private boolean cleanupNecessary;
+    private DataLayout libsulongDatalayout;
+    private Boolean datalayoutInitialised;
+    private final LLVMLanguage language;
 
     private final LLVMTracerInstrument tracer;
 
@@ -195,10 +173,11 @@ public final class LLVMContext {
 
     LLVMContext(LLVMLanguage language, Env env, String languageHome) {
         this.language = language;
+        this.libsulongDatalayout = null;
+        this.datalayoutInitialised = false;
         this.env = env;
         this.initialized = false;
         this.cleanupNecessary = false;
-        this.dataLayout = new DataLayout();
         this.destructorFunctions = new ArrayList<>();
         this.nativeCallStatistics = SulongEngineOption.isTrue(env.getOptions().get(SulongEngineOption.NATIVE_CALL_STATS)) ? new ConcurrentHashMap<>() : null;
         this.sigDfl = LLVMNativePointer.create(0);
@@ -234,39 +213,29 @@ public final class LLVMContext {
         } else {
             tracer = null;
         }
-        // pthread storages
-        this.retValStorage = new ConcurrentHashMap<>();
-        this.threadStorage = new ConcurrentHashMap<>();
-        this.createdThreads = new ArrayList<>();
-        this.onceStorage = new ArrayList<>();
-        this.curKeyVal = 0;
-        this.keyLockObj = new Object();
-        this.keyStorage = new ConcurrentHashMap<>();
-        this.destructorStorage = new ConcurrentHashMap<>();
-        this.callTargetLock = new Object();
-        this.pthreadCallTarget = null;
-        this.pthreadConstants = new UtilCConstants(this);
-
     }
 
     private static final class InitializeContextNode extends LLVMStatementNode {
 
-        private final ContextReference<LLVMContext> ctxRef;
+        @CompilationFinal private ContextReference<LLVMContext> ctxRef;
         private final FrameSlot stackPointer;
 
         @Child DirectCallNode initContext;
 
         InitializeContextNode(LLVMContext ctx, FrameDescriptor rootFrame) {
-            this.ctxRef = ctx.getLanguage().getContextReference();
             this.stackPointer = rootFrame.findFrameSlot(LLVMStack.FRAME_ID);
 
             LLVMFunctionDescriptor initContextDescriptor = ctx.globalScope.getFunction("__sulong_init_context");
-            RootCallTarget initContextFunction = initContextDescriptor.getLLVMIRFunction();
+            RootCallTarget initContextFunction = initContextDescriptor.getLLVMIRFunctionSlowPath();
             this.initContext = DirectCallNode.create(initContextFunction);
         }
 
         @Override
         public void execute(VirtualFrame frame) {
+            if (ctxRef == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                ctxRef = lookupContextReference(LLVMLanguage.class);
+            }
             LLVMContext ctx = ctxRef.get();
             if (!ctx.initialized) {
                 assert !ctx.cleanupNecessary;
@@ -381,6 +350,21 @@ public final class LLVMContext {
         return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(value));
     }
 
+    public void addLibsulongDataLayout(DataLayout datalayout) {
+        // Libsulong datalayout can only be set once. This should be called by
+        // Runner#parseDefaultLibraries.
+        if (!datalayoutInitialised) {
+            this.libsulongDatalayout = datalayout;
+            datalayoutInitialised = true;
+        } else {
+            throw new NullPointerException("The default datalayout cannot be overrwitten.");
+        }
+    }
+
+    public DataLayout getLibsulongDataLayout() {
+        return libsulongDatalayout;
+    }
+
     void finalizeContext() {
         // the following cases exist for cleanup:
         // - exit() or interop: execute all atexit functions, shutdown stdlib, flush IO, and execute
@@ -388,7 +372,7 @@ public final class LLVMContext {
         // - _exit(), _Exit(), or abort(): no cleanup necessary
         if (cleanupNecessary) {
             try {
-                RootCallTarget disposeContext = globalScope.getFunction("__sulong_dispose_context").getLLVMIRFunction();
+                RootCallTarget disposeContext = globalScope.getFunction("__sulong_dispose_context").getLLVMIRFunctionSlowPath();
                 try (StackPointer stackPointer = threadingStack.getStack().newFrame()) {
                     disposeContext.call(stackPointer);
                 }
@@ -400,13 +384,13 @@ public final class LLVMContext {
 
     private CallTarget freeGlobalBlocks;
 
-    private void initFreeGlobalBlocks() {
+    private void initFreeGlobalBlocks(NodeFactory nodeFactory) {
         // lazily initialized, this is not necessary if there are no global blocks allocated
         if (freeGlobalBlocks == null) {
             freeGlobalBlocks = Truffle.getRuntime().createCallTarget(new RootNode(language) {
 
-                @Child LLVMMemoryOpNode freeRo = language.getNodeFactory().createFreeGlobalsBlock(true);
-                @Child LLVMMemoryOpNode freeRw = language.getNodeFactory().createFreeGlobalsBlock(false);
+                @Child LLVMMemoryOpNode freeRo = nodeFactory.createFreeGlobalsBlock(true);
+                @Child LLVMMemoryOpNode freeRw = nodeFactory.createFreeGlobalsBlock(false);
 
                 @Override
                 public Object execute(VirtualFrame frame) {
@@ -428,14 +412,6 @@ public final class LLVMContext {
     }
 
     void dispose(LLVMMemory memory) {
-        // join all created pthread - threads
-        for (int i = 0; i < createdThreads.size(); i++) {
-            try {
-                createdThreads.get(i).join();
-            } catch (InterruptedException e) {
-            }
-        }
-
         printNativeCallStatistic();
 
         if (isInitialized()) {
@@ -460,26 +436,6 @@ public final class LLVMContext {
         if (tracer != null) {
             tracer.dispose();
         }
-    }
-
-    public int getByteAlignment(Type type) {
-        return type.getAlignment(dataLayout);
-    }
-
-    public int getByteSize(Type type) {
-        return type.getSize(dataLayout);
-    }
-
-    public int getBytePadding(long offset, Type type) {
-        return Type.getPadding(offset, type, dataLayout);
-    }
-
-    public long getIndexOffset(long index, AggregateType type) {
-        return type.getOffsetOf(index, dataLayout);
-    }
-
-    public DataLayout getDataSpecConverter() {
-        return dataLayout;
     }
 
     public ExternalLibrary addInternalLibrary(String lib, boolean isNative) {
@@ -793,10 +749,6 @@ public final class LLVMContext {
         return Collections.unmodifiableList(runningThreads);
     }
 
-    public void addDataLayout(DataLayout layout) {
-        this.dataLayout = this.dataLayout.merge(layout);
-    }
-
     public LLVMSourceContext getSourceContext() {
         return sourceContext;
     }
@@ -807,17 +759,17 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public void registerReadOnlyGlobals(LLVMPointer nonPointerStore) {
+    public void registerReadOnlyGlobals(LLVMPointer nonPointerStore, NodeFactory nodeFactory) {
         synchronized (globalsStoreLock) {
-            initFreeGlobalBlocks();
+            initFreeGlobalBlocks(nodeFactory);
             globalsReadOnlyStore.add(nonPointerStore);
         }
     }
 
     @TruffleBoundary
-    public void registerGlobals(LLVMPointer nonPointerStore) {
+    public void registerGlobals(LLVMPointer nonPointerStore, NodeFactory nodeFactory) {
         synchronized (globalsStoreLock) {
-            initFreeGlobalBlocks();
+            initFreeGlobalBlocks(nodeFactory);
             globalsNonPointerStore.add(nonPointerStore);
         }
     }

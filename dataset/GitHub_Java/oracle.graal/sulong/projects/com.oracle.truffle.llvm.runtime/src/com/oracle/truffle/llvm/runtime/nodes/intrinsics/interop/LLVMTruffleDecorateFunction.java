@@ -35,7 +35,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.NodeChild;
@@ -45,6 +44,9 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ConditionProfile;
+import com.oracle.truffle.llvm.runtime.nodes.func.LLVMDispatchNode;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
@@ -52,13 +54,10 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMIRFunction;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
-import com.oracle.truffle.llvm.runtime.memory.LLVMNativeMemory;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.func.LLVMDispatchNode;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMDispatchNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
@@ -71,8 +70,6 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
 
     @CompilationFinal private ContextReference<LLVMContext> contextRef;
 
-    @CompilationFinal private LanguageReference<LLVMLanguage> languageRef;
-
     protected LLVMDerefHandleGetReceiverNode getDerefHandleGetReceiverNode() {
         if (derefHandleGetReceiverNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -81,16 +78,18 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
         return derefHandleGetReceiverNode;
     }
 
-    protected boolean isAutoDerefHandle(LLVMNativePointer addr) {
-        if (languageRef == null) {
+    @CompilationFinal private LLVMMemory cachedMemory;
+
+    private LLVMMemory getLLVMMemoryCached() {
+        if (cachedMemory == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            languageRef = lookupLanguageReference(LLVMLanguage.class);
+            cachedMemory = getLLVMMemory();
         }
-        // checking the bit is cheaper than getting the assumption in interpreted mode
-        if (CompilerDirectives.inCompiledCode() && languageRef.get().getNoHandleAssumption(true).isValid()) {
-            return false;
-        }
-        return LLVMNativeMemory.isDerefHandleMemory(addr.asNative());
+        return cachedMemory;
+    }
+
+    protected boolean isAutoDerefHandle(LLVMNativePointer addr) {
+        return getLLVMMemoryCached().isDerefHandleMemory(addr.asNative());
     }
 
     protected abstract static class DecoratedRoot extends RootNode {

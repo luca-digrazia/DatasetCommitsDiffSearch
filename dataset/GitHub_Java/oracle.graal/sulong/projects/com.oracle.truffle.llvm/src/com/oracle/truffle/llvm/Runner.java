@@ -1002,7 +1002,7 @@ final class Runner {
             final LLVMExpressionNode loadedFunction = CommonNodeFactory.createLoad(functionType, functionLoadTarget);
             final LLVMExpressionNode[] argNodes = new LLVMExpressionNode[]{
                             CommonNodeFactory.createFrameRead(PointerType.VOID, rootFrame.findFrameSlot(LLVMStack.FRAME_ID))};
-            final LLVMStatementNode functionCall = LLVMVoidStatementNodeGen.create(CommonNodeFactory.createFunctionCall(loadedFunction, argNodes, functionType));
+            final LLVMStatementNode functionCall = LLVMVoidStatementNodeGen.create(nodeFactory.createFunctionCall(loadedFunction, argNodes, functionType));
 
             final StructureConstant structorDefinition = (StructureConstant) arrayConstant.getElement(i);
             final SymbolImpl prioritySymbol = structorDefinition.getElement(0);
@@ -1028,7 +1028,7 @@ final class Runner {
         LLVMFunctionDescriptor mainFunctionDescriptor = findMainMethod(parserResults);
         LLVMFunctionDescriptor startFunctionDescriptor = findStartMethod();
         if (mainFunctionDescriptor != null && startFunctionDescriptor != null) {
-            RootCallTarget startCallTarget = startFunctionDescriptor.getLLVMIRFunction();
+            RootCallTarget startCallTarget = startFunctionDescriptor.getLLVMIRFunctionSlowPath();
             Path applicationPath = mainFunctionDescriptor.getLibrary().getPath();
             RootNode rootNode = new LLVMGlobalRootNode(language, StackManager.createRootFrame(), mainFunctionDescriptor, startCallTarget, Objects.toString(applicationPath, ""));
             mainFunctionCallTarget = Truffle.getRuntime().createCallTarget(rootNode);
