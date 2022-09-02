@@ -101,6 +101,7 @@ import jdk.vm.ci.hotspot.HotSpotNmethod;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.runtime.JVMCICompiler;
 
 public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implements HotSpotTruffleCompiler {
@@ -145,15 +146,14 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
     }
 
     private static GraalJVMCICompiler getCompiler(OptionValues options) {
-        HotSpotJVMCIRuntime runtime = HotSpotJVMCIRuntime.runtime();
         if (!Options.TruffleCompilerConfiguration.hasBeenSet(options)) {
-            JVMCICompiler compiler = runtime.getCompiler();
+            JVMCICompiler compiler = JVMCI.getRuntime().getCompiler();
             if (compiler instanceof GraalJVMCICompiler) {
                 return (GraalJVMCICompiler) compiler;
             }
         }
-        CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(Options.TruffleCompilerConfiguration.getValue(options), options, runtime);
-        return HotSpotGraalCompilerFactory.createCompiler("Truffle", runtime, options, compilerConfigurationFactory);
+        CompilerConfigurationFactory compilerConfigurationFactory = CompilerConfigurationFactory.selectFactory(Options.TruffleCompilerConfiguration.getValue(options), options);
+        return HotSpotGraalCompilerFactory.createCompiler("Truffle", JVMCI.getRuntime(), options, compilerConfigurationFactory);
     }
 
     public HotSpotTruffleCompilerImpl(HotSpotGraalRuntimeProvider hotspotGraalRuntime, TruffleCompilerConfiguration config) {
@@ -275,7 +275,7 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
         Suites newSuites = config.lastTier().suites().copy();
         removeInliningPhase(newSuites);
         OptionValues options = debug.getOptions();
-        StructuredGraph graph = new StructuredGraph.Builder(options, debug, AllowAssumptions.NO).useProfilingInfo(false).method(javaMethod).compilationId(compilationId).build();
+        StructuredGraph graph = new StructuredGraph.Builder(options, debug, AllowAssumptions.NO).method(javaMethod).compilationId(compilationId).build();
 
         final Providers lastTierProviders = config.lastTier().providers();
         final Backend backend = config.backend();
@@ -329,8 +329,7 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
 
     @Override
     protected void exitHostVM(int status) {
-        HotSpotJVMCIRuntime runtime = HotSpotJVMCIRuntime.runtime();
-        HotSpotGraalServices.exit(-1, runtime);
+        HotSpotGraalServices.exit(-1);
     }
 
     @Override

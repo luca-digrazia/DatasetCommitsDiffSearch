@@ -27,6 +27,7 @@ package org.graalvm.compiler.truffle.compiler;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExcludeAssertions;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InlineAcrossTruffleBoundary;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.IterativePartialEscape;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.LanguageAgnosticInlining;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumGraalNodeCount;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.NodeSourcePositions;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.PrintExpansionHistogram;
@@ -84,14 +85,13 @@ import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.InlineKind;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
+import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.common.TruffleSourceLanguagePosition;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl.CancellableTruffleCompilationTask;
 import org.graalvm.compiler.truffle.compiler.nodes.TruffleAssumption;
 import org.graalvm.compiler.truffle.compiler.nodes.asserts.NeverPartOfCompilationNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.AllowMaterializeNode;
 import org.graalvm.compiler.truffle.compiler.phases.DeoptimizeOnExceptionPhase;
-import org.graalvm.compiler.truffle.compiler.phases.FrameClearPhase;
 import org.graalvm.compiler.truffle.compiler.phases.InstrumentBranchesPhase;
 import org.graalvm.compiler.truffle.compiler.phases.InstrumentPhase;
 import org.graalvm.compiler.truffle.compiler.phases.InstrumentTruffleBoundariesPhase;
@@ -122,7 +122,6 @@ public abstract class PartialEvaluator {
 
     private static final TimerKey PartialEvaluationTimer = DebugContext.timer("PartialEvaluation-Decoding").doc("Time spent in the graph-decoding of partial evaluation.");
     private static final TimerKey TruffleEscapeAnalysisTimer = DebugContext.timer("PartialEvaluation-EscapeAnalysis").doc("Time spent in the escape-analysis in Truffle tier.");
-    private static final TimerKey TruffleFrameClearTimer = DebugContext.timer("PartialEvaluation-FrameClear").doc("Time spent in the frame-clear in Truffle tier.");
     private static final TimerKey TruffleConditionalEliminationTimer = DebugContext.timer("PartialEvaluation-ConditionalElimination").doc("Time spent in conditional elimination in Truffle tier.");
     private static final TimerKey TruffleCanonicalizerTimer = DebugContext.timer("PartialEvaluation-Canonicalizer").doc("Time spent in the canonicalizer in the Truffle tier.");
     private static final TimerKey TruffleConvertDeoptimizeTimer = DebugContext.timer("PartialEvaluation-ConvertDeoptimizeToGuard").doc("Time spent in converting deoptimize to guard in Truffle tier.");
@@ -296,14 +295,14 @@ public abstract class PartialEvaluator {
         public final OptionValues options;
         public final DebugContext debug;
         public final CompilableTruffleAST compilable;
-        public final TruffleMetaAccessProvider inliningPlan;
+        public final TruffleInliningPlan inliningPlan;
         public final CompilationIdentifier compilationId;
         public final SpeculationLog log;
         public final CancellableTruffleCompilationTask task;
         public final StructuredGraph graph;
         final HighTierContext highTierContext;
 
-        public Request(OptionValues options, DebugContext debug, CompilableTruffleAST compilable, ResolvedJavaMethod method, TruffleMetaAccessProvider inliningPlan,
+        public Request(OptionValues options, DebugContext debug, CompilableTruffleAST compilable, ResolvedJavaMethod method, TruffleInliningPlan inliningPlan,
                         CompilationIdentifier compilationId, SpeculationLog log, CancellableTruffleCompilationTask task) {
             Objects.requireNonNull(options);
             Objects.requireNonNull(debug);
@@ -356,9 +355,6 @@ public abstract class PartialEvaluator {
                 }
                 try (DebugCloseable a = TruffleEscapeAnalysisTimer.start(request.debug)) {
                     partialEscape(request);
-                }
-                try (DebugCloseable a = TruffleFrameClearTimer.start(request.debug)) {
-                    new FrameClearPhase(knownTruffleTypes).apply(request.graph, request.highTierContext);
                 }
                 // recompute loop frequencies now that BranchProbabilities have been canonicalized
                 ComputeLoopFrequenciesClosure.compute(request.graph);
@@ -478,9 +474,9 @@ public abstract class PartialEvaluator {
 
     private static final class TruffleSourceLanguagePositionProvider implements SourceLanguagePositionProvider {
 
-        private TruffleMetaAccessProvider inliningPlan;
+        private TruffleInliningPlan inliningPlan;
 
-        private TruffleSourceLanguagePositionProvider(TruffleMetaAccessProvider inliningPlan) {
+        private TruffleSourceLanguagePositionProvider(TruffleInliningPlan inliningPlan) {
             this.inliningPlan = inliningPlan;
         }
 
@@ -615,7 +611,13 @@ public abstract class PartialEvaluator {
     @SuppressWarnings({"unused", "try"})
     private void inliningGraphPE(Request request) {
         try (DebugCloseable a = PartialEvaluationTimer.start(request.debug)) {
-            new AgnosticInliningPhase(this, request).apply(request.graph, providers);
+            if (request.options.get(LanguageAgnosticInlining)) {
+                AgnosticInliningPhase agnosticInlining = new AgnosticInliningPhase(this, request);
+                agnosticInlining.apply(request.graph, providers);
+            } else {
+                final PEInliningPlanInvokePlugin plugin = new PEInliningPlanInvokePlugin(this, request.options, request.compilable, request.inliningPlan, request.graph);
+                doGraphPE(request, plugin, getOrCreateEncodedGraphCache());
+            }
         }
         request.debug.dump(DebugContext.BASIC_LEVEL, request.graph, "After Partial Evaluation");
         request.graph.maybeCompress();
