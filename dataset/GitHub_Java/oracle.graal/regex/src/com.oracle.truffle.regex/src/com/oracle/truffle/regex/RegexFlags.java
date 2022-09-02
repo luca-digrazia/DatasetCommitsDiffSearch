@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -55,7 +55,7 @@ import com.oracle.truffle.regex.util.TruffleReadOnlyKeysArray;
 @ExportLibrary(InteropLibrary.class)
 public final class RegexFlags extends AbstractConstantKeysObject implements JsonConvertible {
 
-    private static final TruffleReadOnlyKeysArray KEYS = new TruffleReadOnlyKeysArray("source", "ignoreCase", "multiline", "sticky", "global", "unicode", "dotAll", "hasIndices");
+    private static final TruffleReadOnlyKeysArray KEYS = new TruffleReadOnlyKeysArray("source", "ignoreCase", "multiline", "sticky", "global", "unicode", "dotAll");
 
     private static final int NONE = 0;
     private static final int IGNORE_CASE = 1;
@@ -64,7 +64,6 @@ public final class RegexFlags extends AbstractConstantKeysObject implements Json
     private static final int GLOBAL = 1 << 3;
     private static final int UNICODE = 1 << 4;
     private static final int DOT_ALL = 1 << 5;
-    private static final int HAS_INDICES = 1 << 6;
 
     public static final RegexFlags DEFAULT = new RegexFlags("", NONE);
 
@@ -103,9 +102,6 @@ public final class RegexFlags extends AbstractConstantKeysObject implements Json
                     break;
                 case 's':
                     flags = addFlag(source, flags, i, DOT_ALL);
-                    break;
-                case 'd':
-                    flags = addFlag(source, flags, i, HAS_INDICES);
                     break;
                 default:
                     throw RegexSyntaxException.createFlags(source, ErrorMessages.UNSUPPORTED_FLAG, i);
@@ -149,10 +145,6 @@ public final class RegexFlags extends AbstractConstantKeysObject implements Json
         return isSet(DOT_ALL);
     }
 
-    public boolean hasIndices() {
-        return isSet(HAS_INDICES);
-    }
-
     public boolean isNone() {
         return value == NONE;
     }
@@ -184,8 +176,7 @@ public final class RegexFlags extends AbstractConstantKeysObject implements Json
                         Json.prop("global", isGlobal()),
                         Json.prop("sticky", isSticky()),
                         Json.prop("unicode", isUnicode()),
-                        Json.prop("dotAll", isDotAll()),
-                        Json.prop("hasIndices", hasIndices()));
+                        Json.prop("dotAll", isDotAll()));
     }
 
     @Override
@@ -210,8 +201,6 @@ public final class RegexFlags extends AbstractConstantKeysObject implements Json
                 return isUnicode();
             case "dotAll":
                 return isDotAll();
-            case "hasIndices":
-                return hasIndices();
             default:
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw UnknownIdentifierException.create(symbol);

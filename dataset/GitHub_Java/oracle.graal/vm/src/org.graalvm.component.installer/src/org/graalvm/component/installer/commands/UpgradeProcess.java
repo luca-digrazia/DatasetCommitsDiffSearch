@@ -577,7 +577,7 @@ public class UpgradeProcess implements AutoCloseable {
                         CommonConstants.PATH_COMPONENT_STORAGE + "/gds");
         if (Files.isDirectory(gdsSettings)) {
             Path targetGdsSettings = SystemUtils.resolveRelative(
-                            newInstallPath.resolve(SystemUtils.getGraalVMJDKRoot(newGraalRegistry)),
+                            newInstallPath,
                             CommonConstants.PATH_COMPONENT_STORAGE + "/gds");
             try {
                 SystemUtils.copySubtree(gdsSettings, targetGdsSettings);
