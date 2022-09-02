@@ -96,10 +96,10 @@ public final class OptionKey<T> {
      * }
      * </pre>
      *
-     * Properties can be set using the {@code mylang.Properties} prefix.
+     * Keys can be set using the {@code mylang.Properties} prefix.
      * 
      * <pre>
-     * Context context = Context.newBuilder() //
+     * Engine engine = Engine.newBuilder() //
      *                 .option(&quot;mylang.Properties.key&quot;, &quot;value&quot;) //
      *                 .option(&quot;mylang.Properties.user.name&quot;, &quot;guest&quot;) //
      *                 .build();

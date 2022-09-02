@@ -55,14 +55,16 @@ public final class OptionDescriptor {
     private final OptionCategory category;
     private final OptionStability stability;
     private final boolean deprecated;
+    private final boolean optionMap;
 
-    OptionDescriptor(OptionKey<?> key, String name, String help, OptionCategory category, OptionStability stability, boolean deprecated) {
+    OptionDescriptor(OptionKey<?> key, String name, String help, OptionCategory category, OptionStability stability, boolean deprecated, boolean optionMap) {
         this.key = key;
         this.name = name;
         this.help = help;
         this.category = category;
         this.stability = stability;
         this.deprecated = deprecated;
+        this.optionMap = optionMap;
     }
 
     /**
@@ -100,7 +102,7 @@ public final class OptionDescriptor {
      * @since 19.2
      */
     public boolean isOptionMap() {
-        return getKey().getType().isOptionMap();
+        return optionMap;
     }
 
     /**
@@ -137,7 +139,7 @@ public final class OptionDescriptor {
      */
     @Override
     public String toString() {
-        return "OptionDescriptor [key=" + key + ", help=" + help + ", category=" + category + ", deprecated=" + deprecated + ", optionMap=" + isOptionMap() + "]";
+        return "OptionDescriptor [key=" + key + ", help=" + help + ", category=" + category + ", deprecated=" + deprecated + ", optionMap=" + optionMap + "]";
     }
 
     /**
@@ -149,6 +151,7 @@ public final class OptionDescriptor {
     public int hashCode() {
         final int prime = 31;
         int result = 1;
+        result = prime * result + (optionMap ? 1231 : 1237);
         result = prime * result + (deprecated ? 1231 : 1237);
         result = prime * result + ((help == null) ? 0 : help.hashCode());
         result = prime * result + ((key == null) ? 0 : key.hashCode());
@@ -191,7 +194,7 @@ public final class OptionDescriptor {
         return EMPTY.new Builder(key, name);
     }
 
-    private static final OptionDescriptor EMPTY = new OptionDescriptor(null, null, null, null, null, false);
+    private static final OptionDescriptor EMPTY = new OptionDescriptor(null, null, null, null, null, false, false);
 
     /**
      * Represents an option descriptor builder.
@@ -206,6 +209,7 @@ public final class OptionDescriptor {
         private OptionCategory category = OptionCategory.INTERNAL;
         private OptionStability stability = OptionStability.EXPERIMENTAL;
         private String help = "";
+        private boolean optionMap = false;
 
         Builder(OptionKey<?> key, String name) {
             this.key = key;
@@ -259,12 +263,23 @@ public final class OptionDescriptor {
         }
 
         /**
+         * Specifies if this option is an {@link OptionMap option map}. The default value is
+         * <code>false</code>. See {@link OptionKey#mapOf(Class)}.
+         *
+         * @since 19.2
+         */
+        public Builder optionMap(@SuppressWarnings("hiding") boolean optionMap) {
+            this.optionMap = optionMap;
+            return this;
+        }
+
+        /**
          * Builds and returns a new option descriptor.
          *
          * @since 19.0
          */
         public OptionDescriptor build() {
-            return new OptionDescriptor(key, name, help, category, stability, deprecated);
+            return new OptionDescriptor(key, name, help, category, stability, deprecated, optionMap);
         }
     }
 
