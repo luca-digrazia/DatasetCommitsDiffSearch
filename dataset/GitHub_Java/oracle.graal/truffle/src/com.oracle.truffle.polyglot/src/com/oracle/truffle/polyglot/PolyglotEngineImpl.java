@@ -51,7 +51,6 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
-import java.time.Duration;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1352,13 +1351,9 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
 
         void cancel(List<PolyglotContextImpl> localContexts) {
-            cancel(localContexts, null);
-        }
-
-        void cancel(List<PolyglotContextImpl> localContexts, Duration timeout) {
             boolean cancelling = false;
             for (PolyglotContextImpl context : localContexts) {
-                if (context.cancelling || context.interrupting) {
+                if (context.cancelling) {
                     cancelling = true;
                     break;
                 }
@@ -1369,15 +1364,8 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     for (PolyglotContextImpl context : localContexts) {
                         context.sendInterrupt();
                     }
-                    if (timeout == null) {
-                        for (PolyglotContextImpl context : localContexts) {
-                            context.waitForClose();
-                        }
-                    } else {
-                        long cancelTimeoutNanos = timeout != Duration.ZERO ? System.nanoTime() + timeout.toNanos() : 0;
-                        for (PolyglotContextImpl context : localContexts) {
-                            context.waitForThreads(cancelTimeoutNanos);
-                        }
+                    for (PolyglotContextImpl context : localContexts) {
+                        context.waitForClose();
                     }
                 } finally {
                     disableCancel();
@@ -1408,8 +1396,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                             PolyglotContextImpl context = PolyglotContextImpl.requireContext();
                             if (context.invalid || context.cancelling) {
                                 throw context.createCancelException(eventContext.getInstrumentedNode());
-                            } else if (context.interrupting) {
-                                throw new InterruptExecution(eventContext);
                             }
                         }
                     });
@@ -1464,27 +1450,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             } else {
                 return cancelMessage;
             }
-        }
-    }
-
-    @SuppressWarnings("serial")
-    static final class InterruptExecution extends ThreadDeath implements TruffleException {
-
-        private final Node node;
-        private final String interruptMessage;
-
-        InterruptExecution(EventContext context) {
-            this.node = context != null ? context.getInstrumentedNode() : null;
-            this.interruptMessage = "Execution got interrupted.";
-        }
-
-        public Node getLocation() {
-            return node;
-        }
-
-        @Override
-        public String getMessage() {
-            return interruptMessage;
         }
     }
 
