@@ -450,9 +450,8 @@ public class BreakpointTest extends AbstractDebugTest {
             session.suspendNextExecution();
             startEval(Source.newBuilder(InstrumentationTestLanguage.ID, testFile).build());
             for (int i = 0; i < 3; i++) {
-                int finalIndex = i;
                 expectSuspended((SuspendedEvent event) -> {
-                    checkState(event, 4, true, "STATEMENT", "loopIndex0", String.valueOf(finalIndex), "loopResult0", "Null").prepareContinue();
+                    checkState(event, 4, true, "STATEMENT").prepareContinue();
                 });
             }
             Assert.assertEquals(3, breakpoint.getHitCount());
@@ -476,9 +475,8 @@ public class BreakpointTest extends AbstractDebugTest {
             Breakpoint breakpoint3 = session.install(Breakpoint.newBuilder(getSourceImpl(source)).lineIs(4).build());
             startEval(source);
             for (int i = 0; i < 3; i++) {
-                int finalIndex = i;
                 expectSuspended((SuspendedEvent event) -> {
-                    checkState(event, 4, true, "STATEMENT", "loopIndex0", String.valueOf(finalIndex), "loopResult0", "Null").prepareContinue();
+                    checkState(event, 4, true, "STATEMENT").prepareContinue();
                 });
                 if (i == 0) {
                     breakpoint3.dispose();
@@ -563,7 +561,7 @@ public class BreakpointTest extends AbstractDebugTest {
             startEval(source);
 
             expectSuspended((SuspendedEvent event) -> {
-                checkState(event, 3, true, "STATEMENT", "loopIndex0", "0", "loopResult0", "Null");
+                checkState(event, 3, true, "STATEMENT");
                 Assert.assertEquals(1, event.getBreakpoints().size());
                 Assert.assertSame(breakpoint, event.getBreakpoints().iterator().next());
                 Assert.assertFalse(breakpoint.isEnabled());
