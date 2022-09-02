@@ -95,6 +95,7 @@ import org.graalvm.compiler.nodes.spi.NodeValueMap;
 
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.DebugInfo;
+import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -462,6 +463,10 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
     @Override
     public void emitReadExceptionObject(ValueNode node) {
         builder.buildLandingPad();
+
+        Register exceptionRegister = gen.getRegisterConfig().getReturnRegister(JavaKind.Object);
+        LLVMValueRef exception = builder.buildInlineGetRegister(exceptionRegister.name);
+        setResult(node, builder.buildRegisterObject(exception));
     }
 
     @Override
