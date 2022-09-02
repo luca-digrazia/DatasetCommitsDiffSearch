@@ -46,7 +46,6 @@ public class MatchPattern {
         NOT_IN_BLOCK,
         NOT_SAFE,
         ALREADY_USED,
-        TOO_LATE,
     }
 
     /**
@@ -72,7 +71,6 @@ public class MatchPattern {
         private static final CounterKey MatchResult_NOT_IN_BLOCK = DebugContext.counter("MatchResult_NOT_IN_BLOCK");
         private static final CounterKey MatchResult_NOT_SAFE = DebugContext.counter("MatchResult_NOT_SAFE");
         private static final CounterKey MatchResult_ALREADY_USED = DebugContext.counter("MatchResult_ALREADY_USED");
-        private static final CounterKey MatchResult_TOO_LATE = DebugContext.counter("MatchResult_TOO_LATE");
 
         static final Result OK = new Result(MatchResultCode.OK, null, null);
         private static final Result CACHED_WRONG_CLASS = new Result(MatchResultCode.WRONG_CLASS, null, null);
@@ -81,7 +79,6 @@ public class MatchPattern {
         private static final Result CACHED_NOT_IN_BLOCK = new Result(MatchResultCode.NOT_IN_BLOCK, null, null);
         private static final Result CACHED_NOT_SAFE = new Result(MatchResultCode.NOT_SAFE, null, null);
         private static final Result CACHED_ALREADY_USED = new Result(MatchResultCode.ALREADY_USED, null, null);
-        private static final Result CACHED_TOO_LATE = new Result(MatchResultCode.TOO_LATE, null, null);
 
         static Result wrongClass(Node node, MatchPattern matcher) {
             MatchResult_WRONG_CLASS.increment(node.getDebug());
@@ -111,11 +108,6 @@ public class MatchPattern {
         static Result alreadyUsed(Node node, MatchPattern matcher) {
             MatchResult_ALREADY_USED.increment(node.getDebug());
             return node.getDebug().isLogEnabled() ? new Result(MatchResultCode.ALREADY_USED, node, matcher) : CACHED_ALREADY_USED;
-        }
-
-        static Result tooLate(Node node, MatchPattern matcher) {
-            MatchResult_TOO_LATE.increment(node.getDebug());
-            return node.getDebug().isLogEnabled() ? new Result(MatchResultCode.TOO_LATE, node, matcher) : CACHED_TOO_LATE;
         }
 
         @Override
