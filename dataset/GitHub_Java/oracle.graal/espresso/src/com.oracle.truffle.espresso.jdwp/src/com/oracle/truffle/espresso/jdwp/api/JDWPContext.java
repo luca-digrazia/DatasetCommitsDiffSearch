@@ -466,7 +466,7 @@ public interface JDWPContext {
      * @param redefineInfos the information about the original class and the new class bytes
      * @return 0 on success or the appropriate {@link ErrorCodes} if an error occur
      */
-    int redefineClasses(List<RedefineInfo> redefineInfos);
+    int redefineClasses(RedefineInfo[] redefineInfos);
 
     /**
      * Exit all monitors that was entered by the frame.
@@ -490,6 +490,4 @@ public interface JDWPContext {
      * @return the nearest instrumentable node
      */
     Node getInstrumentableNode(Node node);
-
-    boolean isSystemThread(Thread hostThread);
 }

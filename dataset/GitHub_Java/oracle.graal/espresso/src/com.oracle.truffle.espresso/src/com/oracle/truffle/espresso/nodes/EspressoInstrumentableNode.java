@@ -97,7 +97,6 @@ public abstract class EspressoInstrumentableNode extends Node implements Instrum
                 }
             }
         }
-        Object scopeName = method.getMeta().toGuestString(method.getNameAsString());
-        return EspressoScope.createVariables(liveLocals, frame, scopeName);
+        return EspressoScope.createVariables(liveLocals, frame);
     }
 }
