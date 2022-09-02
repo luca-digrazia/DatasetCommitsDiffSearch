@@ -163,9 +163,9 @@ final class PolyglotLoggers {
     /**
      * Used reflectively by {@code ContextPreInitializationTest}.
      */
-    static Set<Path> getActiveFileHandlers() {
+    static boolean hasActiveFileHandlers() {
         synchronized (fileHandlers) {
-            return new HashSet<>(fileHandlers.keySet());
+            return !fileHandlers.isEmpty();
         }
     }
 
