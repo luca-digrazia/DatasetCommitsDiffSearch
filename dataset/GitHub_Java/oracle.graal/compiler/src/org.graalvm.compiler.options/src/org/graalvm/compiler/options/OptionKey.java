@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -157,7 +157,7 @@ public class OptionKey<T> {
      * {@link #onValueUpdate(EconomicMap, Object, Object)} method is called once the value is set.
      *
      * @param values map of option values
-     * @param v the value to set for this key in {@code values}
+     * @param v the value to set for this key in {@code map}
      */
     @SuppressWarnings("unchecked")
     public void update(EconomicMap<OptionKey<?>, Object> values, Object v) {
@@ -170,7 +170,7 @@ public class OptionKey<T> {
      * {@link #onValueUpdate(EconomicMap, Object, Object)} method is called once the value is set.
      *
      * @param values map of option values
-     * @param v the value to set for this key in {@code values}
+     * @param v the value to set for this key in {@code map}
      */
     @SuppressWarnings("unchecked")
     public void putIfAbsent(EconomicMap<OptionKey<?>, Object> values, Object v) {

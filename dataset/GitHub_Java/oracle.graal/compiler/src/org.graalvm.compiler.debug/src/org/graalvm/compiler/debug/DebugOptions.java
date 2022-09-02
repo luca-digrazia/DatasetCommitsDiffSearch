@@ -50,19 +50,24 @@ public class DebugOptions {
         /**
          * Dump graphs to files.
          */
-        File,
+        file,
 
         /**
          * Dump graphs to the network. The network destination is specified by the
          * {@link DebugOptions#PrintGraphHost} and {@link DebugOptions#PrintGraphPort} options. If a
-         * network connection cannot be opened, dumping falls back to {@link #File} dumping.
+         * network connection cannot be opened, dumping falls back to {@link #file} dumping.
          */
-        Network,
+        network,
+
+        /**
+         * Same as {@link #network} but without the fallback to file dumping.
+         */
+        networkOnly,
 
         /**
          * Do not dump graphs.
          */
-        Disable;
+        none;
     }
 
     // @formatter:off
@@ -137,7 +142,7 @@ public class DebugOptions {
     public static final OptionKey<Boolean> PrintBackendCFG = new OptionKey<>(true);
 
     @Option(help = "Where to dump graphs for the IdealGraphVisualizer.", type = OptionType.Debug)
-    public static final EnumOptionKey<PrintGraphTarget> PrintGraph = new EnumOptionKey<>(PrintGraphTarget.File);
+    public static final EnumOptionKey<PrintGraphTarget> PrintGraph = new EnumOptionKey<>(PrintGraphTarget.file);
 
     @Option(help = "Setting to true sets PrintGraph=file, setting to false sets PrintGraph=network", type = OptionType.Debug)
     public static final OptionKey<Boolean> PrintGraphFile = new OptionKey<Boolean>(true) {
@@ -145,12 +150,12 @@ public class DebugOptions {
         protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Boolean oldValue, Boolean newValue) {
             PrintGraphTarget v = PrintGraph.getValueOrDefault(values);
             if (newValue.booleanValue()) {
-                if (v != PrintGraphTarget.File) {
-                    PrintGraph.update(values, PrintGraphTarget.File);
+                if (v != PrintGraphTarget.file) {
+                    PrintGraph.update(values, PrintGraphTarget.file);
                 }
             } else {
-                if (v != PrintGraphTarget.Network) {
-                    PrintGraph.update(values, PrintGraphTarget.Network);
+                if (v != PrintGraphTarget.network) {
+                    PrintGraph.update(values, PrintGraphTarget.network);
                 }
             }
         }
