@@ -309,7 +309,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             /* The following directive links the class and makes clinit available. */
             try {
                 hostType.getDeclaredConstructors();
-            } catch (NoClassDefFoundError | VerifyError t) {
+            } catch (NoClassDefFoundError t) {
                 /* This code should be non-intrusive so we just ignore. */
                 return;
             }
