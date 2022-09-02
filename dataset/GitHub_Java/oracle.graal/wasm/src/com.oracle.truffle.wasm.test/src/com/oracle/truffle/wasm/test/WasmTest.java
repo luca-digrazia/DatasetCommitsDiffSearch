@@ -34,13 +34,10 @@ import org.junit.Test;
 
 public abstract class WasmTest {
     private TestElement[] testElements = {
-//            test("(module (func (result i32) (i32.const 42)))", expected(42)),
-//            test("(module (func (result i32) i32.const 42 i32.const 17 drop))", expected(42)),
-//             test("(module (func (result i32) i32.const 42 i32.const 17 i32.add))", expected(59)),
-            test("(module (func (result i32) i32.const 42 i32.const 17 i32.sub))", expected(25)),
-//            test("(module (func (result i32) (i32.const 1690433)))", expected(1690433)),
-//            test("(module (func (result f32) (f32.const 3.14)))", expected(3.14f)),
-//            test("(module (func (result f64) (f64.const 340.75)))", expected(340.75)),
+            test("(module (func (result i32) (i32.const 42)))", expected(42)),
+            test("(module (func (result i32) (i32.const 1690433)))", expected(1690433)),
+            test("(module (func (result f32) (f32.const 3.14)))", expected(3.14f)),
+            test("(module (func (result f64) (f64.const 340.75)))", expected(340.75)),
     };
 
     private static TestElement test(String program, TestData data) {
@@ -52,7 +49,7 @@ public abstract class WasmTest {
     }
 
     @Test
-    public void runTests() {
+    public final void runTests() {
         for (TestElement element : testElements) {
             runTest(element);
         }
