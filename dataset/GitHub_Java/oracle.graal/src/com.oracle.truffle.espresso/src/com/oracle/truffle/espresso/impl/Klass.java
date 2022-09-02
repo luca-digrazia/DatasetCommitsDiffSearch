@@ -42,7 +42,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
+import com.oracle.truffle.espresso.jdwp.impl.ClassStatusConstants;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -437,7 +437,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         try {
             initialize();
         } catch (EspressoException e) {
-            StaticObject cause = e.getExceptionObject();
+            StaticObject cause = e.getException();
             if (!InterpreterToVM.instanceOf(cause, getMeta().Error)) {
                 throw getMeta().throwExWithCause(ExceptionInInitializerError.class, cause);
             } else {
@@ -770,11 +770,10 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
             switch (state) {
                 case ObjectKlass.LOADED:
                     return ClassStatusConstants.VERIFIED;
+                case ObjectKlass.INITIALIZED:
                 case ObjectKlass.PREPARED:
                 case ObjectKlass.LINKED:
                     return ClassStatusConstants.PREPARED;
-                case ObjectKlass.INITIALIZED:
-                    return ClassStatusConstants.INITIALIZED;
                 default: return ClassStatusConstants.ERROR;
             }
         } else {

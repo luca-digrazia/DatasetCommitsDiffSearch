@@ -795,12 +795,6 @@ class JDWP {
                 long objectId = input.readLong();
                 long threadId = input.readLong();
 
-                Object thread = verifyThread(threadId, reply, context);
-
-                if (thread == null) {
-                    return new JDWPResult(reply);
-                }
-
                 if (verifyRefType(input.readLong(), reply, context) == null) {
                     return new JDWPResult(reply);
                 }
@@ -821,6 +815,13 @@ class JDWP {
 
                 if (method == null) {
                     return new JDWPResult(reply);
+                }
+
+                Object thread = context.getIds().fromId((int) threadId);
+
+                //TODO(Gregersen) - also verify if thread is still active and not suspended
+                if (thread == context.getNullObject()) {
+                    reply.errorCode(JDWPErrorCodes.INVALID_THREAD);
                 }
 
                 try {
@@ -909,22 +910,16 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long objectId = input.readLong();
-                Object string = verifyString(objectId, reply, context);
+                Object string = context.getIds().fromId((int) objectId);
 
-                if (string == null) {
-                    return new JDWPResult(reply);
-                }
-
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 if (string == context.getNullObject()) {
-                    reply.errorCode(JDWPErrorCodes.INVALID_OBJECT);
-                    return new JDWPResult(reply);
+                    reply.writeString("null");
                 } else {
                     reply.writeString(context.getStringValue(string));
                 }
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
     }
@@ -937,19 +932,13 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context);
-
-                if (thread == null) {
-                    return new JDWPResult(reply);
-                }
-
+                Object thread = context.getIds().fromId((int) threadId);
                 String threadName = context.getThreadName(thread);
 
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeString(threadName);
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
 
@@ -958,17 +947,11 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPDebuggerController controller) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, controller.getContext());
-
-                if (thread == null) {
-                    return new JDWPResult(reply);
-                }
-
+                Object thread = controller.getContext().getIds().fromId((int) threadId);
                 controller.resume(); // TODO(Gregersen) - resume the specified thread
-                return new JDWPResult(reply);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+                return new JDWPResult(reply, null);
             }
         }
 
@@ -1000,17 +983,11 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context);
-
-                if (thread == null) {
-                    return new JDWPResult(reply);
-                }
-
+                Object thread = context.getIds().fromId((int) threadId);
                 int jvmtiThreadStatus = context.getThreadStatus(thread);
                 int threadStatus = getThreadStatus(jvmtiThreadStatus);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeInt(threadStatus);
                 //System.out.println("suspended thread? " + ThreadSuspension.isSuspended(thread) + " with status: " + threadStatus);
                 reply.writeInt(ThreadSuspension.isSuspended(thread));
@@ -1048,18 +1025,13 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context);
+                Object thread = context.getIds().fromId((int) threadId);
 
-                if (thread == null) {
-                    return new JDWPResult(reply);
-                }
-
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 Object threadGroup = context.getThreadGroup(thread);
                 reply.writeLong(context.getIds().getIdAsLong(threadGroup));
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
 
@@ -1068,14 +1040,11 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPDebuggerController controller) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                if (verifyThread(input.readLong(), reply, controller.getContext()) == null) {
-                    return new JDWPResult(reply);
-                }
-
+                long threadId = input.readLong();
                 int startFrame = input.readInt();
                 int length = input.readInt();
+
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 JDWPCallFrame[] frames = controller.getSuspendedInfo().getStackFrames();
                 if (length == -1) {
@@ -1091,7 +1060,7 @@ class JDWP {
                     reply.writeLong(frame.getMethodId());
                     reply.writeLong(frame.getCodeIndex());
                 }
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
 
@@ -1100,16 +1069,22 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPDebuggerController controller) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long threadId = input.readLong();
 
-                if (verifyThread(threadId, reply, controller.getContext()) == null) {
-                    return new JDWPResult(reply);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
+
+                // verify that we're replying for the currently suspended thread
+                if (controller.getContext().getIds().fromId((int) threadId) == controller.getContext().getNullObject()) {
+                    reply.errorCode(20); // TODO(Gregersen) - setup and use error code constant
+                    return new JDWPResult(reply, null);
+                }
+                if (controller.getSuspendedInfo().getThread() != controller.getContext().getIds().fromId((int) threadId)) {
+                    reply.errorCode(10); // TODO(Gregersen) - setup and use error code constant
+                    return new JDWPResult(reply, null);
                 }
 
                 reply.writeInt(controller.getSuspendedInfo().getStackFrames().length);
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
 
@@ -1118,18 +1093,13 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long threadId = input.readLong();
-                Object thread = verifyThread(threadId, reply, context);
-
-                if (thread == null) {
-                    return new JDWPResult(reply);
-                }
-
+                Object thread = context.getIds().fromId((int) threadId);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 int suspensionCount = ThreadSuspension.getSuspensionCount(thread);
+                //System.out.println("Suspension count: " + suspensionCount);
                 reply.writeInt(suspensionCount);
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
     }
@@ -1142,17 +1112,11 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long threadGroupId = input.readLong();
-                Object threadGroup = verifyThreadGroup(threadGroupId, reply, context);
-
-                if (threadGroup == null) {
-                    return new JDWPResult(reply);
-                }
-
+                Object threadGroup = context.getIds().fromId((int) threadGroupId);
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeString("threadGroup-1"); // TODO(Gregersen) - implement retrieving threadgroup name
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
     }
@@ -1165,15 +1129,10 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long arrayId = input.readLong();
-                Object array = verifyArray(arrayId, reply, context);
+                Object array = context.getIds().fromId((int) arrayId);
 
-                if (array == null) {
-                    return new JDWPResult(reply);
-                }
-
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeInt(context.getArrayLength(array));
                 return new JDWPResult(reply, null);
             }
@@ -1190,12 +1149,7 @@ class JDWP {
 
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                Object array = verifyArray(arrayId, reply, context);
-
-                if (array == null || !verifyArrayLength(array, length, reply, context)) {
-                    return new JDWPResult(reply);
-                }
-
+                Object array = context.getIds().fromId((int) arrayId);
                 byte tag = context.getTypeTag(array);
                 boolean isPrimitive = TagConstants.isPrimitive(tag);
 
@@ -1205,7 +1159,7 @@ class JDWP {
                     Object theValue = context.getArrayValue(array, i);
                     writeValue(tag, theValue, reply, !isPrimitive, context);
                 }
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
 
@@ -1220,17 +1174,12 @@ class JDWP {
                 int index = input.readInt();
                 int values = input.readInt();
 
-                Object array = verifyArray(arrayId, reply, context);
-
-                if (array == null || !verifyArrayLength(array, values, reply, context)) {
-                    return new JDWPResult(reply);
-                }
-
+                Object array = context.getIds().fromId((int) arrayId);
                 byte tag = context.getTypeTag(array);
 
                 setArrayValues(context, input, index, values, array, tag);
 
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
 
             private static void setArrayValues(JDWPContext context, PacketStream input, int index, int values, Object array, byte tag) {
@@ -1303,7 +1252,7 @@ class JDWP {
 
                 long classLoaderId = input.readLong();
 
-                Object classLoader = verifyClassLoader(classLoaderId, reply, context);
+                Object classLoader = context.getIds().fromId((int) classLoaderId);
 
                 // TODO(Gregersen) - we will need all classes for which this classloader was the initiating loader
                 KlassRef[] klasses = context.getInitiatedClasses(classLoader);
@@ -1314,7 +1263,7 @@ class JDWP {
                     reply.writeByte(TypeTag.getKind(klass));
                     reply.writeLong(context.getIds().getIdAsLong(klass));
                 }
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
     }
@@ -1341,50 +1290,35 @@ class JDWP {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                if (verifyThread(input.readLong(), reply, context) == null) {
-                    return new JDWPResult(reply);
-                }
-
+                long threadId = input.readLong();
                 long frameId = input.readLong();
                 int slots = input.readInt();
                 reply.writeInt(slots);
 
-                JDWPCallFrame frame = verifyClassFrame(frameId, reply, context);
-
-                if (frame == null) {
-                    return new JDWPResult(reply);
-                }
-
+                JDWPCallFrame frame = (JDWPCallFrame) context.getIds().fromId((int) frameId);
                 Object thisValue = frame.getThisValue();
                 Object[] variables = frame.getVariables();
                 int offset = thisValue != null ? 1 : 0;
 
-                try {
-                    // below assumes the debugger asks for slot values in increasing order
-                    for (int i = 0; i < slots; i++) {
-                        int slot = input.readInt();
-                        Object value = variables[slot - offset];
+                // below assumes the debugger asks for slot values in increasing order
+                for (int i = 0; i < slots; i++) {
+                    int slot = input.readInt();
+                    Object value = variables[slot - offset];
 
-                        byte sigbyte = input.readByte();
-                        // TODO(Gregersen) - verify sigbyte against actual value type
-                        if (sigbyte == TagConstants.ARRAY) {
-                            reply.writeByte(sigbyte);
-                            reply.writeLong(context.getIds().getIdAsLong(value));
-                        } else if (sigbyte == TagConstants.OBJECT) {
-                            sigbyte = context.getSpecificObjectTag(value);
-                            reply.writeByte(sigbyte);
-                            reply.writeLong(context.getIds().getIdAsLong(value));
-                        } else {
-                            writeValue(sigbyte, value, reply, true, context);
-                        }
+                    byte sigbyte = input.readByte();
+                    // TODO(Gregersen) - verify sigbyte against actual value type
+                    if (sigbyte == TagConstants.ARRAY) {
+                        reply.writeByte(sigbyte);
+                        reply.writeLong(context.getIds().getIdAsLong(value));
+                    } else if (sigbyte == TagConstants.OBJECT) {
+                        sigbyte = context.getSpecificObjectTag(value);
+                        reply.writeByte(sigbyte);
+                        reply.writeLong(context.getIds().getIdAsLong(value));
+                    } else {
+                        writeValue(sigbyte, value, reply, true, context);
                     }
-                } catch (ArrayIndexOutOfBoundsException ex) {
-                    // invalid slot provided
-                    reply.errorCode(JDWPErrorCodes.INVALID_SLOT);
-                    return new JDWPResult(reply);
                 }
-
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
 
@@ -1395,18 +1329,11 @@ class JDWP {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                if (verifyThread(input.readLong(), reply, context) == null) {
-                    return new JDWPResult(reply);
-                }
-
+                long threadId = input.readLong();
                 long frameId = input.readLong();
                 int slots = input.readInt();
 
-                JDWPCallFrame frame = verifyClassFrame(frameId, reply, context);
-
-                if (frame == null) {
-                    return new JDWPResult(reply);
-                }
+                JDWPCallFrame frame = (JDWPCallFrame) context.getIds().fromId((int) frameId);
 
                 Object thisValue = frame.getThisValue();
                 Object[] variables = frame.getVariables();
@@ -1418,7 +1345,7 @@ class JDWP {
                     byte kind = input.readByte();
                     variables[slot - offset] = readValue(kind, input, context);
                 }
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
 
@@ -1427,20 +1354,12 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                if (verifyThread(input.readLong(), reply, context) == null) {
-                    return new JDWPResult(reply);
-                }
+                long threadId = input.readLong();
                 long frameId = input.readLong();
 
-                JDWPCallFrame frame = verifyClassFrame(frameId, reply, context);
-
-                if (frame == null) {
-                    return new JDWPResult(reply);
-                }
-
+                JDWPCallFrame frame = (JDWPCallFrame) context.getIds().fromId((int) frameId);
                 Object thisValue = frame.getThisValue();
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeByte(TagConstants.OBJECT);
 
                 if (thisValue != null) {
@@ -1448,7 +1367,7 @@ class JDWP {
                 } else {
                     reply.writeLong(0);
                 }
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
     }
@@ -1461,15 +1380,14 @@ class JDWP {
 
             static JDWPResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
                 long classObjectId = input.readLong();
 
-                ClassObjectId id = verifyClassObject(classObjectId, reply, context);
+                ClassObjectId id = (ClassObjectId) context.getIds().fromId((int) classObjectId);
 
+                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeByte(TypeTag.getKind(id.getKlassRef()));
                 reply.writeLong(context.getIds().getIdAsLong(id.getKlassRef()));
-                return new JDWPResult(reply);
+                return new JDWPResult(reply, null);
             }
         }
     }
@@ -1606,100 +1524,6 @@ class JDWP {
             return null;
         }
         return method;
-    }
-
-    private static Object verifyThread(long threadId, PacketStream reply, JDWPContext context) {
-        Object thread = context.getIds().fromId((int) threadId);
-
-        if (thread == context.getNullObject()) {
-            reply.errorCode(JDWPErrorCodes.INVALID_OBJECT);
-            return null;
-        }
-
-        if (!context.isValidThread(thread)) {
-            reply.errorCode(JDWPErrorCodes.INVALID_THREAD);
-            return null;
-        }
-        return thread;
-    }
-
-    private static Object verifyThreadGroup(long threadGroupId, PacketStream reply, JDWPContext context) {
-        Object threadGroup = context.getIds().fromId((int) threadGroupId);
-
-        if (threadGroup == context.getNullObject()) {
-            reply.errorCode(JDWPErrorCodes.INVALID_OBJECT);
-            return null;
-        }
-
-        if (!context.isValidThreadGroup(threadGroup)) {
-            reply.errorCode(JDWPErrorCodes.INVALID_THREAD_GROUP);
-            return null;
-        }
-
-        return threadGroup;
-    }
-
-    private static Object verifyArray(long arrayId, PacketStream reply, JDWPContext context) {
-        Object array = context.getIds().fromId((int) arrayId);
-
-        if (array == context.getNullObject()) {
-            reply.errorCode(JDWPErrorCodes.INVALID_OBJECT);
-            return null;
-        }
-
-        if (!context.isArray(array)) {
-            reply.errorCode(JDWPErrorCodes.INVALID_ARRAY);
-            return null;
-        }
-        return array;
-    }
-
-    private static boolean verifyArrayLength(Object array, int length, PacketStream reply, JDWPContext context) {
-        if (!context.verifyArrayLength(array, length)) {
-            reply.errorCode(JDWPErrorCodes.INVALID_LENGTH);
-            return false;
-        }
-        return true;
-    }
-
-    private static Object verifyString(long objectId, PacketStream reply, JDWPContext context) {
-        Object string = context.getIds().fromId((int) objectId);
-
-        if (!context.isString(string)) {
-            reply.errorCode(JDWPErrorCodes.INVALID_STRING);
-            return null;
-        }
-        return string;
-    }
-
-    private static Object verifyClassLoader(long classLoaderId, PacketStream reply, JDWPContext context) {
-        Object classLoader = context.getIds().fromId((int) classLoaderId);
-
-        if (!context.isValidClassLoader(classLoader)) {
-            reply.errorCode(JDWPErrorCodes.INVALID_CLASS_LOADER);
-            return null;
-        }
-        return classLoader;
-    }
-
-    private static JDWPCallFrame verifyClassFrame(long frameId, PacketStream reply, JDWPContext context) {
-        Object frame = context.getIds().fromId((int) frameId);
-        if (!(frame instanceof JDWPCallFrame)) {
-            reply.errorCode(JDWPErrorCodes.INVALID_FRAMEID);
-            return null;
-        }
-
-        return (JDWPCallFrame) frame;
-    }
-
-    private static ClassObjectId verifyClassObject(long classObjectId, PacketStream reply, JDWPContext context) {
-        Object object = context.getIds().fromId((int) classObjectId);
-
-        if (object == context.getNullObject() || !(object instanceof ClassObjectId)) {
-            reply.errorCode(JDWPErrorCodes.INVALID_OBJECT);
-            return null;
-        }
-        return (ClassObjectId) object;
     }
 }
 
