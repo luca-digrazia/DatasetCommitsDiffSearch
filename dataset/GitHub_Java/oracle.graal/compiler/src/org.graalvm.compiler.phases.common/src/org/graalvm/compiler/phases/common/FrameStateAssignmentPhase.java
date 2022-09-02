@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -76,9 +76,6 @@ public class FrameStateAssignmentPhase extends Phase {
                 StateSplit stateSplit = (StateSplit) node;
                 FrameState stateAfter = stateSplit.stateAfter();
                 if (stateAfter != null) {
-                    if (node instanceof LoopBeginNode) {
-                        ((LoopBeginNode) node).setBci(stateAfter.bci);
-                    }
                     if (stateAfter.bci == BytecodeFrame.INVALID_FRAMESTATE_BCI) {
                         currentState = null;
                     } else {

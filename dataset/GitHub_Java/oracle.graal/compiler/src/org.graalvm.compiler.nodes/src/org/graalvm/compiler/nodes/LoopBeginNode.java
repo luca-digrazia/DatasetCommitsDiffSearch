@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,8 +56,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
     protected LoopType loopType;
     protected int unrollFactor;
     protected boolean osrLoop;
-    protected int bci = -1;
-    protected boolean disableCounted;
 
     public enum LoopType {
         SIMPLE_LOOP,
@@ -80,22 +78,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
         this.canEndsSafepoint = true;
         loopType = LoopType.SIMPLE_LOOP;
         unrollFactor = 1;
-    }
-
-    public boolean isDisableCounted() {
-        return disableCounted;
-    }
-
-    public void setDisableCounted(boolean disableCounted) {
-        this.disableCounted = disableCounted;
-    }
-
-    public int getBci() {
-        return bci;
-    }
-
-    public void setBci(int bci) {
-        this.bci = bci;
     }
 
     public boolean isSimpleLoop() {

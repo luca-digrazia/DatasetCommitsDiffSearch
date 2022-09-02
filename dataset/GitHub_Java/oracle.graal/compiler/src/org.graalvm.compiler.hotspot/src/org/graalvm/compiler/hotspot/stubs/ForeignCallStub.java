@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,10 +43,9 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.JavaMethodContext;
 import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage;
+import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.Reexecutability;
+import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.Transition;
 import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkageImpl;
-import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
-import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Reexecutability;
-import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition;
 import org.graalvm.compiler.hotspot.meta.HotSpotLoweringProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.nodes.StubForeignCallNode;
@@ -109,7 +108,7 @@ public class ForeignCallStub extends Stub {
      *            cannot be re-executed.
      * @param killedLocations the memory locations killed by the stub call
      */
-    public ForeignCallStub(OptionValues options, HotSpotJVMCIRuntime runtime, HotSpotProviders providers, long address, HotSpotForeignCallDescriptor descriptor, boolean prependThread,
+    public ForeignCallStub(OptionValues options, HotSpotJVMCIRuntime runtime, HotSpotProviders providers, long address, ForeignCallDescriptor descriptor, boolean prependThread,
                     Transition transition, Reexecutability reexecutability, LocationIdentity... killedLocations) {
         super(options, providers, HotSpotForeignCallLinkageImpl.create(providers.getMetaAccess(), providers.getCodeCache(), providers.getWordTypes(), providers.getForeignCalls(), descriptor, 0L,
                         COMPUTES_REGISTERS_KILLED, JavaCall, JavaCallee, transition, reexecutability, killedLocations));
@@ -117,8 +116,7 @@ public class ForeignCallStub extends Stub {
         this.prependThread = prependThread;
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         Class<?>[] targetParameterTypes = createTargetParameters(descriptor);
-        HotSpotForeignCallDescriptor targetSig = new HotSpotForeignCallDescriptor(transition, reexecutability, killedLocations, descriptor.getName() + ":C", descriptor.getResultType(),
-                        targetParameterTypes);
+        ForeignCallDescriptor targetSig = new ForeignCallDescriptor(descriptor.getName() + ":C", descriptor.getResultType(), targetParameterTypes);
         target = HotSpotForeignCallLinkageImpl.create(metaAccess, providers.getCodeCache(), providers.getWordTypes(), providers.getForeignCalls(), targetSig, address,
                         DESTROYS_ALL_CALLER_SAVE_REGISTERS, NativeCall, NativeCall, transition, reexecutability, killedLocations);
     }
@@ -237,7 +235,7 @@ public class ForeignCallStub extends Stub {
         Class<?>[] args = linkage.getDescriptor().getArgumentTypes();
         boolean isObjectResult = !LIRKind.isValue(linkage.getOutgoingCallingConvention().getReturn());
         // Do we want to clear the pending exception?
-        boolean shouldClearException = linkage.getDescriptor().isReexecutable();
+        boolean shouldClearException = linkage.isReexecutable();
         try {
             HotSpotLoweringProvider lowerer = (HotSpotLoweringProvider) providers.getLowerer();
             Templates foreignCallSnippets = lowerer.getForeignCallSnippets();
