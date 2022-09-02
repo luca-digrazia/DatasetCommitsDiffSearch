@@ -167,7 +167,6 @@ public final class Meta implements ContextAccess {
         InternalError = knownKlass(Type.InternalError);
         VerifyError = knownKlass(Type.VerifyError);
 
-        Error = knownKlass(Type.Error);
         NoSuchFieldError = knownKlass(Type.NoSuchFieldError);
         NoSuchMethodError = knownKlass(Type.NoSuchMethodError);
         IllegalAccessError = knownKlass(Type.IllegalAccessError);
@@ -436,7 +435,6 @@ public final class Meta implements ContextAccess {
     public final Field HIDDEN_FRAMES;
     public final Field Throwable_backtrace;
 
-    public final ObjectKlass Error;
     public final ObjectKlass NoSuchFieldError;
     public final ObjectKlass NoSuchMethodError;
     public final ObjectKlass IllegalAccessError;
@@ -651,6 +649,11 @@ public final class Meta implements ContextAccess {
     public EspressoException throwEx(java.lang.Class<?> clazz) {
         assert Throwable.class.isAssignableFrom(clazz);
         throw new EspressoException(initEx(clazz));
+    }
+
+    @TruffleBoundary
+    public EspressoException throwExFromHost(Throwable e) {
+        throw throwExWithMessage(e.getClass(), e.getMessage());
     }
 
     @TruffleBoundary
