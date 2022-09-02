@@ -479,7 +479,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         for (int i = 0; i < array.length; ++i) {
             array[i] = generator.apply(i);
         }
-        return StaticObject.createArray(getArrayClass(), array);
+        return new StaticObject(getArrayClass(), array);
     }
 
     // region Lookup
@@ -549,13 +549,13 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
 
     private Method findMethodHandleIntrinsic(@SuppressWarnings("unused") Symbol<Name> methodName, Symbol<Signature> signature, MethodHandleIntrinsics.PolySigIntrinsics id) {
         if (id == InvokeGeneric) {
-            return (methodName == Name.invoke ? getMeta().invoke : getMeta().invokeExact).findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
+            return getMeta().invoke.findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
                 // TODO(garcia) Create a whole new Node to handle MH invokes.
                 @Override
                 public EspressoBaseNode apply(Method method) {
                     // TODO(garcia) true access checks
                     ObjectKlass callerKlass = getMeta().Object;
-                    StaticObject appendixBox = StaticObject.createArray(getMeta().Object_array, new Object[1]);
+                    StaticObject appendixBox = new StaticObject(getMeta().Object_array, new Object[1]);
                     StaticObject memberName = (StaticObject) getMeta().linkMethod.invokeDirect(
                                     null,
                                     callerKlass.mirror(), (int) REF_invokeVirtual,
