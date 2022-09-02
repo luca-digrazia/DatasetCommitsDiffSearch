@@ -55,7 +55,9 @@ public final class StaticObject implements TruffleObject {
     private static final Unsafe U;
 
     public static final StaticObject VOID = new StaticObject();
+
     public static final StaticObject NULL = new StaticObject();
+
     static {
         try {
             java.lang.reflect.Field f = Unsafe.class.getDeclaredField("theUnsafe");
@@ -224,7 +226,7 @@ public final class StaticObject implements TruffleObject {
 
     public final void setFieldVolatile(Field field, Object value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        U.putObjectVolatile(fields, (long)Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex(), value);
+        U.putObjectVolatile(fields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex(), value);
     }
 
     public final void setField(Field field, Object value) {
