@@ -162,6 +162,13 @@ public final class EspressoContext {
         return shutdownSynchronizer;
     }
 
+    public void notifyShutdownSynchronizer() {
+        Object sync = getShutdownSynchronizer();
+        synchronized (sync) {
+            sync.notifyAll();
+        }
+    }
+
     public EspressoContext(TruffleLanguage.Env env, EspressoLanguage language) {
         this.env = env;
         this.language = language;

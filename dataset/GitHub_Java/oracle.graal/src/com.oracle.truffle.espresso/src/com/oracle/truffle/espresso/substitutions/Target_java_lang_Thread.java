@@ -29,9 +29,12 @@ import static com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
+import org.graalvm.options.OptionValues;
+
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -193,9 +196,10 @@ public final class Target_java_lang_Thread {
                     @GuestCall(target = "java_lang_Thread_exit") DirectCallNode threadExit,
                     // Checkstyle: resume
                     @InjectMeta Meta meta) {
-        EspressoContext context = meta.getContext();
-        if (context.MultiThreaded) {
+        OptionValues options = meta.getContext().getEnv().getOptions();
+        if (options.get(EspressoOptions.MultiThreaded)) {
             // Thread.start() is synchronized.
+            EspressoContext context = meta.getContext();
             KillStatus killStatus = getKillStatus(self);
             if (killStatus != null || context.isClosing()) {
 
