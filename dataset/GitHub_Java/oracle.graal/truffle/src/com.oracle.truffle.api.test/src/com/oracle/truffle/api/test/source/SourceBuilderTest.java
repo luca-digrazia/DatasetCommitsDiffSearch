@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.api.test.source;
 
-import static java.nio.file.StandardOpenOption.CREATE;
-import static java.nio.file.StandardOpenOption.WRITE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -50,32 +48,24 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.WRITE;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.Reader;
 import java.io.StringReader;
 import java.net.MalformedURLException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.SeekableByteChannel;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.util.EnumSet;
 import java.util.Objects;
 import java.util.jar.JarOutputStream;
 import java.util.zip.ZipEntry;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.io.ByteSequence;
 import org.junit.Assert;
 import org.junit.Test;
@@ -87,8 +77,11 @@ import com.oracle.truffle.api.source.Source.LiteralBuilder;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
-import com.oracle.truffle.api.test.polyglot.MemoryFileSystem;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.assertFails;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
+import java.util.EnumSet;
 
 public class SourceBuilderTest extends AbstractPolyglotTest {
 
@@ -528,23 +521,10 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
         assertNotNull("Resource found", resource);
         assertEquals("JAR protocol", "jar", resource.getProtocol());
         Source s = Source.newBuilder("TestJS", resource).build();
-        assertEquals(resource, s.getURL());
         Assert.assertArrayEquals(bytes, s.getBytes().toByteArray());
         assertEquals("x.tjs", s.getName());
-        assertEquals(sample.toURI() + "!/x.tjs", s.getPath());
 
         sample.delete();
-    }
-
-    @Test
-    public void testHttpURL() throws IOException, URISyntaxException {
-        setupEnv();
-        URL resource = new URL("http://example.org/test/File.html");
-        Source s = Source.newBuilder("TestJS", resource).content("Empty").build();
-        assertEquals(resource, s.getURL());
-        assertEquals(resource.toURI(), s.getURI());
-        assertEquals("File.html", s.getName());
-        assertEquals("/test/File.html", s.getPath());
     }
 
     @Test
@@ -613,67 +593,6 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
         Source source = Source.newBuilder("lang", "anything", "name").interactive(true).build();
 
         assertTrue("This source is interactive", source.isInteractive());
-    }
-
-    @Test
-    public void testEncodingTruffleFile() throws IOException {
-        // Checkstyle: stop
-        String content = "žščřďťňáéíóúůý";
-        String xmlContent = "<?xml version=\"1.0\" encoding=\"windows-1250\"?>\n<!DOCTYPE foo PUBLIC \"foo\">\n<content>žščřďťňáéíóúůý</content>";
-        // Checkstyle: resume
-        setupEnv();
-        File testFile = File.createTempFile("test", ".txt").getAbsoluteFile();
-        try (FileOutputStream out = new FileOutputStream(testFile)) {
-            out.write(content.getBytes(StandardCharsets.UTF_16LE));
-        }
-        TruffleFile file = languageEnv.getTruffleFile(testFile.getPath());
-        Source src = Source.newBuilder("lang", file).encoding(StandardCharsets.UTF_16LE).build();
-        assertEquals(content, src.getCharacters().toString());
-
-        testFile = File.createTempFile("test", ".xml").getAbsoluteFile();
-        try (FileOutputStream out = new FileOutputStream(testFile)) {
-            out.write(xmlContent.getBytes(Charset.forName("windows-1250")));
-        }
-        file = languageEnv.getTruffleFile(testFile.getPath());
-        src = Source.newBuilder("lang", file).build();
-        assertEquals(xmlContent, src.getCharacters().toString());
-
-        testFile = File.createTempFile("test", ".txt").getAbsoluteFile();
-        try (FileOutputStream out = new FileOutputStream(testFile)) {
-            out.write(content.getBytes(StandardCharsets.UTF_8));
-        }
-        file = languageEnv.getTruffleFile(testFile.getPath());
-        src = Source.newBuilder("lang", file).build();
-        assertEquals(content, src.getCharacters().toString());
-    }
-
-    @Test
-    public void testEncodingURL() throws IOException {
-        // Checkstyle: stop
-        String content = "žščřďťňáéíóúůý";
-        String xmlContent = "<?xml version=\"1.0\" encoding=\"windows-1250\"?>\n<!DOCTYPE foo PUBLIC \"foo\">\n<content>žščřďťňáéíóúůý</content>";
-        // Checkstyle: resume
-        setupEnv();
-        File testFile = File.createTempFile("test", ".txt").getAbsoluteFile();
-        try (FileOutputStream out = new FileOutputStream(testFile)) {
-            out.write(content.getBytes(StandardCharsets.UTF_16LE));
-        }
-        Source src = Source.newBuilder("lang", testFile.toURI().toURL()).encoding(StandardCharsets.UTF_16LE).build();
-        assertEquals(content, src.getCharacters().toString());
-
-        testFile = File.createTempFile("test", ".xml").getAbsoluteFile();
-        try (FileOutputStream out = new FileOutputStream(testFile)) {
-            out.write(xmlContent.getBytes(Charset.forName("windows-1250")));
-        }
-        src = Source.newBuilder("lang", testFile.toURI().toURL()).build();
-        assertEquals(xmlContent, src.getCharacters().toString());
-
-        testFile = File.createTempFile("test", ".txt").getAbsoluteFile();
-        try (FileOutputStream out = new FileOutputStream(testFile)) {
-            out.write(content.getBytes(StandardCharsets.UTF_8));
-        }
-        src = Source.newBuilder("lang", testFile.toURI().toURL()).build();
-        assertEquals(content, src.getCharacters().toString());
     }
 
     public void subSourceHashAndEquals() {
@@ -808,17 +727,14 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
         fail("Unexpected MIME type: " + mimeType);
     }
 
-    @Registration(id = "TestJava", name = "", characterMimeTypes = "text/x-java", fileTypeDetectors = CommonMIMETypeTestDetector.class)
+    @Registration(id = "TestJava", name = "", characterMimeTypes = "text/x-java")
     public static class TestJavaLanguage extends ProxyLanguage {
 
     }
 
-    @Registration(id = "TestJS", name = "", byteMimeTypes = "application/test-js", fileTypeDetectors = CommonMIMETypeTestDetector.class)
+    @Registration(id = "TestJS", name = "", byteMimeTypes = "application/test-js")
     public static class TestJSLanguage extends ProxyLanguage {
-    }
 
-    @Registration(id = "TestTxt", name = "", byteMimeTypes = "text/plain", fileTypeDetectors = CommonMIMETypeTestDetector.class)
-    public static class TestTxtLanguage extends ProxyLanguage {
     }
 
     @SuppressWarnings("deprecation")
@@ -864,74 +780,5 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
         TruffleFile unknownMimeTypeFile = languageEnv.getTruffleFile("test.unknown");
         assertEquals("application/test-js", Source.findMimeType(knownMimeTypeFile));
         assertNull(Source.findMimeType(unknownMimeTypeFile));
-    }
-
-    @Test
-    public void testNonResolvableURLAllowedIO() throws IOException {
-        setupEnv();
-        File file = File.createTempFile("Test", ".java");
-        file.deleteOnExit();
-        String text;
-        try (FileWriter w = new FileWriter(file)) {
-            text = "// Test";
-            w.write(text);
-        }
-        Source src = Source.newBuilder("TestJava", queryURL(file.toURI())).build();
-        assertNotNull(src);
-        assertTrue(text.contentEquals(src.getCharacters()));
-
-        assertEquals("text/plain", Source.findMimeType(queryURL(file.toURI())));
-    }
-
-    @Test
-    public void testNonResolvableURLDeniedIO() throws IOException {
-        setupEnv(Context.create());
-        File file = File.createTempFile("Test", ".java");
-        file.deleteOnExit();
-        String text;
-        try (FileWriter w = new FileWriter(file)) {
-            text = "// Test";
-            w.write(text);
-        }
-        try {
-            Source.newBuilder("TestJava", queryURL(file.toURI())).build();
-            fail("Expected SecurityException");
-        } catch (SecurityException se) {
-            // expected SecurityException
-        }
-        try {
-            Source.findMimeType(queryURL(file.toURI()));
-            fail("Expected SecurityException");
-        } catch (SecurityException se) {
-            // expected SecurityException
-        }
-    }
-
-    @Test
-    public void testNonResolvableURLCustomFileSystem() throws IOException {
-        MemoryFileSystem fs = new MemoryFileSystem();
-        Path path = fs.parsePath("/Test.java");
-        String text;
-        try (OutputStream out = Channels.newOutputStream(fs.newByteChannel(path, EnumSet.of(StandardOpenOption.CREATE, StandardOpenOption.WRITE)))) {
-            text = "// Test";
-            out.write(text.getBytes());
-        }
-        setupEnv(Context.newBuilder().allowIO(true).fileSystem(fs).build());
-        try {
-            Source.newBuilder("TestJava", queryURL(path.toUri())).build();
-            fail("Expected SecurityException");
-        } catch (SecurityException se) {
-            // expected SecurityException
-        }
-        try {
-            Source.findMimeType(queryURL(path.toUri()));
-            fail("Expected SecurityException");
-        } catch (SecurityException se) {
-            // expected SecurityException
-        }
-    }
-
-    private static URL queryURL(URI uri) throws MalformedURLException {
-        return new URL(uri.toString() + "?query");
     }
 }

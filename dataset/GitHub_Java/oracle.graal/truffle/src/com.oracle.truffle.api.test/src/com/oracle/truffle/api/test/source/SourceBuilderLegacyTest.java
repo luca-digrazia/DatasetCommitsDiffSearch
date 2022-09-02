@@ -1,26 +1,42 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.test.source;
 
@@ -45,19 +61,19 @@ import java.util.zip.ZipEntry;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.oracle.truffle.api.source.MissingMIMETypeException;
-import com.oracle.truffle.api.source.MissingNameException;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 
 /*
  * Legacy tests are necessary to make sure deprecated APIs don't change behavior.
  * To be removed with Source builder deprecations.
  */
 @SuppressWarnings("deprecation")
-public class SourceBuilderLegacyTest {
+public class SourceBuilderLegacyTest extends AbstractPolyglotTest {
+
     @Test
     public void assignMimeTypeAndIdentity() {
-        Source.Builder<RuntimeException, MissingMIMETypeException, RuntimeException> builder = Source.newBuilder("// a comment\n").name("Empty comment");
+        Source.Builder<RuntimeException, com.oracle.truffle.api.source.MissingMIMETypeException, RuntimeException> builder = Source.newBuilder("// a comment\n").name("Empty comment");
         Source s1 = builder.mimeType("content/unknown").build();
         assertEquals("No mime type assigned", "content/unknown", s1.getMimeType());
         Source s2 = builder.mimeType("text/x-c").build();
@@ -71,7 +87,7 @@ public class SourceBuilderLegacyTest {
     @Test
     public void assignMimeTypeAndIdentityForReader() throws IOException {
         String text = "// Hello";
-        Source.Builder<IOException, MissingMIMETypeException, RuntimeException> builder = Source.newBuilder(new StringReader(text)).name("test.txt");
+        Source.Builder<IOException, com.oracle.truffle.api.source.MissingMIMETypeException, RuntimeException> builder = Source.newBuilder(new StringReader(text)).name("test.txt");
         Source s1 = builder.name("Hello").mimeType("text/plain").build();
         assertEquals("Base type assigned", "text/plain", s1.getMimeType());
         Source s2 = builder.mimeType("text/x-c").build();
@@ -85,6 +101,7 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void assignMimeTypeAndIdentityForFile() throws IOException {
+        setupEnv();
         File file = File.createTempFile("Hello", ".java").getCanonicalFile();
         file.deleteOnExit();
 
@@ -116,6 +133,7 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void mimeTypeIsDetectedRandomBytes() throws IOException {
+        setupEnv();
         File file = File.createTempFile("Hello", ".bin").getCanonicalFile();
         file.deleteOnExit();
 
@@ -130,6 +148,7 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void mimeTypeIsDetectedRandomBytesForURI() throws IOException {
+        setupEnv();
         File file = File.createTempFile("Hello", ".bin").getCanonicalFile();
         file.deleteOnExit();
 
@@ -144,6 +163,7 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void ioExceptionWhenFileDoesntExist() throws Exception {
+        setupEnv();
         File file = File.createTempFile("Hello", ".java").getCanonicalFile();
         file.delete();
         assertFalse("Doesn't exist", file.exists());
@@ -188,6 +208,7 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void assignMimeTypeAndIdentityForVirtualFile() throws Exception {
+        setupEnv();
         File file = File.createTempFile("Hello", ".java").getCanonicalFile();
         file.deleteOnExit();
 
@@ -207,33 +228,36 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void noIOWhenContentSpecified() {
-        File file = new File("some.js");
+        setupEnv();
+        File file = new File("some.tjs");
 
         String text = "// Hello";
 
         Source source = Source.newBuilder(file).content(text).build();
         assertEquals("The content has been changed", text, source.getCharacters());
         assertNotNull("Mime type specified", source.getMimeType());
-        assertTrue("Recognized as JavaScript", source.getMimeType().endsWith("/javascript"));
-        assertEquals("some.js", source.getName());
+        assertEquals("Recognized as JavaScript", "application/test-js", source.getMimeType());
+        assertEquals("some.tjs", source.getName());
     }
 
     @Test
     public void fromTextWithFileURI() {
-        File file = new File("some.js");
+        setupEnv();
+        File file = new File("some.tjs");
 
         String text = "// Hello";
 
-        Source source = Source.newBuilder(text).uri(file.toURI()).mimeType("plain/text").name("another.js").build();
+        Source source = Source.newBuilder(text).uri(file.toURI()).mimeType("plain/text").name("another.tjs").build();
         assertEquals("The content has been changed", text, source.getCharacters());
         assertNotNull("Mime type specified", source.getMimeType());
         assertEquals("Assigned MIME type", "plain/text", source.getMimeType());
-        assertEquals("another.js", source.getName());
+        assertEquals("another.tjs", source.getName());
         assertEquals("Using the specified URI", file.toURI(), source.getURI());
     }
 
     @Test
     public void assignMimeTypeAndIdentityForURL() throws IOException {
+        setupEnv();
         File file = File.createTempFile("Hello", ".java");
         file.deleteOnExit();
 
@@ -271,6 +295,7 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void clientManagedSourceChange() {
+        setupEnv();
         final String path = "test.input";
         final String code1 = "test\ntest";
         final String code2 = "test\ntest\nlonger\ntest";
@@ -286,6 +311,7 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void clientManagedSourceChangeAbsolute() {
+        setupEnv();
         final String path = new File("test.input").getAbsolutePath();
         final String code1 = "test\ntest";
         final String code2 = "test\ntest\nlonger\ntest";
@@ -301,20 +327,21 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void jarURLGetsAName() throws IOException {
+        setupEnv();
         File sample = File.createTempFile("sample", ".jar");
         sample.deleteOnExit();
         JarOutputStream os = new JarOutputStream(new FileOutputStream(sample));
-        os.putNextEntry(new ZipEntry("x.js"));
+        os.putNextEntry(new ZipEntry("x.tjs"));
         os.write("Hi!".getBytes("UTF-8"));
         os.closeEntry();
         os.close();
 
-        URL resource = new URL("jar:" + sample.toURI() + "!/x.js");
+        URL resource = new URL("jar:" + sample.toURI() + "!/x.tjs");
         assertNotNull("Resource found", resource);
         assertEquals("JAR protocol", "jar", resource.getProtocol());
         Source s = Source.newBuilder(resource).build();
         assertEquals("Hi!", s.getCharacters());
-        assertEquals("x.js", s.getName());
+        assertEquals("x.tjs", s.getName());
 
         sample.delete();
     }
@@ -336,6 +363,7 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void fileWithReload() throws Exception {
+        setupEnv();
         File file = File.createTempFile("ChangeMe", ".java");
         file.deleteOnExit();
 
@@ -414,8 +442,9 @@ public class SourceBuilderLegacyTest {
 
     @Test
     public void subSourceFromTwoFiles() throws Exception {
-        File f1 = File.createTempFile("subSource", ".js").getCanonicalFile();
-        File f2 = File.createTempFile("subSource", ".js").getCanonicalFile();
+        setupEnv();
+        File f1 = File.createTempFile("subSource", ".tjs").getCanonicalFile();
+        File f2 = File.createTempFile("subSource", ".tjs").getCanonicalFile();
 
         try (FileWriter w = new FileWriter(f1)) {
             w.write("function test() {\n" + "  return 1;\n" + "}\n");
@@ -458,7 +487,7 @@ public class SourceBuilderLegacyTest {
     public void throwsErrorIfNameIsNull() {
         try {
             Source.newBuilder("Hi").mimeType("content/unknown").build();
-        } catch (MissingNameException ex) {
+        } catch (com.oracle.truffle.api.source.MissingNameException ex) {
             // OK
             return;
         }
@@ -469,7 +498,7 @@ public class SourceBuilderLegacyTest {
     public void throwsErrorIfMIMETypeIsNull() {
         try {
             Source.newBuilder("Hi").name("unknown.txt").build();
-        } catch (MissingMIMETypeException ex) {
+        } catch (com.oracle.truffle.api.source.MissingMIMETypeException ex) {
             // OK
             return;
         }
