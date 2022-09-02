@@ -245,14 +245,12 @@ public class ConfigurationTool {
             String value = (parts.length > 1) ? parts[1] : null;
             switch (current) {
                 case "--include-modules":
-                case "--exclude-modules":
                     if (SubstrateUtil.HOSTED) {
                         if (rootNode != null) {
                             throw new UsageException(current + " must be specified before other rule-creating arguments");
                         }
-                        RuleNode.Inclusion inclusion = current.equals("--include-modules") ? RuleNode.Inclusion.Include : RuleNode.Inclusion.Exclude;
                         String[] moduleNames = (value != null) ? value.split(",") : new String[0];
-                        rootNode = ModuleFilterTools.generateFromModules(moduleNames, inclusion, reduce);
+                        rootNode = ModuleFilterTools.generateFromModules(moduleNames, reduce);
                     } else {
                         throw new UsageException(current + " is currently not supported in the native-image build of this tool.");
                     }
