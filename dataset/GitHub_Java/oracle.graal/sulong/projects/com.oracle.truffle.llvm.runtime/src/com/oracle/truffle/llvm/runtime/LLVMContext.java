@@ -302,11 +302,6 @@ public final class LLVMContext {
         }
     }
 
-    public Path getInternalLibraryPath() {
-        assert isInitialized();
-        return internalLibraryPath;
-    }
-
     private static long parseStackSize(String v) {
         String valueString = v.trim();
         long scale = 1;
@@ -516,23 +511,6 @@ public final class LLVMContext {
         if (lifetimeAnalysisStream != null) {
             lifetimeAnalysisStream.dispose();
         }
-    }
-
-    /**
-     * Inject implicit dependency for a {@code library}.
-     * 
-     * @param library the library for which dependencies might be injected
-     * @param libraries a (potentially unmodifiable) list of dependencies
-     */
-    public List<String> injectDependencies(ExternalLibrary library, List<String> libraries) {
-        String injectedDependency = language.getCapability(PlatformCapability.class).injectDependency(this, library);
-        if (injectedDependency == null) {
-            return libraries;
-        }
-        List<String> newList = new ArrayList<>();
-        newList.addAll(libraries);
-        newList.add(injectedDependency);
-        return newList;
     }
 
     public ExternalLibrary addInternalLibrary(String lib, Object reason) {
