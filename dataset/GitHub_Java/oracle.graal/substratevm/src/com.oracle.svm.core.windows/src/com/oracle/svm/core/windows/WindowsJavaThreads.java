@@ -174,6 +174,9 @@ class WindowsParkEvent extends ParkEvent {
         if (resetEventBeforeWait) {
             reset();
         }
+        if (Thread.interrupted()) {
+            return WaitResult.JAVA_THREAD_INTERRUPTED;
+        }
         int status = SynchAPI.WaitForSingleObject(eventHandle, SynchAPI.INFINITE());
         if (status != SynchAPI.WAIT_OBJECT_0()) {
             Log.log().newline().string("WindowsParkEvent.condWait failed, status returned:  ").hex(status);
@@ -190,7 +193,10 @@ class WindowsParkEvent extends ParkEvent {
         if (resetEventBeforeWait) {
             reset();
         }
-        do { // at least once to consume potential unpark
+        do { // at least once to consume possible interrupt/unpark
+            if (Thread.interrupted()) {
+                return WaitResult.JAVA_THREAD_INTERRUPTED;
+            }
             int timeout = (delayMillis < maxTimeout) ? (int) delayMillis : maxTimeout;
             int status = SynchAPI.WaitForSingleObject(eventHandle, timeout);
             if (status == SynchAPI.WAIT_OBJECT_0()) {
