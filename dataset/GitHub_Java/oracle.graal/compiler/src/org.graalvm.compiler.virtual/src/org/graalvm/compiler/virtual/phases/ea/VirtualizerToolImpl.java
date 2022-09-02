@@ -217,7 +217,7 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
         if (!oldValue.getStackKind().isPrimitive()) {
             return false;
         }
-        if (isEntryDefaults(virtual, accessKind.getByteCount(), index)) {
+        if (isEntryDefaults(virtual, accessKind, index)) {
             return true;
         }
         return accessKind.getByteCount() == virtual.byteArrayEntryByteCount(index, this);
@@ -234,28 +234,16 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
                         ((offset % accessKind.getByteCount()) == 0);
     }
 
-    int getVirtualByteCount(ValueNode[] entries, int startIndex) {
-        int pos = startIndex + 1;
-        while (pos < entries.length && entries[pos].getStackKind() == JavaKind.Illegal) {
-            pos++;
-        }
-        return pos - startIndex;
-    }
-
-    boolean isEntryDefaults(ObjectState object, int byteCount, int index) {
-        for (int i = index; i < index + byteCount; i++) {
-            if (!object.getEntry(i).isDefaultConstant()) {
+    private boolean isEntryDefaults(VirtualArrayNode virtual, JavaKind accessKind, int index) {
+        for (int i = index; i < index + accessKind.getByteCount(); i++) {
+            if (!getEntry(virtual, i).isDefaultConstant()) {
                 return false;
             }
         }
         return true;
     }
 
-    boolean isEntryDefaults(VirtualObjectNode virtual, int byteCount, int index) {
-        return isEntryDefaults(state.getObjectState(virtual), byteCount, index);
-    }
-
-    public ValueNode getIllegalConstant() {
+    private ValueNode getIllegalConstant() {
         if (illegalConstant == null) {
             /* Try not to spawn a second illegal constant in the graph. */
             illegalConstant = ConstantNode.forConstant(JavaConstant.forIllegal(), getMetaAccess(), closure.cfg.graph);
