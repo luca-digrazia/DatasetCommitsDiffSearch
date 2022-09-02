@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,12 +29,12 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
-import java.util.function.Supplier;
-
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.runtime.LLVMSyscallEntry;
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMUnsupportedSyscallNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
 /**
@@ -49,6 +49,7 @@ final class UnknownBasicPlatformCapability extends BasicPlatformCapability<Unkno
         /* DUMMY */;
         @Override
         public int value() {
+            CompilerDirectives.transferToInterpreter();
             throw new UnsupportedOperationException();
         }
     }
@@ -64,17 +65,26 @@ final class UnknownBasicPlatformCapability extends BasicPlatformCapability<Unkno
 
     @Override
     protected LLVMSyscallOperationNode createSyscallNode(UnknownSyscalls syscall) {
+        CompilerDirectives.transferToInterpreter();
         throw new UnsupportedOperationException("Should not reach.");
     }
 
     @Override
-    public Object createVAListStorage() {
+    public Object createVAListStorage(RootNode rootNode) {
+        CompilerDirectives.transferToInterpreter();
         throw new UnsupportedOperationException("Should not reach.");
     }
 
     @Override
     public Type getVAListType() {
-        throw new UnsupportedOperationException();
+        CompilerDirectives.transferToInterpreter();
+        throw new UnsupportedOperationException("Should not reach.");
+    }
+
+    @Override
+    public Object createNativeVAListWrapper(LLVMNativePointer vaListPtr, RootNode rootNode) {
+        CompilerDirectives.transferToInterpreter();
+        throw new UnsupportedOperationException("Should not reach.");
     }
 
 }

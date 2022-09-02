@@ -46,6 +46,10 @@ public abstract class LLVMNativeVarargsAreaStackAllocationNode extends LLVMNode 
         this.allocation = LLVMAllocaInstructionNodeGen.create(1, 8, null);
     }
 
+    public void setStackAccess(LLVMStackAccess stackAccess) {
+        this.allocation.setStackAccess(stackAccess);
+    }
+
     @Specialization
     protected LLVMPointer alloc(VirtualFrame frame, long size) {
         return allocation.executeWithTarget(frame, size);

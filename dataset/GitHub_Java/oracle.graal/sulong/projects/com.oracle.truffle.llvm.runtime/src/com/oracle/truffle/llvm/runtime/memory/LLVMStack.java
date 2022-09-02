@@ -42,7 +42,6 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.except.LLVMAllocationFailureException;
 import com.oracle.truffle.llvm.runtime.except.LLVMMemoryException;
 import com.oracle.truffle.llvm.runtime.except.LLVMStackOverflowError;
@@ -66,7 +65,6 @@ public final class LLVMStack {
 
     public static final int NO_ALIGNMENT_REQUIREMENTS = 1;
 
-    private final LLVMContext context;
     private final long stackSize;
 
     private long lowerBounds;
@@ -74,8 +72,7 @@ public final class LLVMStack {
 
     private long stackPointer; // == 0 means no allocated yet
 
-    public LLVMStack(long stackSize, LLVMContext context) {
-        this.context = context;
+    public LLVMStack(long stackSize) {
         this.stackSize = stackSize;
 
         lowerBounds = 0;
@@ -83,15 +80,11 @@ public final class LLVMStack {
         stackPointer = 0;
     }
 
-    public LLVMContext getContext() {
-        return context;
-    }
-
     private boolean isAllocated() {
         return stackPointer != 0;
     }
 
-    public static FrameSlot getStackSlot(FrameDescriptor frameDescriptor) {
+    private static FrameSlot getStackSlot(FrameDescriptor frameDescriptor) {
         return frameDescriptor.findOrAddFrameSlot(STACK_ID, PointerType.VOID, FrameSlotKind.Object);
     }
 
@@ -199,7 +192,7 @@ public final class LLVMStack {
         /**
          * Get the stack instance that was provided to {@link #executeEnter}.
          */
-        public abstract LLVMStack executeGetStack(VirtualFrame frame);
+        public abstract Object executeGetStack(VirtualFrame frame);
     }
 
     /**
