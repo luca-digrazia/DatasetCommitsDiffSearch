@@ -55,13 +55,16 @@ public abstract class LLVMReplaceGlobalVariableStorageNode extends LLVMNode {
         this.descriptor = descriptor;
     }
 
-    public abstract void execute( LLVMPointer value);
+    public abstract void execute(LLVMPointer value);
 
     @Specialization
     void doReplacee(LLVMPointer value,
-                 @CachedContext(LLVMLanguage.class) LLVMContext context,
-                 @Cached LLVMReplaceGlobalVariableStorageNode.ReplaceDynamicObjectHelper replaceHelper) {
-        replaceHelper.execute(context.getGlobalStorage(), descriptor, value);
+                    @CachedContext(LLVMLanguage.class) LLVMContext context,
+                    @Cached LLVMReplaceGlobalVariableStorageNode.ReplaceDynamicObjectHelper replaceHelper) {
+        DynamicObject global = context.getGlobalStorage();
+        synchronized (global) {
+            replaceHelper.execute(global, descriptor, value);
+        }
     }
 
     abstract static class ReplaceDynamicObjectHelper extends LLVMNode {
@@ -70,19 +73,19 @@ public abstract class LLVMReplaceGlobalVariableStorageNode extends LLVMNode {
 
         @SuppressWarnings("unused")
         @Specialization(limit = "3", //
-                guards = {
-                        "object.getShape() == cachedShape",
-                        "loc != null",
-                        "loc.canSet(value)"
-                }, //
-                assumptions = {
-                        "layoutAssumption"
+                        guards = {
+                                        "object.getShape() == cachedShape",
+                                        "loc != null",
+                                        "loc.canSet(value)"
+                        }, //
+                        assumptions = {
+                                        "layoutAssumption"
 
-                })
+                        })
         protected void doDirect(DynamicObject object, LLVMGlobal descriptor, LLVMPointer value,
-                                @Cached("object.getShape()") Shape cachedShape,
-                                @Cached("cachedShape.getValidAssumption()") Assumption layoutAssumption,
-                                @Cached("cachedShape.getProperty(descriptor).getLocation()") Location loc) {
+                        @Cached("object.getShape()") Shape cachedShape,
+                        @Cached("cachedShape.getValidAssumption()") Assumption layoutAssumption,
+                        @Cached("cachedShape.getProperty(descriptor).getLocation()") Location loc) {
             CompilerAsserts.partialEvaluationConstant(descriptor);
             try {
                 loc.set(object, value);
@@ -95,7 +98,7 @@ public abstract class LLVMReplaceGlobalVariableStorageNode extends LLVMNode {
 
         @TruffleBoundary
         @Specialization(guards = {
-                "object.getShape().isValid()"
+                        "object.getShape().isValid()"
         }, replaces = {"doDirect"})
         protected static void doIndirect(DynamicObject object, LLVMGlobal descriptor, LLVMPointer value) {
             object.set(descriptor, value);
