@@ -29,24 +29,35 @@
  */
 package com.oracle.truffle.wasm.test.parser;
 
-import com.oracle.truffle.wasm.parser.binary.BinaryReader;
-import com.oracle.truffle.wasm.test.WasmTest;
-import com.oracle.truffle.wasm.test.WasmTestToolkit;
+import java.io.IOException;
+
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Source;
+import org.graalvm.polyglot.io.ByteSequence;
 import org.junit.Test;
 
-import java.io.IOException;
+import com.oracle.truffle.wasm.binary.Assert;
+import com.oracle.truffle.wasm.test.WasmTest;
+import com.oracle.truffle.wasm.test.WasmTestToolkit;
 
 public class WasmParserTest extends WasmTest {
 
+    @Override
     @Test
-    public void parseHelloWorldTest() throws IOException, InterruptedException {
-        parseProgram("(module (func (result i32) (i32.const 42)))");
-        parseProgram("(module (func (result i32) (i32.const 1690433)))");
+    public void runTests() throws InterruptedException {
+        super.runTests();
     }
 
-    private static void parseProgram(String program) throws IOException, InterruptedException {
-        byte[] binary = WasmTestToolkit.compileWat(program);
-        BinaryReader reader = new BinaryReader(binary);
-        reader.readModule();
+    @Override
+    protected void runTest(TestElement element) {
+        try {
+            byte[] binary = WasmTestToolkit.compileWat(element.program);
+            Context context = Context.create();
+            Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "test").build();
+            context.eval(source);
+        } catch (IOException | InterruptedException e) {
+            Assert.fail(String.format("WasmParserTest failed for program: %s", element.program));
+            e.printStackTrace();
+        }
     }
 }
