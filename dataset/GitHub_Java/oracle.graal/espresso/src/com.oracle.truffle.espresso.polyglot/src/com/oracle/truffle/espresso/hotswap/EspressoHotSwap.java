@@ -57,15 +57,21 @@ public final class EspressoHotSwap {
         }
     }
 
+    public static void registerPostHotSwapAction(HotSwapAction action) {
+        if (handler != null) {
+            handler.registerPostHotSwapAction(action);
+        }
+    }
+
     public static void registerHotSwapAction(Class<?> klass, HotSwapAction action) {
         if (handler != null) {
             handler.registerHotSwapAction(klass, action);
         }
     }
 
-    public static void registerClassInitHotSwap(Class<?> klass, boolean onChange) {
+    public static void registerClassInitHotSwap(Class<?> klass, boolean onChange, HotSwapAction callback) {
         if (handler != null) {
-            handler.registerStaticClassInitHotSwap(klass, onChange);
+            handler.registerStaticClassInitHotSwap(klass, onChange, callback);
         }
     }
 }
