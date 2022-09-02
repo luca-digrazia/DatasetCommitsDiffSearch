@@ -71,9 +71,6 @@ public final class Target_java_lang_invoke_MemberName {
     public native MethodType getMethodType();
 
     @Alias
-    public native Class<?> getFieldType();
-
-    @Alias
     public native byte getReferenceKind();
 
     @SuppressWarnings("static-method")
