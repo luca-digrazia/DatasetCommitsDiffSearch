@@ -55,8 +55,6 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.graalvm.compiler.options.OptionValues;
-
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.util.ClasspathUtils;
 import com.oracle.svm.core.util.InterruptImageBuilding;
@@ -112,8 +110,6 @@ public abstract class AbstractNativeImageClassLoaderSupport {
     abstract List<Path> applicationModulePath();
 
     abstract Optional<? extends Object> findModule(String moduleName);
-
-    abstract void processAddExportsAndAddOpens(OptionValues parsedHostedOptions);
 
     abstract void initAllClasses(ForkJoinPool executor, ImageClassLoader imageClassLoader);
 
