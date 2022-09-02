@@ -135,19 +135,17 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    String asString() {
+    String asString() throws UnsupportedMessageException {
         checkNotForeign();
-        if (isNull(this)) {
-            return null;
+        if (!isString()) {
+            throw UnsupportedMessageException.create();
         }
         return Meta.toHostStringStatic(this);
     }
 
     @ExportMessage
     boolean isBoolean() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         if (isNull(this)) {
             return false;
         }
@@ -165,9 +163,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isNumber() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         if (isNull(this)) {
             return false;
         }
@@ -445,9 +441,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean hasArrayElements() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         return isArray();
     }
 
@@ -905,9 +899,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean hasMembers() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         return notNull(this);
     }
 
@@ -1050,9 +1042,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean hasMetaObject() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         return !isNull(this);
     }
 
@@ -1102,9 +1092,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isDate() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         if (isNull(this)) {
             return false;
         }
@@ -1157,9 +1145,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isTime() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         if (isNull(this)) {
             return false;
         }
@@ -1211,9 +1197,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isTimeZone() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         if (isNull(this)) {
             return false;
         }
@@ -1277,9 +1261,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isDuration() {
-        if (isForeignObject()) {
-            return false;
-        }
+        checkNotForeign();
         if (isNull(this)) {
             return false;
         }
