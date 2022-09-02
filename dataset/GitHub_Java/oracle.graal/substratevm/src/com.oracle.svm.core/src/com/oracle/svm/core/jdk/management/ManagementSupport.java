@@ -170,7 +170,7 @@ public final class ManagementSupport {
 
         Object existing = platformManagedObjectsMap.get(clazz);
         if (existing != null) {
-            throw UserError.abort("PlatformManagedObject already registered: %s", clazz.getName());
+            throw UserError.abort("PlatformManagedObject already registered: " + clazz.getName());
         }
         platformManagedObjectsMap.put(clazz, object);
         platformManagedObjectsSet.add(object);
@@ -197,7 +197,7 @@ public final class ManagementSupport {
 
         Object existing = platformManagedObjectsMap.get(clazz);
         if (existing instanceof PlatformManagedObject) {
-            throw UserError.abort("PlatformManagedObject already registered as a singleton: %s", clazz.getName());
+            throw UserError.abort("PlatformManagedObject already registered as a singleton: " + clazz.getName());
         }
 
         ArrayList<Object> newList = new ArrayList<>();

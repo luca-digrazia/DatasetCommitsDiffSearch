@@ -30,13 +30,13 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
+import java.util.function.Supplier;
+
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMSyscallExitNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMNativeSyscallNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.linux.aarch64.LinuxAArch64Syscall;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VaListStorage;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 final class LinuxAArch64PlatformCapability extends BasicPlatformCapability<LinuxAArch64Syscall> {
 
@@ -55,22 +55,9 @@ final class LinuxAArch64PlatformCapability extends BasicPlatformCapability<Linux
         }
     }
 
-    // TODO: The following methods temporarily return X86 va_list objects until the AArch64 managed
-    // va_list is implemented.
-
     @Override
-    public Object createVAListStorage() {
-        return new LLVMX86_64VaListStorage();
-    }
-
-    @Override
-    public Type getVAListType() {
-        return LLVMX86_64VaListStorage.VA_LIST_TYPE;
-    }
-
-    @Override
-    public Object createNativeVAListWrapper(LLVMNativePointer vaListPtr) {
-        return new LLVMX86_64VaListStorage.NativeVAListWrapper(vaListPtr);
+    public Object createVAListStorage(Supplier<LLVMExpressionNode> allocaNodeFactory) {
+        throw new UnsupportedOperationException();
     }
 
 }
