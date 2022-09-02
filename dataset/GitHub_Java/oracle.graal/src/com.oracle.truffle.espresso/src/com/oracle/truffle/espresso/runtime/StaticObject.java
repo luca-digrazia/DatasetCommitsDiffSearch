@@ -64,10 +64,6 @@ public final class StaticObject implements TruffleObject {
         return object == StaticObject.NULL;
     }
 
-    public static boolean isEspressoNull(Object object) {
-        return object == StaticObject.NULL;
-    }
-
     @ExportMessage
     public boolean isString() {
         return StaticObject.notNull(this) && getKlass() == getKlass().getMeta().String;
@@ -177,7 +173,7 @@ public final class StaticObject implements TruffleObject {
      * behavior and avoid casting to Object[] (a non-leaf cast), we perform field accesses with
      * Unsafe operations.
      */
-    public StaticObject(ArrayKlass klass, Object array) {
+    private StaticObject(ArrayKlass klass, Object array) {
         this.klass = klass;
         assert klass.isArray();
         assert array != null;
@@ -657,7 +653,7 @@ public final class StaticObject implements TruffleObject {
     public void putObject(StaticObject value, int index, Meta meta) {
         assert isArray();
         if (index >= 0 && index < length()) {
-            U.putObject(fields, getObjectFieldIndex(index), arrayStoreExCheck(value, klass.getComponentType(), meta));
+            U.putObject(fields, getObjectFieldIndex(index), arrayStoreExCheck(value, ((ArrayKlass) klass).getComponentType(), meta));
         } else {
             CompilerDirectives.transferToInterpreter();
             throw meta.throwEx(ArrayIndexOutOfBoundsException.class);
@@ -722,10 +718,7 @@ public final class StaticObject implements TruffleObject {
     }
 
     public static StaticObject wrap(char[] array) {
-        return wrap(array, EspressoLanguage.getCurrentContext().getMeta());
-    }
-
-    public static StaticObject wrap(char[] array, Meta meta) {
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         return new StaticObject(meta._char_array, array);
     }
 
