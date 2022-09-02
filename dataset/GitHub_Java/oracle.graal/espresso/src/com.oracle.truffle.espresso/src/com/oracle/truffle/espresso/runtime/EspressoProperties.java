@@ -276,8 +276,9 @@ public interface EspressoProperties {
         Path espressoHome = HomeFinder.getInstance().getLanguageHomes().get(EspressoLanguage.ID);
 
         // Inject hotswap.jar on boot class path on java 8
+        // on 11+ the hotswap module is injected by a patch inside the module system
         // Espresso HotSwap plugin support is currently only available in debugging mode
-        if (options.get(EspressoOptions.JDWPOptions) != null) {
+        if (EspressoOptions.JDWPOptions != null && Files.isDirectory(java8Home)) {
             Path hotswapJar = espressoHome.resolve("lib").resolve("hotswap.jar");
             if (Files.isReadable(hotswapJar)) {
                 TruffleLogger.getLogger(EspressoLanguage.ID).fine("Adding HotSwap API to the boot classpath: " + hotswapJar);
@@ -290,7 +291,8 @@ public interface EspressoProperties {
         }
 
         // Inject polyglot.jar on JDK 8.
-        if (options.get(EspressoOptions.Polyglot) ) {
+        // on 11+ the polyglot module is injected by a patch inside the module system
+        if (options.get(EspressoOptions.Polyglot) && Files.isDirectory(java8Home)) {
             Path polyglotJar = espressoHome.resolve("lib").resolve("polyglot.jar");
             if (Files.isReadable(polyglotJar)) {
                 TruffleLogger.getLogger(EspressoLanguage.ID).fine("Adding Polyglot API to the boot classpath: " + polyglotJar);
