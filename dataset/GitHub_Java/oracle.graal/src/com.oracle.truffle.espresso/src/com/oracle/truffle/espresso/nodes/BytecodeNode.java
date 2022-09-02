@@ -524,6 +524,8 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
 
     // region Local accessors
 
+    @CompilationFinal private boolean zeroStackBackEdges = false;
+
     @Override
     @SuppressWarnings("unchecked")
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.MERGE_EXPLODE)
@@ -1109,6 +1111,14 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
         if (targetBCI < curBCI) {
             if (CompilerDirectives.inInterpreter()) {
                 LoopNode.reportLoopCount(this, 1);
+            }
+            if (!zeroStackBackEdges) {
+                if (newTop != 0) {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    zeroStackBackEdges = true;
+                } else {
+                    return 0;
+                }
             }
         }
         return newTop;
