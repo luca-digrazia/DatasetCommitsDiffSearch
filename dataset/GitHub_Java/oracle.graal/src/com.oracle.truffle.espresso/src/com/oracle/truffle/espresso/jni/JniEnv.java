@@ -390,7 +390,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
             this.handles = new JNIHandles();
 
-            assert jniEnvPtr != null && !getUncached().isNull(jniEnvPtr);
+            assert getUncached().isNull(jniEnvPtr);
         } catch (UnsupportedMessageException | ArityException | UnknownIdentifierException | UnsupportedTypeException e) {
             throw EspressoError.shouldNotReachHere("Cannot initialize Espresso native interface");
         }

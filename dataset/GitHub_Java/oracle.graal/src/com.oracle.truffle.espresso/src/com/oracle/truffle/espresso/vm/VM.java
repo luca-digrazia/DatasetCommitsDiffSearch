@@ -1381,8 +1381,14 @@ public final class VM extends NativeEnv implements ContextAccess {
         return klass.mirror();
     }
 
-    public @Pointer TruffleObject getFunction(long handle) {
-        return handle2Sym.get(handle);
+    public TruffleObject getLibrary(@Pointer TruffleObject handle) {
+        long nativePtr = interopAsPointer(handle);
+        return handle2Lib.get(nativePtr);
+    }
+
+    public TruffleObject getFunction(@Pointer TruffleObject handle) {
+        long nativePtr = interopAsPointer(handle);
+        return handle2Sym.get(nativePtr);
     }
 
     /**
