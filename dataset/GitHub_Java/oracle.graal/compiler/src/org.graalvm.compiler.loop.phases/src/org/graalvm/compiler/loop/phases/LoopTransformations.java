@@ -409,29 +409,29 @@ public abstract class LoopTransformations {
         private final LoopBeginNode mainLoop;
         private final LoopBeginNode postLoop;
 
-        private final LoopFragment preLoopFragment;
-        private final LoopFragment mainLoopFragment;
-        private final LoopFragment postLoopFragment;
+        private final LoopFragment preLoopFragement;
+        private final LoopFragment mainLoopFragement;
+        private final LoopFragment postLoopFragement;
 
-        public PreMainPostResult(LoopBeginNode preLoop, LoopBeginNode mainLoop, LoopBeginNode postLoop, LoopFragment preLoopFragment, LoopFragment mainLoopFragment, LoopFragment postLoopFragment) {
+        public PreMainPostResult(LoopBeginNode preLoop, LoopBeginNode mainLoop, LoopBeginNode postLoop, LoopFragment preLoopFragment, LoopFragment mainLoopFragement, LoopFragment postLoopFragement) {
             this.preLoop = preLoop;
             this.mainLoop = mainLoop;
             this.postLoop = postLoop;
-            this.preLoopFragment = preLoopFragment;
-            this.mainLoopFragment = mainLoopFragment;
-            this.postLoopFragment = postLoopFragment;
+            this.preLoopFragement = preLoopFragment;
+            this.mainLoopFragement = mainLoopFragement;
+            this.postLoopFragement = postLoopFragement;
         }
 
-        public LoopFragment getPreLoopFragment() {
-            return preLoopFragment;
+        public LoopFragment getPreLoopFragement() {
+            return preLoopFragement;
         }
 
-        public LoopFragment getMainLoopFragment() {
-            return mainLoopFragment;
+        public LoopFragment getMainLoopFragement() {
+            return mainLoopFragement;
         }
 
-        public LoopFragment getPostLoopFragment() {
-            return postLoopFragment;
+        public LoopFragment getPostLoopFragement() {
+            return postLoopFragement;
         }
 
         public LoopBeginNode getMainLoop() {

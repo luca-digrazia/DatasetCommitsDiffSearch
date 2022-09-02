@@ -37,7 +37,6 @@ import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.StructuredGraph.FrameStateVerificationFeature;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
@@ -53,8 +52,7 @@ import jdk.vm.ci.meta.SpeculationLog;
 public final class LoopBeginNode extends AbstractMergeNode implements IterableNodeType, LIRLowerable {
 
     public static final NodeClass<LoopBeginNode> TYPE = NodeClass.create(LoopBeginNode.class);
-    private double loopFrequency;
-    private ProfileSource loopFrequencySource;
+    protected double loopFrequency;
     protected double loopOrigFrequency;
     protected int nextEndIndex;
     protected int unswitches;
@@ -84,9 +82,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
     /** See {@link LoopEndNode#canSafepoint} for more information. */
     boolean canEndsSafepoint;
 
-    /** See {@link LoopEndNode#canGuestSafepoint} for more information. */
-    boolean canEndsGuestSafepoint;
-
     @OptionalInput(InputType.Guard) GuardingNode overflowGuard;
 
     public static final CounterKey overflowSpeculationTaken = DebugContext.counter("CountedLoops_OverflowSpeculation_Taken");
@@ -97,12 +92,10 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
     public LoopBeginNode() {
         super(TYPE);
         loopFrequency = 1;
-        loopFrequencySource = ProfileSource.UNKNOWN;
         loopOrigFrequency = 1;
         unswitches = 0;
         splits = 0;
         this.canEndsSafepoint = true;
-        this.canEndsGuestSafepoint = true;
         loopType = LoopType.SIMPLE_LOOP;
         unrollFactor = 1;
     }
@@ -182,15 +175,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
         }
     }
 
-    public void disableGuestSafepoint() {
-        /* Store flag locally in case new loop ends are created later on. */
-        this.canEndsGuestSafepoint = false;
-        /* Propagate flag to all existing loop ends. */
-        for (LoopEndNode loopEnd : loopEnds()) {
-            loopEnd.disableGuestSafepoint();
-        }
-    }
-
     public double loopOrigFrequency() {
         return loopOrigFrequency;
     }
@@ -204,14 +188,9 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
         return loopFrequency;
     }
 
-    public ProfileSource loopFrequencySource() {
-        return loopFrequencySource;
-    }
-
-    public void setLoopFrequency(double loopFrequency, ProfileSource frequencySource) {
+    public void setLoopFrequency(double loopFrequency) {
         assert loopFrequency >= 1.0;
         this.loopFrequency = loopFrequency;
-        this.loopFrequencySource = frequencySource;
     }
 
     /**
