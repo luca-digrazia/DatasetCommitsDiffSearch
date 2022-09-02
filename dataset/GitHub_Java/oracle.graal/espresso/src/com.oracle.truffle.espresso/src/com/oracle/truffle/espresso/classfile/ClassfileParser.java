@@ -1010,18 +1010,17 @@ public final class ClassfileParser {
         return new LineNumberTableAttribute(name, entries);
     }
 
-    private LocalVariableTable parseLocalVariableAttribute(Symbol<Name> name, byte[] code, int maxLocals) {
+    private LocalVariableTable parseLocalVariableAttribute(Symbol<Name> name) {
         assert Name.LocalVariableTable.equals(name);
-        return parseLocalVariableTable(name, code, maxLocals);
+        return parseLocalVariableTable(name);
     }
 
-    private LocalVariableTable parseLocalVariableTypeAttribute(Symbol<Name> name, byte[] code, int maxLocals) {
+    private LocalVariableTable parseLocalVariableTypeAttribute(Symbol<Name> name) {
         assert Name.LocalVariableTypeTable.equals(name);
-        return parseLocalVariableTable(name, code, maxLocals);
+        return parseLocalVariableTable(name);
     }
 
-    private LocalVariableTable parseLocalVariableTable(Symbol<Name> name, byte[] code, int maxLocals) {
-        boolean isLVTT = Name.LocalVariableTypeTable.equals(name);
+    private LocalVariableTable parseLocalVariableTable(Symbol<Name> name) {
         int entryCount = stream.readU2();
         if (entryCount == 0) {
             return LocalVariableTable.EMPTY;
@@ -1034,32 +1033,8 @@ public final class ClassfileParser {
             int descIndex = stream.readU2();
             int slot = stream.readU2();
 
-            if (bci < 0 || bci >= code.length) {
-                throw ConstantPool.classFormatError("Invalid local variable table attribute entry: start_pc out of bounds: " + bci);
-            }
-            if (bci + length > code.length) {
-                throw ConstantPool.classFormatError("Invalid local variable table attribute entry: start_pc + length out of bounds: " + (bci + length));
-            }
-
             Utf8Constant poolName = pool.utf8At(nameIndex);
             Utf8Constant typeName = pool.utf8At(descIndex);
-
-            typeName.validateUTF8();
-            poolName.validateFieldName();
-
-            int extraSlot = 0;
-            if (!isLVTT) {
-                typeName.validateType(false);
-                Symbol<Type> type = typeName.value();
-                if (type == Type._long || type == Type._double) {
-                    extraSlot = 1;
-                }
-            }
-
-            if (slot + extraSlot >= maxLocals) {
-                throw ConstantPool.classFormatError("Invalid local variable table attribute entry: index points to an invalid frame slot: " + slot);
-            }
-
             locals[i] = new Local(poolName, typeName, bci, bci + length, slot);
 
         }
@@ -1383,9 +1358,9 @@ public final class ClassfileParser {
             if (attributeName.equals(Name.LineNumberTable)) {
                 codeAttributes[i] = parseLineNumberTable(attributeName);
             } else if (attributeName.equals(Name.LocalVariableTable)) {
-                codeAttributes[i] = parseLocalVariableAttribute(attributeName, code, maxLocals);
+                codeAttributes[i] = parseLocalVariableAttribute(attributeName);
             } else if (attributeName.equals(Name.LocalVariableTypeTable)) {
-                codeAttributes[i] = parseLocalVariableTypeAttribute(attributeName, code, maxLocals);
+                codeAttributes[i] = parseLocalVariableTypeAttribute(attributeName);
             } else if (attributeName.equals(Name.StackMapTable)) {
                 if (stackMapTable != null) {
                     throw ConstantPool.classFormatError("Duplicate StackMapTable attribute");

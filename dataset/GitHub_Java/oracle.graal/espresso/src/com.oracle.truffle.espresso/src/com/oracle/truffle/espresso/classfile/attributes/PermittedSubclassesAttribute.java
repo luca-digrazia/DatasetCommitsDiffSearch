@@ -31,17 +31,17 @@ import com.oracle.truffle.espresso.runtime.Attribute;
 public class PermittedSubclassesAttribute extends Attribute {
     public static final Symbol<Name> NAME = Name.PermittedSubclasses;
 
-    public static final PermittedSubclassesAttribute EMPTY = new PermittedSubclassesAttribute(NAME, new char[0]);
+    public static final PermittedSubclassesAttribute EMPTY = new PermittedSubclassesAttribute(NAME, new short[0]);
 
     @CompilerDirectives.CompilationFinal(dimensions = 1)//
-    private final char[] classes;
+    private final short[] classes;
 
-    public PermittedSubclassesAttribute(Symbol<Name> name, char[] classes) {
+    public PermittedSubclassesAttribute(Symbol<Name> name, short[] classes) {
         super(name, null);
         this.classes = classes;
     }
 
-    public char[] getClasses() {
+    public short[] getClasses() {
         return classes;
     }
 }

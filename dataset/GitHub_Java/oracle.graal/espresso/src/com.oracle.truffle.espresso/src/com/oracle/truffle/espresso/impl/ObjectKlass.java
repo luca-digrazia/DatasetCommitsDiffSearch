@@ -54,7 +54,6 @@ import com.oracle.truffle.espresso.classfile.attributes.InnerClassesAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.NestHostAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.NestMembersAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.PermittedSubclassesAttribute;
-import com.oracle.truffle.espresso.classfile.attributes.RecordAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SignatureAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SourceDebugExtensionAttribute;
 import com.oracle.truffle.espresso.descriptors.Names;
@@ -1104,8 +1103,10 @@ public final class ObjectKlass extends Klass {
         getConstantPool().setKlassAt(getLinkedKlass().getParserKlass().getThisKlassIndex(), this);
     }
 
+    @SuppressWarnings("static-method")
     public boolean isRecord() {
-        return isFinalFlagSet() && getSuperKlass() == getMeta().java_lang_Record && getAttribute(RecordAttribute.NAME) != null;
+        // TODO:
+        return false;
     }
 
     @Override
