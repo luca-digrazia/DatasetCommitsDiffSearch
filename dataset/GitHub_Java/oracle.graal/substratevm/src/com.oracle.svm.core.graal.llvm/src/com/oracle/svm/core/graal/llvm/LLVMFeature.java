@@ -24,47 +24,66 @@
  */
 package com.oracle.svm.core.graal.llvm;
 
-import static com.oracle.svm.core.SubstrateOptions.CompilerBackend;
+import java.nio.file.Path;
+import java.util.Map;
 
-import com.oracle.svm.core.snippets.SnippetRuntime;
-import org.graalvm.compiler.options.Option;
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.compiler.debug.DebugHandlersFactory;
+import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.nodes.java.LoadExceptionObjectNode;
+import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
-import org.graalvm.compiler.replacements.Snippets;
-import org.graalvm.nativeimage.Feature;
+import org.graalvm.compiler.replacements.TargetGraphBuilderPlugins;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.hosted.Feature;
 
+import com.oracle.graal.pointsto.meta.AnalysisMethod;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
 import com.oracle.svm.core.graal.code.SubstrateBackendFactory;
+import com.oracle.svm.core.graal.code.SubstrateLoweringProviderFactory;
+import com.oracle.svm.core.graal.code.SubstrateSuitesCreatorProvider;
+import com.oracle.svm.core.graal.llvm.lowering.LLVMLoadExceptionObjectLowering;
+import com.oracle.svm.core.graal.llvm.lowering.SubstrateLLVMLoweringProvider;
+import com.oracle.svm.core.graal.llvm.replacements.LLVMGraphBuilderPlugins;
+import com.oracle.svm.core.graal.llvm.runtime.LLVMExceptionUnwind;
+import com.oracle.svm.core.graal.llvm.util.LLVMOptions;
+import com.oracle.svm.core.graal.llvm.util.LLVMToolchain;
+import com.oracle.svm.core.graal.llvm.util.LLVMToolchain.RunFailureException;
+import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
+import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.option.HostedOptionKey;
+import com.oracle.svm.core.snippets.ExceptionUnwind;
+import com.oracle.svm.core.util.UserError;
+import com.oracle.svm.hosted.FeatureImpl;
 import com.oracle.svm.hosted.code.CompileQueue;
 import com.oracle.svm.hosted.image.NativeImageCodeCache;
 import com.oracle.svm.hosted.image.NativeImageCodeCacheFactory;
 import com.oracle.svm.hosted.image.NativeImageHeap;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.function.CLibrary;
-import org.graalvm.nativeimage.c.function.CodePointer;
-import org.graalvm.word.Pointer;
-import org.graalvm.word.WordFactory;
 
+/*
+ * This feature enables the LLVM backend of Native Image. It does so by registering the backend,
+ * lowerings, code cache and exception handling mechanism required to emit LLVM bitcode
+ * from Graal graphs, and compile this bitcode into machine code.
+ */
 @AutomaticFeature
-@CLibrary("m")
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
-public class LLVMFeature implements Feature, GraalFeature, Snippets {
-
-    public static class Options {
-        @Option(help = "Include debugging info in the generated image (for LLVM backend).")//
-        public static final HostedOptionKey<Integer> IncludeLLVMDebugInfo = new HostedOptionKey<>(0);
-
-        @Option(help = "Dump contents of the generated stackmap to the specified file")//
-        public static final HostedOptionKey<String> DumpLLVMStackMap = new HostedOptionKey<>(null);
-    }
+public class LLVMFeature implements Feature, GraalFeature {
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return CompilerBackend.getValue().equals("llvm");
+        if (!SubstrateOptions.useLLVMBackend()) {
+            for (HostedOptionKey<?> llvmOption : LLVMOptions.allOptions) {
+                if (llvmOption.hasBeenSet()) {
+                    throw UserError.abort("Flag %s can only be used together with -H:CompilerBackend=llvm", llvmOption.getName());
+                }
+            }
+        }
+        return SubstrateOptions.useLLVMBackend();
     }
 
     @Override
@@ -75,26 +94,65 @@ public class LLVMFeature implements Feature, GraalFeature, Snippets {
                 return new SubstrateLLVMBackend(newProviders);
             }
         });
+
+        ImageSingletons.add(SubstrateLoweringProviderFactory.class, SubstrateLLVMLoweringProvider::new);
+
         ImageSingletons.add(NativeImageCodeCacheFactory.class, new NativeImageCodeCacheFactory() {
             @Override
-            public NativeImageCodeCache newCodeCache(CompileQueue compileQueue, NativeImageHeap heap) {
-                return new LLVMNativeImageCodeCache(compileQueue.getCompilations(), heap);
+            public NativeImageCodeCache newCodeCache(CompileQueue compileQueue, NativeImageHeap heap, Platform platform, Path tempDir) {
+                return new LLVMNativeImageCodeCache(compileQueue.getCompilations(), heap, platform, tempDir);
             }
         });
-        ImageSingletons.add(SnippetRuntime.ExceptionStackFrameVisitor.class, new SnippetRuntime.ExceptionStackFrameVisitor() {
-            @Override
-            public CodePointer getExceptionHandlerPointer(CodePointer ip, Pointer sp, long handlerOffset) {
-                /*
-                 * LLVM uses a setjmp/longjmp mechanism for exception handling, with the unwind
-                 * information held in a buffer on the stack of the caller. As such, the value
-                 * returned by lookupExceptionOffset is not the offset of the exception handling
-                 * code relative to the call IP, but the offset of the setjmp buffer relative to the
-                 * caller's stack pointer. Furthermore, this offset is stored as itself + 1, because
-                 * it is legal (and frequent) to have an offset of 0 for the buffer, which would be
-                 * considered as the absence of the exception handler.
-                 */
-                return (CodePointer) sp.add(WordFactory.unsigned(handlerOffset - 1));
+
+        ImageSingletons.add(ExceptionUnwind.class, LLVMExceptionUnwind.createRaiseExceptionHandler());
+
+        ImageSingletons.add(TargetGraphBuilderPlugins.class, new LLVMGraphBuilderPlugins());
+
+        ImageSingletons.add(SubstrateSuitesCreatorProvider.class, new SubstrateSuitesCreatorProvider());
+    }
+
+    @Override
+    public void beforeAnalysis(BeforeAnalysisAccess access) {
+        FeatureImpl.BeforeAnalysisAccessImpl accessImpl = (FeatureImpl.BeforeAnalysisAccessImpl) access;
+        accessImpl.registerAsCompiled((AnalysisMethod) LLVMExceptionUnwind.getRetrieveExceptionMethod(accessImpl.getMetaAccess()));
+    }
+
+    @Override
+    public void registerLowerings(RuntimeConfiguration runtimeConfig, OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,
+                    Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings, boolean hosted) {
+        lowerings.put(LoadExceptionObjectNode.class, new LLVMLoadExceptionObjectLowering());
+    }
+
+    static class LLVMVersionChecker {
+        private static final int MIN_LLVM_VERSION = 8;
+        private static final int MIN_LLVM_OPTIMIZATIONS_VERSION = 9;
+        private static final int llvmVersion = getLLVMVersion();
+
+        static boolean useExplicitSelects() {
+            if (!Platform.includedIn(Platform.AMD64.class)) {
+                return false;
             }
-        });
+            return llvmVersion < MIN_LLVM_OPTIMIZATIONS_VERSION;
+        }
+
+        private static int getLLVMVersion() {
+            String versionString;
+            try {
+                versionString = LLVMToolchain.runLLVMCommand("llvm-config", null, "--version");
+            } catch (RunFailureException e) {
+                throw UserError.abort("Using the LLVM backend requires LLVM to be installed on your machine.");
+            }
+            String[] splitVersion = versionString.split("\\.");
+            assert splitVersion.length == 3;
+            int version = Integer.parseInt(splitVersion[0]);
+
+            if (version < MIN_LLVM_VERSION) {
+                throw UserError.abort("Unsupported LLVM version: %d. Supported versions are LLVM %d and above", version, MIN_LLVM_VERSION);
+            } else if (LLVMOptions.BitcodeOptimizations.getValue() && version < MIN_LLVM_OPTIMIZATIONS_VERSION) {
+                throw UserError.abort("Unsupported LLVM version to enable bitcode optimizations: %d. Supported versions are LLVM %d.0.0 and above", version, MIN_LLVM_OPTIMIZATIONS_VERSION);
+            }
+
+            return version;
+        }
     }
 }
