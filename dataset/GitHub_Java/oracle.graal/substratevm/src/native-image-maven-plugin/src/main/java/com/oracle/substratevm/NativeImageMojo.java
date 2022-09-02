@@ -48,9 +48,7 @@ import org.apache.maven.model.ConfigurationContainer;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
 import org.apache.maven.plugin.AbstractMojo;
-import org.apache.maven.plugin.MojoExecution;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.PluginParameterExpressionEvaluator;
 import org.apache.maven.plugin.descriptor.PluginDescriptor;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Component;
@@ -60,7 +58,6 @@ import org.apache.maven.project.MavenProject;
 import org.apache.maven.toolchain.ToolchainManager;
 import org.apache.maven.toolchain.java.DefaultJavaToolChain;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
-import org.codehaus.plexus.component.configurator.expression.ExpressionEvaluationException;
 
 @Mojo(name = "native-image", defaultPhase = LifecyclePhase.PACKAGE)
 public class NativeImageMojo extends AbstractMojo {
@@ -92,15 +89,10 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "${session}", readonly = true)//
     private MavenSession session;
 
-    @Parameter(defaultValue = "${mojoExecution}")
-    private MojoExecution mojoExecution;
-
     @Component
     private ToolchainManager toolchainManager;
 
     private final List<Path> classpath = new ArrayList<>();
-
-    private PluginParameterExpressionEvaluator evaluator;
 
     private boolean isWindows() {
         return System.getProperty("os.name").contains("Windows");
@@ -121,7 +113,6 @@ public class NativeImageMojo extends AbstractMojo {
             getLog().info("Skipping native-image generation (parameter 'skip' is true).");
             return;
         }
-        evaluator = new PluginParameterExpressionEvaluator(session, mojoExecution);
 
         classpath.clear();
         List<String> imageClasspathScopes = Arrays.asList(Artifact.SCOPE_COMPILE, Artifact.SCOPE_RUNTIME);
@@ -268,23 +259,8 @@ public class NativeImageMojo extends AbstractMojo {
                     return null;
                 }
             }
-            String value = node.getValue();
-            return evaluateValue(value);
+            return node.getValue();
         }
-        return null;
-    }
-
-    private String evaluateValue(String value) {
-        if (value != null) {
-            try {
-                Object evaluatedValue = (String) evaluator.evaluate(value);
-                if (evaluatedValue instanceof String) {
-                    return (String) evaluatedValue;
-                }
-            } catch (ExpressionEvaluationException exception) {
-            }
-        }
-
         return null;
     }
 
