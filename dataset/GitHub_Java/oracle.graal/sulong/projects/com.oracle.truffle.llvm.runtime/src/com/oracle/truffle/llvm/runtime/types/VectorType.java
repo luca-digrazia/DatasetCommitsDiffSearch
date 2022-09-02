@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -41,15 +41,12 @@ public final class VectorType extends AggregateType {
 
     @CompilationFinal private Assumption elementTypeAssumption;
     @CompilationFinal private Type elementType;
-    /**
-     * Length of the vector. The value is interpreted as an unsigned 32 bit integer value.
-     */
     private final int length;
 
     public VectorType(Type elementType, int length) {
         if (elementType != null && !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw new AssertionError("Invalid ElementType of Vector: " + elementType.getClass().getSimpleName());
+            throw new AssertionError("Invalid ElementType of Vector: " + elementType);
         }
         this.elementTypeAssumption = Truffle.getRuntime().createAssumption("VectorType.elementType");
         this.elementType = elementType;
@@ -64,23 +61,19 @@ public final class VectorType extends AggregateType {
     }
 
     @Override
-    public long getBitSize() throws TypeOverflowException {
-        return multiplyUnsignedExact(getElementType().getBitSize(), length);
+    public int getBitSize() {
+        return getElementType().getBitSize() * length;
     }
 
     @Override
-    public long getNumberOfElements() {
-        return Integer.toUnsignedLong(length);
-    }
-
-    public int getNumberOfElementsInt() {
+    public int getNumberOfElements() {
         return length;
     }
 
     public void setElementType(Type elementType) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         if (elementType == null || !(elementType instanceof PrimitiveType || elementType instanceof PointerType)) {
-            throw new AssertionError("Invalid ElementType of Vector: " + elementType.getClass().getSimpleName());
+            throw new AssertionError("Invalid ElementType of Vector: " + elementType);
         }
         this.elementTypeAssumption.invalidate();
         this.elementType = elementType;
@@ -103,13 +96,13 @@ public final class VectorType extends AggregateType {
     }
 
     @Override
-    public long getSize(DataLayout targetDataLayout) throws TypeOverflowException {
-        return multiplyUnsignedExact(getElementType().getSize(targetDataLayout), Integer.toUnsignedLong(length));
+    public int getSize(DataLayout targetDataLayout) {
+        return getElementType().getSize(targetDataLayout) * length;
     }
 
     @Override
-    public long getOffsetOf(long index, DataLayout targetDataLayout) throws TypeOverflowException {
-        return multiplyUnsignedExact(getElementType().getSize(targetDataLayout), index);
+    public long getOffsetOf(long index, DataLayout targetDataLayout) {
+        return getElementType().getSize(targetDataLayout) * index;
     }
 
     @Override
