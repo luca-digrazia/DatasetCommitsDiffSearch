@@ -34,7 +34,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.graalvm.compiler.options.Option;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
@@ -54,7 +54,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 @AutomaticFeature
 public class FallbackFeature implements Feature {
-    private static final String ABORT_MSG_PREFIX = "Aborting stand-alone image build";
+    private static final String ABORT_MSG_PREFIX = "Abort stand-alone image build";
 
     private final List<ReflectionInvocationCheck> reflectionInvocationChecks = new ArrayList<>();
 

@@ -179,7 +179,7 @@ public class NativeImage {
     private final ArrayList<String> imageBuilderJavaArgs = new ArrayList<>();
     private final LinkedHashSet<Path> imageClasspath = new LinkedHashSet<>();
     private final LinkedHashSet<Path> imageProvidedClasspath = new LinkedHashSet<>();
-    private final ArrayList<String> customJavaArgs = new ArrayList<>();
+    private final LinkedHashSet<String> customJavaArgs = new LinkedHashSet<>();
     private final LinkedHashSet<String> customImageBuilderArgs = new LinkedHashSet<>();
     private final LinkedHashSet<Path> customImageClasspath = new LinkedHashSet<>();
     private final ArrayList<OptionHandler<? extends NativeImage>> optionHandlers = new ArrayList<>();
@@ -709,7 +709,7 @@ public class NativeImage {
     private Stream<String> getRelativeLauncherClassPath() {
         return optionRegistry.getEnabledOptionsStream(MacroOptionKind.Language, MacroOptionKind.Tool)
                         .map(lang -> lang.getProperty("LauncherClassPath"))
-                        .filter(Objects::nonNull).flatMap(Pattern.compile(":", Pattern.LITERAL)::splitAsStream);
+                        .filter(Objects::nonNull).flatMap(Pattern.compile(File.pathSeparator, Pattern.LITERAL)::splitAsStream);
     }
 
     protected static String consolidateSingleValueArg(Collection<String> args, String argPrefix) {
@@ -1100,7 +1100,7 @@ public class NativeImage {
             if (buildStatus == 2) {
                 /* Perform fallback build */
                 build(FallbackBuildConfiguration.create(nativeImage));
-                showWarning("Image '" + nativeImage.effectiveImageName +
+                nativeImage.showWarning("Image '" + nativeImage.effectiveImageName +
                                 "' is a fallback image that requires a JDK for execution " +
                                 "(use --no-fallback to suppress fallback image generation).");
             } else if (buildStatus != 0) {
@@ -1270,7 +1270,7 @@ public class NativeImage {
         }, message);
     }
 
-    public static void showWarning(String message) {
+    void showWarning(String message) {
         show(System.err::println, "Warning: " + message);
     }
 
