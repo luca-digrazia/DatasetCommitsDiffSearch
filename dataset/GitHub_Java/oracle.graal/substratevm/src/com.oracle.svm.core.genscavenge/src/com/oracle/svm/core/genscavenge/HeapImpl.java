@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.graalvm.compiler.api.replacements.Fold;
+import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.nodes.gc.CardTableBarrierSet;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.IsolateThread;
@@ -70,7 +71,6 @@ import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.thread.ThreadStatus;
 import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.thread.VMThreads;
-import com.oracle.svm.core.util.UnsignedUtils;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -561,7 +561,7 @@ public final class HeapImpl extends Heap {
     @Override
     public int getPreferredAddressSpaceAlignment() {
         if (HeapOptions.ChunkedImageHeapLayout.getValue()) {
-            return UnsignedUtils.safeToInt(HeapPolicy.getAlignedHeapChunkAlignment());
+            return NumUtil.safeToInt(HeapPolicy.getAlignedHeapChunkAlignment().rawValue());
         }
         return ConfigurationValues.getObjectLayout().getAlignment();
     }
