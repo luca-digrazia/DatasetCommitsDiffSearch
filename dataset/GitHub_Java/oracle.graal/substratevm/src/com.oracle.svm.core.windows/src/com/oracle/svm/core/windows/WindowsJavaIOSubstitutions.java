@@ -41,7 +41,6 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
 import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.util.VMError;
 
 @Platforms(Platform.WINDOWS.class)
 @AutomaticFeature
@@ -54,7 +53,7 @@ class WindowsJavaIOSubstituteFeature implements Feature {
         try {
             JNIRuntimeAccess.register(FileDescriptor.class.getDeclaredField("handle"));
         } catch (NoSuchFieldException e) {
-            VMError.shouldNotReachHere("WindowsJavaIOSubstitutionFeature: Error registering class or method: ", e);
+            e.printStackTrace();
         }
     }
 }
