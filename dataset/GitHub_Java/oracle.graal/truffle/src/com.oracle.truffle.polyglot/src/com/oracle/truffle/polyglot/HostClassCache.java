@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,37 +41,220 @@
 package com.oracle.truffle.polyglot;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleOptions;
+import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
+
+import java.lang.ref.WeakReference;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Member;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.WeakHashMap;
-import org.graalvm.polyglot.SafetyConf;
+import java.util.Map.Entry;
 
 final class HostClassCache {
-    private static final Map<SafetyConf, HostClassCache> CACHES = new WeakHashMap<>();
-    private final SafetyConf conf;
 
-    private HostClassCache(SafetyConf conf) {
-        this.conf = conf;
-    }
+    static final PolyglotTargetMapping[] EMPTY_MAPPINGS = new PolyglotTargetMapping[0];
 
-    public static synchronized HostClassCache find(SafetyConf conf) {
-        assert conf != null;
-        HostClassCache c = CACHES.get(conf);
-        if (c == null) {
-            c = new HostClassCache(conf);
-            CACHES.put(conf, c);
-        }
-        return c;
-    }
+    private final APIAccess apiAccess;
+    final HostAccess hostAccess;
+    private final boolean arrayAccess;
+    private final boolean listAccess;
+    private final boolean bufferAccess;
+    private final boolean iterableAccess;
+    private final boolean iteratorAccess;
+    private final boolean mapAccess;
+    private final Map<Class<?>, Object> targetMappings;
+    private final Object unnamedModule;
+    private final WeakReference<HostClassCache> weakHostClassRef = new WeakReference<>(this);
 
-    private final ClassValue<HostClassDesc> CACHED_DESCS = new ClassValue<HostClassDesc>() {
+    private final ClassValue<HostClassDesc> descs = new ClassValue<HostClassDesc>() {
         @Override
         protected HostClassDesc computeValue(Class<?> type) {
-            return new HostClassDesc(type);
+            /*
+             * The weak reference is a workaround for JDK-8169425. Cyclic references are not
+             * supported for values in ClassValue. In practice the passed in weak reference should
+             * never become null during a usage of HostClassDesc.
+             */
+            return new HostClassDesc(weakHostClassRef, type);
         }
     };
 
+    private HostClassCache(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf, ClassLoader classLoader) {
+        this.hostAccess = conf;
+        this.arrayAccess = apiAccess.isArrayAccessible(hostAccess);
+        this.listAccess = apiAccess.isListAccessible(hostAccess);
+        this.bufferAccess = apiAccess.isBufferAccessible(hostAccess);
+        this.iterableAccess = apiAccess.isIterableAccessible(hostAccess);
+        this.iteratorAccess = apiAccess.isIteratorAccessible(hostAccess);
+        this.mapAccess = apiAccess.isMapAccessible(hostAccess);
+        this.apiAccess = apiAccess;
+        this.targetMappings = groupMappings(apiAccess, conf);
+        this.unnamedModule = EngineAccessor.JDKSERVICES.getUnnamedModule(classLoader);
+    }
+
+    Object getUnnamedModule() {
+        return unnamedModule;
+    }
+
+    boolean hasTargetMappings() {
+        return targetMappings != null;
+    }
+
+    @TruffleBoundary
+    PolyglotTargetMapping[] getMappings(Class<?> targetType) {
+        if (targetMappings != null) {
+            Class<?> lookupType;
+            if (targetType.isPrimitive()) {
+                if (targetType == byte.class) {
+                    lookupType = Byte.class;
+                } else if (targetType == short.class) {
+                    lookupType = Short.class;
+                } else if (targetType == int.class) {
+                    lookupType = Integer.class;
+                } else if (targetType == long.class) {
+                    lookupType = Long.class;
+                } else if (targetType == float.class) {
+                    lookupType = Float.class;
+                } else if (targetType == double.class) {
+                    lookupType = Double.class;
+                } else if (targetType == boolean.class) {
+                    lookupType = Boolean.class;
+                } else if (targetType == char.class) {
+                    lookupType = Character.class;
+                } else if (targetType == void.class) {
+                    lookupType = Void.class;
+                } else {
+                    lookupType = null;
+                }
+            } else {
+                lookupType = targetType;
+            }
+            PolyglotTargetMapping[] mappings = (PolyglotTargetMapping[]) targetMappings.get(lookupType);
+            if (mappings == null) {
+                return EMPTY_MAPPINGS;
+            } else {
+                return mappings;
+            }
+        }
+        return EMPTY_MAPPINGS;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<Class<?>, Object> groupMappings(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf) {
+        List<Object> mappings = apiAccess.getTargetMappings(conf);
+        if (mappings == null) {
+            return null;
+        }
+        Map<Class<?>, Object> localMappings = new HashMap<>();
+        for (Object mapping : mappings) {
+            PolyglotTargetMapping map = (PolyglotTargetMapping) mapping;
+            List<PolyglotTargetMapping> list = (List<PolyglotTargetMapping>) localMappings.get(map.targetType);
+            if (list == null) {
+                list = new ArrayList<>();
+                localMappings.put(map.targetType, list);
+            }
+            list.add(map);
+        }
+
+        for (Entry<Class<?>, Object> object : localMappings.entrySet()) {
+            List<PolyglotTargetMapping> classMappings = ((List<PolyglotTargetMapping>) object.getValue());
+            Collections.sort(classMappings);
+            object.setValue(classMappings.toArray(EMPTY_MAPPINGS));
+        }
+        return localMappings;
+    }
+
+    public static HostClassCache findOrInitialize(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf, ClassLoader classLoader) {
+        HostClassCache cache = (HostClassCache) apiAccess.getHostAccessImpl(conf);
+        if (cache == null) {
+            cache = initializeHostCache(apiAccess, conf, classLoader);
+        }
+        return cache;
+    }
+
+    private static HostClassCache initializeHostCache(AbstractPolyglotImpl.APIAccess apiAccess, HostAccess conf, ClassLoader classLoader) {
+        HostClassCache cache;
+        synchronized (conf) {
+            cache = (HostClassCache) apiAccess.getHostAccessImpl(conf);
+            if (cache == null) {
+                cache = new HostClassCache(apiAccess, conf, classLoader);
+                apiAccess.setHostAccessImpl(conf, cache);
+            }
+        }
+        return cache;
+    }
+
+    @TruffleBoundary
+    public static HostClassCache forInstance(HostObject receiver) {
+        return receiver.getEngine().getHostClassCache();
+    }
+
     @TruffleBoundary
     HostClassDesc forClass(Class<?> clazz) {
-        return CACHED_DESCS.get(clazz);
+        return descs.get(clazz);
+    }
+
+    @TruffleBoundary
+    boolean allowsAccess(Method m) {
+        return apiAccess.allowsAccess(hostAccess, m) || isGeneratedClassMember(m);
+    }
+
+    @TruffleBoundary
+    boolean allowsAccess(Constructor<?> m) {
+        return apiAccess.allowsAccess(hostAccess, m) || isGeneratedClassMember(m);
+    }
+
+    @TruffleBoundary
+    boolean allowsAccess(Field f) {
+        return apiAccess.allowsAccess(hostAccess, f) || isGeneratedClassMember(f);
+    }
+
+    /***
+     * Generated class members are always accessible, i.e., members of implementable interfaces and
+     * classes are implicitly exported through their implementations.
+     */
+    private static boolean isGeneratedClassMember(Member member) {
+        if (TruffleOptions.AOT) {
+            return false;
+        }
+        if (HostAdapterClassLoader.isGeneratedClass(member.getDeclaringClass())) {
+            return true;
+        }
+        return false;
+    }
+
+    boolean isArrayAccess() {
+        return arrayAccess;
+    }
+
+    boolean isListAccess() {
+        return listAccess;
+    }
+
+    boolean isBufferAccess() {
+        return bufferAccess;
+    }
+
+    boolean isIterableAccess() {
+        return iterableAccess;
+    }
+
+    boolean isIteratorAccess() {
+        return iteratorAccess;
+    }
+
+    boolean isMapAccess() {
+        return mapAccess;
+    }
+
+    boolean allowsImplementation(Class<?> type) {
+        return apiAccess.allowsImplementation(hostAccess, type);
     }
 }
