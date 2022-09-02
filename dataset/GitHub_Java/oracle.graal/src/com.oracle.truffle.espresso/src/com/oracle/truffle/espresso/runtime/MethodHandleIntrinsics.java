@@ -52,20 +52,18 @@ public final class MethodHandleIntrinsics implements ContextAccess {
     public static int firstStaticSigPoly = PolySigIntrinsics.LinkToVirtual.value;
     public static int lastSigPoly = PolySigIntrinsics.LinkToInterface.value;
 
-    private final EspressoContext context;
+    private EspressoContext context;
 
-    private final ConcurrentHashMap<Symbol<Symbol.Signature>, Method> invokeIntrinsics;
-    private final ConcurrentHashMap<Symbol<Symbol.Signature>, Method> invokeExactIntrinsics;
-    private final ConcurrentHashMap<Symbol<Symbol.Signature>, Method> invokeBasicIntrinsics;
-    private final ConcurrentHashMap<Symbol<Symbol.Signature>, Method> linkToStaticIntrinsics;
-    private final ConcurrentHashMap<Symbol<Symbol.Signature>, Method> linkToVirtualIntrinsics;
-    private final ConcurrentHashMap<Symbol<Symbol.Signature>, Method> linkToSpecialIntrinsics;
-    private final ConcurrentHashMap<Symbol<Symbol.Signature>, Method> linkToInterfaceIntrinsics;
+    private ConcurrentHashMap<Symbol<Symbol.Signature>, Method> invokeGenericIntrinsics;
+    private ConcurrentHashMap<Symbol<Symbol.Signature>, Method> invokeBasicIntrinsics;
+    private ConcurrentHashMap<Symbol<Symbol.Signature>, Method> linkToStaticIntrinsics;
+    private ConcurrentHashMap<Symbol<Symbol.Signature>, Method> linkToVirtualIntrinsics;
+    private ConcurrentHashMap<Symbol<Symbol.Signature>, Method> linkToSpecialIntrinsics;
+    private ConcurrentHashMap<Symbol<Symbol.Signature>, Method> linkToInterfaceIntrinsics;
 
     MethodHandleIntrinsics(EspressoContext context) {
         this.context = context;
-        this.invokeIntrinsics = new ConcurrentHashMap<>();
-        this.invokeExactIntrinsics = new ConcurrentHashMap<>();
+        this.invokeGenericIntrinsics = new ConcurrentHashMap<>();
         this.invokeBasicIntrinsics = new ConcurrentHashMap<>();
         this.linkToStaticIntrinsics = new ConcurrentHashMap<>();
         this.linkToVirtualIntrinsics = new ConcurrentHashMap<>();
@@ -79,7 +77,7 @@ public final class MethodHandleIntrinsics implements ContextAccess {
     }
 
     public Method findIntrinsic(Method thisMethod, Symbol<Symbol.Signature> signature, Function<Method, EspressoBaseNode> baseNodeFactory, PolySigIntrinsics id) {
-        ConcurrentHashMap<Symbol<Symbol.Signature>, Method> intrinsics = getIntrinsicMap(id, thisMethod);
+        ConcurrentHashMap<Symbol<Symbol.Signature>, Method> intrinsics = getIntrinsicMap(id);
         Method method = intrinsics.get(signature);
         if (method != null) {
             return method;
@@ -90,12 +88,12 @@ public final class MethodHandleIntrinsics implements ContextAccess {
         return method;
     }
 
-    private ConcurrentHashMap<Symbol<Symbol.Signature>, Method> getIntrinsicMap(PolySigIntrinsics id, Method thisMethod) {
+    private ConcurrentHashMap<Symbol<Symbol.Signature>, Method> getIntrinsicMap(PolySigIntrinsics id) {
         switch (id) {
             case InvokeBasic:
                 return invokeBasicIntrinsics;
             case InvokeGeneric:
-                return (thisMethod.getName() == Symbol.Name.invoke ? invokeIntrinsics : invokeExactIntrinsics);
+                return invokeGenericIntrinsics;
             case LinkToVirtual:
                 return linkToVirtualIntrinsics;
             case LinkToStatic:

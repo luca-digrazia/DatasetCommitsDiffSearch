@@ -67,8 +67,7 @@ public abstract class InvokeInterfaceNode extends QuickNode {
     }
 
     static Method methodLookup(StaticObject receiver, int itableIndex, Klass declaringKlass) {
-        assert !receiver.getKlass().isArray();
-        return ((ObjectKlass) receiver.getKlass()).itableLookup(declaringKlass, itableIndex);
+        return receiver.getKlass().itableLookup(declaringKlass, itableIndex);
     }
 
     @Override
@@ -86,5 +85,6 @@ public abstract class InvokeInterfaceNode extends QuickNode {
         Object result = executeInterface(receiver, args);
         int resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
         return (resultAt - top) + root.putKind(frame, resultAt, result, Signatures.returnKind(resolutionSeed.getParsedSignature()));
+
     }
 }
