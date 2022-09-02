@@ -34,6 +34,7 @@ import java.util.List;
 
 import org.graalvm.nativeimage.Platform;
 
+import com.oracle.svm.core.c.function.GraalIsolateHeader;
 import com.oracle.svm.hosted.c.info.ConstantInfo;
 import com.oracle.svm.hosted.c.info.ElementInfo;
 import com.oracle.svm.hosted.c.info.EnumConstantInfo;
@@ -53,7 +54,9 @@ public class QueryCodeWriter extends InfoTreeVisitor {
     private static final String formatFloat = "%.15e";
     private static final String formatString = QueryResultFormat.STRING_MARKER + "%s" + QueryResultFormat.STRING_MARKER;
 
+    private final CCompilerInvoker compilerInvoker;
     private final CSourceCodeWriter writer;
+    private final boolean isWindows;
 
     private final List<Object> elementForLineNumber;
 
@@ -64,10 +67,11 @@ public class QueryCodeWriter extends InfoTreeVisitor {
     private final String uInt64;
     private final String sInt64;
 
-    public QueryCodeWriter(Path tempDirectory) {
+    public QueryCodeWriter(CCompilerInvoker compilerInvoker, Path tempDirectory) {
+        this.compilerInvoker = compilerInvoker;
         writer = new CSourceCodeWriter(tempDirectory);
         elementForLineNumber = new ArrayList<>();
-        boolean isWindows = Platform.includedIn(Platform.WINDOWS.class);
+        isWindows = Platform.includedIn(Platform.WINDOWS.class);
 
         String formatL64 = "%" + (isWindows ? "ll" : "l");
         formatSInt64 = formatL64 + "d";
@@ -107,31 +111,31 @@ public class QueryCodeWriter extends InfoTreeVisitor {
     protected void visitNativeCodeInfo(NativeCodeInfo nativeCodeInfo) {
         /* Write general macro definitions. */
         List<String> macroDefinitions = nativeCodeInfo.getDirectives().getMacroDefinitions();
+        macroDefinitions.forEach(writer::appendMacroDefinition);
         if (!macroDefinitions.isEmpty()) {
-            macroDefinitions.forEach(writer::appendMacroDefinition);
             writer.appendln();
         }
 
-        /* Standard header file inclusions. */
+        writer.includeFiles(nativeCodeInfo.getDirectives().getHeaderFiles());
         writer.includeFiles(Arrays.asList("<stdio.h>", "<stddef.h>", "<memory.h>"));
         writer.writeCStandardHeaders();
         writer.appendln();
 
-        /* Inject CContext specific C header file snippet. */
-        List<String> headerSnippet = nativeCodeInfo.getDirectives().getHeaderSnippet();
-        if (!headerSnippet.isEmpty()) {
-            headerSnippet.forEach(writer::appendln);
+        if (isWindows && compilerInvoker.compilerInfo.versionMajor <= 16) {
+            writer.appendln("#ifndef bool");
+            writer.appendln("#define bool char");
+            writer.appendln("#define false ((bool)0)");
+            writer.appendln("#define true  ((bool)1)");
+            writer.appendln("#endif");
             writer.appendln();
         }
 
-        /* CContext specific header file inclusions. */
-        List<String> headerFiles = nativeCodeInfo.getDirectives().getHeaderFiles();
-        if (!headerFiles.isEmpty()) {
-            writer.includeFiles(headerFiles);
+        if (nativeCodeInfo.isBuiltin()) {
+            GraalIsolateHeader.getGraalIsolatePreamble().forEach(writer::appendln);
             writer.appendln();
         }
 
-        /* Write query code for nativeCodeInfo. */
+        /* Write the main function with all the outputs for the children. */
         String functionName = nativeCodeInfo.getName().replaceAll("\\W", "_");
         writer.appendln("int " + functionName + "() {");
         writer.indent();
@@ -140,7 +144,6 @@ public class QueryCodeWriter extends InfoTreeVisitor {
         writer.outdent();
         writer.appendln("}");
 
-        /* Write main function. */
         writer.appendln();
         writer.appendln("int main(void) {");
         writer.indent();
