@@ -749,31 +749,18 @@ public final class GCImpl implements GC {
         Log trace = Log.noopLog().string("[blackenDirtyImageHeapRoots:").newline();
         try (Timer timer = timers.blackenImageHeapRoots.open()) {
             ImageHeapInfo info = HeapImpl.getImageHeapInfo();
-            blackenDirtyImageHeapChunkRoots(asImageHeapChunk(info.offsetOfFirstAlignedChunkWithRememberedSet),
-                            asImageHeapChunk(info.offsetOfFirstUnalignedChunkWithRememberedSet));
-
-            if (AuxiliaryImageHeap.isPresent()) {
-                ImageHeapInfo auxInfo = AuxiliaryImageHeap.singleton().getImageHeapInfo();
-                if (auxInfo != null) {
-                    blackenDirtyImageHeapChunkRoots(asImageHeapChunk(auxInfo.offsetOfFirstAlignedChunkWithRememberedSet),
-                                    asImageHeapChunk(auxInfo.offsetOfFirstUnalignedChunkWithRememberedSet));
-                }
+            AlignedHeapChunk.AlignedHeader aligned = asImageHeapChunk(info.offsetOfFirstAlignedChunkWithRememberedSet);
+            while (aligned.isNonNull()) {
+                AlignedHeapChunk.walkDirtyObjects(aligned, greyToBlackObjectVisitor, true);
+                aligned = HeapChunk.getNext(aligned);
+            }
+            UnalignedHeapChunk.UnalignedHeader unaligned = asImageHeapChunk(info.offsetOfFirstUnalignedChunkWithRememberedSet);
+            while (unaligned.isNonNull()) {
+                UnalignedHeapChunk.walkDirtyObjects(unaligned, greyToBlackObjectVisitor, true);
+                unaligned = HeapChunk.getNext(unaligned);
             }
         }
         trace.string("]").newline();
-    }
-
-    private void blackenDirtyImageHeapChunkRoots(AlignedHeader firstAligned, UnalignedHeader firstUnaligned) {
-        AlignedHeader aligned = firstAligned;
-        while (aligned.isNonNull()) {
-            AlignedHeapChunk.walkDirtyObjects(aligned, greyToBlackObjectVisitor, true);
-            aligned = HeapChunk.getNext(aligned);
-        }
-        UnalignedHeader unaligned = firstUnaligned;
-        while (unaligned.isNonNull()) {
-            UnalignedHeapChunk.walkDirtyObjects(unaligned, greyToBlackObjectVisitor, true);
-            unaligned = HeapChunk.getNext(unaligned);
-        }
     }
 
     @SuppressWarnings("unchecked")

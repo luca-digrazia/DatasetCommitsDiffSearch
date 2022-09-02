@@ -206,8 +206,7 @@ public class RuntimeCodeInfoMemory {
                 }
 
                 // If the visitor removed the current entry from the table, then it is necessary to
-                // visit the now updated entry one more time. However, this could have the effect
-                // that some entries are visited more than once.
+                // visit the now updated entry one more time.
                 if (info == NonmovableArrays.getWord(table, i)) {
                     i++;
                 }
