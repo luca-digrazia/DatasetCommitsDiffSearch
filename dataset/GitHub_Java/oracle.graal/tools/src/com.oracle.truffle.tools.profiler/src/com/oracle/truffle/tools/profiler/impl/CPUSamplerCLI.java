@@ -59,6 +59,7 @@ class CPUSamplerCLI extends ProfilerCLI {
     }
 
     static final OptionType<Output> CLI_OUTPUT_TYPE = new OptionType<>("Output",
+                    Output.HISTOGRAM,
                     new Function<String, Output>() {
                         @Override
                         public Output apply(String s) {
@@ -71,6 +72,7 @@ class CPUSamplerCLI extends ProfilerCLI {
                     });
 
     static final OptionType<CPUSampler.Mode> CLI_MODE_TYPE = new OptionType<>("Mode",
+                    CPUSampler.Mode.EXCLUDE_INLINED_ROOTS,
                     new Function<String, CPUSampler.Mode>() {
                         @Override
                         public CPUSampler.Mode apply(String s) {
@@ -124,30 +126,26 @@ class CPUSamplerCLI extends ProfilerCLI {
     @Option(name = "GatherHitTimes", help = "Save a timestamp for each taken sample (default:false).", category = OptionCategory.USER, stability = OptionStability.STABLE) //
     static final OptionKey<Boolean> GATHER_HIT_TIMES = new OptionKey<>(false);
 
-    @Option(name = "OutputFile", help = "Save output to the given file. Output is printed to output stream by default.", category = OptionCategory.USER, stability = OptionStability.STABLE) //
-    static final OptionKey<String> OUTPUT_FILE = new OptionKey<>("");
-
     static void handleOutput(TruffleInstrument.Env env, CPUSampler sampler) {
-        try (PrintStream out = chooseOutputStream(env, OUTPUT_FILE)) {
-            if (sampler.hasStackOverflowed()) {
-                out.println("-------------------------------------------------------------------------------- ");
-                out.println("ERROR: Shadow stack has overflowed its capacity of " + env.getOptions().get(STACK_LIMIT) + " during execution!");
-                out.println("The gathered data is incomplete and incorrect!");
-                out.println("Use --" + CPUSamplerInstrument.ID + ".StackLimit=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
-                out.println("-------------------------------------------------------------------------------- ");
-                return;
-            }
-            Boolean summariseThreads = env.getOptions().get(SUMMARISE_THREADS);
-            switch (env.getOptions().get(OUTPUT)) {
-                case HISTOGRAM:
-                    printSamplingHistogram(out, sampler, summariseThreads);
-                    break;
-                case CALLTREE:
-                    printSamplingCallTree(out, sampler, summariseThreads);
-                    break;
-                case JSON:
-                    printSamplingJson(out, sampler);
-            }
+        PrintStream out = new PrintStream(env.out());
+        if (sampler.hasStackOverflowed()) {
+            out.println("-------------------------------------------------------------------------------- ");
+            out.println("ERROR: Shadow stack has overflowed its capacity of " + env.getOptions().get(STACK_LIMIT) + " during execution!");
+            out.println("The gathered data is incomplete and incorrect!");
+            out.println("Use --" + CPUSamplerInstrument.ID + ".StackLimit=<" + STACK_LIMIT.getType().getName() + "> to set stack capacity.");
+            out.println("-------------------------------------------------------------------------------- ");
+            return;
+        }
+        Boolean summariseThreads = env.getOptions().get(SUMMARISE_THREADS);
+        switch (env.getOptions().get(OUTPUT)) {
+            case HISTOGRAM:
+                printSamplingHistogram(out, sampler, summariseThreads);
+                break;
+            case CALLTREE:
+                printSamplingCallTree(out, sampler, summariseThreads);
+                break;
+            case JSON:
+                printSamplingJson(out, sampler);
         }
     }
 
