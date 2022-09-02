@@ -312,6 +312,7 @@ public class NodeFactoryFactory {
     private static CodeExecutableElement createGetUncached(NodeData node, ExecutableElement constructor) {
         CodeExecutableElement method = CodeExecutableElement.clone(constructor);
         method.setSimpleName(CodeNames.of("getUncached"));
+        method.getParameters().clear();
         method.getModifiers().clear();
         method.getModifiers().add(Modifier.PUBLIC);
         method.getModifiers().add(Modifier.STATIC);
@@ -322,7 +323,7 @@ public class NodeFactoryFactory {
         if (node.hasErrors()) {
             body.startNew(type);
             for (VariableElement var : method.getParameters()) {
-                body.defaultValue(var.asType());
+                body.string(var.getSimpleName().toString());
             }
             body.end();
         } else {
@@ -330,7 +331,6 @@ public class NodeFactoryFactory {
             body.string(typeElement.getSimpleName().toString(), ".UNCACHED");
         }
         body.end();
-        method.getParameters().clear();
         return method;
     }
 

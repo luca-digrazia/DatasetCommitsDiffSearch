@@ -1336,10 +1336,7 @@ public class FlatNodeGenFactory {
             renameOriginalParameters(forType, method, frameState);
         }
 
-        boolean isExecutableInUncached = forType.getEvaluatedCount() != node.getExecutionCount();
-        if (!isExecutableInUncached) {
-            method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
-        }
+        method.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
 
         if (forType.getMethod() != null) {
             method.getModifiers().addAll(forType.getMethod().getModifiers());
@@ -1347,7 +1344,7 @@ public class FlatNodeGenFactory {
         }
 
         CodeTreeBuilder builder = method.createBuilder();
-        if (isExecutableInUncached) {
+        if (forType.getEvaluatedCount() != node.getExecutionCount()) {
             builder.startThrow().startNew(context.getType(AssertionError.class));
             builder.doubleQuote("This execute method cannot be used for uncached node versions as it requires child nodes to be present. " +
                             "Use an execute method that takes all arguments as parameters.");

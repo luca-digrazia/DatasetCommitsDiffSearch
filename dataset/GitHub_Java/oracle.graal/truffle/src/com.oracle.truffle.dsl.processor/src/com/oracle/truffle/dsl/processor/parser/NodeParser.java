@@ -2250,6 +2250,8 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 }
             }
 
+            seenDynamicParameterBound = specialization.isDynamicParameterBound(receiverExpression, false);
+
             if (substituteCachedExpression != null) {
                 if (substituteUncachedExpression == null) {
                     substituteUncachedExpression = substituteCachedExpression;
@@ -2257,9 +2259,8 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 cachedLibrary.setDefaultExpression(substituteCachedExpression);
                 cachedLibrary.setUncachedExpression(substituteUncachedExpression);
                 cachedLibrary.setAlwaysInitialized(true);
-                continue;
+                return null;
             } else {
-                seenDynamicParameterBound |= specialization.isDynamicParameterBound(receiverExpression, false);
                 cachedLibrary.setDefaultExpression(receiverExpression);
 
                 String receiverName = cachedLibrary.getParameter().getVariableElement().getSimpleName().toString();
