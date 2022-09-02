@@ -91,7 +91,7 @@ public final class ObjectKlass extends Klass {
                     EnclosingMethodAttribute enclosingMethod,
                     InnerClassesAttribute innerClasses,
                     ConstantPool pool, AttributeInfo runtimeVisibleAnnotations) {
-        super(klassName, JavaKind.Object);
+        super(klassName);
         this.superclass = superclass;
         this.interfaces = interfaces;
         this.accessFlags = accessFlags;
@@ -232,6 +232,11 @@ public final class ObjectKlass extends Klass {
     @Override
     public MethodInfo resolveMethod(MethodInfo method, Klass callerType) {
         return null;
+    }
+
+    @Override
+    public JavaKind getJavaKind() {
+        return JavaKind.Object;
     }
 
     @Override

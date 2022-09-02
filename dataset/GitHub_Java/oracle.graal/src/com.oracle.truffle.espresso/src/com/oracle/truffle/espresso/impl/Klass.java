@@ -87,13 +87,9 @@ public abstract class Klass implements ModifiersProvider {
         // TODO(peterssen): Make thread-safe.
         if (arrayClass == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            arrayClass = createArrayKlass();
+            arrayClass = new ArrayKlass(this);
         }
         return arrayClass;
-    }
-
-    protected ArrayKlass createArrayKlass() {
-        return new ArrayKlass(this);
     }
 
     @Override

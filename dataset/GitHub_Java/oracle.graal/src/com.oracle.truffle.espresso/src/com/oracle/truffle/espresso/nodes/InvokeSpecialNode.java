@@ -24,36 +24,25 @@ package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.espresso.descriptors.Signatures;
-import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.impl.MethodInfo;
 
-public final class InvokeSpecialNode extends QuickNode {
-    protected final Method method;
+public final class InvokeSpecialNode extends InvokeNode {
+    protected final MethodInfo method;
     @Child private DirectCallNode directCallNode;
 
-    public InvokeSpecialNode(Method method) {
+    public InvokeSpecialNode(MethodInfo method) {
         this.method = method;
         this.directCallNode = DirectCallNode.create(method.getCallTarget());
     }
 
     @Override
     public int invoke(final VirtualFrame frame, int top) {
-        BytecodeNode root = (BytecodeNode) getParent();
+        EspressoRootNode root = (EspressoRootNode) getParent();
         // TODO(peterssen): IsNull Node?
         nullCheck(root.peekReceiver(frame, top, method));
-        Object[] args = root.peekArguments(frame, top, true, method.getParsedSignature());
-        Object result = callSpecial(args);
-        int resultAt = top - Signatures.slotsForParameters(method.getParsedSignature()) - 1; // -receiver
-        return (resultAt - top) + root.putKind(frame, resultAt, result, method.getReturnKind());
-    }
-
-    private final Object callSpecial(Object[] args) {
-        if (method.isSynchronized()) {
-            synchronized (/* this */ args[0]) {
-                return directCallNode.call(args);
-            }
-        } else {
-            return directCallNode.call(args);
-        }
+        Object[] args = root.peekArguments(frame, top, true, method.getSignature());
+        Object result = directCallNode.call(args);
+        int resultAt = top - method.getSignature().getNumberOfSlotsForParameters() - 1; // -receiver
+        return (resultAt - top) + root.putKind(frame, resultAt, result, method.getSignature().resultKind());
     }
 }

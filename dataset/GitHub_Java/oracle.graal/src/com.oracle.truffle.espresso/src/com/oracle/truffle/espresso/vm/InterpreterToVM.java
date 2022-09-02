@@ -23,50 +23,263 @@
 
 package com.oracle.truffle.espresso.vm;
 
-import java.util.Arrays;
-import java.util.function.IntFunction;
+import static com.oracle.truffle.espresso.meta.Meta.meta;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.IntFunction;
+import java.util.function.IntPredicate;
+
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.impl.ContextAccess;
-import com.oracle.truffle.espresso.impl.Field;
+import com.oracle.truffle.espresso.impl.FieldInfo;
 import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.meta.MetaUtil;
+import com.oracle.truffle.espresso.nodes.IntrinsicReflectionRootNode;
+import com.oracle.truffle.espresso.nodes.IntrinsicRootNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
-import com.oracle.truffle.espresso.substitutions.Host;
+import com.oracle.truffle.espresso.substitutions.EspressoSubstitutions;
+import com.oracle.truffle.espresso.substitutions.Substitution;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Class;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_ClassLoader;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Package;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Runtime;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_reflect_Array;
+import com.oracle.truffle.espresso.substitutions.Target_java_security_AccessController;
+import com.oracle.truffle.espresso.substitutions.Target_sun_misc_Perf;
+import com.oracle.truffle.espresso.substitutions.Target_sun_misc_Signal;
+import com.oracle.truffle.espresso.substitutions.Target_sun_misc_URLClassPath;
+import com.oracle.truffle.espresso.substitutions.Target_sun_misc_Unsafe;
+import com.oracle.truffle.espresso.substitutions.Target_sun_misc_VM;
+import com.oracle.truffle.espresso.substitutions.Target_sun_reflect_NativeMethodAccessorImpl;
+import com.oracle.truffle.espresso.substitutions.Type;
 
 import sun.misc.Unsafe;
 
-public final class InterpreterToVM implements ContextAccess {
+public class InterpreterToVM {
 
-    private final EspressoContext context;
-
-    public InterpreterToVM(EspressoContext context) {
-        this.context = context;
-    }
-
-    @Override
-    public EspressoContext getContext() {
-        return context;
-    }
-
-    private static final Unsafe hostUnsafe;
+    private static Unsafe hostUnsafe;
 
     static {
         try {
-            java.lang.reflect.Field f = Unsafe.class.getDeclaredField("theUnsafe");
+            Field f = Unsafe.class.getDeclaredField("theUnsafe");
             f.setAccessible(true);
             hostUnsafe = (Unsafe) f.get(null);
         } catch (NoSuchFieldException | IllegalAccessException e) {
             throw EspressoError.shouldNotReachHere(e);
+        }
+    }
+
+    private final Map<MethodKey, RootNode> substitutions = new HashMap<>();
+
+    public static List<Class<?>> DEFAULTS = Arrays.asList(
+                    Target_java_lang_Class.class,
+                    Target_java_lang_ClassLoader.class,
+                    Target_java_lang_Package.class,
+                    Target_java_lang_Runtime.class,
+                    Target_java_lang_Thread.class,
+                    Target_java_lang_reflect_Array.class,
+                    Target_java_security_AccessController.class,
+                    Target_sun_misc_Perf.class,
+                    Target_sun_misc_Signal.class,
+                    Target_sun_misc_Unsafe.class,
+                    Target_sun_misc_URLClassPath.class,
+                    Target_sun_misc_VM.class,
+                    Target_sun_reflect_NativeMethodAccessorImpl.class);
+
+    private InterpreterToVM(EspressoLanguage language, List<Class<?>> substitutions) {
+        for (Class<?> clazz : substitutions) {
+            registerSubstitutions(clazz, language);
+        }
+    }
+
+    public InterpreterToVM(EspressoLanguage language) {
+        this(language, DEFAULTS);
+    }
+
+    public StaticObject intern(StaticObject obj) {
+        assert obj.getKlass().getTypeDescriptor().equals(obj.getKlass().getContext().getTypeDescriptors().STRING);
+        return obj.getKlass().getContext().getStrings().intern(obj);
+    }
+
+    private static MethodKey getMethodKey(MethodInfo method) {
+        return new MethodKey(
+                        method.getDeclaringClass().getName(),
+                        method.getName(),
+                        method.getSignature().toString());
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    public RootNode getSubstitution(MethodInfo method) {
+        assert method != null;
+        return substitutions.get(getMethodKey(method));
+    }
+
+    private static final class MethodKey {
+        private final String clazz;
+        private final String methodName;
+        private final String signature;
+
+        public MethodKey(String clazz, String methodName, String signature) {
+            this.clazz = clazz;
+            this.methodName = methodName;
+            this.signature = signature;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            MethodKey methodKey = (MethodKey) o;
+            return Objects.equals(clazz, methodKey.clazz) &&
+                            Objects.equals(methodName, methodKey.methodName) &&
+                            Objects.equals(signature, methodKey.signature);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(clazz, methodName, signature);
+        }
+
+        @Override
+        public String toString() {
+            return "MethodKey{" +
+                            "clazz='" + clazz + '\'' +
+                            ", methodName='" + methodName + '\'' +
+                            ", signature='" + signature + '\'' +
+                            '}';
+        }
+    }
+
+    public static String fixTypeName(String type) {
+        if ((type.startsWith("L") && type.endsWith(";"))) {
+            return type;
+        }
+
+        if (type.startsWith("[")) {
+            return type.replace('.', '/');
+        }
+
+        if (type.endsWith("[]")) {
+            return "[" + fixTypeName(type.substring(0, type.length() - 2));
+        }
+
+        switch (type) {
+            case "boolean":
+                return "Z";
+            case "byte":
+                return "B";
+            case "char":
+                return "C";
+            case "double":
+                return "D";
+            case "float":
+                return "F";
+            case "int":
+                return "I";
+            case "long":
+                return "J";
+            case "short":
+                return "S";
+            case "void":
+                return "V";
+            default:
+                return "L" + type.replace('.', '/') + ";";
+        }
+    }
+
+    public void registerSubstitutions(Class<?> clazz, EspressoLanguage language) {
+
+        String className;
+        Class<?> annotatedClass = clazz.getAnnotation(EspressoSubstitutions.class).value();
+        if (annotatedClass == EspressoSubstitutions.class) {
+            // Target class is derived from class name by simple substitution
+            // e.g. Target_java_lang_System becomes java.lang.System
+            assert clazz.getSimpleName().startsWith("Target_");
+            className = MetaUtil.toInternalName(clazz.getSimpleName().substring("Target_".length()).replace('_', '.'));
+        } else {
+            throw EspressoError.shouldNotReachHere("Substitutions class must be decorated with @" + EspressoSubstitutions.class.getName());
+        }
+        for (Method method : clazz.getDeclaredMethods()) {
+            Substitution substitution = method.getAnnotation(Substitution.class);
+            if (substitution == null) {
+                continue;
+            }
+
+            RootNode rootNode = createRootNodeForMethod(language, method);
+            StringBuilder signature = new StringBuilder("(");
+            Parameter[] parameters = method.getParameters();
+            for (int i = substitution.hasReceiver() ? 1 : 0; i < parameters.length; i++) {
+                Parameter parameter = parameters[i];
+                String parameterTypeName;
+                Type annotatedType = parameter.getAnnotatedType().getAnnotation(Type.class);
+                if (annotatedType != null) {
+                    parameterTypeName = annotatedType.value().getName();
+                } else {
+                    parameterTypeName = parameter.getType().getName();
+                }
+                signature.append(fixTypeName(parameterTypeName));
+            }
+            signature.append(')');
+
+            Type annotatedReturnType = method.getAnnotatedReturnType().getAnnotation(Type.class);
+            String returnTypeName;
+            if (annotatedReturnType != null) {
+                returnTypeName = annotatedReturnType.value().getName();
+            } else {
+                returnTypeName = method.getReturnType().getName();
+            }
+            signature.append(fixTypeName(returnTypeName));
+
+            String methodName = substitution.methodName();
+            if (methodName.length() == 0) {
+                methodName = method.getName();
+            }
+
+            registerSubstitution(fixTypeName(className), methodName, signature.toString(), rootNode, false);
+        }
+    }
+
+    private static RootNode createRootNodeForMethod(EspressoLanguage language, Method method) {
+        if (!EspressoOptions.RUNNING_ON_SVM && language.getContextReference().get().getEnv().getOptions().get(EspressoOptions.IntrinsicsViaMethodHandles)) {
+            MethodHandle handle;
+            try {
+                handle = MethodHandles.publicLookup().unreflect(method);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+            return new IntrinsicRootNode(language, handle);
+        } else {
+            return new IntrinsicReflectionRootNode(language, method);
+        }
+    }
+
+    public void registerSubstitution(String clazz, String methodName, String signature, RootNode intrinsic, boolean update) {
+        MethodKey key = new MethodKey(clazz, methodName, signature);
+        assert intrinsic != null;
+        if (update || !substitutions.containsKey(key)) {
+            // assert !substitutions.containsKey(key) : key + " intrinsic is already registered";
+            substitutions.put(key, intrinsic);
         }
     }
 
@@ -242,91 +455,91 @@ public final class InterpreterToVM implements ContextAccess {
     }
     // endregion
 
-    public boolean getFieldBoolean(StaticObject obj, Field field) {
+    public boolean getFieldBoolean(StaticObject obj, FieldInfo field) {
         return (boolean) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public int getFieldInt(StaticObject obj, Field field) {
+    public int getFieldInt(StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Int;
         return (int) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public long getFieldLong(StaticObject obj, Field field) {
+    public long getFieldLong(StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Long;
         return (long) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public byte getFieldByte(StaticObject obj, Field field) {
+    public byte getFieldByte(StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Byte;
         return (byte) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public short getFieldShort(StaticObject obj, Field field) {
+    public short getFieldShort(StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Short;
         return (short) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public float getFieldFloat(StaticObject obj, Field field) {
+    public float getFieldFloat(StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Float;
         return (float) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public double getFieldDouble(StaticObject obj, Field field) {
+    public double getFieldDouble(StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Double;
         return (double) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public StaticObject getFieldObject(StaticObject obj, Field field) {
+    public StaticObject getFieldObject(StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Object;
         return (StaticObject) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public char getFieldChar(StaticObject obj, Field field) {
+    public char getFieldChar(StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Char;
         return (char) ((StaticObjectImpl) obj).getField(field);
     }
 
-    public void setFieldBoolean(boolean value, StaticObject obj, Field field) {
+    public void setFieldBoolean(boolean value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Boolean;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
-    public void setFieldByte(byte value, StaticObject obj, Field field) {
+    public void setFieldByte(byte value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Byte;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
-    public void setFieldChar(char value, StaticObject obj, Field field) {
+    public void setFieldChar(char value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Char;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
-    public void setFieldShort(short value, StaticObject obj, Field field) {
+    public void setFieldShort(short value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Short;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
-    public void setFieldInt(int value, StaticObject obj, Field field) {
+    public void setFieldInt(int value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Int;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
-    public void setFieldLong(long value, StaticObject obj, Field field) {
+    public void setFieldLong(long value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Long;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
-    public void setFieldFloat(float value, StaticObject obj, Field field) {
+    public void setFieldFloat(float value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Float;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
-    public void setFieldDouble(double value, StaticObject obj, Field field) {
+    public void setFieldDouble(double value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Double;
         ((StaticObjectImpl) obj).setField(field, value);
     }
 
-    public void setFieldObject(StaticObject value, StaticObject obj, Field field) {
+    public void setFieldObject(StaticObject value, StaticObject obj, FieldInfo field) {
         assert field.getKind() == JavaKind.Object;
         ((StaticObjectImpl) obj).setField(field, value);
     }
@@ -342,52 +555,47 @@ public final class InterpreterToVM implements ContextAccess {
         return new StaticObjectArray(componentType.getArrayClass(), arr);
     }
 
-    @TruffleBoundary
-    public StaticObject newMultiArray(Klass component, int... dimensions) {
-        Meta meta = getMeta();
+    @CompilerDirectives.TruffleBoundary
+    public StaticObject newMultiArray(Klass klass, int... dimensions) {
+        assert dimensions.length > 1;
 
-        // TODO(peterssen):
-
-        if (component == meta._void) {
-            throw meta.throwEx(meta.IllegalArgumentException);
-        }
-        int finalDimensions = dimensions == null ? 0 : dimensions.length;
-        if (component.isArray()) {
-            finalDimensions += Types.getArrayDimensions(component.getType());
-        }
-        if (finalDimensions > 255) {
-            throw meta.throwEx(meta.IllegalArgumentException);
-        }
-        for (int d : dimensions) {
-            if (d < 0) {
-                throw meta.throwEx(meta.NegativeArraySizeException);
-            }
-        }
-        return newMultiArrayWithoutChecks(component, dimensions);
-    }
-
-    @TruffleBoundary
-    private StaticObject newMultiArrayWithoutChecks(Klass component, int... dimensions) {
-        assert dimensions != null && dimensions.length > 0;
-        if (dimensions.length == 1) {
-            if (component.isPrimitive()) {
-                return allocatePrimitiveArray((byte) component.getJavaKind().getBasicType(), dimensions[0]);
-            } else {
-                return component.allocateArray(dimensions[0], new IntFunction<StaticObject>() {
-                    @Override
-                    public StaticObject apply(int value) {
-                        return StaticObject.NULL;
-                    }
-                });
-            }
-        }
-        int[] newDimensions = Arrays.copyOfRange(dimensions, 1, dimensions.length);
-        return component.getArrayClass(dimensions.length - 1).allocateArray(dimensions[0], new IntFunction<StaticObject>() {
+        if (Arrays.stream(dimensions).anyMatch(new IntPredicate() {
             @Override
-            public StaticObject apply(int i) {
-                return newMultiArrayWithoutChecks(component, newDimensions);
+            public boolean test(int i) {
+                return i < 0;
             }
-        });
+        })) {
+            throw meta(klass).getMeta().throwEx(NegativeArraySizeException.class);
+        }
+
+        Klass componentType = klass.getComponentType();
+
+        if (dimensions.length == 2) {
+            assert dimensions[0] >= 0;
+            if (componentType.getComponentType().isPrimitive()) {
+                return (StaticObject) meta(componentType).allocateArray(dimensions[0],
+                                new IntFunction<StaticObject>() {
+                                    @Override
+                                    public StaticObject apply(int i) {
+                                        return allocatePrimitiveArray((byte) componentType.getComponentType().getJavaKind().getBasicType(), dimensions[1]);
+                                    }
+                                });
+            }
+            return (StaticObject) meta(componentType).allocateArray(dimensions[0], new IntFunction<StaticObject>() {
+                @Override
+                public StaticObject apply(int i) {
+                    return InterpreterToVM.this.newArray(componentType.getComponentType(), dimensions[1]);
+                }
+            });
+        } else {
+            int[] newDimensions = Arrays.copyOfRange(dimensions, 1, dimensions.length);
+            return (StaticObject) meta(componentType).allocateArray(dimensions[0], new IntFunction<StaticObject>() {
+                @Override
+                public StaticObject apply(int i) {
+                    return InterpreterToVM.this.newMultiArray(componentType, newDimensions);
+                }
+            });
+        }
     }
 
     public static StaticObjectArray allocatePrimitiveArray(byte jvmPrimitiveType, int length) {
@@ -395,21 +603,27 @@ public final class InterpreterToVM implements ContextAccess {
         if (length < 0) {
             throw EspressoLanguage.getCurrentContext().getMeta().throwEx(NegativeArraySizeException.class);
         }
-        // @formatter:off
-        // Checkstyle: stop
         switch (jvmPrimitiveType) {
-            case 4  : return StaticObjectArray.wrap(new boolean[length]);
-            case 5  : return StaticObjectArray.wrap(new char[length]);
-            case 6  : return StaticObjectArray.wrap(new float[length]);
-            case 7  : return StaticObjectArray.wrap(new double[length]);
-            case 8  : return StaticObjectArray.wrap(new byte[length]);
-            case 9  : return StaticObjectArray.wrap(new short[length]);
-            case 10 : return StaticObjectArray.wrap(new int[length]);
-            case 11 : return StaticObjectArray.wrap(new long[length]);
-            default : throw EspressoError.shouldNotReachHere();
+            case 4:
+                return StaticObjectArray.wrap(new boolean[length]);
+            case 5:
+                return StaticObjectArray.wrap(new char[length]);
+            case 6:
+                return StaticObjectArray.wrap(new float[length]);
+            case 7:
+                return StaticObjectArray.wrap(new double[length]);
+            case 8:
+                return StaticObjectArray.wrap(new byte[length]);
+            case 9:
+                return StaticObjectArray.wrap(new short[length]);
+            case 10:
+                return StaticObjectArray.wrap(new int[length]);
+            case 11:
+                return StaticObjectArray.wrap(new long[length]);
+            default:
+                CompilerDirectives.transferToInterpreter();
+                throw EspressoError.shouldNotReachHere();
         }
-        // @formatter:on
-        // Checkstyle: resume
     }
 
     /**
@@ -421,12 +635,12 @@ public final class InterpreterToVM implements ContextAccess {
      * Cloneable >1 Object[] - java.io.Serializable >1 Object[] - If P is a primitive type, then:
      * Object >1 P[] Cloneable >1 P[] java.io.Serializable >1 P[]
      */
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     public boolean instanceOf(StaticObject instance, Klass typeToCheck) {
         if (StaticObject.isNull(instance)) {
             return false;
         }
-        return typeToCheck.isAssignableFrom(instance.getKlass());
+        return meta(typeToCheck).isAssignableFrom(meta(instance.getKlass()));
     }
 
     public StaticObject checkCast(StaticObject instance, Klass klass) {
@@ -438,18 +652,12 @@ public final class InterpreterToVM implements ContextAccess {
     }
 
     public StaticObject newObject(Klass klass) {
-        // TODO(peterssen): Accept only ObjectKlass.
         assert klass != null && !klass.isArray() && !klass.isPrimitive() && !klass.isAbstract();
-        klass.safeInitialize();
+        klass.initialize();
         return new StaticObjectImpl((ObjectKlass) klass);
     }
 
     public int arrayLength(StaticObject arr) {
         return ((StaticObjectArray) arr).length();
-    }
-
-    public @Host(String.class) StaticObject intern(@Host(String.class) StaticObject guestString) {
-        assert getMeta().String == guestString.getKlass();
-        return getStrings().intern(guestString);
     }
 }

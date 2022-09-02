@@ -278,7 +278,7 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
  */
 public final class EspressoRootNode extends RootNode implements LinkedNode {
 
-    @Children private InvokeNode[] nodes = InvokeNode.EMPTY_ARRAY;
+    @Children private InvokeNode[] nodes = new InvokeNode[0];
 
     private final MethodInfo method;
     private final InterpreterToVM vm;
@@ -683,7 +683,7 @@ public final class EspressoRootNode extends RootNode implements LinkedNode {
                             } else {
                                 nextBCI = switchHelper.defaultTarget(curBCI);
                             }
-                            break exit_switch; // break
+                            break;
                         }
 
                         for (int i = low; i <= high; ++i) {
