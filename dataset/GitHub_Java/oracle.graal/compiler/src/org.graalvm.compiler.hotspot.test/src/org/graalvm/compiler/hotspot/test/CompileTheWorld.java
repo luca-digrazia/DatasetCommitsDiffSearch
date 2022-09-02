@@ -30,6 +30,7 @@ import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationBailoutA
 import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationFailureAction;
 import static org.graalvm.compiler.core.test.ReflectionOptionDescriptors.extractEntries;
 import static org.graalvm.compiler.debug.MemUseTrackerKey.getCurrentThreadAllocatedBytes;
+import static org.graalvm.compiler.hotspot.HotSpotJVMCIServices.registerNativeMethods;
 import static org.graalvm.compiler.hotspot.test.CompileTheWorld.Options.DESCRIPTORS;
 import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.Java8OrEarlier;
 import static sun.misc.Unsafe.ARRAY_BYTE_BASE_OFFSET;
@@ -89,7 +90,8 @@ import org.graalvm.compiler.hotspot.CompilationTask;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalCompiler;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-import org.graalvm.compiler.hotspot.test.CompileTheWorld.LibGraalParams.StackTraceBuffer;
+import org.graalvm.compiler.hotspot.HotSpotJVMCIServices;
+import org.graalvm.compiler.hotspot.test.CompileTheWorld.LibgraalParams.StackTraceBuffer;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
@@ -175,13 +177,6 @@ public final class CompileTheWorld {
      */
     private final int stopAt;
 
-    /**
-     * Max classes to compile.
-     *
-     * @see Options#MaxClasses
-     */
-    private final int maxClasses;
-
     /** Only compile methods matching one of the filters in this array if the array is non-null. */
     private final MethodFilter[] methodFilters;
 
@@ -217,10 +212,10 @@ public final class CompileTheWorld {
      * Manages native memory buffers for passing arguments into libgraal and receiving return
      * values. The native memory buffers are freed when this object is {@linkplain #close() closed}.
      */
-    static class LibGraalParams implements AutoCloseable {
+    static class LibgraalParams implements AutoCloseable {
 
         static {
-            LibGraal.registerNativeMethods(HotSpotJVMCIRuntime.runtime(), CompileTheWorld.class);
+            registerNativeMethods(HotSpotJVMCIRuntime.runtime(), CompileTheWorld.class);
         }
 
         /**
@@ -312,7 +307,7 @@ public final class CompileTheWorld {
             }
         };
 
-        LibGraalParams(OptionValues options) {
+        LibgraalParams(OptionValues options) {
             this.options = new OptionsBuffer(options);
         }
 
@@ -334,7 +329,6 @@ public final class CompileTheWorld {
      * @param files {@link File#pathSeparator} separated list of Zip/Jar files to compile
      * @param startAt index of the class file to start compilation at
      * @param stopAt index of the class file to stop compilation at
-     * @param maxClasses maximum number of classes to process
      * @param methodFilters
      * @param excludeMethodFilters
      * @param harnessOptions values for {@link CompileTheWorld.Options}
@@ -345,7 +339,6 @@ public final class CompileTheWorld {
                     String files,
                     int startAt,
                     int stopAt,
-                    int maxClasses,
                     String methodFilters,
                     String excludeMethodFilters,
                     boolean verbose,
@@ -354,9 +347,8 @@ public final class CompileTheWorld {
         this.jvmciRuntime = jvmciRuntime;
         this.compiler = compiler;
         this.inputClassPath = files;
-        this.startAt = Math.max(startAt, 1);
-        this.stopAt = Math.max(stopAt, 1);
-        this.maxClasses = Math.max(maxClasses, 1);
+        this.startAt = startAt;
+        this.stopAt = stopAt;
         this.methodFilters = methodFilters == null || methodFilters.isEmpty() ? null : MethodFilter.parse(methodFilters);
         this.excludeMethodFilters = excludeMethodFilters == null || excludeMethodFilters.isEmpty() ? null : MethodFilter.parse(excludeMethodFilters);
         this.verbose = verbose;
@@ -381,7 +373,6 @@ public final class CompileTheWorld {
         this(jvmciRuntime, compiler, Options.Classpath.getValue(harnessOptions),
                         Options.StartAt.getValue(harnessOptions),
                         Options.StopAt.getValue(harnessOptions),
-                        Options.MaxClasses.getValue(harnessOptions),
                         Options.MethodFilter.getValue(harnessOptions),
                         Options.ExcludeMethodFilter.getValue(harnessOptions),
                         Options.Verbose.getValue(harnessOptions),
@@ -395,7 +386,7 @@ public final class CompileTheWorld {
      */
     @SuppressWarnings("try")
     public void compile() throws Throwable {
-        try (LibGraalParams libgraal = LibGraal.isAvailable() ? new LibGraalParams(compilerOptions) : null) {
+        try (LibgraalParams libgraal = LibGraal.isAvailable() ? new LibgraalParams(compilerOptions) : null) {
             if (SUN_BOOT_CLASS_PATH.equals(inputClassPath)) {
                 String bcpEntry = null;
                 if (Java8OrEarlier) {
@@ -424,7 +415,7 @@ public final class CompileTheWorld {
         if (!LibGraal.isAvailable()) {
             return null;
         }
-        return new LibGraalParams(compilerOptions);
+        return new LibgraalParams(compilerOptions);
     }
 
     public void println() {
@@ -651,19 +642,6 @@ public final class CompileTheWorld {
         return true;
     }
 
-    private ClassPathEntry openClassPathEntry(String entry) throws IOException {
-        if (entry.endsWith(".zip") || entry.endsWith(".jar")) {
-            return new JarClassPathEntry(entry);
-        } else if (entry.equals(JRT_CLASS_PATH_ENTRY)) {
-            return new JRTClassPathEntry(entry, Options.LimitModules.getValue(harnessOptions));
-        } else {
-            if (!new File(entry).isDirectory()) {
-                return null;
-            }
-            return new DirClassPathEntry(entry);
-        }
-    }
-
     /**
      * Compiles all methods in all classes in a given class path.
      *
@@ -671,7 +649,7 @@ public final class CompileTheWorld {
      * @throws IOException
      */
     @SuppressWarnings("try")
-    private void compile(String classPath, LibGraalParams libgraal) throws IOException {
+    private void compile(String classPath, LibgraalParams libgraal) throws IOException {
         final String[] entries = classPath.split(File.pathSeparator);
         long start = System.currentTimeMillis();
         Map<Thread, StackTraceElement[]> initialThreads = Thread.getAllStackTraces();
@@ -708,131 +686,113 @@ public final class CompileTheWorld {
 
         threadPool = new ThreadPoolExecutor(threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>(), new CompilerThreadFactory("CompileTheWorld"));
 
-        int compileStartAt = startAt;
-        int compileStopAt = stopAt;
-        int compielStep = 1;
-        if (maxClasses != Integer.MAX_VALUE) {
-            int totalClassFileCount = 0;
-            for (String entry : entries) {
-                try (ClassPathEntry cpe = openClassPathEntry(entry)) {
-                    if (cpe != null) {
-                        totalClassFileCount += cpe.getClassNames().size();
-                    }
-                }
-            }
-
-            int lastClassFile = totalClassFileCount - 1;
-            compileStartAt = Math.min(startAt, lastClassFile);
-            compileStopAt = Math.min(stopAt, lastClassFile);
-            int range = compileStopAt - compileStartAt + 1;
-            if (maxClasses < range) {
-                compielStep = range / maxClasses;
-            }
-        }
-
         for (int i = 0; i < entries.length; i++) {
             final String entry = entries[i];
-            try (ClassPathEntry cpe = openClassPathEntry(entry)) {
-                if (cpe == null) {
+
+            ClassPathEntry cpe;
+            if (entry.endsWith(".zip") || entry.endsWith(".jar")) {
+                cpe = new JarClassPathEntry(entry);
+            } else if (entry.equals(JRT_CLASS_PATH_ENTRY)) {
+                cpe = new JRTClassPathEntry(entry, Options.LimitModules.getValue(harnessOptions));
+            } else {
+                if (!new File(entry).isDirectory()) {
                     println("CompileTheWorld : Skipped classes in " + entry);
                     println();
                     continue;
                 }
+                cpe = new DirClassPathEntry(entry);
+            }
 
-                if (methodFilters == null || methodFilters.length == 0) {
-                    println("CompileTheWorld : Compiling all classes in " + entry);
-                } else {
-                    String include = Arrays.asList(methodFilters).stream().map(MethodFilter::toString).collect(Collectors.joining(", "));
-                    println("CompileTheWorld : Compiling all methods in " + entry + " matching one of the following filters: " + include);
+            if (methodFilters == null || methodFilters.length == 0) {
+                println("CompileTheWorld : Compiling all classes in " + entry);
+            } else {
+                String include = Arrays.asList(methodFilters).stream().map(MethodFilter::toString).collect(Collectors.joining(", "));
+                println("CompileTheWorld : Compiling all methods in " + entry + " matching one of the following filters: " + include);
+            }
+            if (excludeMethodFilters != null && excludeMethodFilters.length > 0) {
+                String exclude = Arrays.asList(excludeMethodFilters).stream().map(MethodFilter::toString).collect(Collectors.joining(", "));
+                println("CompileTheWorld : Excluding all methods matching one of the following filters: " + exclude);
+            }
+            println();
+
+            ClassLoader loader = cpe.createClassLoader();
+
+            for (String className : cpe.getClassNames()) {
+
+                // Are we done?
+                if (classFileCounter >= stopAt) {
+                    break;
                 }
-                if (excludeMethodFilters != null && excludeMethodFilters.length > 0) {
-                    String exclude = Arrays.asList(excludeMethodFilters).stream().map(MethodFilter::toString).collect(Collectors.joining(", "));
-                    println("CompileTheWorld : Excluding all methods matching one of the following filters: " + exclude);
+
+                classFileCounter++;
+
+                if (className.startsWith("jdk.management.") ||
+                                className.startsWith("jdk.internal.cmm.*") ||
+                                // GR-5881: The class initializer for
+                                // sun.tools.jconsole.OutputViewer
+                                // spawns non-daemon threads for redirecting sysout and syserr.
+                                // These threads tend to cause deadlock at VM exit
+                                className.startsWith("sun.tools.jconsole.")) {
+                    continue;
                 }
-                println();
 
-                ClassLoader loader = cpe.createClassLoader();
+                if (!isClassIncluded(className)) {
+                    continue;
+                }
 
-                for (String className : cpe.getClassNames()) {
+                try {
+                    // Load and initialize class
+                    Class<?> javaClass = Class.forName(className, true, loader);
+                    MetaAccessProvider metaAccess = JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess();
 
-                    // Are we done?
-                    if (classFileCounter >= compileStopAt) {
-                        break;
-                    }
-
-                    classFileCounter++;
-
-                    if (compielStep > 1 && ((classFileCounter - compileStartAt) % compielStep) != 0) {
-                        continue;
-                    }
-
-                    if (className.startsWith("jdk.management.") ||
-                                    className.startsWith("jdk.internal.cmm.*") ||
-                                    // GR-5881: The class initializer for
-                                    // sun.tools.jconsole.OutputViewer
-                                    // spawns non-daemon threads for redirecting sysout and syserr.
-                                    // These threads tend to cause deadlock at VM exit
-                                    className.startsWith("sun.tools.jconsole.")) {
-                        continue;
-                    }
-
-                    if (!isClassIncluded(className)) {
-                        continue;
-                    }
-
+                    // Pre-load all classes in the constant pool.
                     try {
-                        // Load and initialize class
-                        Class<?> javaClass = Class.forName(className, true, loader);
-                        MetaAccessProvider metaAccess = JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess();
-
-                        // Pre-load all classes in the constant pool.
-                        try {
-                            HotSpotResolvedObjectType objectType = (HotSpotResolvedObjectType) metaAccess.lookupJavaType(javaClass);
-                            ConstantPool constantPool = objectType.getConstantPool();
-                            for (int cpi = 1; cpi < constantPool.length(); cpi++) {
-                                constantPool.loadReferencedType(cpi, Bytecodes.LDC);
-                            }
-                        } catch (Throwable t) {
-                            // If something went wrong during pre-loading we just ignore it.
-                            if (isClassIncluded(className)) {
-                                println("Preloading failed for (%d) %s: %s", classFileCounter, className, t);
-                            }
-                            continue;
-                        }
-
-                        // Are we compiling this class?
-                        if (classFileCounter >= compileStartAt) {
-
-                            long start0 = System.currentTimeMillis();
-                            // Compile each constructor/method in the class.
-                            for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
-                                HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaMethod(constructor);
-                                if (canBeCompiled(javaMethod, constructor.getModifiers())) {
-                                    compileMethod(javaMethod, libgraal);
-                                }
-                            }
-                            for (Method method : javaClass.getDeclaredMethods()) {
-                                HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaMethod(method);
-                                if (canBeCompiled(javaMethod, method.getModifiers())) {
-                                    compileMethod(javaMethod, libgraal);
-                                }
-                            }
-
-                            // Also compile the class initializer if it exists
-                            HotSpotResolvedJavaMethod clinit = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaType(javaClass).getClassInitializer();
-                            if (clinit != null && canBeCompiled(clinit, clinit.getModifiers())) {
-                                compileMethod(clinit, libgraal);
-                            }
-                            println("CompileTheWorld (%d) : %s (%d ms)", classFileCounter, className, System.currentTimeMillis() - start0);
+                        HotSpotResolvedObjectType objectType = (HotSpotResolvedObjectType) metaAccess.lookupJavaType(javaClass);
+                        ConstantPool constantPool = objectType.getConstantPool();
+                        for (int cpi = 1; cpi < constantPool.length(); cpi++) {
+                            constantPool.loadReferencedType(cpi, Bytecodes.LDC);
                         }
                     } catch (Throwable t) {
+                        // If something went wrong during pre-loading we just ignore it.
                         if (isClassIncluded(className)) {
-                            println("CompileTheWorld (%d) : Skipping %s %s", classFileCounter, className, t.toString());
-                            printStackTrace(t);
+                            println("Preloading failed for (%d) %s: %s", classFileCounter, className, t);
                         }
+                        continue;
+                    }
+
+                    // Are we compiling this class?
+                    if (classFileCounter >= startAt) {
+
+                        long start0 = System.currentTimeMillis();
+                        // Compile each constructor/method in the class.
+                        for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
+                            HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaMethod(constructor);
+                            if (canBeCompiled(javaMethod, constructor.getModifiers())) {
+                                compileMethod(javaMethod, libgraal);
+                            }
+                        }
+                        for (Method method : javaClass.getDeclaredMethods()) {
+                            HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaMethod(method);
+                            if (canBeCompiled(javaMethod, method.getModifiers())) {
+                                compileMethod(javaMethod, libgraal);
+                            }
+                        }
+
+                        // Also compile the class initializer if it exists
+                        HotSpotResolvedJavaMethod clinit = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaType(javaClass).getClassInitializer();
+                        if (clinit != null && canBeCompiled(clinit, clinit.getModifiers())) {
+                            compileMethod(clinit, libgraal);
+                        }
+                        println("CompileTheWorld (%d) : %s (%d ms)", classFileCounter, className, System.currentTimeMillis() - start0);
+                    }
+                } catch (Throwable t) {
+                    if (isClassIncluded(className)) {
+                        println("CompileTheWorld (%d) : Skipping %s %s", classFileCounter, className, t.toString());
+                        printStackTrace(t);
                     }
                 }
             }
+            cpe.close();
         }
 
         if (!running) {
@@ -905,7 +865,7 @@ public final class CompileTheWorld {
     }
 
     @SuppressWarnings("try")
-    private void compileMethod(HotSpotResolvedJavaMethod method, LibGraalParams libgraal) throws InterruptedException, ExecutionException {
+    private void compileMethod(HotSpotResolvedJavaMethod method, LibgraalParams libgraal) throws InterruptedException, ExecutionException {
         if (methodFilters != null && !MethodFilter.matches(methodFilters, method)) {
             return;
         }
@@ -939,7 +899,7 @@ public final class CompileTheWorld {
     /**
      * Compiles a method and gathers some statistics.
      */
-    private void compileMethod(HotSpotResolvedJavaMethod method, int counter, LibGraalParams libgraal) {
+    private void compileMethod(HotSpotResolvedJavaMethod method, int counter, LibgraalParams libgraal) {
         try {
             long start = System.currentTimeMillis();
             long allocatedAtStart = getCurrentThreadAllocatedBytes();
@@ -949,7 +909,7 @@ public final class CompileTheWorld {
             HotSpotInstalledCode installedCode;
             if (libgraal != null) {
                 HotSpotJVMCIRuntime runtime = HotSpotJVMCIRuntime.runtime();
-                long methodHandle = LibGraal.translate(runtime, method);
+                long methodHandle = HotSpotJVMCIServices.translate(runtime, method);
                 long isolateThread = LibGraal.getIsolateThread();
 
                 StackTraceBuffer stackTraceBuffer = libgraal.getStackTraceBuffer();
@@ -965,7 +925,7 @@ public final class CompileTheWorld {
                                 stackTraceBufferAddress,
                                 stackTraceBuffer.size);
 
-                installedCode = LibGraal.unhand(runtime, HotSpotInstalledCode.class, installedCodeHandle);
+                installedCode = HotSpotJVMCIServices.unhand(runtime, HotSpotInstalledCode.class, installedCodeHandle);
                 if (installedCode == null) {
                     int length = UNSAFE.getInt(stackTraceBufferAddress);
                     byte[] data = new byte[length];
@@ -1042,7 +1002,6 @@ public final class CompileTheWorld {
         public static final OptionKey<String> ExcludeMethodFilter = new OptionKey<>(null);
         public static final OptionKey<Integer> StartAt = new OptionKey<>(1);
         public static final OptionKey<Integer> StopAt = new OptionKey<>(Integer.MAX_VALUE);
-        public static final OptionKey<Integer> MaxClasses = new OptionKey<>(Integer.MAX_VALUE);
         public static final OptionKey<String> Config = new OptionKey<>(null);
         public static final OptionKey<Boolean> MultiThreaded = new OptionKey<>(false);
         public static final OptionKey<Integer> Threads = new OptionKey<>(0);
@@ -1057,10 +1016,8 @@ public final class CompileTheWorld {
                      "Iterations", "The number of iterations to perform.",
                    "MethodFilter", "Only compile methods matching this filter.",
             "ExcludeMethodFilter", "Exclude methods matching this filter from compilation.",
-                        "StartAt", "First class to consider for compilation (default = 1).",
-                         "StopAt", "Last class to consider for compilation (default = <number of classes>).",
-                     "MaxClasses", "Maximum number of classes to process (default = <number of classes>). " +
-                                   "Ignored if less than (StopAt - StartAt + 1).",
+                        "StartAt", "First class to consider for compilation.",
+                         "StopAt", "Last class to consider for compilation.",
                          "Config", "Option values to use during compile the world compilations. For example, " +
                                    "to disable partial escape analysis and print compilations specify " +
                                    "'PartialEscapeAnalysis=false PrintCompilation=true'. " +
