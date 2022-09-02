@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,9 +37,16 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import org.graalvm.graphio.GraphOutput;
 import org.graalvm.graphio.GraphStructure;
+import org.graalvm.graphio.GraphTypes;
+import static org.junit.Assert.assertSame;
 import org.junit.Test;
+import java.lang.reflect.Field;
+import static org.junit.Assert.assertEquals;
+import java.nio.charset.Charset;
+import java.util.HashMap;
 
 public final class GraphOutputTest {
 
@@ -101,14 +108,163 @@ public final class GraphOutputTest {
             graphOutput.print(new MockGraph(), properties, 2, "Graph 1");
         }
         ByteArrayOutputStream embedded = new ByteArrayOutputStream();
-        WritableByteChannel embeddChannel = Channels.newChannel(embedded);
-        try (GraphOutput<MockGraph, ?> baseOutput = GraphOutput.newBuilder(new MockGraphStructure()).protocolVersion(6, 0).build(embeddChannel)) {
-            try (GraphOutput<MockGraph, ?> embeddedOutput = GraphOutput.newBuilder(new MockGraphStructure()).protocolVersion(6, 0).embedded(true).build((WritableByteChannel) baseOutput)) {
-                embeddedOutput.print(new MockGraph(), properties, 1, "Graph 1");
-                baseOutput.print(new MockGraph(), properties, 2, "Graph 1");
+        SharedWritableByteChannel embeddChannel = new SharedWritableByteChannel(Channels.newChannel(embedded));
+        try {
+            try (GraphOutput<MockGraph, ?> baseOutput = GraphOutput.newBuilder(new MockGraphStructure()).protocolVersion(6, 0).build(embeddChannel)) {
+                try (GraphOutput<MockGraph, ?> embeddedOutput = GraphOutput.newBuilder(new MockGraphStructure()).protocolVersion(6, 0).embedded(true).build((WritableByteChannel) baseOutput)) {
+                    embeddedOutput.print(new MockGraph(), properties, 1, "Graph 1");
+                    baseOutput.print(new MockGraph(), properties, 2, "Graph 1");
+                }
             }
+        } finally {
+            embeddChannel.realClose();
         }
         assertArrayEquals(expected.toByteArray(), embedded.toByteArray());
+    }
+
+    @Test
+    @SuppressWarnings({"static-method", "unchecked"})
+    public void testClassOfEnumValueWithImplementation() throws ClassNotFoundException, ReflectiveOperationException {
+        Class<? extends GraphTypes> defaultTypesClass = (Class<? extends GraphTypes>) Class.forName("org.graalvm.graphio.DefaultGraphTypes");
+        Field f = defaultTypesClass.getDeclaredField("DEFAULT");
+        f.setAccessible(true);
+        GraphTypes types = (GraphTypes) f.get(null);
+
+        Object clazz = types.enumClass(CustomEnum.ONE);
+        assertSame(CustomEnum.class, clazz);
+    }
+
+    @Test
+    @SuppressWarnings({"static-method", "unchecked"})
+    public void testBuilderPromotesVersion() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (WritableByteChannel channel = Channels.newChannel(out)) {
+            GraphOutput.Builder<MockGraph, Void, ?> builder = GraphOutput.newBuilder(new MockGraphStructure()).attr("test", "failed");
+            try (GraphOutput<MockGraph, ?> graphOutput = builder.build(channel)) {
+                graphOutput.print(new MockGraph(), Collections.emptyMap(), 0, "Mock Graph");
+            } catch (IllegalStateException ise) {
+                // expected exception
+            }
+        }
+        byte[] bytes = out.toByteArray();
+        // there's B-I-G-V, major, minor
+        assertEquals("Major version 7 must be auto-selected", 7, bytes[4]);
+    }
+
+    @Test
+    @SuppressWarnings({"static-method", "unchecked"})
+    public void testTooOldVersionFails() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (WritableByteChannel channel = Channels.newChannel(out)) {
+            GraphOutput.Builder<MockGraph, Void, ?> builder = GraphOutput.newBuilder(new MockGraphStructure()).protocolVersion(6, 1);
+            try {
+                builder.attr("test", "failed");
+                fail("Should have failed, attr() requires version 7.0");
+            } catch (IllegalStateException ex) {
+                // expected
+            }
+            try (GraphOutput<MockGraph, ?> graphOutput = builder.build(channel)) {
+                graphOutput.print(new MockGraph(), Collections.emptyMap(), 0, "Mock Graph");
+            } catch (IllegalStateException ise) {
+                // expected exception
+            }
+        }
+    }
+
+    @Test
+    @SuppressWarnings({"static-method", "unchecked"})
+    public void testVersionDowngradeFails() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (WritableByteChannel channel = Channels.newChannel(out)) {
+            GraphOutput.Builder<MockGraph, Void, ?> builder = GraphOutput.newBuilder(new MockGraphStructure());
+            builder.attr("test", "failed");
+            try {
+                builder.protocolVersion(6, 0);
+                fail("Should fail, cannot downgrade from required version.");
+            } catch (IllegalArgumentException e) {
+                // expected
+            }
+            try (GraphOutput<MockGraph, ?> graphOutput = builder.build(channel)) {
+                graphOutput.print(new MockGraph(), Collections.emptyMap(), 0, "Mock Graph");
+            } catch (IllegalStateException ise) {
+                // expected exception
+            }
+        }
+    }
+
+    @Test
+    @SuppressWarnings({"static-method", "unchecked"})
+    public void testManualAncientVersion() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (WritableByteChannel channel = Channels.newChannel(out)) {
+            GraphOutput.Builder<MockGraph, Void, ?> builder = GraphOutput.newBuilder(new MockGraphStructure()).protocolVersion(3, 0);
+            try (GraphOutput<MockGraph, ?> graphOutput = builder.build(channel)) {
+                graphOutput.print(new MockGraph(), Collections.emptyMap(), 0, "Mock Graph");
+            }
+        }
+        byte[] bytes = out.toByteArray();
+        // there's B-I-G-V, major, minor
+        assertEquals("Protocol version 3 was requested", 3, bytes[4]);
+    }
+
+    @Test
+    @SuppressWarnings({"static-method", "unchecked"})
+    public void testManualVersionUpgradeOK() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (WritableByteChannel channel = Channels.newChannel(out)) {
+            GraphOutput.Builder<MockGraph, Void, ?> builder = GraphOutput.newBuilder(new MockGraphStructure());
+            builder.attr("some", "thing");
+            builder.protocolVersion(7, 0);
+            try (GraphOutput<MockGraph, ?> graphOutput = builder.build(channel)) {
+                graphOutput.print(new MockGraph(), Collections.emptyMap(), 0, "Mock Graph");
+            }
+        }
+        byte[] bytes = out.toByteArray();
+        // there's B-I-G-V, major, minor
+        assertEquals("Protocol version 7 was requested", 7, bytes[4]);
+    }
+
+    @Test
+    @SuppressWarnings({"static-method", "unchecked"})
+    public void testIntPropertiesFailWithOldVersion() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try (WritableByteChannel channel = Channels.newChannel(out)) {
+            GraphOutput.Builder<MockGraph, Void, ?> builder = GraphOutput.newBuilder(new MockGraphStructure()).protocolVersion(7, 0);
+            try (GraphOutput<MockGraph, ?> graphOutput = builder.build(channel)) {
+                graphOutput.print(new MockGraph(), makeIntProperties(), 0, "Mock Graph");
+                fail("Should fail, can't include more than " + (Character.MAX_VALUE - 1) + " properties with version < 8.");
+            } catch (IllegalArgumentException iae) {
+                // expected exception
+            }
+        }
+    }
+
+    @Test
+    @SuppressWarnings({"static-method", "unchecked"})
+    public void testIntPropertiesWithDefaultVersion() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Map<Object, Object> properties = makeIntProperties();
+        try (WritableByteChannel channel = Channels.newChannel(out)) {
+            GraphOutput.Builder<MockGraph, Void, ?> builder = GraphOutput.newBuilder(new MockGraphStructure());
+            try (GraphOutput<MockGraph, ?> graphOutput = builder.build(channel)) {
+                graphOutput.print(new MockGraph(), properties, 0, "Mock Graph");
+            }
+        }
+        byte[] bytes = out.toByteArray();
+        // there's B-I-G-V, major, minor, BEGIN_GRAPH, id, format, args.length, (args),
+        // short props count, int props count
+        int begin = 4 + 1 + 1 + 1 + 4 + "Mock Graph".getBytes(Charset.forName("UTF-8")).length + 4 + 4;
+        assertEquals("Properties short count should be " + (int) Character.MAX_VALUE, Character.MAX_VALUE, (char) (bytes[begin] << 8) | (bytes[++begin] & 0xff));
+        assertEquals("Properties int count should be " + properties.size(), properties.size(),
+                        ((bytes[++begin] & 0xFF) << 24) | ((bytes[++begin] & 0xFF) << 16) | ((bytes[++begin] & 0xFF) << 8) | ((bytes[++begin] & 0xFF)));
+    }
+
+    private static Map<Object, Object> makeIntProperties() {
+        Map<Object, Object> map = new HashMap<>();
+        for (int i = 0; i < Character.MAX_VALUE; ++i) {
+            map.put(i, i);
+        }
+        return map;
     }
 
     private static ByteBuffer generateData(int size) {
@@ -118,6 +274,34 @@ public final class GraphOutputTest {
         }
         buffer.limit(size);
         return buffer;
+    }
+
+    private static final class SharedWritableByteChannel implements WritableByteChannel {
+
+        private final WritableByteChannel delegate;
+
+        SharedWritableByteChannel(WritableByteChannel delegate) {
+            Objects.requireNonNull(delegate, "Delegate must be non null.");
+            this.delegate = delegate;
+        }
+
+        @Override
+        public int write(ByteBuffer bb) throws IOException {
+            return delegate.write(bb);
+        }
+
+        @Override
+        public boolean isOpen() {
+            return delegate.isOpen();
+        }
+
+        @Override
+        public void close() throws IOException {
+        }
+
+        void realClose() throws IOException {
+            delegate.close();
+        }
     }
 
     private static final class MockGraphStructure implements GraphStructure<MockGraph, Void, Void, Void> {
@@ -247,5 +431,20 @@ public final class GraphOutputTest {
     }
 
     private static final class MockGraph {
+    }
+
+    private enum CustomEnum {
+        ONE() {
+            @Override
+            public String toString() {
+                return "one";
+            }
+        },
+        TWO() {
+            @Override
+            public String toString() {
+                return "two";
+            }
+        }
     }
 }
