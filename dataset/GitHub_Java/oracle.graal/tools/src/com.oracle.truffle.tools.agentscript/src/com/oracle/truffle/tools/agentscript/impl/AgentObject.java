@@ -25,8 +25,6 @@
 package com.oracle.truffle.tools.agentscript.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.instrumentation.EventBinding;
-import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.LoadSourceEvent;
 import com.oracle.truffle.api.instrumentation.LoadSourceListener;
@@ -46,8 +44,6 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.tools.agentscript.AgentScript;
 import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -58,34 +54,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class AgentObject implements TruffleObject {
     private final TruffleInstrument.Env env;
     private final AtomicBoolean initializationFinished;
-    private final Map<AgentType, Map<Object, EventBinding<?>>> listeners = new EnumMap<>(AgentType.class);
     private Object closeFn;
 
     AgentObject(TruffleInstrument.Env env) {
         this.env = env;
         this.initializationFinished = new AtomicBoolean(false);
-    }
-
-    private void registerHandle(AgentType at, EventBinding<?> handle, Object arg) {
-        synchronized (listeners) {
-            Map<Object, EventBinding<?>> listenersForType = listeners.get(at);
-            if (listenersForType == null) {
-                listenersForType = new LinkedHashMap<>();
-                listeners.put(at, listenersForType);
-            }
-            listenersForType.put(arg, handle);
-        }
-    }
-
-    private void removeHandle(AgentType type, Object arg) {
-        EventBinding<?> remove;
-        synchronized (listeners) {
-            Map<Object, EventBinding<?>> listenersForType = listeners.get(type);
-            remove = listenersForType == null ? null : listenersForType.get(arg);
-        }
-        if (remove != null) {
-            remove.dispose();
-        }
     }
 
     private static final class ExcludeAgentScriptsFilter implements SourceSectionFilter.SourcePredicate {
@@ -162,12 +135,12 @@ final class AgentObject implements TruffleObject {
                     @CachedLibrary(limit = "0") InteropLibrary interop) throws UnknownIdentifierException, UnsupportedMessageException {
         Instrumenter instrumenter = obj.env.getInstrumenter();
         switch (member) {
-            case "on": {
+            case "on":
                 AgentType type = AgentType.find((String) args[0]);
                 switch (type) {
                     case SOURCE: {
                         SourceFilter filter = SourceFilter.newBuilder().sourceIs(new ExcludeAgentScriptsFilter(obj.initializationFinished)).includeInternal(false).build();
-                        EventBinding<LoadSourceListener> handle = instrumenter.attachLoadSourceListener(filter, new LoadSourceListener() {
+                        instrumenter.attachLoadSourceListener(filter, new LoadSourceListener() {
                             @Override
                             public void onLoad(LoadSourceEvent event) {
                                 try {
@@ -177,21 +150,18 @@ final class AgentObject implements TruffleObject {
                                 }
                             }
                         }, true);
-                        obj.registerHandle(type, handle, args[1]);
                         break;
                     }
                     case ENTER: {
                         CompilerDirectives.transferToInterpreter();
                         SourceSectionFilter filter = createFilter(obj, args);
-                        EventBinding<ExecutionEventNodeFactory> handle = instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, args[1], null));
-                        obj.registerHandle(type, handle, args[1]);
+                        instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, args[1], null));
                         break;
                     }
                     case RETURN: {
                         CompilerDirectives.transferToInterpreter();
                         SourceSectionFilter filter = createFilter(obj, args);
-                        EventBinding<ExecutionEventNodeFactory> handle = instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, null, args[1]));
-                        obj.registerHandle(type, handle, args[1]);
+                        instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, null, args[1]));
                         break;
                     }
                     case CLOSE: {
@@ -203,13 +173,6 @@ final class AgentObject implements TruffleObject {
                         throw new IllegalStateException();
                 }
                 break;
-            }
-            case "off": {
-                CompilerDirectives.transferToInterpreter();
-                AgentType type = AgentType.find((String) args[0]);
-                obj.removeHandle(type, args[1]);
-                break;
-            }
             default:
                 throw UnknownIdentifierException.create(member);
         }
