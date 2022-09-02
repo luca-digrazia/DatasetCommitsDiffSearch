@@ -27,20 +27,20 @@ package com.oracle.svm.core.posix;
 import static com.oracle.svm.core.posix.headers.Dirent.opendir;
 import static com.oracle.svm.core.posix.headers.Dirent.readdir_r;
 import static com.oracle.svm.core.posix.headers.Dlfcn.RTLD_DEFAULT;
-import static com.oracle.svm.core.headers.Errno.EACCES;
-import static com.oracle.svm.core.headers.Errno.EAGAIN;
-import static com.oracle.svm.core.headers.Errno.ECANCELED;
-import static com.oracle.svm.core.headers.Errno.EINTR;
-import static com.oracle.svm.core.headers.Errno.EINVAL;
-import static com.oracle.svm.core.headers.Errno.ENOENT;
-import static com.oracle.svm.core.headers.Errno.ENOMEM;
-import static com.oracle.svm.core.headers.Errno.ENOTCONN;
-import static com.oracle.svm.core.headers.Errno.ENOTSOCK;
-import static com.oracle.svm.core.headers.Errno.ENOTSUP;
-import static com.oracle.svm.core.headers.Errno.EOPNOTSUPP;
-import static com.oracle.svm.core.headers.Errno.ERANGE;
-import static com.oracle.svm.core.headers.Errno.ESRCH;
-import static com.oracle.svm.core.headers.Errno.errno;
+import static com.oracle.svm.core.posix.headers.Errno.EACCES;
+import static com.oracle.svm.core.posix.headers.Errno.EAGAIN;
+import static com.oracle.svm.core.posix.headers.Errno.ECANCELED;
+import static com.oracle.svm.core.posix.headers.Errno.EINTR;
+import static com.oracle.svm.core.posix.headers.Errno.EINVAL;
+import static com.oracle.svm.core.posix.headers.Errno.ENOENT;
+import static com.oracle.svm.core.posix.headers.Errno.ENOMEM;
+import static com.oracle.svm.core.posix.headers.Errno.ENOTCONN;
+import static com.oracle.svm.core.posix.headers.Errno.ENOTSOCK;
+import static com.oracle.svm.core.posix.headers.Errno.ENOTSUP;
+import static com.oracle.svm.core.posix.headers.Errno.EOPNOTSUPP;
+import static com.oracle.svm.core.posix.headers.Errno.ERANGE;
+import static com.oracle.svm.core.posix.headers.Errno.ESRCH;
+import static com.oracle.svm.core.posix.headers.Errno.errno;
 import static com.oracle.svm.core.posix.headers.Fcntl.F_GETFL;
 import static com.oracle.svm.core.posix.headers.Fcntl.F_RDLCK;
 import static com.oracle.svm.core.posix.headers.Fcntl.F_SETFL;
@@ -160,7 +160,7 @@ import com.oracle.svm.core.posix.headers.Dirent.DIR;
 import com.oracle.svm.core.posix.headers.Dirent.dirent;
 import com.oracle.svm.core.posix.headers.Dirent.direntPointer;
 import com.oracle.svm.core.posix.headers.Dlfcn;
-import com.oracle.svm.core.headers.Errno;
+import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Fcntl;
 import com.oracle.svm.core.posix.headers.Fcntl.flock;
 import com.oracle.svm.core.posix.headers.Grp.group;
@@ -425,11 +425,11 @@ public final class PosixJavaNIOSubstitutions {
                 // 092     ret = thr_kill((thread_t)thread, INTERRUPT_SIGNAL);
                 // 093 #else
                 // 094     ret = pthread_kill((pthread_t)thread, INTERRUPT_SIGNAL);
+                ret = Pthread.pthread_kill(WordFactory.pointer(thread), PosixInterruptSignalHandler.INTERRUPT_SIGNAL);
                 // 095 #endif
-                ret = PosixInterruptSignalUtils.interruptPThread(WordFactory.pointer(thread));
                 // 096     if (ret != 0)
                 if (ret != 0) {
-                // 097         JNU_ThrowIOExceptionWithLastError(env, "Thread signal failed");
+                    // 097         JNU_ThrowIOExceptionWithLastError(env, "Thread signal failed");
                     throw PosixUtils.newIOExceptionWithLastError("Thread signal failed");
                 }
             }
@@ -454,7 +454,7 @@ public final class PosixJavaNIOSubstitutions {
             // 72      sigemptyset(&sa.sa_mask);
             // 73      if (sigaction(INTERRUPT_SIGNAL, &sa, &osa) < 0)
             // 74          JNU_ThrowIOExceptionWithLastError(env, "sigaction");
-            PosixInterruptSignalUtils.ensureInitialized();
+            PosixInterruptSignalHandler.ensureInitialized();
         }
 
         /* } Do not re-format commented code: @formatter:on */
