@@ -78,7 +78,6 @@ import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
-import org.graalvm.options.OptionMap;
 import org.graalvm.options.OptionStability;
 
 import com.oracle.truffle.api.Option;
@@ -258,13 +257,6 @@ public class OptionProcessor extends AbstractProcessor {
             return false;
         }
 
-        boolean optionMap = false;
-        TypeMirror optionMapType = ElementUtils.getTypeElement(processingEnv, OptionMap.class.getName()).asType();
-        List<? extends TypeMirror> typeArguments = ((DeclaredType) fieldType).getTypeArguments();
-        if (typeArguments.size() == 1) {
-            optionMap = types.isSubtype(typeArguments.get(0), types.erasure(optionMapType));
-        }
-
         String help = annotation.help();
         if (help.length() != 0) {
             char firstChar = help.charAt(0);
@@ -305,7 +297,7 @@ public class OptionProcessor extends AbstractProcessor {
                     name = group + "." + optionName;
                 }
             }
-            info.options.add(new OptionInfo(name, help, field, elementAnnotation, deprecated, category, stability, optionMap));
+            info.options.add(new OptionInfo(name, help, field, elementAnnotation, deprecated, category, stability));
         }
         return true;
     }
@@ -319,14 +311,15 @@ public class OptionProcessor extends AbstractProcessor {
         processingEnv.getMessager().printMessage(Kind.ERROR, formattedMessage, element, annotation);
     }
 
-    private static void generateOptionDescriptor(OptionsInfo info) {
+    private void generateOptionDescriptor(OptionsInfo info) {
         Element element = info.type;
         ProcessorContext context = ProcessorContext.getInstance();
 
         CodeTypeElement unit = generateDescriptors(context, element, info);
         DeclaredType overrideType = (DeclaredType) context.getType(Override.class);
+        DeclaredType suppressedWarnings = (DeclaredType) context.getType(SuppressWarnings.class);
         unit.accept(new GenerateOverrideVisitor(overrideType), null);
-        unit.accept(new FixWarningsVisitor(element, overrideType), null);
+        unit.accept(new FixWarningsVisitor(context.getEnvironment(), suppressedWarnings, overrideType), null);
         try {
             unit.accept(new CodeWriter(context.getEnvironment(), element), null);
         } catch (RuntimeException e) {
@@ -345,7 +338,7 @@ public class OptionProcessor extends AbstractProcessor {
         ProcessorContext.getInstance().getEnvironment().getMessager().printMessage(Kind.ERROR, message + ": " + ElementUtils.printException(t), e);
     }
 
-    private static CodeTypeElement generateDescriptors(ProcessorContext context, Element element, OptionsInfo model) {
+    private CodeTypeElement generateDescriptors(ProcessorContext context, Element element, OptionsInfo model) {
         String optionsClassName = ElementUtils.getSimpleName(element.asType()) + OptionDescriptors.class.getSimpleName();
         TypeElement sourceType = (TypeElement) model.type;
         PackageElement pack = context.getEnvironment().getElementUtils().getPackageOf(sourceType);
@@ -356,50 +349,23 @@ public class OptionProcessor extends AbstractProcessor {
         GeneratorUtils.addGeneratedBy(context, descriptors, (TypeElement) element);
 
         ExecutableElement get = ElementUtils.findExecutableElement(optionDescriptorsType, "get");
-        CodeExecutableElement getMethod = CodeExecutableElement.clone(get);
+        CodeExecutableElement getMethod = CodeExecutableElement.clone(processingEnv, get);
         getMethod.getModifiers().remove(ABSTRACT);
         CodeTreeBuilder builder = getMethod.createBuilder();
 
         String nameVariableName = getMethod.getParameters().get(0).getSimpleName().toString();
-
-        boolean elseIf = false;
+        builder.startSwitch().string(nameVariableName).end().startBlock();
         for (OptionInfo info : model.options) {
-            if (!info.optionMap) {
-                continue;
-            }
-            elseIf = builder.startIf(elseIf);
-            // Prefix options must be delimited by a '.' or match exactly.
-            // e.g. for java.Props: java.Props.Threshold and java.Props match, but
-            // java.PropsThreshold doesn't.
-            builder.startCall(nameVariableName, "startsWith").doubleQuote(info.name + ".").end();
-            builder.string(" || ");
-            builder.startCall(nameVariableName, "equals").doubleQuote(info.name).end();
-
-            builder.end().startBlock();
-            builder.startReturn().tree(createBuildOptionDescriptor(context, info)).end();
-            builder.end();
-        }
-
-        boolean startSwitch = false;
-        for (OptionInfo info : model.options) {
-            if (info.optionMap) {
-                continue;
-            }
-            if (!startSwitch) {
-                builder.startSwitch().string(nameVariableName).end().startBlock();
-                startSwitch = true;
-            }
             builder.startCase().doubleQuote(info.name).end().startCaseBlock();
             builder.startReturn().tree(createBuildOptionDescriptor(context, info)).end();
             builder.end(); // case
         }
-        if (startSwitch) {
-            builder.end(); // block
-        }
+        builder.end(); // block
         builder.returnNull();
+
         descriptors.add(getMethod);
 
-        CodeExecutableElement iteratorMethod = CodeExecutableElement.clone(ElementUtils.findExecutableElement(optionDescriptorsType, "iterator"));
+        CodeExecutableElement iteratorMethod = CodeExecutableElement.clone(processingEnv, ElementUtils.findExecutableElement(optionDescriptorsType, "iterator"));
         iteratorMethod.getModifiers().remove(ABSTRACT);
         builder = iteratorMethod.createBuilder();
 
@@ -441,8 +407,6 @@ public class OptionProcessor extends AbstractProcessor {
         builder.startCall("", "help").doubleQuote(info.help).end();
         builder.startCall("", "category").staticReference(context.getType(OptionCategory.class), info.category.name()).end();
         builder.startCall("", "stability").staticReference(context.getType(OptionStability.class), info.stability.name()).end();
-        builder.startCall("", "optionMap").string(Boolean.toString(info.optionMap)).end();
-
         builder.startCall("", "build").end();
         return builder.build();
     }
@@ -453,13 +417,12 @@ public class OptionProcessor extends AbstractProcessor {
         final String name;
         final String help;
         final boolean deprecated;
-        final boolean optionMap;
         final VariableElement field;
         final AnnotationMirror annotation;
         final OptionCategory category;
         final OptionStability stability;
 
-        OptionInfo(String name, String help, VariableElement field, AnnotationMirror annotation, boolean deprecated, OptionCategory category, OptionStability stability, boolean optionMap) {
+        OptionInfo(String name, String help, VariableElement field, AnnotationMirror annotation, boolean deprecated, OptionCategory category, OptionStability stability) {
             this.name = name;
             this.help = help;
             this.field = field;
@@ -467,7 +430,6 @@ public class OptionProcessor extends AbstractProcessor {
             this.deprecated = deprecated;
             this.category = category;
             this.stability = stability;
-            this.optionMap = optionMap;
         }
 
         @Override
