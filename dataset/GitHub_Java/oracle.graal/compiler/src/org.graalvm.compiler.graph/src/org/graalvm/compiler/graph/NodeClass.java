@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,7 +30,6 @@ import static org.graalvm.compiler.graph.Edges.translateInto;
 import static org.graalvm.compiler.graph.Graph.isModificationCountsEnabled;
 import static org.graalvm.compiler.graph.InputEdges.translateInto;
 import static org.graalvm.compiler.graph.Node.WithAllEdges;
-import static org.graalvm.compiler.graph.UnsafeAccess.UNSAFE;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
@@ -42,15 +43,16 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.core.common.FieldIntrospection;
 import org.graalvm.compiler.core.common.Fields;
 import org.graalvm.compiler.core.common.FieldsScanner;
-import org.graalvm.compiler.debug.Debug;
+import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugCloseable;
-import org.graalvm.compiler.debug.DebugCounter;
-import org.graalvm.compiler.debug.DebugTimer;
-import org.graalvm.compiler.debug.Fingerprint;
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
+import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.graph.Edges.Type;
 import org.graalvm.compiler.graph.Graph.DuplicationReplacement;
 import org.graalvm.compiler.graph.Node.EdgeVisitor;
@@ -58,16 +60,17 @@ import org.graalvm.compiler.graph.Node.Input;
 import org.graalvm.compiler.graph.Node.OptionalInput;
 import org.graalvm.compiler.graph.Node.Successor;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.Canonicalizable.BinaryCommutative;
-import org.graalvm.compiler.graph.spi.Simplifiable;
+import org.graalvm.compiler.graph.spi.BinaryCommutativeMarker;
+import org.graalvm.compiler.graph.spi.CanonicalizableMarker;
+import org.graalvm.compiler.graph.spi.SimplifiableMarker;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodeinfo.Verbosity;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.Equivalence;
+import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
+
+import sun.misc.Unsafe;
 
 /**
  * Metadata for every {@link Node} type. The metadata includes:
@@ -79,14 +82,15 @@ import org.graalvm.util.Equivalence;
  */
 public final class NodeClass<T> extends FieldIntrospection<T> {
 
+    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     // Timers for creation of a NodeClass instance
-    private static final DebugTimer Init_FieldScanning = Debug.timer("NodeClass.Init.FieldScanning");
-    private static final DebugTimer Init_FieldScanningInner = Debug.timer("NodeClass.Init.FieldScanning.Inner");
-    private static final DebugTimer Init_AnnotationParsing = Debug.timer("NodeClass.Init.AnnotationParsing");
-    private static final DebugTimer Init_Edges = Debug.timer("NodeClass.Init.Edges");
-    private static final DebugTimer Init_Data = Debug.timer("NodeClass.Init.Data");
-    private static final DebugTimer Init_AllowedUsages = Debug.timer("NodeClass.Init.AllowedUsages");
-    private static final DebugTimer Init_IterableIds = Debug.timer("NodeClass.Init.IterableIds");
+    private static final TimerKey Init_FieldScanning = DebugContext.timer("NodeClass.Init.FieldScanning");
+    private static final TimerKey Init_FieldScanningInner = DebugContext.timer("NodeClass.Init.FieldScanning.Inner");
+    private static final TimerKey Init_AnnotationParsing = DebugContext.timer("NodeClass.Init.AnnotationParsing");
+    private static final TimerKey Init_Edges = DebugContext.timer("NodeClass.Init.Edges");
+    private static final TimerKey Init_Data = DebugContext.timer("NodeClass.Init.Data");
+    private static final TimerKey Init_AllowedUsages = DebugContext.timer("NodeClass.Init.AllowedUsages");
+    private static final TimerKey Init_IterableIds = DebugContext.timer("NodeClass.Init.IterableIds");
 
     public static final long MAX_EDGES = 8;
     public static final long MAX_LIST_EDGES = 6;
@@ -95,8 +99,8 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     public static final long NEXT_EDGE = 0x08;
 
     @SuppressWarnings("try")
-    private static <T extends Annotation> T getAnnotationTimed(AnnotatedElement e, Class<T> annotationClass) {
-        try (DebugCloseable s = Init_AnnotationParsing.start()) {
+    private static <T extends Annotation> T getAnnotationTimed(AnnotatedElement e, Class<T> annotationClass, DebugContext debug) {
+        try (DebugCloseable s = Init_AnnotationParsing.start(debug)) {
             return e.getAnnotation(annotationClass);
         }
     }
@@ -105,7 +109,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
      * Gets the {@link NodeClass} associated with a given {@link Class}.
      */
     public static <T> NodeClass<T> create(Class<T> c) {
-        assert get(c) == null;
+        assert getUnchecked(c) == null;
         Class<? super T> superclass = c.getSuperclass();
         NodeClass<? super T> nodeSuperclass = null;
         if (superclass != NODE_CLASS) {
@@ -115,22 +119,30 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> NodeClass<T> get(Class<T> superclass) {
+    private static <T> NodeClass<T> getUnchecked(Class<T> clazz) {
         try {
-            Field field = superclass.getDeclaredField("TYPE");
+            Field field = clazz.getDeclaredField("TYPE");
             field.setAccessible(true);
             return (NodeClass<T>) field.get(null);
         } catch (IllegalArgumentException | IllegalAccessException | NoSuchFieldException | SecurityException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Could not load Graal NodeClass TYPE field for " + clazz, e);
         }
+    }
+
+    public static <T> NodeClass<T> get(Class<T> clazz) {
+        NodeClass<T> result = getUnchecked(clazz);
+        if (result == null && clazz != NODE_CLASS) {
+            throw GraalError.shouldNotReachHere("TYPE field not initialized for class " + clazz.getTypeName());
+        }
+        return result;
     }
 
     private static final Class<?> NODE_CLASS = Node.class;
     private static final Class<?> INPUT_LIST_CLASS = NodeInputList.class;
     private static final Class<?> SUCCESSOR_LIST_CLASS = NodeSuccessorList.class;
 
-    private static AtomicInteger nextIterableId = new AtomicInteger();
-    private static AtomicInteger nextLeafId = new AtomicInteger();
+    private static final AtomicInteger nextIterableId = new AtomicInteger();
+    private static final AtomicInteger nextLeafId = new AtomicInteger();
 
     private final InputEdges inputs;
     private final SuccessorEdges successors;
@@ -145,22 +157,10 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     private final long inputsIteration;
     private final long successorIteration;
 
-    private static final DebugCounter ITERABLE_NODE_TYPES = Debug.counter("IterableNodeTypes");
-    private final DebugCounter nodeIterableCount;
+    private static final CounterKey ITERABLE_NODE_TYPES = DebugContext.counter("IterableNodeTypes");
 
-    /**
-     * Determines if this node type implements {@link Canonicalizable}.
-     */
     private final boolean isCanonicalizable;
-
-    /**
-     * Determines if this node type implements {@link BinaryCommutative}.
-     */
     private final boolean isCommutative;
-
-    /**
-     * Determines if this node type implements {@link Simplifiable}.
-     */
     private final boolean isSimplifiable;
     private final boolean isLeafNode;
 
@@ -173,30 +173,27 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     @SuppressWarnings("try")
     public NodeClass(Class<T> clazz, NodeClass<? super T> superNodeClass, FieldsScanner.CalcOffset calcOffset, int[] presetIterableIds, int presetIterableId) {
         super(clazz);
+        DebugContext debug = DebugContext.forCurrentThread();
         this.superNodeClass = superNodeClass;
         assert NODE_CLASS.isAssignableFrom(clazz);
 
-        this.isCanonicalizable = Canonicalizable.class.isAssignableFrom(clazz);
-        this.isCommutative = BinaryCommutative.class.isAssignableFrom(clazz);
-        if (Canonicalizable.Unary.class.isAssignableFrom(clazz) || Canonicalizable.Binary.class.isAssignableFrom(clazz)) {
-            assert Canonicalizable.Unary.class.isAssignableFrom(clazz) ^ Canonicalizable.Binary.class.isAssignableFrom(clazz) : clazz + " should implement either Unary or Binary, not both";
-        }
+        this.isCanonicalizable = CanonicalizableMarker.class.isAssignableFrom(clazz);
+        this.isCommutative = BinaryCommutativeMarker.class.isAssignableFrom(clazz);
+        this.isSimplifiable = SimplifiableMarker.class.isAssignableFrom(clazz);
 
-        this.isSimplifiable = Simplifiable.class.isAssignableFrom(clazz);
-
-        NodeFieldsScanner fs = new NodeFieldsScanner(calcOffset, superNodeClass);
-        try (DebugCloseable t = Init_FieldScanning.start()) {
+        NodeFieldsScanner fs = new NodeFieldsScanner(calcOffset, superNodeClass, debug);
+        try (DebugCloseable t = Init_FieldScanning.start(debug)) {
             fs.scan(clazz, clazz.getSuperclass(), false);
         }
 
-        try (DebugCloseable t1 = Init_Edges.start()) {
+        try (DebugCloseable t1 = Init_Edges.start(debug)) {
             successors = new SuccessorEdges(fs.directSuccessors, fs.successors);
             successorIteration = computeIterationMask(successors.type(), successors.getDirectCount(), successors.getOffsets());
             inputs = new InputEdges(fs.directInputs, fs.inputs);
             inputsIteration = computeIterationMask(inputs.type(), inputs.getDirectCount(), inputs.getOffsets());
         }
-        try (DebugCloseable t1 = Init_Data.start()) {
-            data = new Fields(fs.data);
+        try (DebugCloseable t1 = Init_Data.start(debug)) {
+            data = Fields.create(fs.data);
         }
 
         isLeafNode = inputs.getCount() + successors.getCount() == 0;
@@ -209,11 +206,17 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         canGVN = Node.ValueNumberable.class.isAssignableFrom(clazz);
         startGVNNumber = clazz.getName().hashCode();
 
-        NodeInfo info = getAnnotationTimed(clazz, NodeInfo.class);
+        NodeInfo info = getAnnotationTimed(clazz, NodeInfo.class, debug);
         assert info != null : "Missing NodeInfo annotation on " + clazz;
-        this.nameTemplate = info.nameTemplate();
+        if (!info.nameTemplate().isEmpty()) {
+            this.nameTemplate = info.nameTemplate();
+        } else if (!info.shortName().isEmpty()) {
+            this.nameTemplate = info.shortName();
+        } else {
+            this.nameTemplate = "";
+        }
 
-        try (DebugCloseable t1 = Init_AllowedUsages.start()) {
+        try (DebugCloseable t1 = Init_AllowedUsages.start(debug)) {
             allowedUsageTypes = superNodeClass == null ? EnumSet.noneOf(InputType.class) : superNodeClass.allowedUsageTypes.clone();
             allowedUsageTypes.addAll(Arrays.asList(info.allowedUsageTypes()));
         }
@@ -222,8 +225,8 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             this.iterableIds = presetIterableIds;
             this.iterableId = presetIterableId;
         } else if (IterableNodeType.class.isAssignableFrom(clazz)) {
-            ITERABLE_NODE_TYPES.increment();
-            try (DebugCloseable t1 = Init_IterableIds.start()) {
+            ITERABLE_NODE_TYPES.increment(debug);
+            try (DebugCloseable t1 = Init_IterableIds.start(debug)) {
                 this.iterableId = nextIterableId.getAndIncrement();
 
                 NodeClass<?> snc = superNodeClass;
@@ -238,10 +241,9 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             this.iterableId = Node.NOT_ITERABLE;
             this.iterableIds = null;
         }
-        nodeIterableCount = Debug.counter("NodeIterable_%s", clazz);
         assert verifyIterableIds();
 
-        try (Debug.Scope scope = Debug.scope("NodeCosts")) {
+        try (DebugContext.Scope scope = debug.scope("NodeCosts")) {
             /*
              * Note: We do not check for the existence of the node cost annotations during
              * construction as not every node needs to have them set. However if costs are queried,
@@ -266,9 +268,19 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
                 size = s;
             }
             assert size != null;
-            Debug.log("Node cost for node of type __| %s |_, cycles:%s,size:%s", clazz, cycles, size);
+            debug.log("Node cost for node of type __| %s |_, cycles:%s,size:%s", clazz, cycles, size);
         }
+        assert verifyMemoryEdgeInvariant(fs) : "Nodes participating in the memory graph should have at most 1 optional memory input.";
+    }
 
+    private static boolean verifyMemoryEdgeInvariant(NodeFieldsScanner fs) {
+        int optionalMemoryInputs = 0;
+        for (InputInfo info : fs.inputs) {
+            if (info.optional && info.inputType == InputType.Memory) {
+                optionalMemoryInputs++;
+            }
+        }
+        return optionalMemoryInputs <= 1;
     }
 
     private final NodeCycles cycles;
@@ -352,8 +364,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         return new Fields[]{data, inputs, successors};
     }
 
-    public int[] iterableIds() {
-        nodeIterableCount.increment();
+    int[] iterableIds() {
         return iterableIds;
     }
 
@@ -366,21 +377,21 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     }
 
     /**
-     * Determines if this node type implements {@link Canonicalizable}.
+     * Determines if this node type is {@link CanonicalizableMarker canonicalizable}.
      */
     public boolean isCanonicalizable() {
         return isCanonicalizable;
     }
 
     /**
-     * Determines if this node type implements {@link BinaryCommutative}.
+     * Determines if this node type is {@link BinaryCommutativeMarker commutative}.
      */
     public boolean isCommutative() {
         return isCommutative;
     }
 
     /**
-     * Determines if this node type implements {@link Simplifiable}.
+     * Determines if this node type is {@link SimplifiableMarker simplifiable}.
      */
     public boolean isSimplifiable() {
         return isSimplifiable;
@@ -446,9 +457,11 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         public final ArrayList<EdgeInfo> successors = new ArrayList<>();
         int directInputs;
         int directSuccessors;
+        final DebugContext debug;
 
-        protected NodeFieldsScanner(FieldsScanner.CalcOffset calc, NodeClass<?> superNodeClass) {
+        protected NodeFieldsScanner(FieldsScanner.CalcOffset calc, NodeClass<?> superNodeClass, DebugContext debug) {
             super(calc);
+            this.debug = debug;
             if (superNodeClass != null) {
                 translateInto(superNodeClass.inputs, inputs);
                 translateInto(superNodeClass.successors, successors);
@@ -461,10 +474,10 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
         @SuppressWarnings("try")
         @Override
         protected void scanField(Field field, long offset) {
-            Input inputAnnotation = getAnnotationTimed(field, Node.Input.class);
-            OptionalInput optionalInputAnnotation = getAnnotationTimed(field, Node.OptionalInput.class);
-            Successor successorAnnotation = getAnnotationTimed(field, Successor.class);
-            try (DebugCloseable s = Init_FieldScanningInner.start()) {
+            Input inputAnnotation = getAnnotationTimed(field, Node.Input.class, debug);
+            OptionalInput optionalInputAnnotation = getAnnotationTimed(field, Node.OptionalInput.class, debug);
+            Successor successorAnnotation = getAnnotationTimed(field, Successor.class, debug);
+            try (DebugCloseable s = Init_FieldScanningInner.start(debug)) {
                 Class<?> type = field.getType();
                 int modifiers = field.getModifiers();
 
@@ -701,6 +714,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             } else {
                 Object objectA = data.getObject(a, i);
                 Object objectB = data.getObject(b, i);
+                assert !isLambda(objectA) || !isLambda(objectB) : "lambdas are not permitted in fields of " + this.toString();
                 if (objectA != objectB) {
                     if (objectA != null && objectB != null) {
                         if (!deepEquals0(objectA, objectB)) {
@@ -713,6 +727,11 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             }
         }
         return true;
+    }
+
+    private static boolean isLambda(Object obj) {
+        // This needs to be consistent with InnerClassLambdaMetafactory constructor.
+        return obj != null && obj.getClass().getSimpleName().contains("$$Lambda$");
     }
 
     public boolean isValid(Position pos, NodeClass<?> from, Edges fromEdges) {
@@ -810,10 +829,12 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
 
     /**
      * The template used to build the {@link Verbosity#Name} version. Variable parts are specified
-     * using &#123;i#inputName&#125; or &#123;p#propertyName&#125;.
+     * using &#123;i#inputName&#125; or &#123;p#propertyName&#125;. If no
+     * {@link NodeInfo#nameTemplate() template} is specified, it uses {@link NodeInfo#shortName()}.
+     * If none of the two is specified, it returns an empty string.
      */
     public String getNameTemplate() {
-        return nameTemplate.isEmpty() ? shortName() : nameTemplate;
+        return nameTemplate;
     }
 
     interface InplaceUpdateClosure {
@@ -831,6 +852,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             // Use sparse map
             newNodes = EconomicMap.create(Equivalence.IDENTITY);
         }
+        graph.beforeNodeDuplication(oldGraph);
         createNodeDuplicates(graph, nodes, replacements, newNodes);
 
         InplaceUpdateClosure replacementClosure = new InplaceUpdateClosure() {
@@ -879,15 +901,9 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
                     replacement = replacements.replacement(node);
                 }
                 if (replacement != node) {
-                    if (Fingerprint.ENABLED) {
-                        Fingerprint.submit("replacing %s with %s", node, replacement);
-                    }
                     assert replacement != null;
                     newNodes.put(node, replacement);
                 } else {
-                    if (Fingerprint.ENABLED) {
-                        Fingerprint.submit("duplicating %s", node);
-                    }
                     Node newNode = node.clone(graph, WithAllEdges);
                     assert newNode.getNodeClass().isLeafNode() || newNode.hasNoUsages();
                     assert newNode.getClass() == node.getClass();
@@ -931,7 +947,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
     }
 
     /**
-     * @returns true if the node has no inputs and no successors
+     * @return true if the node has no inputs and no successors
      */
     public boolean isLeafNode() {
         return isLeafNode;
@@ -1181,8 +1197,8 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
                     return false;
                 }
             } else {
-                Object v1 = Edges.getNodeListUnsafe(node, offset);
-                Object v2 = Edges.getNodeListUnsafe(other, offset);
+                NodeList<Node> v1 = Edges.getNodeListUnsafe(node, offset);
+                NodeList<Node> v2 = Edges.getNodeListUnsafe(other, offset);
                 if (!Objects.equals(v1, v2)) {
                     return false;
                 }
@@ -1358,7 +1374,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             if ((myMask & LIST_MASK) == 0) {
                 Node curNode = Edges.getNodeUnsafe(node, offset);
                 if (curNode != null) {
-                    assert curNode.isAlive() : "Input not alive " + curNode;
+                    assert curNode.isAlive() : "Input " + curNode + " of node " + node + " is not alive";
                     curNode.addUsage(node);
                 }
             } else {
@@ -1374,7 +1390,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             for (int i = 0; i < list.size(); ++i) {
                 Node curNode = list.get(i);
                 if (curNode != null) {
-                    assert curNode.isAlive() : "Input not alive";
+                    assert curNode.isAlive() : "Input not alive " + curNode;
                     curNode.addUsage(node);
                 }
             }
