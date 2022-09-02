@@ -45,11 +45,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.GeneratedBy;
 import com.oracle.truffle.api.nodes.NodeUtil;
@@ -75,12 +72,12 @@ public abstract class LibraryFactory<T extends Library> {
     private final ConcurrentHashMap<Class<?>, T> cachedCache = new ConcurrentHashMap<>();
     private final ProxyExports proxyExports = new ProxyExports();
     final Map<String, Message> nameToMessages;
-    @CompilationFinal private T uncachedDispatch;
+    private final T uncachedDispatch;
 
     final DynamicDispatchLibrary dispatchLibrary;
 
     @SuppressWarnings("unchecked")
-    protected LibraryFactory(Class<T> libraryClass, List<Message> messages) {
+    protected LibraryFactory(Class<T> libraryClass, List<Message> messages, T uncachedDispatch) {
         assert this.getClass().getName().endsWith(LibraryExport.GENERATED_CLASS_SUFFIX);
         assert this.getClass().getAnnotation(GeneratedBy.class) != null;
         assert this.getClass().getAnnotation(GeneratedBy.class).value() == libraryClass;
@@ -93,16 +90,12 @@ public abstract class LibraryFactory<T extends Library> {
             messagesMap.put(message.getSimpleName(), message);
         }
         this.nameToMessages = messagesMap;
+        this.uncachedDispatch = uncachedDispatch;
+
         if (libraryClass == DynamicDispatchLibrary.class) {
             this.dispatchLibrary = null;
         } else {
             this.dispatchLibrary = LibraryFactory.resolve(DynamicDispatchLibrary.class).getUncached();
-        }
-    }
-
-    final void ensureInitialized() {
-        if (this.uncachedDispatch == null) {
-            this.uncachedDispatch = createUncachedDispatch();
         }
     }
 
@@ -165,8 +158,6 @@ public abstract class LibraryFactory<T extends Library> {
     }
 
     /**
-     * Returns an uncached and specialized version of the library.
-     *
      * Returns an cached and manually dispatched version of this library.
      *
      * @see Library#getUncached(Class, Object) for further details.
@@ -217,8 +208,6 @@ public abstract class LibraryFactory<T extends Library> {
      * @since 1.0
      */
     protected abstract T createDispatchImpl(int limit);
-
-    protected abstract T createUncachedDispatch();
 
     /**
      * Creates a proxy version of this library. An implementation for this method is generated, do
@@ -339,8 +328,6 @@ public abstract class LibraryFactory<T extends Library> {
                 if (isLibrary) {
                     throw new AssertionError("Recursive initialization detected. Library cannot use itself in a static initializer.");
                 }
-            } else {
-                lib.ensureInitialized();
             }
             return lib;
         }
@@ -415,120 +402,6 @@ public abstract class LibraryFactory<T extends Library> {
         public T createCached(Object receiver) {
             return createProxy(REFLECTION_FACTORY.create(receiver));
         }
-    }
-
-    /**
-     * Helper class representing a single resolved receiver class that exports multiple libraries.
-     */
-    static final class ResolvedDispatch {
-
-        private static final ConcurrentHashMap<Class<?>, ResolvedDispatch> CACHE = new ConcurrentHashMap<>();
-        private static final ConcurrentHashMap<Class<?>, LibraryExport<?>[]> REGISTRY = new ConcurrentHashMap<>();
-
-        // the root of every receiver class chain.
-        private static final ResolvedDispatch OBJECT_RECEIVER = new ResolvedDispatch(null, Object.class);
-        private final ResolvedDispatch parent;
-        private final Class<?> dispatchClass;
-        private final Map<Class<?>, LibraryExport<?>> libraries;
-
-        @SuppressWarnings({"hiding", "unchecked"})
-        private ResolvedDispatch(ResolvedDispatch parent, Class<?> dispatchClass, LibraryExport<?>... libs) {
-            this.parent = parent;
-            this.dispatchClass = dispatchClass;
-            Map<Class<?>, LibraryExport<?>> libraries = new LinkedHashMap<>();
-            for (LibraryExport<?> lib : libs) {
-                libraries.put(lib.getLibrary(), lib);
-            }
-            this.libraries = libraries;
-        }
-
-        @SuppressWarnings("unchecked")
-        <T extends Library> LibraryExport<T> getLibrary(Class<T> libraryClass) {
-            LibraryExport<?> lib = libraries.get(libraryClass);
-            if (lib == null && parent != null) {
-                lib = parent.getLibrary(libraryClass);
-            }
-            return (LibraryExport<T>) lib;
-        }
-
-        @TruffleBoundary
-        static ResolvedDispatch lookup(Class<?> receiverClass) {
-            ResolvedDispatch type = CACHE.get(receiverClass);
-            if (type == null) {
-                type = resolveClass(receiverClass);
-            }
-            return type;
-        }
-
-        static <T extends Library> void register(Class<?> receiverClass, LibraryExport<?>... libs) {
-            LibraryExport<?>[] prevLibs = REGISTRY.put(receiverClass, libs);
-            if (prevLibs != null) {
-                throw new IllegalStateException("Receiver " + receiverClass + " is already registered.");
-            }
-            // eagerly resolve known receivers in AOT mode
-            if (TruffleOptions.AOT) {
-                lookup(receiverClass);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "ResolvedDispatch[" + dispatchClass.getName() + "]";
-        }
-
-        Set<Class<?>> getLibraries() {
-            return libraries.keySet();
-        }
-
-        private static boolean hasExports(Class<?> c) {
-            return c.getAnnotationsByType(ExportLibrary.class).length > 0;
-        }
-
-        private static ResolvedDispatch resolveClass(Class<?> dispatchClass) {
-            if (dispatchClass == null) {
-                return OBJECT_RECEIVER;
-            }
-            ResolvedDispatch parent = resolveClass(dispatchClass.getSuperclass());
-            ResolvedDispatch resolved;
-            LibraryExport<?>[] libs = REGISTRY.get(dispatchClass);
-            if (libs == null && hasExports(dispatchClass)) {
-                /*
-                 * We can omit loading classes in AOT mode as they are resolved eagerly using the
-                 * TruffleFeature. We can also omit if the type was already resolved.
-                 */
-                if (!TruffleOptions.AOT) {
-                    loadGeneratedClass(dispatchClass);
-                    libs = REGISTRY.get(dispatchClass);
-                }
-                if (libs == null) {
-                    throw new AssertionError(String.format("Libraries for class '%s' could not be resolved. Not registered?", dispatchClass.getName()));
-                }
-            }
-
-            if (libs != null) {
-                resolved = new ResolvedDispatch(parent, dispatchClass, libs);
-            } else {
-                resolved = parent;
-            }
-
-            ResolvedDispatch concurrent = CACHE.putIfAbsent(dispatchClass, resolved);
-            if (concurrent != null) {
-                return concurrent;
-            } else {
-                return resolved;
-            }
-        }
-
-        static void loadGeneratedClass(Class<?> currentReceiverClass) {
-            String generatedClassName = currentReceiverClass.getPackage().getName() + "." + currentReceiverClass.getSimpleName() + "Gen";
-            try {
-                Class.forName(generatedClassName);
-            } catch (ClassNotFoundException e) {
-                throw new AssertionError(String.format("Generated class '%s' for class '%s' not found. " +
-                                "Did the Truffle annotation processor run?", generatedClassName, currentReceiverClass.getName()), e);
-            }
-        }
-
     }
 
 }

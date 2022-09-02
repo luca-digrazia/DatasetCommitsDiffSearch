@@ -40,28 +40,31 @@
  */
 package com.oracle.truffle.api.library.test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.ResolvedLibrary;
+import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
 public abstract class AbstractLibraryTest {
 
     protected static final <T extends Library> T createCached(Class<T> library, Object receiver) {
-        return adopt(ResolvedLibrary.resolve(library).createCached(receiver));
+        return adopt(LibraryFactory.resolve(library).create(receiver));
     }
 
     protected static final <T extends Library> T createCachedDispatch(Class<T> library, int limit) {
-        return adopt(ResolvedLibrary.resolve(library).createCachedDispatch(limit));
+        return adopt(LibraryFactory.resolve(library).createDispatched(limit));
     }
 
     protected static final <T extends Library> T getUncached(Class<T> library, Object receiver) {
-        return ResolvedLibrary.resolve(library).getUncached(receiver);
+        return LibraryFactory.resolve(library).getUncached(receiver);
     }
 
     protected static final <T extends Library> T getUncachedDispatch(Class<T> library) {
-        return ResolvedLibrary.resolve(library).getUncachedDispatch();
+        return LibraryFactory.resolve(library).getUncached();
     }
 
     static <T extends Node> T adopt(T node) {
@@ -77,6 +80,22 @@ public abstract class AbstractLibraryTest {
         };
         root.adoptChildren();
         return node;
+    }
+
+    static void assertAssertionError(Runnable r) {
+        assertAssertionError(r, null);
+    }
+
+    static void assertAssertionError(Runnable r, String message) {
+        try {
+            r.run();
+        } catch (AssertionError e) {
+            if (message != null) {
+                assertEquals(message, e.getMessage());
+            }
+            return;
+        }
+        fail();
     }
 
 }
