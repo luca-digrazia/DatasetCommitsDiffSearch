@@ -427,6 +427,7 @@ public final class MethodVerifier implements ContextAccess {
 
     // JSR BCI states
     static private final byte RETURNED_TO = 64;
+    static private final byte EXPLORED = -128;
     // This state is accompanied by the BCI of the RET instruction that caused it.
     // It is of the form (ret_bci << 16) | RETURNED_TO
 
@@ -1237,7 +1238,7 @@ public final class MethodVerifier implements ContextAccess {
                 // @formatter:on
                 case JSR: // fall through
                 case JSR_W: {
-                    if (majorVersion >= 51) {
+                    if (majorVersion >= 50) {
                         throw new VerifyError("JSR/RET bytecode in version >= 51");
                     }
                     if (stackFrames[BCI] == null) {
@@ -1250,7 +1251,7 @@ public final class MethodVerifier implements ContextAccess {
                     return BCI;
                 }
                 case RET: {
-                    if (majorVersion >= 51) {
+                    if (majorVersion >= 50) {
                         throw new VerifyError("JSR/RET bytecode in version >= 51");
                     }
                     ReturnAddressOperand ra = locals.loadReturnAddress(code.readLocalIndex(BCI));
@@ -1368,18 +1369,17 @@ public final class MethodVerifier implements ContextAccess {
                         throw new VerifyError();
                     }
                     FieldRefConstant frc = (FieldRefConstant) pc;
-                    Symbol<Type> fieldDesc = frc.getType(pool);
-                    Operand toPut = stack.pop(kindToOperand(fieldDesc));
+                    Symbol<Type> fieldHolderType = frc.getType(pool);
+                    Operand toPut = stack.pop(kindToOperand(fieldHolderType));
                     checkInit(toPut);
                     if (curOpcode == PUTFIELD) {
-                        Symbol<Type> fieldHolderType = getTypes().fromName(frc.getHolderKlassName(pool));
-                        Operand fieldHolder = kindToOperand(fieldHolderType);
+                        Operand fieldHolder = kindToOperand(getTypes().fromName(frc.getHolderKlassName(pool)));
                         Operand receiver = checkInitAccess(stack.popRef(fieldHolder), fieldHolder);
-                        if (receiver.isArrayType()) {
-                            throw new VerifyError("Trying to access field of an array type: " + receiver);
-                        }
                         if (methodName != Name.INIT) {
                             checkProtectedField(receiver, fieldHolderType, code.readCPI(BCI));
+                        }
+                        if (receiver.isArrayType()) {
+                            throw new VerifyError("Trying to access field of an array type: " + receiver);
                         }
                     }
                     break;
@@ -1394,8 +1394,6 @@ public final class MethodVerifier implements ContextAccess {
                     // Checkstyle: resume
                     // @formatter:on
                 {
-                    // TODO(garcia) refactor this thing. Way too big.
-
                     // Check padding.
                     if (curOpcode == INVOKEINTERFACE && code.readUByte(BCI + 4) != 0) {
                         throw new VerifyError("4th byte after INVOKEINTERFACE must be 0.");
@@ -1791,8 +1789,7 @@ public final class MethodVerifier implements ContextAccess {
                  */
                 if (!field.isProtected()) {
                     return;
-                }
-                if (!thisKlass.getRuntimePackage().equals(Types.getRuntimePackage(fieldHolderType))) {
+                } else if (!thisKlass.getRuntimePackage().equals(Types.getRuntimePackage(fieldHolderType))) {
                     if (!stackOp.compliesWith(thisOperand)) {
                         /**
                          * Otherwise, use of a member of an object of type Target requires that
