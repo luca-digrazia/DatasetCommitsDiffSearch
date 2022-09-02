@@ -240,8 +240,8 @@ public final class RequestedJDWPEvents {
                     filter.addPositivePattern(pattern);
                     JDWPLogger.log("adding positive refType pattern: %s", JDWPLogger.LogLevel.STEPPING, pattern.pattern());
                 } catch (PatternSyntaxException ex) {
-                    // wrong input pattern
-                    throw new RuntimeException("should not reach here");
+                    // wrong input pattern, silently ignore this breakpoint request then
+                    System.out.println("EXCEPTION: " + ex);
                 }
                 break;
             case 6:
@@ -251,8 +251,7 @@ public final class RequestedJDWPEvents {
                     filter.addExcludePattern(pattern);
                     JDWPLogger.log("adding negative refType pattern: %s", JDWPLogger.LogLevel.STEPPING, pattern.pattern());
                 } catch (PatternSyntaxException ex) {
-                    // wrong input pattern
-                    throw new RuntimeException("should not reach here");
+                    // wrong input pattern, silently ignore this breakpoint request then
                 }
                 break;
             case 7: // location-specific
