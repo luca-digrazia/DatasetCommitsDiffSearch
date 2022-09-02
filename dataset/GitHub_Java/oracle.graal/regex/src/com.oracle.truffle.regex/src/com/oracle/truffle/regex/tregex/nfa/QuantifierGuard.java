@@ -44,37 +44,97 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.parser.Token.Quantifier;
 
+/**
+ * Transition guards introduced by bounded {@link Quantifier}s.
+ */
 public final class QuantifierGuard {
 
     public enum Kind {
+        /**
+         * Transition is entering a quantified expression. Just increase the loop count.
+         */
         enter,
-        enterInc,
+        /**
+         * Transition represents a back-edge in the quantifier loop. Check if the loop count is
+         * below {@link Quantifier#getMax()}, then increase loop count.
+         */
         loop,
+        /**
+         * Transition represents a back-edge in a quantifier loop without upper bound, i.e.
+         * quantifiers where {@link Quantifier#isInfiniteLoop()} is {@code true}. Just increase the
+         * loop count.
+         */
         loopInc,
+        /**
+         * Transition is leaving a quantified expression. Check if the loop count is above
+         * {@link Quantifier#getMin()}, then reset the loop count.
+         */
         exit,
+        /**
+         * Transition is leaving a quantified expression without lower bound, i.e. quantifiers where
+         * {@link Quantifier#getMin()} {@code == 0}. Just reset the loop count.
+         */
         exitReset,
+        /**
+         * Transition is entering a quantified expression that may match the empty string. Save the
+         * current index.
+         */
         enterZeroWidth,
+        /**
+         * Transition is leaving a quantified expression that may match the empty string. Check if
+         * the current index is greater than the saved index. In the case of Ruby, also check if any
+         * capture groups were modified.
+         */
         exitZeroWidth,
+        /**
+         * Transition is leaving a quantified expression that may match the empty string and it is
+         * about to continue to what follows the loop. This is only possible in Ruby and only when
+         * the last iteration of the quantiifed expression fails the empty check (the check for the
+         * index and the state of capture groups tested by {@link #exitZeroWidth}).
+         */
+        escapeZeroWidth,
+        /**
+         * Transition would go through an entire quantified expression without matching anything.
+         * Check if quantifier count is less than {@link Quantifier#getMin()}, then increase the
+         * quantifier count. This guard is added to all transitions to the special
+         * {@link PureNFAState#isEmptyMatch() empty-match} state.
+         */
         enterEmptyMatch,
-        exitEmptyMatch
+        /**
+         * Transition is leaving an {@link PureNFAState#isEmptyMatch() empty-match} state. This
+         * guard doesn't do anything, it just serves as a marker for
+         * {@link QuantifierGuard#getKindReverse()}.
+         */
+        exitEmptyMatch,
+        /**
+         * Transition is passing a capture group boundary. We need this information in order to
+         * implement the empty check test in {@link #exitZeroWidth}, which, in the case of Ruby,
+         * also needs to monitor the state of capture groups in between {@link #enterZeroWidth} and
+         * {@link #exitZeroWidth}.
+         */
+        updateCG
     }
 
     public static final QuantifierGuard[] NO_GUARDS = {};
 
     private final Kind kind;
     private final Quantifier quantifier;
+    private final int index;
 
     private QuantifierGuard(Kind kind, Quantifier quantifier) {
         this.kind = kind;
         this.quantifier = quantifier;
+        this.index = -1;
+    }
+
+    private QuantifierGuard(Kind kind, int index) {
+        this.kind = kind;
+        this.quantifier = null;
+        this.index = index;
     }
 
     public static QuantifierGuard createEnter(Quantifier quantifier) {
         return new QuantifierGuard(Kind.enter, quantifier);
-    }
-
-    public static QuantifierGuard createEnterInc(Quantifier quantifier) {
-        return new QuantifierGuard(Kind.enterInc, quantifier);
     }
 
     public static QuantifierGuard createLoop(Quantifier quantifier) {
@@ -101,6 +161,10 @@ public final class QuantifierGuard {
         return new QuantifierGuard(Kind.exitZeroWidth, quantifier);
     }
 
+    public static QuantifierGuard createEscapeZeroWidth(Quantifier quantifier) {
+        return new QuantifierGuard(Kind.escapeZeroWidth, quantifier);
+    }
+
     public static QuantifierGuard createEnterEmptyMatch(Quantifier quantifier) {
         return new QuantifierGuard(Kind.enterEmptyMatch, quantifier);
     }
@@ -109,32 +173,40 @@ public final class QuantifierGuard {
         return new QuantifierGuard(Kind.exitEmptyMatch, quantifier);
     }
 
+    public static QuantifierGuard createUpdateCG(int index) {
+        return new QuantifierGuard(Kind.updateCG, index);
+    }
+
     public Kind getKind() {
         return kind;
     }
 
+    /**
+     * Get the equivalent of this guard when matching in reverse.
+     */
     public Kind getKindReverse() {
         switch (kind) {
             case enter:
-            case enterInc:
                 return quantifier.getMin() > 0 ? Kind.exit : Kind.exitReset;
             case loop:
             case loopInc:
                 return kind;
             case exit:
             case exitReset:
-                return quantifier.isInfiniteLoop() ? Kind.enterInc : Kind.enter;
+                return Kind.enter;
             case enterZeroWidth:
                 return Kind.exitZeroWidth;
             case exitZeroWidth:
+            case escapeZeroWidth:
                 return Kind.enterZeroWidth;
             case enterEmptyMatch:
                 return Kind.exitEmptyMatch;
             case exitEmptyMatch:
                 return Kind.enterEmptyMatch;
+            case updateCG:
+                return Kind.updateCG;
             default:
-                CompilerDirectives.transferToInterpreter();
-                throw new IllegalStateException();
+                throw CompilerDirectives.shouldNotReachHere();
         }
     }
 
@@ -142,9 +214,20 @@ public final class QuantifierGuard {
         return quantifier;
     }
 
+    /**
+     * Returns the capture group boundary index for {@code updateCG} guards.
+     */
+    public int getIndex() {
+        return index;
+    }
+
     @TruffleBoundary
     @Override
     public String toString() {
-        return kind + " " + quantifier;
+        if (quantifier != null) {
+            return kind + " " + quantifier;
+        } else {
+            return kind + " " + index;
+        }
     }
 }

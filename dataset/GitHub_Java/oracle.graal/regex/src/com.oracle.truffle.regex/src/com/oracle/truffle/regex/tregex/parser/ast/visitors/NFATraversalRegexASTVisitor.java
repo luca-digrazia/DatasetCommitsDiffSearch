@@ -139,9 +139,7 @@ public abstract class NFATraversalRegexASTVisitor {
      * loop, leading us to the CharacterClass node {@code [a]}. <br>
      * This is a multiset, because in some cases, we want to admit one empty traversal through a
      * loop, but still disallow any further iterations to prevent infinite loops. The value stored
-     * in this map tells us how many times we have entered the current search. <br>
-     * NB: For every looping group, this map tells us how many {@code enter} nodes there are on the
-     * current path.
+     * in this map tells us how many times we have entered the current search.
      */
     private final EconomicMap<RegexASTNode, Integer> insideLoops;
     /**
@@ -426,7 +424,6 @@ public abstract class NFATraversalRegexASTVisitor {
                         }
                     }
                     curPath.add(pathSwitchEnterAndPassThrough(lastElement));
-                    unregisterInsideLoop(parent);
                 } else {
                     pushGroupExit(parent);
                 }
@@ -580,20 +577,10 @@ public abstract class NFATraversalRegexASTVisitor {
                     if (pathGroupHasNext(lastVisited)) {
                         cur = pathGroupGetNext(lastVisited);
                         curPath.add(pathToGroupEnter(pathIncGroupAltIndex(lastVisited)));
-                        if (pathIsGroupPassThrough(lastVisited)) {
-                            // a passthrough node was changed to an enter node,
-                            // so we register the loop in insideLoops
-                            registerInsideLoop(group);
-                        }
                         return true;
                     } else {
                         assert noEmptyGuardGroupEnterOnPath(group);
-                        if (pathIsGroupEnter(lastVisited)) {
-                            // we only deregister the node from insideLoops if this was an enter
-                            // node, if it was a passthrough node, it was already deregistered when
-                            // it was transformed from an enter node in doAdvance
-                            unregisterInsideLoop(group);
-                        }
+                        unregisterInsideLoop(group);
                         insideEmptyGuardGroup.remove(group);
                     }
                 } else if (ast.getOptions().getFlavor() == RubyFlavor.INSTANCE && pathIsGroupExit(lastVisited) && group.hasQuantifier() && group.getQuantifier().hasZeroWidthIndex()) {
@@ -601,7 +588,7 @@ public abstract class NFATraversalRegexASTVisitor {
                     if (advanceTerm(group)) {
                         return true;
                     } else {
-                        retreat();
+                        curPath.pop();
                     }
                 }
             } else {
