@@ -108,244 +108,208 @@ public final class StaticObject implements TruffleObject {
     @ExportMessage
     public static boolean isNull(StaticObject object) {
         assert object != null;
-        if (object.isEspressoObject()) {
-            return object == StaticObject.NULL;
-        }
-        return InteropLibrary.getUncached().isNull(object.rawInteropObject());
+        return object == StaticObject.NULL;
     }
 
     @ExportMessage
     public boolean isString() {
-        if (isEspressoObject()) {
-            return StaticObject.notNull(this) && getKlass() == getKlass().getMeta().java_lang_String;
-        }
-        return InteropLibrary.getUncached().isString(rawInteropObject());
+        return StaticObject.notNull(this) && getKlass() == getKlass().getMeta().java_lang_String;
     }
 
     @ExportMessage
-    public String asString() throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            return Meta.toHostString(this);
-        }
-        return InteropLibrary.getUncached().asString(rawInteropObject());
+    public String asString() {
+        return Meta.toHostString(this);
     }
 
     @ExportMessage
     public boolean isBoolean() {
-        if (isEspressoObject()) {
-            if (isNull(this)) {
-                return false;
-            }
-            return klass == klass.getMeta().java_lang_Boolean;
+        if (isNull(this)) {
+            return false;
         }
-        return InteropLibrary.getUncached().isBoolean(rawInteropObject());
+        return klass == klass.getMeta().java_lang_Boolean;
     }
 
     @ExportMessage
     public boolean asBoolean() throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (!isBoolean()) {
-                throw UnsupportedMessageException.create();
-            }
-            return (boolean) klass.getMeta().java_lang_Boolean_value.get(this);
+        if (!isBoolean()) {
+            throw UnsupportedMessageException.create();
         }
-        return InteropLibrary.getUncached().asBoolean(rawInteropObject());
+        return (boolean) klass.getMeta().java_lang_Boolean_value.get(this);
     }
 
     @ExportMessage
     public boolean isNumber() {
-        if (isEspressoObject()) {
-            if (isNull(this)) {
-                return false;
-            }
-            Meta meta = klass.getMeta();
-            return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Long || klass == meta.java_lang_Float ||
-                            klass == meta.java_lang_Double;
+        if (isNull(this)) {
+            return false;
         }
-        return InteropLibrary.getUncached().isNumber(rawInteropObject());
+
+        Meta meta = klass.getMeta();
+        return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Long || klass == meta.java_lang_Float ||
+                        klass == meta.java_lang_Double;
     }
 
     @ExportMessage
     boolean fitsInByte() {
-        if (isEspressoObject()) {
-            if (isNull(this)) {
-                return false;
-            }
-            if (isAtMostByte(klass)) {
-                return true;
-            }
-
-            Meta meta = klass.getMeta();
-            if (klass == meta.java_lang_Short) {
-                short content = getShortField(meta.java_lang_Short_value);
-                return (byte) content == content;
-            }
-            if (klass == meta.java_lang_Integer) {
-                int content = getIntField(meta.java_lang_Integer_value);
-                return (byte) content == content;
-            }
-            if (klass == meta.java_lang_Long) {
-                long content = getLongField(meta.java_lang_Long_value);
-                return (byte) content == content;
-            }
-            if (klass == meta.java_lang_Float) {
-                float content = getFloatField(meta.java_lang_Float_value);
-                return (byte) content == content && !isNegativeZero(content);
-            }
-            if (klass == meta.java_lang_Double) {
-                double content = getDoubleField(meta.java_lang_Double_value);
-                return (byte) content == content && !isNegativeZero(content);
-            }
+        if (isNull(this)) {
             return false;
         }
-        return InteropLibrary.getUncached().fitsInByte(rawInteropObject());
+        if (isAtMostByte(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Short) {
+            short content = getShortField(meta.java_lang_Short_value);
+            return (byte) content == content;
+        }
+        if (klass == meta.java_lang_Integer) {
+            int content = getIntField(meta.java_lang_Integer_value);
+            return (byte) content == content;
+        }
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            return (byte) content == content;
+        }
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return (byte) content == content && !isNegativeZero(content);
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return (byte) content == content && !isNegativeZero(content);
+        }
+        return false;
     }
 
     @ExportMessage
     boolean fitsInShort() {
-        if (isEspressoObject()) {
-            if (isNull(this)) {
-                return false;
-            }
-            if (isAtMostShort(klass)) {
-                return true;
-            }
-
-            Meta meta = klass.getMeta();
-            if (klass == meta.java_lang_Integer) {
-                int content = getIntField(meta.java_lang_Integer_value);
-                return (short) content == content;
-            }
-            if (klass == meta.java_lang_Long) {
-                long content = getLongField(meta.java_lang_Long_value);
-                return (short) content == content;
-            }
-            if (klass == meta.java_lang_Float) {
-                float content = getFloatField(meta.java_lang_Float_value);
-                return (short) content == content && !isNegativeZero(content);
-            }
-            if (klass == meta.java_lang_Double) {
-                double content = getDoubleField(meta.java_lang_Double_value);
-                return (short) content == content && !isNegativeZero(content);
-            }
+        if (isNull(this)) {
             return false;
         }
-        return InteropLibrary.getUncached().fitsInShort(rawInteropObject());
+        if (isAtMostShort(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Integer) {
+            int content = getIntField(meta.java_lang_Integer_value);
+            return (short) content == content;
+        }
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            return (short) content == content;
+        }
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return (short) content == content && !isNegativeZero(content);
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return (short) content == content && !isNegativeZero(content);
+        }
+        return false;
     }
 
     @ExportMessage
     public boolean fitsInInt() {
-        if (isEspressoObject()) {
-            if (isNull(this)) {
-                return false;
-            }
-            if (isAtMostInt(klass)) {
-                return true;
-            }
-
-            Meta meta = klass.getMeta();
-            if (klass == meta.java_lang_Long) {
-                long content = getLongField(meta.java_lang_Long_value);
-                return (int) content == content;
-            }
-            if (klass == meta.java_lang_Float) {
-                float content = getFloatField(meta.java_lang_Float_value);
-                return inSafeIntegerRange(content) && !isNegativeZero(content) && (int) content == content;
-            }
-            if (klass == meta.java_lang_Double) {
-                double content = getDoubleField(meta.java_lang_Double_value);
-                return (int) content == content && !isNegativeZero(content);
-            }
+        if (isNull(this)) {
             return false;
         }
-        return InteropLibrary.getUncached().fitsInInt(rawInteropObject());
+        if (isAtMostInt(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            return (int) content == content;
+        }
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return inSafeIntegerRange(content) && !isNegativeZero(content) && (int) content == content;
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return (int) content == content && !isNegativeZero(content);
+        }
+        return false;
     }
 
     @ExportMessage
     boolean fitsInLong() {
-        if (isEspressoObject()) {
-            if (isNull(this)) {
-                return false;
-            }
-            if (isAtMostLong(klass)) {
-                return true;
-            }
-
-            Meta meta = klass.getMeta();
-            if (klass == meta.java_lang_Float) {
-                float content = getFloatField(meta.java_lang_Float_value);
-                return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
-            }
-            if (klass == meta.java_lang_Double) {
-                double content = getDoubleField(meta.java_lang_Double_value);
-                return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
-            }
+        if (isNull(this)) {
             return false;
         }
-        return InteropLibrary.getUncached().fitsInLong(rawInteropObject());
+        if (isAtMostLong(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
+        }
+        return false;
 
     }
 
     @ExportMessage
     boolean fitsInFloat() {
-        if (isEspressoObject()) {
-            if (isNull(this)) {
-                return false;
-            }
-            if (isAtMostFloat(klass)) {
-                return true;
-            }
-
-            Meta meta = klass.getMeta();
-            // We might lose precision when we convert an int or a long to a float, however, we still
-            // perform the conversion.
-            // This is consistent with Truffle interop, see GR-22718 for more details.
-            if (klass == meta.java_lang_Integer) {
-                int content = getIntField(meta.java_lang_Integer_value);
-                float floatContent = content;
-                return (int) floatContent == content;
-            }
-            if (klass == meta.java_lang_Long) {
-                long content = getLongField(meta.java_lang_Long_value);
-                float floatContent = content;
-                return (long) floatContent == content;
-            }
-            if (klass == meta.java_lang_Double) {
-                double content = getDoubleField(meta.java_lang_Double_value);
-                return !Double.isFinite(content) || (float) content == content;
-            }
+        if (isNull(this)) {
             return false;
         }
-        return InteropLibrary.getUncached().fitsInFloat(rawInteropObject());
+        if (isAtMostFloat(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        // We might lose precision when we convert an int or a long to a float, however, we still
+        // perform the conversion.
+        // This is consistent with Truffle interop, see GR-22718 for more details.
+        if (klass == meta.java_lang_Integer) {
+            int content = getIntField(meta.java_lang_Integer_value);
+            float floatContent = content;
+            return (int) floatContent == content;
+        }
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            float floatContent = content;
+            return (long) floatContent == content;
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return !Double.isFinite(content) || (float) content == content;
+        }
+        return false;
     }
 
     @ExportMessage
     boolean fitsInDouble() {
-        if (isEspressoObject()) {
-            if (isNull(this)) {
-                return false;
-            }
-
-            Meta meta = klass.getMeta();
-            if (isAtMostInt(klass) || klass == meta.java_lang_Double) {
-                return true;
-            }
-            if (klass == meta.java_lang_Long) {
-                long content = getLongField(meta.java_lang_Long_value);
-                double doubleContent = content;
-                return (long) doubleContent == content;
-            }
-            if (klass == meta.java_lang_Float) {
-                float content = getFloatField(meta.java_lang_Float_value);
-                return !Float.isFinite(content) || (double) content == content;
-            }
+        if (isNull(this)) {
             return false;
         }
-        return InteropLibrary.getUncached().fitsInDouble(rawInteropObject());
+
+        Meta meta = klass.getMeta();
+        if (isAtMostInt(klass) || klass == meta.java_lang_Double) {
+            return true;
+        }
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            double doubleContent = content;
+            return (long) doubleContent == content;
+        }
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return !Float.isFinite(content) || (double) content == content;
+        }
+        return false;
     }
 
     private Number readNumberValue() throws UnsupportedMessageException {
-        assert isEspressoObject();
         Meta meta = klass.getMeta();
         if (klass == meta.java_lang_Byte) {
             return (Byte) meta.java_lang_Byte_value.get(this);
@@ -371,74 +335,56 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     byte asByte() throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (!fitsInByte()) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedMessageException.create();
-            }
-            return readNumberValue().byteValue();
+        if (!fitsInByte()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
         }
-        return InteropLibrary.getUncached().asByte(rawInteropObject());
+        return readNumberValue().byteValue();
     }
 
     @ExportMessage
     short asShort() throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (!fitsInShort()) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedMessageException.create();
-            }
-            return readNumberValue().shortValue();
+        if (!fitsInShort()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
         }
-        return InteropLibrary.getUncached().asShort(rawInteropObject());
+        return readNumberValue().shortValue();
     }
 
     @ExportMessage
     public int asInt() throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (!fitsInInt()) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedMessageException.create();
-            }
-            return readNumberValue().intValue();
+        if (!fitsInInt()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
         }
-        return InteropLibrary.getUncached().asInt(rawInteropObject());
+        return readNumberValue().intValue();
     }
 
     @ExportMessage
     long asLong() throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (!fitsInLong()) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedMessageException.create();
-            }
-            return readNumberValue().longValue();
+        if (!fitsInLong()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
         }
-        return InteropLibrary.getUncached().asLong(this);
+        return readNumberValue().longValue();
     }
 
     @ExportMessage
     float asFloat() throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (!fitsInFloat()) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedMessageException.create();
-            }
-            return readNumberValue().floatValue();
+        if (!fitsInFloat()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
         }
-        return InteropLibrary.getUncached().asFloat(rawInteropObject());
+        return readNumberValue().floatValue();
     }
 
     @ExportMessage
     double asDouble() throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (!fitsInDouble()) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedMessageException.create();
-            }
-            return readNumberValue().doubleValue();
+        if (!fitsInDouble()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
         }
-        return InteropLibrary.getUncached().asDouble(rawInteropObject());
+        return readNumberValue().doubleValue();
     }
 
     @ExportMessage
@@ -869,87 +815,67 @@ public final class StaticObject implements TruffleObject {
     @TruffleBoundary
     @ExportMessage
     Object toDisplayString(boolean allowSideEffects) {
-        if (isEspressoObject()) {
-            if (StaticObject.isNull(this)) {
-                return "NULL";
-            }
-            Klass thisKlass = getKlass();
-
-            if (allowSideEffects) {
-                // Call guest toString.
-                int toStringIndex = thisKlass.getMeta().java_lang_Object_toString.getVTableIndex();
-                Method toString = thisKlass.vtableLookup(toStringIndex);
-                return Meta.toHostString((StaticObject) toString.invokeDirect(this));
-            }
-
-            // Handle some special instances without side effects.
-            if (thisKlass == thisKlass.getMeta().java_lang_Class) {
-                return "class " + thisKlass.getTypeAsString();
-            }
-            if (thisKlass == thisKlass.getMeta().java_lang_String) {
-                return Meta.toHostString(this);
-            }
-            return thisKlass.getTypeAsString() + "@" + Integer.toHexString(System.identityHashCode(this));
+        if (StaticObject.isNull(this)) {
+            return "NULL";
         }
-        InteropLibrary interopLibrary = InteropLibrary.getUncached();
-        try {
-            return interopLibrary.asString(interopLibrary.toDisplayString(rawInteropObject(), allowSideEffects));
-        } catch (UnsupportedMessageException e) {
-            throw EspressoError.shouldNotReachHere("Interop library failed to convert display string to string");
+        Klass thisKlass = getKlass();
+
+        if (allowSideEffects) {
+            // Call guest toString.
+            int toStringIndex = thisKlass.getMeta().java_lang_Object_toString.getVTableIndex();
+            Method toString = thisKlass.vtableLookup(toStringIndex);
+            return Meta.toHostString((StaticObject) toString.invokeDirect(this));
         }
+
+        // Handle some special instances without side effects.
+        if (thisKlass == thisKlass.getMeta().java_lang_Class) {
+            return "class " + thisKlass.getTypeAsString();
+        }
+        if (thisKlass == thisKlass.getMeta().java_lang_String) {
+            return Meta.toHostString(this);
+        }
+        return thisKlass.getTypeAsString() + "@" + Integer.toHexString(System.identityHashCode(this));
     }
 
     public static final String CLASS_TO_STATIC = "static";
 
     @ExportMessage
-    Object readMember(String member) throws UnknownIdentifierException, UnsupportedMessageException {
-        if (isEspressoObject()) {
-            if (notNull(this)) {
-                // Class<T>.static == Klass<T>
-                if (CLASS_TO_STATIC.equals(member)) {
-                    if (getKlass() == getKlass().getMeta().java_lang_Class) {
-                        return getMirrorKlass();
-                    }
-                }
-                // Class<T>.class == Class<T>
-                if (STATIC_TO_CLASS.equals(member)) {
-                    if (getKlass() == getKlass().getMeta().java_lang_Class) {
-                        return this;
-                    }
+    Object readMember(String member) throws UnknownIdentifierException {
+        if (notNull(this)) {
+            // Class<T>.static == Klass<T>
+            if (CLASS_TO_STATIC.equals(member)) {
+                if (getKlass() == getKlass().getMeta().java_lang_Class) {
+                    return getMirrorKlass();
                 }
             }
-            throw UnknownIdentifierException.create(member);
+            // Class<T>.class == Class<T>
+            if (STATIC_TO_CLASS.equals(member)) {
+                if (getKlass() == getKlass().getMeta().java_lang_Class) {
+                    return this;
+                }
+            }
         }
-        return InteropLibrary.getUncached().readMember(rawInteropObject(), member);
+        throw UnknownIdentifierException.create(member);
     }
 
     @ExportMessage
     boolean hasMembers() {
-        if (isEspressoObject()) {
-            return notNull(this);
-        }
-        return InteropLibrary.getUncached().hasMembers(rawInteropObject());
+        return !isNull(this);
     }
 
     @ExportMessage
     boolean isMemberReadable(String member) {
-        if(isEspressoObject()) {
-            return notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class //
-                    && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
-        }
-        return InteropLibrary.getUncached().isMemberReadable(rawInteropObject(), member);
+        return notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class //
+                        && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
     }
 
     private static final KeysArray CLASS_MEMBERS = new KeysArray(new String[]{CLASS_TO_STATIC, STATIC_TO_CLASS});
 
     @ExportMessage
-    Object getMembers(@SuppressWarnings("unused") boolean includeInternal) throws UnsupportedMessageException {
-        if (isEspressoObject()) {
-            return (notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class)
-                    ? CLASS_MEMBERS // .static and .class
-                    : KeysArray.EMPTY;
-        }
-        return InteropLibrary.getUncached().getMembers(rawInteropObject(), includeInternal);
+    Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+        return (notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class)
+                        ? KeysArray.EMPTY
+                        : CLASS_MEMBERS; // .static and .class
     }
 
     // endregion Interop
@@ -1116,10 +1042,6 @@ public final class StaticObject implements TruffleObject {
         return this.primitiveFields == INTEROP_MARKER;
     }
 
-    public boolean isEspressoObject() {
-        return !isInterop();
-    }
-
     public Object rawInteropObject() {
         assert isInterop();
         return this.fields;
@@ -1129,7 +1051,6 @@ public final class StaticObject implements TruffleObject {
         return this == getKlass().getStatics();
     }
 
-    // TODO: interop objects
     // Shallow copy.
     public StaticObject copy() {
         if (isNull(this)) {
@@ -1144,7 +1065,6 @@ public final class StaticObject implements TruffleObject {
 
     @ExplodeLoop
     private void initInstanceFields(ObjectKlass thisKlass) {
-        assert isEspressoObject();
         CompilerAsserts.partialEvaluationConstant(thisKlass);
         for (Field f : thisKlass.getFieldTable()) {
             assert !f.isStatic();
@@ -1158,7 +1078,6 @@ public final class StaticObject implements TruffleObject {
 
     @ExplodeLoop
     private void initStaticFields(ObjectKlass thisKlass) {
-        assert isEspressoObject();
         CompilerAsserts.partialEvaluationConstant(thisKlass);
         for (Field f : thisKlass.getStaticFieldTable()) {
             assert f.isStatic();
@@ -1176,14 +1095,12 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public StaticObject getFieldVolatile(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return (StaticObject) UNSAFE.getObjectVolatile(CompilerDirectives.castExact(fields, Object[].class), getObjectFieldIndex(field.getIndex()));
     }
 
     // Not to be used to access hidden fields !
     public StaticObject getField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert !field.getKind().isSubWord();
         Object result;
@@ -1198,34 +1115,28 @@ public final class StaticObject implements TruffleObject {
 
     // Use with caution. Can be used with hidden fields.
     public Object getUnsafeField(int fieldIndex) {
-        assert isEspressoObject();
         return UNSAFE.getObject(castExact(fields, Object[].class), getObjectFieldIndex(fieldIndex));
     }
 
     private void setUnsafeField(int index, Object value) {
-        assert isEspressoObject();
         UNSAFE.putObject(fields, getObjectFieldIndex(index), value);
     }
 
     private Object getUnsafeFieldVolatile(int fieldIndex) {
-        assert isEspressoObject();
         return UNSAFE.getObjectVolatile(castExact(fields, Object[].class), getObjectFieldIndex(fieldIndex));
     }
 
     private void setUnsafeFieldVolatile(int index, Object value) {
-        assert isEspressoObject();
         UNSAFE.putObjectVolatile(fields, getObjectFieldIndex(index), value);
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setFieldVolatile(Field field, Object value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putObjectVolatile(castExact(fields, Object[].class), getObjectFieldIndex(field.getIndex()), value);
     }
 
     public void setField(Field field, Object value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert !field.getKind().isSubWord();
         assert !(value instanceof StaticObject) ||
@@ -1242,7 +1153,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     public boolean compareAndSwapField(Field field, Object before, Object after) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.compareAndSwapObject(fields, getObjectFieldIndex(field.getIndex()), before, after);
     }
@@ -1258,7 +1168,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     public boolean getBooleanField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Boolean;
         if (field.isVolatile()) {
@@ -1270,13 +1179,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public byte getByteFieldVolatile(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getByteVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public byte getByteField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Byte;
         if (field.isVolatile()) {
@@ -1287,7 +1194,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     public char getCharField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Char;
         if (field.isVolatile()) {
@@ -1299,13 +1205,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public char getCharFieldVolatile(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getCharVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public short getShortField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Short;
         if (field.isVolatile()) {
@@ -1317,13 +1221,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public short getShortFieldVolatile(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getShortVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public int getIntField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Int;
         if (field.isVolatile()) {
@@ -1335,13 +1237,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public int getIntFieldVolatile(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getIntVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public float getFloatField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
@@ -1353,13 +1253,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public float getFloatFieldVolatile(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getFloatVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public double getDoubleField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Double;
         if (field.isVolatile()) {
@@ -1371,7 +1269,6 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public double getDoubleFieldVolatile(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getDoubleVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
@@ -1379,7 +1276,6 @@ public final class StaticObject implements TruffleObject {
     // Field setters
 
     public void setBooleanField(Field field, boolean value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Boolean;
         if (field.isVolatile()) {
@@ -1391,12 +1287,10 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setBooleanFieldVolatile(Field field, boolean value) {
-        assert isEspressoObject();
         setByteFieldVolatile(field, (byte) (value ? 1 : 0));
     }
 
     public void setByteField(Field field, byte value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Byte;
         if (field.isVolatile()) {
@@ -1408,12 +1302,10 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setByteFieldVolatile(Field field, byte value) {
-        assert isEspressoObject();
         UNSAFE.putByteVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setCharField(Field field, char value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Char;
         if (field.isVolatile()) {
@@ -1425,12 +1317,10 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setCharFieldVolatile(Field field, char value) {
-        assert isEspressoObject();
         UNSAFE.putCharVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setShortField(Field field, short value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Short;
         if (field.isVolatile()) {
@@ -1442,12 +1332,10 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setShortFieldVolatile(Field field, short value) {
-        assert isEspressoObject();
         UNSAFE.putShortVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setIntField(Field field, int value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Int || field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
@@ -1459,12 +1347,10 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setIntFieldVolatile(Field field, int value) {
-        assert isEspressoObject();
         UNSAFE.putIntVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setFloatField(Field field, float value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
@@ -1476,13 +1362,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setDoubleFieldVolatile(Field field, double value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putDoubleVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setDoubleField(Field field, double value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Double;
         if (field.isVolatile()) {
@@ -1494,13 +1378,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setFloatFieldVolatile(Field field, float value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putFloatVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public boolean compareAndSwapIntField(Field field, int before, int after) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.compareAndSwapInt(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), before, after);
     }
@@ -1510,13 +1392,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public long getLongFieldVolatile(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getLongVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public long getLongField(Field field) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind().needsTwoSlots();
         if (field.isVolatile()) {
@@ -1528,13 +1408,11 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setLongFieldVolatile(Field field, long value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putLongVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setLongField(Field field, long value) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind().needsTwoSlots();
         if (field.isVolatile()) {
@@ -1545,7 +1423,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     public boolean compareAndSwapLongField(Field field, long before, long after) {
-        assert isEspressoObject();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.compareAndSwapLong(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), before, after);
     }
@@ -1555,7 +1432,6 @@ public final class StaticObject implements TruffleObject {
     // Given a guest Class, get the corresponding Klass.
     public Klass getMirrorKlass() {
         assert getKlass().getType() == Type.java_lang_Class;
-        assert isEspressoObject();
         Klass result = (Klass) getHiddenField(getKlass().getMeta().HIDDEN_MIRROR_KLASS);
         if (result == null) {
             CompilerDirectives.transferToInterpreter();
@@ -1569,9 +1445,6 @@ public final class StaticObject implements TruffleObject {
     public String toString() {
         if (this == NULL) {
             return "null";
-        }
-        if (isInterop()) {
-            return "interop object: " + getKlass().getTypeAsString();
         }
         if (getKlass() == getKlass().getMeta().java_lang_String) {
             return Meta.toHostString(this);
@@ -1589,9 +1462,6 @@ public final class StaticObject implements TruffleObject {
     public String toVerboseString() {
         if (this == NULL) {
             return "null";
-        }
-        if (isInterop()) {
-            return String.format("interop object: %s\n%s", getKlass().getTypeAsString(), InteropLibrary.getUncached().toDisplayString(rawInteropObject()));
         }
         if (getKlass() == getKlass().getMeta().java_lang_String) {
             return Meta.toHostString(this);
@@ -1611,25 +1481,21 @@ public final class StaticObject implements TruffleObject {
     }
 
     public void setHiddenField(Field hiddenField, Object value) {
-        assert isEspressoObject();
         assert hiddenField.isHidden();
         setUnsafeField(hiddenField.getIndex(), value);
     }
 
     public Object getHiddenField(Field hiddenField) {
-        assert isEspressoObject();
         assert hiddenField.isHidden();
         return getUnsafeField(hiddenField.getIndex());
     }
 
     public void setHiddenFieldVolatile(Field hiddenField, Object value) {
-        assert isEspressoObject();
         assert hiddenField.isHidden();
         setUnsafeFieldVolatile(hiddenField.getIndex(), value);
     }
 
     public Object getHiddenFieldVolatile(Field hiddenField) {
-        assert isEspressoObject();
         assert hiddenField.isHidden();
         return getUnsafeFieldVolatile(hiddenField.getIndex());
     }
@@ -1640,13 +1506,11 @@ public final class StaticObject implements TruffleObject {
 
     @SuppressWarnings("unchecked")
     public <T> T unwrap() {
-        assert isEspressoObject();
         assert isArray();
         return (T) fields;
     }
 
     public <T> T get(int index) {
-        assert isEspressoObject();
         assert isArray();
         return this.<T[]> unwrap()[index];
     }
@@ -1655,7 +1519,6 @@ public final class StaticObject implements TruffleObject {
      * Workaround to avoid casting to Object[] in InterpreterToVM (non-leaf type check).
      */
     public void putObject(StaticObject value, int index, Meta meta) {
-        assert isEspressoObject();
         assert isArray();
         if (index >= 0 && index < length()) {
             UNSAFE.putObject(fields, getObjectFieldIndex(index), arrayStoreExCheck(value, ((ArrayKlass) klass).getComponentType(), meta));
@@ -1674,13 +1537,11 @@ public final class StaticObject implements TruffleObject {
     }
 
     public int length() {
-        assert isEspressoObject();
         assert isArray();
         return Array.getLength(fields);
     }
 
     private Object cloneWrappedArray() {
-        assert isEspressoObject();
         assert isArray();
         if (fields instanceof boolean[]) {
             return this.<boolean[]> unwrap().clone();
@@ -1790,7 +1651,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     public void setArrayByte(byte value, int index, Meta meta) {
-        assert isEspressoObject();
         assert isArray() && (fields instanceof byte[] || fields instanceof boolean[]);
         if (index >= 0 && index < length()) {
             UNSAFE.putByte(fields, getArrayByteOffset(index), value);
@@ -1800,7 +1660,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     public byte getArrayByte(int index, Meta meta) {
-        assert isEspressoObject();
         assert isArray() && (fields instanceof byte[] || fields instanceof boolean[]);
         if (index >= 0 && index < length()) {
             return UNSAFE.getByte(fields, getArrayByteOffset(index));
@@ -1810,7 +1669,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     public StaticObject getAndSetObject(Field field, StaticObject value) {
-        assert isEspressoObject();
         return (StaticObject) UNSAFE.getAndSetObject(fields, getObjectFieldIndex(field.getIndex()), value);
     }
 }
