@@ -26,8 +26,6 @@ package com.oracle.svm.graal.hosted;
 
 import java.util.function.Function;
 
-import com.oracle.svm.graal.isolated.IsolateAwareMetaAccess;
-import com.oracle.svm.graal.meta.SubstrateMetaAccess;
 import org.graalvm.compiler.nodes.spi.LoopsDataProvider;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
@@ -48,24 +46,20 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 
 public class SubstrateRuntimeGraalSetup implements RuntimeGraalSetup {
 
-    protected final SubstrateMetaAccess metaAccess;
-
-    public SubstrateRuntimeGraalSetup() {
-        if (SubstrateOptions.supportCompileInIsolates()) {
-            metaAccess = new IsolateAwareMetaAccess();
-        } else {
-            metaAccess = new SubstrateMetaAccess();
-        }
-    }
+    protected GraalProviderObjectReplacements providerObjectReplacements;
 
     @Override
     public GraalProviderObjectReplacements getProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
-        if (SubstrateOptions.supportCompileInIsolates()) {
-            assert metaAccess instanceof IsolateAwareMetaAccess;
-            return new IsolateAwareProviderObjectReplacements(aMetaAccess, (IsolateAwareMetaAccess) metaAccess);
-        } else {
-            return new GraalProviderObjectReplacements(aMetaAccess, metaAccess);
+        if (providerObjectReplacements != null) {
+            return providerObjectReplacements;
         }
+
+        if (SubstrateOptions.supportCompileInIsolates()) {
+            providerObjectReplacements = new IsolateAwareProviderObjectReplacements(aMetaAccess);
+        } else {
+            providerObjectReplacements = new GraalProviderObjectReplacements(aMetaAccess);
+        }
+        return providerObjectReplacements;
     }
 
     @Override
