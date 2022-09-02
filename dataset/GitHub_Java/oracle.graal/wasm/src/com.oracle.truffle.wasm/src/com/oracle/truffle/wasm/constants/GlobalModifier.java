@@ -45,7 +45,4 @@ public final class GlobalModifier {
                 throw new WasmException("Unknown modifier: 0x" + Integer.toHexString(modifier));
         }
     }
-
-    private GlobalModifier() {
-    }
 }

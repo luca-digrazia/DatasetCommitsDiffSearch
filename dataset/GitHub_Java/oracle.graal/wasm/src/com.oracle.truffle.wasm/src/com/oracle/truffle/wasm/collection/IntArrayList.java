@@ -29,7 +29,7 @@
  */
 package com.oracle.truffle.wasm.collection;
 
-public class IntArrayList {
+public final class IntArrayList {
     private static final int[] EMPTY_INT_ARRAY = new int[0];
 
     private int[] array;
@@ -44,6 +44,15 @@ public class IntArrayList {
         ensureSize();
         array[offset] = n;
         offset++;
+    }
+
+    public int popBack() {
+        offset--;
+        return array[offset];
+    }
+
+    public int get(int index) {
+        return array[index];
     }
 
     public int size() {

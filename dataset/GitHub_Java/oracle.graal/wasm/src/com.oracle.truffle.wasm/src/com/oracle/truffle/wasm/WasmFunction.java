@@ -30,12 +30,10 @@
 package com.oracle.truffle.wasm;
 
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.nodes.IndirectCallNode;
 
 @ExportLibrary(InteropLibrary.class)
 public class WasmFunction implements TruffleObject {
@@ -105,8 +103,8 @@ public class WasmFunction implements TruffleObject {
     }
 
     @ExportMessage
-    Object execute(Object[] arguments, @Cached IndirectCallNode callNode) {
-        return callNode.call(resolveCallTarget(), arguments);
+    Object execute(Object[] arguments) {
+        return resolveCallTarget().call(arguments);
     }
 
     public WasmCodeEntry codeEntry() {

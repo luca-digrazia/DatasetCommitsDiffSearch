@@ -31,20 +31,20 @@ package com.oracle.truffle.wasm.predefined.testutil;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmContext;
-import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.WasmVoidResult;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
+import com.oracle.truffle.wasm.WasmCodeEntry;
+import com.oracle.truffle.wasm.WasmContext;
+import com.oracle.truffle.wasm.WasmLanguage;
+import com.oracle.truffle.wasm.WasmVoidResult;
+import com.oracle.truffle.wasm.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
 
 import java.util.function.Consumer;
 
 /**
- * Initialize the module using the initialization object provided by the test suite.
- * The initialization will set certain globals and memory locations to specific values.
- * This is done because certain language backends emit non-WebAssembly code that is used
- * to initialize parts of the memory.
+ * Initialize the module using the initialization object provided by the test suite. The
+ * initialization will set certain globals and memory locations to specific values. This is done
+ * because certain language backends emit non-WebAssembly code that is used to initialize parts of
+ * the memory.
  */
 public class RunCustomInitialization extends WasmPredefinedRootNode {
     public RunCustomInitialization(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
@@ -64,7 +64,7 @@ public class RunCustomInitialization extends WasmPredefinedRootNode {
 
     @SuppressWarnings("unchecked")
     @CompilerDirectives.TruffleBoundary
-    private void initializeModule(Object initialization) {
+    private static void initializeModule(Object initialization) {
         if (initialization != null) {
             WasmContext context = WasmContext.getCurrent();
             ((Consumer<WasmContext>) initialization).accept(context);

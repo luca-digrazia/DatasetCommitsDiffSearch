@@ -34,13 +34,13 @@ import java.nio.charset.Charset;
 
 import com.oracle.truffle.api.TruffleFile;
 
-public class WasmFileDetector implements TruffleFile.FileTypeDetector {
+public final class WasmFileDetector implements TruffleFile.FileTypeDetector {
     @Override
     public String findMimeType(TruffleFile file) throws IOException {
-       if (file.getName() != null && file.getName().endsWith(".wasm")) {
-           return "application/wasm";
-       }
-       return null;
+        if (file.getName() != null && file.getName().endsWith(".wasm")) {
+            return "application/wasm";
+        }
+        return null;
     }
 
     @Override

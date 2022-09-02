@@ -89,9 +89,6 @@ public class CompareContextsNode extends WasmPredefinedRootNode {
         if (firstMemory == null && lastMemory == null) {
             return;
         }
-        if (firstMemory == null || lastMemory == null) {
-            throw new WasmExecutionException(this, "One of the memories is null.");
-        }
         if (firstMemory.byteSize() != lastMemory.byteSize()) {
             throw new WasmExecutionException(this, "Mismatch in memory lengths: " + firstMemory.byteSize() + " vs " +
                             lastMemory.byteSize());

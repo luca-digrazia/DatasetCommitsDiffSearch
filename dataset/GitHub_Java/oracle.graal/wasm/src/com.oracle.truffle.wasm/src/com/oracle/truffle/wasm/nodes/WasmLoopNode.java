@@ -40,7 +40,7 @@ public final class WasmLoopNode extends WasmNode {
     @Child private LoopNode loopNode;
 
     public WasmLoopNode(WasmBlockNode block) {
-        super(block.module(), block.codeEntry(), block.byteLength());
+        super(block.module(), block.codeEntry(), block.byteLength(), block.byteConstantLength(), block.longConstantLength());
         this.loopNode = Truffle.getRuntime().createLoopNode(block);
     }
 
@@ -52,25 +52,5 @@ public final class WasmLoopNode extends WasmNode {
     @Override
     public byte returnTypeId() {
         return ((WasmBlockNode) this.loopNode.getRepeatingNode()).returnTypeId();
-    }
-
-    @Override
-    int byteConstantLength() {
-        return ((WasmBlockNode) loopNode.getRepeatingNode()).byteConstantLength();
-    }
-
-    @Override
-    int intConstantLength() {
-        return ((WasmBlockNode) loopNode.getRepeatingNode()).intConstantLength();
-    }
-
-    @Override
-    int longConstantLength() {
-        return ((WasmBlockNode) loopNode.getRepeatingNode()).longConstantLength();
-    }
-
-    @Override
-    int branchTableLength() {
-        return ((WasmBlockNode) loopNode.getRepeatingNode()).branchTableLength();
     }
 }

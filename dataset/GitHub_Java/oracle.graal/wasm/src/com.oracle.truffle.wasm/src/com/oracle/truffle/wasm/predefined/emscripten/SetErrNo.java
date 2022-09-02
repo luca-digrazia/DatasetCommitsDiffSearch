@@ -35,8 +35,6 @@ import com.oracle.truffle.wasm.WasmLanguage;
 import com.oracle.truffle.wasm.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
 
-import static com.oracle.truffle.wasm.WasmTracing.trace;
-
 public class SetErrNo extends WasmPredefinedRootNode {
     public SetErrNo(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
         super(language, codeEntry, memory);

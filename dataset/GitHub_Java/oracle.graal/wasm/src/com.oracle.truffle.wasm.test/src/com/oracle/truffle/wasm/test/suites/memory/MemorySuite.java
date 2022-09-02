@@ -29,20 +29,19 @@
  */
 package com.oracle.truffle.wasm.test.suites.memory;
 
-import com.oracle.truffle.wasm.test.WasmSuiteBase;
-import com.oracle.truffle.wasm.test.options.WasmTestOptions;
+import java.io.IOException;
+
 import org.junit.Test;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import com.oracle.truffle.wasm.test.WasmSuiteBase;
 
 public class MemorySuite extends WasmSuiteBase {
     @Override
-    protected Path testDirectory() {
-        return Paths.get(WasmTestOptions.TEST_SOURCE_PATH, "memory");
+    protected String testResource() {
+        return "memory";
     }
 
+    @Override
     @Test
     public void test() throws IOException {
         // This is here just to make mx aware of the test suite class.
