@@ -57,7 +57,7 @@ public final class RuntimeCodeInfoAccess {
     }
 
     public static SubstrateInstalledCode getInstalledCode(CodeInfo info) {
-        return CodeInfoAccess.getObjectField(info, CodeInfoImpl.INSTALLEDCODE_OBJFIELD);
+        return CodeInfoAccess.<SubstrateInstalledCode> getObjectField(info, CodeInfoImpl.INSTALLEDCODE_OBJFIELD);
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -65,9 +65,8 @@ public final class RuntimeCodeInfoAccess {
         return cast(info).getCodeObserverHandles();
     }
 
-    public static void initialize(CodeInfo info, Pointer codeStart, int codeSize, int dataOffset, int dataSize, int codeAndDataMemorySize,
-                    int tier, NonmovableArray<InstalledCodeObserverHandle> observerHandles, boolean freeArraysOnRelease) {
-
+    public static void initialize(CodeInfo info, Pointer codeStart, int codeSize, int dataOffset, int dataSize,
+                    int codeAndDataMemorySize, int tier, NonmovableArray<InstalledCodeObserverHandle> observerHandles) {
         CodeInfoImpl impl = cast(info);
         impl.setCodeStart((CodePointer) codeStart);
         impl.setCodeSize(WordFactory.unsigned(codeSize));
@@ -76,7 +75,6 @@ public final class RuntimeCodeInfoAccess {
         impl.setCodeAndDataMemorySize(WordFactory.unsigned(codeAndDataMemorySize));
         impl.setTier(tier);
         impl.setCodeObserverHandles(observerHandles);
-        impl.setFreeArraysOnRelease(freeArraysOnRelease);
     }
 
     public static void setCodeObjectConstantsInfo(CodeInfo info, NonmovableArray<Byte> refMapEncoding, long refMapIndex) {
@@ -86,28 +84,8 @@ public final class RuntimeCodeInfoAccess {
         impl.setCodeConstantsReferenceMapIndex(refMapIndex);
     }
 
-    public static NonmovableArray<Byte> getCodeConstantsReferenceMapEncoding(CodeInfo info) {
-        return cast(info).getCodeConstantsReferenceMapEncoding();
-    }
-
-    public static long getCodeConstantsReferenceMapIndex(CodeInfo info) {
-        return cast(info).getCodeConstantsReferenceMapIndex();
-    }
-
-    public static NonmovableArray<Byte> getDeoptimizationEncodings(CodeInfo info) {
-        return cast(info).getDeoptimizationEncodings();
-    }
-
-    public static NonmovableArray<Integer> getDeoptimizationStartOffsets(CodeInfo info) {
-        return cast(info).getDeoptimizationStartOffsets();
-    }
-
-    public static NonmovableObjectArray<Object> getDeoptimizationObjectConstants(CodeInfo info) {
-        return cast(info).getDeoptimizationObjectConstants();
-    }
-
     @Uninterruptible(reason = "Nonmovable object arrays are not visible to GC until installed.")
-    public static void setDeoptimizationMetadata(CodeInfo info, NonmovableArray<Integer> startOffsets, NonmovableArray<Byte> encodings, NonmovableObjectArray<Object> objectConstants) {
+    static void setDeoptimizationMetadata(CodeInfo info, NonmovableArray<Integer> startOffsets, NonmovableArray<Byte> encodings, NonmovableObjectArray<Object> objectConstants) {
         CodeInfoImpl impl = cast(info);
         impl.setDeoptimizationStartOffsets(startOffsets);
         impl.setDeoptimizationEncodings(encodings);
@@ -252,9 +230,7 @@ public final class RuntimeCodeInfoAccess {
             Heap.getHeap().getRuntimeCodeInfoGCSupport().unregisterRuntimeCodeInfo(info);
         }
 
-        if (cast(info).getFreeArraysOnRelease()) {
-            forEachArray(info, RELEASE_ACTION);
-        }
+        forEachArray(info, RELEASE_ACTION);
         ImageSingletons.lookup(UnmanagedMemorySupport.class).free(info);
     }
 
