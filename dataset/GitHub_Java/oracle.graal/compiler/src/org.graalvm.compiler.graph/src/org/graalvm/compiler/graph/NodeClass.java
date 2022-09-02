@@ -867,7 +867,6 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             // Use sparse map
             newNodes = EconomicMap.create(Equivalence.IDENTITY);
         }
-        graph.beforeNodeDuplication(oldGraph);
         createNodeDuplicates(graph, nodes, replacements, newNodes);
 
         InplaceUpdateClosure replacementClosure = new InplaceUpdateClosure() {
@@ -1389,7 +1388,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             if ((myMask & LIST_MASK) == 0) {
                 Node curNode = Edges.getNodeUnsafe(node, offset);
                 if (curNode != null) {
-                    assert curNode.isAlive() : "Input " + curNode + " of node " + node + " is not alive";
+                    assert curNode.isAlive() : "Input not alive " + curNode;
                     curNode.addUsage(node);
                 }
             } else {
@@ -1405,7 +1404,7 @@ public final class NodeClass<T> extends FieldIntrospection<T> {
             for (int i = 0; i < list.size(); ++i) {
                 Node curNode = list.get(i);
                 if (curNode != null) {
-                    assert curNode.isAlive() : "Input not alive " + curNode;
+                    assert curNode.isAlive() : "Input not alive";
                     curNode.addUsage(node);
                 }
             }
