@@ -31,16 +31,9 @@ import java.util.concurrent.locks.LockSupport;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.ffi.Buffer;
@@ -686,126 +679,43 @@ public final class Target_sun_misc_Unsafe {
 
     // region get*(long offset)
 
-    static final class UnsafeUtils {
-        static Unsafe getUnsafe(EspressoContext context, BranchProfile unsupportedProfile) {
-            if (context.NativeAccessAllowed) {
-                return UnsafeAccess.get();
-            }
-            unsupportedProfile.enter();
-            Meta meta = context.getMeta();
-            throw meta.throwExceptionWithMessage(meta.java_lang_UnsupportedOperationException, "Cannot perform unsafe operations unless the Context allows native access");
-        }
+    @Substitution(hasReceiver = true)
+    public static byte getByte(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long offset, @InjectMeta Meta meta) {
+        return UnsafeAccess.getIfAllowed(meta).getByte(offset);
     }
 
     @Substitution(hasReceiver = true)
-    static abstract class GetByte extends Node {
-
-        abstract byte execute(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long address);
-
-        @Specialization
-        byte doCached(
-                        @SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self,
-                        long address,
-                        @CachedContext(EspressoLanguage.class) EspressoContext context,
-                        @Cached BranchProfile unsupportedProfile) {
-            return UnsafeUtils.getUnsafe(context, unsupportedProfile).getByte(address);
-        }
+    public static char getChar(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long offset, @InjectMeta Meta meta) {
+        return UnsafeAccess.getIfAllowed(meta).getChar(offset);
     }
 
     @Substitution(hasReceiver = true)
-    static abstract class GetChar extends Node {
-
-        abstract char execute(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long address);
-
-        @Specialization
-        char doCached(
-                @SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self,
-                long address,
-                @CachedContext(EspressoLanguage.class) EspressoContext context,
-                @Cached BranchProfile unsupportedProfile) {
-            return UnsafeUtils.getUnsafe(context, unsupportedProfile).getChar(address);
-        }
+    public static short getShort(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long offset, @InjectMeta Meta meta) {
+        return UnsafeAccess.getIfAllowed(meta).getShort(offset);
     }
 
     @Substitution(hasReceiver = true)
-    static abstract class GetShort extends Node {
-
-        abstract short execute(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long address);
-
-        @Specialization
-        short doCached(
-                @SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self,
-                long address,
-                @CachedContext(EspressoLanguage.class) EspressoContext context,
-                @Cached BranchProfile unsupportedProfile) {
-            return UnsafeUtils.getUnsafe(context, unsupportedProfile).getShort(address);
-        }
+    public static int getInt(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long offset, @InjectMeta Meta meta) {
+        return UnsafeAccess.getIfAllowed(meta).getInt(offset);
     }
 
     @Substitution(hasReceiver = true)
-    static abstract class GetInt extends Node {
-
-        abstract int execute(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long address);
-
-        @Specialization
-        int doCached(
-                @SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self,
-                long address,
-                @CachedContext(EspressoLanguage.class) EspressoContext context,
-                @Cached BranchProfile unsupportedProfile) {
-            return UnsafeUtils.getUnsafe(context, unsupportedProfile).getInt(address);
-        }
+    public static float getFloat(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long offset, @InjectMeta Meta meta) {
+        return UnsafeAccess.getIfAllowed(meta).getFloat(offset);
     }
 
     @Substitution(hasReceiver = true)
-    static abstract class GetFloat extends Node {
-
-        abstract float execute(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long address);
-
-        @Specialization
-        float doCached(
-                @SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self,
-                long address,
-                @CachedContext(EspressoLanguage.class) EspressoContext context,
-                @Cached BranchProfile unsupportedProfile) {
-            return UnsafeUtils.getUnsafe(context, unsupportedProfile).getFloat(address);
-        }
+    public static long getLong(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long offset, @InjectMeta Meta meta) {
+        return UnsafeAccess.getIfAllowed(meta).getLong(offset);
     }
 
     @Substitution(hasReceiver = true)
-    static abstract class GetDouble extends Node {
-
-        abstract double execute(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long address);
-
-        @Specialization
-        double doCached(
-                @SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self,
-                long address,
-                @CachedContext(EspressoLanguage.class) EspressoContext context,
-                @Cached BranchProfile unsupportedProfile) {
-            return UnsafeUtils.getUnsafe(context, unsupportedProfile).getDouble(address);
-        }
+    public static double getDouble(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long offset, @InjectMeta Meta meta) {
+        return UnsafeAccess.getIfAllowed(meta).getDouble(offset);
     }
-
-    @Substitution(hasReceiver = true)
-    static abstract class GetLong extends Node {
-
-        abstract long execute(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, long address);
-
-        @Specialization
-        long doCached(
-                @SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self,
-                long address,
-                @CachedContext(EspressoLanguage.class) EspressoContext context,
-                @Cached BranchProfile unsupportedProfile) {
-            return UnsafeUtils.getUnsafe(context, unsupportedProfile).getLong(address);
-        }
-    }
-
     // endregion get*(long offset)
 
     // region put*Volatile(Object holder, long offset)
-
     @TruffleBoundary(allowInlining = true)
     @Substitution(hasReceiver = true, nameProvider = SharedUnsafeObjectAccessToReference.class)
     public static void putObjectVolatile(@SuppressWarnings("unused") @JavaType(Unsafe.class) StaticObject self, @JavaType(Object.class) StaticObject holder, long offset,
