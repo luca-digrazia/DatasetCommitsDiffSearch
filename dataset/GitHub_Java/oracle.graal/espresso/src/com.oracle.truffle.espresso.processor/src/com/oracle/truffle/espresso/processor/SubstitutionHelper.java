@@ -40,8 +40,6 @@ public class SubstitutionHelper {
     // Target of the substitution, cab be a public static method or a node.
     private final Element target;
 
-    private final TypeElement implAnnotation;
-
     public TypeElement getNodeTarget() {
         return (TypeElement) target;
     }
@@ -50,9 +48,8 @@ public class SubstitutionHelper {
         return (ExecutableElement) target;
     }
 
-    public SubstitutionHelper(EspressoProcessor processor, Element target, TypeElement implAnnotation) {
+    public SubstitutionHelper(EspressoProcessor processor, Element target) {
         this.target = target;
-        this.implAnnotation = implAnnotation;
         // If the target is a node, obtain the abstract execute* method.
         ExecutableElement targetMethod = isNodeTarget()
                         ? EspressoProcessor.findNodeExecute(processor.getMessager(), getNodeTarget())
@@ -63,9 +60,5 @@ public class SubstitutionHelper {
 
     public boolean isNodeTarget() {
         return target instanceof TypeElement;
-    }
-
-    public TypeElement getImplAnnotation() {
-        return implAnnotation;
     }
 }

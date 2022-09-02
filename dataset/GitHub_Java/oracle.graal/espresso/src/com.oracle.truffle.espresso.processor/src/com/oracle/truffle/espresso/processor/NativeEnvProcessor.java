@@ -29,6 +29,7 @@ import java.util.Set;
 
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -47,22 +48,20 @@ public final class NativeEnvProcessor extends EspressoProcessor {
     private static final String JNI_PACKAGE = "com.oracle.truffle.espresso.jni";
     protected static final String FFI_PACKAGE = "com.oracle.truffle.espresso.ffi";
     private static final String POINTER = FFI_PACKAGE + "." + "Pointer";
-    private static final String NATIVE_TYPE = FFI_PACKAGE + "." + "NativeType";
-    private static final String NATIVE_SIGNATURE = FFI_PACKAGE + "." + "NativeSignature";
-
     private static final String HANDLE = JNI_PACKAGE + "." + "Handle";
     private static final String JNI_IMPL = JNI_PACKAGE + "." + "JniImpl";
 
     private static final String SUBSTITUTIONS_PACKAGE = "com.oracle.truffle.espresso.substitutions";
-    private static final String SUBSTITUTOR = "CallableFromNative";
+    private static final String SUBSTITUTOR = "IntrinsicSubstitutor";
 
     private static final String ENV_ARG_NAME = "env";
     private static final String INVOKE = "invoke(Object " + ENV_ARG_NAME + ", Object[] " + ARGS_NAME + ") {\n";
 
     private static final String GENERATE_INTRISIFICATION = "com.oracle.truffle.espresso.substitutions.GenerateNativeEnv";
+    private static final String PREPEND_ENV = "com.oracle.truffle.espresso.substitutions.GenerateNativeEnv.PrependEnv";
 
-    protected static final String IMPORT_NATIVE_SIGNATURE = "import " + NATIVE_SIGNATURE + ";\n";
-    protected static final String IMPORT_NATIVE_TYPE = "import " + NATIVE_TYPE + ";\n";
+    protected static final String IMPORT_NATIVE_SIGNATURE = "import " + FFI_PACKAGE + "." + "NativeSignature" + ";\n";
+    protected static final String IMPORT_NATIVE_TYPE = "import " + FFI_PACKAGE + "." + "NativeType" + ";\n";
 
     // @Pointer
     private TypeElement pointerAnnotation;
@@ -78,6 +77,10 @@ public final class NativeEnvProcessor extends EspressoProcessor {
 
     // @GenerateNativeEnv
     private TypeElement generateIntrinsification;
+    // @GenerateNativeEnv.target()
+    private ExecutableElement targetAttribute;
+    // @GenerateNativeEnv.PrependEnv()
+    private TypeElement prependEnvAnnotation;
     // @JniImpl
     private TypeElement jniImpl;
 
@@ -107,13 +110,12 @@ public final class NativeEnvProcessor extends EspressoProcessor {
 
         public IntrinsincsHelper(EspressoProcessor processor,
                         Element element,
-                        TypeElement implAnnotation,
                         NativeType[] jniNativeSignature,
                         List<Boolean> referenceTypes,
                         boolean isStatic,
                         boolean prependEnv,
                         boolean needsHandlify) {
-            super(processor, element, implAnnotation);
+            super(processor, element);
             this.jniNativeSignature = jniNativeSignature;
             this.referenceTypes = referenceTypes;
             this.isStatic = isStatic;
@@ -127,23 +129,31 @@ public final class NativeEnvProcessor extends EspressoProcessor {
     }
 
     protected void initNfiType() {
+        this.pointerAnnotation = processingEnv.getElementUtils().getTypeElement(POINTER);
+        this.handleAnnotation = processingEnv.getElementUtils().getTypeElement(HANDLE);
     }
 
     @Override
     void processImpl(RoundEnvironment env) {
         // Set up the different annotations, along with their values, that we will need.
-        this.generateIntrinsification = getTypeElement(GENERATE_INTRISIFICATION);
-        this.jniImpl = getTypeElement(JNI_IMPL);
-        this.pointerAnnotation = getTypeElement(POINTER);
-        this.handleAnnotation = getTypeElement(HANDLE);
-
+        this.generateIntrinsification = processingEnv.getElementUtils().getTypeElement(GENERATE_INTRISIFICATION);
+        this.prependEnvAnnotation = processingEnv.getElementUtils().getTypeElement(PREPEND_ENV);
+        this.jniImpl = processingEnv.getElementUtils().getTypeElement(JNI_IMPL);
+        initNfiType();
+        for (Element e : generateIntrinsification.getEnclosedElements()) {
+            if (e.getKind() == ElementKind.METHOD) {
+                if (e.getSimpleName().contentEquals("target")) {
+                    this.targetAttribute = (ExecutableElement) e;
+                }
+            }
+        }
         for (Element e : env.getElementsAnnotatedWith(generateIntrinsification)) {
             findIntrisificationTarget(e);
         }
         for (IntrinsificationTarget target : targets) {
             initClosure(target);
             for (Element e : env.getElementsAnnotatedWith(target.intrinsicAnnotation)) {
-                processElement(e, target.intrinsicAnnotation);
+                processElement(e);
             }
         }
     }
@@ -156,14 +166,16 @@ public final class NativeEnvProcessor extends EspressoProcessor {
         this.imports = "import " + envPackage + "." + envClassName + ";\n";
 
         // Generate collector in the same package as env annotation.
-        initCollector(envPackage);
+        initCollector(envPackage, envClassName + "Collector");
     }
 
     private void findIntrisificationTarget(Element e) {
         assert e.getKind() == ElementKind.CLASS;
         TypeElement c = (TypeElement) e;
         AnnotationMirror genIntrisification = getAnnotation(c, generateIntrinsification);
-        TypeMirror targetAnnotation = getAnnotationValue(genIntrisification, "target", TypeMirror.class);
+        AnnotationValue v = getAttribute(genIntrisification, targetAttribute);
+        assert v.getValue() instanceof TypeMirror;
+        TypeElement targetAnnotation = processingEnv.getElementUtils().getTypeElement(v.getValue().toString());
         String qualifiedName = c.getQualifiedName().toString();
         int lastDot = qualifiedName.lastIndexOf('.');
         String packageName;
@@ -175,17 +187,14 @@ public final class NativeEnvProcessor extends EspressoProcessor {
             packageName = "";
             className = qualifiedName;
         }
-        targets.add(new IntrinsificationTarget(packageName, className, asTypeElement(targetAnnotation)));
+        targets.add(new IntrinsificationTarget(packageName, className, targetAnnotation));
     }
 
-    void processElement(Element element, TypeElement implAnnotation) {
+    void processElement(Element element) {
         assert element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CLASS;
         assert element.getEnclosingElement().getKind() == ElementKind.CLASS;
         TypeElement declaringClass = (TypeElement) element.getEnclosingElement();
-
-        AnnotationMirror genIntrisification = getAnnotation(declaringClass, generateIntrinsification);
-        boolean prependEnvValue = getAnnotationValue(genIntrisification, "prependEnv", Boolean.class);
-        boolean prependEnv = prependEnvValue || isJni(element);
+        boolean prependEnv = getAnnotation(declaringClass, this.prependEnvAnnotation) != null || isJni(element);
         if (declaringClass.getQualifiedName().toString().equals(envPackage + "." + envClassName)) {
             String className = envClassName;
             // Obtain the name of the method to be substituted in.
@@ -206,7 +215,7 @@ public final class NativeEnvProcessor extends EspressoProcessor {
                 // Check if we need to call an instance method
                 boolean isStatic = element.getKind() == ElementKind.METHOD && targetMethod.getModifiers().contains(Modifier.STATIC);
                 // Spawn helper
-                IntrinsincsHelper h = new IntrinsincsHelper(this, element, implAnnotation, jniNativeSignature, referenceTypes, isStatic, prependEnv, needsHandlify);
+                IntrinsincsHelper h = new IntrinsincsHelper(this, element, jniNativeSignature, referenceTypes, isStatic, prependEnv, needsHandlify);
                 // Create the contents of the source file
                 String classFile = spawnSubstitutor(
                                 envPackage,
