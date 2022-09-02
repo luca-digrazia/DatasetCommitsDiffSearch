@@ -24,16 +24,15 @@
 package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.substitutions.Substitutor;
 
 public class IntrinsicSubstitutorRootNode extends EspressoMethodNode {
     private final Substitutor substitution;
 
-    public IntrinsicSubstitutorRootNode(Substitutor.Factory factory, Method method) {
+    public IntrinsicSubstitutorRootNode(Substitutor sub, Method method) {
         super(method);
-        this.substitution = factory.create(EspressoLanguage.getCurrentContext().getMeta());
+        this.substitution = sub;
     }
 
     @Override
