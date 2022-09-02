@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,19 +27,19 @@ package org.graalvm.compiler.replacements.test;
 import java.util.Objects;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
-import org.graalvm.compiler.debug.Debug;
-import org.graalvm.compiler.debug.DebugConfigScope;
+import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.Scope;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import org.graalvm.compiler.replacements.Snippets;
 import org.graalvm.compiler.replacements.classfile.ClassfileBytecodeProvider;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.compiler.word.nodes.WordCastNode;
+import org.graalvm.compiler.word.WordCastNode;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -147,7 +149,8 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
     public void testFieldOffsetMergeNonLiveBasePointer() {
         thrown.expect(GraalError.class);
         thrown.expectMessage(UNKNOWN_REFERENCE_AT_SAFEPOINT_MSG);
-        try (DebugConfigScope s = Debug.setConfig(Debug.silentConfig())) {
+        DebugContext debug = getDebugContext();
+        try (Scope s = debug.disable()) {
             // Run a couple times to encourage objects to move
             for (int i = 0; i < 4; i++) {
                 Result r = new Result();
@@ -171,7 +174,8 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
     public void testFieldOffsetMergeLiveBasePointer() {
         thrown.expect(GraalError.class);
         thrown.expectMessage(UNKNOWN_REFERENCE_AT_SAFEPOINT_MSG);
-        try (DebugConfigScope s = Debug.setConfig(Debug.silentConfig())) {
+        DebugContext debug = getDebugContext();
+        try (Scope s = debug.disable()) {
             // Run a couple times to encourage objects to move
             for (int i = 0; i < 4; i++) {
                 Result r = new Result();
@@ -196,6 +200,7 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
             internalPointer = getRawPointer(o2) + offsetB;
             SideEffect2 = internalPointer;
         }
+        GraalDirectives.controlFlowAnchor();
         // make sure the internal pointer is computed before the safepoint
         GraalDirectives.blackhole(internalPointer);
         objResult.beforeGC.basePointer = getRawPointer(objResult);
@@ -215,6 +220,7 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
             internalPointer = getRawPointer(o2) + offsetB;
             SideEffect2 = internalPointer;
         }
+        GraalDirectives.controlFlowAnchor();
         // make sure the internal pointer is computed before the safepoint
         GraalDirectives.blackhole(internalPointer);
         objResult.beforeGC.basePointer = getRawPointer(objResult);
@@ -233,6 +239,7 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
             internalPointer = getRawPointer(b) + offsetB;
             SideEffect2 = internalPointer;
         }
+        GraalDirectives.controlFlowAnchor();
         // make sure the internal pointer is computed before the safepoint
         GraalDirectives.blackhole(internalPointer);
         objResult.beforeGC.basePointer = getRawPointer(objResult);
@@ -244,9 +251,8 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
     }
 
     @Override
-    protected Plugins getDefaultGraphBuilderPlugins() {
-        Plugins plugins = super.getDefaultGraphBuilderPlugins();
-        Registration r = new Registration(plugins.getInvocationPlugins(), DerivedOopTest.class);
+    protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
+        Registration r = new Registration(invocationPlugins, DerivedOopTest.class);
         ClassfileBytecodeProvider bytecodeProvider = getSystemClassLoaderBytecodeProvider();
 
         ResolvedJavaMethod intrinsic = getResolvedJavaMethod("getRawPointerIntrinsic");
@@ -256,13 +262,12 @@ public class DerivedOopTest extends ReplacementsTest implements Snippets {
                 return b.intrinsify(bytecodeProvider, targetMethod, intrinsic, receiver, new ValueNode[]{arg});
             }
         });
-
-        return plugins;
+        super.registerInvocationPlugins(invocationPlugins);
     }
 
     @Override
-    protected boolean checkHighTierGraph(StructuredGraph graph) {
+    protected void checkHighTierGraph(StructuredGraph graph) {
         assert graph.getNodes().filter(WordCastNode.class).count() > 0 : "DerivedOopTest.toLong should be intrinsified";
-        return super.checkHighTierGraph(graph);
+        super.checkHighTierGraph(graph);
     }
 }

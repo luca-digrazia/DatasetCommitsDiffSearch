@@ -124,7 +124,6 @@ import org.graalvm.compiler.phases.tiers.TargetProvider;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.runtime.RuntimeProvider;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.test.AddExports;
 import org.graalvm.compiler.test.GraalTest;
 import org.graalvm.compiler.test.JLModule;
@@ -151,9 +150,9 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
 
 /**
- * Base class for compiler unit tests.
+ * Base class for Graal compiler unit tests.
  * <p>
- * White box tests for compiler transformations use this pattern:
+ * White box tests for Graal compiler transformations use this pattern:
  * <ol>
  * <li>Create a graph by {@linkplain #parseEager parsing} a method.</li>
  * <li>Manually modify the graph (e.g. replace a parameter node with a constant).</li>
@@ -195,7 +194,7 @@ public abstract class GraalCompilerTest extends GraalTest {
      * as of JDK 9.
      */
     protected final void exportPackage(Class<?> moduleMember, String packageName) {
-        if (JavaVersionUtil.JAVA_SPEC > 8) {
+        if (!Java8OrEarlier) {
             JLModule.exportPackageTo(moduleMember, packageName, getClass());
         }
     }

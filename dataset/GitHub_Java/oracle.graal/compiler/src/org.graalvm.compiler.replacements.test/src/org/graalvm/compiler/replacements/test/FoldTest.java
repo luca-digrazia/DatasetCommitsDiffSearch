@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,8 +24,6 @@
  */
 package org.graalvm.compiler.replacements.test;
 
-import org.junit.Test;
-
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.Fold;
@@ -32,12 +32,11 @@ import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import org.graalvm.compiler.nodes.graphbuilderconf.NodeIntrinsicPluginFactory.InjectionProvider;
 import org.graalvm.compiler.replacements.NodeIntrinsificationProvider;
+import org.junit.Test;
 
 public class FoldTest extends ReplacementsTest {
 
@@ -81,12 +80,13 @@ public class FoldTest extends ReplacementsTest {
     }
 
     @Override
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
+    protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
+        InjectionProvider injection = new NodeIntrinsificationProvider(getMetaAccess(), getSnippetReflection(), getProviders().getForeignCalls(), null);
+        new PluginFactory_FoldTest().registerPlugins(invocationPlugins, injection);
         BytecodeProvider replacementBytecodeProvider = getSystemClassLoaderBytecodeProvider();
         Registration r = new Registration(invocationPlugins, TestMethod.class, replacementBytecodeProvider);
         r.registerMethodSubstitution(TestMethodSubstitution.class, "test");
-        return super.editGraphBuilderConfiguration(conf);
+        super.registerInvocationPlugins(invocationPlugins);
     }
 
     public static int callTest() {
@@ -94,23 +94,13 @@ public class FoldTest extends ReplacementsTest {
     }
 
     @Override
-    protected Plugins getDefaultGraphBuilderPlugins() {
-        Plugins ret = super.getDefaultGraphBuilderPlugins();
-        // manually register generated factories, jvmci service providers don't work from unit tests
-        InjectionProvider injection = new NodeIntrinsificationProvider(getMetaAccess(), getSnippetReflection(), getProviders().getForeignCalls(), null);
-        new PluginFactory_FoldTest().registerPlugins(ret.getInvocationPlugins(), injection);
-        return ret;
-    }
-
-    @Override
-    protected boolean checkHighTierGraph(StructuredGraph graph) {
+    protected void checkHighTierGraph(StructuredGraph graph) {
         // check that folding happened correctly
         StartNode start = graph.start();
         assert start.next() instanceof ReturnNode : "expected ReturnNode, got " + start.next();
 
         ReturnNode ret = (ReturnNode) start.next();
         assert ret.result().isConstant() : "expected ConstantNode, got " + ret.result();
-        return true;
     }
 
     @Test

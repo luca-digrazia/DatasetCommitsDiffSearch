@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,9 +30,6 @@ import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
 import static org.hamcrest.CoreMatchers.instanceOf;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -46,12 +45,12 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import org.graalvm.compiler.nodes.memory.MemoryNode;
 import org.graalvm.compiler.replacements.classfile.ClassfileBytecodeProvider;
+import org.junit.Assert;
+import org.junit.Test;
 
 import jdk.vm.ci.meta.JavaKind;
 
@@ -118,12 +117,12 @@ public class SubstitutionsTest extends ReplacementsTest {
     }
 
     @Override
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
+    protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
+        new PluginFactory_SubstitutionsTest().registerPlugins(invocationPlugins, null);
         ClassfileBytecodeProvider bytecodeProvider = getSystemClassLoaderBytecodeProvider();
         Registration r = new Registration(invocationPlugins, TestMethod.class, bytecodeProvider);
         r.registerMethodSubstitution(TestMethodSubstitution.class, "test");
-        return super.editGraphBuilderConfiguration(conf);
+        super.registerInvocationPlugins(invocationPlugins);
     }
 
     public static int callTest() {
@@ -131,15 +130,7 @@ public class SubstitutionsTest extends ReplacementsTest {
     }
 
     @Override
-    protected Plugins getDefaultGraphBuilderPlugins() {
-        Plugins ret = super.getDefaultGraphBuilderPlugins();
-        // manually register generated factories, Graal service providers don't work from unit tests
-        new PluginFactory_SubstitutionsTest().registerPlugins(ret.getInvocationPlugins(), null);
-        return ret;
-    }
-
-    @Override
-    protected boolean checkHighTierGraph(StructuredGraph graph) {
+    protected void checkHighTierGraph(StructuredGraph graph) {
         // Check that the graph contains the expected test nodes.
         NodeIterable<ReturnNode> retNodes = graph.getNodes().filter(ReturnNode.class);
         Assert.assertTrue("expected exactly one ReturnNode", retNodes.count() == 1);
@@ -160,8 +151,6 @@ public class SubstitutionsTest extends ReplacementsTest {
         value.safeDelete();
         guard.safeDelete();
         graph.removeFixed(memory);
-
-        return true;
     }
 
     @Test
