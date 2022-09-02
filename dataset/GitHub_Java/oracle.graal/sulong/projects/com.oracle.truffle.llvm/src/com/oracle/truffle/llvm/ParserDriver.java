@@ -135,39 +135,37 @@ final class ParserDriver {
      * Parses a bitcode module and all its dependencies and return a {@code CallTarget} that
      * performs all necessary initialization when executed.
      *
-     * @param source the {@link Source} of the file being parsed.
-     * @param bytes the {@link ByteSequence} of the source.
-     * @param library the {@link ExternalLibrary} of the source.
+     * @param source
+     * @param bytes
+     * @param library
      * @return calltarget
      */
     private CallTarget parseWithDependencies(Source source, ByteSequence bytes, ExternalLibrary library) {
 
         ArrayList<Source> dependenciesSource = new ArrayList<>();
-        insertDefaultDependencies(dependenciesSource);
-        // Process the bitcode file and its dependencies in the dynamic linking order
+        insertDefaultLibrariesForRootNode(dependenciesSource);
+        // process the bitcode file and its dependencies in the dynamic linking order
         LLVMParserResult result = parseLibraryWithSource(source, library, bytes, dependenciesSource);
         boolean isInternalLibrary = context.isInternalLibrary(library);
 
         if (result == null) {
-            // If result is null, then the file parsed does not contain bitcode.
-            // The NFI can handle it later if it's a native file.
+            // if result is null, then the file parsed does not contain bitcode.
+            // (NFI can handle it later if it's a native file.)
             NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
             if (nfiContextExtension != null) {
                 nfiContextExtension.addNativeLibrary(library);
             }
-            // An empty
             return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
         }
-        // ensures the library of the source is not native
+
         assert !library.isNative();
 
-        // Remove cyclic and redundant dependency.
-        // PLi: It might be cheaper to let the truffle cache take care of this.
+        // Need to clear libsulong++ if we are already in libsulong.
         removeCyclicDependency(source, dependenciesSource);
 
         if (isInternalLibrary) {
             String libraryName = getSimpleLibraryName(library.getName());
-            // Add the file scope of the source to the language
+            // Add the file scope to the language
             language.addInternalFileScope(libraryName, result.getRuntime().getFileScope());
 
             if (libraryName.equals("libsulong")) {
@@ -176,6 +174,7 @@ final class ParserDriver {
 
             // renaming is attempted only for internal libraries.
             resolveRenamedSymbols(result, language, context);
+
         }
 
         addExternalSymbolsToScopes(result);
@@ -186,7 +185,7 @@ final class ParserDriver {
      *
      * @param sourceDependencies
      */
-    private void insertDefaultDependencies(ArrayList<Source> sourceDependencies) {
+    private void insertDefaultLibrariesForRootNode(ArrayList<Source> sourceDependencies) {
         // There could be conflicts between the default libraries of Sulong and the ones that are
         // passed on the command-line. To resolve that, we add ours first but parse them later on.
         String[] sulongLibraryNames = language.getCapability(PlatformCapability.class).getSulongDefaultLibraries();
@@ -207,14 +206,16 @@ final class ParserDriver {
     static final String SULONG_RENAME_MARKER = "___sulong_import_";
     static final int SULONG_RENAME_MARKER_LEN = SULONG_RENAME_MARKER.length();
 
-    protected static void resolveRenamedSymbols(LLVMParserResult parserResult, LLVMLanguage language, LLVMContext context) {
+    protected static ArrayList<LLVMFunction> resolveRenamedSymbols(LLVMParserResult parserResult, LLVMLanguage language, LLVMContext context) {
         ListIterator<FunctionSymbol> it = parserResult.getExternalFunctions().listIterator();
+        ArrayList<LLVMFunction> functions = new ArrayList<>();
         while (it.hasNext()) {
             FunctionSymbol external = it.next();
             String name = external.getName();
-            LLVMScope scope;
-            String originalName;
-            String lib;
+            LLVMScope scope = null;
+            String originalName = null;
+            String lib = null;
+            boolean createNewFunction = false;
             /*
              * An unresolved name has the form defined by the {@code _SULONG_IMPORT_SYMBOL(libName,
              * symbolName)} macro defined in the {@code sulong-internal.h} header file. Check
@@ -248,7 +249,7 @@ final class ParserDriver {
                         throw new LLVMLinkerException(String.format("The symbol %s could not be imported because library %s was not found", external.getName(), lib));
                     }
                     originalName = name.substring(idx + 1);
-                    createNewFunction(scope, originalName, parserResult, external, lib, name, it);
+                    createNewFunction = true;
                 }
             } else if (CXXDemangler.isRenamedNamespaceSymbol(name)) {
                 ArrayList<String> namespaces = CXXDemangler.decodeNamespace(name);
@@ -274,23 +275,25 @@ final class ParserDriver {
                     throw new LLVMLinkerException(String.format("The symbol %s could not be imported because library %s was not found", external.getName(), lib));
                 }
                 originalName = CXXDemangler.encodeNamespace(namespaces);
-                createNewFunction(scope, originalName, parserResult, external, lib, name, it);
+                createNewFunction = true;
+            }
+
+            if (createNewFunction) {
+                LLVMFunction originalSymbol = scope.getFunction(originalName);
+                if (originalSymbol == null) {
+                    throw new LLVMLinkerException(
+                                    String.format("The symbol %s could not be imported because the symbol %s was not found in library %s", external.getName(), originalName, lib));
+                }
+                LLVMFunction newFunction = LLVMFunction.create(name, originalSymbol.getLibrary(), originalSymbol.getFunction(), originalSymbol.getType(),
+                                parserResult.getRuntime().getBitcodeID(), external.getIndex(), external.isExported());
+                LLVMScope fileScope = parserResult.getRuntime().getFileScope();
+                fileScope.register(newFunction);
+                functions.add(newFunction);
+                it.remove();
+                parserResult.getDefinedFunctions().add(external);
             }
         }
-    }
-
-    private static void createNewFunction(LLVMScope scope, String originalName, LLVMParserResult parserResult, FunctionSymbol external, String lib, String name, ListIterator<FunctionSymbol> it) {
-        LLVMFunction originalSymbol = scope.getFunction(originalName);
-        if (originalSymbol == null) {
-            throw new LLVMLinkerException(
-                            String.format("The symbol %s could not be imported because the symbol %s was not found in library %s", external.getName(), originalName, lib));
-        }
-        LLVMFunction newFunction = LLVMFunction.create(name, originalSymbol.getLibrary(), originalSymbol.getFunction(), originalSymbol.getType(),
-                        parserResult.getRuntime().getBitcodeID(), external.getIndex(), external.isExported());
-        LLVMScope fileScope = parserResult.getRuntime().getFileScope();
-        fileScope.register(newFunction);
-        it.remove();
-        parserResult.getDefinedFunctions().add(external);
+        return functions;
     }
 
     /**
@@ -388,7 +391,6 @@ final class ParserDriver {
                     dependenciesSource.add(source);
                 }
             } else {
-                // The cached is returned if lib has already been added.
                 dependency = context.addExternalLibrary(lib, library, binaryParserResult.getLocator());
                 if (dependency != null && !dependencies.contains(dependency)) {
                     dependencies.add(dependency);
@@ -402,13 +404,12 @@ final class ParserDriver {
     }
 
     private Source createDependencySource(ExternalLibrary lib) {
+
         if (lib.hasFile() && !lib.getFile().isRegularFile() || lib.getPath() == null || !lib.getPath().toFile().isFile()) {
             if (!lib.isNative()) {
                 throw new LLVMParserException("'" + lib.getPath() + "' is not a file or does not exist.");
             } else {
-                // If the file or the path of the file does not exists, then assume that this is not
-                // a bitcode
-                // file, but a native file and the NFI is going to handle it.
+                // lets assume that this is not a bitcode file and the NFI is going to handle it
                 NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
                 if (nfiContextExtension != null) {
                     nfiContextExtension.addNativeLibrary(lib);
@@ -417,11 +418,6 @@ final class ParserDriver {
             }
         }
 
-        // Mark default bitcode libraries as bitcode libraries.
-        // TODO (PLi): Remove this. The default libraries should not be created by the context as
-        // a native library first and then marked as a bitcode library. Also they should not be
-        // created
-        // as an ExternalLibrary first, and then converted into a source.
         if (lib.getName().equalsIgnoreCase(BasicPlatformCapability.LIBSULONG_FILENAME) || lib.getName().equalsIgnoreCase(BasicPlatformCapability.LIBSULONGXX_FILENAME)) {
             if (lib.isNative()) {
                 lib.makeBitcodeLibrary();
@@ -456,17 +452,10 @@ final class ParserDriver {
                                                 false));
             }
         }
+
     }
 
-    /**
-     * Creates the call target of the load module node, which initialise the library.
-     *
-     * @param name the name of the library
-     * @param parserResult the {@link LLVMParserResult} for the library
-     * @param sources the list of {@link Source} of the library's dependencies
-     * @param source the {@link Source} of the library
-     * @return the call target for initialising the library.
-     */
+    // name, single parserResult, list of dependencies (list of sources)
     private CallTarget createLibraryCallTarget(String name, LLVMParserResult parserResult, List<Source> sources, Source source) {
         if (context.getEnv().getOptions().get(SulongEngineOption.PARSE_ONLY)) {
             return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
@@ -480,17 +469,14 @@ final class ParserDriver {
     }
 
     private void removeCyclicDependency(Source source, ArrayList<Source> dependenciesSource) {
-        // Remove the itself as it's own dependency
         while (dependenciesSource.contains(source)) {
             dependenciesSource.remove(source);
         }
 
-        // Remove libsulong++ for libsulong
         if (source.getName().equals(BasicPlatformCapability.LIBSULONG_FILENAME)) {
             removeDependency(dependenciesSource, BasicPlatformCapability.LIBSULONGXX_FILENAME);
         }
 
-        // Remove libsulong for libsulong++
         if (source.getName().equals(BasicPlatformCapability.LIBSULONGXX_FILENAME)) {
             removeDependency(dependenciesSource, BasicPlatformCapability.LIBSULONG_FILENAME);
         }
@@ -509,8 +495,6 @@ final class ParserDriver {
         }
     }
 
-    // This method is required as only the name of the libraries is given, not the source of the
-    // library itself.
     private static void removeDependency(ArrayList<Source> sources, String remove) {
         Source toRemove = null;
         for (Source dependency : sources) {
