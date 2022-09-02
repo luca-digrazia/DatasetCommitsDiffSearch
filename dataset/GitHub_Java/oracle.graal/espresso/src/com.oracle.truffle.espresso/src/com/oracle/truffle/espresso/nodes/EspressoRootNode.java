@@ -363,7 +363,10 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
 
         public void exitInternalMonitors(Meta meta) {
             for (int i = 0; i < top; i++) {
-                InterpreterToVM.monitorExit(monitors[i], meta);
+                StaticObject monitor = monitors[i];
+                if (monitor != synchronizedMethodMonitor) {
+                    InterpreterToVM.monitorExit(monitor, meta);
+                }
             }
         }
 
