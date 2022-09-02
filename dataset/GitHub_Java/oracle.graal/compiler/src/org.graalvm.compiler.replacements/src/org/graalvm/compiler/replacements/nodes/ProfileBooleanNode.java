@@ -26,8 +26,8 @@ package org.graalvm.compiler.replacements.nodes;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_UNKNOWN;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
-import static org.graalvm.compiler.nodes.util.ConstantReflectionUtil.loadIntArrayConstant;
 
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
@@ -40,7 +40,6 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
@@ -48,11 +47,11 @@ import jdk.vm.ci.meta.JavaConstant;
 @NodeInfo(cycles = CYCLES_UNKNOWN, size = SIZE_UNKNOWN)
 public class ProfileBooleanNode extends MacroStateSplitNode implements Simplifiable {
     public static final NodeClass<ProfileBooleanNode> TYPE = NodeClass.create(ProfileBooleanNode.class);
-    private final ConstantReflectionProvider constantProvider;
+    private final SnippetReflectionProvider snippetReflection;
 
-    public ProfileBooleanNode(ConstantReflectionProvider constantProvider, MacroParams p) {
+    public ProfileBooleanNode(SnippetReflectionProvider snippetReflection, MacroParams p) {
         super(TYPE, p);
-        this.constantProvider = constantProvider;
+        this.snippetReflection = snippetReflection;
     }
 
     ValueNode getResult() {
@@ -74,7 +73,7 @@ public class ProfileBooleanNode extends MacroStateSplitNode implements Simplifia
         ValueNode counters = getCounters();
         if (counters.isConstant()) {
             ValueNode newResult = result;
-            int[] counts = loadIntArrayConstant(constantProvider, (JavaConstant) counters.asConstant(), 2);
+            int[] counts = snippetReflection.asObject(int[].class, (JavaConstant) counters.asConstant());
             if (counts != null && counts.length == 2) {
                 int falseCount = counts[0];
                 int trueCount = counts[1];

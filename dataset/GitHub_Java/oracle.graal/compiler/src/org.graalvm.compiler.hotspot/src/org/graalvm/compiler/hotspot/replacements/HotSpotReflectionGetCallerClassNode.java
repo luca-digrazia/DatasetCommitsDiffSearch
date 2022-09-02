@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,7 +29,6 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.replacements.nodes.ReflectionGetCallerClassNode;
 
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 @NodeInfo
@@ -47,7 +46,7 @@ public final class HotSpotReflectionGetCallerClassNode extends ReflectionGetCall
     }
 
     @Override
-    protected boolean ignoredBySecurityStackWalk(MetaAccessProvider metaAccess, ResolvedJavaMethod method) {
+    protected boolean ignoredBySecurityStackWalk(ResolvedJavaMethod method) {
         return ((HotSpotResolvedJavaMethod) method).ignoredBySecurityStackWalk();
     }
 }

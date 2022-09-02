@@ -57,12 +57,12 @@ public final class SubstrateObjectCloneNode extends BasicObjectCloneNode impleme
     }
 
     @Override
-    public VirtualInstanceNode createVirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
+    protected VirtualInstanceNode createVirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
         return new SubstrateVirtualInstanceNode(type, hasIdentity);
     }
 
     @Override
-    public LoadFieldNode genLoadFieldNode(Assumptions assumptions, ValueNode originalAlias, ResolvedJavaField field) {
+    protected LoadFieldNode genLoadFieldNode(Assumptions assumptions, ValueNode originalAlias, ResolvedJavaField field) {
         if (field.getJavaKind() == JavaKind.Object && field.getType() instanceof SharedType) {
             /*
              * We have the static analysis to check interface types, e.g.., if a parameter of field

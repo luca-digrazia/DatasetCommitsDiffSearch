@@ -38,8 +38,11 @@ public final class SubstrateReflectionGetCallerClassNode extends ReflectionGetCa
 
     public static final NodeClass<SubstrateReflectionGetCallerClassNode> TYPE = NodeClass.create(SubstrateReflectionGetCallerClassNode.class);
 
-    public SubstrateReflectionGetCallerClassNode(MacroParams p) {
+    private final MetaAccessProvider metaAccess;
+
+    public SubstrateReflectionGetCallerClassNode(MetaAccessProvider metaAccess, MacroParams p) {
         super(TYPE, p);
+        this.metaAccess = metaAccess;
     }
 
     @Override
@@ -52,7 +55,7 @@ public final class SubstrateReflectionGetCallerClassNode extends ReflectionGetCa
     }
 
     @Override
-    protected boolean ignoredBySecurityStackWalk(MetaAccessProvider metaAccess, ResolvedJavaMethod method) {
-        return !StackTraceUtils.shouldShowFrame(metaAccess, method, true, false, false);
+    protected boolean ignoredBySecurityStackWalk(ResolvedJavaMethod method) {
+        return !StackTraceUtils.shouldShowFrame(metaAccess, method, false, false);
     }
 }
