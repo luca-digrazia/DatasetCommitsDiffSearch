@@ -834,11 +834,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     public final boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
         CompilerAsserts.neverPartOfCompilation();
         invalidate(newNode, reason);
-        /*
-         * Notify compiled method that have inlined this call target that the tree changed. It also
-         * ensures that compiled code that might be installed by currently running compilation task
-         * that can no longer be cancelled is invalidated.
-         */
+        /* Notify compiled method that have inlined this call target that the tree changed. */
         invalidateNodeRewritingAssumption();
         return false;
     }
@@ -901,10 +897,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         if (engine.multiTier) {
             if (isValidLastTier()) {
                 String callsThresholdInFirstTier = String.format("%7d/%5d", getCallCount(), engine.callThresholdInFirstTier);
-                properties.put("Tier", "Last");
+                properties.put("LastTier", true);
                 properties.put("Calls/Thres", callsThresholdInFirstTier);
             } else {
-                properties.put("Tier", "First");
+                properties.put("LastTier", false);
                 properties.put("Calls/Thres", callsThresholdInInterpreter);
                 properties.put("CallsAndLoop/Thres", loopsThresholdInInterpreter);
             }
