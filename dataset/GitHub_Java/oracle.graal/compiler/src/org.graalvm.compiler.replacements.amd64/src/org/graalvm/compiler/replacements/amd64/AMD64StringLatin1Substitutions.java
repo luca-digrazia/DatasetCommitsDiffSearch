@@ -28,15 +28,13 @@ import static org.graalvm.compiler.api.directives.GraalDirectives.LIKELY_PROBABI
 import static org.graalvm.compiler.api.directives.GraalDirectives.UNLIKELY_PROBABILITY;
 import static org.graalvm.compiler.api.directives.GraalDirectives.SLOWPATH_PROBABILITY;
 import static org.graalvm.compiler.api.directives.GraalDirectives.injectBranchProbability;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.byteArrayBaseOffset;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.byteArrayIndexScale;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.charArrayBaseOffset;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.charArrayIndexScale;
 
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
+import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
+import org.graalvm.compiler.replacements.nodes.ArrayCompareToNode;
 import org.graalvm.compiler.replacements.nodes.ArrayRegionEqualsNode;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.word.Pointer;
@@ -56,8 +54,46 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 @ClassSubstitution(className = "java.lang.StringLatin1", optional = true)
 public class AMD64StringLatin1Substitutions {
 
+    @Fold
+    static int byteArrayBaseOffset(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayBaseOffset(JavaKind.Byte);
+    }
+
+    @Fold
+    static int byteArrayIndexScale(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayIndexScale(JavaKind.Byte);
+    }
+
+    @Fold
+    static int charArrayBaseOffset(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayBaseOffset(JavaKind.Char);
+    }
+
+    @Fold
+    static int charArrayIndexScale(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayIndexScale(JavaKind.Char);
+    }
+
     /** Marker value for the {@link InjectedParameter} injected parameter. */
     static final MetaAccessProvider INJECTED = null;
+
+    /**
+     * @param value is byte[]
+     * @param other is byte[]
+     */
+    @MethodSubstitution
+    public static int compareTo(byte[] value, byte[] other) {
+        return ArrayCompareToNode.compareTo(value, other, value.length, other.length, JavaKind.Byte, JavaKind.Byte);
+    }
+
+    /**
+     * @param value is byte[]
+     * @param other is char[]
+     */
+    @MethodSubstitution
+    public static int compareToUTF16(byte[] value, byte[] other) {
+        return ArrayCompareToNode.compareTo(value, other, value.length, other.length, JavaKind.Byte, JavaKind.Char);
+    }
 
     private static Word pointer(byte[] target) {
         return Word.objectToTrackedPointer(target).add(byteArrayBaseOffset(INJECTED));
@@ -131,7 +167,7 @@ public class AMD64StringLatin1Substitutions {
      * Intrinsic for {@code java.lang.StringLatin1.inflate([BI[CII)V}.
      *
      * <pre>
-     * &#64;IntrinsicCandidate
+     * &#64;HotSpotIntrinsicCandidate
      * public static void inflate(byte[] src, int src_indx, char[] dst, int dst_indx, int len)
      * </pre>
      */
@@ -155,7 +191,7 @@ public class AMD64StringLatin1Substitutions {
      * Intrinsic for {@code }java.lang.StringLatin1.inflate([BI[BII)V}.
      *
      * <pre>
-     * &#64;IntrinsicCandidate
+     * &#64;HotSpotIntrinsicCandidate
      * public static void inflate(byte[] src, int src_indx, byte[] dst, int dst_indx, int len)
      * </pre>
      *

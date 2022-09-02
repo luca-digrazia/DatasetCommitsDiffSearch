@@ -24,30 +24,27 @@
  */
 package org.graalvm.compiler.replacements.amd64;
 
-import static org.graalvm.compiler.api.directives.GraalDirectives.LIKELY_PROBABILITY;
-import static org.graalvm.compiler.api.directives.GraalDirectives.SLOWPATH_PROBABILITY;
-import static org.graalvm.compiler.api.directives.GraalDirectives.UNLIKELY_PROBABILITY;
-import static org.graalvm.compiler.api.directives.GraalDirectives.injectBranchProbability;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.byteArrayBaseOffset;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.byteArrayIndexScale;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.charArrayBaseOffset;
-import static org.graalvm.compiler.replacements.ReplacementsUtil.charArrayIndexScale;
-
-import org.graalvm.compiler.api.replacements.ClassSubstitution;
-import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
-import org.graalvm.compiler.api.replacements.MethodSubstitution;
-import org.graalvm.compiler.nodes.DeoptimizeNode;
-import org.graalvm.compiler.nodes.extended.JavaReadNode;
-import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
-import org.graalvm.compiler.replacements.ReplacementsUtil;
-import org.graalvm.compiler.replacements.nodes.ArrayRegionEqualsNode;
-import org.graalvm.compiler.word.Word;
-import org.graalvm.word.Pointer;
-
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
+
+import static org.graalvm.compiler.api.directives.GraalDirectives.LIKELY_PROBABILITY;
+import static org.graalvm.compiler.api.directives.GraalDirectives.UNLIKELY_PROBABILITY;
+import static org.graalvm.compiler.api.directives.GraalDirectives.SLOWPATH_PROBABILITY;
+import static org.graalvm.compiler.api.directives.GraalDirectives.injectBranchProbability;
+
+import org.graalvm.compiler.api.replacements.ClassSubstitution;
+import org.graalvm.compiler.api.replacements.Fold;
+import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
+import org.graalvm.compiler.api.replacements.MethodSubstitution;
+import org.graalvm.compiler.nodes.DeoptimizeNode;
+import org.graalvm.compiler.replacements.ReplacementsUtil;
+import org.graalvm.compiler.replacements.StringUTF16Substitutions;
+import org.graalvm.compiler.replacements.nodes.ArrayCompareToNode;
+import org.graalvm.compiler.replacements.nodes.ArrayRegionEqualsNode;
+import org.graalvm.compiler.word.Word;
+import org.graalvm.word.Pointer;
 
 // JaCoCo Exclude
 
@@ -58,13 +55,56 @@ import jdk.vm.ci.meta.MetaAccessProvider;
  */
 @ClassSubstitution(className = "java.lang.StringUTF16", optional = true)
 public class AMD64StringUTF16Substitutions {
+
+    @Fold
+    static int byteArrayBaseOffset(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayBaseOffset(JavaKind.Byte);
+    }
+
+    @Fold
+    static int byteArrayIndexScale(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayIndexScale(JavaKind.Byte);
+    }
+
+    @Fold
+    static int charArrayBaseOffset(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayBaseOffset(JavaKind.Char);
+    }
+
+    @Fold
+    static int charArrayIndexScale(@InjectedParameter MetaAccessProvider metaAccess) {
+        return metaAccess.getArrayIndexScale(JavaKind.Char);
+    }
+
     /**
      * Marker value for the {@link InjectedParameter} injected parameter.
      */
     static final MetaAccessProvider INJECTED = null;
 
-    private static int length(byte[] value) {
+    public static int length(byte[] value) {
         return value.length >> 1;
+    }
+
+    /**
+     * @param value is char[]
+     * @param other is char[]
+     */
+    @MethodSubstitution
+    public static int compareTo(byte[] value, byte[] other) {
+        return ArrayCompareToNode.compareTo(value, other, value.length, other.length, JavaKind.Char, JavaKind.Char);
+    }
+
+    /**
+     * @param value is char[]
+     * @param other is byte[]
+     */
+    @MethodSubstitution
+    public static int compareToLatin1(byte[] value, byte[] other) {
+        /*
+         * Swapping array arguments because intrinsic expects order to be byte[]/char[] but kind
+         * arguments stay in original order.
+         */
+        return ArrayCompareToNode.compareTo(other, value, other.length, value.length, JavaKind.Char, JavaKind.Byte);
     }
 
     @MethodSubstitution
@@ -80,11 +120,6 @@ public class AMD64StringUTF16Substitutions {
         return pointer(value).add(offset * charArrayIndexScale(INJECTED));
     }
 
-    /**
-     * Will be intrinsified with an {@link InvocationPlugin} to a {@link JavaReadNode}.
-     */
-    private static native char getChar(byte[] value, int i);
-
     @MethodSubstitution
     public static int indexOfUnsafe(byte[] source, int sourceCount, byte[] target, int targetCount, int fromIndex) {
         ReplacementsUtil.dynamicAssert(fromIndex >= 0, "StringUTF16.indexOfUnsafe invalid args: fromIndex negative");
@@ -92,13 +127,13 @@ public class AMD64StringUTF16Substitutions {
         ReplacementsUtil.dynamicAssert(targetCount <= length(target), "StringUTF16.indexOfUnsafe invalid args: targetCount > length(target)");
         ReplacementsUtil.dynamicAssert(sourceCount >= targetCount, "StringUTF16.indexOfUnsafe invalid args: sourceCount < targetCount");
         if (targetCount == 1) {
-            return AMD64ArrayIndexOf.indexOf1Char(source, sourceCount, fromIndex, getChar(target, 0));
+            return AMD64ArrayIndexOf.indexOf1Char(source, sourceCount, fromIndex, StringUTF16Substitutions.getChar(target, 0));
         } else {
             int haystackLength = sourceCount - (targetCount - 2);
             int offset = fromIndex;
             while (injectBranchProbability(LIKELY_PROBABILITY, offset < haystackLength)) {
-                int indexOfResult = AMD64ArrayIndexOf.indexOfTwoConsecutiveChars(source, haystackLength, offset, getChar(target, 0),
-                                getChar(target, 1));
+                int indexOfResult = AMD64ArrayIndexOf.indexOfTwoConsecutiveChars(source, haystackLength, offset, StringUTF16Substitutions.getChar(target, 0),
+                                StringUTF16Substitutions.getChar(target, 1));
                 if (injectBranchProbability(UNLIKELY_PROBABILITY, indexOfResult < 0)) {
                     return -1;
                 }
@@ -154,7 +189,7 @@ public class AMD64StringUTF16Substitutions {
      * Intrinsic for {@code java.lang.StringUTF16.compress([CI[BII)I}.
      *
      * <pre>
-     * &#64;IntrinsicCandidate
+     * &#64;HotSpotIntrinsicCandidate
      * public static int compress(char[] src, int src_indx, byte[] dst, int dst_indx, int len)
      * </pre>
      */
@@ -171,7 +206,7 @@ public class AMD64StringUTF16Substitutions {
      * Intrinsic for {@code }java.lang.StringUTF16.compress([BI[BII)I}.
      *
      * <pre>
-     * &#64;IntrinsicCandidate
+     * &#64;HotSpotIntrinsicCandidate
      * public static int compress(byte[] src, int src_indx, byte[] dst, int dst_indx, int len)
      * </pre>
      * <p>
