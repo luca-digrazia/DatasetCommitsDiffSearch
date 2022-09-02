@@ -735,9 +735,11 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return name;
     }
 
+
     public boolean sameRuntimePackage(Klass other) {
         return this.getDefiningClassLoader() == other.getDefiningClassLoader() && this.getRuntimePackage().equals(other.getRuntimePackage());
     }
+
 
     // region jdwp-specific
 
@@ -775,8 +777,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
                     return ClassStatusConstants.PREPARED;
                 case ObjectKlass.INITIALIZED:
                     return ClassStatusConstants.INITIALIZED;
-                default:
-                    return ClassStatusConstants.ERROR;
+                default: return ClassStatusConstants.ERROR;
             }
         } else {
             return ClassStatusConstants.INITIALIZED;
@@ -796,11 +797,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     @Override
     public boolean isAssignable(KlassRef klass) {
         return isAssignableFrom((Klass) klass);
-    }
-
-    @Override
-    public Object getKlassObject() {
-        return mirror();
     }
 
     // endregion jdwp-specific

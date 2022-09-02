@@ -107,6 +107,4 @@ public interface KlassRef {
     Object getPrepareThread();
 
     boolean isAssignable(KlassRef klass);
-
-    Object getKlassObject();
 }

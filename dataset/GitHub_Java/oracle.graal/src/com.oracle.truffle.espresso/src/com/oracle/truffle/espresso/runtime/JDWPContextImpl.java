@@ -5,14 +5,13 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.JDWPSetup;
-import com.oracle.truffle.espresso.jdwp.impl.JDWPVirtualMachine;
+import com.oracle.truffle.espresso.jdwp.api.JDWPVirtualMachine;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.jdwp.api.NullKlass;
 import com.oracle.truffle.espresso.jdwp.impl.ClassObjectId;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPCallFrame;
-import com.oracle.truffle.espresso.jdwp.impl.JDWPVirtualMachineImpl;
 import com.oracle.truffle.espresso.jdwp.impl.TagConstants;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -35,14 +34,14 @@ public final class JDWPContextImpl implements JDWPContext {
 
     public JDWPContextImpl(EspressoContext context) {
         this.context = context;
-        this.vm = new JDWPVirtualMachineImpl();
+        this.vm = new EspressoVirtualMachine();
         this.ids = new Ids<>(StaticObject.NULL);
     }
 
-    public void jdwpInit(TruffleLanguage.Env env) {
+    public void jdwpInit() {
         // enable JDWP instrumenter only if options are set (assumed valid if non-null)
         if (context.JDWPOptions != null) {
-            JDWPSetup.setup(env, context.JDWPOptions, this);
+            JDWPSetup.setup(context.JDWPOptions, this);
         }
     }
 
@@ -99,6 +98,11 @@ public final class JDWPContextImpl implements JDWPContext {
             return context.getRegistries().isClassLoader(loader);
         }
         return false;
+    }
+
+    @Override
+    public TruffleLanguage.Env getEnv() {
+        return context.getEnv();
     }
 
     @Override
