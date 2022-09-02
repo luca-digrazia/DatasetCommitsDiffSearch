@@ -32,6 +32,7 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.source.Source;
 
+@SuppressWarnings("unused")
 @ExportLibrary(InteropLibrary.class)
 final class SourceEventObject implements TruffleObject {
     private final Source source;
@@ -45,27 +46,51 @@ final class SourceEventObject implements TruffleObject {
         return true;
     }
 
+    enum Members {
+        characters,
+        name,
+        language,
+        mimeType,
+        uri;
+    }
+
+    @CompilerDirectives.TruffleBoundary
     @ExportMessage
     static Object getMembers(SourceEventObject obj, boolean includeInternal) {
-        return new Object[0];
+        return ArrayObject.wrap(Members.values());
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    @ExportMessage
+    static boolean isMemberReadable(SourceEventObject obj, String member) {
+        try {
+            return Members.valueOf(member) != null;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 
     @CompilerDirectives.TruffleBoundary
     @ExportMessage
     static Object readMember(SourceEventObject obj, String member) throws UnknownIdentifierException {
-        switch (member) {
-            case "characters":
-                return obj.source.getCharacters().toString();
-            case "name":
-                return obj.source.getName();
-            default:
-                throw UnknownIdentifierException.create(member);
+        final Members existingMember;
+        try {
+            existingMember = Members.valueOf(member);
+        } catch (IllegalArgumentException ex) {
+            throw UnknownIdentifierException.create(member);
         }
+        switch (existingMember) {
+            case characters:
+                return obj.source.getCharacters().toString();
+            case name:
+                return obj.source.getName();
+            case language:
+                return obj.source.getLanguage();
+            case mimeType:
+                return NullObject.nullCheck(obj.source.getMimeType());
+            case uri:
+                return obj.source.getURI().toASCIIString();
+        }
+        throw new IllegalArgumentException(member);
     }
-
-    @ExportMessage
-    static boolean isMemberReadable(SourceEventObject obj, String member) {
-        return true;
-    }
-
 }
