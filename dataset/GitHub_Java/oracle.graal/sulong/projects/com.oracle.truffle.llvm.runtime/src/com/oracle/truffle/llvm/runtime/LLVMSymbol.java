@@ -112,11 +112,7 @@ public abstract class LLVMSymbol {
 
     public abstract boolean isAlias();
 
-    public abstract boolean isElemPtrExpression();
-
     public abstract LLVMFunction asFunction();
 
     public abstract LLVMGlobal asGlobalVariable();
-
-    public abstract LLVMElemPtrSymbol asElemPtrExpression();
 }

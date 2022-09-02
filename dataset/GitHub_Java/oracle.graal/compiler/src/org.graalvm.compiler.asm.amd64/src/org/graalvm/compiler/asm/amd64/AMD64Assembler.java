@@ -4002,10 +4002,6 @@ public class AMD64Assembler extends AMD64BaseAssembler {
         SUB.rmOp.emit(this, QWORD, dst, src);
     }
 
-    public final void sqrtsd(Register dst, Register src) {
-        SSEOp.SQRT.emit(this, SD, dst, src);
-    }
-
     public final void testq(Register dst, Register src) {
         AMD64RMOp.TEST.emit(this, QWORD, dst, src);
     }
