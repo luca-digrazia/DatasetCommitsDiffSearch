@@ -31,7 +31,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.runtime.JVMCI;
 import org.graalvm.compiler.api.runtime.GraalJVMCICompiler;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.hotspot.meta.HotSpotJITClassInitializationPlugin;
 import org.graalvm.compiler.java.LambdaUtils;
 import org.graalvm.compiler.options.OptionValues;
@@ -46,7 +45,7 @@ import org.junit.Test;
 public class LambdaStableNameTest {
     private String findStableLambdaName(ResolvedJavaType type) {
         OptionValues options = new OptionValues(OptionValues.newOptionMap());
-        DebugContext debug = new Builder(options, Collections.emptyList()).build();
+        DebugContext debug = DebugContext.create(options, Collections.emptyList());
         GraalJVMCICompiler compiler = (GraalJVMCICompiler) JVMCI.getRuntime().getCompiler();
         Providers providers = compiler.getGraalRuntime().getCapability(RuntimeProvider.class).getHostBackend().getProviders();
         final HotSpotJITClassInitializationPlugin initializationPlugin = new HotSpotJITClassInitializationPlugin();
