@@ -29,18 +29,22 @@
  */
 package com.oracle.truffle.wasm.parser.binary;
 
-public class ExecutionState {
-    int stackSize;
+import java.io.IOException;
+import java.nio.charset.Charset;
 
-    public ExecutionState() {
-        this.stackSize = 0;
+import com.oracle.truffle.api.TruffleFile;
+
+public class WasmFileDetector implements TruffleFile.FileTypeDetector {
+    @Override
+    public String findMimeType(TruffleFile file) throws IOException {
+       if (file.getName() != null && file.getName().endsWith(".wasm")) {
+           return "application/wasm";
+       }
+       return null;
     }
 
-    public void push() {
-        stackSize++;
-    }
-
-    public void pop() {
-        stackSize--;
+    @Override
+    public Charset findEncoding(TruffleFile file) throws IOException {
+        return null;
     }
 }

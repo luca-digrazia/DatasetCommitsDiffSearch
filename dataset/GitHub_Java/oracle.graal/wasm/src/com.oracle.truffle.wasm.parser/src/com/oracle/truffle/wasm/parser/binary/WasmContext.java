@@ -29,18 +29,46 @@
  */
 package com.oracle.truffle.wasm.parser.binary;
 
-public class ExecutionState {
-    int stackSize;
+import static com.oracle.truffle.api.TruffleLanguage.Env;
 
-    public ExecutionState() {
-        this.stackSize = 0;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.Scope;
+import com.oracle.truffle.api.source.Source;
+
+public class WasmContext {
+    private Env env;
+    private WasmLanguage language;
+    private Map<String, WasmModule> modules;
+
+    public WasmContext(Env env, WasmLanguage language) {
+        this.env = env;
+        this.language = language;
+        this.modules = new HashMap<>();
     }
 
-    public void push() {
-        stackSize++;
+    public CallTarget parse(Source source) {
+        return env.parse(source);
     }
 
-    public void pop() {
-        stackSize--;
+    public WasmLanguage language() {
+        return language;
+    }
+
+    public Iterable<Scope> getTopScopes() {
+        // Go through all WasmModules parsed with this context, and create a Scope for each of them.
+        ArrayList<Scope> scopes = new ArrayList<>();
+        for (Map.Entry<String, WasmModule> entry : modules.entrySet()) {
+            Scope scope = Scope.newBuilder(entry.getKey(), entry.getValue()).build();
+            scopes.add(scope);
+        }
+        return scopes;
+    }
+
+    void registerModule(WasmModule module) {
+        modules.put(module.name(), module);
     }
 }

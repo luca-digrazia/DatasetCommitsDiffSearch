@@ -29,18 +29,51 @@
  */
 package com.oracle.truffle.wasm.parser.binary;
 
-public class ExecutionState {
-    int stackSize;
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-    public ExecutionState() {
-        this.stackSize = 0;
+@ExportLibrary(InteropLibrary.class)
+public class WasmFunction implements TruffleObject {
+    private SymbolTable symbolTable;
+    private int typeIndex;
+    private RootCallTarget callTarget;
+
+    private byte[] locals;
+    private int offset;
+
+    public WasmFunction(SymbolTable symbolTable, int typeIndex) {
+        this.symbolTable = symbolTable;
+        this.typeIndex = typeIndex;
+        this.callTarget = null;
     }
 
-    public void push() {
-        stackSize++;
+    public byte returnType() {
+        return symbolTable.getFunctionReturnType(typeIndex);
     }
 
-    public void pop() {
-        stackSize--;
+    void setCallTarget(RootCallTarget callTarget) {
+        this.callTarget = callTarget;
+    }
+
+    public void registerLocal(byte type) {
+        locals[offset] = type;
+        offset++;
+    }
+
+    public RootCallTarget getCallTarget() {
+        return callTarget;
+    }
+
+    @ExportMessage
+    boolean isExecutable() {
+        return true;
+    }
+
+    @ExportMessage
+    Object execute(Object[] arguments) {
+        return callTarget.call(arguments);
     }
 }
