@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,10 +25,7 @@
 package org.graalvm.compiler.truffle.test;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
@@ -37,11 +34,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
+import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
@@ -50,7 +49,6 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
@@ -60,14 +58,11 @@ import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class RewriteDuringCompilationTest extends AbstractPolyglotTest {
-    private static volatile UpdateStaticFieldNode updateStaticFieldNode;
-    private static volatile LoopNode loopNode;
-
     abstract static class BaseNode extends Node {
         abstract Object execute(VirtualFrame frame);
     }
 
-    static final class UpdateStaticFieldNode extends BaseNode {
+    static final class DetectInvalidCodeNode extends BaseNode {
         private volatile boolean valid = true;
         private boolean invalidTwice = false;
 
@@ -99,7 +94,6 @@ public class RewriteDuringCompilationTest extends AbstractPolyglotTest {
 
         WhileLoopNode(Object loopCount, BaseNode child) {
             this.loop = Truffle.getRuntime().createLoopNode(new LoopConditionNode(loopCount, child));
-            loopNode = this.loop;
         }
 
         FrameSlot getLoopIndex() {
@@ -132,7 +126,7 @@ public class RewriteDuringCompilationTest extends AbstractPolyglotTest {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            frame.setObject(getResult(), InstrumentationTestLanguage.Null.INSTANCE);
+            frame.setObject(getResult(), false);
             frame.setInt(getLoopIndex(), 0);
             loop.execute(frame);
             try {
@@ -193,51 +187,53 @@ public class RewriteDuringCompilationTest extends AbstractPolyglotTest {
         }
     }
 
-    @Before
-    public void setUp() {
-        loopNode = null;
-        updateStaticFieldNode = null;
-    }
-
     @Test
     public void testRootCompilation() throws IOException, InterruptedException, ExecutionException {
-        testCompilation(updateStaticFieldNode = new UpdateStaticFieldNode(), 1000, 20);
+        DetectInvalidCodeNode detectInvalidCodeNode = new DetectInvalidCodeNode();
+        testCompilation(detectInvalidCodeNode, null, detectInvalidCodeNode, 1000, 20);
     }
 
     @Test
     public void testLoopCompilation() throws IOException, InterruptedException, ExecutionException {
-        testCompilation(new WhileLoopNode(10000000, updateStaticFieldNode = new UpdateStaticFieldNode()), 1000, 40);
+        DetectInvalidCodeNode detectInvalidCodeNode = new DetectInvalidCodeNode();
+        WhileLoopNode testedCode = new WhileLoopNode(10000000, detectInvalidCodeNode);
+        testCompilation(testedCode, testedCode.loop, detectInvalidCodeNode, 1000, 40);
     }
 
     private volatile boolean rewriting = false;
 
-    private void testCompilation(BaseNode testedCode, int rewriteCount, int maxDelayBeforeRewrite) throws IOException, InterruptedException, ExecutionException {
-        setupEnv(Context.create(), new ProxyLanguage() {
-            private final List<CallTarget> targets = new LinkedList<>(); // To prevent from GC
+    private void testCompilation(BaseNode testedCode, LoopNode loopNode, DetectInvalidCodeNode nodeToRewrite, int rewriteCount, int maxDelayBeforeRewrite)
+                    throws IOException, InterruptedException, ExecutionException {
+        // DetectInvalidCodeNode.invalidTwice does not work with multi-tier
+        // code can remain active of another tier with local invalidation.
+        setupEnv(Context.newBuilder().allowExperimentalOptions(true).option("engine.MultiTier", "false"), new ProxyLanguage() {
+            private CallTarget target;
 
             @Override
-            protected CallTarget parse(ParsingRequest request) throws Exception {
+            protected synchronized CallTarget parse(ParsingRequest request) throws Exception {
                 com.oracle.truffle.api.source.Source source = request.getSource();
-                CallTarget target = Truffle.getRuntime().createCallTarget(new RootNode(languageInstance) {
+                if (target == null) {
+                    target = Truffle.getRuntime().createCallTarget(new RootNode(languageInstance) {
 
-                    @Node.Child private volatile BaseNode child = testedCode;
+                        @Node.Child private volatile BaseNode child = testedCode;
 
-                    @Override
-                    public Object execute(VirtualFrame frame) {
-                        return child.execute(frame);
-                    }
+                        @Override
+                        public Object execute(VirtualFrame frame) {
+                            return child.execute(frame);
+                        }
 
-                    @Override
-                    public SourceSection getSourceSection() {
-                        return source.createSection(1);
-                    }
+                        @Override
+                        public SourceSection getSourceSection() {
+                            return source.createSection(1);
+                        }
 
-                });
-                targets.add(target);
+                    });
+                }
                 return target;
             }
         });
 
+        AtomicReference<DetectInvalidCodeNode> nodeToRewriteReference = new AtomicReference<>(nodeToRewrite);
         Random rnd = new Random();
         CountDownLatch nodeRewritingLatch = new CountDownLatch(1);
         List<Object> callTargetsToCheck = new ArrayList<>();
@@ -251,12 +247,16 @@ public class RewriteDuringCompilationTest extends AbstractPolyglotTest {
                         nodeRewritingLatch.await();
                     } catch (InterruptedException ie) {
                     }
-                    Object loopNodeCallTarget = getLoopNodeCallTarget();
-                    if (loopNodeCallTarget != null) {
-                        callTargetsToCheck.add(loopNodeCallTarget);
+                    if (loopNode != null) {
+                        Object loopNodeCallTarget = ((OptimizedOSRLoopNode) loopNode).getCompiledOSRLoop();
+                        if (loopNodeCallTarget != null) {
+                            callTargetsToCheck.add(loopNodeCallTarget);
+                        }
                     }
-                    UpdateStaticFieldNode previousNode = updateStaticFieldNode;
-                    updateStaticFieldNode.replace(updateStaticFieldNode = new UpdateStaticFieldNode());
+                    DetectInvalidCodeNode previousNode = nodeToRewriteReference.get();
+                    DetectInvalidCodeNode newNode = new DetectInvalidCodeNode();
+                    nodeToRewriteReference.set(newNode);
+                    previousNode.replace(newNode);
                     previousNode.valid = false;
                 }
             } finally {
@@ -279,32 +279,7 @@ public class RewriteDuringCompilationTest extends AbstractPolyglotTest {
             executor.awaitTermination(100, TimeUnit.SECONDS);
         }
         for (Object callTarget : callTargetsToCheck) {
-            Assert.assertFalse("Obsolete loop call target is still valid", isLoopNodeCallTargetValid(callTarget));
+            Assert.assertFalse("Obsolete loop call target is still valid", ((OptimizedCallTarget) callTarget).isValid());
         }
-    }
-
-    private static Object getLoopNodeCallTarget() {
-        Object toRet = null;
-        if (loopNode != null && loopNode.getClass().getSuperclass() != null) {
-            try {
-                Field callTargetField = loopNode.getClass().getSuperclass().getDeclaredField("compiledOSRLoop");
-                callTargetField.setAccessible(true);
-                toRet = callTargetField.get(loopNode);
-            } catch (Exception e) {
-            }
-        }
-        return toRet;
-    }
-
-    private static boolean isLoopNodeCallTargetValid(Object callTarget) {
-        boolean toRet = false;
-        if (callTarget != null) {
-            try {
-                Method isValidMethod = callTarget.getClass().getMethod("isValid");
-                toRet = (Boolean) isValidMethod.invoke(callTarget);
-            } catch (Exception e) {
-            }
-        }
-        return toRet;
     }
 }
