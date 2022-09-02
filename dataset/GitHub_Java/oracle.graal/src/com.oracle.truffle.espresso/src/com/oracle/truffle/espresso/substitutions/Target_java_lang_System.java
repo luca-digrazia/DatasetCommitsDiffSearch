@@ -23,7 +23,6 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.MetaUtil;
@@ -43,7 +42,6 @@ public final class Target_java_lang_System {
         return System.identityHashCode(MetaUtil.maybeUnwrapNull(self));
     }
 
-
     @Substitution
     public static void arraycopy(@Host(Object.class) StaticObject src, int srcPos, @Host(Object.class) StaticObject dest, int destPos, int length) {
         arraycopyCount.inc();
@@ -57,61 +55,48 @@ public final class Target_java_lang_System {
 
     private static void doArrayCopy(@Host(Object.class) StaticObject src, int srcPos, @Host(Object.class) StaticObject dest, int destPos, int length) {
         if (StaticObject.isNull(src) || StaticObject.isNull(dest)) {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(NullPointerException.class);
+            throw new NullPointerException();
         }
         // Mimics hotspot implementation.
         if (src.isArray() && dest.isArray()) {
             // System.arraycopy does the bounds checks
             if (src == dest) {
                 // Same array, no need to type check
-                boundsCheck(src, srcPos, dest, destPos, length);
                 System.arraycopy(src.unwrap(), srcPos, dest.unwrap(), destPos, length);
             } else {
                 Klass destType = dest.getKlass().getComponentType();
                 Klass srcType = src.getKlass().getComponentType();
-                if (destType.isPrimitive() && srcType.isPrimitive()) {
-                    if (srcType != destType) {
-                        throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayStoreException.class);
-                    }
-                    boundsCheck(src, srcPos, dest, destPos, length);
+                if (destType.isPrimitive() || srcType.isPrimitive()) {
+                    // primitives -> System.arrayCopy detects the arrayStoreException for us
                     System.arraycopy(src.unwrap(), srcPos, dest.unwrap(), destPos, length);
-                } else if (!destType.isPrimitive() && !srcType.isPrimitive()) {
-                    if (destType.isAssignableFrom(srcType)) {
-                        // We have guarantee we can copy, as all elements in src conform to dest.
-                        boundsCheck(src, srcPos, dest, destPos, length);
-                        System.arraycopy(src.unwrap(), srcPos, dest.unwrap(), destPos, length);
-                    } else {
-                        // slow path (manual copy) (/ex: copying an Object[] to a String[]) requires
-                        // individual type checks. Should rarely happen ( < 1% of cases).
-                        // @formatter:off
-                        // Use cases:
-                        // - System startup.
-                        // - MethodHandle and CallSite linking.
-                        boundsCheck(src, srcPos, dest, destPos, length);
-                        StaticObject[] s = src.unwrap();
-                        StaticObject[] d = dest.unwrap();
-                        for (int i = 0; i < length; i++) {
-                            StaticObject cpy = s[i + srcPos];
-                            if (StaticObject.isNull(cpy) || destType.isAssignableFrom(cpy.getKlass())) {
-                                d[destPos + i] = cpy;
-                            } else {
-                                throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayStoreException.class);
-                            }
+                } else if (destType.isAssignableFrom(srcType)) {
+                    // We have guarantee we can copy, as all elements in src conform to dest.
+                    System.arraycopy(src.unwrap(), srcPos, dest.unwrap(), destPos, length);
+                } else {
+                    // slow path (manual copy) (/ex: copying an Object[] to a String[]) requires
+                    // individual type checks. Should rarely happen ( < 1% of cases).
+                    // @formatter:off
+                    // Use cases:
+                    // - System startup.
+                    // - MethodHandle and CallSite linking.
+                    if (srcPos < 0 || destPos < 0 || length < 0 || srcPos > src.length() - length || destPos > dest.length() - length){
+                        // Other checks are caught during execution without side effects.
+                        throw new ArrayIndexOutOfBoundsException();
+                    }
+                    StaticObject[] s = src.unwrap();
+                    StaticObject[] d = dest.unwrap();
+                    for (int i = 0; i < length; i++) {
+                        StaticObject cpy = s[i + srcPos];
+                        if (StaticObject.isNull(cpy) || destType.isAssignableFrom(cpy.getKlass())) {
+                            d[destPos + i] = cpy;
+                        } else {
+                            throw new ArrayStoreException();
                         }
                     }
-                } else {
-                    throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayStoreException.class);
                 }
             }
         } else {
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayStoreException.class);
-        }
-    }
-
-    private static void boundsCheck(@Host(Object.class) StaticObject src, int srcPos, @Host(Object.class) StaticObject dest, int destPos, int length) {
-        if (srcPos < 0 || destPos < 0 || length < 0 || srcPos > src.length() - length || destPos > dest.length() - length) {
-            // Other checks are caught during execution without side effects.
-            throw EspressoLanguage.getCurrentContext().getMeta().throwEx(ArrayIndexOutOfBoundsException.class);
+            throw new ArrayStoreException();
         }
     }
 
