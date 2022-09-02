@@ -113,7 +113,7 @@ public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode imp
         assert VMOperation.isInProgressAtSafepoint();
         this.entryPoint = address;
         this.address = address;
-        callTarget.onCodeInstalled(this);
+        callTarget.setInstalledCode(this);
     }
 
     @Override
@@ -121,7 +121,6 @@ public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode imp
         assert VMOperation.isInProgressAtSafepoint();
         this.entryPoint = 0;
         this.address = 0;
-        callTarget.onCodeCleared(this);
     }
 
     @Override
@@ -148,8 +147,16 @@ public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode imp
         }
     }
 
+    /**
+     * Prevents reads from floating across a safepoint when the caller is inlined in another method.
+     * Intrinsified in {@link SubstrateTruffleGraphBuilderPlugins}.
+     */
+    protected static void safepointBarrier() {
+        // Intrinsified, but empty so it can be called during hosted Truffle calls
+    }
+
     static Object doInvoke(SubstrateOptimizedCallTarget callTarget, Object[] args) {
-        SubstrateOptimizedCallTarget.safepointBarrier();
+        safepointBarrier();
         /*
          * We have to be very careful that the calling code is uninterruptible, i.e., has no
          * safepoint between the read of the entry point address and the indirect call to this

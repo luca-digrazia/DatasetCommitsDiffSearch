@@ -119,7 +119,7 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
         return createInstalledCode();
     }
 
-    protected void setInstalledCode(SubstrateOptimizedCallTargetInstalledCode code) {
+    void setInstalledCode(SubstrateOptimizedCallTargetInstalledCode code) {
         VMOperation.guaranteeInProgressAtSafepoint("Must be at a safepoint");
         assert code != null : "Must never become null";
         if (code == installedCode) {
