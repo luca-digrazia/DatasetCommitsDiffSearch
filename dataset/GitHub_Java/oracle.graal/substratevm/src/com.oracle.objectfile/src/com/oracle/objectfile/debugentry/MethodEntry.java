@@ -28,9 +28,6 @@ package com.oracle.objectfile.debugentry;
 
 import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugRangeInfo;
 
-import java.util.Arrays;
-import java.util.stream.Collectors;
-
 public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> {
     final TypeEntry[] paramTypes;
     final String[] paramNames;
@@ -38,7 +35,6 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
     boolean isInRange;
 
     final String symbolName;
-    private String signature;
 
     public MethodEntry(FileEntry fileEntry, String symbolName, String methodName, ClassEntry ownerType,
                     TypeEntry valueType, TypeEntry[] paramTypes, String[] paramNames, int modifiers,
@@ -124,13 +120,6 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
         return symbolName;
     }
 
-    private String getSignature() {
-        if (signature == null) {
-            signature = Arrays.stream(paramTypes).map(TypeEntry::getTypeName).collect(Collectors.joining(", "));
-        }
-        return signature;
-    }
-
     public int compareTo(String methodName, String paramSignature, String returnTypeName) {
         int nameComparison = memberName.compareTo(methodName);
         if (nameComparison != 0) {
@@ -140,7 +129,24 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
         if (typeComparison != 0) {
             return typeComparison;
         }
-        return getSignature().compareTo(paramSignature);
+        String[] paramTypeNames = paramSignature.split((","));
+        int length;
+        if (paramSignature.trim().length() == 0) {
+            length = 0;
+        } else {
+            length = paramTypeNames.length;
+        }
+        int paramCountComparison = getParamCount() - length;
+        if (paramCountComparison != 0) {
+            return paramCountComparison;
+        }
+        for (int i = 0; i < getParamCount(); i++) {
+            int paraComparison = getParamTypeName(i).compareTo(paramTypeNames[i].trim());
+            if (paraComparison != 0) {
+                return paraComparison;
+            }
+        }
+        return 0;
     }
 
     @Override
@@ -154,6 +160,16 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
         if (typeComparison != 0) {
             return typeComparison;
         }
-        return getSignature().compareTo(other.getSignature());
+        int paramCountComparison = getParamCount() - other.getParamCount();
+        if (paramCountComparison != 0) {
+            return paramCountComparison;
+        }
+        for (int i = 0; i < getParamCount(); i++) {
+            int paramComparison = getParamTypeName(i).compareTo(other.getParamTypeName(i));
+            if (paramComparison != 0) {
+                return paramComparison;
+            }
+        }
+        return 0;
     }
 }
