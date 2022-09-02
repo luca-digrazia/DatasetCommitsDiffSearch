@@ -29,7 +29,6 @@ import java.io.IOException;
 
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.ByteSequence;
-import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 
 /**
@@ -219,8 +218,7 @@ public final class ClassfileStream {
     }
 
     public ClassFormatError classFormatError(String format, Object... args) {
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
-        throw meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, String.format(format, args) + " in classfile " + classfile);
+        throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ClassFormatError.class, String.format(format, args) + " in classfile " + classfile);
     }
 
     public ClassFormatError ioError(IOException ioException) {
