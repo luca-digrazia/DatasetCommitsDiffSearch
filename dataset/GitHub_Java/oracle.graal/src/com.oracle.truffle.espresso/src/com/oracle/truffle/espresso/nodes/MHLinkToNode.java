@@ -22,6 +22,7 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
@@ -33,29 +34,28 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-public abstract class MHLinkToNode extends HandleIntrinsicNode {
+public abstract class MHLinkToNode extends EspressoBaseNode {
     final int argCount;
     final MethodHandleIntrinsics.PolySigIntrinsics id;
     @Child IndirectCallNode callNode;
-    private final int hiddenVmtarget;
+    private final int hidden_vmtarget;
     private final boolean hasReceiver;
 
     MHLinkToNode(Method method, MethodHandleIntrinsics.PolySigIntrinsics id) {
         super(method);
         this.id = id;
-        this.argCount = Signatures.parameterCount(method.getParsedSignature(), false);
+        this.argCount = Signatures.parameterCount(getMethod().getParsedSignature(), false);
         this.callNode = IndirectCallNode.create();
-        this.hiddenVmtarget = method.getMeta().HIDDEN_VMTARGET.getFieldIndex();
+        this.hidden_vmtarget = getMeta().HIDDEN_VMTARGET.getFieldIndex();
         this.hasReceiver = id != MethodHandleIntrinsics.PolySigIntrinsics.LinkToStatic;
-        assert method.isStatic();
     }
 
     @Override
-    public Object call(Object[] args) {
+    public Object invokeNaked(VirtualFrame frame) {
         assert (getMethod().isStatic());
-        Method target = getTarget(args);
-        Object[] basicArgs = unbasic(args, target.getParsedSignature(), 0, argCount - 1, hasReceiver);
-        return rebasic(linkTo(target, basicArgs), target.getReturnKind());
+        Method target = getTarget(frame.getArguments());
+        Object[] args = unbasic(frame.getArguments(), target.getParsedSignature(), 0, argCount - 1, hasReceiver);
+        return rebasic(linkTo(target, args), target.getReturnKind());
     }
 
     protected abstract Object linkTo(Method target, Object[] args);
@@ -105,11 +105,11 @@ public abstract class MHLinkToNode extends HandleIntrinsicNode {
         }
     }
 
-    private Method getTarget(Object[] args) {
+    private final Method getTarget(Object[] args) {
         assert args.length >= 1;
         StaticObject memberName = (StaticObject) args[args.length - 1];
         assert (memberName.getKlass().getType() == Symbol.Type.MemberName);
-        Method target = (Method) memberName.getUnsafeField(hiddenVmtarget);
+        Method target = (Method) memberName.getUnsafeField(hidden_vmtarget);
         return target;
     }
 }

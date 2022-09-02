@@ -641,10 +641,10 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
     }
 
     public boolean isMethodHandleInvokeIntrinsic() {
-        return isNative() && declaringKlass == getMeta().MethodHandle && MethodHandleIntrinsics.getId(this) == MethodHandleIntrinsics.PolySigIntrinsics.InvokeGeneric;
+        return isNative() && declaringKlass == getMeta().MethodHandle && (getName() == Name.invoke || getName() == Name.invokeExact);
     }
 
     public boolean isMethodHandleIntrinsic() {
-        return isNative() && declaringKlass == getMeta().MethodHandle && MethodHandleIntrinsics.getId(this) != MethodHandleIntrinsics.PolySigIntrinsics.None;
+        return declaringKlass == getMeta().MethodHandle && (isMethodHandleInvokeIntrinsic() || MethodHandleIntrinsics.getId(this) != MethodHandleIntrinsics.PolySigIntrinsics.None);
     }
 }
