@@ -76,7 +76,7 @@ final class PolyglotLocals {
             for (InstrumentContextLocal<?> local : locals) {
                 local.instrument = polyglotInstrument;
             }
-            locations = polyglotInstrument.engine.addContextLocals(locals, true);
+            locations = polyglotInstrument.engine.addContextLocals(locals);
         }
         polyglotInstrument.contextLocalLocations = locations;
 
@@ -109,7 +109,7 @@ final class PolyglotLocals {
             } else {
                 PolyglotLanguage language = polyglotLanguageInstance.language;
                 PolyglotEngineImpl engine = language.engine;
-                language.previousContextLocalLocations = locations = engine.addContextLocals(locals, false);
+                language.previousContextLocalLocations = locations = engine.addContextLocals(locals);
                 assert locations.length == locals.size();
             }
         }
@@ -126,7 +126,7 @@ final class PolyglotLocals {
             for (InstrumentContextThreadLocal<?> local : locals) {
                 local.instrument = polyglotInstrument;
             }
-            locations = polyglotInstrument.engine.addContextThreadLocals(locals, true);
+            locations = polyglotInstrument.engine.addContextThreadLocals(locals);
         }
         polyglotInstrument.contextThreadLocalLocations = locations;
     }
@@ -159,7 +159,7 @@ final class PolyglotLocals {
             } else {
                 PolyglotLanguage language = polyglotLanguageInstance.language;
                 PolyglotEngineImpl engine = language.engine;
-                language.previousContextThreadLocalLocations = locations = engine.addContextThreadLocals(locals, false);
+                language.previousContextThreadLocalLocations = locations = engine.addContextThreadLocals(locals);
                 assert locations.length == locals.size();
             }
         }
@@ -257,7 +257,7 @@ final class PolyglotLocals {
                 if (context.engine != instrument.engine) {
                     throw new AssertionError("Invalid sharing of locations.");
                 }
-                return EngineAccessor.INSTRUMENT.invokeContextLocalFactory(factory, context.truffleContext);
+                return EngineAccessor.INSTRUMENT.invokeContextLocalFactory(factory, context.creatorTruffleContext);
             }
         }
 
@@ -479,7 +479,7 @@ final class PolyglotLocals {
                 if (context.engine != instrument.engine) {
                     throw new AssertionError("Invalid sharing of locations.");
                 }
-                return EngineAccessor.INSTRUMENT.invokeContextThreadLocalFactory(factory, context.truffleContext, thread);
+                return EngineAccessor.INSTRUMENT.invokeContextThreadLocalFactory(factory, context.creatorTruffleContext, thread);
             }
         }
 
@@ -509,26 +509,49 @@ final class PolyglotLocals {
             return result;
         }
 
-        final Object readLocal(Object[] locals) {
-            assert locals != null && index < locals.length && locals[index] != null : "invalid context local state";
+        final Object readLocal(PolyglotContextImpl context, Object[] locals, boolean threadLocal) {
+            assert locals != null && index < locals.length && locals[index] != null : invalidLocalMessage(context, locals);
             Object result;
             if (CompilerDirectives.isPartialEvaluationConstant(this)) {
-                StableLocalLocations stableLocations = this.engine.contextThreadLocalLocations;
-                LocalLocation[] locations = stableLocations.locations;
-                if (!stableLocations.assumption.isValid()) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    result = locals[index];
-                } else {
-                    result = EngineAccessor.RUNTIME.unsafeCast(EngineAccessor.RUNTIME.castArrayFixedLength(locals, locations.length)[index], profiledType, true, true, true);
-                }
+                result = readLocalFast(locals, threadLocal);
             } else {
                 result = locals[index];
             }
-            assert result.getClass() == profiledType : "invalid context local state";
+            assert result.getClass() == profiledType : invalidLocalMessage(context, locals);
+            return result;
+        }
+
+        private Object readLocalFast(Object[] locals, boolean threadLocal) {
+            Object result;
+            StableLocalLocations stableLocations = (threadLocal ? this.engine.contextThreadLocalLocations : this.engine.contextLocalLocations);
+            LocalLocation[] locations = stableLocations.locations;
+            if (!stableLocations.assumption.isValid()) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                result = locals[index];
+            } else {
+                result = EngineAccessor.RUNTIME.unsafeCast(EngineAccessor.RUNTIME.castArrayFixedLength(locals, locations.length)[index], profiledType, true, true, true);
+            }
             return result;
         }
 
         abstract Object invokeFactoryImpl(PolyglotContextImpl context, Thread thread);
+
+        private String invalidLocalMessage(PolyglotContextImpl context, Object[] locals) {
+            if (locals == null) {
+                return "Invalid local state: Locals is null. Current context: " + context.toString();
+            } else if (index < 0 || index >= locals.length) {
+                return "Invalid local state: Locals index is out of bounds " + index + ". Current context: " + context.toString();
+            }
+
+            Object value = locals[index];
+            if (value == null) {
+                return "Invalid local state: Local is not initialized. Engine closed: " + engine.closed + ". Current context: " + context.toString();
+            } else if (locals[index].getClass() != profiledType) {
+                return "Invalid local state: Invalid profiled type. Expected " + profiledType.getName() + " but was " + value.getClass().getName();
+            }
+            return "Invalid local state: Unknown reason. Current context: " + context.toString();
+        }
+
     }
 
 }
