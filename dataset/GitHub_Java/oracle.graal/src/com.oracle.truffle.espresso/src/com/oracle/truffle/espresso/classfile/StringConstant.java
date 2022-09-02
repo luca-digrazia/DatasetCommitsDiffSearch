@@ -71,7 +71,6 @@ public interface StringConstant extends PoolConstant {
             if (pool.at(utf8Index).tag() != Tag.UTF8) {
                 throw new VerifyError("invalid pool constant: " + tag());
             }
-            pool.at(utf8Index).checkValidity(pool);
         }
     }
 

@@ -152,7 +152,6 @@ public interface ClassConstant extends PoolConstant {
             if (pool.at(classNameIndex).tag() != UTF8) {
                 throw new VerifyError("Ill-formed constant: " + tag());
             }
-            pool.at(classNameIndex).checkValidity(pool);
         }
     }
 

@@ -80,7 +80,7 @@ public interface MemberRefConstant extends PoolConstant {
             return pool.classAt(classIndex).getName(pool);
         }
 
-        public Klass getResolvedHolderKlass(Klass accessingKlass, RuntimeConstantPool pool) {
+        protected Klass getResolvedHolderKlass(Klass accessingKlass, RuntimeConstantPool pool) {
             return pool.resolvedKlassAt(accessingKlass, classIndex);
         }
 
@@ -95,9 +95,12 @@ public interface MemberRefConstant extends PoolConstant {
         }
 
         @Override
-        public void validate(ConstantPool pool) {
-            pool.classAt(classIndex).validate(pool);
-            pool.nameAndTypeAt(nameAndTypeIndex).validate(pool);
+        public void checkValidity(ConstantPool pool) {
+            if (pool.at(classIndex).tag() != CLASS || pool.at(nameAndTypeIndex).tag() != NAME_AND_TYPE) {
+                throw new VerifyError("Ill-formed constant: " + tag());
+            }
+            pool.at(classIndex).checkValidity(pool);
+            pool.at(nameAndTypeIndex).checkValidity(pool);
         }
     }
 
