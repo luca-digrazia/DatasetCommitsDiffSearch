@@ -40,15 +40,13 @@
  */
 package org.graalvm.wasm;
 
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
-
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import org.graalvm.wasm.exception.Failure;
+import org.graalvm.wasm.exception.WasmException;
 
 /**
  * The global registry holds the global values in the WebAssembly engine instance.
@@ -118,7 +116,6 @@ public class GlobalRegistry {
             try {
                 return (int) InteropLibrary.getUncached().readMember(global, "value");
             } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         }
@@ -131,7 +128,6 @@ public class GlobalRegistry {
             try {
                 return Float.floatToRawIntBits((float) InteropLibrary.getUncached().readMember(global, "value"));
             } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         }
@@ -144,7 +140,6 @@ public class GlobalRegistry {
             try {
                 return (long) InteropLibrary.getUncached().readMember(global, "value");
             } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         }
@@ -157,7 +152,6 @@ public class GlobalRegistry {
             try {
                 return Double.doubleToRawLongBits((double) InteropLibrary.getUncached().readMember(global, "value"));
             } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         }
@@ -170,7 +164,6 @@ public class GlobalRegistry {
             try {
                 return (float) InteropLibrary.getUncached().readMember(global, "value");
             } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         }
@@ -183,7 +176,6 @@ public class GlobalRegistry {
             try {
                 return (double) InteropLibrary.getUncached().readMember(global, "value");
             } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         }
@@ -196,7 +188,6 @@ public class GlobalRegistry {
             try {
                 InteropLibrary.getUncached().writeMember(global, "value", value);
             } catch (UnsupportedMessageException | UnknownIdentifierException | UnsupportedTypeException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         } else {
@@ -210,7 +201,6 @@ public class GlobalRegistry {
             try {
                 InteropLibrary.getUncached().writeMember(global, "value", value);
             } catch (UnsupportedMessageException | UnknownIdentifierException | UnsupportedTypeException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         } else {
@@ -224,7 +214,6 @@ public class GlobalRegistry {
             try {
                 InteropLibrary.getUncached().writeMember(global, "value", value);
             } catch (UnsupportedMessageException | UnknownIdentifierException | UnsupportedTypeException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         } else {
@@ -238,7 +227,6 @@ public class GlobalRegistry {
             try {
                 InteropLibrary.getUncached().writeMember(global, "value", Float.intBitsToFloat(value));
             } catch (UnsupportedMessageException | UnknownIdentifierException | UnsupportedTypeException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         } else {
@@ -252,7 +240,6 @@ public class GlobalRegistry {
             try {
                 InteropLibrary.getUncached().writeMember(global, "value", value);
             } catch (UnsupportedMessageException | UnknownIdentifierException | UnsupportedTypeException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         } else {
@@ -266,7 +253,6 @@ public class GlobalRegistry {
             try {
                 InteropLibrary.getUncached().writeMember(global, "value", Double.longBitsToDouble(value));
             } catch (UnsupportedMessageException | UnknownIdentifierException | UnsupportedTypeException e) {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.format(Failure.UNSPECIFIED_TRAP, "Global does not have a value attribute: %s", global);
             }
         } else {
@@ -289,7 +275,6 @@ public class GlobalRegistry {
 
     public Object externalGlobal(int address) {
         if (address >= 0) {
-            CompilerDirectives.transferToInterpreter();
             throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Global at address " + address + " is not external.");
         }
         return externalGlobals[-address - 1];
