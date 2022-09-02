@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -60,7 +60,7 @@ public final class TraceASTCompilationListener extends AbstractGraalTruffleRunti
             try (PrintWriter out = new PrintWriter(logMessage)) {
                 printCompactTree(out, target, inliningDecision);
             }
-            runtime.logEvent(target, 0, "opt AST", target.toString(), target.getDebugProperties(), logMessage.toString());
+            runtime.logEvent(target, 0, "opt AST", target.toString(), target.getDebugProperties(inliningDecision), logMessage.toString());
         }
     }
 

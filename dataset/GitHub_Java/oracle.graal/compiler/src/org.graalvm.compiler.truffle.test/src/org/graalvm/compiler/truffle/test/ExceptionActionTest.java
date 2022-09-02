@@ -266,12 +266,9 @@ public class ExceptionActionTest extends TestWithPolyglotOptions {
         newVmArgs.addAll(vmArgs.stream().filter(new Predicate<String>() {
             @Override
             public boolean test(String vmArg) {
-                // Filter out the LogFile option to prevent overriding of the unit tests log file by
-                // a sub-process.
                 return !vmArg.contains(GraalCompilerOptions.CompilationFailureAction.getName()) &&
                                 !vmArg.contains(GraalCompilerOptions.CompilationBailoutAsFailure.getName()) &&
-                                !vmArg.contains(GraalCompilerOptions.CrashAt.getName()) &
-                                                !vmArg.contains("LogFile");
+                                !vmArg.contains(GraalCompilerOptions.CrashAt.getName());
             }
         }).collect(Collectors.toList()));
         for (String additionalVmOption : additionalVmOptions) {

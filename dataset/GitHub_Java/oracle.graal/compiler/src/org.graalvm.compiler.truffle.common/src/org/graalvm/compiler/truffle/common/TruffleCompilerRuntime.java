@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -325,7 +325,7 @@ public interface TruffleCompilerRuntime {
      * trace line is shown below:
      *
      * <pre>
-     * opt queued       :anonymous <split-1563da5>                                  |ASTSize      20/   20 |Calls/Thres    7723/    3 |CallsAndLoop/Thres    7723/ 1000 |Inval#              0
+     * [truffle] opt queued       :anonymous <split-1563da5>                                  |ASTSize      20/   20 |Calls/Thres    7723/    3 |CallsAndLoop/Thres    7723/ 1000 |Inval#              0
      * </pre>
      *
      * @param depth nesting depth of the event (subject column is indented @{code depth * 2})
@@ -459,9 +459,4 @@ public interface TruffleCompilerRuntime {
      * Determines if {@code method} is annotated by {@code TruffleBoundary}.
      */
     boolean isTruffleBoundary(ResolvedJavaMethod method);
-
-    /**
-     * Determines if {@code method} is annotated by {@code TruffleBoundary}.
-     */
-    boolean isSpecializationMethod(ResolvedJavaMethod method);
 }

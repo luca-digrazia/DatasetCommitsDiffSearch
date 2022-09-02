@@ -135,10 +135,6 @@ public abstract class Accessor {
         getTVMCI().onEngineClosed(runtimeData);
     }
 
-    protected OutputStream getConfiguredLogStream() {
-        return getTVMCI().getConfiguredLogStream();
-    }
-
     public abstract static class NodeSupport {
 
         public abstract boolean isInstrumentable(RootNode rootNode);
@@ -357,17 +353,17 @@ public abstract class Accessor {
 
         public abstract Object asBoxedGuestValue(Object guestObject, Object polyglotLanguageContext);
 
-        public abstract Object createDefaultLoggerCache();
+        public abstract Object createDefaultLoggerCacheSPI();
 
-        public abstract Handler getLogHandler(Object loggerCache);
+        public abstract Handler getLogHandler(Object loggerCacheSPI);
 
-        public abstract Map<String, Level> getLogLevels(Object loggerCache);
+        public abstract Map<String, Level> getLogLevels(Object loggerCacheSPI);
 
-        public abstract Object getLoggerOwner(Object loggerCache);
+        public abstract Object getLoggerOwner(Object loggerCacheSPI);
 
         public abstract TruffleLogger getLogger(Object polyglotInstrument, String name);
 
-        public abstract LogRecord createLogRecord(Object loggerCache, Level level, String loggerName, String message, String className, String methodName, Object[] parameters, Throwable thrown);
+        public abstract LogRecord createLogRecord(Object loggerCacheSPI, Level level, String loggerName, String message, String className, String methodName, Object[] parameters, Throwable thrown);
 
         public abstract Object getCurrentOuterContext();
 
