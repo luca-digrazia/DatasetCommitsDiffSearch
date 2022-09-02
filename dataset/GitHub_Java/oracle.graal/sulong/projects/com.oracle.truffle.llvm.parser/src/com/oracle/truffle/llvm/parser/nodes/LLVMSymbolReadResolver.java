@@ -91,7 +91,6 @@ import com.oracle.truffle.llvm.runtime.types.visitors.TypeVisitor;
 
 public final class LLVMSymbolReadResolver {
 
-    private final boolean storeSSAValueInSlot;
     private final LLVMParserRuntime runtime;
     private final NodeFactory nodeFactory;
     private final FrameDescriptor frame;
@@ -446,22 +445,20 @@ public final class LLVMSymbolReadResolver {
         }
     }
 
-    public LLVMSymbolReadResolver(LLVMParserRuntime runtime, FrameDescriptor frame, GetStackSpaceFactory getStackSpaceFactory, DataLayout dataLayout, boolean storeSSAValueInSlot) {
+    public LLVMSymbolReadResolver(LLVMParserRuntime runtime, FrameDescriptor frame, GetStackSpaceFactory getStackSpaceFactory, DataLayout dataLayout) {
         this.runtime = runtime;
-        this.storeSSAValueInSlot = storeSSAValueInSlot;
         this.nodeFactory = runtime.getNodeFactory();
         this.frame = frame;
         this.getStackSpaceFactory = getStackSpaceFactory;
         this.dataLayout = dataLayout;
     }
 
-    public FrameSlot findOrAddFrameSlot(FrameDescriptor descriptor, SSAValue value) {
+    public static FrameSlot findOrAddFrameSlot(FrameDescriptor descriptor, SSAValue value) {
         FrameSlot slot = descriptor.findFrameSlot(value.getFrameIdentifier());
-        Object info = storeSSAValueInSlot ? value : null;
         if (slot == null) {
-            slot = descriptor.findOrAddFrameSlot(value.getFrameIdentifier(), info, Type.getFrameSlotKind(value.getType()));
+            slot = descriptor.findOrAddFrameSlot(value.getFrameIdentifier(), value, Type.getFrameSlotKind(value.getType()));
         }
-        assert slot.getInfo() == info;
+        assert slot.getInfo() == value;
         return slot;
     }
 

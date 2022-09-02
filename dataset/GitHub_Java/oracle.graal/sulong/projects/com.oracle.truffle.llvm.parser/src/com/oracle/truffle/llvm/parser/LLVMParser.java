@@ -35,6 +35,7 @@ import java.util.List;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
+import com.oracle.truffle.llvm.parser.model.enums.Visibility;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
@@ -43,10 +44,10 @@ import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
-import com.oracle.truffle.llvm.runtime.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMAlias;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.Function;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.LazyLLVMIRFunction;
@@ -130,7 +131,8 @@ public final class LLVMParser {
     private void defineGlobal(GlobalVariable global, List<String> importedSymbols) {
         assert !global.isExternal();
         // handle the file scope
-        LLVMGlobal globalSymbol = LLVMGlobal.create(global.getName(), global.getType(), global.getSourceSymbol(), global.isReadOnly(), global.getIndex(), runtime.getBitcodeID());
+        LLVMGlobal globalSymbol = LLVMGlobal.create(global.getName(), global.getType(), global.getSourceSymbol(), global.isReadOnly(), global.getIndex(), runtime.getBitcodeID(),
+                        global.getVisibility() == Visibility.HIDDEN);
         globalSymbol.define(global.getType(), library);
         runtime.getFileScope().register(globalSymbol);
 
@@ -177,10 +179,10 @@ public final class LLVMParser {
                 localScope.register(llvmFunction);
             }
 
-            exportedDescriptor = runtime.getGlobalScope().get(functionSymbol.getName());
-            if (exportedDescriptor == null) {
+            LLVMSymbol globalExportedDescriptor = runtime.getGlobalScope().get(functionSymbol.getName());
+            if (globalExportedDescriptor == null) {
                 runtime.getGlobalScope().register(llvmFunction);
-            } else if (exportedDescriptor.isFunction()) {
+            } else if (globalExportedDescriptor.isFunction()) {
                 importedSymbols.add(functionSymbol.getName());
             } else {
                 assert exportedDescriptor.isGlobalVariable();
