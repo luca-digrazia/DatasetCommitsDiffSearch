@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.polyglot;
 
-import static com.oracle.truffle.polyglot.GuestToHostRootNode.createGuestToHost;
-
 import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Type;
@@ -54,20 +52,16 @@ import java.util.List;
 import java.util.Objects;
 import java.util.StringJoiner;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
-import com.oracle.truffle.api.dsl.Cached.Shared;
-import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ConditionProfile;
@@ -77,7 +71,6 @@ import com.oracle.truffle.polyglot.HostMethodDesc.SingleMethod;
 import com.oracle.truffle.polyglot.PolyglotLanguageContext.ToGuestValueNode;
 
 @ReportPolymorphism
-@GenerateUncached
 abstract class HostExecuteNode extends Node {
     static final int LIMIT = 3;
     private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class<?>[0];
@@ -85,22 +78,26 @@ abstract class HostExecuteNode extends Node {
     HostExecuteNode() {
     }
 
+    private final ToGuestValueNode toGuest = ToGuestValueNode.create();
+
     static HostExecuteNode create() {
         return HostExecuteNodeGen.create();
     }
 
-    public final Object execute(HostMethodDesc method, Object obj, Object[] args, PolyglotLanguageContext languageContext) throws UnsupportedTypeException, ArityException {
+    public final Object execute(HostMethodDesc method, Object obj, Object[] args, PolyglotLanguageContext languageContext) {
         try {
             return executeImpl(method, obj, args, languageContext);
         } catch (ClassCastException | NullPointerException e) {
             // conversion failed by ToJavaNode
-            throw UnsupportedTypeException.create(args);
-        } catch (UnsupportedTypeException | ArityException e) {
-            throw e;
+            throw UnsupportedTypeException.raise(e, args);
+        } catch (InteropException e) {
+            throw e.raise();
+        } catch (Throwable e) {
+            throw HostInteropReflect.rethrow(PolyglotImpl.wrapHostException(languageContext, e));
         }
     }
 
-    protected abstract Object executeImpl(HostMethodDesc method, Object obj, Object[] args, PolyglotLanguageContext languageContext) throws UnsupportedTypeException, ArityException;
+    protected abstract Object executeImpl(HostMethodDesc method, Object obj, Object[] args, PolyglotLanguageContext languageContext) throws InteropException;
 
     static ToHostNode[] createToHost(int argsLength) {
         ToHostNode[] toJava = new ToHostNode[argsLength];
@@ -116,11 +113,10 @@ abstract class HostExecuteNode extends Node {
     Object doFixed(SingleMethod method, Object obj, Object[] args, PolyglotLanguageContext languageContext,
                     @Cached("method") SingleMethod cachedMethod,
                     @Cached("createToHost(method.getParameterCount())") ToHostNode[] toJavaNodes,
-                    @Cached ToGuestValueNode toGuest,
-                    @Cached("createClassProfile()") ValueProfile receiverProfile) throws ArityException {
+                    @Cached("createClassProfile()") ValueProfile receiverProfile) {
         int arity = cachedMethod.getParameterCount();
         if (args.length != arity) {
-            throw ArityException.create(arity, args.length);
+            throw ArityException.raise(arity, args.length);
         }
         Class<?>[] types = cachedMethod.getParameterTypes();
         Type[] genericTypes = cachedMethod.getGenericParameterTypes();
@@ -128,20 +124,20 @@ abstract class HostExecuteNode extends Node {
         for (int i = 0; i < toJavaNodes.length; i++) {
             convertedArguments[i] = toJavaNodes[i].execute(args[i], types[i], genericTypes[i], languageContext);
         }
-        return doInvoke(cachedMethod, receiverProfile.profile(obj), convertedArguments, languageContext, toGuest);
+
+        return doInvoke(cachedMethod, receiverProfile.profile(obj), convertedArguments, languageContext);
     }
 
     @SuppressWarnings("unused")
     @Specialization(guards = {"method.isVarArgs()", "method == cachedMethod"}, limit = "LIMIT")
     Object doVarArgs(SingleMethod method, Object obj, Object[] args, PolyglotLanguageContext languageContext,
                     @Cached("method") SingleMethod cachedMethod,
-                    @Cached ToHostNode toJavaNode,
-                    @Cached ToGuestValueNode toGuest,
-                    @Cached("createClassProfile()") ValueProfile receiverProfile) throws ArityException {
+                    @Cached("create()") ToHostNode toJavaNode,
+                    @Cached("createClassProfile()") ValueProfile receiverProfile) {
         int parameterCount = cachedMethod.getParameterCount();
         int minArity = parameterCount - 1;
         if (args.length < minArity) {
-            throw ArityException.create(minArity, args.length);
+            throw ArityException.raise(minArity, args.length);
         }
         Class<?>[] types = cachedMethod.getParameterTypes();
         Type[] genericTypes = cachedMethod.getGenericParameterTypes();
@@ -159,36 +155,33 @@ abstract class HostExecuteNode extends Node {
         } else {
             convertedArguments[minArity] = toJavaNode.execute(args[minArity], types[minArity], genericTypes[minArity], languageContext);
         }
-        return doInvoke(cachedMethod, receiverProfile.profile(obj), convertedArguments, languageContext, toGuest);
+        return doInvoke(cachedMethod, receiverProfile.profile(obj), convertedArguments, languageContext);
     }
 
     @Specialization(replaces = {"doFixed", "doVarArgs"})
-    static Object doSingleUncached(SingleMethod method, Object obj, Object[] args, PolyglotLanguageContext languageContext,
-                    @Shared("toHost") @Cached ToHostNode toJavaNode,
-                    @Shared("toGuest") @Cached ToGuestValueNode toGuest,
-                    @Shared("varArgsProfile") @Cached("createBinaryProfile()") ConditionProfile isVarArgsProfile) throws ArityException {
+    Object doSingleUncached(SingleMethod method, Object obj, Object[] args, PolyglotLanguageContext languageContext,
+                    @Cached("create()") ToHostNode toJavaNode,
+                    @Cached("createBinaryProfile()") ConditionProfile isVarArgsProfile) {
         int parameterCount = method.getParameterCount();
         int minArity = method.isVarArgs() ? parameterCount - 1 : parameterCount;
         if (args.length < minArity) {
-            throw ArityException.create(minArity, args.length);
+            throw ArityException.raise(minArity, args.length);
         }
         Object[] convertedArguments = prepareArgumentsUncached(method, args, languageContext, toJavaNode, isVarArgsProfile);
-        return doInvoke(method, obj, convertedArguments, languageContext, toGuest);
+        return doInvoke(method, obj, convertedArguments, languageContext);
     }
 
     // Note: checkArgTypes must be evaluated after selectOverload.
     @SuppressWarnings("unused")
     @ExplodeLoop
-    @Specialization(guards = {"method == cachedMethod", "checkArgTypes(args, cachedArgTypes, interop, asVarArgs)"}, limit = "LIMIT")
-    static Object doOverloadedCached(OverloadedMethod method, Object obj, Object[] args, PolyglotLanguageContext languageContext,
+    @Specialization(guards = {"method == cachedMethod", "checkArgTypes(args, cachedArgTypes, toJavaNode, asVarArgs)"}, limit = "LIMIT")
+    Object doOverloadedCached(OverloadedMethod method, Object obj, Object[] args, PolyglotLanguageContext languageContext,
                     @Cached("method") OverloadedMethod cachedMethod,
-                    @Cached ToHostNode toJavaNode,
-                    @Cached ToGuestValueNode toGuest,
-                    @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
+                    @Cached("create()") ToHostNode toJavaNode,
                     @Cached(value = "createArgTypesArray(args)", dimensions = 1) Type[] cachedArgTypes,
                     @Cached("selectOverload(method, args, languageContext, cachedArgTypes)") SingleMethod overload,
-                    @Cached("asVarArgs(args, overload)") boolean asVarArgs,
-                    @Cached("createClassProfile()") ValueProfile receiverProfile) throws ArityException, UnsupportedTypeException {
+                    @Cached("asVarArgs(args, overload, languageContext, toJavaNode)") boolean asVarArgs,
+                    @Cached("createClassProfile()") ValueProfile receiverProfile) {
         assert overload == selectOverload(method, args, languageContext);
         Class<?>[] types = overload.getParameterTypes();
         Type[] genericTypes = overload.getGenericParameterTypes();
@@ -207,17 +200,16 @@ abstract class HostExecuteNode extends Node {
                 convertedArguments[i] = toJavaNode.execute(args[i], types[i], genericTypes[i], languageContext);
             }
         }
-        return doInvoke(overload, receiverProfile.profile(obj), convertedArguments, languageContext, toGuest);
+        return doInvoke(overload, receiverProfile.profile(obj), convertedArguments, languageContext);
     }
 
     @Specialization(replaces = "doOverloadedCached")
-    static Object doOverloadedUncached(OverloadedMethod method, Object obj, Object[] args, PolyglotLanguageContext languageContext,
-                    @Shared("toHost") @Cached ToHostNode toJavaNode,
-                    @Shared("toGuest") @Cached ToGuestValueNode toGuest,
-                    @Shared("varArgsProfile") @Cached("createBinaryProfile()") ConditionProfile isVarArgsProfile) throws ArityException, UnsupportedTypeException {
+    Object doOverloadedUncached(OverloadedMethod method, Object obj, Object[] args, PolyglotLanguageContext languageContext,
+                    @Cached("create()") ToHostNode toJavaNode,
+                    @Cached("createBinaryProfile()") ConditionProfile isVarArgsProfile) {
         SingleMethod overload = selectOverload(method, args, languageContext);
         Object[] convertedArguments = prepareArgumentsUncached(overload, args, languageContext, toJavaNode, isVarArgsProfile);
-        return doInvoke(overload, obj, convertedArguments, languageContext, toGuest);
+        return doInvoke(overload, obj, convertedArguments, languageContext);
     }
 
     private static Object[] prepareArgumentsUncached(SingleMethod method, Object[] args, PolyglotLanguageContext languageContext, ToHostNode toJavaNode, ConditionProfile isVarArgsProfile) {
@@ -256,7 +248,7 @@ abstract class HostExecuteNode extends Node {
             Type argType;
             if (arg == null) {
                 argType = null;
-            } else if (multiple && ToHostNode.isPrimitiveTarget(targetType)) {
+            } else if (multiple && ToHostNode.isAssignableFromTrufflePrimitiveType(targetType)) {
                 Class<?> currentTargetType = targetType;
 
                 Collection<Class<?>> otherPossibleTypes = new ArrayList<>();
@@ -280,7 +272,7 @@ abstract class HostExecuteNode extends Node {
                      * subtype of the other param type, we must not guard against the other param
                      * type, and we do not have to as this overload was better fit regardless.
                      */
-                    if ((ToHostNode.isPrimitiveTarget(paramType) || ToHostNode.isPrimitiveTarget(targetType)) &&
+                    if ((ToHostNode.isAssignableFromTrufflePrimitiveType(paramType) || ToHostNode.isAssignableFromTrufflePrimitiveType(targetType)) &&
                                     isAssignableFrom(targetType, paramType) && !isSubtypeOf(arg, paramType)) {
                         otherPossibleTypes.add(paramType);
                     }
@@ -296,11 +288,11 @@ abstract class HostExecuteNode extends Node {
             cachedArgTypes[i] = argType;
         }
 
-        assert checkArgTypes(args, cachedArgTypes, InteropLibrary.getFactory().getUncached(), false) : Arrays.toString(cachedArgTypes);
+        assert checkArgTypes(args, cachedArgTypes, ToHostNode.create(), false) : Arrays.toString(cachedArgTypes);
     }
 
     @ExplodeLoop
-    static boolean checkArgTypes(Object[] args, Type[] argTypes, InteropLibrary interop, @SuppressWarnings("unused") boolean dummy) {
+    static boolean checkArgTypes(Object[] args, Type[] argTypes, ToHostNode toJavaNode, @SuppressWarnings("unused") boolean dummy) {
         if (args.length != argTypes.length) {
             return false;
         }
@@ -324,7 +316,7 @@ abstract class HostExecuteNode extends Node {
                         return false;
                     }
                 } else if (argType instanceof PrimitiveType) {
-                    if (!((PrimitiveType) argType).test(arg, interop)) {
+                    if (!((PrimitiveType) argType).test(arg, toJavaNode)) {
                         return false;
                     }
                 } else {
@@ -399,12 +391,13 @@ abstract class HostExecuteNode extends Node {
     }
 
     @TruffleBoundary
-    static SingleMethod selectOverload(OverloadedMethod method, Object[] args, Object languageContext) throws ArityException, UnsupportedTypeException {
+    static SingleMethod selectOverload(OverloadedMethod method, Object[] args, Object languageContext) {
         return selectOverload(method, args, languageContext, null);
     }
 
     @TruffleBoundary
-    static SingleMethod selectOverload(OverloadedMethod method, Object[] args, Object languageContext, Type[] cachedArgTypes) throws ArityException, UnsupportedTypeException {
+    static SingleMethod selectOverload(OverloadedMethod method, Object[] args, Object languageContext, Type[] cachedArgTypes) {
+        ToHostNode toJavaNode = ToHostNode.create();
         SingleMethod[] overloads = method.getOverloads();
         List<SingleMethod> applicableByArity = new ArrayList<>();
         int minOverallArity = Integer.MAX_VALUE;
@@ -430,19 +423,19 @@ abstract class HostExecuteNode extends Node {
             applicableByArity.add(overload);
         }
         if (applicableByArity.isEmpty()) {
-            throw ArityException.create((args.length > maxOverallArity ? maxOverallArity : minOverallArity), args.length);
+            throw ArityException.raise((args.length > maxOverallArity ? maxOverallArity : minOverallArity), args.length);
         }
 
         SingleMethod best;
         for (int priority : ToHostNode.PRIORITIES) {
-            best = findBestCandidate(applicableByArity, args, languageContext, false, priority, cachedArgTypes);
+            best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, false, priority, cachedArgTypes);
             if (best != null) {
                 return best;
             }
         }
         if (anyVarArgs) {
             for (int priority : ToHostNode.PRIORITIES) {
-                best = findBestCandidate(applicableByArity, args, languageContext, true, priority, cachedArgTypes);
+                best = findBestCandidate(applicableByArity, args, languageContext, toJavaNode, true, priority, cachedArgTypes);
                 if (best != null) {
                     return best;
                 }
@@ -452,8 +445,8 @@ abstract class HostExecuteNode extends Node {
         throw noApplicableOverloadsException(overloads, args);
     }
 
-    private static SingleMethod findBestCandidate(List<SingleMethod> applicableByArity, Object[] args, Object languageContext, boolean varArgs, int priority,
-                    Type[] cachedArgTypes) throws UnsupportedTypeException {
+    private static SingleMethod findBestCandidate(List<SingleMethod> applicableByArity, Object[] args, Object languageContext, ToHostNode toJavaNode, boolean varArgs, int priority,
+                    Type[] cachedArgTypes) {
         List<SingleMethod> candidates = new ArrayList<>();
 
         if (!varArgs) {
@@ -465,8 +458,7 @@ abstract class HostExecuteNode extends Node {
                     Type[] genericParameterTypes = candidate.getGenericParameterTypes();
                     boolean applicable = true;
                     for (int i = 0; i < paramCount; i++) {
-                        if (!isSubtypeOf(args[i], parameterTypes[i]) &&
-                                        !ToHostNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], languageContext, priority, InteropLibrary.getFactory().getUncached(args[i]))) {
+                        if (!isSubtypeOf(args[i], parameterTypes[i]) && !toJavaNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], languageContext, priority)) {
                             applicable = false;
                             break;
                         }
@@ -484,8 +476,7 @@ abstract class HostExecuteNode extends Node {
                     Type[] genericParameterTypes = candidate.getGenericParameterTypes();
                     boolean applicable = true;
                     for (int i = 0; i < parameterCount - 1; i++) {
-                        if (!isSubtypeOf(args[i], parameterTypes[i]) &&
-                                        !ToHostNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], languageContext, priority, InteropLibrary.getFactory().getUncached(args[i]))) {
+                        if (!isSubtypeOf(args[i], parameterTypes[i]) && !toJavaNode.canConvert(args[i], parameterTypes[i], genericParameterTypes[i], languageContext, priority)) {
                             applicable = false;
                             break;
                         }
@@ -500,9 +491,7 @@ abstract class HostExecuteNode extends Node {
                             varArgsGenericComponentType = varArgsComponentType;
                         }
                         for (int i = parameterCount - 1; i < args.length; i++) {
-                            if (!isSubtypeOf(args[i], varArgsComponentType) &&
-                                            !ToHostNode.canConvert(args[i], varArgsComponentType, varArgsGenericComponentType, languageContext, priority,
-                                                            InteropLibrary.getFactory().getUncached(args[i]))) {
+                            if (!isSubtypeOf(args[i], varArgsComponentType) && !toJavaNode.canConvert(args[i], varArgsComponentType, varArgsGenericComponentType, languageContext, priority)) {
                                 applicable = false;
                                 break;
                             }
@@ -525,7 +514,7 @@ abstract class HostExecuteNode extends Node {
 
                 return best;
             } else {
-                SingleMethod best = findMostSpecificOverload(candidates, args, varArgs, priority);
+                SingleMethod best = findMostSpecificOverload(candidates, args, varArgs, priority, toJavaNode);
                 if (best != null) {
                     if (cachedArgTypes != null) {
                         fillArgTypesArray(args, cachedArgTypes, best, varArgs, applicableByArity, priority);
@@ -539,10 +528,10 @@ abstract class HostExecuteNode extends Node {
         return null;
     }
 
-    private static SingleMethod findMostSpecificOverload(List<SingleMethod> candidates, Object[] args, boolean varArgs, int priority) {
+    private static SingleMethod findMostSpecificOverload(List<SingleMethod> candidates, Object[] args, boolean varArgs, int priority, ToHostNode toJavaNode) {
         assert candidates.size() >= 2;
         if (candidates.size() == 2) {
-            int res = compareOverloads(candidates.get(0), candidates.get(1), args, varArgs, priority);
+            int res = compareOverloads(candidates.get(0), candidates.get(1), args, varArgs, priority, toJavaNode);
             return res == 0 ? null : (res < 0 ? candidates.get(0) : candidates.get(1));
         }
 
@@ -554,7 +543,7 @@ abstract class HostExecuteNode extends Node {
             SingleMethod cand = candIt.next();
             boolean add = false;
             for (Iterator<SingleMethod> bestIt = best.iterator(); bestIt.hasNext();) {
-                int res = compareOverloads(cand, bestIt.next(), args, varArgs, priority);
+                int res = compareOverloads(cand, bestIt.next(), args, varArgs, priority, toJavaNode);
                 if (res == 0) {
                     add = true;
                 } else if (res < 0) {
@@ -576,7 +565,7 @@ abstract class HostExecuteNode extends Node {
         return null; // ambiguous
     }
 
-    private static int compareOverloads(SingleMethod m1, SingleMethod m2, Object[] args, boolean varArgs, int priority) {
+    private static int compareOverloads(SingleMethod m1, SingleMethod m2, Object[] args, boolean varArgs, int priority, ToHostNode toJavaNode) {
         int res = 0;
         int maxParamCount = Math.max(m1.getParameterCount(), m2.getParameterCount());
         assert !varArgs || m1.isVarArgs() && m2.isVarArgs();
@@ -588,7 +577,7 @@ abstract class HostExecuteNode extends Node {
             if (t1 == t2) {
                 continue;
             }
-            int r = compareByPriority(t1, t2, args[i], priority);
+            int r = compareByPriority(t1, t2, args[i], priority, toJavaNode);
             if (r == 0) {
                 r = compareAssignable(t1, t2);
                 if (r == 0) {
@@ -610,17 +599,16 @@ abstract class HostExecuteNode extends Node {
         return varArgs && i >= parameterTypes.length - 1 ? parameterTypes[parameterTypes.length - 1].getComponentType() : parameterTypes[i];
     }
 
-    private static int compareByPriority(Class<?> t1, Class<?> t2, Object arg, int priority) {
+    private static int compareByPriority(Class<?> t1, Class<?> t2, Object arg, int priority, ToHostNode toJavaNode) {
         if (priority <= ToHostNode.STRICT) {
             return 0;
         }
-        InteropLibrary argInterop = InteropLibrary.getFactory().getUncached(arg);
         for (int p : ToHostNode.PRIORITIES) {
             if (p > priority) {
                 break;
             }
-            boolean p1 = ToHostNode.canConvert(arg, t1, p, argInterop);
-            boolean p2 = ToHostNode.canConvert(arg, t2, p, argInterop);
+            boolean p1 = toJavaNode.canConvert(arg, t1, p);
+            boolean p2 = toJavaNode.canConvert(arg, t2, p);
             if (p1 != p2) {
                 return p1 ? -1 : 1;
             }
@@ -704,14 +692,14 @@ abstract class HostExecuteNode extends Node {
         }
     }
 
-    private static RuntimeException ambiguousOverloadsException(List<SingleMethod> candidates, Object[] args) throws UnsupportedTypeException {
+    private static RuntimeException ambiguousOverloadsException(List<SingleMethod> candidates, Object[] args) {
         String message = String.format("Multiple applicable overloads found for method name %s (candidates: %s, arguments: %s)", candidates.get(0).getName(), candidates, arrayToStringWithTypes(args));
-        throw UnsupportedTypeException.create(args, message);
+        return UnsupportedTypeException.raise(new IllegalArgumentException(message), args);
     }
 
-    private static RuntimeException noApplicableOverloadsException(SingleMethod[] overloads, Object[] args) throws UnsupportedTypeException {
+    private static RuntimeException noApplicableOverloadsException(SingleMethod[] overloads, Object[] args) {
         String message = String.format("no applicable overload found (overloads: %s, arguments: %s)", Arrays.toString(overloads), arrayToStringWithTypes(args));
-        throw UnsupportedTypeException.create(args, message);
+        return UnsupportedTypeException.raise(new IllegalArgumentException(message), args);
     }
 
     private static Type getGenericComponentType(Type type) {
@@ -735,25 +723,15 @@ abstract class HostExecuteNode extends Node {
         return arguments;
     }
 
-    private static final CallTarget INVOKE = createGuestToHost(new GuestToHostRootNode(HostObject.class, "doInvoke") {
-        @Override
-        protected Object executeImpl(Object obj, Object[] callArguments) {
-            SingleMethod method = (SingleMethod) callArguments[ARGUMENT_OFFSET];
-            Object[] arguments = (Object[]) callArguments[ARGUMENT_OFFSET + 1];
-            Object ret;
-            try {
-                ret = method.invoke(obj, arguments);
-            } catch (Throwable e) {
-                throw HostInteropReflect.rethrow(e);
-            }
-            return ret;
-        }
-    });
-
-    private static Object doInvoke(SingleMethod method, Object obj, Object[] arguments, PolyglotLanguageContext languageContext, ToGuestValueNode toGuest) {
+    private Object doInvoke(SingleMethod method, Object obj, Object[] arguments, PolyglotLanguageContext languageContext) {
         assert arguments.length == method.getParameterCount();
-        Object ret = GuestToHostRootNode.guestToHostCall(toGuest, INVOKE, languageContext, obj, method, arguments);
-        return toGuest.execute(languageContext, ret);
+        Object ret;
+        try {
+            ret = method.invoke(obj, arguments);
+        } catch (Throwable e) {
+            throw HostInteropReflect.rethrow(e);
+        }
+        return toGuest.apply(languageContext, ret);
     }
 
     private static String arrayToStringWithTypes(Object[] args) {
@@ -838,13 +816,13 @@ abstract class HostExecuteNode extends Node {
         }
 
         @ExplodeLoop
-        public boolean test(Object value, InteropLibrary interop) {
+        public boolean test(Object value, ToHostNode toJavaNode) {
             for (Class<?> otherType : otherTypes) {
-                if (ToHostNode.canConvertToPrimitive(value, otherType, priority, interop)) {
+                if (toJavaNode.canConvertToPrimitive(value, otherType, priority)) {
                     return false;
                 }
             }
-            return ToHostNode.canConvertToPrimitive(value, targetType, priority, interop);
+            return toJavaNode.canConvertToPrimitive(value, targetType, priority);
         }
     }
 }
