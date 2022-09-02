@@ -334,6 +334,7 @@ public final class Meta implements ContextAccess {
         MethodHandleNatives = knownKlass(Type.MethodHandleNatives);
         MethodHandleNatives_linkMethod = MethodHandleNatives.lookupDeclaredMethod(Name.linkMethod, Signature.linkMethod_signature);
         MethodHandleNatives_linkCallSite = MethodHandleNatives.lookupDeclaredMethod(Name.linkCallSite, Signature.linkCallSite_signature);
+        MethodHandleNatives_fixMethodType = MethodHandleNatives.lookupDeclaredMethod(Name.fixMethodType, Signature.fixMethodType_signature);
         MethodHandleNatives_linkMethodHandleConstant = MethodHandleNatives.lookupDeclaredMethod(Name.linkMethodHandleConstant, Signature.linkMethodHandleConstant_signature);
         MethodHandleNatives_findMethodHandleType = MethodHandleNatives.lookupDeclaredMethod(Name.findMethodHandleType, Signature.MethodType_cons);
 
@@ -644,6 +645,7 @@ public final class Meta implements ContextAccess {
     public final Method MethodHandleNatives_linkMethodHandleConstant;
     public final Method MethodHandleNatives_findMethodHandleType;
     public final Method MethodHandleNatives_linkCallSite;
+    public final Method MethodHandleNatives_fixMethodType;
 
     // References
     public final ObjectKlass Finalizer;
@@ -790,64 +792,64 @@ public final class Meta implements ContextAccess {
         return ex;
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public EspressoException throwEx(ObjectKlass exKlass) {
         assert Throwable.isAssignableFrom(exKlass);
         throw new EspressoException(initEx(exKlass));
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public EspressoException throwEx(java.lang.Class<?> clazz) {
         assert Throwable.class.isAssignableFrom(clazz);
         throw new EspressoException(initEx(clazz));
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public static EspressoException throwEx(StaticObject throwable) {
         throw new EspressoException(throwable);
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public EspressoException throwExWithMessage(java.lang.Class<?> clazz, String message) {
         throw new EspressoException(initExWithMessage(clazz, message));
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public EspressoException throwExWithCause(java.lang.Class<?> clazz, @Host(Throwable.class) StaticObject cause) {
         assert Throwable.class.isAssignableFrom(clazz);
         assert StaticObject.isNull(cause) || Throwable.isAssignableFrom(cause.getKlass());
         throw new EspressoException(initExWithCause(clazz, cause));
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public EspressoException throwExWithCauseAndMessage(java.lang.Class<?> clazz, @Host(Throwable.class) StaticObject cause, String message) {
         assert Throwable.class.isAssignableFrom(clazz);
         assert StaticObject.isNull(cause) || Throwable.isAssignableFrom(cause.getKlass());
         throw new EspressoException(initExWithCauseAndMessage(clazz, cause, message));
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public EspressoException throwExWithMessage(ObjectKlass exKlass, @Host(String.class) StaticObject message) {
         assert Throwable.isAssignableFrom(exKlass);
         assert StaticObject.isNull(message) || String.isAssignableFrom(message.getKlass());
         throw new EspressoException(initExWithMessage(exKlass, message));
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public EspressoException throwExWithCause(ObjectKlass exKlass, @Host(Throwable.class) StaticObject cause) {
         assert Throwable.isAssignableFrom(exKlass);
         assert StaticObject.isNull(cause) || Throwable.isAssignableFrom(cause.getKlass());
         throw new EspressoException(initExWithCause(exKlass, cause));
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public EspressoException throwExWithCauseAndMessage(ObjectKlass exKlass, @Host(Throwable.class) StaticObject cause, @Host(java.lang.String.class) StaticObject message) {
         assert Throwable.isAssignableFrom(exKlass);
         assert StaticObject.isNull(cause) || Throwable.isAssignableFrom(cause.getKlass());
         throw new EspressoException(initExWithCauseAndMessage(exKlass, cause, message));
     }
 
-    @TruffleBoundary(transferToInterpreterOnException = false)
+    @TruffleBoundary
     public Klass throwableKlass(java.lang.Class<?> exceptionClass) {
         assert isKnownClass(exceptionClass);
         assert Throwable.class.isAssignableFrom(exceptionClass);
