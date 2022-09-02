@@ -62,8 +62,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
@@ -109,7 +107,6 @@ final class InstrumentationHandler {
     /* Load order needs to be preserved for sources, thats why we store sources again in a list. */
     private final AtomicReference<SourceList> sourcesListRef = new AtomicReference<>();
     private volatile boolean hasSourceBindings;
-    private volatile boolean collectingSources;
     /*
      * The contract is the following: "sourcesExecuted" and "sourcesExecutedList" can only be
      * accessed while synchronized on "sourcesExecuted". Both will only be lazily initialized from
@@ -121,7 +118,6 @@ final class InstrumentationHandler {
     /* Load order needs to be preserved for sources, thats why we store sources again in a list. */
     private final AtomicReference<SourceList> sourcesExecutedListRef = new AtomicReference<>();
     private volatile boolean hasSourceExecutedBindings;
-    private volatile boolean collectingSourcesExecuted;
 
     private final Collection<RootNode> loadedRoots = new WeakAsyncList<>(256);
     private final Collection<RootNode> executedRoots = new WeakAsyncList<>(64);
@@ -138,8 +134,6 @@ final class InstrumentationHandler {
     private final Collection<EventBinding.Allocation<? extends AllocationListener>> allocationBindings = new EventBindingList<>(2);
     private final Collection<EventBinding<? extends ContextsListener>> contextsBindings = new EventBindingList<>(8);
     private final Collection<EventBinding<? extends ThreadsListener>> threadsBindings = new EventBindingList<>(8);
-    private final ReadWriteLock sourceBindingsLock = new ReentrantReadWriteLock();
-    private final ReadWriteLock sourceExecutedBindingsLock = new ReentrantReadWriteLock();
 
     /*
      * Fast lookup of instrumenter instances based on a key provided by the accessor.
@@ -174,45 +168,40 @@ final class InstrumentationHandler {
         assert root.getLanguageInfo() != null;
         if (hasSourceBindings) {
             final Source[] rootSources;
-            sourceBindingsLock.readLock().lock();
-            try {
-                if (!sourceBindings.isEmpty() || collectingSources) {
-                    // we'll add to the sourcesList, so it needs to be initialized
-                    lazyInitializeSourcesList();
+            if (!sourceBindings.isEmpty()) {
+                // we'll add to the sourcesList, so it needs to be initialized
+                lazyInitializeSourcesList();
 
-                    FindSourcesVisitor visitor = findSourcesVisitor.get();
-                    SourceSection sourceSection = root.getSourceSection();
-                    if (sourceSection != null) {
-                        visitor.adoptSource(sourceSection.getSource());
-                    }
-                    RootNode previousRoot = visitor.root;
-                    Set<Class<?>> previousProvidedTags = visitor.providedTags;
-                    SourceSection previousRootSourceSection = visitor.rootSourceSection;
-                    int previousRootBits = visitor.rootBits;
-                    visitRoot(root, root, visitor, false);
-                    rootSources = visitor.getSources();
-                    visitor.root = previousRoot;
-                    visitor.providedTags = previousProvidedTags;
-                    visitor.rootSourceSection = previousRootSourceSection;
-                    visitor.rootBits = previousRootBits;
-                } else {
-                    hasSourceBindings = false;
-                    sources.clear();
-                    sourcesListRef.set(null);
-                    rootSources = null;
+                FindSourcesVisitor visitor = findSourcesVisitor.get();
+                SourceSection sourceSection = root.getSourceSection();
+                if (sourceSection != null) {
+                    visitor.adoptSource(sourceSection.getSource());
                 }
-                loadedRoots.add(root);
-                // Do not invoke foreign code while holding a lock to avoid deadlocks.
-                if (rootSources != null) {
-                    SourceList sourceList = sourcesListRef.get();
-                    if (sourceList == null || !sourceList.addIfIncomplete(rootSources)) {
-                        for (Source src : rootSources) {
-                            notifySourceBindingsLoaded(sourceBindings, src);
-                        }
+                RootNode previousRoot = visitor.root;
+                Set<Class<?>> previousProvidedTags = visitor.providedTags;
+                SourceSection previousRootSourceSection = visitor.rootSourceSection;
+                int previousRootBits = visitor.rootBits;
+                visitRoot(root, root, visitor, false);
+                rootSources = visitor.getSources();
+                visitor.root = previousRoot;
+                visitor.providedTags = previousProvidedTags;
+                visitor.rootSourceSection = previousRootSourceSection;
+                visitor.rootBits = previousRootBits;
+            } else {
+                hasSourceBindings = false;
+                sources.clear();
+                sourcesListRef.set(null);
+                rootSources = null;
+            }
+            loadedRoots.add(root);
+            // Do not invoke foreign code while holding a lock to avoid deadlocks.
+            if (rootSources != null) {
+                SourceList sourceList = sourcesListRef.get();
+                if (sourceList == null || !sourceList.addIfIncomplete(rootSources)) {
+                    for (Source src : rootSources) {
+                        notifySourceBindingsLoaded(sourceBindings, src);
                     }
                 }
-            } finally {
-                sourceBindingsLock.readLock().unlock();
             }
         } else {
             loadedRoots.add(root);
@@ -294,55 +283,50 @@ final class InstrumentationHandler {
         assert root.getLanguageInfo() != null;
         if (hasSourceExecutedBindings) {
             final Source[] rootSources;
-            sourceExecutedBindingsLock.readLock().lock();
-            try {
-                if (!sourceExecutedBindings.isEmpty() || collectingSourcesExecuted) {
-                    // we'll add to the sourcesExecutedList, so it needs to be initialized
-                    lazyInitializeSourcesExecutedList();
+            if (!sourceExecutedBindings.isEmpty()) {
+                // we'll add to the sourcesExecutedList, so it needs to be initialized
+                lazyInitializeSourcesExecutedList();
 
-                    int rootBits = RootNodeBits.get(root);
-                    if (RootNodeBits.isNoSourceSection(rootBits)) {
-                        rootSources = null;
-                    } else {
-                        FindSourcesVisitor visitor = findSourcesExecutedVisitor.get();
-                        SourceSection sourceSection = root.getSourceSection();
-                        if (RootNodeBits.isSameSource(rootBits) && sourceSection != null) {
-                            Source source = sourceSection.getSource();
-                            visitor.adoptSource(source);
-                        } else {
-                            if (sourceSection != null) {
-                                visitor.adoptSource(sourceSection.getSource());
-                            }
-                            RootNode previousRoot = visitor.root;
-                            Set<Class<?>> previousProvidedTags = visitor.providedTags;
-                            SourceSection previousRootSourceSection = visitor.rootSourceSection;
-                            int previousRootBits = visitor.rootBits;
-                            visitRoot(root, root, visitor, false);
-                            visitor.root = previousRoot;
-                            visitor.providedTags = previousProvidedTags;
-                            visitor.rootSourceSection = previousRootSourceSection;
-                            visitor.rootBits = previousRootBits;
-                        }
-                        rootSources = visitor.getSources();
-                    }
-                } else {
-                    hasSourceExecutedBindings = false;
-                    sourcesExecuted.clear();
-                    sourcesExecutedListRef.set(null);
+                int rootBits = RootNodeBits.get(root);
+                if (RootNodeBits.isNoSourceSection(rootBits)) {
                     rootSources = null;
-                }
-                executedRoots.add(root);
-                // Do not invoke foreign code while holding a lock to avoid deadlocks.
-                if (rootSources != null) {
-                    SourceList sourceList = sourcesExecutedListRef.get();
-                    if (sourceList == null || !sourceList.addIfIncomplete(rootSources)) {
-                        for (Source src : rootSources) {
-                            notifySourceExecutedBindings(sourceExecutedBindings, src);
+                } else {
+                    FindSourcesVisitor visitor = findSourcesExecutedVisitor.get();
+                    SourceSection sourceSection = root.getSourceSection();
+                    if (RootNodeBits.isSameSource(rootBits) && sourceSection != null) {
+                        Source source = sourceSection.getSource();
+                        visitor.adoptSource(source);
+                    } else {
+                        if (sourceSection != null) {
+                            visitor.adoptSource(sourceSection.getSource());
                         }
+                        RootNode previousRoot = visitor.root;
+                        Set<Class<?>> previousProvidedTags = visitor.providedTags;
+                        SourceSection previousRootSourceSection = visitor.rootSourceSection;
+                        int previousRootBits = visitor.rootBits;
+                        visitRoot(root, root, visitor, false);
+                        visitor.root = previousRoot;
+                        visitor.providedTags = previousProvidedTags;
+                        visitor.rootSourceSection = previousRootSourceSection;
+                        visitor.rootBits = previousRootBits;
+                    }
+                    rootSources = visitor.getSources();
+                }
+            } else {
+                hasSourceExecutedBindings = false;
+                sourcesExecuted.clear();
+                sourcesExecutedListRef.set(null);
+                rootSources = null;
+            }
+            executedRoots.add(root);
+            // Do not invoke foreign code while holding a lock to avoid deadlocks.
+            if (rootSources != null) {
+                SourceList sourceList = sourcesExecutedListRef.get();
+                if (sourceList == null || !sourceList.addIfIncomplete(rootSources)) {
+                    for (Source src : rootSources) {
+                        notifySourceExecutedBindings(sourceExecutedBindings, src);
                     }
                 }
-            } finally {
-                sourceExecutedBindingsLock.readLock().unlock();
             }
         } else {
             executedRoots.add(root);
@@ -489,23 +473,13 @@ final class InstrumentationHandler {
             trace("BEGIN: Adding source binding %s, %s%n", binding.getFilter(), binding.getElement());
         }
 
+        this.sourceBindings.add(binding);
+        this.hasSourceBindings = true;
         if (notifyLoaded) {
-            this.collectingSources = true;
-            this.hasSourceBindings = true;
             lazyInitializeSourcesList();
-        }
-        sourceBindingsLock.writeLock().lock();
-        try {
-            this.sourceBindings.add(binding);
-            this.hasSourceBindings = true;
-            if (notifyLoaded) {
-                this.collectingSources = false;
-                for (Source source : sourcesListRef.get().getCompleteList()) {
-                    notifySourceBindingLoaded(binding, source);
-                }
+            for (Source source : sourcesListRef.get().getCompleteList()) {
+                notifySourceBindingLoaded(binding, source);
             }
-        } finally {
-            sourceBindingsLock.writeLock().unlock();
         }
 
         if (TRACE) {
@@ -520,23 +494,13 @@ final class InstrumentationHandler {
             trace("BEGIN: Adding source execution binding %s, %s%n", binding.getFilter(), binding.getElement());
         }
 
+        this.sourceExecutedBindings.add(binding);
+        this.hasSourceExecutedBindings = true;
         if (notifyLoaded) {
-            this.collectingSourcesExecuted = true;
-            this.hasSourceExecutedBindings = true;
             lazyInitializeSourcesExecutedList();
-        }
-        sourceExecutedBindingsLock.writeLock().lock();
-        try {
-            this.sourceExecutedBindings.add(binding);
-            this.hasSourceExecutedBindings = true;
-            if (notifyLoaded) {
-                this.collectingSourcesExecuted = false;
-                for (Source source : sourcesExecutedListRef.get().getCompleteList()) {
-                    notifySourceExecutedBinding(binding, source);
-                }
+            for (Source source : sourcesExecutedListRef.get().getCompleteList()) {
+                notifySourceExecutedBinding(binding, source);
             }
-        } finally {
-            sourceExecutedBindingsLock.writeLock().unlock();
         }
 
         if (TRACE) {
@@ -1299,19 +1263,7 @@ final class InstrumentationHandler {
             SourceSection previousParentSourceSection = null;
             if (instrumentable) {
                 computeRootBits(sourceSection);
-                Node oldNode = node;
                 node = materializeSyntaxNodes(node, sourceSection);
-                if (node != oldNode) {
-                    /*
-                     * We also need to traverse all old children on materialization. This is
-                     * necessary if the old node is still currently executing and does not yet see
-                     * the new node. Unfortunately we don't know reliably whether we are currently
-                     * executing that is why we always need to instrument the old node as well. This
-                     * is especially problematic for long or infinite loops in combination with
-                     * cancel events.
-                     */
-                    NodeUtil.forEachChild(oldNode, this);
-                }
                 visitInstrumentable(this.savedParent, this.savedParentSourceSection, node, sourceSection);
                 previousParent = this.savedParent;
                 previousParentSourceSection = this.savedParentSourceSection;
@@ -1381,12 +1333,12 @@ final class InstrumentationHandler {
             if (binding.isInstrumentedLeaf(providedTags, instrumentableNode, sourceSection) ||
                             binding.isChildInstrumentedLeaf(providedTags, root, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection)) {
                 if (TRACE) {
-                    traceFilterCheck("hit", instrumentableNode, sourceSection);
+                    traceFilterCheck("hit", sourceSection);
                 }
                 visitInstrumented(instrumentableNode, sourceSection);
             } else {
                 if (TRACE) {
-                    traceFilterCheck("miss", instrumentableNode, sourceSection);
+                    traceFilterCheck("miss", sourceSection);
                 }
             }
         }
@@ -1395,8 +1347,8 @@ final class InstrumentationHandler {
     }
 
     @SuppressWarnings("deprecation")
-    private static void traceFilterCheck(String result, Node instrumentableNode, SourceSection sourceSection) {
-        trace("  Filter %4s node:%s section:%s %n", result, instrumentableNode, sourceSection);
+    private static void traceFilterCheck(String result, SourceSection sourceSection) {
+        trace("  Filter %4s section:%s %n", result, sourceSection);
     }
 
     private abstract class AbstractBindingsVisitor extends AbstractNodeVisitor {
@@ -1448,7 +1400,7 @@ final class InstrumentationHandler {
                 if (binding.isInstrumentedFull(providedTags, root, instrumentableNode, sourceSection) ||
                                 binding.isChildInstrumentedFull(providedTags, root, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection)) {
                     if (TRACE) {
-                        traceFilterCheck("hit", instrumentableNode, sourceSection);
+                        traceFilterCheck("hit", sourceSection);
                     }
                     visitInstrumented(binding, instrumentableNode, sourceSection);
                     if (!visitForEachBinding) {
@@ -1456,7 +1408,7 @@ final class InstrumentationHandler {
                     }
                 } else {
                     if (TRACE) {
-                        traceFilterCheck("miss", instrumentableNode, sourceSection);
+                        traceFilterCheck("miss", sourceSection);
                     }
                 }
             }
