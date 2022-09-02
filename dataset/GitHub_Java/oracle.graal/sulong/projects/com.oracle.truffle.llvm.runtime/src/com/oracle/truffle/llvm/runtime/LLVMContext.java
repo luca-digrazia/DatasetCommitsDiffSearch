@@ -517,7 +517,7 @@ public final class LLVMContext {
 
     private void addLibraryPath(String p) {
         Path path = Paths.get(p);
-        TruffleFile file = getEnv().getInternalTruffleFile(path.toString());
+        TruffleFile file = getEnv().getTruffleFile(path.toString());
         if (file.isDirectory()) {
             synchronized (libraryPathsLock) {
                 if (!libraryPaths.contains(path)) {
