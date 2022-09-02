@@ -119,7 +119,6 @@ public final class ObjectKlass extends Klass {
     private final StaticObject definingClassLoader;
 
     @CompilationFinal volatile RedefinitionCache redefineCache;
-    private Field redefinitionCountField;
 
     // used for class redefintion whenrefreshing vtables etc.
     private final ArrayList<ObjectKlass> subTypes = new ArrayList<>(8);
@@ -1051,7 +1050,7 @@ public final class ObjectKlass extends Klass {
         return cache;
     }
 
-    public void redefineClass(ChangePacket packet, List<ObjectKlass> refreshSubClasses, Ids ids) {
+    public void redefineClass(ChangePacket packet, List<ObjectKlass> refreshSubClasses, Ids<Object> ids) {
         ParserKlass parserKlass = packet.parserKlass;
         DetectedChange change = packet.detectedChange;
         RedefinitionCache oldVersion = redefineCache;
@@ -1128,28 +1127,7 @@ public final class ObjectKlass extends Klass {
         }
 
         redefineCache = new RedefinitionCache(pool, linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
-
-        // flush caches before invalidating to avoid races
-        // a potential thread fetching new reflection data
-        // will be blocked at entry until the redefinition
-        // transaction is ended
-        flushReflectionCaches();
         oldVersion.assumption.invalidate();
-    }
-
-    private void flushReflectionCaches() {
-        // increment the redefine count on the class instance to flush reflection caches
-        if (redefinitionCountField == null) {
-            for (Field f : mirror().getKlass().getDeclaredFields()) {
-                // TODO(Gregersen) - is the field name the same on all JDKs?
-                if ("classRedefinedCount".equals(f.getNameAsString())) {
-                    redefinitionCountField = f;
-                    break;
-                }
-            }
-        }
-        int value = InterpreterToVM.getFieldInt(mirror(), redefinitionCountField);
-        InterpreterToVM.setFieldInt(++value, mirror(), redefinitionCountField);
     }
 
     private static Method findMethod(ParserMethod changedMethod, Method[] declaredMethods) {
@@ -1164,7 +1142,7 @@ public final class ObjectKlass extends Klass {
     // if an added/removed method is an override of a super method
     // we need to invalidate the super class method, to allow
     // for new method dispatch lookup
-    private void updateOverrideMethods(Ids ids, int flags, Symbol<Name> name, Symbol<Signature> signature) {
+    private void updateOverrideMethods(Ids<Object> ids, int flags, Symbol<Name> name, Symbol<Signature> signature) {
         if (!Modifier.isStatic(flags) && !Modifier.isPrivate(flags) && !Name._init_.equals(name)) {
             ObjectKlass superKlass = getSuperKlass();
 
@@ -1201,12 +1179,6 @@ public final class ObjectKlass extends Klass {
         }
 
         redefineCache = new RedefinitionCache(oldVersion.pool, oldVersion.linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
-
-        // flush caches before invalidating to avoid races
-        // a potential thread fetching new reflection data
-        // will be blocked at entry until the redefinition
-        // transaction is ended
-        flushReflectionCaches();
         oldVersion.assumption.invalidate();
     }
 
