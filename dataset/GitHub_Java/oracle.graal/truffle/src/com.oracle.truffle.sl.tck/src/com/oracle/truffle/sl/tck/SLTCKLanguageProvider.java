@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -277,9 +277,8 @@ public class SLTCKLanguageProvider implements LanguageProvider {
     private static Source createSource(final String resourceName) throws IOException {
         int slashIndex = resourceName.lastIndexOf('/');
         String scriptName = slashIndex >= 0 ? resourceName.substring(slashIndex + 1) : resourceName;
-        try (Reader in = new InputStreamReader(SLTCKLanguageProvider.class.getResourceAsStream(resourceName), "UTF-8")) {
-            return Source.newBuilder(ID, in, scriptName).build();
-        }
+        final Reader in = new InputStreamReader(SLTCKLanguageProvider.class.getResourceAsStream(resourceName), "UTF-8");
+        return Source.newBuilder(ID, in, scriptName).build();
     }
 
     private static Value eval(final Context context, final String fncDecl, final String functionName) {
