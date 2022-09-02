@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -149,11 +149,11 @@ public final class SourceSectionFilter {
         if (root == null) {
             return Collections.emptySet();
         }
-        Object polyglotEngine = InstrumentAccessor.nodesAccess().getPolyglotEngine(root);
-        if (polyglotEngine == null) {
+        Object sourceVM = InstrumentationHandler.AccessorInstrumentHandler.nodesAccess().getSourceVM(root);
+        if (sourceVM == null) {
             return Collections.emptySet();
         }
-        InstrumentationHandler handler = (InstrumentationHandler) InstrumentAccessor.engineAccess().getInstrumentationHandler(polyglotEngine);
+        InstrumentationHandler handler = (InstrumentationHandler) InstrumentationHandler.AccessorInstrumentHandler.engineAccess().getInstrumentationHandler(sourceVM);
         return handler.getProvidedTags(node);
     }
 
