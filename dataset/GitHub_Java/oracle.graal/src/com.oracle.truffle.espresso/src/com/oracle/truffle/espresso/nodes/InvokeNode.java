@@ -30,7 +30,7 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public abstract class InvokeNode extends Node {
-    public abstract int invoke(VirtualFrame frame, int top);
+    public abstract void invoke(final VirtualFrame frame);
 
     // TODO(peterssen): Make this a node?
     protected static final StaticObject nullCheck(StaticObject value) {

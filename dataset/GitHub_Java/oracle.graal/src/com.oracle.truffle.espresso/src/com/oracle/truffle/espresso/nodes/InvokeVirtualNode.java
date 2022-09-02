@@ -31,6 +31,7 @@ import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.MethodInfo;
 import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 
 public abstract class InvokeVirtualNode extends InvokeNode {
@@ -39,22 +40,21 @@ public abstract class InvokeVirtualNode extends InvokeNode {
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
 
-    protected abstract Object executeVirtual(StaticObject receiver, Object[] args);
+    protected abstract Object executeVirtual(StaticObject receiver, Object[] arguments);
 
     @SuppressWarnings("unused")
     @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "receiver.getKlass() == cachedKlass")
-    Object callVirtualDirect(StaticObjectImpl receiver, Object[] args,
+    Object callVirtualDirect(StaticObjectImpl receiver, Object[] arguments,
                     @Cached("receiver.getKlass()") Klass cachedKlass,
                     @Cached("methodLookup(resolutionSeed, receiver)") MethodInfo resolvedMethod,
                     @Cached("create(resolvedMethod.getCallTarget())") DirectCallNode directCallNode) {
-        return directCallNode.call(args);
+        return directCallNode.call(arguments);
     }
 
     @Specialization(replaces = "callVirtualDirect")
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
         // Brute virtual method resolution, walk the whole klass hierarchy.
-        // TODO(peterssen): Implement itable-based lookup.
         MethodInfo targetMethod = methodLookup(resolutionSeed, receiver);
         return indirectCallNode.call(targetMethod.getCallTarget(), arguments);
     }
@@ -66,25 +66,17 @@ public abstract class InvokeVirtualNode extends InvokeNode {
 
     @TruffleBoundary
     static MethodInfo methodLookup(MethodInfo resolutionSeed, StaticObject receiver) {
-        // TODO(peterssen): Method lookup is uber-slow and non-spec-compliant.
-        Klass clazz = receiver.getKlass();
+        Klass clazz = ((StaticObjectClass) resolutionSeed.getContext().getJNI().GetObjectClass(receiver)).getMirror();
         return clazz.findConcreteMethod(resolutionSeed.getName(), resolutionSeed.getSignature());
     }
 
     @Override
-    public final int invoke(final VirtualFrame frame, int top) {
-        // Method signature does not change across methods.
-        // Can safely use the constant signature from `resolutionSeed` instead of the non-constant
-        // signature from the lookup.
-        // TODO(peterssen): Maybe refrain from exposing the whole root node?.
+    public final void invoke(final VirtualFrame frame) {
         EspressoRootNode root = (EspressoRootNode) getParent();
-        // TODO(peterssen): IsNull Node?.
-        StaticObject receiver = nullCheck(root.peekReceiver(frame, top, resolutionSeed));
-        Object[] args = root.peekArguments(frame, top, true, resolutionSeed.getSignature());
-        assert receiver != null;
-        assert receiver == args[0] : "receiver must be the first argument";
-        Object result = executeVirtual(receiver, args);
-        int resultAt = top - resolutionSeed.getSignature().getNumberOfSlotsForParameters() - 1; // -receiver
-        return (resultAt - top) + root.putKind(frame, resultAt, result, resolutionSeed.getSignature().resultKind());
+        // Method signature does not change.
+        StaticObject receiver = nullCheck(root.peekReceiver(frame, resolutionSeed));
+        Object[] arguments = root.popArguments(frame, true, resolutionSeed.getSignature());
+        Object result = executeVirtual(receiver, arguments);
+        root.pushKind(frame, result, resolutionSeed.getSignature().getReturnTypeDescriptor().toKind());
     }
 }
