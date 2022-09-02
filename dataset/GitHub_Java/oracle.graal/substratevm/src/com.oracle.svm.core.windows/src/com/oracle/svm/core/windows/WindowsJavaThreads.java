@@ -170,7 +170,7 @@ class WindowsParkEvent extends ParkEvent {
     }
 
     @Override
-    protected void condWait() {
+    protected WaitResult condWait() {
         if (resetEventBeforeWait) {
             reset();
         }
@@ -180,10 +180,11 @@ class WindowsParkEvent extends ParkEvent {
             Log.log().newline().string("GetLastError returned:  ").hex(WinBase.GetLastError()).newline();
             throw VMError.shouldNotReachHere("WaitForSingleObject failed");
         }
+        return WaitResult.UNPARKED;
     }
 
     @Override
-    protected void condTimedWait(long delayNanos) {
+    protected WaitResult condTimedWait(long delayNanos) {
         final int maxTimeout = 0x10_000_000;
         long delayMillis = Math.max(0, TimeUtils.roundNanosToMillis(delayNanos));
         if (resetEventBeforeWait) {
@@ -193,7 +194,7 @@ class WindowsParkEvent extends ParkEvent {
             int timeout = (delayMillis < maxTimeout) ? (int) delayMillis : maxTimeout;
             int status = SynchAPI.WaitForSingleObject(eventHandle, timeout);
             if (status == SynchAPI.WAIT_OBJECT_0()) {
-                break; // unparked
+                return WaitResult.UNPARKED;
             } else if (status != SynchAPI.WAIT_TIMEOUT()) {
                 Log.log().newline().string("WindowsParkEvent.condTimedWait failed, status returned:  ").hex(status);
                 Log.log().newline().string("GetLastError returned:  ").hex(WinBase.GetLastError()).newline();
@@ -201,6 +202,7 @@ class WindowsParkEvent extends ParkEvent {
             }
             delayMillis -= timeout;
         } while (delayMillis > 0);
+        return WaitResult.TIMED_OUT;
     }
 
     @Override
