@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -52,14 +52,14 @@ import com.oracle.truffle.llvm.runtime.pthread.PThreadExitException;
 public final class LLVMPThreadThreadIntrinsics {
 
     @NodeChild(type = LLVMExpressionNode.class, value = "thread")
+    @NodeChild(type = LLVMExpressionNode.class, value = "attr")
     @NodeChild(type = LLVMExpressionNode.class, value = "startRoutine")
     @NodeChild(type = LLVMExpressionNode.class, value = "arg")
     @ImportStatic({CommonNodeFactory.class, LLVMInteropType.ValueKind.class})
     public abstract static class LLVMPThreadCreate extends LLVMBuiltin {
 
         @Specialization
-        @TruffleBoundary
-        protected int doIntrinsic(LLVMPointer thread, LLVMPointer startRoutine, LLVMPointer arg,
+        protected int doIntrinsic(LLVMPointer thread, @SuppressWarnings("unused") LLVMPointer attr, LLVMPointer startRoutine, LLVMPointer arg,
                         @Cached("createStoreNode(I64)") LLVMStoreNode store,
                         @CachedContext(LLVMLanguage.class) LLVMContext context) {
             LLVMPThreadStart.LLVMPThreadRunnable init = new LLVMPThreadStart.LLVMPThreadRunnable(startRoutine, arg, context, true);
@@ -79,46 +79,63 @@ public final class LLVMPThreadThreadIntrinsics {
         @Specialization
         protected int doIntrinsic(Object returnValue,
                         @CachedContext(LLVMLanguage.class) LLVMContext context) {
-            setThreadReturnValue(returnValue, context);
-            throw new PThreadExitException();
-        }
-
-        @TruffleBoundary
-        private static void setThreadReturnValue(Object returnValue, LLVMContext context) {
             context.getpThreadContext().setThreadReturnValue(Thread.currentThread().getId(), returnValue);
+            throw new PThreadExitException();
         }
     }
 
     @NodeChild(type = LLVMExpressionNode.class, value = "threadId")
+    @NodeChild(type = LLVMExpressionNode.class, value = "threadReturn")
+    @ImportStatic({CommonNodeFactory.class, LLVMInteropType.ValueKind.class})
     public abstract static class LLVMPThreadJoin extends LLVMBuiltin {
 
         @Specialization
-        @TruffleBoundary
-        protected Object doIntrinsic(long threadId,
+        protected int doIntrinsic(long threadId, LLVMPointer threadReturn,
+                        @Cached("createStoreNode(POINTER)") LLVMStoreNode storeNode,
                         @CachedContext(LLVMLanguage.class) LLVMContext context) {
             final Thread thread = context.getpThreadContext().getThread(threadId);
             if (thread != null) {
-                try {
-                    thread.join();
-                } catch (InterruptedException e) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw new LLVMThreadException(this, "Failed to join thread", e);
-                }
+                joinThread(thread);
             }
 
-            return context.getpThreadContext().getThreadReturnValue(threadId);
+            if (!threadReturn.isNull()) {
+                Object retVal = context.getpThreadContext().getThreadReturnValue(threadId);
+                if (retVal == null) {
+                    retVal = LLVMNativePointer.createNull();
+                }
+
+                storeNode.executeWithTarget(threadReturn, retVal);
+            }
+
+            return 0;
+        }
+
+        @TruffleBoundary
+        private void joinThread(Thread thread) {
+            assert thread != null;
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new LLVMThreadException(this, "Failed to join thread", e);
+            }
+        }
+    }
+
+    @NodeChild(type = LLVMExpressionNode.class, value = "thread1")
+    @NodeChild(type = LLVMExpressionNode.class, value = "thread2")
+    public abstract static class LLVMPThreadEqual extends LLVMBuiltin {
+
+        @Specialization
+        protected int doIntrinsic(long thread1, long thread2) {
+            return thread1 == thread2 ? 1 : 0;
         }
     }
 
     public abstract static class LLVMPThreadSelf extends LLVMBuiltin {
 
         @Specialization
-        protected LLVMNativePointer doIntrinsic() {
-            return LLVMNativePointer.create(getThreadId());
-        }
-
-        @TruffleBoundary
-        private static long getThreadId() {
+        protected long doIntrinsic() {
             return Thread.currentThread().getId();
         }
     }
