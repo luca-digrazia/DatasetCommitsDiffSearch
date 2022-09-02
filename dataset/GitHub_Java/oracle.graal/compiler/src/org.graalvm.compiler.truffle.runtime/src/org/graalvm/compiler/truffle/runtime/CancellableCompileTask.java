@@ -105,9 +105,4 @@ public final class CancellableCompileTask implements TruffleCompilationTask {
     public Future<?> getFuture() {
         return future;
     }
-
-    @Override
-    public String toString() {
-        return "CompileTask[" + future + "]";
-    }
 }
