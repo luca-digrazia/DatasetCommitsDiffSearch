@@ -29,7 +29,10 @@
  */
 package com.oracle.truffle.llvm.parser.listeners;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
 import com.oracle.truffle.llvm.parser.metadata.MDKind;
@@ -72,8 +75,8 @@ import com.oracle.truffle.llvm.parser.model.symbols.instructions.ValueInstructio
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidCallInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInstruction;
 import com.oracle.truffle.llvm.parser.model.symbols.instructions.VoidInvokeInstruction;
+import com.oracle.truffle.llvm.parser.records.Records;
 import com.oracle.truffle.llvm.parser.scanner.Block;
-import com.oracle.truffle.llvm.parser.scanner.RecordBuffer;
 import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.types.AggregateType;
 import com.oracle.truffle.llvm.runtime.types.ArrayType;
@@ -92,11 +95,11 @@ public final class Function implements ParserListener {
     private static final int INSTRUCTION_BINOP = 2;
     private static final int INSTRUCTION_CAST = 3;
     private static final int INSTRUCTION_GEP_OLD = 4;
-    private static final int INSTRUCTION_SELECT = 5;
+    // private static final int INSTRUCTION_SELECT = 5;
     private static final int INSTRUCTION_EXTRACTELT = 6;
     private static final int INSTRUCTION_INSERTELT = 7;
     private static final int INSTRUCTION_SHUFFLEVEC = 8;
-    private static final int INSTRUCTION_CMP = 9;
+    // private static final int INSTRUCTION_CMP = 9;
     private static final int INSTRUCTION_RET = 10;
     private static final int INSTRUCTION_BR = 11;
     private static final int INSTRUCTION_SWITCH = 12;
@@ -105,7 +108,7 @@ public final class Function implements ParserListener {
     private static final int INSTRUCTION_PHI = 16;
     private static final int INSTRUCTION_ALLOCA = 19;
     private static final int INSTRUCTION_LOAD = 20;
-    private static final int INSTRUCTION_VAARG = 23;
+    // private static final int INSTRUCTION_VAARG = 23;
     private static final int INSTRUCTION_STORE_OLD = 24;
     private static final int INSTRUCTION_EXTRACTVAL = 26;
     private static final int INSTRUCTION_INSERTVAL = 27;
@@ -122,18 +125,18 @@ public final class Function implements ParserListener {
     private static final int INSTRUCTION_RESUME = 39;
     private static final int INSTRUCTION_LANDINGPAD_OLD = 40;
     private static final int INSTRUCTION_LOADATOMIC = 41;
-    private static final int INSTRUCTION_STOREATOMIC_OLD = 42;
+    // private static final int INSTRUCTION_STOREATOMIC_OLD = 42;
     private static final int INSTRUCTION_GEP = 43;
     private static final int INSTRUCTION_STORE = 44;
     private static final int INSTRUCTION_STOREATOMIC = 45;
     private static final int INSTRUCTION_CMPXCHG = 46;
     private static final int INSTRUCTION_LANDINGPAD = 47;
-    private static final int INSTRUCTION_CLEANUPRET = 48;
-    private static final int INSTRUCTION_CATCHRET = 49;
-    private static final int INSTRUCTION_CATCHPAD = 50;
-    private static final int INSTRUCTION_CLEANUPPAD = 51;
-    private static final int INSTRUCTION_CATCHSWITCH = 52;
-    private static final int INSTRUCTION_OPERAND_BUNDLE = 55;
+    // private static final int INSTRUCTION_CLEANUPRET = 48;
+    // private static final int INSTRUCTION_CATCHRET = 49;
+    // private static final int INSTRUCTION_CATCHPAD = 50;
+    // private static final int INSTRUCTION_CLEANUPPAD = 51;
+    // private static final int INSTRUCTION_CATCHSWITCH = 52;
+    // private static final int INSTRUCTION_OPERAND_BUNDLE = 55;
 
     private final FunctionDefinition function;
 
@@ -147,11 +150,13 @@ public final class Function implements ParserListener {
 
     private MDLocation lastLocation = null;
 
+    private final List<Integer> implicitIndices = new ArrayList<>();
+
     private final ParameterAttributes paramAttributes;
 
     private final IRScope scope;
 
-    public Function(IRScope scope, Types types, FunctionDefinition function, int mode, ParameterAttributes paramAttributes) {
+    Function(IRScope scope, Types types, FunctionDefinition function, int mode, ParameterAttributes paramAttributes) {
         this.scope = scope;
         this.types = types;
         this.function = function;
@@ -198,21 +203,21 @@ public final class Function implements ParserListener {
     }
 
     @Override
-    public void record(RecordBuffer buffer) {
-        int opCode = buffer.getId();
+    public void record(long id, long[] args) {
+        final int opCode = (int) id;
 
         // debug locations can occur after terminating instructions, we process them before we
         // replace the old block
         switch (opCode) {
             case INSTRUCTION_DEBUG_LOC:
-                parseDebugLocation(buffer); // intentional fallthrough
+                parseDebugLocation(args); // intentional fallthrough
 
             case INSTRUCTION_DEBUG_LOC_AGAIN:
                 applyDebugLocation();
                 return;
 
             case INSTRUCTION_DECLAREBLOCKS:
-                function.allocateBlocks((int) buffer.read());
+                function.allocateBlocks((int) args[0]);
                 return;
 
             default:
@@ -223,154 +228,140 @@ public final class Function implements ParserListener {
             instructionBlock = function.generateBlock();
             isLastBlockTerminated = false;
         }
+
         switch (opCode) {
 
             case INSTRUCTION_BINOP:
-                createBinaryOperation(buffer);
+                createBinaryOperation(args);
                 break;
 
             case INSTRUCTION_CAST:
-                createCast(buffer);
+                createCast(args);
                 break;
 
             case INSTRUCTION_GEP_OLD:
-                createGetElementPointerOld(buffer, false);
+                createGetElementPointerOld(args, false);
                 break;
 
             case INSTRUCTION_EXTRACTELT:
-                createExtractElement(buffer);
+                createExtractElement(args);
                 break;
 
             case INSTRUCTION_INSERTELT:
-                createInsertElement(buffer);
+                createInsertElement(args);
                 break;
 
             case INSTRUCTION_SHUFFLEVEC:
-                createShuffleVector(buffer);
+                createShuffleVector(args);
                 break;
 
             case INSTRUCTION_RET:
-                createReturn(buffer);
+                createReturn(args);
                 break;
 
             case INSTRUCTION_BR:
-                createBranch(buffer);
+                createBranch(args);
                 break;
 
             case INSTRUCTION_SWITCH:
-                createSwitch(buffer);
+                createSwitch(args);
                 break;
 
             case INSTRUCTION_UNREACHABLE:
-                createUnreachable(buffer);
+                createUnreachable(args);
                 break;
 
             case INSTRUCTION_PHI:
-                createPhi(buffer);
+                createPhi(args);
                 break;
 
             case INSTRUCTION_ALLOCA:
-                createAlloca(buffer);
+                createAlloca(args);
                 break;
 
             case INSTRUCTION_LOAD:
-                createLoad(buffer);
+                createLoad(args);
                 break;
 
             case INSTRUCTION_STORE_OLD:
-                createStoreOld(buffer);
+                createStoreOld(args);
                 break;
 
             case INSTRUCTION_EXTRACTVAL:
-                createExtractValue(buffer);
+                createExtractValue(args);
                 break;
 
             case INSTRUCTION_INSERTVAL:
-                createInsertValue(buffer);
+                createInsertValue(args);
                 break;
 
             case INSTRUCTION_CMP2:
-                createCompare2(buffer);
+                createCompare2(args);
                 break;
 
             case INSTRUCTION_VSELECT:
-                createSelect(buffer);
+                createSelect(args);
                 break;
 
             case INSTRUCTION_INBOUNDS_GEP_OLD:
-                createGetElementPointerOld(buffer, true);
+                createGetElementPointerOld(args, true);
                 break;
 
             case INSTRUCTION_INDIRECTBR:
-                createIndirectBranch(buffer);
+                createIndirectBranch(args);
                 break;
 
             case INSTRUCTION_CALL:
-                createFunctionCall(buffer);
+                createFunctionCall(args);
                 break;
 
             case INSTRUCTION_INVOKE:
-                createInvoke(buffer);
+                createInvoke(args);
                 break;
 
             case INSTRUCTION_LANDINGPAD:
-                createLandingpad(buffer);
+                createLandingpad(args);
                 break;
 
             case INSTRUCTION_LANDINGPAD_OLD:
-                createLandingpadOld(buffer);
+                createLandingpadOld(args);
                 break;
 
             case INSTRUCTION_RESUME:
-                createResume(buffer);
+                createResume(args);
                 break;
 
             case INSTRUCTION_GEP:
-                createGetElementPointer(buffer);
+                createGetElementPointer(args);
                 break;
 
             case INSTRUCTION_STORE:
-                createStore(buffer);
+                createStore(args);
                 break;
 
             case INSTRUCTION_LOADATOMIC:
-                createLoadAtomic(buffer);
+                createLoadAtomic(args);
                 break;
 
             case INSTRUCTION_STOREATOMIC:
-                createAtomicStore(buffer);
+                createAtomicStore(args);
                 break;
 
             case INSTRUCTION_CMPXCHG_OLD:
             case INSTRUCTION_CMPXCHG:
-                createCompareExchange(buffer, opCode);
+                createCompareExchange(args, opCode);
                 break;
 
             case INSTRUCTION_ATOMICRMW:
-                createAtomicReadModifyWrite(buffer);
+                createAtomicReadModifyWrite(args);
                 break;
 
             case INSTRUCTION_FENCE:
-                createFence(buffer);
+                createFence(args);
                 break;
 
             default:
-                // differentiate between unknown and unsupported instructions
-                switch (opCode) {
-                    case INSTRUCTION_SELECT:
-                    case INSTRUCTION_CMP:
-                    case INSTRUCTION_VAARG:
-                    case INSTRUCTION_STOREATOMIC_OLD:
-                    case INSTRUCTION_CLEANUPRET:
-                    case INSTRUCTION_CATCHRET:
-                    case INSTRUCTION_CATCHPAD:
-                    case INSTRUCTION_CLEANUPPAD:
-                    case INSTRUCTION_CATCHSWITCH:
-                    case INSTRUCTION_OPERAND_BUNDLE:
-                        throw new LLVMParserException("Unsupported opCode in function block: " + opCode);
-                    default:
-                        throw new LLVMParserException("Unknown opCode in function block: " + opCode);
-                }
+                throw new LLVMParserException("Unsupported opCode in function block: " + opCode);
         }
     }
 
@@ -387,20 +378,26 @@ public final class Function implements ParserListener {
 
     private static final int INVOKE_HASEXPLICITFUNCTIONTYPE_SHIFT = 13;
 
-    private void createInvoke(RecordBuffer buffer) {
-        AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(buffer.read());
-        long ccInfo = buffer.read();
+    private void createInvoke(long[] args) {
+        int i = 0;
+        final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[i++]);
+        final long ccInfo = args[i++];
 
-        InstructionBlock normalSuccessor = function.getBlock(buffer.read());
-        InstructionBlock unwindSuccessor = function.getBlock(buffer.read());
+        final InstructionBlock normalSuccessor = function.getBlock(args[i++]);
+        final InstructionBlock unwindSuccessor = function.getBlock(args[i++]);
 
         FunctionType functionType = null;
         if (((ccInfo >> INVOKE_HASEXPLICITFUNCTIONTYPE_SHIFT) & 1) != 0) {
-            functionType = Types.castToFunction(readType(buffer));
+            functionType = Types.castToFunction(types.get(args[i++]));
         }
 
-        int target = readIndex(buffer);
-        Type calleeType = readValueType(buffer, target);
+        final int target = getIndex(args[i++]);
+        final Type calleeType;
+        if (scope.isValueForwardRef(target)) {
+            calleeType = types.get(args[i++]);
+        } else {
+            calleeType = scope.getValueType(target);
+        }
 
         if (functionType == null) {
             if (calleeType instanceof PointerType) {
@@ -412,59 +409,77 @@ public final class Function implements ParserListener {
             }
         }
 
-        int[] args = new int[buffer.remaining()];
+        int[] arguments = new int[args.length - i];
+        int skipped = 0;
         int j = 0;
-        // the formal parameters are read without forward types
-        while (j < functionType.getArgumentTypes().length && buffer.remaining() > 0) {
-            args[j++] = readIndex(buffer);
+        while (j < functionType.getArgumentTypes().length && i < args.length) {
+            arguments[j++] = getIndex(args[i++]);
         }
-        // now varargs are read with forward types
-        while (buffer.remaining() > 0) {
-            args[j++] = readIndexSkipType(buffer);
+        while (i < args.length) {
+            int index = getIndex(args[i++]);
+            arguments[j++] = index;
+            if (scope.isValueForwardRef(index)) {
+                i++;
+                skipped++;
+            }
         }
-        if (args.length != j) {
-            args = Arrays.copyOf(args, j);
+        if (skipped > 0) {
+            arguments = Arrays.copyOf(arguments, arguments.length - skipped);
         }
 
         final Type returnType = functionType.getReturnType();
         if (returnType == VoidType.INSTANCE) {
-            emit(VoidInvokeInstruction.fromSymbols(scope, target, args, normalSuccessor, unwindSuccessor, paramAttr));
+            emit(VoidInvokeInstruction.fromSymbols(scope, target, arguments, normalSuccessor, unwindSuccessor, paramAttr));
         } else {
-            emit(InvokeInstruction.fromSymbols(scope, returnType, target, args, normalSuccessor, unwindSuccessor, paramAttr));
+            emit(InvokeInstruction.fromSymbols(scope, returnType, target, arguments, normalSuccessor, unwindSuccessor, paramAttr));
         }
         isLastBlockTerminated = true;
     }
 
-    private void createResume(RecordBuffer buffer) {
-        int val = readIndexSkipType(buffer);
+    private void createResume(long[] args) {
+        int i = 0;
+        final int val = getIndex(args[i]);
+        // args[i + 1] -> type
         emit(ResumeInstruction.fromSymbols(scope.getSymbols(), val));
         isLastBlockTerminated = true;
     }
 
-    private void createLandingpad(RecordBuffer buffer) {
-        Type type = readType(buffer);
-        boolean isCleanup = buffer.readBoolean();
-        int numClauses = buffer.readInt();
+    private void createLandingpad(long[] args) {
+        int i = 0;
+        final Type type = types.get(args[i++]);
+        final boolean isCleanup = args[i++] != 0;
+        final int numClauses = (int) args[i++];
         long[] clauseKinds = new long[numClauses]; // catch = 0, filter = 1
         long[] clauseTypes = new long[numClauses];
         for (int j = 0; j < numClauses; j++) {
-            clauseKinds[j] = buffer.read();
-            clauseTypes[j] = readIndexSkipType(buffer);
+            clauseKinds[j] = args[i++];
+            clauseTypes[j] = getIndex(args[i++]);
+            if (scope.isValueForwardRef(clauseTypes[j])) {
+                i++;
+            }
         }
         emit(LandingpadInstruction.generate(scope.getSymbols(), type, isCleanup, clauseKinds, clauseTypes));
     }
 
-    private void createLandingpadOld(RecordBuffer buffer) {
-        final Type type = readType(buffer);
-        readIndexSkipType(buffer);  // personality function
+    private void createLandingpadOld(long[] args) {
+        int i = 0;
+        final Type type = types.get(args[i++]);
 
-        final boolean isCleanup = buffer.readBoolean();
-        final int numClauses = buffer.readInt();
+        long persFn = getIndex(args[i++]);
+        if (scope.isValueForwardRef((int) persFn)) {
+            i++;
+        }
+
+        final boolean isCleanup = args[i++] != 0;
+        final int numClauses = (int) args[i++];
         long[] clauseKinds = new long[numClauses]; // catch = 0, filter = 1
         long[] clauseTypes = new long[numClauses];
         for (int j = 0; j < numClauses; j++) {
-            clauseKinds[j] = buffer.read();
-            clauseTypes[j] = readIndexSkipType(buffer);
+            clauseKinds[j] = args[i++];
+            clauseTypes[j] = getIndex(args[i++]);
+            if (scope.isValueForwardRef(clauseTypes[j])) {
+                i++;
+            }
         }
         emit(LandingpadInstruction.generate(scope.getSymbols(), type, isCleanup, clauseKinds, clauseTypes));
     }
@@ -472,21 +487,27 @@ public final class Function implements ParserListener {
     private static final int CALL_HAS_FMF_SHIFT = 17;
     private static final int CALL_HAS_EXPLICITTYPE_SHIFT = 15;
 
-    private void createFunctionCall(RecordBuffer buffer) {
-        final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(buffer.read());
-        final long ccinfo = buffer.read();
+    private void createFunctionCall(long[] args) {
+        int i = 0;
+        final AttributesCodeEntry paramAttr = paramAttributes.getCodeEntry(args[i++]);
+        final long ccinfo = args[i++];
 
         if (((ccinfo >> CALL_HAS_FMF_SHIFT) & 1) != 0) {
-            buffer.read(); // fast math flags
+            i++; // fast math flags
         }
 
         FunctionType functionType = null;
         if (((ccinfo >> CALL_HAS_EXPLICITTYPE_SHIFT) & 1) != 0) {
-            functionType = Types.castToFunction(readType(buffer));
+            functionType = Types.castToFunction(types.get(args[i++]));
         }
 
-        int callee = readIndex(buffer);
-        Type calleeType = readValueType(buffer, callee);
+        int callee = getIndex(args[i++]);
+        Type calleeType;
+        if (scope.isValueForwardRef(callee)) {
+            calleeType = types.get(args[i++]);
+        } else {
+            calleeType = scope.getValueType(callee);
+        }
 
         if (functionType == null) {
             if (calleeType instanceof FunctionType) {
@@ -496,63 +517,67 @@ public final class Function implements ParserListener {
             }
         }
 
-        int[] args = new int[buffer.remaining()];
+        int[] arguments = new int[args.length - i];
+        int skipped = 0;
         int j = 0;
-        while (j < functionType.getArgumentTypes().length && buffer.remaining() > 0) {
-            args[j++] = readIndex(buffer);
+        while (j < functionType.getArgumentTypes().length && i < args.length) {
+            arguments[j++] = getIndex(args[i++]);
         }
-        while (buffer.remaining() > 0) {
-            args[j++] = readIndexSkipType(buffer);
+        while (i < args.length) {
+            int index = getIndex(args[i++]);
+            arguments[j++] = index;
+            if (scope.isValueForwardRef(index)) {
+                i++;
+                skipped++;
+            }
         }
-        if (j != args.length) {
-            args = Arrays.copyOf(args, j);
+        if (skipped > 0) {
+            arguments = Arrays.copyOf(arguments, arguments.length - skipped);
         }
 
         final Type returnType = functionType.getReturnType();
 
         if (returnType == VoidType.INSTANCE) {
-            emit(VoidCallInstruction.fromSymbols(scope, callee, args, paramAttr));
+            emit(VoidCallInstruction.fromSymbols(scope, callee, arguments, paramAttr));
         } else {
-            emit(CallInstruction.fromSymbols(scope, returnType, callee, args, paramAttr));
+            emit(CallInstruction.fromSymbols(scope, returnType, callee, arguments, paramAttr));
         }
     }
 
     private static final long SWITCH_CASERANGE_SHIFT = 16;
     private static final long SWITCH_CASERANGE_FLAG = 0x4B5;
 
-    private void createSwitch(RecordBuffer buffer) {
-        long first = buffer.read();
-        if ((first >> SWITCH_CASERANGE_SHIFT) == SWITCH_CASERANGE_FLAG) {
-            // "special" format that likely isn't produced by LLVM at all
+    private void createSwitch(long[] args) {
+        int i = 0;
 
-            // first value is indicator
-            buffer.read(); // type
-            final int cond = readIndex(buffer);
-            final int defaultBlock = buffer.readInt();
+        if ((args[0] >> SWITCH_CASERANGE_SHIFT) == SWITCH_CASERANGE_FLAG) {
+            i++; // indicator
+            i++; // type
+            final int cond = getIndex(args[i++]);
+            final int defaultBlock = (int) args[i++];
 
-            final int count = buffer.readInt();
+            final int count = (int) args[i++];
             final long[] caseConstants = new long[count];
             final int[] caseBlocks = new int[count];
             for (int j = 0; j < count; j++) {
-                buffer.read();
-                buffer.read();
-                caseConstants[j] = buffer.readSignedValue();
-                caseBlocks[j] = buffer.readInt();
+                i += 2;
+                caseConstants[j] = Records.toSignedValue(args[i++]);
+                caseBlocks[j] = (int) args[i++];
             }
 
             emit(SwitchOldInstruction.generate(function, scope.getSymbols(), cond, defaultBlock, caseConstants, caseBlocks));
 
         } else {
-            // first value is type
+            i++; // type
 
-            final int cond = readIndex(buffer);
-            final int defaultBlock = buffer.readInt();
-            final int count = buffer.remaining() >> 1;
+            final int cond = getIndex(args[i++]);
+            final int defaultBlock = (int) args[i++];
+            final int count = (args.length - i) >> 1;
             final int[] caseValues = new int[count];
             final int[] caseBlocks = new int[count];
             for (int j = 0; j < count; j++) {
-                caseValues[j] = getIndexAbsolute(buffer.read());
-                caseBlocks[j] = buffer.readInt();
+                caseValues[j] = getIndexAbsolute(args[i++]);
+                caseBlocks[j] = (int) args[i++];
             }
 
             emit(SwitchInstruction.generate(function, scope.getSymbols(), cond, defaultBlock, caseValues, caseBlocks));
@@ -566,13 +591,14 @@ public final class Function implements ParserListener {
     private static final long ALLOCA_SWIFTERRORMASK = 1L << 7;
     private static final long ALLOCA_FLAGSMASK = ALLOCA_INMASK | ALLOCA_EXPLICITTYPEMASK | ALLOCA_SWIFTERRORMASK;
 
-    private void createAlloca(RecordBuffer buffer) {
-        long typeRecord = buffer.read();
-        buffer.read(); // type of count
-        int count = getIndexAbsolute(buffer.read());
-        long alignRecord = buffer.read();
+    private void createAlloca(long[] args) {
+        int i = 0;
+        final long typeRecord = args[i++];
+        i++; // type of count
+        final int count = getIndexAbsolute(args[i++]);
+        final long alignRecord = args[i];
 
-        int align = getAlign(alignRecord & ~ALLOCA_FLAGSMASK);
+        final int align = getAlign(alignRecord & ~ALLOCA_FLAGSMASK);
 
         Type type = types.get(typeRecord);
         if ((alignRecord & ALLOCA_EXPLICITTYPEMASK) != 0L) {
@@ -585,56 +611,90 @@ public final class Function implements ParserListener {
 
     private static final int LOAD_ARGS_EXPECTED_AFTER_TYPE = 3;
 
-    private void createLoad(RecordBuffer buffer) {
-        int src = readIndex(buffer);
-        Type srcType = readValueType(buffer, src);
-        Type opType;
-        if (buffer.remaining() == LOAD_ARGS_EXPECTED_AFTER_TYPE) {
-            opType = readType(buffer);
+    private void createLoad(long[] args) {
+        int i = 0;
+        final int src = getIndex(args[i++]);
+
+        final Type srcType;
+        if (scope.isValueForwardRef(src)) {
+            srcType = types.get(args[i++]);
+        } else {
+            srcType = scope.getValueType(src);
+        }
+
+        final Type opType;
+        if (i + LOAD_ARGS_EXPECTED_AFTER_TYPE == args.length) {
+            opType = types.get(args[i++]);
         } else {
             opType = Types.castToPointer(srcType).getPointeeType();
         }
-        buffer.read(); // skip alignment
-        boolean isVolatile = buffer.readBoolean();
 
-        emit(LoadInstruction.fromSymbols(scope.getSymbols(), opType, src, isVolatile));
+        final int align = getAlign(args[i++]);
+        final boolean isVolatile = args[i] != 0;
+
+        emit(LoadInstruction.fromSymbols(scope.getSymbols(), opType, src, align, isVolatile));
     }
 
     private static final int LOADATOMIC_ARGS_EXPECTED_AFTER_TYPE = 5;
 
-    private void createLoadAtomic(RecordBuffer buffer) {
-        int src = readIndex(buffer);
-        Type srcType = readValueType(buffer, src);
-        Type opType;
-        if (buffer.remaining() == LOADATOMIC_ARGS_EXPECTED_AFTER_TYPE) {
-            opType = readType(buffer);
+    private void createLoadAtomic(long[] args) {
+        int i = 0;
+        final int src = getIndex(args[i++]);
+
+        final Type srcType;
+        if (scope.isValueForwardRef(src)) {
+            srcType = types.get(args[i++]);
+        } else {
+            srcType = scope.getValueType(src);
+        }
+
+        final Type opType;
+        if (i + LOADATOMIC_ARGS_EXPECTED_AFTER_TYPE == args.length) {
+            opType = types.get(args[i++]);
         } else {
             opType = Types.castToPointer(srcType).getPointeeType();
         }
-        buffer.read(); // skip alignment
-        boolean isVolatile = buffer.readBoolean();
-        long atomicOrdering = buffer.read();
-        long synchronizationScope = buffer.read();
 
-        emit(LoadInstruction.fromSymbols(scope.getSymbols(), opType, src, isVolatile, atomicOrdering, synchronizationScope));
+        final int align = getAlign(args[i++]);
+        final boolean isVolatile = args[i++] != 0;
+        final long atomicOrdering = args[i++];
+        final long synchronizationScope = args[i];
+
+        emit(LoadInstruction.fromSymbols(scope.getSymbols(), opType, src, align, isVolatile, atomicOrdering, synchronizationScope));
     }
 
-    private void createCompareExchange(RecordBuffer buffer, int record) {
-        int ptr = readIndex(buffer);
-        Type ptrType = readValueType(buffer, ptr);
-        int cmp = record == INSTRUCTION_CMPXCHG ? readIndexSkipType(buffer) : readIndex(buffer);
-        final int replace = readIndex(buffer);
-        final boolean isVolatile = buffer.readBoolean();
-        final long successOrdering = buffer.read();
-        final long synchronizationScope = buffer.read();
-        final long failureOrdering = buffer.remaining() > 0 ? buffer.read() : -1L;
-        if (buffer.remaining() == 0) {
-            throw new LLVMParserException("Old-style (<3.5.0) cmpxchg instruction is not supported");
+    private void createCompareExchange(long[] args, int record) {
+        int i = 0;
+
+        final Type ptrType;
+        final int ptr = getIndex(args[i]);
+        if (scope.isValueForwardRef(ptr)) {
+            ptrType = types.get(args[++i]);
+        } else {
+            ptrType = scope.getValueType(ptr);
         }
-        final boolean isWeak = buffer.readBoolean();
+        final int cmp = getIndex(args[++i]);
+        if (record == INSTRUCTION_CMPXCHG && scope.isValueForwardRef(cmp)) {
+            ++i; // type of cmp
+        }
+        final int replace = getIndex(args[++i]);
+        final boolean isVolatile = args[++i] != 0;
+        final long successOrdering = args[++i];
+        final long synchronizationScope = args[++i];
+        final long failureOrdering = i < args.length - 1 ? args[++i] : -1L;
+        final boolean addExtractValue = i >= args.length - 1;
+        final boolean isWeak = addExtractValue || (args[++i] != 0);
 
         final AggregateType type = findCmpxchgResultType(Types.castToPointer(ptrType).getPointeeType());
+
         emit(CompareExchangeInstruction.fromSymbols(scope.getSymbols(), type, ptr, cmp, replace, isVolatile, successOrdering, synchronizationScope, failureOrdering, isWeak));
+
+        if (addExtractValue) {
+            // in older llvm versions cmpxchg just returned the new value at the pointer, to emulate
+            // this we have to add an extractelvalue instruction. llvm does the same thing
+            createExtractValue(new long[]{1, 0});
+            implicitIndices.add(scope.getNextValueIndex() - 1); // register the implicit index
+        }
     }
 
     private static final int CMPXCHG_TYPE_LENGTH = 2;
@@ -656,10 +716,10 @@ public final class Function implements ParserListener {
         return new StructureType(true, new Type[]{elementType, PrimitiveType.I1});
     }
 
-    private void parseDebugLocation(RecordBuffer buffer) {
+    private void parseDebugLocation(long[] args) {
         // if e.g. the previous instruction was @llvm.debug.declare this will be the location of the
         // declaration of the variable in the source file
-        lastLocation = MDLocation.createFromFunctionArgs(buffer, scope.getMetadata());
+        lastLocation = MDLocation.createFromFunctionArgs(args, scope.getMetadata());
     }
 
     private void applyDebugLocation() {
@@ -667,186 +727,291 @@ public final class Function implements ParserListener {
         instructionBlock.getInstruction(lastInstructionIndex).setDebugLocation(lastLocation);
     }
 
-    private void createAtomicStore(RecordBuffer buffer) {
-        int destination = readIndexSkipType(buffer);
-        int source = readIndexSkipType(buffer);
-        int align = getAlign(buffer.read());
-        boolean isVolatile = buffer.readBoolean();
-        long atomicOrdering = buffer.read();
-        long synchronizationScope = buffer.read();
+    private void createAtomicStore(long[] args) {
+        int i = 0;
+
+        final int destination = getIndex(args[i++]);
+        if (scope.isValueForwardRef(destination)) {
+            i++;
+        }
+
+        final int source = getIndex(args[i++]);
+        if (scope.isValueForwardRef(source)) {
+            i++;
+        }
+
+        final int align = getAlign(args[i++]);
+        final boolean isVolatile = args[i++] != 0;
+        final long atomicOrdering = args[i++];
+        final long synchronizationScope = args[i];
 
         emit(StoreInstruction.fromSymbols(scope.getSymbols(), destination, source, align, isVolatile, atomicOrdering, synchronizationScope));
     }
 
-    private void createAtomicReadModifyWrite(RecordBuffer buffer) {
-        int ptr = readIndex(buffer);
-        Type ptrType = readValueType(buffer, ptr);
-        int value = readIndex(buffer);
-        int opcode = buffer.readInt();
-        boolean isVolatile = buffer.readBoolean();
-        long atomicOrdering = buffer.read();
-        long synchronizationScope = buffer.read();
+    private void createAtomicReadModifyWrite(long[] args) {
+        int i = 0;
+
+        final int ptr = getIndex(args[i++]);
+        final Type ptrType;
+        if (scope.isValueForwardRef(ptr)) {
+            ptrType = types.get(args[i++]);
+        } else {
+            ptrType = scope.getValueType(ptr);
+        }
+        final int value = getIndex(args[i++]);
+        final int opcode = (int) args[i++];
+        final boolean isVolatile = args[i++] != 0;
+        final long atomicOrdering = args[i++];
+        final long synchronizationScope = args[i];
 
         final Type type = Types.castToPointer(ptrType).getPointeeType();
 
         emit(ReadModifyWriteInstruction.fromSymbols(scope.getSymbols(), type, ptr, value, opcode, isVolatile, atomicOrdering, synchronizationScope));
     }
 
-    private void createFence(RecordBuffer buffer) {
-        long atomicOrdering = buffer.read();
-        long synchronizationScope = buffer.read();
+    private void createFence(long[] args) {
+        int i = 0;
+
+        final long atomicOrdering = args[i++];
+        final long synchronizationScope = args[i];
 
         emit(FenceInstruction.generate(atomicOrdering, synchronizationScope));
     }
 
-    private void createBinaryOperation(RecordBuffer buffer) {
-        int lhs = readIndex(buffer);
-        Type type = readValueType(buffer, lhs);
-        int rhs = readIndex(buffer);
-        int opcode = buffer.readInt();
-        int flags = buffer.remaining() > 0 ? buffer.readInt() : 0;
+    private void createBinaryOperation(long[] args) {
+        int i = 0;
+        Type type;
+        int lhs = getIndex(args[i++]);
+        if (scope.isValueForwardRef(lhs)) {
+            type = types.get(args[i++]);
+        } else {
+            type = scope.getValueType(lhs);
+        }
+        int rhs = getIndex(args[i++]);
+        int opcode = (int) args[i++];
+        int flags = i < args.length ? (int) args[i] : 0;
 
         emit(BinaryOperationInstruction.fromSymbols(scope.getSymbols(), type, opcode, flags, lhs, rhs));
     }
 
-    private void createBranch(RecordBuffer buffer) {
-        if (buffer.size() == 1) {
-            emit(BranchInstruction.fromTarget(function.getBlock(buffer.read())));
+    private void createBranch(long[] args) {
+        if (args.length == 1) {
+            emit(BranchInstruction.fromTarget(function.getBlock(args[0])));
 
         } else {
-            InstructionBlock trueSuccessor = function.getBlock(buffer.read());
-            InstructionBlock falseSuccessor = function.getBlock(buffer.read());
-            int condition = readIndex(buffer);
+            final int condition = getIndex(args[2]);
+            final InstructionBlock trueSuccessor = function.getBlock(args[0]);
+            final InstructionBlock falseSuccessor = function.getBlock(args[1]);
             emit(ConditionalBranchInstruction.fromSymbols(scope.getSymbols(), condition, trueSuccessor, falseSuccessor));
         }
 
         isLastBlockTerminated = true;
     }
 
-    private void createCast(RecordBuffer buffer) {
-        int value = readIndexSkipType(buffer);
-        Type type = readType(buffer);
-        int opcode = buffer.readInt();
+    private void createCast(long[] args) {
+        int i = 0;
+        int value = getIndex(args[i++]);
+        if (scope.isValueForwardRef(value)) {
+            i++;
+        }
+        Type type = types.get(args[i++]);
+        int opcode = (int) args[i];
+
         emit(CastInstruction.fromSymbols(scope.getSymbols(), type, opcode, value));
     }
 
-    private void createCompare2(RecordBuffer buffer) {
-        int lhs = readIndex(buffer);
-        Type operandType = readValueType(buffer, lhs);
-        int rhs = readIndex(buffer);
-        int opcode = buffer.readInt();
+    private void createCompare2(long[] args) {
+        int i = 0;
+        Type operandType;
+        int lhs = getIndex(args[i++]);
+        if (scope.isValueForwardRef(lhs)) {
+            operandType = types.get(args[i++]);
+        } else {
+            operandType = scope.getValueType(lhs);
+        }
+        int rhs = getIndex(args[i++]);
+        int opcode = (int) args[i];
 
-        Type type = operandType instanceof VectorType ? new VectorType(PrimitiveType.I1, Types.castToVector(operandType).getNumberOfElements()) : PrimitiveType.I1;
+        Type type = operandType instanceof VectorType
+                        ? new VectorType(PrimitiveType.I1, Types.castToVector(operandType).getNumberOfElements())
+                        : PrimitiveType.I1;
+
         emit(CompareInstruction.fromSymbols(scope.getSymbols(), type, opcode, lhs, rhs));
     }
 
-    private void createExtractElement(RecordBuffer buffer) {
-        int vector = readIndex(buffer);
-        Type vectorType = readValueType(buffer, vector);
-        int index = readIndex(buffer);
+    private void createExtractElement(long[] args) {
+        int i = 0;
+        int vector = getIndex(args[i++]);
 
-        Type elementType = Types.castToVector(vectorType).getElementType();
+        Type vectorType;
+        if (scope.isValueForwardRef(vector)) {
+            vectorType = types.get(args[i++]);
+        } else {
+            vectorType = scope.getValueType(vector);
+        }
+        int index = getIndex(args[i]);
+
+        final Type elementType = Types.castToVector(vectorType).getElementType();
         emit(ExtractElementInstruction.fromSymbols(scope.getSymbols(), elementType, vector, index));
     }
 
-    private void createExtractValue(RecordBuffer buffer) {
-        int aggregate = readIndex(buffer);
-        Type aggregateType = readValueType(buffer, aggregate);
-        int index = buffer.readInt();
-        buffer.checkEnd("Multiple indices for extractvalue are not yet supported!");
+    private void createExtractValue(long[] args) {
+        int i = 0;
+        int aggregate = getIndex(args[i++]);
+        Type aggregateType = null;
+        if (scope.isValueForwardRef(aggregate)) {
+            aggregateType = types.get(args[i++]);
+        }
+        int index = (int) args[i++];
+        if (aggregateType == null) {
+            aggregateType = scope.getValueType(aggregate);
+        }
 
-        Type elementType = Types.castToAggregate(aggregateType).getElementType(index);
+        if (i != args.length) {
+            throw new LLVMParserException("Multiple indices for extractvalue are not yet supported!");
+        }
+
+        final Type elementType = Types.castToAggregate(aggregateType).getElementType(index);
         emit(ExtractValueInstruction.fromSymbols(scope.getSymbols(), elementType, aggregate, index));
     }
 
-    private void createGetElementPointer(RecordBuffer buffer) {
-        boolean isInbounds = buffer.readBoolean();
-        buffer.read(); // we do not use this parameter
-        int pointer = readIndex(buffer);
-        Type base = readValueType(buffer, pointer);
-        int[] indices = readIndices(buffer);
+    private void createGetElementPointer(long[] args) {
+        int i = 0;
+        boolean isInbounds = args[i++] != 0;
+        i++; // we do not use this parameter
+        int pointer = getIndex(args[i++]);
+        Type base;
+        if (scope.isValueForwardRef(pointer)) {
+            base = types.get(args[i++]);
+        } else {
+            base = scope.getValueType(pointer);
+        }
+        List<Integer> indices = getIndices(args, i);
         Type type = new PointerType(getElementPointerType(base, indices));
 
         emit(GetElementPointerInstruction.fromSymbols(scope.getSymbols(), type, pointer, indices, isInbounds));
     }
 
-    private void createGetElementPointerOld(RecordBuffer buffer, boolean isInbounds) {
-        int pointer = readIndex(buffer);
-        Type base = readValueType(buffer, pointer);
-        int[] indices = readIndices(buffer);
+    private void createGetElementPointerOld(long[] args, boolean isInbounds) {
+        int i = 0;
+        int pointer = getIndex(args[i++]);
+        Type base;
+        if (scope.isValueForwardRef(pointer)) {
+            base = types.get(args[i++]);
+        } else {
+            base = scope.getValueType(pointer);
+        }
+        List<Integer> indices = getIndices(args, i);
         Type type = new PointerType(getElementPointerType(base, indices));
 
         emit(GetElementPointerInstruction.fromSymbols(scope.getSymbols(), type, pointer, indices, isInbounds));
     }
 
-    private void createIndirectBranch(RecordBuffer buffer) {
-        buffer.read(); // skipped
-        int address = readIndex(buffer);
-        int[] successors = new int[buffer.size() - 2];
+    private void createIndirectBranch(long[] args) {
+        int address = getIndex(args[1]);
+        int[] successors = new int[args.length - 2];
         for (int i = 0; i < successors.length; i++) {
-            successors[i] = buffer.readInt();
+            successors[i] = (int) args[i + 2];
         }
 
         emit(IndirectBranchInstruction.generate(function, scope.getSymbols(), address, successors));
         isLastBlockTerminated = true;
     }
 
-    private void createInsertElement(RecordBuffer buffer) {
-        int vector = readIndex(buffer);
-        Type type = readValueType(buffer, vector);
-        int value = readIndex(buffer);
-        int index = readIndex(buffer);
+    private void createInsertElement(long[] args) {
+        int i = 0;
+
+        int vector = getIndex(args[i++]);
+        Type type;
+        if (scope.isValueForwardRef(vector)) {
+            type = types.get(args[i++]);
+        } else {
+            type = scope.getValueType(vector);
+        }
+
+        int value = getIndex(args[i++]);
+        int index = getIndex(args[i]);
 
         emit(InsertElementInstruction.fromSymbols(scope.getSymbols(), type, vector, index, value));
     }
 
-    private void createInsertValue(RecordBuffer buffer) {
-        int aggregate = readIndex(buffer);
-        Type type = readValueType(buffer, aggregate);
-        int value = readIndexSkipType(buffer);
-        int index = buffer.readInt();
-        buffer.checkEnd("Multiple indices for insertvalue are not yet supported!");
+    private void createInsertValue(long[] args) {
+        int i = 0;
+
+        int aggregate = getIndex(args[i++]);
+        Type type;
+        if (scope.isValueForwardRef(aggregate)) {
+            type = types.get(args[i++]);
+        } else {
+            type = scope.getValueType(aggregate);
+        }
+
+        int value = getIndex(args[i++]);
+        if (scope.isValueForwardRef(value)) {
+            i++;
+        }
+
+        int index = (int) args[i++];
+
+        if (args.length != i) {
+            throw new LLVMParserException("Multiple indices for insertvalue are not yet supported!");
+        }
 
         emit(InsertValueInstruction.fromSymbols(scope.getSymbols(), type, aggregate, index, value));
     }
 
-    private void createPhi(RecordBuffer buffer) {
-        Type type = readType(buffer);
-        int count = (buffer.size() - 1) >> 1;
+    private void createPhi(long[] args) {
+        Type type = types.get(args[0]);
+        int count = (args.length) - 1 >> 1;
         int[] values = new int[count];
         InstructionBlock[] blocks = new InstructionBlock[count];
-        for (int i = 0; i < count; i++) {
-            values[i] = getIndex(buffer.readSignedValue());
-            blocks[i] = function.getBlock(buffer.read());
+        for (int i = 0, j = 1; i < count; i++) {
+            values[i] = getIndex(Records.toSignedValue(args[j++]));
+            blocks[i] = function.getBlock(args[j++]);
         }
 
         emit(PhiInstruction.generate(scope.getSymbols(), type, values, blocks));
     }
 
-    private void createReturn(RecordBuffer buffer) {
-        if (buffer.size() == 0 || buffer.getAt(0) == 0) {
+    private void createReturn(long[] args) {
+        if (args.length == 0 || args[0] == 0) {
             emit(ReturnInstruction.generate());
         } else {
-            int value = readIndex(buffer);
+            final int value = getIndex(args[0]);
             emit(ReturnInstruction.generate(scope.getSymbols(), value));
         }
+
         isLastBlockTerminated = true;
     }
 
-    private void createSelect(RecordBuffer buffer) {
-        int trueValue = readIndex(buffer);
-        Type type = readValueType(buffer, trueValue);
-        int falseValue = readIndex(buffer);
-        int condition = readIndex(buffer);
+    private void createSelect(long[] args) {
+        int i = 0;
+        Type type;
+        int trueValue = getIndex(args[i++]);
+        if (scope.isValueForwardRef(trueValue)) {
+            type = types.get(args[i++]);
+        } else {
+            type = scope.getValueType(trueValue);
+        }
+        int falseValue = getIndex(args[i++]);
+        int condition = getIndex(args[i]);
 
         emit(SelectInstruction.fromSymbols(scope.getSymbols(), type, condition, trueValue, falseValue));
     }
 
-    private void createShuffleVector(RecordBuffer buffer) {
-        int vector1 = readIndex(buffer);
-        Type vectorType = readValueType(buffer, vector1);
-        int vector2 = readIndex(buffer);
-        int mask = readIndex(buffer);
+    private void createShuffleVector(long[] args) {
+        int i = 0;
+
+        int vector1 = getIndex(args[i++]);
+        Type vectorType;
+        if (scope.isValueForwardRef(vector1)) {
+            vectorType = types.get(args[i++]);
+        } else {
+            vectorType = scope.getValueType(vector1);
+        }
+
+        int vector2 = getIndex(args[i++]);
+        int mask = getIndex(args[i]);
 
         Type subtype = Types.castToVector(vectorType).getElementType();
         int length = Types.castToVector(scope.getValueType(mask)).getNumberOfElements();
@@ -855,25 +1020,41 @@ public final class Function implements ParserListener {
         emit(ShuffleVectorInstruction.fromSymbols(scope.getSymbols(), type, vector1, vector2, mask));
     }
 
-    private void createStore(RecordBuffer buffer) {
-        int destination = readIndexSkipType(buffer);
-        int source = readIndexSkipType(buffer);
-        int align = getAlign(buffer.read());
-        boolean isVolatile = buffer.readBoolean();
+    private void createStore(long[] args) {
+        int i = 0;
+
+        int destination = getIndex(args[i++]);
+        if (scope.isValueForwardRef(destination)) {
+            i++;
+        }
+
+        int source = getIndex(args[i++]);
+        if (scope.isValueForwardRef(source)) {
+            i++;
+        }
+
+        int align = getAlign(args[i++]);
+        boolean isVolatile = args[i] != 0;
 
         emit(StoreInstruction.fromSymbols(scope.getSymbols(), destination, source, align, isVolatile));
     }
 
-    private void createStoreOld(RecordBuffer buffer) {
-        int destination = readIndexSkipType(buffer);
-        int source = readIndex(buffer);
-        int align = getAlign(buffer.read());
-        boolean isVolatile = buffer.readBoolean();
+    private void createStoreOld(long[] args) {
+        int i = 0;
+
+        int destination = getIndex(args[i++]);
+        if (scope.isValueForwardRef(destination)) {
+            i++;
+        }
+
+        int source = getIndex(args[i++]);
+        int align = getAlign(args[i++]);
+        boolean isVolatile = args[i] != 0;
 
         emit(StoreInstruction.fromSymbols(scope.getSymbols(), destination, source, align, isVolatile));
     }
 
-    private void createUnreachable(@SuppressWarnings("unused") RecordBuffer buffer) {
+    private void createUnreachable(@SuppressWarnings("unused") long[] args) {
         emit(UnreachableInstruction.generate());
         isLastBlockTerminated = true;
     }
@@ -882,7 +1063,7 @@ public final class Function implements ParserListener {
         return (int) argument & (Long.SIZE - 1);
     }
 
-    private Type getElementPointerType(Type type, int[] indices) {
+    private Type getElementPointerType(Type type, List<Integer> indices) {
         Type elementType = type;
         for (int indexIndex : indices) {
             if (elementType instanceof PointerType) {
@@ -907,26 +1088,6 @@ public final class Function implements ParserListener {
         return elementType;
     }
 
-    private int readIndex(RecordBuffer buffer) {
-        return getIndex(buffer.read());
-    }
-
-    private int readIndexSkipType(RecordBuffer buffer) {
-        int value = getIndex(buffer.read());
-        if (scope.isValueForwardRef(value)) {
-            buffer.read();
-        }
-        return value;
-    }
-
-    private Type readValueType(RecordBuffer buffer, int valueIndex) {
-        if (scope.isValueForwardRef(valueIndex)) {
-            return types.get(buffer.read());
-        } else {
-            return scope.getValueType(valueIndex);
-        }
-    }
-
     private int getIndex(long index) {
         if (mode >= 1) {
             return getIndexRelative(index);
@@ -935,25 +1096,34 @@ public final class Function implements ParserListener {
         }
     }
 
-    private static int getIndexAbsolute(long index) {
-        return (int) index;
+    private List<Integer> getIndices(long[] arguments, int from) {
+        List<Integer> indices = new ArrayList<>(arguments.length - from);
+        int i = from;
+        while (i < arguments.length) {
+            int index = getIndex(arguments[i++]);
+            if (scope.isValueForwardRef(index)) {
+                // type of forward referenced index
+                i++;
+            }
+            indices.add(index);
+        }
+        return Collections.unmodifiableList(indices);
+    }
+
+    private int getIndexAbsolute(long index) {
+        long actualIndex = index;
+        for (int i = 0; i < implicitIndices.size() && implicitIndices.get(i) <= actualIndex; i++) {
+            actualIndex++;
+        }
+        return (int) actualIndex;
     }
 
     private int getIndexRelative(long index) {
-        return (int) (scope.getNextValueIndex() - index);
-    }
-
-    private int[] readIndices(RecordBuffer buffer) {
-        int[] indices = new int[buffer.remaining()];
-        int pos = 0;
-        while (buffer.remaining() > 0) {
-            indices[pos++] = readIndexSkipType(buffer);
+        long actualIndex = scope.getNextValueIndex() - index;
+        for (int i = implicitIndices.size() - 1; i >= 0 && implicitIndices.get(i) > actualIndex; i--) {
+            actualIndex--;
         }
-        return pos == indices.length ? indices : Arrays.copyOf(indices, pos);
-    }
-
-    private Type readType(RecordBuffer buffer) {
-        return types.get(buffer.read());
+        return (int) actualIndex;
     }
 
     public FunctionDefinition getFunction() {
