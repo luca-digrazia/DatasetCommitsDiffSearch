@@ -62,6 +62,7 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 
@@ -578,12 +579,12 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     void setCachedThreadInfo(PolyglotThreadInfo info) {
         assert Thread.holdsLock(this);
-        if (closed || closingThread != null || invalid || interrupting) {
+        if (closed || closingThread != null || invalid) {
             // never set the cached thread when closed closing or invalid
             currentThreadInfo = PolyglotThreadInfo.NULL;
         } else {
             currentThreadInfo = info;
-            if (engine.singleThreadPerContext.isValid() && engine.singleContext.isValid() && engine.neverInterrupted.isValid()) {
+            if (engine.singleThreadPerContext.isValid() && engine.singleContext.isValid()) {
                 constantCurrentThreadInfo = info;
             }
         }
@@ -639,12 +640,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 notifyThreadClosed();
             }
             info.leave(engine, this);
-            if (!closed && !cancelling && !invalid && !interrupting) {
+            if (!closed && !cancelling && !invalid) {
                 setCachedThreadInfo(threadInfo);
-            }
-            if (interrupting && !info.isActiveNotCancelled()) {
-                Thread.interrupted();
-                notifyAll();
             }
         }
         return info;
@@ -1024,109 +1021,67 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         }
     }
 
-    private void finishInterruptForChildContexts() {
+    private void interruptChildContexts(boolean interrupt) {
         PolyglotContextImpl[] childContextsToInterrupt;
         synchronized (this) {
-            interrupting = false;
+            if (interrupt) {
+                PolyglotThreadInfo info = getCurrentThreadInfo();
+                if (info != PolyglotThreadInfo.NULL && info.isActive()) {
+                    throw PolyglotEngineException.illegalState("Cannot interrupt context from a thread where its child context is active.");
+                }
+            }
+            interrupting = interrupt;
             childContextsToInterrupt = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
         }
         for (PolyglotContextImpl childCtx : childContextsToInterrupt) {
-            childCtx.finishInterruptForChildContexts();
+            childCtx.interruptChildContexts(interrupt);
         }
     }
 
-    private void interruptChildContexts() {
-        PolyglotContextImpl[] childContextsToInterrupt;
-        synchronized (this) {
-            PolyglotThreadInfo info = getCurrentThreadInfo();
-            if (info != PolyglotThreadInfo.NULL && info.isActive()) {
-                throw PolyglotEngineException.illegalState("Cannot interrupt context from a thread where its child context is active.");
-            }
-            interrupting = true;
-            setCachedThreadInfo(PolyglotThreadInfo.NULL);
-            childContextsToInterrupt = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
-        }
-        for (PolyglotContextImpl childCtx : childContextsToInterrupt) {
-            childCtx.interruptChildContexts();
-        }
+    Lock getInterruptingLock() {
+        return closingLock;
     }
 
     @Override
-    public boolean interrupt(Context sourceContext, Duration timeout) {
+    public void interrupt(Context sourceContext, Duration timeout) {
         try {
             checkCreatorAccess(sourceContext, "interrupted");
             if (parent != null) {
                 throw PolyglotEngineException.illegalState("Cannot interrupt inner context separately.");
             }
-            engine.neverInterrupted.invalidate();
-            long startMillis = System.currentTimeMillis();
-            PolyglotContextImpl[] childContextsToInterrupt;
-            boolean waitForCloseOrInterrupt = false;
-            while (true) {
-                if (waitForCloseOrInterrupt) {
-                    closingLock.lock();
-                    closingLock.unlock();
-                    waitForCloseOrInterrupt = false;
-                }
-                synchronized (this) {
-                    if (closed) {
-                        // already closed
-                        return true;
-                    }
-                    if (interrupting) {
-                        // currently interrupting on another thread -> wait for other thread to
-                        // complete interrupting
-                        waitForCloseOrInterrupt = true;
-                        continue;
-                    }
-                    Thread localClosingThread = closingThread;
-                    if (localClosingThread != null) {
-                        if (localClosingThread == Thread.currentThread()) {
-                            // interrupt was invoked as a part of closing -> just complete
-                            return true;
-                        } else {
-                            // currently closing on another thread -> wait for other thread to
-                            // complete closing
-                            waitForCloseOrInterrupt = true;
-                            continue;
-                        }
-                    }
-                    PolyglotThreadInfo info = getCurrentThreadInfo();
-                    if (info != PolyglotThreadInfo.NULL && info.isActive()) {
-                        throw PolyglotEngineException.illegalState("Cannot interrupt context from a thread where the context is active.");
-                    }
-                    interrupting = true;
-                    setCachedThreadInfo(PolyglotThreadInfo.NULL);
-                    childContextsToInterrupt = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
-                    /*
-                     * Two interrupt operations cannot be simultaneously in progress in the whole
-                     * context hierarchy. Inner contexts cannot use interrupt separately and outer
-                     * context use exclusive lock that is shared with close.
-                     */
-                    closingLock.lock();
-                    break;
-                }
-            }
-
+            /*
+             * Two interrupt operations cannot be simultaneously in progress in the whole context
+             * hierarchy. Inner contexts cannot use interrupt separately and outer context use
+             * exclusive lock.
+             */
+            Lock interruptLock = getInterruptingLock();
+            interruptLock.lock();
             try {
-                for (PolyglotContextImpl childCtx : childContextsToInterrupt) {
-                    childCtx.interruptChildContexts();
-                }
-
-                return engine.getCancelHandler().cancel(Collections.singletonList(this), startMillis, timeout);
-            } finally {
+                PolyglotContextImpl[] childContextsToInterrupt;
                 try {
-                    PolyglotContextImpl[] childContextsToFinishInterrupt;
+                    synchronized (this) {
+                        PolyglotThreadInfo info = getCurrentThreadInfo();
+                        if (info != PolyglotThreadInfo.NULL && info.isActive()) {
+                            throw PolyglotEngineException.illegalState("Cannot interrupt context from a thread where the context is active.");
+                        }
+                        interrupting = true;
+                        childContextsToInterrupt = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
+                    }
+                    for (PolyglotContextImpl childCtx : childContextsToInterrupt) {
+                        childCtx.interruptChildContexts(true);
+                    }
+                    engine.getCancelHandler().cancel(Collections.singletonList(this), timeout);
+                } finally {
                     synchronized (this) {
                         interrupting = false;
-                        childContextsToFinishInterrupt = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
+                        childContextsToInterrupt = childContexts.toArray(new PolyglotContextImpl[childContexts.size()]);
                     }
-                    for (PolyglotContextImpl childCtx : childContextsToFinishInterrupt) {
-                        childCtx.finishInterruptForChildContexts();
+                    for (PolyglotContextImpl childCtx : childContextsToInterrupt) {
+                        childCtx.interruptChildContexts(false);
                     }
-                } finally {
-                    closingLock.unlock();
                 }
+            } finally {
+                interruptLock.unlock();
             }
         } catch (Throwable thr) {
             throw PolyglotImpl.guestToHostException(engine, thr);
@@ -1173,21 +1128,15 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         }
     }
 
-    boolean waitForThreads(long startMillis, long timeoutMillis) {
+    void waitForThreads(long timeoutNanos) {
+        long startNanos = System.nanoTime();
         synchronized (this) {
-            long timeElapsed = System.currentTimeMillis() - startMillis;
-            while (hasActiveOtherThread(true) && (timeoutMillis == 0 || timeElapsed < timeoutMillis)) {
+            while (hasActiveOtherThread(true) && (timeoutNanos == 0 || System.nanoTime() - startNanos < timeoutNanos)) {
                 try {
-                    if (timeoutMillis == 0) {
-                        wait();
-                    } else {
-                        wait(timeoutMillis - timeElapsed);
-                    }
+                    wait(100);
                 } catch (InterruptedException e) {
                 }
-                timeElapsed = System.currentTimeMillis() - startMillis;
             }
-            return !hasActiveOtherThread(true);
         }
     }
 
@@ -1234,11 +1183,11 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         return info.isActive();
     }
 
-    PolyglotThreadInfo getFirstActiveOtherThread(boolean includePolyglotThreads) {
+    PolyglotThreadInfo getFirstActiveOtherThread(boolean includePolyglotThread) {
         assert Thread.holdsLock(this);
         // send enters and leaves into a lock by setting the lastThread to null.
         for (PolyglotThreadInfo otherInfo : threads.values()) {
-            if (!includePolyglotThreads && otherInfo.isPolyglotThread(this)) {
+            if (!includePolyglotThread && otherInfo.isPolyglotThread(this)) {
                 continue;
             }
             if (!otherInfo.isCurrent() && otherInfo.isActiveNotCancelled()) {
@@ -1279,12 +1228,12 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
          *
          * 4) The close was not yet performed and no thread is executing -> perform close
          */
-        boolean waitForCloseOrInterrupt = false;
+        boolean waitForClose = false;
         while (true) {
-            if (waitForCloseOrInterrupt) {
+            if (waitForClose) {
                 closingLock.lock();
                 closingLock.unlock();
-                waitForCloseOrInterrupt = false;
+                waitForClose = false;
             }
             synchronized (this) {
                 if (closed) {
@@ -1299,20 +1248,11 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     } else {
                         // currently canceling on another thread -> wait for other thread to
                         // complete closing
-                        waitForCloseOrInterrupt = true;
+                        waitForClose = true;
                         continue;
                     }
                 }
                 PolyglotThreadInfo threadInfo = getCurrentThreadInfo();
-                if (interrupting) {
-                    // currently interrupting on another thread
-                    if (parent == null) {
-                        // interrupt operation holds the closingLock -> wait for the interrupt to
-                        // complete
-                        waitForCloseOrInterrupt = true;
-                        continue;
-                    }
-                }
 
                 // triggers a thread changed event which requires slow path enter
                 setCachedThreadInfo(PolyglotThreadInfo.NULL);
@@ -1507,7 +1447,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     synchronized void sendInterrupt() {
-        if (!cancelling && !interrupting) {
+        if (!cancelling) {
             return;
         }
         for (PolyglotThreadInfo threadInfo : threads.values()) {

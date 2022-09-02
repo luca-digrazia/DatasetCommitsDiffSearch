@@ -105,7 +105,6 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.SpecializationStatistics;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.DispatchOutputStream;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
@@ -115,10 +114,6 @@ import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.ThreadsListener;
-import com.oracle.truffle.api.interop.ExceptionType;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
@@ -191,8 +186,9 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     @CompilationFinal Assumption singleContext = Truffle.getRuntime().createAssumption("Single context per engine.");
     final Assumption singleThreadPerContext = Truffle.getRuntime().createAssumption("Single thread per context of an engine.");
     final Assumption noInnerContexts = Truffle.getRuntime().createAssumption("No inner contexts.");
+    final Assumption noThreadTimingNeeded = Truffle.getRuntime().createAssumption("No enter timing needed.");
+    final Assumption noPriorityChangeNeeded = Truffle.getRuntime().createAssumption("No priority change needed.");
     final Assumption customHostClassLoader = Truffle.getRuntime().createAssumption("No custom host class loader needed.");
-    final Assumption neverInterrupted = Truffle.getRuntime().createAssumption("No context interrupted.");
 
     volatile OptionDescriptors allOptions;
     volatile boolean closed;
@@ -468,11 +464,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         this.engineOptionValues = engineOptions;
         this.logLevels = newLogConfig.logLevels;
         this.storeEngine = RUNTIME.isStoreEnabled(engineOptions);
-
-        if (storeEngine && boundEngine && singleContext.isValid()) {
-            singleContext.invalidate();
-        }
-
         INSTRUMENT.patchInstrumentationHandler(instrumentationHandler, newOut, newErr, newIn);
 
         Map<PolyglotLanguage, Map<String, String>> languagesOptions = new HashMap<>();
@@ -529,6 +520,23 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 }
             }
         }
+    }
+
+    void uninitializeMultiContext() {
+        assert Thread.holdsLock(this.lock);
+
+        /*
+         * If we store an engine we force initialize multi context to avoid language to do any
+         * context related references in the AST, but after, at least for context bound engines we
+         * can restore the single context assumption.
+         */
+        if (storeEngine && boundEngine && !singleContext.isValid()) {
+            singleContext = Truffle.getRuntime().createAssumption("Single context after preinitialization.");
+        }
+
+        // much more things should be done here, like trying to use single context references
+        // for stored engines and then patch them later on.
+
     }
 
     void initializeMultiContext(PolyglotContextImpl existingContext) {
@@ -1199,11 +1207,9 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 }
             }
         }
-        synchronized (lock) {
-            for (PolyglotLanguage language : idToLanguage.values()) {
-                for (PolyglotLanguageInstance instance : language.getInstancePool()) {
-                    instance.listCachedSources(sources);
-                }
+        for (PolyglotLanguage language : idToLanguage.values()) {
+            for (PolyglotLanguageInstance instance : language.getInstancePool()) {
+                instance.listCachedSources(sources);
             }
         }
         return sources;
@@ -1236,23 +1242,8 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     void preInitialize() {
         synchronized (this.lock) {
             this.preInitializedContext.set(PolyglotContextImpl.preInitialize(this));
+            this.uninitializeMultiContext();
         }
-    }
-
-    void finalizeStore() {
-        assert Thread.holdsLock(this.lock);
-
-        /*
-         * If we store an engine we force initialize multi context to avoid language to do any
-         * context related references in the AST, but after, at least for context bound engines we
-         * can restore the single context assumption.
-         */
-        if (storeEngine && boundEngine && !singleContext.isValid()) {
-            singleContext = Truffle.getRuntime().createAssumption("Single context after preinitialization.");
-        }
-
-        // much more things should be done here, like trying to use single context references
-        // for stored engines and then patch them later on.
     }
 
     /**
@@ -1361,10 +1352,10 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
 
         void cancel(List<PolyglotContextImpl> localContexts) {
-            cancel(localContexts, 0, null);
+            cancel(localContexts, null);
         }
 
-        boolean cancel(List<PolyglotContextImpl> localContexts, long startMillis, Duration timeout) {
+        void cancel(List<PolyglotContextImpl> localContexts, Duration timeout) {
             boolean cancelling = false;
             for (PolyglotContextImpl context : localContexts) {
                 if (context.cancelling || context.interrupting) {
@@ -1383,20 +1374,15 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                             context.waitForClose();
                         }
                     } else {
-                        long cancelTimeoutMillis = timeout != Duration.ZERO ? timeout.toMillis() : 0;
-                        boolean success = true;
+                        long cancelTimeoutNanos = timeout != Duration.ZERO ? timeout.toNanos() : 0;
                         for (PolyglotContextImpl context : localContexts) {
-                            if (!context.waitForThreads(startMillis, cancelTimeoutMillis)) {
-                                success = false;
-                            }
+                            context.waitForThreads(cancelTimeoutNanos);
                         }
-                        return success;
                     }
                 } finally {
                     disableCancel();
                 }
             }
-            return true;
         }
 
         void enableCancel() {
@@ -1423,7 +1409,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                             if (context.invalid || context.cancelling) {
                                 throw context.createCancelException(eventContext.getInstrumentedNode());
                             } else if (context.interrupting) {
-                                throw new InterruptExecution(eventContext.getInstrumentedNode());
+                                throw new InterruptExecution(eventContext);
                             }
                         }
                     });
@@ -1481,19 +1467,24 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
     }
 
-    @ExportLibrary(InteropLibrary.class)
-    static final class InterruptExecution extends AbstractTruffleException {
+    @SuppressWarnings("serial")
+    static final class InterruptExecution extends Error implements TruffleException {
 
-        private static final long serialVersionUID = 8652484189010224048L;
+        private final Node node;
+        private final String interruptMessage;
 
-        InterruptExecution(Node location) {
-            super("Execution got interrupted.", location);
+        InterruptExecution(EventContext context) {
+            this.node = context != null ? context.getInstrumentedNode() : null;
+            this.interruptMessage = "Execution got interrupted.";
         }
 
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        ExceptionType getExceptionType() {
-            return ExceptionType.INTERRUPT;
+        public Node getLocation() {
+            return node;
+        }
+
+        @Override
+        public String getMessage() {
+            return interruptMessage;
         }
     }
 
@@ -1831,7 +1822,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     }
 
     PolyglotThreadInfo getCachedThreadInfo(PolyglotContextImpl context) {
-        if (singleThreadPerContext.isValid() && singleContext.isValid() && neverInterrupted.isValid()) {
+        if (singleThreadPerContext.isValid() && singleContext.isValid()) {
             return context.constantCurrentThreadInfo;
         } else {
             return context.currentThreadInfo;

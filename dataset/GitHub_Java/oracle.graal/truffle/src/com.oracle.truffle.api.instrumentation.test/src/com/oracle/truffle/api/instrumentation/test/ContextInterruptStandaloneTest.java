@@ -51,7 +51,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.graalvm.polyglot.Context;
@@ -59,7 +58,6 @@ import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -68,13 +66,11 @@ import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.test.CompileImmediatelyCheck;
 
 public class ContextInterruptStandaloneTest {
 
     @Test
     public void testParallelCloseAndInterrupt() throws InterruptedException, IOException, ExecutionException {
-        Assume.assumeFalse(CompileImmediatelyCheck.isCompileImmediately());
         ExecutorService executorService = Executors.newFixedThreadPool(10);
         try (Context context = Context.create()) {
             context.initialize(InstrumentationTestLanguage.ID);
@@ -102,11 +98,7 @@ public class ContextInterruptStandaloneTest {
                     if (rnd.nextBoolean()) {
                         context.close(true);
                     } else {
-                        try {
-                            context.interrupt(Duration.ofSeconds(50));
-                        } catch (TimeoutException te) {
-                            throw new RuntimeException(te);
-                        }
+                        context.interrupt(Duration.ofSeconds(50));
                     }
                 }));
             }
@@ -150,12 +142,7 @@ public class ContextInterruptStandaloneTest {
                 context.eval(source);
             }));
             passLatch.await();
-            try {
-                context.interrupt(Duration.ofSeconds(1));
-                Assert.fail();
-            } catch (TimeoutException te) {
-                Assert.assertEquals("Interrupt timed out.", te.getMessage());
-            }
+            Assert.assertFalse(context.interrupt(Duration.ofSeconds(1)));
             interruptFinished.set(true);
             interruptFinishLatch.countDown();
             for (Future<?> future : futures) {
@@ -179,13 +166,8 @@ public class ContextInterruptStandaloneTest {
         Context[] context = new Context[1];
         context[0] = Context.create();
         try {
-            attachListener(() -> {
-                try {
-                    context[0].interrupt(Duration.ofSeconds(100));
-                } catch (TimeoutException te) {
-                    throw new RuntimeException(te);
-                }
-            }, getInstrumentEnv(context[0].getEngine()));
+            attachListener(() -> context[0].interrupt(Duration.ofSeconds(100)),
+                            getInstrumentEnv(context[0].getEngine()));
             context[0].initialize(InstrumentationTestLanguage.ID);
             Source source = Source.newBuilder(InstrumentationTestLanguage.ID, "LOOP(infinity,CONSTANT(42))", "SelfInterruptingScript").build();
             context[0].eval(source);
@@ -206,9 +188,6 @@ public class ContextInterruptStandaloneTest {
             attachListener(() -> {
                 try {
                     context[0].interrupt(Duration.ofSeconds(100));
-                } catch (TimeoutException te) {
-                    polyglotThreadException[0] = te;
-                    throw new RuntimeException(te);
                 } catch (Exception e) {
                     polyglotThreadException[0] = e;
                     throw e;
@@ -230,9 +209,9 @@ public class ContextInterruptStandaloneTest {
     }
 
     @Test
-    public void testInterruptCurrentThreadNotEntered() throws TimeoutException {
+    public void testInterruptCurrentThreadNotEntered() {
         try (Context context = Context.create()) {
-            context.interrupt(Duration.ofSeconds(100));
+            Assert.assertTrue(context.interrupt(Duration.ofSeconds(100)));
         }
     }
 
