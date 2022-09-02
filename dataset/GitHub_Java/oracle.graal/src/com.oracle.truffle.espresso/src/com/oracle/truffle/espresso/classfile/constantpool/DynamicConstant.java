@@ -164,7 +164,7 @@ public interface DynamicConstant extends PoolConstant {
 
         @Override
         public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putObject(refs, top, resolved);
+            BytecodeNode.putObject(primitives, refs, top, resolved);
         }
 
         @Override
@@ -187,7 +187,7 @@ public interface DynamicConstant extends PoolConstant {
 
         @Override
         public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putInt(primitives, top, resolved);
+            BytecodeNode.putInt(primitives, refs, top, resolved);
         }
 
         @Override
@@ -210,7 +210,7 @@ public interface DynamicConstant extends PoolConstant {
 
         @Override
         public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putLong(primitives, top, resolved);
+            BytecodeNode.putLong(primitives, refs, top, resolved);
         }
 
         @Override
@@ -233,7 +233,7 @@ public interface DynamicConstant extends PoolConstant {
 
         @Override
         public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putDouble(primitives, top, resolved);
+            BytecodeNode.putDouble(primitives, refs, top, resolved);
         }
 
         @Override
@@ -256,7 +256,7 @@ public interface DynamicConstant extends PoolConstant {
 
         @Override
         public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            BytecodeNode.putFloat(primitives, top, resolved);
+            BytecodeNode.putFloat(primitives, refs, top, resolved);
         }
 
         @Override

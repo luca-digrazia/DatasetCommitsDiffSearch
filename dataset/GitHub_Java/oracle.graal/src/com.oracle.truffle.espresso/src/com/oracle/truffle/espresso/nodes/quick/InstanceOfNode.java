@@ -26,6 +26,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
+import com.oracle.truffle.espresso.nodes.OperandStack;
 import com.oracle.truffle.espresso.nodes.helper.TypeCheckNode;
 import com.oracle.truffle.espresso.nodes.helper.TypeCheckNodeGen;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -43,15 +44,15 @@ public final class InstanceOfNode extends QuickNode {
     }
 
     @Override
-    public int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
-        StaticObject receiver = BytecodeNode.popObject(refs, top - 1);
+    public final int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
+        StaticObject receiver = OperandStack.popObject(refs, top - 1);
         boolean result = StaticObject.notNull(receiver) && typeCheckNode.executeTypeCheck(typeToCheck, receiver.getKlass());
         BytecodeNode.putKind(primitives, refs, top - 1, result, JavaKind.Boolean);
         return 0; // stack effect -> pop receiver, push boolean
     }
 
     @Override
-    public boolean producedForeignObject(Object[] refs) {
+    public boolean producedForeignObject(long[] primitives, Object[] refs) {
         return false;
     }
 }
