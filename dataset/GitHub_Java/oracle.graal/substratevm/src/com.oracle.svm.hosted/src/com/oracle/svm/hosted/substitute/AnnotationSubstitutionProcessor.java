@@ -728,7 +728,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
         RecomputeFieldValue.Kind kind = RecomputeFieldValue.Kind.None;
         Class<?> targetClass = originalClass;
         String targetName = "";
-        boolean isFinal = annotated.isFinal();
+        boolean isFinal = false;
 
         if (recomputeAnnotation != null) {
             kind = recomputeAnnotation.kind();
