@@ -23,6 +23,7 @@
 package com.oracle.truffle.espresso.runtime;
 
 import static com.oracle.truffle.api.CompilerDirectives.castExact;
+import static com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import static com.oracle.truffle.espresso.impl.Klass.STATIC_TO_CLASS;
 import static com.oracle.truffle.espresso.runtime.InteropUtils.inSafeIntegerRange;
 import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostByte;
@@ -47,6 +48,7 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Field;
@@ -123,7 +125,7 @@ public final class StaticObject implements TruffleObject {
         if (!isBoolean()) {
             throw UnsupportedMessageException.create();
         }
-        return (boolean) klass.getMeta().java_lang_Boolean_value.get(this);
+        return (boolean) klass.lookupMethod(Name.booleanValue, Signature._boolean).invokeDirect(this);
     }
 
     @ExportMessage
