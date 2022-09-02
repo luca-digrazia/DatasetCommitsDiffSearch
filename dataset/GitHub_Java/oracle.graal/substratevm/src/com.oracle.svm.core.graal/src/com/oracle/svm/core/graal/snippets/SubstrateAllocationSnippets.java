@@ -26,6 +26,8 @@ package com.oracle.svm.core.graal.snippets;
 
 import static org.graalvm.compiler.nodes.PiArrayNode.piArrayCastToSnippetReplaceeStamp;
 import static org.graalvm.compiler.nodes.PiNode.piCastToSnippetReplaceeStamp;
+import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.LUDICROUSLY_FAST_PATH_PROBABILITY;
+import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probability;
 import static org.graalvm.compiler.replacements.SnippetTemplate.DEFAULT_REPLACER;
 
 import java.util.Map;
@@ -36,7 +38,6 @@ import org.graalvm.compiler.api.replacements.Snippet.ConstantParameter;
 import org.graalvm.compiler.api.replacements.Snippet.VarargsParameter;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.GraalOptions;
-import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
@@ -45,9 +46,10 @@ import org.graalvm.compiler.graph.Node.ConstantNodeParameter;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
+import org.graalvm.compiler.nodes.PiNode;
+import org.graalvm.compiler.nodes.SnippetAnchorNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.java.DynamicNewArrayNode;
 import org.graalvm.compiler.nodes.java.DynamicNewInstanceNode;
@@ -58,7 +60,6 @@ import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.AllocationSnippets;
-import org.graalvm.compiler.replacements.ReplacementsUtil;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
@@ -80,6 +81,7 @@ import com.oracle.svm.core.graal.nodes.SubstrateDynamicNewArrayNode;
 import com.oracle.svm.core.graal.nodes.SubstrateDynamicNewInstanceNode;
 import com.oracle.svm.core.graal.nodes.SubstrateNewArrayNode;
 import com.oracle.svm.core.graal.nodes.SubstrateNewInstanceNode;
+import com.oracle.svm.core.graal.nodes.UnreachableNode;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
@@ -90,6 +92,7 @@ import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescriptor;
 import com.oracle.svm.core.snippets.SubstrateForeignCallTarget;
+import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -105,8 +108,6 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
     private static final SubstrateForeignCallDescriptor[] FOREIGN_CALLS = new SubstrateForeignCallDescriptor[]{NEW_MULTI_ARRAY, HUB_ERROR, ARRAY_HUB_ERROR};
 
     private static final String RUNTIME_REFLECTION_TYPE_NAME = RuntimeReflection.class.getTypeName();
-    private static final InstantiationException ILLEGAL_NEW_DYNAMIC_INSTANCE = new InstantiationException("Cannot allocate instance.");
-    private static final IllegalArgumentException ILLEGAL_NEW_DYNAMIC_ARRAY = new IllegalArgumentException("Cannot allocate array.");
 
     public static void registerForeignCalls(Providers providers, Map<SubstrateForeignCallDescriptor, SubstrateForeignCallLinkage> foreignCalls) {
         for (SubstrateForeignCallDescriptor descriptor : FOREIGN_CALLS) {
@@ -120,8 +121,8 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                     @ConstantParameter boolean fillContents,
                     @ConstantParameter boolean emitMemoryBarrier,
                     @ConstantParameter AllocationProfilingData profilingData) {
-        checkHub(hub);
-        Object result = allocateInstanceImpl(encodeAsTLABObjectHeader(hub), WordFactory.nullPointer(), WordFactory.unsigned(size), fillContents, emitMemoryBarrier, true, profilingData);
+        DynamicHub checkedHub = checkHub(hub);
+        Object result = allocateInstanceImpl(encodeAsTLABObjectHeader(checkedHub), WordFactory.nullPointer(), WordFactory.unsigned(size), fillContents, emitMemoryBarrier, true, profilingData);
         return piCastToSnippetReplaceeStamp(result);
     }
 
@@ -135,39 +136,32 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                     @ConstantParameter boolean maybeUnroll,
                     @ConstantParameter boolean supportsBulkZeroing,
                     @ConstantParameter AllocationProfilingData profilingData) {
-        checkHub(hub);
-        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(hub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, emitMemoryBarrier, maybeUnroll,
-                        supportsBulkZeroing, profilingData);
+        DynamicHub checkedHub = checkHub(hub);
+        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, getArrayZeroingStartOffset(),
+                        emitMemoryBarrier, maybeUnroll, supportsBulkZeroing, profilingData);
         return piArrayCastToSnippetReplaceeStamp(result, length);
     }
 
     @Snippet
     public Object allocateInstanceDynamic(DynamicHub hub, @ConstantParameter boolean fillContents, @ConstantParameter boolean emitMemoryBarrier,
-                    @ConstantParameter AllocationProfilingData profilingData) throws InstantiationException {
-        if (!LayoutEncoding.isInstance(hub.getLayoutEncoding())) {
-            throw ILLEGAL_NEW_DYNAMIC_INSTANCE;
-        }
-        UnsignedWord size = LayoutEncoding.getInstanceSize(hub.getLayoutEncoding());
-        Object result = allocateInstanceImpl(encodeAsTLABObjectHeader(hub), WordFactory.nullPointer(), size, fillContents, emitMemoryBarrier, false, profilingData);
+                    @ConstantParameter AllocationProfilingData profilingData) {
+        DynamicHub checkedHub = checkInstanceDynamicHub(hub);
+        UnsignedWord size = LayoutEncoding.getInstanceSize(checkedHub.getLayoutEncoding());
+        Object result = allocateInstanceImpl(encodeAsTLABObjectHeader(checkedHub), WordFactory.nullPointer(), size, fillContents, emitMemoryBarrier, false, profilingData);
         return piCastToSnippetReplaceeStamp(result);
     }
 
     @Snippet
     public Object allocateArrayDynamic(DynamicHub elementType, int length, @ConstantParameter boolean fillContents, @ConstantParameter boolean emitMemoryBarrier,
                     @ConstantParameter boolean supportsBulkZeroing, @ConstantParameter AllocationProfilingData profilingData) {
-        if (elementType == DynamicHub.fromClass(void.class)) {
-            throw ILLEGAL_NEW_DYNAMIC_ARRAY;
-        }
+        DynamicHub checkedArrayHub = getCheckedArrayHub(elementType);
 
-        DynamicHub arrayHub = elementType.getArrayHub();
-        checkArrayHub(elementType, arrayHub);
-
-        int layoutEncoding = arrayHub.getLayoutEncoding();
+        int layoutEncoding = checkedArrayHub.getLayoutEncoding();
         int headerSize = getArrayHeaderSize(layoutEncoding);
         int log2ElementSize = LayoutEncoding.getArrayIndexShift(layoutEncoding);
 
-        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(arrayHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, emitMemoryBarrier, false,
-                        supportsBulkZeroing, profilingData);
+        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedArrayHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, getArrayZeroingStartOffset(),
+                        emitMemoryBarrier, false, supportsBulkZeroing, profilingData);
         return piArrayCastToSnippetReplaceeStamp(result, length);
     }
 
@@ -178,7 +172,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
 
     /** Foreign call: {@link #NEW_MULTI_ARRAY}. */
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate in the implementation of allocation.")
-    @SubstrateForeignCallTarget
+    @SubstrateForeignCallTarget(stubCallingConvention = false)
     private static Object newMultiArrayStub(Word dynamicHub, int rank, Word dimensionsStackValue) {
         /*
          * All dimensions must be checked here up front, since a previous dimension of length 0
@@ -213,40 +207,81 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
         return result;
     }
 
-    private static void checkHub(DynamicHub hub) {
-        if (BranchProbabilityNode.probability(BranchProbabilityNode.SLOW_PATH_PROBABILITY, hub == null || !hub.isInstantiated())) {
-            callHubErrorStub(HUB_ERROR, DynamicHub.toClass(hub));
+    private static DynamicHub checkHub(DynamicHub hub) {
+        if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, hub != null)) {
+            DynamicHub nonNullHub = (DynamicHub) PiNode.piCastNonNull(hub, SnippetAnchorNode.anchor());
+            if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, nonNullHub.isInstantiated())) {
+                return nonNullHub;
+            }
         }
+
+        callHubErrorStub(HUB_ERROR, DynamicHub.toClass(hub));
+        throw UnreachableNode.unreachable();
+    }
+
+    private static DynamicHub checkInstanceDynamicHub(DynamicHub hub) {
+        if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, hub != null)) {
+            DynamicHub nonNullHub = (DynamicHub) PiNode.piCastNonNull(hub, SnippetAnchorNode.anchor());
+            if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, LayoutEncoding.isInstance(nonNullHub.getLayoutEncoding())) &&
+                            probability(LUDICROUSLY_FAST_PATH_PROBABILITY, nonNullHub.isInstantiated())) {
+                return nonNullHub;
+            }
+        }
+
+        callHubErrorStub(HUB_ERROR, DynamicHub.toClass(hub));
+        throw UnreachableNode.unreachable();
     }
 
     @NodeIntrinsic(value = ForeignCallNode.class)
     private static native void callHubErrorStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Class<?> hub);
 
     /** Foreign call: {@link #HUB_ERROR}. */
-    @SubstrateForeignCallTarget
-    private static void hubErrorStub(DynamicHub hub) {
+    @SubstrateForeignCallTarget(stubCallingConvention = true)
+    private static void hubErrorStub(DynamicHub hub) throws InstantiationException {
         if (hub == null) {
             throw new NullPointerException("Allocation type is null.");
+        } else if (!LayoutEncoding.isInstance(hub.getLayoutEncoding())) {
+            throw new InstantiationException("Cannot allocate instance.");
         } else if (!hub.isInstantiated()) {
             throw new IllegalArgumentException("Class " + DynamicHub.toClass(hub).getTypeName() +
                             " is instantiated reflectively but was never registered. Register the class by using " + RUNTIME_REFLECTION_TYPE_NAME);
+        } else {
+            throw VMError.shouldNotReachHere();
         }
     }
 
-    private static void checkArrayHub(DynamicHub elementType, DynamicHub arrayHub) {
-        if (BranchProbabilityNode.probability(BranchProbabilityNode.SLOW_PATH_PROBABILITY, arrayHub == null || !arrayHub.isInstantiated())) {
-            callArrayHubErrorStub(ARRAY_HUB_ERROR, DynamicHub.toClass(elementType));
+    private static DynamicHub getCheckedArrayHub(DynamicHub elementType) {
+        if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, elementType != null) && probability(LUDICROUSLY_FAST_PATH_PROBABILITY, elementType != DynamicHub.fromClass(void.class))) {
+            DynamicHub nonNullElementType = (DynamicHub) PiNode.piCastNonNull(elementType, SnippetAnchorNode.anchor());
+            DynamicHub arrayHub = nonNullElementType.getArrayHub();
+            if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, arrayHub != null)) {
+                DynamicHub nonNullArrayHub = (DynamicHub) PiNode.piCastNonNull(arrayHub, SnippetAnchorNode.anchor());
+                if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, nonNullArrayHub.isInstantiated())) {
+                    return nonNullArrayHub;
+                }
+            }
         }
+
+        callArrayHubErrorStub(ARRAY_HUB_ERROR, DynamicHub.toClass(elementType));
+        throw UnreachableNode.unreachable();
     }
 
     @NodeIntrinsic(value = ForeignCallNode.class)
     private static native void callArrayHubErrorStub(@ConstantNodeParameter ForeignCallDescriptor descriptor, Class<?> elementType);
 
     /** Foreign call: {@link #ARRAY_HUB_ERROR}. */
-    @SubstrateForeignCallTarget
+    @SubstrateForeignCallTarget(stubCallingConvention = true)
     private static void arrayHubErrorStub(DynamicHub elementType) {
-        throw new IllegalArgumentException("Class " + DynamicHub.toClass(elementType).getTypeName() + "[]" +
-                        " is instantiated reflectively but was never registered. Register the class by using " + RUNTIME_REFLECTION_TYPE_NAME);
+        if (elementType == null) {
+            throw new NullPointerException("Allocation type is null.");
+        } else if (elementType == DynamicHub.fromClass(void.class)) {
+            throw new IllegalArgumentException("Cannot allocate void array.");
+        } else if (elementType.getArrayHub() == null || !elementType.getArrayHub().isInstantiated()) {
+            throw new IllegalArgumentException("Class " + DynamicHub.toClass(elementType).getTypeName() + "[]" +
+                            " is instantiated reflectively but was never registered. Register the class by using " + RUNTIME_REFLECTION_TYPE_NAME);
+        } else {
+            VMError.shouldNotReachHere();
+        }
     }
 
     @Override
@@ -311,9 +346,12 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
     }
 
     protected static int getArrayHeaderSize(int layoutEncoding) {
-        long result = LayoutEncoding.getArrayBaseOffset(layoutEncoding).rawValue();
-        ReplacementsUtil.runtimeAssert(result > 0 && result <= Integer.MAX_VALUE, "Invalid instance size");
-        return (int) result;
+        return (int) LayoutEncoding.getArrayBaseOffset(layoutEncoding).rawValue();
+    }
+
+    @Fold
+    protected static int getArrayZeroingStartOffset() {
+        return ConfigurationValues.getObjectLayout().getArrayZeroingStartOffset();
     }
 
     private static Word encodeAsTLABObjectHeader(DynamicHub hub) {
@@ -359,7 +397,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
 
     public abstract static class Templates extends SubstrateTemplates {
         protected final AllocationSnippetCounters snippetCounters;
-        private AllocationProfilingData profilingData;
+        private final AllocationProfilingData profilingData;
 
         private final SnippetInfo allocateInstance;
         private final SnippetInfo allocateArray;
@@ -372,6 +410,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                         SnippetReflectionProvider snippetReflection) {
             super(options, factories, providers, snippetReflection);
             snippetCounters = new AllocationSnippetCounters(groupFactory);
+            profilingData = new SubstrateAllocationProfilingData(snippetCounters, null);
 
             allocateInstance = snippet(SubstrateAllocationSnippets.class, "allocateInstance", null, receiver, ALLOCATION_LOCATION_IDENTITIES);
             allocateArray = snippet(SubstrateAllocationSnippets.class, "allocateArray", null, receiver, ALLOCATION_LOCATION_IDENTITIES);
@@ -406,10 +445,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                 // Create one object per snippet instantiation - this kills the snippet caching as
                 // we need to add the object as a constant to the snippet.
                 return new SubstrateAllocationProfilingData(snippetCounters, createAllocationSiteCounter(node, type));
-            } else if (profilingData == null) {
-                profilingData = new SubstrateAllocationProfilingData(snippetCounters, null);
             }
-
             return profilingData;
         }
 
@@ -469,7 +505,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                 SharedType type = (SharedType) node.elementType().getArrayClass();
                 DynamicHub hub = type.getHub();
                 int layoutEncoding = hub.getLayoutEncoding();
-                int headerSize = NumUtil.safeToInt(LayoutEncoding.getArrayBaseOffset(layoutEncoding).rawValue());
+                int headerSize = getArrayHeaderSize(layoutEncoding);
                 int log2ElementSize = LayoutEncoding.getArrayIndexShift(layoutEncoding);
                 ConstantNode hubConstant = ConstantNode.forConstant(SubstrateObjectConstant.forObject(hub), providers.getMetaAccess(), graph);
 

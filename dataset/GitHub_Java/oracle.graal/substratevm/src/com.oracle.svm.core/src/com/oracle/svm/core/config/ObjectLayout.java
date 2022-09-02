@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.core.config;
 
-import com.oracle.svm.core.hub.DynamicHub;
-import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.nativeimage.c.constant.CEnum;
 import org.graalvm.util.GuardedAnnotationAccess;
@@ -54,12 +52,13 @@ public final class ObjectLayout {
     private final int firstFieldOffset;
     private final int arrayLengthOffset;
     private final int arrayBaseOffset;
+    private final int arrayZeroingStartOffset;
     private final boolean useExplicitIdentityHashCodeField;
     private final int instanceIdentityHashCodeOffset;
     private final int arrayIdentityHashcodeOffset;
 
     public ObjectLayout(SubstrateTargetDescription target, int referenceSize, int objectAlignment, int hubOffset, int firstFieldOffset, int arrayLengthOffset, int arrayBaseOffset,
-                    boolean useExplicitIdentityHashCodeField, int instanceIdentityHashCodeOffset, int arrayIdentityHashcodeOffset) {
+                    int arrayZeroingStartOffset, boolean useExplicitIdentityHashCodeField, int instanceIdentityHashCodeOffset, int arrayIdentityHashcodeOffset) {
         assert CodeUtil.isPowerOf2(referenceSize);
         assert CodeUtil.isPowerOf2(objectAlignment);
         assert hubOffset < firstFieldOffset && hubOffset < arrayLengthOffset;
@@ -73,6 +72,7 @@ public final class ObjectLayout {
         this.firstFieldOffset = firstFieldOffset;
         this.arrayLengthOffset = arrayLengthOffset;
         this.arrayBaseOffset = arrayBaseOffset;
+        this.arrayZeroingStartOffset = arrayZeroingStartOffset;
         this.useExplicitIdentityHashCodeField = useExplicitIdentityHashCodeField;
         this.instanceIdentityHashCodeOffset = instanceIdentityHashCodeOffset;
         this.arrayIdentityHashcodeOffset = arrayIdentityHashcodeOffset;
@@ -150,31 +150,18 @@ public final class ObjectLayout {
         return arrayLengthOffset;
     }
 
-    /**
-     * Whether instance objects should have an additional (optional) field for the identity hashcode
-     * appended after instance fields.
-     *
-     * @return {@code true} if an identity hashcode field should be placed after instance fields if
-     *         necessary, or
-     *         {@code false} if the identity hashcode is mandatory and already has a set location.
-     */
+    public int getArrayZeroingStartOffset() {
+        return arrayZeroingStartOffset;
+    }
+
     public boolean useExplicitIdentityHashCodeField() {
         return useExplicitIdentityHashCodeField;
     }
 
-    /**
-     * The offset of the identity hashcode field for instance objects.
-     *
-     * @return The (>= 0) offset of the identity hashcode field if it is known, or
-     *         < 0 if the offset should be queried from the hub (see
-     *         {@link DynamicHub#getHashCodeOffset()}).
-     */
     public int getInstanceIdentityHashCodeOffset() {
         return instanceIdentityHashCodeOffset;
     }
 
-    /** The offset of the identity hashcode field for array objects. */
-    @Fold
     public int getArrayIdentityHashcodeOffset() {
         return arrayIdentityHashcodeOffset;
     }
