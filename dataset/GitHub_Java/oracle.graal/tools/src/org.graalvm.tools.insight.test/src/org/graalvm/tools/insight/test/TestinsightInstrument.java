@@ -26,8 +26,6 @@ package org.graalvm.tools.insight.test;
 
 import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import java.util.Collections;
-import java.util.Map;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
@@ -55,10 +53,10 @@ public class TestinsightInstrument extends TruffleInstrument {
     protected void onCreate(Env env) {
         Integer initialCount = env.getOptions().get(COUNT);
         if (initialCount != null && initialCount > 0) {
-            env.registerService(new Insight.SymbolProvider() {
+            env.registerService(new Insight.SymbolProvider("count") {
                 @Override
-                public Map<String, Object> symbolsWithValues() throws Exception {
-                    return Collections.singletonMap("count", initialCount);
+                public Object getValue() {
+                    return initialCount;
                 }
             });
         }
