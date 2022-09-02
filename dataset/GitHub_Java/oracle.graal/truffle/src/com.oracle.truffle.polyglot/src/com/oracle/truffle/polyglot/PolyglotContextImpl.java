@@ -40,7 +40,7 @@
  */
 package com.oracle.truffle.polyglot;
 
-import static com.oracle.truffle.polyglot.EngineAccessor.LANGUAGE;
+import static com.oracle.truffle.polyglot.VMAccessor.LANGUAGE;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -60,10 +60,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.graalvm.collections.EconomicSet;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.EnvironmentAccess;
 import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
@@ -79,6 +77,7 @@ import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.impl.Accessor.CastUnsafe;
 import com.oracle.truffle.polyglot.HostLanguage.HostContext;
+import org.graalvm.polyglot.EnvironmentAccess;
 
 final class PolyglotContextImpl extends AbstractContextImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
@@ -192,13 +191,13 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.config = config;
         this.creator = null;
         this.creatorArguments = Collections.emptyMap();
-        this.truffleContext = EngineAccessor.LANGUAGE.createTruffleContext(this);
+        this.truffleContext = VMAccessor.LANGUAGE.createTruffleContext(this);
         this.polyglotBindings = new ConcurrentHashMap<>();
         this.weakReference = new ContextWeakReference(this);
         this.contextImpls = new Object[engine.contextLength];
         this.contexts = createContextArray();
         if (!config.logLevels.isEmpty()) {
-            EngineAccessor.LANGUAGE.configureLoggers(this, config.logLevels, getAllLoggers(engine));
+            VMAccessor.LANGUAGE.configureLoggers(this, config.logLevels, getAllLoggers(engine));
         }
         PolyglotLanguageContext hostContext = getContextInitialized(engine.hostLanguage, null);
         this.polyglotHostBindings = getAPIAccess().newValue(polyglotBindings, new PolyglotBindingsValue(hostContext));
@@ -224,7 +223,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.truffleContext = spiContext;
         this.polyglotBindings = new ConcurrentHashMap<>();
         if (!parent.config.logLevels.isEmpty()) {
-            EngineAccessor.LANGUAGE.configureLoggers(this, parent.config.logLevels, getAllLoggers(engine));
+            VMAccessor.LANGUAGE.configureLoggers(this, parent.config.logLevels, getAllLoggers(engine));
         }
         this.contextImpls = new Object[engine.contextLength];
         this.contexts = createContextArray();
@@ -328,7 +327,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     void notifyContextCreated() {
-        EngineAccessor.INSTRUMENT.notifyContextCreated(engine, truffleContext);
+        VMAccessor.INSTRUMENT.notifyContextCreated(engine, truffleContext);
     }
 
     private synchronized void addChildContext(PolyglotContextImpl child) {
@@ -515,7 +514,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
         }
         if (needsInitialization) {
-            EngineAccessor.INSTRUMENT.notifyThreadStarted(engine, truffleContext, current);
+            VMAccessor.INSTRUMENT.notifyThreadStarted(engine, truffleContext, current);
         }
         return prev;
     }
@@ -616,7 +615,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         List<PolyglotLanguage> deniedLanguages = null;
         for (PolyglotLanguageContext context : contexts) {
             if (context.isInitialized()) {
-                if (!EngineAccessor.LANGUAGE.isThreadAccessAllowed(context.env, current, singleThread)) {
+                if (!VMAccessor.LANGUAGE.isThreadAccessAllowed(context.env, current, singleThread)) {
                     if (deniedLanguages == null) {
                         deniedLanguages = new ArrayList<>();
                     }
@@ -737,7 +736,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         // slow language lookup - for compatibility
         for (PolyglotLanguageContext lang : contexts) {
             if (lang.isInitialized()) {
-                TruffleLanguage<?> language = EngineAccessor.LANGUAGE.getLanguage(lang.env);
+                TruffleLanguage<?> language = VMAccessor.LANGUAGE.getLanguage(lang.env);
                 if (languageClazz != TruffleLanguage.class && languageClazz.isInstance(language)) {
                     return lang;
                 }
@@ -1091,12 +1090,12 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             }
 
             for (Thread thread : remainingThreads) {
-                EngineAccessor.INSTRUMENT.notifyThreadFinished(engine, truffleContext, thread);
+                VMAccessor.INSTRUMENT.notifyThreadFinished(engine, truffleContext, thread);
             }
-            EngineAccessor.INSTRUMENT.notifyContextClosed(engine, truffleContext);
+            VMAccessor.INSTRUMENT.notifyContextClosed(engine, truffleContext);
             if (parent == null) {
                 if (!this.config.logLevels.isEmpty()) {
-                    EngineAccessor.LANGUAGE.configureLoggers(this, null, getAllLoggers(engine));
+                    VMAccessor.LANGUAGE.configureLoggers(this, null, getAllLoggers(engine));
                 }
                 if (this.config.logHandler != null && !PolyglotLogHandler.isSameLogSink(this.config.logHandler, engine.logHandler)) {
                     this.config.logHandler.close();
@@ -1199,7 +1198,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.config = newConfig;
         initializeStaticContext(this);
         if (!newConfig.logLevels.isEmpty()) {
-            EngineAccessor.LANGUAGE.configureLoggers(this, newConfig.logLevels, getAllLoggers(engine));
+            VMAccessor.LANGUAGE.configureLoggers(this, newConfig.logLevels, getAllLoggers(engine));
         }
         final Object prev = enter();
         try {
@@ -1227,9 +1226,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     static PolyglotContextImpl preInitialize(final PolyglotEngineImpl engine) {
         final FileSystems.PreInitializeContextFileSystem fs = new FileSystems.PreInitializeContextFileSystem();
-        final FileSystems.PreInitializeContextFileSystem internalFs = new FileSystems.PreInitializeContextFileSystem();
-        EconomicSet<String> allowedLanguages = EconomicSet.create();
-        allowedLanguages.addAll(engine.getLanguages().keySet());
         final PolyglotContextConfig config = new PolyglotContextConfig(engine,
                         engine.out,
                         engine.err,
@@ -1242,22 +1238,14 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                         false,
                         null,
                         Collections.emptyMap(),
-                        allowedLanguages,
+                        engine.getLanguages().keySet(),
                         Collections.emptyMap(),
-                        fs, internalFs, engine.logHandler, false, null,
-                        EnvironmentAccess.INHERIT, null, null);
+                        fs, engine.logHandler, false, null,
+                        EnvironmentAccess.INHERIT, null);
         final PolyglotContextImpl context = new PolyglotContextImpl(engine, config);
         try {
-            final String oldOption = engine.engineOptionValues.get(PolyglotEngineOptions.PreinitializeContexts);
-            final String newOption = ImageBuildTimeOptions.get(ImageBuildTimeOptions.PREINITIALIZE_CONTEXTS_NAME);
-            final String optionValue;
-            if (!oldOption.isEmpty() && !newOption.isEmpty()) {
-                optionValue = oldOption + "," + newOption;
-            } else {
-                optionValue = oldOption + newOption;
-            }
-
-            if (!optionValue.isEmpty()) {
+            final String optionValue = engine.engineOptionValues.get(PolyglotEngineOptions.PreinitializeContexts);
+            if (optionValue != null && !optionValue.isEmpty()) {
                 final Set<String> languagesToPreinitialize = new HashSet<>();
                 Collections.addAll(languagesToPreinitialize, optionValue.split(","));
                 context.inContextPreInitialization = true;
@@ -1266,7 +1254,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     try {
                         for (String languageId : engine.getLanguages().keySet()) {
                             if (languagesToPreinitialize.contains(languageId)) {
-                                PolyglotLanguage language = engine.findLanguage(null, languageId, null, false, true);
+                                PolyglotLanguage language = engine.findLanguage(languageId, null, false);
                                 if (language != null) {
                                     final PolyglotLanguageContext languageContext = context.getContextInitialized(language, null);
                                     languageContext.preInitialize();
@@ -1290,16 +1278,15 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             return context;
         } finally {
             fs.onPreInitializeContextEnd();
-            internalFs.onPreInitializeContextEnd();
             FileSystems.resetDefaultFileSystemProvider();
             if (!config.logLevels.isEmpty()) {
-                EngineAccessor.LANGUAGE.configureLoggers(context, null, getAllLoggers(engine));
+                VMAccessor.LANGUAGE.configureLoggers(context, null, getAllLoggers(engine));
             }
         }
     }
 
     private static Object[] getAllLoggers(PolyglotEngineImpl engine) {
-        Object defaultLoggers = EngineAccessor.LANGUAGE.getDefaultLoggers();
+        Object defaultLoggers = VMAccessor.LANGUAGE.getDefaultLoggers();
         Object engineLoggers = engine.getEngineLoggers();
         return engineLoggers == null ? new Object[]{defaultLoggers} : new Object[]{defaultLoggers, engineLoggers};
     }
