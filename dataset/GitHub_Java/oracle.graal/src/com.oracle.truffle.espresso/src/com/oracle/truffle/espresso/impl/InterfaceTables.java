@@ -45,17 +45,17 @@ import com.oracle.truffle.espresso.meta.EspressoError;
  * - Third pass is performed just after second. Using the now correct vtable and mirandas, perform a
  * simple mapping from the helper table to the final itable.
  */
-final class InterfaceTables {
+class InterfaceTables {
 
-    private static final Comparator<TableData> SORTER = new Comparator<TableData>() {
+    static private final Comparator<TableData> SORTER = new Comparator<TableData>() {
         @Override
         public int compare(TableData o1, TableData o2) {
-            return Integer.compare(o1.klass.getId(), o2.klass.getId());
+            return Integer.compare(o1.klass.getID(), o2.klass.getID());
         }
     };
 
-    private static final Entry[][] EMPTY_ENTRY_DUAL_ARRAY = new Entry[0][];
-    private static final Method[][] EMPTY_METHOD_DUAL_ARRAY = new Method[0][];
+    static private final Entry[][] EMPTY_ENTRY_DUAL_ARRAY = new Entry[0][];
+    static private final Method[][] EMPTY_METHOD_DUAL_ARRAY = new Method[0][];
 
     private final ObjectKlass thisKlass;
     private final ObjectKlass superKlass;
@@ -75,7 +75,7 @@ final class InterfaceTables {
         ObjectKlass[] klassTable;
         Method[] mirandas;
 
-        CreationResult(Entry[][] tables, ObjectKlass[] klassTable, Method[] mirandas) {
+        public CreationResult(Entry[][] tables, ObjectKlass[] klassTable, Method[] mirandas) {
             TableData[] data = new TableData[klassTable.length];
             for (int i = 0; i < data.length; i++) {
                 data[i] = new TableData(klassTable[i], tables[i]);
@@ -95,7 +95,7 @@ final class InterfaceTables {
         ObjectKlass[] klassTable;
         Method[] methodtable;
 
-        InterfaceCreationResult(ObjectKlass[] klassTable, Method[] methodtable) {
+        public InterfaceCreationResult(ObjectKlass[] klassTable, Method[] methodtable) {
             this.klassTable = klassTable;
             this.methodtable = methodtable;
         }
@@ -111,11 +111,11 @@ final class InterfaceTables {
         }
     }
 
-    static final class Entry {
+    static class Entry {
         Location loc;
         int index;
 
-        Entry(Location loc, int index) {
+        public Entry(Location loc, int index) {
             this.loc = loc;
             this.index = index;
         }
@@ -411,9 +411,8 @@ final class InterfaceTables {
 
     private static boolean canInsert(ObjectKlass interf, ArrayList<ObjectKlass> tmpKlassTable) {
         for (Klass k : tmpKlassTable) {
-            if (k == interf) {
+            if (k == interf)
                 return false;
-            }
         }
         return true;
     }
