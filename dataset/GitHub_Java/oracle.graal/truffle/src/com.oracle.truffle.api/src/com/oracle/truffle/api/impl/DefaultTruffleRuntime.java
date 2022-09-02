@@ -274,7 +274,6 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
 
         @SuppressWarnings("unchecked")
         static <S> Iterable<S> load(Class<S> service) {
-            TruffleJDKServices.addUses(service);
             if (LOAD_METHOD != null) {
                 try {
                     return (Iterable<S>) LOAD_METHOD.invoke(null, service);
