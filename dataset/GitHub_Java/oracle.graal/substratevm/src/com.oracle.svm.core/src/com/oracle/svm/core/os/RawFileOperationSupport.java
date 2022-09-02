@@ -86,7 +86,6 @@ public interface RawFileOperationSupport {
      *
      * @return true if the file descriptor is valid, false otherwise.
      */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     boolean isValid(RawFileDescriptor fd);
 
     /**
