@@ -888,12 +888,12 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
         }
 
         @ExportMessage
-        boolean hasIterator() {
+        boolean hasArrayIterator() {
             return hasIterator;
         }
 
         @ExportMessage
-        Object getIterator() throws UnsupportedMessageException {
+        Object getArrayIterator() throws UnsupportedMessageException {
             if (iterator == null) {
                 throw UnsupportedMessageException.create();
             }
@@ -1057,21 +1057,21 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
     }
 
     @Test
-    public void getIterator() throws UnsupportedMessageException {
+    public void getArrayIterable() throws UnsupportedMessageException {
         IterableTest iterableTest = new IterableTest(new IteratorTest(1));
         InteropLibrary iterableLib = createLibrary(InteropLibrary.class, iterableTest);
-        assertEquals(iterableTest.iterator.get(), iterableLib.getIterator(iterableTest));
+        assertEquals(iterableTest.iterator.get(), iterableLib.getArrayIterator(iterableTest));
         iterableTest.hasIterator = false;
-        assertFails(() -> iterableLib.getIterator(iterableTest), AssertionError.class);
+        assertFails(() -> iterableLib.getArrayIterator(iterableTest), AssertionError.class);
         iterableTest.hasIterator = true;
         iterableTest.iterator = null;
-        assertFails(() -> iterableLib.getIterator(iterableTest), AssertionError.class);
+        assertFails(() -> iterableLib.getArrayIterator(iterableTest), AssertionError.class);
         iterableTest.iterator = () -> null;
-        assertFails(() -> iterableLib.getIterator(iterableTest), AssertionError.class);
+        assertFails(() -> iterableLib.getArrayIterator(iterableTest), AssertionError.class);
         TruffleObject empty = new TruffleObject() {
         };
         iterableTest.iterator = () -> empty;
-        assertFails(() -> iterableLib.getIterator(iterableTest), AssertionError.class);
+        assertFails(() -> iterableLib.getArrayIterator(iterableTest), AssertionError.class);
     }
 
     @Test
@@ -1093,6 +1093,9 @@ public class InteropAssertionsTest extends InteropLibraryBaseTest {
         InteropLibrary iteratorLib = createLibrary(InteropLibrary.class, iteratorTest);
         assertEquals(iteratorTest.next.get(), iteratorLib.getIteratorNextElement(iteratorTest));
         iteratorTest.isIterator = false;
+        assertFails(() -> iteratorLib.getIteratorNextElement(iteratorTest), AssertionError.class);
+        iteratorTest.isIterator = true;
+        iteratorTest.next = null;
         assertFails(() -> iteratorLib.getIteratorNextElement(iteratorTest), AssertionError.class);
 
         iteratorTest.next = () -> null;
