@@ -485,9 +485,4 @@ public final class JDWPContextImpl implements JDWPContext {
     public void interruptThread(Object thread) {
         Target_java_lang_Thread.interrupt0((StaticObject) thread);
     }
-
-    @Override
-    public void exit(int exitCode) {
-        System.exit(exitCode);
-    }
 }

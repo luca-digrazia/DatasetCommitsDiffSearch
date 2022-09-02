@@ -116,6 +116,7 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal private int computedModifiers = -1;
 
+
     public static final int LOADED = 0;
     public static final int LINKED = 1;
     public static final int PREPARED = 2;
