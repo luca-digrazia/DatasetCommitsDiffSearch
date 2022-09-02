@@ -1200,13 +1200,9 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         return threads;
     }
 
-    boolean isActiveNotCancelled() {
-        return isActiveNotCancelled(true);
-    }
-
-    synchronized boolean isActiveNotCancelled(boolean includePolyglotThreads) {
+    synchronized boolean isActiveNotCancelled() {
         for (PolyglotThreadInfo seenTinfo : threads.values()) {
-            if ((includePolyglotThreads || !seenTinfo.isPolyglotThread(this)) && seenTinfo.isActiveNotCancelled()) {
+            if (seenTinfo.isActiveNotCancelled()) {
                 return true;
             }
         }
