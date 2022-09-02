@@ -199,11 +199,13 @@ public final class ObjectKlass extends Klass {
             vtable = VirtualTable.create(superKlass, methods, this, mirandaMethods, false);
             itable = InterfaceTables.fixTables(vtable, mirandaMethods, methods, methodCR.tables, iKlassTable);
         }
-        if (superKlass != null) {
-            superKlass.addSubType(this);
-        }
-        for (ObjectKlass superInterface : superInterfaces) {
-            superInterface.addSubType(this);
+        synchronized (subTypes) {
+            if (superKlass != null) {
+                superKlass.addSubType(this);
+            }
+            for (ObjectKlass superInterface : superInterfaces) {
+                superInterface.addSubType(this);
+            }
         }
         this.klassVersion = new KlassVersion(pool, linkedKlass, methods, mirandaMethods, vtable, itable, iKlassTable);
         this.initState = LINKED;
@@ -211,9 +213,7 @@ public final class ObjectKlass extends Klass {
     }
 
     private void addSubType(ObjectKlass objectKlass) {
-        synchronized (subTypes) {
-            subTypes.add(new WeakReference<>(objectKlass));
-        }
+        subTypes.add(new WeakReference<>(objectKlass));
     }
 
     private boolean verifyTables() {
