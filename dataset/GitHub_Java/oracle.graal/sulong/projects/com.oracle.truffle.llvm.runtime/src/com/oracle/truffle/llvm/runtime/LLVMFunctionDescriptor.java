@@ -172,8 +172,9 @@ public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject impl
     static class Execute {
 
         @Specialization(limit = "5", guards = "self == cachedSelf")
-        static Object doCached(@SuppressWarnings("unused") LLVMFunctionDescriptor self, Object[] args,
-                        @Cached("self") @SuppressWarnings("unused") LLVMFunctionDescriptor cachedSelf,
+        @SuppressWarnings("unused")
+        static Object doCached(LLVMFunctionDescriptor self, Object[] args,
+                        @Cached("self") LLVMFunctionDescriptor cachedSelf,
                         @Cached("create(cachedSelf.getForeignCallTarget())") DirectCallNode call) {
             return call.call(args);
         }
