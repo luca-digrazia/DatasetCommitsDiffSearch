@@ -119,7 +119,7 @@ import com.oracle.svm.core.util.VMError;
  */
 public final class Safepoint {
 
-    public static final SubstrateForeignCallDescriptor ENTER_SLOW_PATH_SAFEPOINT_CHECK = SnippetRuntime.findForeignCall(Safepoint.class, "enterSlowPathSafepointCheck", true);
+    private static final SubstrateForeignCallDescriptor ENTER_SLOW_PATH_SAFEPOINT_CHECK = SnippetRuntime.findForeignCall(Safepoint.class, "enterSlowPathSafepointCheck", true);
     private static final SubstrateForeignCallDescriptor ENTER_SLOW_PATH_NATIVE_TO_JAVA = SnippetRuntime.findForeignCall(Safepoint.class, "enterSlowPathNativeToJava", true);
 
     /** All foreign calls defined in this class. */
@@ -135,6 +135,9 @@ public final class Safepoint {
 
         @Option(help = "Exit the VM if I can not come to a safepoint in this many nanoseconds. 0 implies forever.")//
         public static final RuntimeOptionKey<Long> SafepointPromptnessFailureNanos = new RuntimeOptionKey<>(TimeUtils.millisToNanos(0L));
+
+        @Option(help = "Are safepoint promptness failures fatal?")//
+        public static final RuntimeOptionKey<Boolean> SafepointPromptnessFailureIsFatal = new RuntimeOptionKey<>(true);
     }
 
     private static long getSafepointPromptnessWarningNanos() {
@@ -145,9 +148,26 @@ public final class Safepoint {
         return Options.SafepointPromptnessFailureNanos.getValue().longValue();
     }
 
+    private static boolean getSafepointPromptnessFailureIsFatal() {
+        return Options.SafepointPromptnessFailureIsFatal.getValue();
+    }
+
     /**
-     * Used to wrap exceptions that are explicitly thrown by recurring callbacks.
+     * A statically-allocated exception to be thrown in case I can not come to a safepoint promptly.
      */
+    private static final PromptnessException promptnessException = new PromptnessException("Could not come to safepoint promptly.");
+
+    public static class PromptnessException extends RuntimeException {
+
+        protected PromptnessException(String message) {
+            super(message);
+        }
+
+        /** Every exception needs a serialVersionUID. */
+        private static final long serialVersionUID = -1924498867085800218L;
+
+    }
+
     static class SafepointException extends RuntimeException {
         private static final long serialVersionUID = 1L;
 
@@ -172,7 +192,7 @@ public final class Safepoint {
                     Statistics.incFrozen();
                     freezeAtSafepoint(callerHasJavaFrameAnchor);
                     Statistics.incThawed();
-                    VMError.guarantee(VMThreads.StatusSupport.isStatusJava(), "Must be back in Java state");
+                    VMError.guarantee(VMThreads.StatusSupport.isStatusJava(), "Must back in Java state");
                 }
 
                 /*
@@ -265,36 +285,11 @@ public final class Safepoint {
     }
 
     /** Per-thread variable for safepoint requests. */
-    static final FastThreadLocalInt safepointRequested = FastThreadLocalFactory.createInt();
+    private static final FastThreadLocalInt safepointRequested = FastThreadLocalFactory.createInt();
 
-    /**
-     * Use this method with care as it potentially destroys or skews data that is needed for
-     * scheduling the execution of recurring callbacks (i.e., the number of executed safepoints in a
-     * period of time).
-     *
-     * This method must only be used in places where no races with other threads can happen (e.g.,
-     * before attaching the thread or at a safepoint).
-     */
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    static void setSafepointRequested(IsolateThread vmThread, int value) {
-        assert CurrentIsolate.getCurrentThread().isNull() || VMOperationControl.mayExecuteVmOperations();
+    public static void setSafepointRequested(IsolateThread vmThread, int value) {
         safepointRequested.setVolatile(vmThread, value);
-    }
-
-    /**
-     * Use this method with care as it potentially destroys or skews data that is needed for
-     * scheduling the execution of recurring callbacks (i.e., the number of executed safepoints in a
-     * period of time).
-     */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    static void setSafepointRequested(int value) {
-        int oldValue;
-        do {
-            // the update to safepointRequestedValueBeforeSafepoint must be visible before the
-            // update to safepointRequested
-            oldValue = safepointRequested.getVolatile();
-            safepointRequestedValueBeforeSafepoint.setVolatile(0);
-        } while (!safepointRequested.compareAndSet(oldValue, value));
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -302,10 +297,15 @@ public final class Safepoint {
         return safepointRequested.get(vmThread); // need not be volatile
     }
 
-    static final FastThreadLocalInt safepointRequestedValueBeforeSafepoint = FastThreadLocalFactory.createInt();
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static void setSafepointRequested(int value) {
+        safepointRequested.setVolatile(value);
+    }
+
+    private static final FastThreadLocalInt safepointRequestedValueBeforeSafepoint = FastThreadLocalFactory.createInt();
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    static void setSafepointRequestedValueBeforeSafepoint(IsolateThread vmThread, int value) {
+    public static void setSafepointRequestedValueBeforeSafepoint(IsolateThread vmThread, int value) {
         safepointRequestedValueBeforeSafepoint.setVolatile(vmThread, value);
     }
 
@@ -315,7 +315,7 @@ public final class Safepoint {
     }
 
     /**
-     * Returns the memory location identity for {@link #safepointRequested}.
+     * Returns the memory location identity accessed by {@link #checkSafepointRequested()}.
      */
     public static LocationIdentity getThreadLocalSafepointRequestedLocationIdentity() {
         return safepointRequested.getLocationIdentity();
@@ -325,12 +325,27 @@ public final class Safepoint {
         return VMThreadLocalInfos.getOffset(safepointRequested);
     }
 
+    /**
+     * Check if a safepoint has been requested, and block if it is requested.
+     *
+     * Can only be called from snippets. The fast path is inlined, the slow path is a method call.
+     */
+    public static void checkSafepointRequested() {
+        final boolean needSlowPath = SafepointCheckNode.test();
+        if (BranchProbabilityNode.probability(BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY, needSlowPath)) {
+            callSlowPathSafepointCheck(ENTER_SLOW_PATH_SAFEPOINT_CHECK);
+        }
+    }
+
+    @NodeIntrinsic(value = ForeignCallNode.class)
+    private static native void callSlowPathSafepointCheck(@ConstantNodeParameter ForeignCallDescriptor descriptor);
+
     /** Foreign call: {@link #ENTER_SLOW_PATH_SAFEPOINT_CHECK}. */
     @SubstrateForeignCallTarget
     @Uninterruptible(reason = "Must not contain safepoint checks")
     private static void enterSlowPathSafepointCheck() throws Throwable {
         if (VMThreads.StatusSupport.isStatusIgnoreSafepoints(CurrentIsolate.getCurrentThread())) {
-            /* The thread is detaching so it won't ever need to execute a safepoint again. */
+            /* Reset counter so that we do not enter the slow path immediately again. */
             Safepoint.setSafepointRequested(Safepoint.SafepointRequestValues.RESET);
             return;
         }
@@ -496,31 +511,17 @@ public final class Safepoint {
                      */
                     continue;
                 }
-                requestSafepoint(vmThread);
+                // Request that the thread comes to a safepoint.
+                int saved = getSafepointRequested(vmThread);
+                setSafepointRequestedValueBeforeSafepoint(vmThread, saved);
+                setSafepointRequested(vmThread, SafepointRequestValues.ENTER);
+                Statistics.incRequested();
             }
             trace.string("  returns");
             if (trace.isEnabled() && Statistics.Options.GatherSafepointStatistics.getValue()) {
                 trace.string(" with requests: ").signed(Statistics.getRequested());
             }
             trace.string("]").newline();
-        }
-
-        /**
-         * This method tries to request a safepoint for a thread. The other thread can either honor
-         * or ignore the request. If the other thread honors the request, then the old value of
-         * {@link Safepoint#safepointRequested} is stored in
-         * {@link Safepoint#safepointRequestedValueBeforeSafepoint}.
-         */
-        static void requestSafepoint(IsolateThread vmThread) {
-            int oldValue;
-            do {
-                // the update to safepointRequestedValueBeforeSafepoint must be visible before the
-                // update to safepointRequested
-                oldValue = safepointRequested.getVolatile(vmThread);
-                safepointRequestedValueBeforeSafepoint.setVolatile(vmThread, oldValue);
-            } while (!safepointRequested.compareAndSet(vmThread, oldValue, SafepointRequestValues.ENTER));
-
-            Statistics.incRequested();
         }
 
         /** Wait for there to be no threads (except myself) still waiting to reach a safepoint. */
@@ -550,7 +551,8 @@ public final class Safepoint {
                             case VMThreads.StatusSupport.STATUS_IN_JAVA: {
                                 /* Re-request the safepoint in case of a lost update. */
                                 if (Integer.compareUnsigned(getSafepointRequested(vmThread), SafepointRequestValues.ENTER) > 0 && !VMThreads.StatusSupport.isStatusIgnoreSafepoints(vmThread)) {
-                                    requestSafepoint(vmThread);
+                                    setSafepointRequested(vmThread, SafepointRequestValues.ENTER);
+                                    Statistics.incRequested();
                                 }
                                 notAtSafepoint += 1;
                                 break;
@@ -617,7 +619,7 @@ public final class Safepoint {
 
                     /* Reset the safepointRequested values to the values before the safepoint. */
                     setSafepointRequested(vmThread, getSafepointRequestedValueBeforeSafepoint(vmThread));
-                    setSafepointRequestedValueBeforeSafepoint(vmThread, 0);
+                    setSafepointRequestedValueBeforeSafepoint(vmThread, Safepoint.SafepointRequestValues.RESET);
 
                     /*
                      * Release the thread back to native code. Most threads will transition from
@@ -662,7 +664,11 @@ public final class Safepoint {
                     warning.string("  failureNanos: ").signed(failureNanos).string(" < nanosSinceStart: ").signed(nanosSinceStart);
                     warning.string("  startNanos: ").signed(startNanos);
                     warning.string("  reason: ").string(reason).string("]").newline();
-                    VMError.guarantee(false, "Safepoint promptness failure.");
+                    if (Safepoint.getSafepointPromptnessFailureIsFatal()) {
+                        VMError.guarantee(false, "Fatal: Safepoint promptness failure.");
+                    } else {
+                        throw promptnessException;
+                    }
                 }
             }
         }
