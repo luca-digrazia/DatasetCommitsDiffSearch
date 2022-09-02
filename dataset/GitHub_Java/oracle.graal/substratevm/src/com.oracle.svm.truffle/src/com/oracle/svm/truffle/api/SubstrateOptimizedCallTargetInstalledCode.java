@@ -46,12 +46,6 @@ import com.oracle.truffle.api.Truffle;
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-/**
- * Represents the compiled code of a {@link SubstrateOptimizedCallTarget}.
- * <p>
- * Assume that methods return stale values because internal state can change at any safepoint (see
- * {@link SubstrateInstalledCode}).
- */
 public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode implements SubstrateInstalledCode, OptimizedAssumptionDependency {
     protected final SubstrateOptimizedCallTarget callTarget;
 
