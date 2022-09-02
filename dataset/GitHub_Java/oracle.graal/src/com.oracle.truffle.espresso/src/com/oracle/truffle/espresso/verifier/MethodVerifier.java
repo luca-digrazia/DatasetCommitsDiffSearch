@@ -634,45 +634,45 @@ public final class MethodVerifier implements ContextAccess {
     // Traverses the switch to mark jump targets. Also checks that lookup switch keys are sorted.
     private void initSwitch(int bci, int opCode) {
         if (opCode == LOOKUPSWITCH) {
-            BytecodeLookupSwitch switchHelper = BytecodeLookupSwitch.INSTANCE;
+            BytecodeLookupSwitch switchHelper = code.getBytecodeLookupSwitch();
             int low = 0;
-            int high = switchHelper.numberOfCases(code, bci);
+            int high = switchHelper.numberOfCases(bci);
             int oldKey = 0;
             boolean init = false;
             int target;
             for (int i = low; i < high; i++) {
-                int newKey = switchHelper.keyAt(code, bci, i - low);
+                int newKey = switchHelper.keyAt(bci, i - low);
                 if (init && newKey <= oldKey) {
                     throw new VerifyError("Unsorted keys in LOOKUPSWITCH");
                 }
                 init = true;
                 oldKey = newKey;
-                target = switchHelper.targetAt(code, bci, i - low);
+                target = switchHelper.targetAt(bci, i - low);
                 if (bciStates[target] == UNREACHABLE) {
                     throw new VerifyError("Jump to the middle of an instruction: " + target);
                 }
                 bciStates[target] = setStatus(bciStates[bci], JUMP_TARGET);
             }
-            target = switchHelper.defaultTarget(code, bci);
+            target = switchHelper.defaultTarget(bci);
             if (bciStates[target] == UNREACHABLE) {
                 throw new VerifyError("Jump to the middle of an instruction: " + target);
             }
             bciStates[target] = setStatus(bciStates[bci], JUMP_TARGET);
         } else if (opCode == TABLESWITCH) {
-            BytecodeTableSwitch switchHelper = BytecodeTableSwitch.INSTANCE;
-            int low = switchHelper.lowKey(code, bci);
-            int high = switchHelper.highKey(code, bci);
+            BytecodeTableSwitch switchHelper = code.getBytecodeTableSwitch();
+            int low = switchHelper.lowKey(bci);
+            int high = switchHelper.highKey(bci);
             int target;
             // if high == MAX_INT, i < high will always be true. This loop condition is to avoid
             // an infinite loop in this case.
             for (int i = low; i != high + 1; i++) {
-                target = switchHelper.targetAt(code, bci, i - low);
+                target = switchHelper.targetAt(bci, i - low);
                 if (bciStates[target] == UNREACHABLE) {
                     throw new VerifyError("Jump to the middle of an instruction: " + target);
                 }
                 bciStates[target] = setStatus(bciStates[bci], JUMP_TARGET);
             }
-            target = switchHelper.defaultTarget(code, bci);
+            target = switchHelper.defaultTarget(bci);
             if (bciStates[target] == UNREACHABLE) {
                 throw new VerifyError("Jump to the middle of an instruction: " + target);
             }
@@ -1892,7 +1892,7 @@ public final class MethodVerifier implements ContextAccess {
 
     private int verifyLookupSwitch(int bci, OperandStack stack, Locals locals) {
         stack.popInt();
-        BytecodeLookupSwitch switchHelper = BytecodeLookupSwitch.INSTANCE;
+        BytecodeLookupSwitch switchHelper = code.getBytecodeLookupSwitch();
         // Padding checks
         for (int j = bci + 1; j < switchHelper.getAlignedBci(bci); j++) {
             if (version51OrEarlier() && code.readUByte(j) != 0) {
@@ -1900,45 +1900,45 @@ public final class MethodVerifier implements ContextAccess {
             }
         }
         int low = 0;
-        int high = switchHelper.numberOfCases(code, bci) - 1;
+        int high = switchHelper.numberOfCases(bci) - 1;
         int previousKey = 0;
         if (high > 0) {
-            previousKey = switchHelper.keyAt(code, bci, low);
+            previousKey = switchHelper.keyAt(bci, low);
         }
 
         // Verify all branches
         for (int i = low; i <= high; i++) {
-            int thisKey = switchHelper.keyAt(code, bci, i);
+            int thisKey = switchHelper.keyAt(bci, i);
             if (i > 0 && thisKey <= previousKey) {
                 throw new VerifyError("Unsorted keys in LookupSwitch");
             }
-            branch(bci + switchHelper.offsetAt(code, bci, i), stack, locals);
+            branch(bci + switchHelper.offsetAt(bci, i), stack, locals);
             previousKey = thisKey;
         }
 
         // Verify default branch
-        return switchHelper.defaultTarget(code, bci);
+        return switchHelper.defaultTarget(bci);
     }
 
     private int verifyTableSwitch(int bci, OperandStack stack, Locals locals) {
         stack.popInt();
-        BytecodeTableSwitch switchHelper = BytecodeTableSwitch.INSTANCE;
+        BytecodeTableSwitch switchHelper = code.getBytecodeTableSwitch();
         // Padding checks
         for (int j = bci + 1; j < switchHelper.getAlignedBci(bci); j++) {
             if (version51OrEarlier() && code.readUByte(j) != 0) {
                 throw new VerifyError("non-zero padding for TABLESWITCH");
             }
         }
-        int low = switchHelper.lowKey(code, bci);
-        int high = switchHelper.highKey(code, bci);
+        int low = switchHelper.lowKey(bci);
+        int high = switchHelper.highKey(bci);
 
         // Verify all branches
         for (int i = low; i != high + 1; i++) {
-            branch(switchHelper.targetAt(code, bci, i - low), stack, locals);
+            branch(switchHelper.targetAt(bci, i - low), stack, locals);
         }
 
         // Verify default branch
-        return switchHelper.defaultTarget(code, bci);
+        return switchHelper.defaultTarget(bci);
     }
 
     private void verifyJSR(int bci, OperandStack stack, Locals locals) {
