@@ -73,8 +73,8 @@ import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.truffle.compiler.phases.DeoptimizeOnExceptionPhase;
 import org.graalvm.compiler.word.WordTypes;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
@@ -306,7 +306,6 @@ public final class GraalFeature implements Feature {
     @Override
     public void duringSetup(DuringSetupAccess c) {
         DuringSetupAccessImpl config = (DuringSetupAccessImpl) c;
-        AnalysisMetaAccess aMetaAccess = config.getMetaAccess();
 
         try {
             /*
@@ -314,18 +313,14 @@ public final class GraalFeature implements Feature {
              * is the NodeClass from Truffle. So we require Truffle on the class path for any images
              * and tests that use Graal at run time.
              */
-            aMetaAccess.lookupJavaType(SubstrateType.class);
+            config.getMetaAccess().lookupJavaType(SubstrateType.class);
         } catch (NoClassDefFoundError ex) {
             throw VMError.shouldNotReachHere("Building a native image with Graal support requires Truffle on the class path. For unit tests run with 'svmtest', add the option '--truffle'.");
         }
 
         ImageSingletons.add(GraalSupport.class, new GraalSupport());
 
-        if (!ImageSingletons.contains(RuntimeGraalSetup.class)) {
-            ImageSingletons.add(RuntimeGraalSetup.class, new SubstrateRuntimeGraalSetup());
-        }
-        GraalProviderObjectReplacements providerReplacements = ImageSingletons.lookup(RuntimeGraalSetup.class).getProviderObjectReplacements(aMetaAccess);
-        objectReplacer = new GraalObjectReplacer(config.getUniverse(), aMetaAccess, providerReplacements);
+        objectReplacer = new GraalObjectReplacer(config.getUniverse(), config.getMetaAccess());
         config.registerObjectReplacer(objectReplacer);
 
         config.registerClassReachabilityListener(GraalSupport::registerPhaseStatistics);
@@ -360,7 +355,7 @@ public final class GraalFeature implements Feature {
         FeatureHandler featureHandler = config.getFeatureHandler();
         NativeImageGenerator.registerGraphBuilderPlugins(featureHandler, runtimeConfig, hostedProviders, config.getMetaAccess(), config.getUniverse(), null, null, config.getNativeLibraries(),
                         config.getImageClassLoader(), false, false, ((Inflation) config.getBigBang()).getAnnotationSubstitutionProcessor(), new SubstrateClassInitializationPlugin(config.getHostVM()),
-                        classInitializationSupport, ConfigurationValues.getTarget());
+                        classInitializationSupport);
         DebugContext debug = DebugContext.forCurrentThread();
         NativeImageGenerator.registerReplacements(debug, featureHandler, runtimeConfig, runtimeConfig.getProviders(), runtimeConfig.getSnippetReflection(), false, true);
         featureHandler.forEachGraalFeature(feature -> feature.registerCodeObserver(runtimeConfig));
@@ -523,7 +518,7 @@ public final class GraalFeature implements Feature {
                     return;
                 }
 
-                CanonicalizerPhase.create().apply(graph, hostedProviders);
+                new CanonicalizerPhase().apply(graph, hostedProviders);
                 if (deoptimizeOnExceptionPredicate != null) {
                     new DeoptimizeOnExceptionPhase(deoptimizeOnExceptionPredicate).apply(graph);
                 }
@@ -641,7 +636,7 @@ public final class GraalFeature implements Feature {
         graphEncoder = new GraphEncoder(ConfigurationValues.getTarget().arch);
 
         StrengthenStampsPhase strengthenStamps = new RuntimeStrengthenStampsPhase(config.getUniverse(), objectReplacer);
-        CanonicalizerPhase canonicalizer = CanonicalizerPhase.create();
+        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
         for (CallTreeNode node : methods.values()) {
             StructuredGraph graph = node.graph;
             if (graph != null) {
