@@ -100,28 +100,19 @@ public final class LLVMCallNode extends LLVMExpressionNode {
         Object function = dispatchTargetNode.executeGeneric(frame);
         if (mayBeBuiltin) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            synchronized (this) {
-                if (mayBeBuiltin) {
+            mayBeBuiltin = false;
+            if (function instanceof LLVMFunctionDescriptor) {
+                LLVMFunctionDescriptor descriptor = (LLVMFunctionDescriptor) function;
+                if (descriptor.isIntrinsicFunction()) {
                     try {
-                        if (function instanceof LLVMFunctionDescriptor) {
-                            LLVMFunctionDescriptor descriptor = (LLVMFunctionDescriptor) function;
-                            if (descriptor.isIntrinsicFunction()) {
-                                try {
-                                    intrinsicDispatch = insert(new IntrinsicDispatch(descriptor, argumentNodes, functionType));
-                                } catch (LLVMPolyglotException e) {
-                                    // re-throw with this node to generate correct stack trace
-                                    throw new LLVMPolyglotException(this, e.getMessage(), e);
-                                }
-                            }
-                        }
-                    } finally {
-                        // set it to false now that intrinsicDispatch has been set if needed
-                        mayBeBuiltin = false;
+                        intrinsicDispatch = insert(new IntrinsicDispatch(descriptor, argumentNodes, functionType));
+                    } catch (LLVMPolyglotException e) {
+                        // re-throw with this node to generate correct stack trace
+                        throw new LLVMPolyglotException(this, e.getMessage(), e);
                     }
                 }
             }
         }
-
         IntrinsicDispatch intrinsic = intrinsicDispatch;
         if (intrinsic != null) {
             if (intrinsic.matches(function)) {
