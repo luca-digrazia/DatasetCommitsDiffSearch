@@ -36,8 +36,8 @@ import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.jdk.Jvm;
 import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
+import com.oracle.svm.core.windows.headers.Jvm;
 import com.oracle.svm.core.windows.headers.WinBase;
 
 @AutomaticFeature
@@ -50,6 +50,39 @@ class WindowsNativeLibraryFeature implements Feature {
 }
 
 class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
+    static final String[] builtInPkgNatives = {
+                    "Java_com_sun_demo_jvmti_hprof",
+                    "Java_com_sun_java_util_jar_pack",
+                    "Java_com_sun_net_ssl",
+                    "Java_com_sun_nio_file",
+                    "Java_com_sun_security_cert_internal_x509",
+                    "Java_java_io",
+                    "Java_java_lang",
+                    "Java_java_math",
+                    "Java_java_net",
+                    "Java_java_nio",
+                    "Java_java_security",
+                    "Java_java_text",
+                    "Java_java_time",
+                    "Java_java_util",
+                    "Java_javax_net",
+                    "Java_javax_script",
+                    "Java_javax_security",
+                    "Java_jdk_internal_org",
+                    "Java_jdk_internal_util",
+                    "Java_jdk_net",
+                    "Java_sun_invoke",
+                    "Java_sun_launcher",
+                    "Java_sun_net",
+                    "Java_sun_nio",
+                    "Java_sun_reflect",
+                    "Java_sun_security",
+                    "Java_sun_text",
+                    "Java_sun_util",
+
+                    /* SVM Specific packages */
+                    "Java_com_oracle_svm_core_jdk"
+    };
 
     static void initialize() {
         ImageSingletons.add(PlatformNativeLibrarySupport.class, new WindowsNativeLibrarySupport());
@@ -82,6 +115,19 @@ class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
         }
     }
 
+    @Override
+    public boolean isBuiltinPkgNative(String name) {
+        // Do a quick check first
+        if (name.startsWith("Java_")) {
+            for (String str : builtInPkgNatives) {
+                if (name.startsWith(str)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     class WindowsNativeLibrary implements NativeLibrary {
 
         private final String canonicalIdentifier;
@@ -108,20 +154,21 @@ class WindowsNativeLibrarySupport implements PlatformNativeLibrarySupport {
         }
 
         @Override
-        public boolean load() {
-            if (builtin) {
-                return true;
-            }
-            assert dlhandle.isNull();
-            try (CCharPointerHolder dllPathPin = CTypeConversion.toCString(canonicalIdentifier)) {
-                CCharPointer dllPathPtr = dllPathPin.get();
+        public void load() {
+            if (!builtin) {
+                assert dlhandle.isNull();
+                String dllPath = canonicalIdentifier;
+                CCharPointerHolder dllpathPin = CTypeConversion.toCString(dllPath);
+                CCharPointer dllPathPtr = dllpathPin.get();
                 /*
                  * WinBase.SetDllDirectoryA(dllpathPtr); CCharPointerHolder pathPin =
                  * CTypeConversion.toCString(path); CCharPointer pathPtr = pathPin.get();
                  */
                 dlhandle = WinBase.LoadLibraryA(dllPathPtr);
+                if (this.dlhandle.isNull()) {
+                    throw new UnsatisfiedLinkError(dllPath + ": " + WinBase.GetLastError());
+                }
             }
-            return dlhandle.isNonNull();
         }
 
         @Override

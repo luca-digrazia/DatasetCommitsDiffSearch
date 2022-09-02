@@ -32,6 +32,7 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.windows.headers.LibC;
 
 @TargetClass(java.lang.System.class)
 @Platforms(Platform.WINDOWS.class)
@@ -40,7 +41,13 @@ final class Target_java_lang_System {
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) static volatile Console cons;
 
     @Substitute
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
+    public static long currentTimeMillis() {
+        return nanoTime() / WindowsUtils.NANOSECS_PER_MILLISEC;
+    }
+
+    @Substitute
+    @Uninterruptible(reason = "Called from uninterruptible code.")
     protected static long nanoTime() {
         return WindowsUtils.getNanoCounter();
     }
@@ -48,6 +55,16 @@ final class Target_java_lang_System {
     @Substitute
     public static String mapLibraryName(String libname) {
         return libname + ".dll";
+    }
+}
+
+@TargetClass(className = "java.lang.Shutdown")
+@Platforms(Platform.WINDOWS.class)
+final class Target_java_lang_Shutdown {
+
+    @Substitute
+    static void halt0(int status) {
+        LibC.exit(status);
     }
 }
 
