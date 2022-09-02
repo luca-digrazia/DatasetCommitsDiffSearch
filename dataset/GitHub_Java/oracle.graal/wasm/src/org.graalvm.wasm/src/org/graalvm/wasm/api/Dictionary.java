@@ -112,10 +112,4 @@ public class Dictionary implements TruffleObject {
         dictionary.addMembers(nameValuePairs);
         return dictionary;
     }
-
-    @SuppressWarnings("unused")
-    @ExportMessage(name = "toDisplayString")
-    public Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
-        return this.getClass().getName() + "[" + members + "]";
-    }
 }

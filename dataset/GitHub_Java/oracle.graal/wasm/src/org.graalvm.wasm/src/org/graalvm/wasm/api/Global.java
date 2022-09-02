@@ -42,22 +42,29 @@ package org.graalvm.wasm.api;
 
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import org.graalvm.wasm.exception.WasmJsApiException;
 
 @ExportLibrary(InteropLibrary.class)
 public class Global extends Dictionary {
+    private final Object descriptor;
     private final ValueType valueType;
     private final boolean mutable;
     private Object value;
 
-    public Global(String valueType, boolean mutable, Object value) {
-        this.valueType = ValueType.valueOf(valueType);
-        this.mutable = mutable;
+    public Global(Object descriptor, Object value) {
+        this.descriptor = descriptor;
+        try {
+            this.valueType = ValueType.valueOf((String) InteropLibrary.getUncached().readMember(descriptor, "value"));
+            this.mutable = (boolean) InteropLibrary.getUncached().readMember(descriptor, "mutable");
+        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid global descriptor: " + descriptor);
+        }
         setInternal(value);
         addMembers(new Object[]{
-                        "descriptor", new GlobalDescriptor(valueType, mutable),
+                        "descriptor", this.descriptor,
                         "valueOf", new Executable(args -> get())
         });
     }
