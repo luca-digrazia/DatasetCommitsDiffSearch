@@ -37,8 +37,8 @@ import java.util.NoSuchElementException;
 @EspressoSubstitutions
 public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
     @Substitution
-    public static boolean isForeignObject(@Host(Object.class) StaticObject object) {
-        return object.isForeignObject();
+    public static boolean isInteropObject(@Host(Object.class) StaticObject object) {
+        return object.isInteropObject();
     }
 
     @Substitution
@@ -47,13 +47,13 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
             return value;
         }
         Klass targetKlass = targetClass.getMirrorKlass();
-        if (value.isForeignObject()) {
+        if (value.isInteropObject()) {
             if (targetKlass.isPrimitive()) {
                 try {
-                    return castToBoxed(targetKlass, value.rawForeignObject(), meta);
+                    return castToBoxed(targetKlass, value.rawInteropObject(), meta);
                 } catch (UnsupportedMessageException e) {
                     throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException,
-                                    String.format("Couldn't read %s value from foreign object", targetKlass.getTypeAsString()));
+                                    String.format("Couldn't read %s value from interop object", targetKlass.getTypeAsString()));
                 }
             }
 
@@ -62,60 +62,60 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
             }
 
             try {
-                checkHasAllFieldsOrThrow(value.rawForeignObject(), targetKlass, InteropLibrary.getUncached());
+                checkHasAllFieldsOrThrow(value.rawInteropObject(), targetKlass, InteropLibrary.getUncached());
             } catch (NoSuchElementException e) {
                 throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException,
                                 String.format("Field %s not found", e.getMessage()));
             }
 
-            return StaticObject.createForeign(targetKlass, value.rawForeignObject());
+            return StaticObject.createInterop(targetKlass, value.rawInteropObject());
         } else {
             return InterpreterToVM.checkCast(value, targetKlass);
         }
     }
 
-    private static void checkHasAllFieldsOrThrow(Object foreignObject, Klass klass, InteropLibrary interopLibrary) {
+    private static void checkHasAllFieldsOrThrow(Object interopObject, Klass klass, InteropLibrary interopLibrary) {
         for (Field f : klass.getDeclaredFields()) {
-            if (!f.isStatic() && interopLibrary.isMemberExisting(foreignObject, f.getNameAsString())) {
+            if (!f.isStatic() && interopLibrary.isMemberExisting(interopObject, f.getNameAsString())) {
                 throw new NoSuchElementException(f.getNameAsString());
             }
         }
         if (klass.getSuperClass() != null) {
-            checkHasAllFieldsOrThrow(foreignObject, klass.getSuperKlass(), interopLibrary);
+            checkHasAllFieldsOrThrow(interopObject, klass.getSuperKlass(), interopLibrary);
         }
     }
 
-    private static StaticObject castToBoxed(Klass targetKlass, Object foreignValue, Meta meta) throws UnsupportedMessageException {
+    private static StaticObject castToBoxed(Klass targetKlass, Object interopValue, Meta meta) throws UnsupportedMessageException {
         assert targetKlass.isPrimitive();
         InteropLibrary interopLibrary = InteropLibrary.getUncached();
         switch (targetKlass.getJavaKind()) {
             case Boolean:
-                boolean boolValue = interopLibrary.asBoolean(foreignValue);
+                boolean boolValue = interopLibrary.asBoolean(interopValue);
                 return meta.boxBoolean(boolValue);
             case Char:
-                String value = interopLibrary.asString(foreignValue);
+                String value = interopLibrary.asString(interopValue);
                 if (value.length() != 1) {
                     throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException,
                                     String.format("Cannot cast string %s to char", value));
                 }
                 return meta.boxCharacter(value.charAt(0));
             case Byte:
-                byte byteValue = interopLibrary.asByte(foreignValue);
+                byte byteValue = interopLibrary.asByte(interopValue);
                 return meta.boxByte(byteValue);
             case Short:
-                short shortValue = interopLibrary.asShort(foreignValue);
+                short shortValue = interopLibrary.asShort(interopValue);
                 return meta.boxShort(shortValue);
             case Int:
-                int intValue = interopLibrary.asInt(foreignValue);
+                int intValue = interopLibrary.asInt(interopValue);
                 return meta.boxInteger(intValue);
             case Long:
-                long longValue = interopLibrary.asLong(foreignValue);
+                long longValue = interopLibrary.asLong(interopValue);
                 return meta.boxLong(longValue);
             case Float:
-                float floatValue = interopLibrary.asFloat(foreignValue);
+                float floatValue = interopLibrary.asFloat(interopValue);
                 return meta.boxFloat(floatValue);
             case Double:
-                double doubleValue = interopLibrary.asDouble(foreignValue);
+                double doubleValue = interopLibrary.asDouble(interopValue);
                 return meta.boxDouble(doubleValue);
             case Void:
                 throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException, "Cannot cast to void");
@@ -130,7 +130,7 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         if (evalResult instanceof StaticObject) {
             return (StaticObject) evalResult;
         }
-        return createForeignObject(evalResult, meta);
+        return createInteropObject(evalResult, meta);
     }
 
     @Substitution
@@ -146,7 +146,7 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         if (binding instanceof StaticObject) {
             return (StaticObject) binding;
         }
-        return createForeignObject(binding, meta);
+        return createInteropObject(binding, meta);
     }
 
     @Substitution
@@ -156,14 +156,14 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
                             "Polyglot bindings are not accessible for this language. Use --polyglot or allowPolyglotAccess when building the context.");
         }
         String bindingName = Meta.toHostString(name);
-        if (value.isForeignObject()) {
-            meta.getContext().getEnv().exportSymbol(bindingName, value.rawForeignObject());
+        if (value.isInteropObject()) {
+            meta.getContext().getEnv().exportSymbol(bindingName, value.rawInteropObject());
         } else {
             meta.getContext().getEnv().exportSymbol(bindingName, value);
         }
     }
 
-    protected static StaticObject createForeignObject(Object object, Meta meta) {
-        return StaticObject.createForeign(meta.java_lang_Object, object);
+    protected static StaticObject createInteropObject(Object object, Meta meta) {
+        return StaticObject.createInterop(meta.java_lang_Object, object);
     }
 }
