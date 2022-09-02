@@ -280,7 +280,7 @@ public final class Target_sun_misc_Unsafe {
         // TODO(peterssen): Current workaround assumes it's a field access, offset <-> field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return holder.compareAndSwapObjectField(f, before, after);
+        return holder.compareAndSwapField(f, before, after);
     }
 
     @Substitution(hasReceiver = true, nameProvider = Unsafe8.class)
@@ -316,11 +316,11 @@ public final class Target_sun_misc_Unsafe {
     private static StaticObject doStaticObjectCompareExchange(StaticObject holder, Field f, StaticObject before, StaticObject after) {
         StaticObject result;
         do {
-            result = holder.getObjectFieldVolatile(f);
+            result = holder.getFieldVolatile(f);
             if (result != before) {
                 return result;
             }
-        } while (!holder.compareAndSwapObjectField(f, before, after));
+        } while (!holder.compareAndSwapField(f, before, after));
         return before;
     }
 
@@ -741,7 +741,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return holder.getObjectFieldVolatile(f);
+        return holder.getFieldVolatile(f);
     }
 
     // endregion get*Volatile(Object holder, long offset)
@@ -798,7 +798,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert !f.getKind().isSubWord();
-        holder.setObjectFieldVolatile(f, value);
+        holder.setFieldVolatile(f, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -1156,7 +1156,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         // TODO(peterssen): Volatile is stronger than needed.
-        holder.setObjectFieldVolatile(f, value);
+        holder.setFieldVolatile(f, value);
     }
 
     // endregion put*(Object holder, long offset, * value)
@@ -1293,7 +1293,7 @@ public final class Target_sun_misc_Unsafe {
         Thread hostThread = Thread.currentThread();
         Object blocker = LockSupport.getBlocker(hostThread);
         Field parkBlocker = meta.java_lang_Thread.lookupDeclaredField(Symbol.Name.parkBlocker, Type.java_lang_Object);
-        StaticObject guestBlocker = thread.getObjectField(parkBlocker);
+        StaticObject guestBlocker = thread.getField(parkBlocker);
         // LockSupport.park(/* guest blocker */);
         if (!StaticObject.isNull(guestBlocker)) {
             unsafe.putObject(hostThread, PARK_BLOCKER_OFFSET, guestBlocker);
