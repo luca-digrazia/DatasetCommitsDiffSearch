@@ -138,30 +138,6 @@ public final class SourceSectionFilter {
     }
 
     /**
-     * TODO: write javadoc.
-     */
-    private static final class ProvidesRootTagNode extends Node implements InstrumentableNode {
-
-        static final ProvidesRootTagNode INSTANCE = new ProvidesRootTagNode();
-
-        @Override
-        public boolean isInstrumentable() {
-            return true;
-        }
-
-        @Override
-        public WrapperNode createWrapper(ProbeNode probe) {
-            // Never used since this is a dummy node
-            return null;
-        }
-
-        @Override
-        public boolean hasTag(Class<? extends Tag> tag) {
-            return tag == StandardTags.RootTag.class;
-        }
-    }
-
-    /**
      * TODO: javadoc.
      * 
      * @param node
@@ -169,17 +145,11 @@ public final class SourceSectionFilter {
      * @return todo
      * @since todo
      */
-    public boolean includes(RootNode node, SourceSection sourceSection) {
-        Set<Class<?>> tags = node != null ? getProvidedTags(node) : Collections.emptySet();
-        if (!tags.contains(StandardTags.RootTag.class)) {
+    public boolean includes(Node node, SourceSection sourceSection) {
+        if (node != null && !InstrumentationHandler.isInstrumentableNode(node)) {
             return false;
         }
-        for (EventFilterExpression exp : expressions) {
-            if (!exp.isIncluded(tags, ProvidesRootTagNode.INSTANCE, sourceSection)) {
-                return false;
-            }
-        }
-        return true;
+        return includesImpl(node, sourceSection);
     }
 
     private boolean includesImpl(Node node, SourceSection sourceSection) {
