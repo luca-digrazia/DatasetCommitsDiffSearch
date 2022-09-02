@@ -126,8 +126,8 @@ public final class EspressoContext {
         this.JDWPOptions = env.getOptions().get(EspressoOptions.JDWPOptions); // null if not
                                                                               // specified
         this.InlineFieldAccessors = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineFieldAccessors);
-        this.DisableMethodHandleInlining = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.DisableMethodHandleInlining);
         this.Verify = env.getOptions().get(EspressoOptions.Verify);
+        this.SpecCompliancyMode = env.getOptions().get(EspressoOptions.SpecCompliancy);
     }
 
     public ClassRegistries getRegistries() {
@@ -604,10 +604,14 @@ public final class EspressoContext {
     // Checkstyle: stop field name check
 
     public final boolean InlineFieldAccessors;
-    public final boolean DisableMethodHandleInlining;
 
     public final EspressoOptions.VerifyMode Verify;
     public final JDWPOptions JDWPOptions;
+    public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
+
+    public EspressoOptions.SpecCompliancyMode specCompliancyMode() {
+        return SpecCompliancyMode;
+    }
 
     // Checkstyle: resume field name check
 
@@ -619,17 +623,6 @@ public final class EspressoContext {
 
     public StaticObject getMainThread() {
         return threadManager.getMainThread();
-    }
-
-    public boolean isValidThread(Object thread) {
-        StaticObject[] activeThreads = threadManager.activeThreads();
-
-        for (StaticObject activeThread : activeThreads) {
-            if (activeThread == thread) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @SuppressWarnings("static-method")

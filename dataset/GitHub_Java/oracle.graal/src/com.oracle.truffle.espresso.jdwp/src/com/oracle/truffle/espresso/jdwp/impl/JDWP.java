@@ -2010,6 +2010,7 @@ final class JDWP {
             public static final int ID = 14;
 
             static CommandResult createReply(Packet packet) {
+                PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 if (!CAN_FORCE_EARLY_RETURN) {
@@ -2457,20 +2458,6 @@ final class JDWP {
 
                 reply.writeByte(TypeTag.getKind(klass));
                 reply.writeLong(context.getIds().getIdAsLong(klass));
-                return new CommandResult(reply);
-            }
-        }
-    }
-
-    static class Event {
-        public static final int ID = 64;
-
-        static class COMPOSITE {
-            public static final int ID = 100;
-
-            static CommandResult createReply(Packet packet) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
                 return new CommandResult(reply);
             }
         }
