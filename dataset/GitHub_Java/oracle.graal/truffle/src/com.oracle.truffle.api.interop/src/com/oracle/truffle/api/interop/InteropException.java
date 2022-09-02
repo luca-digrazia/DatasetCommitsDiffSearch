@@ -53,13 +53,11 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
  */
 public abstract class InteropException extends Exception {
 
-    @TruffleBoundary
     InteropException(String message, Throwable cause) {
         super(message, cause);
         validateTruffleException(cause);
     }
 
-    @TruffleBoundary
     InteropException(String message) {
         super(message);
     }
