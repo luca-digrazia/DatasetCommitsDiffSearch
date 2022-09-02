@@ -129,11 +129,10 @@ public final class LibGraalIsolate {
      * Notifies that the {@code JavaVM} associated with {@code isolate} has been destroyed. All
      * subsequent accesses to objects in the isolate will throw an {@link IllegalArgumentException}.
      */
-    static synchronized void unregister(long isolateId) {
-        LibGraalIsolate isolate = isolates.remove(isolateId);
-        if (isolate != null) {
-            isolate.destroyed = true;
-        }
+    static synchronized void remove(LibGraalIsolate isolate) {
+        isolate.destroyed = true;
+        LibGraalIsolate removed = isolates.remove(isolate.id);
+        assert removed == isolate : "isolate already removed or overwritten: " + isolate;
     }
 
     @Override
