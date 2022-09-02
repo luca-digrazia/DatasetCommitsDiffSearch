@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -43,8 +43,11 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import com.oracle.truffle.tools.utils.json.JSONArray;
 import com.oracle.truffle.tools.utils.json.JSONObject;
@@ -53,6 +56,7 @@ import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugScope;
 import com.oracle.truffle.api.debug.DebugStackFrame;
+import com.oracle.truffle.api.debug.DebugStackTraceElement;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
@@ -65,6 +69,7 @@ import com.oracle.truffle.api.debug.SuspensionFilter;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.utilities.TriState;
 
 import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext.CancellableRunnable;
 import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext.NoSuspendedThreadException;
@@ -83,6 +88,8 @@ import com.oracle.truffle.tools.chromeinspector.types.Location;
 import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
 import com.oracle.truffle.tools.chromeinspector.types.Scope;
 import com.oracle.truffle.tools.chromeinspector.types.Script;
+import com.oracle.truffle.tools.chromeinspector.types.StackTrace;
+import com.oracle.truffle.tools.chromeinspector.util.LineSearch;
 
 import org.graalvm.collections.Pair;
 
@@ -90,11 +97,22 @@ public final class InspectorDebugger extends DebuggerDomain {
 
     private static final StepConfig STEP_CONFIG = StepConfig.newBuilder().suspendAnchors(SourceElement.ROOT, SuspendAnchor.AFTER).build();
 
+    // Generic matcher of completion function
+    // (function(x){var a=[];for(var o=x;o!==null&&typeof o !== 'undefined';o=o.__proto__){
+    // a.push(Object.getOwnPropertyNames(o))
+    // };return a})(obj)
+    private static final Pattern FUNCTION_COMPLETION_PATTERN = Pattern.compile(
+                    "\\(function\\s*\\((?<x>\\w+)\\)\\s*\\{\\s*var\\s+(?<a>\\w+)\\s*=\\s*\\[\\];\\s*" +
+                                    "for\\s*\\(var\\s+(?<o>\\w+)\\s*=\\s*\\k<x>;\\s*\\k<o>\\s*\\!==\\s*null\\s*&&\\s*typeof\\s+\\k<o>\\s*\\!==\\s*.undefined.;\\k<o>\\s*=\\s*\\k<o>\\.__proto__\\)\\s*\\{" +
+                                    "\\s*\\k<a>\\.push\\(Object\\.getOwnPropertyNames\\(\\k<o>\\)\\)" +
+                                    "\\};\\s*return\\s+\\k<a>\\}\\)\\((?<object>.*)\\)$");
+
     private final InspectorExecutionContext context;
     private final Object suspendLock = new Object();
-    private DebuggerSession ds;
-    private ScriptsHandler slh;
-    private BreakpointsHandler bph;
+    private volatile SuspendedCallbackImpl suspendedCallback;
+    private volatile DebuggerSession debuggerSession;
+    private volatile ScriptsHandler scriptsHandler;
+    private volatile BreakpointsHandler breakpointsHandler;
     // private Scope globalScope;
     private volatile DebuggerSuspendedInfo suspendedInfo; // Set when suspended
     private boolean running = true;
@@ -104,13 +122,11 @@ public final class InspectorDebugger extends DebuggerDomain {
     private final AtomicBoolean delayUnlock = new AtomicBoolean();
     private final Phaser onSuspendPhaser = new Phaser();
     private final BlockingQueue<CancellableRunnable> suspendThreadExecutables = new LinkedBlockingQueue<>();
+    private final ReadWriteLock domainLock;
 
-    public InspectorDebugger(InspectorExecutionContext context) {
-        this(context, false);
-    }
-
-    public InspectorDebugger(InspectorExecutionContext context, boolean suspend) {
+    public InspectorDebugger(InspectorExecutionContext context, boolean suspend, ReadWriteLock domainLock) {
         this.context = context;
+        this.domainLock = domainLock;
         context.setSuspendThreadExecutor(new SuspendedThreadExecutor() {
             @Override
             public void execute(CancellableRunnable executable) throws NoSuspendedThreadException {
@@ -128,50 +144,71 @@ public final class InspectorDebugger extends DebuggerDomain {
             }
         });
         if (suspend) {
-            doEnable();
-            ds.suspendNextExecution();
+            Lock lock = domainLock.writeLock();
+            lock.lock();
+            try {
+                startSession();
+            } finally {
+                lock.unlock();
+            }
+            debuggerSession.suspendNextExecution();
         }
     }
 
-    private void doEnable() {
+    private void startSession() {
         Debugger tdbg = context.getEnv().lookup(context.getEnv().getInstruments().get("debugger"), Debugger.class);
-        ds = tdbg.startSession(new SuspendedCallbackImpl(), SourceElement.ROOT, SourceElement.STATEMENT);
-        ds.setSourcePath(context.getSourcePath());
-        ds.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(!context.isInspectInitialization()).includeInternal(context.isInspectInternal()).build());
-        slh = context.acquireScriptsHandler();
-        slh.setDebuggerSession(ds);
-        bph = new BreakpointsHandler(ds, slh, () -> eventHandler);
+        suspendedCallback = new SuspendedCallbackImpl();
+        debuggerSession = tdbg.startSession(suspendedCallback, SourceElement.ROOT, SourceElement.STATEMENT);
+        debuggerSession.setSourcePath(context.getSourcePath());
+        debuggerSession.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(!context.isInspectInitialization()).includeInternal(context.isInspectInternal()).build());
+        scriptsHandler = context.acquireScriptsHandler();
+        scriptsHandler.setDebuggerSession(debuggerSession);
+        breakpointsHandler = new BreakpointsHandler(debuggerSession, scriptsHandler, () -> eventHandler);
     }
 
     @Override
-    public void enable() {
-        if (ds == null) {
-            doEnable();
+    public void doEnable() {
+        if (debuggerSession == null) {
+            startSession();
         }
-        slh.addLoadScriptListener(new LoadScriptListenerImpl());
+        scriptsHandler.addLoadScriptListener(new LoadScriptListenerImpl());
     }
 
     @Override
-    public void disable() {
-        if (ds != null) {
-            slh.setDebuggerSession(null);
-            ds.close();
-            ds = null;
-            context.releaseScriptsHandler();
-            slh = null;
-            bph = null;
-            synchronized (suspendLock) {
-                if (!running) {
-                    running = true;
-                    suspendLock.notifyAll();
-                }
+    public void doDisable() {
+        assert debuggerSession != null;
+        scriptsHandler.setDebuggerSession(null);
+        debuggerSession.close();
+        debuggerSession = null;
+        suspendedCallback.dispose();
+        suspendedCallback = null;
+        context.releaseScriptsHandler();
+        scriptsHandler = null;
+        breakpointsHandler = null;
+        synchronized (suspendLock) {
+            if (!running) {
+                running = true;
+                suspendLock.notifyAll();
             }
         }
     }
 
     @Override
-    public void setAsyncCallStackDepth(int maxDepth) {
+    protected void notifyDisabled() {
+        // We might call startSession() in the constructor, without doEnable().
+        // That means that doDisable() might not have been called.
+        if (debuggerSession != null) {
+            doDisable();
+        }
+    }
 
+    @Override
+    public void setAsyncCallStackDepth(int maxDepth) throws CommandProcessException {
+        if (maxDepth >= 0) {
+            debuggerSession.setAsynchronousStackDepth(maxDepth);
+        } else {
+            throw new CommandProcessException("Invalid async call stack depth: " + maxDepth);
+        }
     }
 
     @Override
@@ -180,7 +217,7 @@ public final class InspectorDebugger extends DebuggerDomain {
         for (int i = 0; i < patterns.length; i++) {
             compiledPatterns[i] = Pattern.compile(patterns[i]);
         }
-        ds.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(!context.isInspectInitialization()).includeInternal(context.isInspectInternal()).sourceIs(
+        debuggerSession.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(!context.isInspectInitialization()).includeInternal(context.isInspectInternal()).sourceIs(
                         source -> !sourceMatchesBlackboxPatterns(source, compiledPatterns)).build());
     }
 
@@ -188,13 +225,13 @@ public final class InspectorDebugger extends DebuggerDomain {
     public void setPauseOnExceptions(String state) throws CommandProcessException {
         switch (state) {
             case "none":
-                bph.setExceptionBreakpoint(false, false);
+                breakpointsHandler.setExceptionBreakpoint(false, false);
                 break;
             case "uncaught":
-                bph.setExceptionBreakpoint(false, true);
+                breakpointsHandler.setExceptionBreakpoint(false, true);
                 break;
             case "all":
-                bph.setExceptionBreakpoint(true, true);
+                breakpointsHandler.setExceptionBreakpoint(true, true);
                 break;
             default:
                 throw new CommandProcessException("Unknown Pause on exceptions mode: " + state);
@@ -204,34 +241,72 @@ public final class InspectorDebugger extends DebuggerDomain {
 
     @Override
     public Params getPossibleBreakpoints(Location start, Location end, boolean restrictToFunction) throws CommandProcessException {
+        if (start == null) {
+            throw new CommandProcessException("Start location required.");
+        }
         int scriptId = start.getScriptId();
-        if (scriptId != end.getScriptId()) {
+        if (end != null && scriptId != end.getScriptId()) {
             throw new CommandProcessException("Different location scripts: " + scriptId + ", " + end.getScriptId());
         }
-        Script script = slh.getScript(scriptId);
+        Script script = scriptsHandler.getScript(scriptId);
         if (script == null) {
             throw new CommandProcessException("Unknown scriptId: " + scriptId);
         }
-        Source source = script.getSource();
-        int o1 = source.getLineStartOffset(start.getLine());
-        if (start.getColumn() > 0) {
-            o1 += start.getColumn() - 1;
-        }
-        int o2;
-        if (end.getLine() > source.getLineCount()) {
-            o2 = source.getLength();
-        } else {
-            o2 = source.getLineStartOffset(end.getLine());
-            if (end.getColumn() > 0) {
-                o2 += end.getColumn() - 1;
-            }
-        }
-        SourceSection range = source.createSection(o1, o2 - o1);
-        Iterable<SourceSection> locations = SuspendableLocationFinder.findSuspendableLocations(range, restrictToFunction, ds, context.getEnv());
         JSONObject json = new JSONObject();
         JSONArray arr = new JSONArray();
-        for (SourceSection ss : locations) {
-            arr.put(new Location(scriptId, ss.getStartLine(), ss.getStartColumn()).toJSON());
+        Source source = script.getSourceLoaded();
+        if (source.hasCharacters() && source.getLength() > 0) {
+            int lc = source.getLineCount();
+            int l1 = start.getLine();
+            int c1 = start.getColumn();
+            if (c1 <= 0) {
+                c1 = 1;
+            }
+            if (l1 > lc) {
+                l1 = lc;
+                c1 = source.getLineLength(l1);
+            }
+            int l2;
+            int c2;
+            if (end != null) {
+                l2 = end.getLine();
+                c2 = end.getColumn();
+                // The end should be exclusive, but not all clients adhere to that.
+                if (l1 != l2 || c1 != c2) {
+                    // Only when start != end consider end as exclusive:
+                    if (l2 > lc) {
+                        l2 = lc;
+                        c2 = source.getLineLength(l2);
+                    } else {
+                        if (c2 <= 1) {
+                            l2 = l2 - 1;
+                            if (l2 <= 0) {
+                                l2 = 1;
+                            }
+                            c2 = source.getLineLength(l2);
+                        } else {
+                            c2 = c2 - 1;
+                        }
+                    }
+                    if (l1 > l2) {
+                        l1 = l2;
+                    }
+                }
+            } else {
+                l2 = l1;
+                c2 = source.getLineLength(l2);
+            }
+            if (c2 == 0) {
+                c2 = 1; // 1-based column on zero-length line
+            }
+            if (l1 == l2 && c2 < c1) {
+                c1 = c2;
+            }
+            SourceSection range = source.createSection(l1, c1, l2, c2);
+            Iterable<SourceSection> locations = SuspendableLocationFinder.findSuspendableLocations(range, restrictToFunction, debuggerSession, context.getEnv());
+            for (SourceSection ss : locations) {
+                arr.put(new Location(scriptId, ss.getStartLine(), ss.getStartColumn()).toJSON());
+            }
         }
         json.put("locations", arr);
         return new Params(json);
@@ -242,25 +317,30 @@ public final class InspectorDebugger extends DebuggerDomain {
         if (scriptId == null) {
             throw new CommandProcessException("A scriptId required.");
         }
+        CharSequence characters = getScript(scriptId).getCharacters();
+        JSONObject json = new JSONObject();
+        json.put("scriptSource", characters.toString());
+        return new Params(json);
+    }
+
+    private Script getScript(String scriptId) throws CommandProcessException {
         Script script;
         try {
-            script = slh.getScript(Integer.parseInt(scriptId));
+            script = scriptsHandler.getScript(Integer.parseInt(scriptId));
             if (script == null) {
                 throw new CommandProcessException("Unknown scriptId: " + scriptId);
             }
         } catch (NumberFormatException nfe) {
             throw new CommandProcessException(nfe.getMessage());
         }
-        JSONObject json = new JSONObject();
-        json.put("scriptSource", script.getSource().getCharacters());
-        return new Params(json);
+        return script;
     }
 
     @Override
     public void pause() {
         DebuggerSuspendedInfo susp = suspendedInfo;
         if (susp == null) {
-            ds.suspendNextExecution();
+            debuggerSession.suspendNextExecution();
         }
     }
 
@@ -317,13 +397,28 @@ public final class InspectorDebugger extends DebuggerDomain {
     }
 
     private CallFrame[] createCallFrames(Iterable<DebugStackFrame> frames, SuspendAnchor topAnchor, DebugValue returnValue) {
+        return createCallFrames(frames, topAnchor, returnValue, null);
+    }
+
+    CallFrame[] refreshCallFrames(Iterable<DebugStackFrame> frames, SuspendAnchor topAnchor, CallFrame[] oldFrames) {
+        DebugValue returnValue = null;
+        if (oldFrames.length > 0 && oldFrames[0].getReturnValue() != null) {
+            returnValue = oldFrames[0].getReturnValue().getDebugValue();
+        }
+        return createCallFrames(frames, topAnchor, returnValue, oldFrames);
+    }
+
+    private CallFrame[] createCallFrames(Iterable<DebugStackFrame> frames, SuspendAnchor topAnchor, DebugValue returnValue, CallFrame[] oldFrames) {
         List<CallFrame> cfs = new ArrayList<>();
         int depth = 0;
         int depthAll = -1;
+        if (scriptsHandler == null || debuggerSession == null) {
+            return new CallFrame[0];
+        }
         for (DebugStackFrame frame : frames) {
             depthAll++;
             SourceSection sourceSection = frame.getSourceSection();
-            if (sourceSection == null) {
+            if (sourceSection == null || !sourceSection.isAvailable()) {
                 continue;
             }
             if (!context.isInspectInternal() && frame.isInternal()) {
@@ -334,11 +429,11 @@ public final class InspectorDebugger extends DebuggerDomain {
                 // should not be, double-check
                 continue;
             }
-            int scriptId = slh.assureLoaded(source);
+            int scriptId = scriptsHandler.assureLoaded(source);
             if (scriptId < 0) {
                 continue;
             }
-            Script script = slh.getScript(scriptId);
+            Script script = scriptsHandler.getScript(scriptId);
             List<Scope> scopes = new ArrayList<>();
             DebugScope dscope;
             try {
@@ -357,6 +452,16 @@ public final class InspectorDebugger extends DebuggerDomain {
             if (dscope == null) {
                 functionSourceSection = sourceSection;
             }
+            Scope[] oldScopes;
+            if (oldFrames != null && oldFrames.length > depth) {
+                oldScopes = oldFrames[depth].getScopeChain();
+            } else {
+                oldScopes = null;
+            }
+            List<DebugValue> receivers = new ArrayList<>();
+            int thisIndex = -1;  // index of "this" receiver in `receivers` array
+            int scopeIndex = 0;  // index of language implementation scope
+            TriState isJS = TriState.UNDEFINED;
             while (dscope != null) {
                 if (wasFunction) {
                     scopeType = "closure";
@@ -365,14 +470,35 @@ public final class InspectorDebugger extends DebuggerDomain {
                     functionSourceSection = dscope.getSourceSection();
                     wasFunction = true;
                 }
-                if (dscope.isFunctionScope() || dscope.getDeclaredValues().iterator().hasNext()) {
-                    // provide only scopes that have some variables
-                    scopes.add(createScope(scopeType, dscope));
+                boolean scopeAdded = addScope(scopes, dscope, scopeType, scopeIndex, oldScopes);
+                if (scopeAdded) {
+                    DebugValue receiver = dscope.getReceiver();
+                    receivers.add(receiver);
+                    if (receiver != null) {
+                        if (thisIndex == -1 && "this".equals(receiver.getName())) {
+                            // There is one receiver named "this".
+                            thisIndex = scopes.size() - 1;
+                        } else {
+                            // There are multiple receivers, or the receiver is not named as "this"
+                            // Unless we're in JavaScript, we'll not provide frame's "this",
+                            // we'll add the receiver(s) to scope variables instead.
+                            if (TriState.UNDEFINED == isJS) {
+                                isJS = TriState.valueOf(LanguageChecks.isJS(receiver.getOriginalLanguage()));
+                            }
+                            // JavaScript needs to provide frame's "this",
+                            // therefore we need to keep the index for JS.
+                            if (TriState.FALSE == isJS) {
+                                thisIndex = -2;
+                            }
+                        }
+
+                    }
                 }
                 dscope = getParent(dscope);
+                scopeIndex++;
             }
             try {
-                dscope = ds.getTopScope(source.getLanguage());
+                dscope = debuggerSession.getTopScope(source.getLanguage());
             } catch (DebugException ex) {
                 PrintWriter err = context.getErr();
                 if (err != null) {
@@ -381,28 +507,64 @@ public final class InspectorDebugger extends DebuggerDomain {
                 }
             }
             while (dscope != null) {
-                if (dscope.getDeclaredValues().iterator().hasNext()) {
-                    // provide only scopes that have some variables
-                    scopes.add(createScope("global", dscope));
-                }
+                addScope(scopes, dscope, "global", scopeIndex, oldScopes);
                 dscope = getParent(dscope);
+                scopeIndex++;
             }
             RemoteObject returnObj = null;
             if (depthAll == 0 && returnValue != null) {
                 returnObj = context.getRemoteObjectsHandler().getRemote(returnValue);
             }
+            RemoteObject thisObj;
+            if (thisIndex < -1) {
+                for (int i = 0; i < receivers.size(); i++) {
+                    DebugValue receiver = receivers.get(i);
+                    if (receiver != null) {
+                        scopes.get(i).getObject().setScopeReceiver(receiver);
+                    }
+                }
+                thisObj = null;
+            } else if (thisIndex == -1) {
+                // no added scope, no receiver
+                thisObj = null;
+            } else {
+                thisObj = context.getRemoteObjectsHandler().getRemote(receivers.get(thisIndex));
+            }
             SuspendAnchor anchor = (depthAll == 0) ? topAnchor : SuspendAnchor.BEFORE;
             CallFrame cf = new CallFrame(frame, depth++, script, sourceSection, anchor, functionSourceSection,
-                            null, returnObj, scopes.toArray(new Scope[scopes.size()]));
+                            thisObj, returnObj, scopes.toArray(new Scope[scopes.size()]));
             cfs.add(cf);
         }
         return cfs.toArray(new CallFrame[cfs.size()]);
     }
 
-    private Scope createScope(String scopeType, DebugScope dscope) {
-        RemoteObject scopeVars = new RemoteObject(dscope);
+    private boolean addScope(List<Scope> scopes, DebugScope dscope, String scopeType, int scopeIndex, Scope[] oldScopes) {
+        if (dscope.isFunctionScope() || dscope.getDeclaredValues().iterator().hasNext()) {
+            // provide only scopes that have some variables
+            String lastId = getLastScopeId(oldScopes, scopeIndex);
+            // Create the new scope with the ID of the old one to refresh the content
+            scopes.add(createScope(scopeType, dscope, scopeIndex, lastId));
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private static String getLastScopeId(Scope[] oldScopes, int scopeIndex) {
+        if (oldScopes != null) {
+            for (Scope scope : oldScopes) {
+                if (scope.getInternalIndex() == scopeIndex) {
+                    return scope.getObject().getId();
+                }
+            }
+        }
+        return null;
+    }
+
+    private Scope createScope(String scopeType, DebugScope dscope, int index, String lastId) {
+        RemoteObject scopeVars = new RemoteObject(dscope, lastId);
         context.getRemoteObjectsHandler().register(scopeVars);
-        return new Scope(scopeType, scopeVars, dscope.getName(), null, null);
+        return new Scope(scopeType, scopeVars, dscope.getName(), null, null, index);
     }
 
     private DebugScope getParent(DebugScope dscope) {
@@ -421,11 +583,28 @@ public final class InspectorDebugger extends DebuggerDomain {
     }
 
     @Override
+    public Params searchInContent(String scriptId, String query, boolean caseSensitive, boolean isRegex) throws CommandProcessException {
+        if (scriptId.isEmpty() || query.isEmpty()) {
+            throw new CommandProcessException("Must specify both scriptId and query.");
+        }
+        Source source = getScript(scriptId).getSource();
+        JSONArray matchLines;
+        try {
+            matchLines = LineSearch.matchLines(source, query, caseSensitive, isRegex);
+        } catch (PatternSyntaxException ex) {
+            throw new CommandProcessException(ex.getDescription());
+        }
+        JSONObject match = new JSONObject();
+        match.put("properties", matchLines);
+        return new Params(match);
+    }
+
+    @Override
     public void setBreakpointsActive(Optional<Boolean> active) throws CommandProcessException {
         if (!active.isPresent()) {
             throw new CommandProcessException("Must specify active argument.");
         }
-        ds.setBreakpointsActive(Breakpoint.Kind.SOURCE_LOCATION, active.get());
+        debuggerSession.setBreakpointsActive(Breakpoint.Kind.SOURCE_LOCATION, active.get());
     }
 
     @Override
@@ -435,7 +614,7 @@ public final class InspectorDebugger extends DebuggerDomain {
         }
         boolean active = !skip.get();
         for (Breakpoint.Kind kind : Breakpoint.Kind.values()) {
-            ds.setBreakpointsActive(kind, active);
+            debuggerSession.setBreakpointsActive(kind, active);
         }
     }
 
@@ -448,9 +627,9 @@ public final class InspectorDebugger extends DebuggerDomain {
             throw new CommandProcessException("Must specify line number.");
         }
         if (!url.isEmpty()) {
-            return bph.createURLBreakpoint(url, line, column, condition);
+            return breakpointsHandler.createURLBreakpoint(url, line, column, condition);
         } else {
-            return bph.createURLBreakpoint(Pattern.compile(urlRegex), line, column, condition);
+            return breakpointsHandler.createURLBreakpoint(Pattern.compile(urlRegex), line, column, condition);
         }
     }
 
@@ -459,12 +638,40 @@ public final class InspectorDebugger extends DebuggerDomain {
         if (location == null) {
             throw new CommandProcessException("Must specify location.");
         }
-        return bph.createBreakpoint(location, condition);
+        return breakpointsHandler.createBreakpoint(location, condition);
+    }
+
+    @Override
+    public Params setBreakpointOnFunctionCall(String functionObjectId, String condition) throws CommandProcessException {
+        if (functionObjectId == null) {
+            throw new CommandProcessException("Must specify function object ID.");
+        }
+        RemoteObject functionObject = context.getRemoteObjectsHandler().getRemote(functionObjectId);
+        if (functionObject != null) {
+            DebugValue functionValue = functionObject.getDebugValue();
+            try {
+                return context.executeInSuspendThread(new SuspendThreadExecutable<Params>() {
+                    @Override
+                    public Params executeCommand() throws CommandProcessException {
+                        return breakpointsHandler.createFunctionBreakpoint(functionValue, condition);
+                    }
+
+                    @Override
+                    public Params processException(DebugException dex) {
+                        return new Params(new JSONObject());
+                    }
+                });
+            } catch (NoSuspendedThreadException e) {
+                return new Params(new JSONObject());
+            }
+        } else {
+            throw new CommandProcessException("Function with object ID " + functionObjectId + " does not exist.");
+        }
     }
 
     @Override
     public void removeBreakpoint(String id) throws CommandProcessException {
-        if (!bph.removeBreakpoint(id)) {
+        if (!breakpointsHandler.removeBreakpoint(id)) {
             throw new CommandProcessException("No breakpoint with id '" + id + "'");
         }
     }
@@ -474,7 +681,7 @@ public final class InspectorDebugger extends DebuggerDomain {
         if (location == null) {
             throw new CommandProcessException("Must specify location.");
         }
-        bph.createOneShotBreakpoint(location);
+        breakpointsHandler.createOneShotBreakpoint(location);
         resume(postProcessor);
     }
 
@@ -483,13 +690,13 @@ public final class InspectorDebugger extends DebuggerDomain {
     }
 
     @Override
-    public Params evaluateOnCallFrame(String callFrameId, String expression, String objectGroup,
+    public Params evaluateOnCallFrame(String callFrameId, String expressionOrig, String objectGroup,
                     boolean includeCommandLineAPI, boolean silent, boolean returnByValue,
                     boolean generatePreview, boolean throwOnSideEffect) throws CommandProcessException {
         if (callFrameId == null) {
             throw new CommandProcessException("A callFrameId required.");
         }
-        if (expression == null) {
+        if (expressionOrig == null) {
             throw new CommandProcessException("An expression required.");
         }
         int frameId;
@@ -497,6 +704,18 @@ public final class InspectorDebugger extends DebuggerDomain {
             frameId = Integer.parseInt(callFrameId);
         } catch (NumberFormatException ex) {
             throw new CommandProcessException(ex.getLocalizedMessage());
+        }
+        ConsoleUtilitiesAPI cuAPI;
+        if (includeCommandLineAPI) {
+            cuAPI = ConsoleUtilitiesAPI.parse(expressionOrig);
+        } else {
+            cuAPI = null;
+        }
+        final String expression;
+        if (cuAPI != null) {
+            expression = cuAPI.getExpression();
+        } else {
+            expression = expressionOrig;
         }
         JSONObject jsonResult;
         try {
@@ -508,25 +727,39 @@ public final class InspectorDebugger extends DebuggerDomain {
                     }
                     CallFrame cf = suspendedInfo.getCallFrames()[frameId];
                     JSONObject json = new JSONObject();
-                    LanguageInfo languageInfo = cf.getFrame().getLanguage();
-                    DebugValue value = null;
-                    if (languageInfo == null || !languageInfo.isInteractive()) {
-                        value = getVarValue(expression, cf);
-                        if (value == null) {
+                    if (runSpecialFunctions(expression, cf, generatePreview, json)) {
+                        return json;
+                    }
+                    DebugValue value = getVarValue(expression, cf);
+                    if (value == null) {
+                        try {
+                            value = cf.getFrame().eval(expression);
+                            suspendedInfo.refreshFrames();
+                        } catch (IllegalStateException ex) {
+                            // Not an interactive language
+                        }
+                    }
+                    if (value == null) {
+                        LanguageInfo languageInfo = cf.getFrame().getLanguage();
+                        if (languageInfo == null || !languageInfo.isInteractive()) {
                             String errorMessage = getEvalNonInteractiveMessage();
                             ExceptionDetails exceptionDetails = new ExceptionDetails(errorMessage);
-                            json.put("exceptionDetails", exceptionDetails.createJSON(context));
+                            json.put("exceptionDetails", exceptionDetails.createJSON(context, generatePreview));
                             JSONObject err = new JSONObject();
                             err.putOpt("value", errorMessage);
                             err.putOpt("type", "string");
                             json.put("result", err);
                         }
-                    } else {
-                        value = cf.getFrame().eval(expression);
                     }
                     if (value != null) {
-                        RemoteObject ro = new RemoteObject(value, context.getErr());
-                        context.getRemoteObjectsHandler().register(ro);
+                        if (cuAPI != null) {
+                            value = cuAPI.process(value, breakpointsHandler);
+                            if (value == null) {
+                                return json;
+                            }
+                        }
+                        RemoteObject ro = new RemoteObject(value, generatePreview, context);
+                        context.getRemoteObjectsHandler().register(ro, objectGroup);
                         json.put("result", ro.toJSON());
                     }
                     return json;
@@ -535,10 +768,10 @@ public final class InspectorDebugger extends DebuggerDomain {
                 @Override
                 public JSONObject processException(DebugException dex) {
                     JSONObject json = new JSONObject();
-                    InspectorRuntime.fillExceptionDetails(json, dex, context);
+                    InspectorRuntime.fillExceptionDetails(json, dex, context, generatePreview);
                     DebugValue exceptionObject = dex.getExceptionObject();
                     if (exceptionObject != null) {
-                        RemoteObject ro = context.createAndRegister(exceptionObject);
+                        RemoteObject ro = context.createAndRegister(exceptionObject, generatePreview);
                         json.put("result", ro.toJSON());
                     } else {
                         JSONObject err = new JSONObject();
@@ -558,6 +791,28 @@ public final class InspectorDebugger extends DebuggerDomain {
         return new Params(jsonResult);
     }
 
+    private boolean runSpecialFunctions(String expression, CallFrame cf, boolean generatePreview, JSONObject json) {
+        // Test whether code-completion on an object was requested:
+        Matcher completionMatcher = FUNCTION_COMPLETION_PATTERN.matcher(expression);
+        if (completionMatcher.matches()) {
+            String objectOfCompletion = completionMatcher.group("object");
+            DebugValue value = getVarValue(objectOfCompletion, cf);
+            if (value == null) {
+                try {
+                    value = cf.getFrame().eval(objectOfCompletion);
+                } catch (IllegalStateException ex) {
+                    // Not an interactive language
+                }
+            }
+            if (value != null) {
+                JSONObject result = InspectorRuntime.createCodecompletion(value, null, generatePreview, context, false);
+                json.put("result", result);
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Get value of variable "name", if any. */
     static DebugValue getVarValue(String name, CallFrame cf) {
         for (Scope scope : cf.getScopeChain()) {
@@ -565,6 +820,10 @@ public final class InspectorDebugger extends DebuggerDomain {
             DebugValue var = debugScope.getDeclaredValue(name);
             if (var != null) {
                 return var;
+            }
+            DebugValue receiver = debugScope.getReceiver();
+            if (receiver != null && name.equals(receiver.getName())) {
+                return receiver;
             }
         }
         return null;
@@ -637,10 +896,19 @@ public final class InspectorDebugger extends DebuggerDomain {
                         DebugScope debugScope = scope.getObject().getScope();
                         DebugValue debugValue = debugScope.getDeclaredValue(variableName);
                         Pair<DebugValue, Object> evaluatedValue = susp.lastEvaluatedValue.getAndSet(null);
-                        if (evaluatedValue != null && Objects.equals(evaluatedValue.getRight(), newValue.getPrimitiveValue())) {
-                            debugValue.set(evaluatedValue.getLeft());
-                        } else {
-                            context.setValue(debugValue, newValue);
+                        try {
+                            if (evaluatedValue != null && Objects.equals(evaluatedValue.getRight(), newValue.getPrimitiveValue())) {
+                                debugValue.set(evaluatedValue.getLeft());
+                            } else {
+                                context.setValue(debugValue, newValue);
+                            }
+                        } catch (DebugException ex) {
+                            PrintWriter err = context.getErr();
+                            if (err != null) {
+                                err.println("set of " + debugValue.getName() + " has caused " + ex);
+                                ex.printStackTrace(err);
+                            }
+                            throw ex;
                         }
                     }
                     return null;
@@ -685,8 +953,8 @@ public final class InspectorDebugger extends DebuggerDomain {
         }
     }
 
-    public static boolean sourceMatchesBlackboxPatterns(Source source, Pattern[] patterns) {
-        String uri = ScriptsHandler.getNiceStringFromURI(source.getURI());
+    public boolean sourceMatchesBlackboxPatterns(Source source, Pattern[] patterns) {
+        String uri = scriptsHandler.getSourceURL(source);
         for (Pattern pattern : patterns) {
             // Check whether pattern corresponds to:
             // 1) the name of a file
@@ -721,32 +989,42 @@ public final class InspectorDebugger extends DebuggerDomain {
             jsonParams.put("startLine", 0);
             jsonParams.put("startColumn", 0);
             Source source = script.getSource();
-            int lastLine = source.getLineCount() - 1;
+            int lastLine;
             int lastColumn;
-            if (lastLine < 0) {
-                lastLine = 0;
-                lastColumn = 0;
-            } else {
-                lastColumn = source.getLineLength(lastLine + 1);
-                int srcMapLine = lastLine + 1;
-                CharSequence line;
-                do {
-                    line = source.getCharacters(srcMapLine);
-                    srcMapLine--;
-                    // Node.js wraps source into a function, skip empty lines and end of a function.
-                } while (srcMapLine > 0 && (line.length() == 0 || "});".equals(line)));
-                CharSequence sourceMapURL = (srcMapLine > 0) ? getSourceMapURL(source, srcMapLine) : null;
-                if (sourceMapURL != null) {
-                    jsonParams.put("sourceMapURL", sourceMapURL);
-                    lastLine = srcMapLine - 1;
+            int length;
+            if (source.hasCharacters()) {
+                lastLine = source.getLineCount() - 1;
+                if (lastLine < 0) {
+                    lastLine = 0;
+                    lastColumn = 0;
+                } else {
                     lastColumn = source.getLineLength(lastLine + 1);
+                    int srcMapLine = lastLine + 1;
+                    CharSequence line;
+                    do {
+                        line = source.getCharacters(srcMapLine);
+                        srcMapLine--;
+                        // Node.js wraps source into a function,
+                        // skip empty lines and end of a function.
+                    } while (srcMapLine > 0 && (line.length() == 0 || "});".equals(line)));
+                    CharSequence sourceMapURL = (srcMapLine > 0) ? getSourceMapURL(source, srcMapLine) : null;
+                    if (sourceMapURL != null) {
+                        jsonParams.put("sourceMapURL", sourceMapURL);
+                        lastLine = srcMapLine - 1;
+                        lastColumn = source.getLineLength(lastLine + 1);
+                    }
                 }
+                length = source.getLength();
+            } else {
+                lastLine = 3;
+                lastColumn = 0;
+                length = script.getCharacters().length();
             }
             jsonParams.put("endLine", lastLine);
             jsonParams.put("endColumn", lastColumn);
             jsonParams.put("executionContextId", context.getId());
             jsonParams.put("hash", script.getHash());
-            jsonParams.put("length", source.getLength());
+            jsonParams.put("length", length);
             Params params = new Params(jsonParams);
             Event scriptParsed = new Event("Debugger.scriptParsed", params);
             eventHandler.event(scriptParsed);
@@ -788,11 +1066,6 @@ public final class InspectorDebugger extends DebuggerDomain {
 
         @Override
         public void onSuspend(SuspendedEvent se) {
-            if (!se.hasSourceElement(SourceElement.STATEMENT) && se.getSuspendAnchor() == SuspendAnchor.BEFORE) {
-                // Suspend requested and we're at the begining of a ROOT.
-                ds.suspendNextExecution();
-                return;
-            }
             try {
                 context.waitForRunPermission();
             } catch (InterruptedException ex) {
@@ -801,54 +1074,71 @@ public final class InspectorDebugger extends DebuggerDomain {
             lock();
             onSuspendPhaser.register();
             try {
-                synchronized (suspendLock) {
-                    running = false;
-                }
-                if (ds == null) {
-                    // Debugger has been disabled while waiting on locks
-                    return;
-                }
-                if (!runningUnwind) {
-                    slh.assureLoaded(ss.getSource());
-                    context.setLastLanguage(ss.getSource().getLanguage(), ss.getSource().getMimeType());
-                } else {
-                    runningUnwind = false;
-                }
-                JSONObject jsonParams = new JSONObject();
-                DebugValue returnValue = se.getReturnValue();
-                if (!se.hasSourceElement(SourceElement.ROOT)) {
-                    // It is misleading to see return values on call exit,
-                    // when we show it at function exit
-                    returnValue = null;
-                }
-                CallFrame[] callFrames = createCallFrames(se.getStackFrames(), se.getSuspendAnchor(), returnValue);
-                suspendedInfo = new DebuggerSuspendedInfo(se, callFrames);
-                context.setSuspendedInfo(suspendedInfo);
                 Event paused;
-                if (commandLazyResponse != null) {
-                    paused = commandLazyResponse.getResponse(suspendedInfo);
-                    commandLazyResponse = null;
-                } else {
-                    jsonParams.put("callFrames", getFramesParam(callFrames));
-                    List<Breakpoint> breakpoints = se.getBreakpoints();
-                    JSONArray bpArr = new JSONArray();
-                    Set<Breakpoint.Kind> kinds = new HashSet<>(1);
-                    for (Breakpoint bp : breakpoints) {
-                        String id = bph.getId(bp);
-                        if (id != null) {
-                            bpArr.put(id);
+                Lock lock = domainLock.readLock();
+                lock.lock();
+                try {
+                    if (debuggerSession == null) {
+                        // Debugger has been disabled while waiting on locks
+                        return;
+                    }
+                    DebugValue returnValue = se.getReturnValue();
+                    if (se.hasSourceElement(SourceElement.ROOT) && se.getBreakpoints().isEmpty()) {
+                        if ((!se.hasSourceElement(SourceElement.STATEMENT) && se.getSuspendAnchor() == SuspendAnchor.BEFORE) ||
+                                        (se.getSuspendAnchor() == SuspendAnchor.AFTER && returnValue == null)) {
+                            // We're at the begining of a `RootTag` node, or
+                            // we're at the end of `RootTag` node and have no return value.
+                            // Do not suspend in this case, not to cause distrations.
+                            se.prepareStepInto(STEP_CONFIG);
+                            return;
                         }
-                        kinds.add(bp.getKind());
                     }
-                    jsonParams.put("reason", getHaltReason(kinds));
-                    JSONObject data = getHaltData(se);
-                    if (data != null) {
-                        jsonParams.put("data", data);
+                    synchronized (suspendLock) {
+                        running = false;
                     }
-                    jsonParams.put("hitBreakpoints", bpArr);
+                    if (!runningUnwind) {
+                        scriptsHandler.assureLoaded(ss.getSource());
+                        context.setLastLanguage(ss.getSource().getLanguage(), ss.getSource().getMimeType());
+                    } else {
+                        runningUnwind = false;
+                    }
+                    JSONObject jsonParams = new JSONObject();
+                    if (!se.hasSourceElement(SourceElement.ROOT)) {
+                        // It is misleading to see return values on call exit,
+                        // when we show it at function exit
+                        returnValue = null;
+                    }
+                    CallFrame[] callFrames = createCallFrames(se.getStackFrames(), se.getSuspendAnchor(), returnValue);
+                    suspendedInfo = new DebuggerSuspendedInfo(InspectorDebugger.this, se, callFrames);
+                    context.setSuspendedInfo(suspendedInfo);
+                    if (commandLazyResponse != null) {
+                        paused = commandLazyResponse.getResponse(suspendedInfo);
+                        commandLazyResponse = null;
+                    } else {
+                        jsonParams.put("callFrames", getFramesParam(callFrames));
+                        jsonParams.putOpt("asyncStackTrace", findAsyncStackTrace(se.getAsynchronousStacks()));
+                        List<Breakpoint> breakpoints = se.getBreakpoints();
+                        JSONArray bpArr = new JSONArray();
+                        Set<Breakpoint.Kind> kinds = new HashSet<>(1);
+                        for (Breakpoint bp : breakpoints) {
+                            String id = breakpointsHandler.getId(bp);
+                            if (id != null) {
+                                bpArr.put(id);
+                            }
+                            kinds.add(bp.getKind());
+                        }
+                        jsonParams.put("reason", getHaltReason(kinds));
+                        JSONObject data = getHaltData(se);
+                        if (data != null) {
+                            jsonParams.put("data", data);
+                        }
+                        jsonParams.put("hitBreakpoints", bpArr);
 
-                    Params params = new Params(jsonParams);
-                    paused = new Event("Debugger.paused", params);
+                        Params params = new Params(jsonParams);
+                        paused = new Event("Debugger.paused", params);
+                    }
+                } finally {
+                    lock.unlock();
                 }
                 eventHandler.event(paused);
                 List<CancellableRunnable> executables;
@@ -856,9 +1146,13 @@ public final class InspectorDebugger extends DebuggerDomain {
                     executables = null;
                     synchronized (suspendLock) {
                         if (!running && suspendThreadExecutables.isEmpty()) {
-                            try {
-                                suspendLock.wait();
-                            } catch (InterruptedException ex) {
+                            if (context.isSynchronous()) {
+                                running = true;
+                            } else {
+                                try {
+                                    suspendLock.wait();
+                                } catch (InterruptedException ex) {
+                                }
                             }
                         }
                         if (!suspendThreadExecutables.isEmpty()) {
@@ -893,7 +1187,7 @@ public final class InspectorDebugger extends DebuggerDomain {
                     silentResume = false;
                 }
             } finally {
-                onSuspendPhaser.arrive();
+                onSuspendPhaser.arriveAndDeregister();
                 if (delayUnlock.getAndSet(false)) {
                     future.set(scheduler.schedule(() -> {
                         unlock();
@@ -950,7 +1244,7 @@ public final class InspectorDebugger extends DebuggerDomain {
             DebugValue exceptionObject = exception.getExceptionObject();
             JSONObject data;
             if (exceptionObject != null) {
-                RemoteObject remoteObject = context.createAndRegister(exceptionObject);
+                RemoteObject remoteObject = context.createAndRegister(exceptionObject, false);
                 data = remoteObject.toJSON();
             } else {
                 data = new JSONObject();
@@ -959,22 +1253,35 @@ public final class InspectorDebugger extends DebuggerDomain {
             return data;
         }
 
-        private class SchedulerThreadFactory implements ThreadFactory {
-
-            private final ThreadGroup group;
-
-            SchedulerThreadFactory() {
-                SecurityManager s = System.getSecurityManager();
-                this.group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
+        private void dispose() {
+            unlock();
+            ScheduledFuture<?> sf = future.getAndSet(null);
+            if (sf != null) {
+                sf.cancel(true);
             }
-
-            @Override
-            public Thread newThread(Runnable r) {
-                Thread t = new Thread(group, r, "Suspend Unlocking Scheduler");
-                t.setDaemon(true);
-                t.setPriority(Thread.NORM_PRIORITY);
-                return t;
+            scheduler.shutdown();
+            try {
+                scheduler.awaitTermination(30, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
             }
+        }
+    }
+
+    private static class SchedulerThreadFactory implements ThreadFactory {
+
+        private final ThreadGroup group;
+
+        SchedulerThreadFactory() {
+            SecurityManager s = System.getSecurityManager();
+            this.group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
+        }
+
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = new Thread(group, r, "Suspend Unlocking Scheduler");
+            t.setDaemon(true);
+            t.setPriority(Thread.NORM_PRIORITY);
+            return t;
         }
     }
 
@@ -984,6 +1291,14 @@ public final class InspectorDebugger extends DebuggerDomain {
             array.put(cf.toJSON());
         }
         return array;
+    }
+
+    private JSONObject findAsyncStackTrace(List<List<DebugStackTraceElement>> asyncStacks) {
+        if (asyncStacks.isEmpty()) {
+            return null;
+        }
+        StackTrace stackTrace = new StackTrace(context, asyncStacks);
+        return stackTrace.toJSON();
     }
 
     private interface CommandLazyResponse {
