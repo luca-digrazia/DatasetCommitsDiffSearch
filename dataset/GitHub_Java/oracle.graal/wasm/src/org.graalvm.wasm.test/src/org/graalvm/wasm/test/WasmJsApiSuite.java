@@ -56,7 +56,6 @@ import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.ByteSequence;
 import org.graalvm.wasm.WasmContext;
-import org.graalvm.wasm.api.ByteArrayBuffer;
 import org.graalvm.wasm.api.Dictionary;
 import org.graalvm.wasm.api.Executable;
 import org.graalvm.wasm.api.Global;
@@ -67,7 +66,6 @@ import org.graalvm.wasm.api.MemoryDescriptor;
 import org.graalvm.wasm.api.Module;
 import org.graalvm.wasm.api.ModuleExportDescriptor;
 import org.graalvm.wasm.api.ProxyGlobal;
-import org.graalvm.wasm.api.Sequence;
 import org.graalvm.wasm.api.Table;
 import org.graalvm.wasm.api.TableDescriptor;
 import org.graalvm.wasm.api.TableKind;
@@ -292,60 +290,6 @@ public class WasmJsApiSuite {
         });
     }
 
-    @Test
-    public void testExportOrder() throws IOException {
-        runTest(context -> {
-            final WebAssembly wasm = new WebAssembly(context);
-            final WebAssemblyInstantiatedSource instantiatedSource = wasm.instantiate(binaryWithMixedExports, null);
-            final Instance instance = instantiatedSource.instance();
-            final Dictionary exports = instance.exports();
-            final Object members = exports.getMembers(false);
-            String[] expected = new String[]{"f1", "g1", "t", "m", "g2", "f2"};
-            try {
-                final InteropLibrary lib = InteropLibrary.getUncached();
-                for (int i = 0; i < lib.getArraySize(members); i++) {
-                    final Object member = lib.readArrayElement(members, i);
-                    Assert.assertEquals("Member " + i + " should correspond to the expected export.", expected[i], lib.asString(member));
-                }
-            } catch (UnsupportedMessageException e) {
-                throw new RuntimeException(e);
-            } catch (InvalidArrayIndexException e) {
-                throw new RuntimeException(e);
-            }
-        });
-
-    }
-
-    @Test
-    public void testCustomSections() throws IOException {
-        runTest(context -> {
-            final WebAssembly wasm = new WebAssembly(context);
-            final Module module = wasm.compile(binaryWithCustomSections);
-            try {
-                checkCustomSections(new byte[][]{}, module.customSections(""));
-                checkCustomSections(new byte[][]{}, module.customSections("zero"));
-                checkCustomSections(new byte[][]{{1, 3, 5}}, module.customSections("odd"));
-                checkCustomSections(new byte[][]{{2, 4}, {6}}, module.customSections("even"));
-            } catch (InvalidArrayIndexException ex) {
-                throw new RuntimeException(ex);
-            }
-        });
-    }
-
-    private static void checkCustomSections(byte[][] expected, Sequence<ByteArrayBuffer> actual) throws InvalidArrayIndexException {
-        Assert.assertEquals("Custom section count", expected.length, (int) actual.getArraySize());
-        for (int i = 0; i < expected.length; i++) {
-            checkCustomSection(expected[i], (ByteArrayBuffer) actual.readArrayElement(i));
-        }
-    }
-
-    private static void checkCustomSection(byte[] expected, ByteArrayBuffer actual) throws InvalidArrayIndexException {
-        Assert.assertEquals("Custom section length", expected.length, (int) actual.getArraySize());
-        for (int i = 0; i < expected.length; i++) {
-            Assert.assertEquals("Custom section data", expected[i], actual.readArrayElement(i));
-        }
-    }
-
     private static void runTest(Consumer<WasmContext> testCase) throws IOException {
         final Context.Builder contextBuilder = Context.newBuilder("wasm");
         contextBuilder.option("wasm.Builtins", "testutil:testutil");
@@ -553,30 +497,4 @@ public class WasmJsApiSuite {
                     (byte) 0x00, (byte) 0x00, (byte) 0x0a, (byte) 0x06, (byte) 0x01, (byte) 0x04, (byte) 0x00, (byte) 0x41, (byte) 0x2a, (byte) 0x0b
     };
 
-    // Module with 3 custom sections: "even" (with data 2, 4),
-    // "odd" (with data 1, 3, 5) and "even" (with data 6)
-    private static final byte[] binaryWithCustomSections = new byte[]{
-                    (byte) 0x00, (byte) 0x61, (byte) 0x73, (byte) 0x6d, (byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x07, (byte) 0x04, (byte) 0x65, (byte) 0x76,
-                    (byte) 0x65, (byte) 0x6e, (byte) 0x02, (byte) 0x04, (byte) 0x00, (byte) 0x07, (byte) 0x03, (byte) 0x6f, (byte) 0x64, (byte) 0x64, (byte) 0x01, (byte) 0x03, (byte) 0x05,
-                    (byte) 0x00, (byte) 0x06, (byte) 0x04, (byte) 0x65, (byte) 0x76, (byte) 0x65, (byte) 0x6e, (byte) 0x06
-    };
-
-    // (module
-    // (func (export "f1"))
-    // (global (export "g1") i32 (i32.const 1))
-    // (table (export "t") 1 anyfunc)
-    // (memory (export "m") 1)
-    // (global (export "g2") f64 (f64.const 0))
-    // (func (export "f2"))
-    // )
-    private static final byte[] binaryWithMixedExports = new byte[]{
-                    (byte) 0x00, (byte) 0x61, (byte) 0x73, (byte) 0x6d, (byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, (byte) 0x04, (byte) 0x01, (byte) 0x60, (byte) 0x00,
-                    (byte) 0x00, (byte) 0x03, (byte) 0x03, (byte) 0x02, (byte) 0x00, (byte) 0x00, (byte) 0x04, (byte) 0x04, (byte) 0x01, (byte) 0x70, (byte) 0x00, (byte) 0x01, (byte) 0x05,
-                    (byte) 0x03, (byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x06, (byte) 0x12, (byte) 0x02, (byte) 0x7f, (byte) 0x00, (byte) 0x41, (byte) 0x01, (byte) 0x0b, (byte) 0x7c,
-                    (byte) 0x00, (byte) 0x44, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x0b, (byte) 0x07, (byte) 0x1d,
-                    (byte) 0x06, (byte) 0x02, (byte) 0x66, (byte) 0x31, (byte) 0x00, (byte) 0x00, (byte) 0x02, (byte) 0x67, (byte) 0x31, (byte) 0x03, (byte) 0x00, (byte) 0x01, (byte) 0x74,
-                    (byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x6d, (byte) 0x02, (byte) 0x00, (byte) 0x02, (byte) 0x67, (byte) 0x32, (byte) 0x03, (byte) 0x01, (byte) 0x02, (byte) 0x66,
-                    (byte) 0x32, (byte) 0x00, (byte) 0x01, (byte) 0x0a, (byte) 0x07, (byte) 0x02, (byte) 0x02, (byte) 0x00, (byte) 0x0b, (byte) 0x02, (byte) 0x00, (byte) 0x0b, (byte) 0x00,
-                    (byte) 0x0c, (byte) 0x04, (byte) 0x6e, (byte) 0x61, (byte) 0x6d, (byte) 0x65, (byte) 0x02, (byte) 0x05, (byte) 0x02, (byte) 0x00, (byte) 0x00, (byte) 0x01, (byte) 0x00,
-    };
 }
