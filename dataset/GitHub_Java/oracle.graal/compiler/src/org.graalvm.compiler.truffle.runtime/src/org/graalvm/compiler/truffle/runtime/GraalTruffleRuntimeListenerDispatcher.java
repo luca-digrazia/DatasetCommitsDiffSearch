@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
@@ -50,92 +49,93 @@ final class GraalTruffleRuntimeListenerDispatcher extends CopyOnWriteArrayList<G
 
     @Override
     public void onCompilationSplit(OptimizedDirectCallNode callNode) {
-        invokeListeners((l) -> l.onCompilationSplit(callNode));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationSplit(callNode);
+        }
     }
 
     @Override
     public void onCompilationSplitFailed(OptimizedDirectCallNode callNode, CharSequence reason) {
-        invokeListeners((l) -> l.onCompilationSplitFailed(callNode, reason));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationSplitFailed(callNode, reason);
+        }
     }
 
     @Override
     public void onCompilationQueued(OptimizedCallTarget target) {
-        invokeListeners((l) -> l.onCompilationQueued(target));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationQueued(target);
+        }
     }
 
     @Override
     public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
-        invokeListeners((l) -> l.onCompilationDequeued(target, source, reason));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationDequeued(target, source, reason);
+        }
     }
 
     @Override
     public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanent) {
-        invokeListeners((l) -> l.onCompilationFailed(target, reason, bailout, permanent));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationFailed(target, reason, bailout, permanent);
+        }
     }
 
     @Override
     public void onCompilationStarted(OptimizedCallTarget target) {
-        invokeListeners((l) -> l.onCompilationStarted(target));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationStarted(target);
+        }
     }
 
     @Override
     public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph) {
-        invokeListeners((l) -> l.onCompilationTruffleTierFinished(target, inliningDecision, graph));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationTruffleTierFinished(target, inliningDecision, graph);
+        }
     }
 
     @Override
     public void onCompilationGraalTierFinished(OptimizedCallTarget target, GraphInfo graph) {
-        invokeListeners((l) -> l.onCompilationGraalTierFinished(target, graph));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationGraalTierFinished(target, graph);
+        }
     }
 
     @Override
     public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
-        invokeListeners((l) -> l.onCompilationSuccess(target, inliningDecision, graph, result));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationSuccess(target, inliningDecision, graph, result);
+        }
     }
 
     @Override
     public void onCompilationInvalidated(OptimizedCallTarget target, Object source, CharSequence reason) {
-        invokeListeners((l) -> l.onCompilationInvalidated(target, source, reason));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationInvalidated(target, source, reason);
+        }
     }
 
     @Override
     public void onCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
-        invokeListeners((l) -> l.onCompilationDeoptimized(target, frame));
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onCompilationDeoptimized(target, frame);
+        }
     }
 
     @Override
     public void onShutdown() {
-        invokeListeners((l) -> l.onShutdown());
+        for (GraalTruffleRuntimeListener l : this) {
+            l.onShutdown();
+        }
     }
 
     @Override
     public void onEngineClosed(EngineData runtimeData) {
-        invokeListeners((l) -> l.onEngineClosed(runtimeData));
-    }
-
-    private void invokeListeners(Consumer<? super GraalTruffleRuntimeListener> action) {
-        Throwable exception = null;
         for (GraalTruffleRuntimeListener l : this) {
-            try {
-                action.accept(l);
-            } catch (ThreadDeath t) {
-                throw t;
-            } catch (Throwable t) {
-                if (exception == null) {
-                    exception = t;
-                } else {
-                    exception.addSuppressed(t);
-                }
-            }
+            l.onEngineClosed(runtimeData);
         }
-        if (exception != null) {
-            throw sthrow(RuntimeException.class, exception);
-        }
-    }
-
-    @SuppressWarnings({"unchecked", "unused"})
-    private static <E extends Throwable> RuntimeException sthrow(Class<E> type, Throwable ex) throws E {
-        throw (E) ex;
     }
 
     // Conversion from TruffleCompilerListener events to GraalTruffleRuntimeListener events
