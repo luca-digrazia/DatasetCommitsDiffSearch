@@ -96,13 +96,13 @@ public final class DebuggerController implements ContextsListener {
         this.eventFilters = new EventFilters();
     }
 
-    public void initialize(Debugger debug, JDWPOptions jdwpOptions, JDWPContext jdwpContext, Object thread) {
+    public void initialize(Debugger debug, JDWPOptions jdwpOptions, JDWPContext jdwpContext, Object initialThread) {
         this.debugger = debug;
         this.options = jdwpOptions;
         this.context = jdwpContext;
         this.ids = jdwpContext.getIds();
-        this.eventListener = new VMEventListenerImpl(this, thread);
-        this.initialThread = thread;
+        this.eventListener = new VMEventListenerImpl(this, initialThread);
+        this.initialThread = initialThread;
 
         // setup the debug session object early to make sure instrumentable nodes are materialized
         debuggerSession = debug.startSession(new SuspendedCallbackImpl(), SourceElement.ROOT, SourceElement.STATEMENT);

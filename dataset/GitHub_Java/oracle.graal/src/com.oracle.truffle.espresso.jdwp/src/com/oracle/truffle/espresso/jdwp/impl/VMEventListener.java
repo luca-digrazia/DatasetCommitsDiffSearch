@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,27 +22,82 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
+import com.oracle.truffle.espresso.jdwp.api.CallFrame;
+import com.oracle.truffle.espresso.jdwp.api.VMListener;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
-import java.util.concurrent.Callable;
+public interface VMEventListener extends VMListener {
+    void setConnection(SocketConnection connection);
 
-public interface VMEventListener {
-    void classPrepared(KlassRef klass, Object currentThread);
     void classUnloaded(KlassRef klass);
-    void threadStarted(Object thread);
-    void threadDied(Object thread);
-    void breakpointHIt(BreakpointInfo info, Object currentThread);
+
+    void breakpointHit(BreakpointInfo info, CallFrame frame, Object currentThread);
+
+    void vmDied();
 
     void addClassUnloadRequestId(int id);
-    void addThreadStartedRequestId(int id);
-    void addThreadDiedRequestId(int id);
 
-    Callable addClassPrepareRequest(ClassPrepareRequest request);
+    void addThreadStartedRequestId(int id, byte suspendPolicy);
+
+    void addThreadDiedRequestId(int id, byte suspendPolicy);
+
+    void addVMStartRequest(int id);
+
+    void addVMDeathRequest(int id);
+
+    void addClassPrepareRequest(ClassPrepareRequest request);
+
     void removeClassPrepareRequest(int requestId);
 
     void addBreakpointRequest(int requestId, BreakpointInfo info);
+
     void removeBreakpointRequest(int requestId);
 
+    void stepCompleted(SteppingInfo info, CallFrame currentFrame);
 
-    void stepCompleted(int commandRequestId, JDWPCallFrame currentFrame);
+    void exceptionThrown(BreakpointInfo info, Object currentThread, Object exception, CallFrame[] callFrames);
+
+    void increaseFieldBreakpointCount();
+
+    void decreaseFieldBreakpointCount();
+
+    void increaseMethodBreakpointCount();
+
+    void decreaseMethodBreakpointCount();
+
+    void fieldAccessBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame);
+
+    void fieldModificationBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame);
+
+    void clearAllBreakpointRequests();
+
+    void removeThreadStartedRequestId();
+
+    void removeThreadDiedRequestId();
+
+    void methodBreakpointHit(MethodBreakpointEvent methodEvent, Object currentThread, CallFrame callFrame);
+
+    void addMonitorContendedEnterRequest(int requestId, RequestFilter filter);
+
+    void removeMonitorContendedEnterRequest(int requestId);
+
+    void addMonitorContendedEnteredRequest(int requestId, RequestFilter filter);
+
+    void removeMonitorContendedEnteredRequest(int requestId);
+
+    void addMonitorWaitRequest(int requestId, RequestFilter filter);
+
+    void removeMonitorWaitRequest(int requestId);
+
+    void addMonitorWaitedRequest(int requestId, RequestFilter filter);
+
+    void removeMonitorWaitedRequest(int requestId);
+
+    void holdEvents();
+
+    void releaseEvents();
+
+    MonitorInfo getMonitorInfo(Object guestThread, Object monitor);
+
+    void sendInitialThreadStartedEvents();
 }

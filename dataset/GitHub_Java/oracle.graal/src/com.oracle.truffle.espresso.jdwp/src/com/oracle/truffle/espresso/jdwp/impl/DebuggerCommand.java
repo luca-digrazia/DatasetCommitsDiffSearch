@@ -22,22 +22,34 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-class DebuggerCommand {
+final class DebuggerCommand {
 
     enum Kind {
         STEP_INTO,
         STEP_OVER,
         STEP_OUT,
-        SUBMIT_BREAKPOINT,
-        RESUME
+        SUBMIT_LINE_BREAKPOINT,
+        SUBMIT_METHOD_ENTRY_BREAKPOINT,
+        SUBMIT_EXCEPTION_BREAKPOINT
     }
 
-    Kind kind;
+    final Kind kind;
+    private final RequestFilter requestFilter;
     private SourceLocation location;
-    private BreakpointInfo info;
+    private BreakpointInfo breakpointInfo;
+    private volatile boolean submitted;
 
-    DebuggerCommand(Kind kind) {
+    DebuggerCommand(Kind kind, RequestFilter filter) {
         this.kind = kind;
+        this.requestFilter = filter;
+    }
+
+    public boolean isSubmitted() {
+        return submitted;
+    }
+
+    public void markSubmitted() {
+        submitted = true;
     }
 
     void setSourceLocation(SourceLocation location) {
@@ -48,11 +60,15 @@ class DebuggerCommand {
         return location;
     }
 
-    public void setBreakpointInfo(BreakpointInfo info) {
-        this.info = info;
+    public RequestFilter getRequestFilter() {
+        return requestFilter;
     }
 
-    public BreakpointInfo getInfo() {
-        return info;
+    public void setBreakpointInfo(BreakpointInfo info) {
+        this.breakpointInfo = info;
+    }
+
+    public BreakpointInfo getBreakpointInfo() {
+        return breakpointInfo;
     }
 }
