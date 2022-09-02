@@ -942,7 +942,8 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
         builder.string(" || ");
         builder.staticReference(dispatchLibraryConstant).string(
                         ".getUncached().dispatch(receiver) == null : ").doubleQuote(
-                                        "Invalid library export. Exported receiver with dynamic dispatch found but not expected.");
+                                        "Invalid library export '" + libraryExports.getTemplateType().getQualifiedName().toString() +
+                                                        "'. Exported receiver with dynamic dispatch found but not expected.");
         builder.end();
         return builder.build();
     }
