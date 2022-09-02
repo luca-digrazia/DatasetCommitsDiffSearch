@@ -64,36 +64,12 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         this.frameIdSlot = frameDescriptor.addFrameSlot("frameId", FrameSlotKind.Long);
     }
 
-    private EspressoRootNode(EspressoRootNode split, FrameDescriptor frameDescriptor, EspressoMethodNode methodNode) {
-        super(methodNode.getMethod().getEspressoLanguage(), frameDescriptor);
-        this.methodNode = methodNode;
-        this.monitorSlot = split.monitorSlot;
-        this.frameIdSlot = split.frameIdSlot;
-    }
-
     public final Method getMethod() {
         return getMethodNode().getMethod();
     }
 
     public final Method.MethodVersion getMethodVersion() {
         return getMethodNode().getMethodVersion();
-    }
-
-    public abstract EspressoRootNode split();
-
-    @Override
-    public boolean isCloningAllowed() {
-        return getMethodNode().shouldSplit();
-    }
-
-    @Override
-    protected boolean isCloneUninitializedSupported() {
-        return getMethodNode().shouldSplit();
-    }
-
-    @Override
-    protected EspressoRootNode cloneUninitialized() {
-        return split();
     }
 
     @Override
@@ -133,7 +109,7 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         }
     }
 
-    protected EspressoMethodNode getMethodNode() {
+    private EspressoMethodNode getMethodNode() {
         Node child = methodNode;
         if (child instanceof WrapperNode) {
             child = ((WrapperNode) child).getDelegateNode();
@@ -216,15 +192,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
             super(frameDescriptor, methodNode, true);
         }
 
-        Synchronized(Synchronized split) {
-            super(split, split.getFrameDescriptor(), split.getMethodNode());
-        }
-
-        @Override
-        public EspressoRootNode split() {
-            return new Synchronized(this);
-        }
-
         @Override
         public Object execute(VirtualFrame frame) {
             Method method = getMethod();
@@ -256,15 +223,6 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
 
         Default(FrameDescriptor frameDescriptor, EspressoMethodNode methodNode) {
             super(frameDescriptor, methodNode, methodNode.getMethod().usesMonitors());
-        }
-
-        Default(Default split) {
-            super(split, split.getFrameDescriptor(), split.getMethodNode());
-        }
-
-        @Override
-        public EspressoRootNode split() {
-            return new Default(this);
         }
 
         @Override
