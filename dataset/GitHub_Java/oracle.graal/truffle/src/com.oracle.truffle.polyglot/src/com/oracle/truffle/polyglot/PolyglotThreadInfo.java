@@ -154,12 +154,8 @@ final class PolyglotThreadInfo {
         return getThread() != null && enteredCount == 1 && !cancelled;
     }
 
-    boolean isActiveNotCancelled() {
-        return getThread() != null && enteredCount > 0 && !cancelled;
-    }
-
     boolean isActive() {
-        return getThread() != null && enteredCount > 0;
+        return getThread() != null && enteredCount > 0 && !cancelled;
     }
 
     @Override
