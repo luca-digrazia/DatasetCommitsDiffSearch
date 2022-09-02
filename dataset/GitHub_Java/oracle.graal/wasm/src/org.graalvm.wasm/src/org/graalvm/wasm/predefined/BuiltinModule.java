@@ -40,6 +40,9 @@
  */
 package org.graalvm.wasm.predefined;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -50,16 +53,11 @@ import org.graalvm.wasm.WasmFunction;
 import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmTable;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
+import org.graalvm.wasm.exception.WasmValidationException;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.predefined.emscripten.EmscriptenModule;
-import org.graalvm.wasm.predefined.spectest.SpectestModule;
 import org.graalvm.wasm.predefined.testutil.TestutilModule;
 import org.graalvm.wasm.predefined.wasi.WasiModule;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public abstract class BuiltinModule {
     private static final Map<String, BuiltinModule> predefinedModules = new HashMap<>();
@@ -69,13 +67,12 @@ public abstract class BuiltinModule {
         pm.put("emscripten", new EmscriptenModule());
         pm.put("testutil", new TestutilModule());
         pm.put("wasi_snapshot_preview1", new WasiModule());
-        pm.put("spectest", new SpectestModule());
     }
 
     public static WasmInstance createBuiltinInstance(WasmLanguage language, WasmContext context, String name, String predefinedModuleName) {
         final BuiltinModule builtinModule = predefinedModules.get(predefinedModuleName);
         if (builtinModule == null) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, "Unknown predefined module: " + predefinedModuleName);
+            throw new WasmValidationException("Unknown predefined module: " + predefinedModuleName);
         }
         return builtinModule.createInstance(language, context, name);
     }
@@ -94,13 +91,13 @@ public abstract class BuiltinModule {
     }
 
     protected int defineExternalGlobal(WasmInstance instance, String globalName, Object global) {
-        int index = instance.symbolTable().numGlobals();
+        int index = instance.symbolTable().maxGlobalIndex() + 1;
         instance.symbolTable().declareExportedExternalGlobal(globalName, index, global);
         return index;
     }
 
     protected int defineGlobal(WasmInstance instance, String name, byte valueType, byte mutability, long value) {
-        int index = instance.symbolTable().numGlobals();
+        int index = instance.symbolTable().maxGlobalIndex() + 1;
         instance.symbolTable().declareExportedGlobalWithValue(name, index, valueType, mutability, value);
         return index;
     }
@@ -111,7 +108,7 @@ public abstract class BuiltinModule {
     }
 
     protected int defineTable(WasmInstance instance, String tableName, int initSize, int maxSize, byte type) {
-        Assert.assertByteEqual(type, ReferenceTypes.FUNCREF, "Only function types are currently supported in tables.", Failure.UNSPECIFIED_MALFORMED);
+        Assert.assertByteEqual(type, ReferenceTypes.FUNCREF, "Only function types are currently supported in tables.");
         instance.symbolTable().allocateTable(initSize, maxSize);
         instance.symbolTable().exportTable(tableName);
         return 0;
