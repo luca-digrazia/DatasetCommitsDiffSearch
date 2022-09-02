@@ -1,11 +1,33 @@
+/*
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package org.graalvm.compiler.truffle.test;
 
 import java.util.function.Consumer;
 
-import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.management.ExecutionEvent;
 import org.graalvm.polyglot.management.ExecutionListener;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -25,9 +47,8 @@ import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
 
-    static final SourceSection DUMMY_SECTION = com.oracle.truffle.api.source.Source.newBuilder("").name("").language(ProxyLanguage.ID).build().createSection(0, 0);
+    static final SourceSection DUMMY_SECTION = com.oracle.truffle.api.source.Source.newBuilder(ProxyLanguage.ID, "", "").name("").build().createSection(0, 0);
 
-    Context context;
     ProxyLanguage langauge;
 
     static int counter;
@@ -85,15 +106,11 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
     public void testOnEnterCompilation() {
         testListener(null, "return42", new Return42Node());
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onEnter(empty) //
-                        .expressions(true), //
+        testListener(ExecutionListener.newBuilder().onEnter(empty).expressions(true),
                         "return42", //
                         new Return42Node());
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onEnter(counting) //
-                        .expressions(true), //
+        testListener(ExecutionListener.newBuilder().onEnter(counting).expressions(true),
                         "return42AndIncrement", //
                         new Return42Node());
     }
@@ -102,15 +119,11 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
     public void testOnReturnCompilation() {
         testListener(null, "return42", new Return42Node());
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onReturn(empty) //
-                        .expressions(true), //
-                        "return42", //
+        testListener(ExecutionListener.newBuilder().onReturn(empty).expressions(true),
+                        "return42",
                         new Return42Node());
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onReturn(counting) //
-                        .expressions(true), //
+        testListener(ExecutionListener.newBuilder().onReturn(counting).expressions(true),
                         "return42AndIncrement", //
                         new Return42Node());
     }
@@ -119,15 +132,11 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
     public void testOnErrorCompilation() {
         testListener(null, "throwError", new ThrowErrorNode());
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onReturn(empty) //
-                        .expressions(true), //
+        testListener(ExecutionListener.newBuilder().onReturn(empty).expressions(true),
                         "throwError", //
                         new ThrowErrorNode());
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onReturn(counting) //
-                        .expressions(true), //
+        testListener(ExecutionListener.newBuilder().onReturn(counting).expressions(true),
                         "throwErrorAndIncrement", //
                         new ThrowErrorNode());
     }
@@ -140,16 +149,12 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
     public void testOnErrorNoException() {
         testListener(null, "returnNull", new ReturnNullNode());
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onEnter(empty).onReturn(empty) //
-                        .expressions(true).collectReturnValue(true).collectInputValues(true), //
-                        "returnNull", //
+        testListener(ExecutionListener.newBuilder().onEnter(empty).onReturn(empty).expressions(true).collectReturnValue(true).collectInputValues(true), //
+                        "returnNull",
                         new ReturnNullNode());
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onEnter(empty).onReturn(counting) //
-                        .expressions(true).collectReturnValue(true).collectInputValues(true), //
-                        "returnNullAndIncrement", //
+        testListener(ExecutionListener.newBuilder().onEnter(empty).onReturn(counting).expressions(true).collectReturnValue(true).collectInputValues(true), //
+                        "returnNullAndIncrement",
                         new ReturnNullNode());
 
     }
@@ -158,9 +163,7 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
     public void testMultipleCounts() {
         testListener(null, "return84", new ExecuteTwoChildrenNode(new Return42Node(), new Return42Node()));
 
-        testListener(ExecutionListener.newBuilder() //
-                        .onEnter(counting) //
-                        .expressions(true),
+        testListener(ExecutionListener.newBuilder().onEnter(counting).expressions(true),
                         "return84AndIncrementThrice",
                         new ExecuteTwoChildrenNode(new Return42Node(), new Return42Node()));
     }
@@ -168,7 +171,7 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
     private void testListener(ExecutionListener.Builder builder, String expectedMethodName, BaseNode baseNode) {
         ExecutionListener listener = null;
         if (builder != null) {
-            listener = builder.attach(context.getEngine());
+            listener = builder.attach(getContext().getEngine());
         }
         assertPartialEvalEquals(expectedMethodName, createRoot(baseNode));
         if (listener != null) {
@@ -184,17 +187,10 @@ public class ExecutionListenerCompilerTest extends PartialEvaluationTest {
                 return super.parse(request);
             }
         });
-        context = Context.create();
-        context.initialize(ProxyLanguage.ID);
-        context.enter();
+        setupContext();
+        getContext().initialize(ProxyLanguage.ID);
         langauge = ProxyLanguage.getCurrentLanguage();
         counter = 0;
-    }
-
-    @After
-    public void tearDown() {
-        context.leave();
-        context.close();
     }
 
     private RootNode createRoot(BaseNode node) {

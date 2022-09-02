@@ -53,10 +53,11 @@ public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
 
     @Test
     public void testMergedStackTrace() throws Exception {
+        List<String> vmArgs = SubprocessUtil.getVMCommandLine();
         if (isSilent()) {
             testMergedStackTraceImpl();
         } else {
-            SubprocessUtil.Subprocess proc = SubprocessUtil.java(makeSilent(getVmArgs()), "com.oracle.mxtool.junit.MxJUnitWrapper", getClass().getName());
+            SubprocessUtil.Subprocess proc = SubprocessUtil.java(makeSilent(vmArgs), "com.oracle.mxtool.junit.MxJUnitWrapper", getClass().getName());
             int exitCode = proc.exitCode;
             if (exitCode != 0) {
                 fail(String.format("non-zero exit code %d for command:%n%s", exitCode, proc));
@@ -67,14 +68,6 @@ public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
     private static boolean isSilent() {
         Object value = System.getProperty(String.format("graal.%s", GraalCompilerOptions.CompilationFailureAction.getName()));
         return CompilationWrapper.ExceptionAction.Silent.toString().equals(value);
-    }
-
-    private static List<String> getVmArgs() {
-        // Filter out the LogFile option to prevent overriding of the unit tests log file by a
-        // sub-process.
-        List<String> vmArgs = SubprocessUtil.getVMCommandLine().stream().filter((vmArg) -> !vmArg.contains("LogFile")).collect(Collectors.toList());
-        vmArgs.add(SubprocessUtil.PACKAGE_OPENING_OPTIONS);
-        return vmArgs;
     }
 
     private static List<String> makeSilent(List<? extends String> vmArgs) {
@@ -88,7 +81,7 @@ public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
         setupContext("engine.CompilationExceptionsAreThrown", Boolean.TRUE.toString(), "engine.CompilationExceptionsAreFatal", Boolean.FALSE.toString());
         GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
         OptimizedCallTarget compilable = (OptimizedCallTarget) runtime.createCallTarget(RootNode.createConstantNode(42));
-        TruffleCompiler compiler = runtime.getTruffleCompiler(compilable);
+        TruffleCompiler compiler = runtime.getTruffleCompiler();
         try (TruffleCompilation compilation = compiler.openCompilation(compilable)) {
             try (TruffleDebugContext debug = compiler.openDebugContext(TruffleRuntimeOptions.getOptionsForCompiler(compilable), compilation)) {
                 TruffleInliningPlan inliningPlan = runtime.createInliningPlan(compilable, null);

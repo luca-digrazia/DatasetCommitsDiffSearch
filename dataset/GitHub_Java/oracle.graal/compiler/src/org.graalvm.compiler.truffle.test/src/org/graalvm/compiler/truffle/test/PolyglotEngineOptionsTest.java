@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,6 @@ package org.graalvm.compiler.truffle.test;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.options.OptionDescriptor;
-import org.graalvm.options.OptionStability;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.junit.Assert;
@@ -78,17 +77,6 @@ public class PolyglotEngineOptionsTest extends TestWithSynchronousCompiling {
         Assert.assertEquals(PolyglotCompilerOptions.EngineModeEnum.LATENCY, target.getOptionValue(PolyglotCompilerOptions.Mode));
     }
 
-    @Test
-    public void testEngineModeLatency() {
-        Assert.assertEquals(OptionStability.STABLE, Engine.create().getOptions().get("engine.Mode").getStability());
-
-        setupContext("engine.Mode", "latency");
-        OptimizedCallTarget target = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));
-        Assert.assertEquals(PolyglotCompilerOptions.EngineModeEnum.LATENCY, target.getOptionValue(PolyglotCompilerOptions.Mode));
-        Assert.assertEquals(false, target.engine.inlining);
-        Assert.assertEquals(false, target.engine.splitting);
-    }
-
     @Test(expected = IllegalArgumentException.class)
     public void testParseUnknownMode() {
         Context.newBuilder() //
@@ -97,8 +85,7 @@ public class PolyglotEngineOptionsTest extends TestWithSynchronousCompiling {
     }
 
     private void testCompilationThreshold(int iterations, String compilationThresholdOption, Runnable doWhile) {
-        Context ctx = setupContext(compilationThresholdOption == null ? new String[]{"engine.MultiTier", "false"}
-                        : new String[]{"engine.CompilationThreshold", compilationThresholdOption, "engine.MultiTier", "false"});
+        Context ctx = setupContext(compilationThresholdOption == null ? new String[0] : new String[]{"engine.CompilationThreshold", compilationThresholdOption});
         ctx.eval("sl", "function test() {}");
         SLFunction test = SLLanguage.getCurrentContext().getFunctionRegistry().getFunction("test");
 

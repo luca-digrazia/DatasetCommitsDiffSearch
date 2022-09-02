@@ -31,7 +31,6 @@ import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -42,12 +41,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling {
 
     private static final GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
-
-    @Override
-    @Before
-    public void before() {
-        setupContext("engine.MultiTier", "false");
-    }
 
     @Test
     @SuppressWarnings("try")
@@ -92,7 +85,7 @@ public class TruffleBoundaryExceptionsTest extends TestWithSynchronousCompiling 
             }
         };
 
-        setupContext("engine.InvalidationReprofileCount", "0", "engine.MultiTier", "false");
+        setupContext("engine.InvalidationReprofileCount", "0");
         DeoptCountingExceptionOverBoundaryRootNode rootNode = new DeoptCountingExceptionOverBoundaryRootNode();
         final OptimizedCallTarget outerTarget = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
 
