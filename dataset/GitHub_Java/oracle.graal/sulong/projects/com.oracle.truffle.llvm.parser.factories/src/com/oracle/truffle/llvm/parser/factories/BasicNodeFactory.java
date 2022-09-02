@@ -178,8 +178,6 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_VectorM
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_VectorMathNodeFactory.LLVMX86_VectorMinNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_VectorMathNodeFactory.LLVMX86_VectorPackNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_VectorMathNodeFactory.LLVMX86_VectorSquareRootNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMMetaLiteralNode;
-import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMMetaLiteralNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNode.LLVMManagedPointerLiteralNode;
 import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMDoubleLiteralNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMFloatLiteralNodeGen;
@@ -890,8 +888,6 @@ public class BasicNodeFactory implements NodeFactory {
                 default:
                     throw new AssertionError(value + " " + type);
             }
-        } else if (type instanceof MetaType) {
-            return LLVMMetaLiteralNodeGen.create(value);
         }
         throw new AssertionError(value + " " + type);
     }
