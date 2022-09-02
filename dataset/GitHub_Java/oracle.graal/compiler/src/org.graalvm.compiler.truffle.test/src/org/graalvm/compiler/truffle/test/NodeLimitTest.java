@@ -29,8 +29,7 @@ import java.util.function.Function;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.truffle.compiler.PolyglotCompilerOptionsScope;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
@@ -72,7 +71,7 @@ public class NodeLimitTest extends PartialEvaluationTest {
                 return null;
             }
         });
-        try (PolyglotCompilerOptionsScope scope = PolyglotCompilerOptionsScope.overrideOptions(PolyglotCompilerOptions.MaximumInlineNodeCount, 10)) {
+        try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleMaximumInlineNodeCount, 10)) {
             RootCallTarget target = Truffle.getRuntime().createCallTarget(rootNode);
             final Object[] arguments = {1};
             partialEval((OptimizedCallTarget) target, arguments, StructuredGraph.AllowAssumptions.YES, CompilationIdentifier.INVALID_COMPILATION_ID);
@@ -161,7 +160,7 @@ public class NodeLimitTest extends PartialEvaluationTest {
 
     @SuppressWarnings("try")
     private void peRootNode(int nodeLimit, RootNode rootNode) {
-        try (PolyglotCompilerOptionsScope scope = PolyglotCompilerOptionsScope.overrideOptions(PolyglotCompilerOptions.MaximumGraalNodeCount, nodeLimit)) {
+        try (TruffleCompilerOptions.TruffleOptionsOverrideScope scope = TruffleCompilerOptions.overrideOptions(TruffleCompilerOptions.TruffleMaximumGraalNodeCount, nodeLimit)) {
             RootCallTarget target = Truffle.getRuntime().createCallTarget(rootNode);
             final Object[] arguments = {1};
             partialEval((OptimizedCallTarget) target, arguments, StructuredGraph.AllowAssumptions.YES, CompilationIdentifier.INVALID_COMPILATION_ID);

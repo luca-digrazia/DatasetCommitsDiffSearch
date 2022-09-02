@@ -66,7 +66,6 @@ import org.graalvm.compiler.java.ComputeLoopFrequenciesClosure;
 import org.graalvm.compiler.loop.phases.ConvertDeoptimizeToGuardPhase;
 import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.ConstantNode;
-import org.graalvm.compiler.nodes.EncodedGraph;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -101,7 +100,6 @@ import org.graalvm.compiler.replacements.PEGraphDecoder;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup;
-import org.graalvm.compiler.truffle.common.CallNodeProvider;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.InlineKind;
@@ -116,13 +114,13 @@ import org.graalvm.compiler.truffle.compiler.phases.InstrumentBranchesPhase;
 import org.graalvm.compiler.truffle.compiler.phases.InstrumentPhase;
 import org.graalvm.compiler.truffle.compiler.phases.InstrumentTruffleBoundariesPhase;
 import org.graalvm.compiler.truffle.compiler.phases.VerifyFrameDoesNotEscapePhase;
-import org.graalvm.compiler.truffle.compiler.phases.inlining.AgnosticInliningPhase;
 import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
 import org.graalvm.compiler.truffle.compiler.substitutions.TruffleGraphBuilderPlugins;
 import org.graalvm.compiler.truffle.compiler.substitutions.TruffleInvocationPluginProvider;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 
 import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -141,8 +139,7 @@ public abstract class PartialEvaluator {
     private final CanonicalizerPhase canonicalizer;
     private final SnippetReflectionProvider snippetReflection;
     private final ResolvedJavaMethod callDirectMethod;
-    protected final ResolvedJavaMethod callInlinedMethod;
-    protected final ResolvedJavaMethod callInlinedAgnosticMethod;
+    private final ResolvedJavaMethod callInlinedMethod;
     private final ResolvedJavaMethod callIndirectMethod;
     private final ResolvedJavaMethod callRootMethod;
     private final GraphBuilderConfiguration configForParsing;
@@ -172,7 +169,6 @@ public abstract class PartialEvaluator {
         ResolvedJavaMethod[] methods = type.getDeclaredMethods();
         this.callDirectMethod = findRequiredMethod(type, methods, "callDirect", "(Lcom/oracle/truffle/api/nodes/Node;[Ljava/lang/Object;)Ljava/lang/Object;");
         this.callInlinedMethod = findRequiredMethod(type, methods, "callInlined", "(Lcom/oracle/truffle/api/nodes/Node;[Ljava/lang/Object;)Ljava/lang/Object;");
-        this.callInlinedAgnosticMethod = findRequiredMethod(type, methods, "callInlinedAgnostic", "([Ljava/lang/Object;)Ljava/lang/Object;");
         this.callIndirectMethod = findRequiredMethod(type, methods, "callIndirect", "(Lcom/oracle/truffle/api/nodes/Node;[Ljava/lang/Object;)Ljava/lang/Object;");
         this.callRootMethod = findRequiredMethod(type, methods, "callRoot", "([Ljava/lang/Object;)Ljava/lang/Object;");
 
@@ -224,23 +220,7 @@ public abstract class PartialEvaluator {
     }
 
     public ResolvedJavaMethod[] getNeverInlineMethods() {
-        return new ResolvedJavaMethod[]{callDirectMethod, callIndirectMethod, callInlinedAgnosticMethod};
-    }
-
-    private StructuredGraph createGraphForPE(DebugContext debug, String name, ResolvedJavaMethod rootMethod, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log,
-                    Cancellable cancellable) {
-        OptionValues options = TruffleCompilerOptions.getOptions();
-        // @formatter:off
-        StructuredGraph.Builder builder = new StructuredGraph.Builder(options, debug, allowAssumptions).
-                name(name).
-                method(rootMethod).
-                speculationLog(log).
-                compilationId(compilationId).
-                trackNodeSourcePosition(configForParsing.trackNodeSourcePosition()).
-                cancellable(cancellable);
-        // @formatter:on
-        builder = customizeStructuredGraphBuilder(builder);
-        return builder.build();
+        return new ResolvedJavaMethod[]{callDirectMethod, callIndirectMethod};
     }
 
     @SuppressWarnings("try")
@@ -248,8 +228,19 @@ public abstract class PartialEvaluator {
                     AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable) {
         try (PerformanceInformationHandler handler = PerformanceInformationHandler.install()) {
             String name = compilable.toString();
+            OptionValues options = debug.getOptions();
             ResolvedJavaMethod rootMethod = rootForCallTarget(compilable);
-            final StructuredGraph graph = createGraphForPE(debug, name, rootMethod, allowAssumptions, compilationId, log, cancellable);
+            // @formatter:off
+            StructuredGraph.Builder builder = new StructuredGraph.Builder(options, debug, allowAssumptions).
+                            name(name).
+                            method(rootMethod).
+                            speculationLog(log).
+                            compilationId(compilationId).
+                            trackNodeSourcePosition(configForParsing.trackNodeSourcePosition()).
+                            cancellable(cancellable);
+            // @formatter:on
+            builder = customizeStructuredGraphBuilder(builder);
+            final StructuredGraph graph = builder.build();
 
             try (DebugContext.Scope s = debug.scope("CreateGraph", graph);
                             Indent indent = debug.logAndIndent("createGraph %s", graph);) {
@@ -274,30 +265,6 @@ public abstract class PartialEvaluator {
         }
     }
 
-    public void parseRootGraphForInlining(CompilableTruffleAST compilable, StructuredGraph graph, CallNodeProvider callNodeProvider, InlineInvokePlugin callNodePlugin,
-                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining) {
-        // This is only called by agnostic inlining. Legacy inlining does not use this method.
-        HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<>(), OptimisticOptimizations.NONE);
-        assert (SharedTruffleCompilerOptions.TruffleLanguageAgnosticInlining.getValue(graph.getOptions()));
-
-        doGraphPE(compilable, graph, tierContext, (TruffleInliningPlan) callNodeProvider, callNodePlugin, graphCacheForInlining);
-    }
-
-    public StructuredGraph createGraphForInlining(DebugContext debug, CompilableTruffleAST compilable, CallNodeProvider callNodeProvider, InlineInvokePlugin callNodePlugin,
-                    AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable,
-                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining) {
-        // This is only called by agnostic inlining. Legacy inlining does not use this method.
-        String name = compilable.toString();
-        ResolvedJavaMethod rootMethod = inlineRootForCallTargetAgnostic(compilable);
-        final StructuredGraph graph = createGraphForPE(debug, name, rootMethod, allowAssumptions, compilationId, log, cancellable);
-        HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<>(), OptimisticOptimizations.NONE);
-        assert (SharedTruffleCompilerOptions.TruffleLanguageAgnosticInlining.getValue(graph.getOptions()));
-
-        doGraphPE(compilable, graph, tierContext, (TruffleInliningPlan) callNodeProvider, callNodePlugin, graphCacheForInlining);
-
-        return graph;
-    }
-
     /**
      * Hook for subclasses: customize the StructuredGraph.
      */
@@ -312,26 +279,6 @@ public abstract class PartialEvaluator {
      */
     public ResolvedJavaMethod rootForCallTarget(CompilableTruffleAST compilable) {
         return callRootMethod;
-    }
-
-    /**
-     * Hook for subclasses: return a customized compilation root when inlining a specific call
-     * target.
-     *
-     * @param compilable the Truffle AST being compiled.
-     */
-    public ResolvedJavaMethod inlineRootForCallTarget(CompilableTruffleAST compilable) {
-        return callInlinedMethod;
-    }
-
-    /**
-     * Hook for subclasses: return a customized compilation root when inlining a specific call
-     * target.
-     *
-     * @param compilable the Truffle AST being compiled.
-     */
-    public ResolvedJavaMethod inlineRootForCallTargetAgnostic(CompilableTruffleAST compilable) {
-        return callInlinedAgnosticMethod;
     }
 
     private class InterceptReceiverPlugin implements ParameterPlugin {
@@ -352,22 +299,7 @@ public abstract class PartialEvaluator {
         }
     }
 
-    public static class PEInlineInvokePlugin implements InlineInvokePlugin {
-        @Override
-        public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
-            TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
-            InlineInfo inlineInfo = asInlineInfo(rt.getInlineKind(original, true), original);
-            if (!inlineInfo.allowsInlining()) {
-                return inlineInfo;
-            }
-            assert !builder.parsingIntrinsic();
-
-            return inlineInfo;
-        }
-
-    }
-
-    private class PEInliningPlanInvokePlugin extends PEInlineInvokePlugin {
+    private class PEInlineInvokePlugin implements InlineInvokePlugin {
 
         private final Deque<TruffleInliningPlan> inlining;
         private final int nodeLimit;
@@ -375,7 +307,7 @@ public abstract class PartialEvaluator {
         private final int inliningNodeLimit;
         private boolean graphTooBigReported;
 
-        PEInliningPlanInvokePlugin(TruffleInliningPlan inlining, StructuredGraph graph, int nodeLimit, int inliningNodeLimit) {
+        PEInlineInvokePlugin(TruffleInliningPlan inlining, StructuredGraph graph, int nodeLimit, int inliningNodeLimit) {
             this.inlining = new ArrayDeque<>();
             this.inlining.push(inlining);
             this.graph = graph;
@@ -492,7 +424,7 @@ public abstract class PartialEvaluator {
             if (!inlineInfo.allowsInlining()) {
                 return inlineInfo;
             }
-            if (original.equals(callIndirectMethod) || original.equals(callInlinedAgnosticMethod) || original.equals(callDirectMethod)) {
+            if (original.equals(callIndirectMethod) || original.equals(callDirectMethod)) {
                 return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
             }
             if (hasMethodHandleArgument(arguments)) {
@@ -531,8 +463,8 @@ public abstract class PartialEvaluator {
 
     @SuppressWarnings("unused")
     protected PEGraphDecoder createGraphDecoder(StructuredGraph graph, final HighTierContext tierContext, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins,
-                    InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePluginList,
-                    SourceLanguagePositionProvider sourceLanguagePositionProvider, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
+                    InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePluginList, ResolvedJavaMethod callInlined,
+                    SourceLanguagePositionProvider sourceLanguagePositionProvider) {
         final GraphBuilderConfiguration newConfig = configForParsing.copy();
         InvocationPlugins parsingInvocationPlugins = newConfig.getPlugins().getInvocationPlugins();
 
@@ -550,17 +482,18 @@ public abstract class PartialEvaluator {
 
         Providers compilationUnitProviders = providers.copyWith(new TruffleConstantFieldProvider(providers.getConstantFieldProvider(), providers.getMetaAccess()));
         return new CachingPEGraphDecoder(architecture, graph, compilationUnitProviders, newConfig, TruffleCompilerImpl.Optimizations, AllowAssumptions.ifNonNull(graph.getAssumptions()),
-                        loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList, callInlinedMethod, callInlinedAgnosticMethod,
-                        sourceLanguagePositionProvider, postParsingPhase, graphCache);
+                        loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList, callInlined, sourceLanguagePositionProvider, postParsingPhase);
     }
 
-    protected void doGraphPE(CompilableTruffleAST compilable, StructuredGraph graph, HighTierContext tierContext, TruffleInliningPlan inliningDecision, InlineInvokePlugin inlineInvokePlugin,
-                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
+    protected void doGraphPE(CompilableTruffleAST compilable, StructuredGraph graph, HighTierContext tierContext, TruffleInliningPlan inliningDecision) {
         LoopExplosionPlugin loopExplosionPlugin = new PELoopExplosionPlugin();
         ParameterPlugin parameterPlugin = new InterceptReceiverPlugin(compilable);
 
         ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         InlineInvokePlugin[] inlineInvokePlugins;
+        InlineInvokePlugin inlineInvokePlugin = new PEInlineInvokePlugin(inliningDecision, graph, TruffleMaximumGraalNodeCount.getValue(graph.getOptions()),
+                        TruffleMaximumInlineNodeCount.getValue(graph.getOptions()));
+
         HistogramInlineInvokePlugin histogramPlugin = null;
         Boolean printTruffleExpansionHistogram = TruffleCompilerOptions.getValue(PrintTruffleExpansionHistogram);
         if (printTruffleExpansionHistogram) {
@@ -571,8 +504,8 @@ public abstract class PartialEvaluator {
         }
 
         SourceLanguagePositionProvider sourceLanguagePosition = new TruffleSourceLanguagePositionProvider(inliningDecision);
-        PEGraphDecoder decoder = createGraphDecoder(graph, tierContext, loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins,
-                        sourceLanguagePosition, graphCache);
+        PEGraphDecoder decoder = createGraphDecoder(graph, tierContext, loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePlugins, callInlinedMethod,
+                        sourceLanguagePosition);
         decoder.decode(graph.method(), graph.isSubstitution(), graph.trackNodeSourcePosition());
 
         if (printTruffleExpansionHistogram) {
@@ -593,7 +526,8 @@ public abstract class PartialEvaluator {
     }
 
     protected void registerTruffleInvocationPlugins(InvocationPlugins invocationPlugins, boolean canDelayIntrinsification) {
-        TruffleGraphBuilderPlugins.registerInvocationPlugins(invocationPlugins, canDelayIntrinsification, providers, knownTruffleTypes);
+        ConstantReflectionProvider constantReflection = providers.getConstantReflection();
+        TruffleGraphBuilderPlugins.registerInvocationPlugins(invocationPlugins, canDelayIntrinsification, providers.getMetaAccess(), constantReflection, knownTruffleTypes);
         for (TruffleInvocationPluginProvider p : GraalServices.load(TruffleInvocationPluginProvider.class)) {
             p.registerInvocationPlugins(providers, architecture, invocationPlugins, canDelayIntrinsification);
         }
@@ -611,7 +545,7 @@ public abstract class PartialEvaluator {
     private void fastPartialEvaluation(CompilableTruffleAST compilable, TruffleInliningPlan inliningDecision, StructuredGraph graph, CoreProviders baseContext, HighTierContext tierContext,
                     PerformanceInformationHandler handler) {
         DebugContext debug = graph.getDebug();
-        agnosticInliningOrGraphPE(compilable, inliningDecision, graph, baseContext, tierContext);
+        doGraphPE(compilable, graph, tierContext, inliningDecision);
         debug.dump(DebugContext.BASIC_LEVEL, graph, "After Partial Evaluation");
 
         graph.maybeCompress();
@@ -649,17 +583,6 @@ public abstract class PartialEvaluator {
         graph.maybeCompress();
 
         handler.reportPerformanceWarnings(compilable, graph);
-    }
-
-    private void agnosticInliningOrGraphPE(CompilableTruffleAST compilable, TruffleInliningPlan inliningDecision, StructuredGraph graph, CoreProviders baseContext, HighTierContext tierContext) {
-        if (SharedTruffleCompilerOptions.TruffleLanguageAgnosticInlining.getValue(graph.getOptions())) {
-            AgnosticInliningPhase agnosticInlining = new AgnosticInliningPhase(this, inliningDecision, compilable);
-            agnosticInlining.apply(graph, baseContext);
-        } else {
-            final PEInliningPlanInvokePlugin plugin = new PEInliningPlanInvokePlugin(inliningDecision, graph, TruffleMaximumGraalNodeCount.getValue(graph.getOptions()),
-                            TruffleMaximumInlineNodeCount.getValue(graph.getOptions()));
-            doGraphPE(compilable, graph, tierContext, inliningDecision, plugin, EconomicMap.create());
-        }
     }
 
     protected void applyInstrumentationPhases(StructuredGraph graph, HighTierContext tierContext) {
