@@ -213,7 +213,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     @CompilationFinal private HostToGuestCodeCache hostToGuestCodeCache;
 
     final SpecializationStatistics specializationStatistics;
-    Function<String, TruffleLogger> engineLoggerSupplier;   // effectively final
+    final Function<String, TruffleLogger> engineLoggerSupplier;
     private volatile TruffleLogger engineLogger;
 
     @CompilationFinal volatile StableLocalLocations contextLocalLocations = new StableLocalLocations(EMPTY_LOCATIONS);
@@ -469,8 +469,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         this.logLevels = newLogConfig.logLevels;
         boolean wasStore = this.storeEngine;
         this.storeEngine = RUNTIME.isStoreEnabled(engineOptions);
-        this.engineLoggerSupplier = logSupplier;
-        this.engineLogger = null;
 
         intitializeStore(wasStore, storeEngine);
 
@@ -1788,7 +1786,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             synchronized (this.lock) {
                 res = engineLoggers;
                 if (res == null) {
-                    res = LANGUAGE.createEngineLoggers(PolyglotLoggers.LoggerCache.newEngineLoggerCache(this), logLevels);
+                    res = LANGUAGE.createEngineLoggers(PolyglotLoggers.createEngineSPI(this), logLevels);
                     for (ContextWeakReference contextRef : contexts) {
                         PolyglotContextImpl context = contextRef.get();
                         if (context != null && !context.config.logLevels.isEmpty()) {
