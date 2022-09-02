@@ -49,6 +49,7 @@ import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Objects;
@@ -105,7 +106,7 @@ public final class HostAccess {
      *
      * @since 1.0
      */
-    public static final HostAccess EXPLICIT = newBuilder().allowAccessAnnotatedBy(HostAccess.Export.class).name("HostAccess.EXPLICIT").build();
+    public static final HostAccess EXPLICIT = newBuilder().allowAccessAnnotatedBy(HostAccess.Export.class).name("HostAccessPolicy.EXPLICIT").build();
 
     /**
      *
@@ -123,7 +124,7 @@ public final class HostAccess {
      *
      * @since 1.0
      */
-    public static final HostAccess ALL = newBuilder().allowPublicAccess(true).name("HostAccess.ALL").build();
+    public static final HostAccess ALL = newBuilder().allowPublicAccess(true).name("HostAccessPolicy.ALL").build();
 
     /**
      * Predefined host access policy that disallows any access to public host methods or fields.
@@ -136,7 +137,7 @@ public final class HostAccess {
      *
      * @since 1.0
      */
-    public static final HostAccess NONE = newBuilder().name("HostAccess.NONE").build();
+    public static final HostAccess NONE = newBuilder().name("HostAccessPolicy.NONE").build();
 
     HostAccess(Set<Class<? extends Annotation>> annotations, Set<AnnotatedElement> excludes, Set<AnnotatedElement> members, String name, boolean allowPublic) {
         this.annotations = annotations;
@@ -191,6 +192,22 @@ public final class HostAccess {
     @Override
     public String toString() {
         return name == null ? super.toString() : name;
+    }
+
+    private static boolean hasAnnotation(AnnotatedElement member, Class<? extends Annotation> annotationType) {
+        if (member instanceof Field) {
+            Field f = (Field) member;
+            return f.getAnnotation(annotationType) != null;
+        }
+        if (member instanceof Method) {
+            Method m = (Method) member;
+            return m.getAnnotation(annotationType) != null;
+        }
+        if (member instanceof Constructor) {
+            Constructor<?> c = (Constructor<?>) member;
+            return c.getAnnotation(annotationType) != null;
+        }
+        return false;
     }
 
     /**

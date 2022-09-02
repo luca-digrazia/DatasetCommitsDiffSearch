@@ -48,18 +48,15 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.net.URI;
-import java.nio.charset.Charset;
 import java.nio.file.FileSystemNotFoundException;
+import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.function.Supplier;
 import java.util.logging.Level;
 
 import org.graalvm.options.OptionCategory;
@@ -434,18 +431,6 @@ public abstract class TruffleLanguage<C> {
          * @return list of service types that this language can provide
          */
         Class<?>[] services() default {};
-
-        /**
-         * Declarative list of {@link TruffleFile.FileTypeDetector} classes provided by this
-         * language.
-         * <p>
-         * The language has to support all MIME types recognized by the registered
-         * {@link TruffleFile.FileTypeDetector file type detectors}.
-         *
-         * @return list of file type detectors
-         * @since 1.0
-         */
-        Class<? extends TruffleFile.FileTypeDetector>[] fileTypeDetectors() default {};
     }
 
     /**
@@ -1307,7 +1292,7 @@ public abstract class TruffleLanguage<C> {
         private final Map<String, Object> config;
         private final OptionValues options;
         private final String[] applicationArguments;
-        private final TruffleFile.FileSystemContext fileSystemContext;
+        private final FileSystem fileSystem;
 
         @CompilationFinal private volatile List<Object> services;
 
@@ -1320,7 +1305,7 @@ public abstract class TruffleLanguage<C> {
 
         @SuppressWarnings("unchecked")
         private Env(Object vmObject, TruffleLanguage<?> language, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config, OptionValues options, String[] applicationArguments,
-                        FileSystem fileSystem, Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectors) {
+                        FileSystem fileSystem) {
             this.vmObject = vmObject;
             this.spi = (TruffleLanguage<Object>) language;
             this.in = in;
@@ -1330,7 +1315,7 @@ public abstract class TruffleLanguage<C> {
             this.options = options;
             this.applicationArguments = applicationArguments == null ? new String[0] : applicationArguments;
             this.valid = true;
-            this.fileSystemContext = new TruffleFile.FileSystemContext(fileSystem, fileTypeDetectors);
+            this.fileSystem = fileSystem;
         }
 
         Object getVMObject() {
@@ -1495,19 +1480,13 @@ public abstract class TruffleLanguage<C> {
          * {@link String} or one of the Java primitive wrappers ( {@link Integer}, {@link Double},
          * {@link Byte}, {@link Boolean}, etc.).
          * <p>
-         * Polyglot symbols can only be imported if the {@link #isPolyglotAccessAllowed() polyglot
-         * access} is allowed.
          *
          * @param symbolName the name of the symbol to search for
          * @return object representing the symbol or <code>null</code> if it does not exist
-         * @throws SecurityException if importing polyglot symbols is not allowed
          * @since 0.8 or earlier
          */
         @TruffleBoundary
         public Object importSymbol(String symbolName) {
-            if (!isPolyglotAccessAllowed()) {
-                throw new SecurityException("Polyglot bindings are not accessible for this language.");
-            }
             return AccessAPI.engineAccess().importSymbol(vmObject, this, symbolName);
         }
 
@@ -1521,21 +1500,14 @@ public abstract class TruffleLanguage<C> {
          * object from the other language) to support interoperability between languages,
          * {@link String} or one of the Java primitive wrappers ( {@link Integer}, {@link Double},
          * {@link Byte}, {@link Boolean}, etc.).
-         * <p>
-         * Polyglot symbols can only be export if the {@link #isPolyglotAccessAllowed() polyglot
-         * access} is allowed.
          *
          * @param symbolName the name with which the symbol should be exported into the polyglot
          *            scope
          * @param value the value to export for
-         * @throws SecurityException if exporting polyglot symbols is not allowed
          * @since 0.27
          */
         @TruffleBoundary
         public void exportSymbol(String symbolName, Object value) {
-            if (!isPolyglotAccessAllowed()) {
-                throw new SecurityException("Polyglot bindings are not accessible for this language.");
-            }
             AccessAPI.engineAccess().exportSymbol(vmObject, symbolName, value);
         }
 
@@ -1753,21 +1725,6 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Returns <code>true</code> if polyglot access is allowed, else <code>false</code>. Guest
-         * languages should hide or disable all polyglot builtins if this flag is set to
-         * <code>false</code>. Note that if polyglot access is disabled, then the
-         * {@link #getLanguages() available languages list} only shows the current language,
-         * {@link Registration#dependentLanguages() dependent languages} and
-         * {@link Registration#internal() internal languages}.
-         *
-         * @see org.graalvm.polyglot.Context.Builder#allowPolyglotAccess(org.graalvm.polyglot.PolyglotAccess)
-         * @since 1.0
-         */
-        public boolean isPolyglotAccessAllowed() {
-            return AccessAPI.engineAccess().isPolyglotAccessAllowed(vmObject);
-        }
-
-        /**
          * Allows it to be determined if this {@link org.graalvm.polyglot.Context} can execute code
          * written in a language with a given MIME type.
          *
@@ -1891,8 +1848,7 @@ public abstract class TruffleLanguage<C> {
         /**
          * Returns an additional service provided by the given language, specified by type. For
          * services registered by {@link Registration#services()} the service lookup will ensure
-         * that the language is loaded and services are registered. The provided langauge and type
-         * must not be <code>null</code>.
+         * that the language is loaded and services are registered.
          *
          * @param <S> the requested type
          * @param language the language to query
@@ -1907,7 +1863,7 @@ public abstract class TruffleLanguage<C> {
             if (this.getSpi().languageInfo == language) {
                 throw new IllegalArgumentException("Cannot request services from the current language.");
             }
-            Objects.requireNonNull(language);
+
             S result = AccessAPI.engineAccess().lookupService(vmObject, language, this.getSpi().languageInfo, type);
             if (result != null) {
                 return result;
@@ -1991,11 +1947,11 @@ public abstract class TruffleLanguage<C> {
         public TruffleFile getTruffleFile(String path) {
             checkDisposed();
             try {
-                return new TruffleFile(fileSystemContext, fileSystemContext.fileSystem.parsePath(path));
+                return new TruffleFile(fileSystem, fileSystem.parsePath(path));
             } catch (UnsupportedOperationException e) {
                 throw e;
             } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystemContext.fileSystem);
+                throw TruffleFile.wrapHostException(t, fileSystem);
             }
         }
 
@@ -2010,11 +1966,11 @@ public abstract class TruffleLanguage<C> {
         public TruffleFile getTruffleFile(URI uri) {
             checkDisposed();
             try {
-                return new TruffleFile(fileSystemContext, fileSystemContext.fileSystem.parsePath(uri));
+                return new TruffleFile(fileSystem, fileSystem.parsePath(uri));
             } catch (UnsupportedOperationException e) {
                 throw new FileSystemNotFoundException("FileSystem for: " + uri.getScheme() + " scheme is not supported.");
             } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystemContext.fileSystem);
+                throw TruffleFile.wrapHostException(t, fileSystem);
             }
         }
 
@@ -2055,11 +2011,11 @@ public abstract class TruffleLanguage<C> {
                 throw new IllegalArgumentException("Current working directory must be directory.");
             }
             try {
-                fileSystemContext.fileSystem.setCurrentWorkingDirectory(currentWorkingDirectory.getSPIPath());
+                fileSystem.setCurrentWorkingDirectory(currentWorkingDirectory.getSPIPath());
             } catch (UnsupportedOperationException | IllegalArgumentException | SecurityException e) {
                 throw e;
             } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystemContext.fileSystem);
+                throw TruffleFile.wrapHostException(t, fileSystem);
             }
         }
 
@@ -2073,9 +2029,9 @@ public abstract class TruffleLanguage<C> {
         public String getFileNameSeparator() {
             checkDisposed();
             try {
-                return fileSystemContext.fileSystem.getSeparator();
+                return fileSystem.getSeparator();
             } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystemContext.fileSystem);
+                throw TruffleFile.wrapHostException(t, fileSystem);
             }
         }
 
@@ -2493,8 +2449,8 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public Env createEnv(Object vmObject, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options,
-                        String[] applicationArguments, FileSystem fileSystem, Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectors) {
-            Env env = new Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem, fileTypeDetectors);
+                        String[] applicationArguments, FileSystem fileSystem) {
+            Env env = new Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem);
             LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
             LanguageInfo info = language.languageInfo;
             AccessAPI.instrumentAccess().collectEnvServices(collectedServices, API.nodes().getEngineObject(info), language);
@@ -2681,7 +2637,7 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public Env patchEnvContext(Env env, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options, String[] applicationArguments,
-                        FileSystem fileSystem, Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectors) {
+                        FileSystem fileSystem) {
             assert env.spi != null;
             final Env newEnv = createEnv(
                             env.vmObject,
@@ -2691,7 +2647,7 @@ public abstract class TruffleLanguage<C> {
                             stdIn,
                             config,
                             options,
-                            applicationArguments, fileSystem, fileTypeDetectors);
+                            applicationArguments, fileSystem);
 
             newEnv.initialized = env.initialized;
             newEnv.context = env.context;
@@ -2700,30 +2656,8 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public Object createFileSystemContext(FileSystem fileSystem, Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectors) {
-            return new TruffleFile.FileSystemContext(fileSystem, fileTypeDetectors);
-        }
-
-        @Override
-        public Object getCurrentFileSystemContext() {
-            Object polyglotContextImpl = AccessAPI.engineAccess().getCurrentOuterContext();
-            if (polyglotContextImpl == null) {
-                throw new IllegalStateException("No current context");
-            }
-            FileSystem fileSystem = AccessAPI.engineAccess().getFileSystem(polyglotContextImpl);
-            Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectorsSupplier = AccessAPI.engineAccess().getFileTypeDetectorsSupplier(polyglotContextImpl);
-            return new TruffleFile.FileSystemContext(fileSystem, fileTypeDetectorsSupplier);
-        }
-
-        @Override
-        public String getMimeType(TruffleFile file, Set<String> validMimeTypes) throws IOException {
-            return file.getMimeType(validMimeTypes);
-        }
-
-        @Override
-        public Charset getEncoding(TruffleFile file, String mimeType) throws IOException {
-            String useMimeType = mimeType == null ? file.getMimeType() : mimeType;
-            return useMimeType == null ? null : file.getEncoding(useMimeType);
+        public Path getPath(TruffleFile file) {
+            return file.getSPIPath();
         }
 
         @Override
@@ -2756,19 +2690,8 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public TruffleFile getTruffleFile(String path, Object fileSystemContext) {
-            TruffleFile.FileSystemContext ctx = (TruffleFile.FileSystemContext) fileSystemContext;
-            return new TruffleFile(ctx, ctx.fileSystem.parsePath(path));
-        }
-
-        @Override
-        public TruffleFile getTruffleFile(URI uri, Object fileSystemContext) {
-            TruffleFile.FileSystemContext ctx = (TruffleFile.FileSystemContext) fileSystemContext;
-            try {
-                return new TruffleFile(ctx, ctx.fileSystem.parsePath(uri));
-            } catch (UnsupportedOperationException e) {
-                throw new FileSystemNotFoundException("FileSystem for: " + uri.getScheme() + " scheme is not supported.");
-            }
+        public TruffleFile getTruffleFile(FileSystem fs, String path) {
+            return new TruffleFile(fs, fs.parsePath(path));
         }
 
         @Override
