@@ -24,102 +24,238 @@
  */
 package org.graalvm.component.installer.remote;
 
-import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.stream.Collectors;
+import org.graalvm.component.installer.model.CatalogContents;
 import org.graalvm.component.installer.CommandInput;
+import org.graalvm.component.installer.Commands;
+import org.graalvm.component.installer.CommonConstants;
+import org.graalvm.component.installer.ComponentCollection;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.model.ComponentRegistry;
-import org.graalvm.component.installer.persist.MetadataLoader;
 import org.graalvm.component.installer.SoftwareChannel;
+import org.graalvm.component.installer.SoftwareChannelSource;
 import org.graalvm.component.installer.model.ComponentInfo;
+import org.graalvm.component.installer.model.ComponentStorage;
 
 public class RemoteCatalogDownloader implements SoftwareChannel {
     private final CommandInput input;
     private final Feedback feedback;
-    private final String catalogString;
 
-    private ComponentRegistry catalog;
-    private Iterable<SoftwareChannel> channels;
-    private SoftwareChannel delegate;
+    private Iterable<SoftwareChannel.Factory> factories;
+    private List<SoftwareChannelSource> channelSources = new ArrayList<>();
+    private CatalogContents union;
+    private String overrideCatalogSpec;
+    private String defaultCatalogSpec;
+    private boolean catalogURLParsed;
+    private boolean remoteSourcesAllowed = true;
 
-    public RemoteCatalogDownloader(CommandInput in, Feedback out, String catLocation) {
+    public RemoteCatalogDownloader(CommandInput in, Feedback out, String overrideCatalogSpec) {
         this.input = in;
         this.feedback = out.withBundle(RemoteCatalogDownloader.class);
-
-        this.catalogString = catLocation;
-        channels = ServiceLoader.load(SoftwareChannel.class);
+        this.overrideCatalogSpec = overrideCatalogSpec;
+        this.factories = ServiceLoader.load(SoftwareChannel.Factory.class);
     }
 
+    // tests only
     public RemoteCatalogDownloader(CommandInput in, Feedback out, URL catalogURL) {
-        this(in, out, catalogURL.toString());
+        this(in, out, catalogURL == null ? null : catalogURL.toString());
+    }
+
+    public void addLocalChannelSource(SoftwareChannelSource src) {
+        src.setParameter("reportErrors", Boolean.FALSE.toString());
+        channelSources.add(src);
+    }
+
+    public void setRemoteSourcesAllowed(boolean remoteSourcesAllowed) {
+        this.remoteSourcesAllowed = remoteSourcesAllowed;
+    }
+
+    public boolean isRemoteSourcesAllowed() {
+        return remoteSourcesAllowed;
     }
 
     // for testing only
-    void setChannels(Iterable<SoftwareChannel> chan) {
-        this.channels = chan;
+    void setChannels(Iterable<SoftwareChannel.Factory> chan) {
+        this.factories = chan;
     }
 
-    public ComponentRegistry get() {
-        if (catalog == null) {
-            catalog = openCatalog();
-        }
-        return catalog;
+    public void setDefaultCatalog(String defaultCatalogSpec) {
+        this.defaultCatalogSpec = defaultCatalogSpec;
     }
 
-    SoftwareChannel delegate() {
-        if (delegate != null) {
-            return delegate;
+    public String getOverrideCatalogSpec() {
+        return overrideCatalogSpec;
+    }
+
+    private MergeStorage mergedStorage;
+
+    static final String CAP_CATALOG_URL_SUFFIX = "_" + CommonConstants.CAP_CATALOG_URL; // NOI18N
+
+    @SuppressWarnings("ThrowableResultIgnored")
+    List<SoftwareChannelSource> parseChannelSources(String overrideSpec) {
+        List<SoftwareChannelSource> sources = new ArrayList<>();
+        if (overrideSpec == null) {
+            return sources;
         }
-        for (SoftwareChannel ch : channels) {
-            if (ch.setupLocation(catalogString)) {
-                this.delegate = ch;
+        String[] parts = overrideSpec.split("\\|"); // NOI18N
+        for (String s : parts) {
+            try {
+                sources.add(new SoftwareChannelSource(s));
+            } catch (MalformedURLException ex) {
+                feedback.error("REMOTE_FailedToParseParameter", ex, s); // NOI18N
             }
         }
-        if (delegate == null) {
-            throw feedback.failure("REMOTE_CannotHandleLocation", null, catalogString);
+        return sources;
+    }
+
+    List<SoftwareChannelSource> getChannelSources() {
+        if (catalogURLParsed) {
+            return channelSources;
         }
-        delegate.init(input, feedback);
-        return delegate;
-    }
-
-    @SuppressWarnings("unchecked")
-    public ComponentRegistry openCatalog() {
-        return delegate().getRegistry();
-    }
-
-    @Override
-    public boolean setupLocation(String urlString) {
-        for (SoftwareChannel ch : channels) {
-            if (ch.setupLocation(catalogString)) {
-                return true;
+        List<SoftwareChannelSource> sources = Collections.emptyList();
+        if (remoteSourcesAllowed) {
+            if (overrideCatalogSpec != null) {
+                sources = parseChannelSources(overrideCatalogSpec);
+            } else {
+                sources = readChannelSources();
+                if (sources.isEmpty()) {
+                    sources = parseChannelSources(defaultCatalogSpec);
+                }
             }
         }
-        return false;
+        channelSources.addAll(0, sources);
+        catalogURLParsed = true;
+        return channelSources;
+    }
+
+    private static final Comparator<String> CHANNEL_KEY_COMPARATOR = new Comparator<String>() {
+        @Override
+        public int compare(String o1, String o2) {
+            String k1 = o1.substring(CommonConstants.CAP_CATALOG_PREFIX.length());
+            String k2 = o2.substring(CommonConstants.CAP_CATALOG_PREFIX.length());
+            int i1 = Integer.MAX_VALUE;
+            int i2 = Integer.MAX_VALUE;
+            try {
+                i1 = Integer.parseInt(k1);
+            } catch (NumberFormatException ex) {
+            }
+            try {
+                i2 = Integer.parseInt(k2);
+            } catch (NumberFormatException ex) {
+            }
+            if (i1 != i2) {
+                return i1 - i2;
+            }
+            return k1.compareToIgnoreCase(k2);
+        }
+    };
+
+    private static Map<String, String> lowercaseMap(Map<String, String> map) {
+        Map<String, String> res = new HashMap<>();
+        for (String s : map.keySet()) {
+            res.put(s.toLowerCase(Locale.ENGLISH), map.get(s));
+        }
+        return res;
+    }
+
+    List<SoftwareChannelSource> readChannelSources(String pref, Map<String, String> graalCaps) {
+        String prefix = pref + CommonConstants.CAP_CATALOG_PREFIX;
+        List<String> orderedKeys = graalCaps.keySet().stream().filter((k) -> {
+            String lk = k.toLowerCase(Locale.ENGLISH);
+            return lk.startsWith(prefix) && lk.endsWith(CAP_CATALOG_URL_SUFFIX);
+        }).map((k) -> k.substring(0, k.length() - CAP_CATALOG_URL_SUFFIX.length())).collect(Collectors.toList());
+        Collections.sort(orderedKeys, CHANNEL_KEY_COMPARATOR);
+
+        List<SoftwareChannelSource> sources = new ArrayList<>();
+        for (String key : orderedKeys) {
+            String url = graalCaps.get(key + CAP_CATALOG_URL_SUFFIX);
+            String lab = graalCaps.get(key + "_" + CommonConstants.CAP_CATALOG_LABEL);
+            if (url == null) {
+                continue;
+            }
+            SoftwareChannelSource s = new SoftwareChannelSource(url, lab);
+            for (String a : graalCaps.keySet()) {
+                if (!(a.startsWith(key) && a.length() > key.length() + 1)) {
+                    continue;
+                }
+                String k = a.substring(key.length() + 1).toLowerCase(Locale.ENGLISH);
+                switch (k) {
+                    case CommonConstants.CAP_CATALOG_LABEL:
+                    case CommonConstants.CAP_CATALOG_URL:
+                        continue;
+                }
+                s.setParameter(k, graalCaps.get(a));
+            }
+
+            sources.add(s);
+        }
+        return sources;
+    }
+
+    List<SoftwareChannelSource> readChannelSources() {
+        List<SoftwareChannelSource> res;
+        Map<String, String> lcEnv = lowercaseMap(input.parameters(false));
+        res = readChannelSources(CommonConstants.ENV_VARIABLE_PREFIX.toLowerCase(Locale.ENGLISH), lcEnv);
+        if (res != null && !res.isEmpty()) {
+            return res;
+        }
+        if (remoteSourcesAllowed) {
+            return readChannelSources("", input.getLocalRegistry().getGraalCapabilities()); // NOI18N
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
+    private MergeStorage mergeChannels() {
+        if (mergedStorage != null) {
+            return mergedStorage;
+        }
+        mergedStorage = new MergeStorage(input.getLocalRegistry(), feedback);
+        mergedStorage.setIgnoreCatalogErrors(input.hasOption(Commands.OPTION_IGNORE_CATALOG_ERRORS));
+        for (SoftwareChannelSource spec : getChannelSources()) {
+            SoftwareChannel ch = null;
+            for (SoftwareChannel.Factory f : factories) {
+                ch = f.createChannel(spec, input, feedback);
+                if (ch != null) {
+                    break;
+                }
+            }
+            if (ch != null) {
+                mergedStorage.addChannel(spec, ch);
+            }
+        }
+        return mergedStorage;
+    }
+
+    SoftwareChannel delegate(ComponentInfo ci) {
+        return mergeChannels().getOrigin(ci);
+    }
+
+    public ComponentCollection getRegistry() {
+        if (union == null) {
+            union = new CatalogContents(feedback, mergeChannels(), input.getLocalRegistry());
+            // get errors early
+            union.getComponentIDs();
+        }
+        return union;
     }
 
     @Override
-    public void init(CommandInput input, Feedback output) {
+    public FileDownloader configureDownloader(ComponentInfo cInfo, FileDownloader dn) {
+        return delegate(cInfo).configureDownloader(cInfo, dn);
     }
 
     @Override
-    public ComponentRegistry getRegistry() {
-        return delegate().getRegistry();
-    }
-
-    @Override
-    public MetadataLoader createLocalFileLoader(Path localFile, boolean verify) throws IOException {
-        return delegate.createLocalFileLoader(localFile, verify);
-    }
-
-    @Override
-    public FileDownloader configureDownloader(FileDownloader dn) {
-        return delegate.configureDownloader(dn);
-    }
-
-    @Override
-    public MetadataLoader completeMetadata(MetadataLoader ldr, ComponentInfo info) throws IOException {
-        return delegate.completeMetadata(ldr, info);
+    public ComponentStorage getStorage() {
+        return mergeChannels();
     }
 }
