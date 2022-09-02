@@ -308,6 +308,7 @@ public class ValueAssert {
                         fail("should have thrown");
                     } catch (PolyglotException expected) {
                         // caught expected exception
+                        assertTrue(expected.isGuestException());
                     } catch (UnsupportedOperationException unsupported) {
                         throw new AssertionError(unsupported);
                     }

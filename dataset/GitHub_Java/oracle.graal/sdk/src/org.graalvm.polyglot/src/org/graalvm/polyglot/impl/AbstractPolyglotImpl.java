@@ -51,6 +51,7 @@ import java.lang.reflect.AnnotatedElement;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -132,6 +133,8 @@ public abstract class AbstractPolyglotImpl {
                 throw new AssertionError("Only one implementation of APIAccess allowed. " + getClass().getCanonicalName());
             }
         }
+
+        public abstract boolean useContextClassLoader();
 
         public abstract Engine newEngine(AbstractEngineImpl impl);
 
@@ -249,6 +252,8 @@ public abstract class AbstractPolyglotImpl {
     public abstract AbstractSourceSectionImpl getSourceSectionImpl();
 
     public abstract AbstractManagementImpl getManagementImpl();
+
+    public abstract Path findHome();
 
     public abstract static class AbstractManagementImpl {
 
@@ -438,6 +443,8 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract Map<String, Language> getLanguages();
 
+        public abstract String getVersion();
+
         public abstract OptionDescriptors getOptions();
 
         public abstract Context createContext(OutputStream out, OutputStream err, InputStream in, boolean allowHostAccess,
@@ -446,7 +453,7 @@ public abstract class AbstractPolyglotImpl {
                         boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter,
                         Map<String, String> options,
                         Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream, boolean allowCreateProcess, ProcessHandler processHandler,
-                        EnvironmentAccess environmentAccess, Map<String, String> environment, ZoneId zone, Object limitsImpl, String currentWorkingDirectory);
+                        EnvironmentAccess environmentAccess, Map<String, String> environment, ZoneId zone, Object limitsImpl);
 
         public abstract String getImplementationName();
 
