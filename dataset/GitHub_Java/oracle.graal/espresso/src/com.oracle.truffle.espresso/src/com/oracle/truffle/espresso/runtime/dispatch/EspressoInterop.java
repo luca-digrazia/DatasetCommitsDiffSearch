@@ -42,7 +42,9 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
@@ -58,6 +60,7 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.EmptyKeysArray;
 import com.oracle.truffle.espresso.impl.Field;
@@ -79,6 +82,13 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 @ExportLibrary(value = InteropLibrary.class, receiverType = StaticObject.class)
 public class EspressoInterop extends BaseInterop {
     // region ### is/as checks/conversions
+
+    static final Object[] EMPTY_ARGS = new Object[]{};
+
+    public static Meta getMeta() {
+        CompilerAsserts.neverPartOfCompilation();
+        return EspressoLanguage.getCurrentContext().getMeta();
+    }
 
     static Object unwrapForeign(Object receiver) {
         if (receiver instanceof StaticObject && ((StaticObject) receiver).isForeignObject()) {
@@ -413,7 +423,7 @@ public class EspressoInterop extends BaseInterop {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
-                return receiver.<boolean[]> unwrap()[(int) index];
+                return receiver.<byte[]> unwrap()[(int) index] != 0;
             } catch (IndexOutOfBoundsException outOfBounds) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
@@ -851,29 +861,13 @@ public class EspressoInterop extends BaseInterop {
 
     @ExportMessage
     static Object readMember(StaticObject receiver, String member,
-                    @Cached @Exclusive LookupInstanceFieldNode lookupField
-    // , @Cached @Exclusive LookupVirtualMethodNode lookupMethod
-    ) throws UnknownIdentifierException {
+                    @Cached @Exclusive LookupInstanceFieldNode lookupField) throws UnknownIdentifierException {
         receiver.checkNotForeign();
         if (notNull(receiver)) {
             Field f = lookupField.execute(getInteropKlass(receiver), member);
             if (f != null) {
                 return unwrapForeign(f.get(receiver));
             }
-
-            // Disable reading method as executable members for now.
-            /*-
-            Method m = null;
-            try {
-                m = lookupMethod.execute(getInteropKlass(receiver), member, -1);
-            } catch (ArityException e) {
-                // Ignore
-            }
-            if (m != null) {
-                return new EspressoFunction(m, receiver);
-            }
-            */
-
             // Class<T>.static == Klass<T>
             if (CLASS_TO_STATIC.equals(member)) {
                 if (receiver.getKlass() == receiver.getKlass().getMeta().java_lang_Class) {
@@ -900,26 +894,12 @@ public class EspressoInterop extends BaseInterop {
 
     @ExportMessage
     static boolean isMemberReadable(StaticObject receiver, String member,
-                    @Cached @Exclusive LookupInstanceFieldNode lookupField
-    // , @Cached @Exclusive LookupVirtualMethodNode lookupMethod
-    ) {
+                    @Cached @Exclusive LookupInstanceFieldNode lookupField) {
         receiver.checkNotForeign();
         Field f = lookupField.execute(getInteropKlass(receiver), member);
         if (f != null) {
             return true;
         }
-        // Disable reading method as executable members for now.
-        /*-
-        Method m = null;
-        try {
-            m = lookupMethod.execute(getInteropKlass(receiver), member, -1);
-        } catch (ArityException e) {
-            // Ignore
-        }
-        if (m != null) {
-            return true;
-        }
-        */
         return notNull(receiver) && receiver.getKlass() == receiver.getKlass().getMeta().java_lang_Class //
                         && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
     }
@@ -938,15 +918,19 @@ public class EspressoInterop extends BaseInterop {
     @ExportMessage
     static void writeMember(StaticObject receiver, String member, Object value,
                     @Cached @Exclusive LookupInstanceFieldNode lookup,
-                    @Cached ToEspressoNode toEspresso) throws UnsupportedTypeException, UnknownIdentifierException {
+                    @Cached ToEspressoNode toEspresso,
+                    @Shared("error") @Cached BranchProfile error) throws UnsupportedTypeException, UnknownIdentifierException, UnsupportedMessageException {
         receiver.checkNotForeign();
         Field f = lookup.execute(getInteropKlass(receiver), member);
         if (f != null) {
-            if (!f.isFinalFlagSet()) {
-                f.set(receiver, toEspresso.execute(value, f.resolveTypeKlass()));
-                return;
+            if (f.isFinalFlagSet()) {
+                error.enter();
+                throw UnsupportedMessageException.create();
             }
+            f.set(receiver, toEspresso.execute(value, f.resolveTypeKlass()));
+            return;
         }
+        error.enter();
         throw UnknownIdentifierException.create(member);
     }
 
@@ -958,7 +942,7 @@ public class EspressoInterop extends BaseInterop {
 
     private static final String[] CLASS_KEYS = {CLASS_TO_STATIC, STATIC_TO_CLASS};
 
-    protected static ObjectKlass getInteropKlass(StaticObject receiver) {
+    public static ObjectKlass getInteropKlass(StaticObject receiver) {
         if (receiver.getKlass().isArray()) {
             return receiver.getKlass().getMeta().java_lang_Object;
         } else {
@@ -1053,7 +1037,7 @@ public class EspressoInterop extends BaseInterop {
     }
 
     @ExportMessage
-    static @CompilerDirectives.TruffleBoundary LocalDate asDate(StaticObject receiver,
+    static @TruffleBoundary LocalDate asDate(StaticObject receiver,
                     @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
         receiver.checkNotForeign();
         if (isDate(receiver)) {
@@ -1105,7 +1089,7 @@ public class EspressoInterop extends BaseInterop {
     }
 
     @ExportMessage
-    static @CompilerDirectives.TruffleBoundary LocalTime asTime(StaticObject receiver,
+    static @TruffleBoundary LocalTime asTime(StaticObject receiver,
                     @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
         receiver.checkNotForeign();
         if (isTime(receiver)) {
@@ -1157,7 +1141,7 @@ public class EspressoInterop extends BaseInterop {
     }
 
     @ExportMessage
-    static @CompilerDirectives.TruffleBoundary ZoneId asTimeZone(StaticObject receiver,
+    static @TruffleBoundary ZoneId asTimeZone(StaticObject receiver,
                     @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
         receiver.checkNotForeign();
         if (isTimeZone(receiver)) {
@@ -1180,28 +1164,25 @@ public class EspressoInterop extends BaseInterop {
     }
 
     @ExportMessage
-    static @CompilerDirectives.TruffleBoundary Instant asInstant(StaticObject receiver,
+    static @TruffleBoundary Instant asInstant(StaticObject receiver,
                     @CachedLibrary("receiver") InteropLibrary receiverLibrary, @Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
         receiver.checkNotForeign();
         if (receiverLibrary.isInstant(receiver)) {
+            StaticObject instant;
             Meta meta = receiver.getKlass().getMeta();
-            if (instanceOf(receiver, meta.java_time_Instant)) {
-                long seconds = (long) meta.java_time_Instant_seconds.get(receiver);
-                int nanos = (int) meta.java_time_Instant_nanos.get(receiver);
-                return Instant.ofEpochSecond(seconds, nanos);
-            } else if (instanceOf(receiver, meta.java_time_ZonedDateTime)) {
-                StaticObject instant = (StaticObject) meta.java_time_ZonedDateTime_toInstant.invokeDirect(receiver);
-                // Interop library should be compatible.
-                assert receiverLibrary.accepts(instant);
-                return asInstant(instant, receiverLibrary, error);
+            if (instanceOf(receiver, meta.java_time_ZonedDateTime)) {
+                instant = (StaticObject) meta.java_time_ZonedDateTime_toInstant.invokeDirect(receiver);
             } else if (instanceOf(receiver, meta.java_util_Date)) {
                 int index = meta.java_util_Date_toInstant.getVTableIndex();
                 Method virtualToInstant = receiver.getKlass().vtableLookup(index);
-                StaticObject instant = (StaticObject) virtualToInstant.invokeDirect(receiver);
-                // Interop library should be compatible.
-                assert receiverLibrary.accepts(instant);
-                return asInstant(instant, receiverLibrary, error);
+                instant = (StaticObject) virtualToInstant.invokeDirect(receiver);
+            } else {
+                instant = receiver;
             }
+            assert instanceOf(instant, meta.java_time_Instant);
+            long seconds = (long) meta.java_time_Instant_seconds.get(instant);
+            int nanos = (int) meta.java_time_Instant_nanos.get(instant);
+            return Instant.ofEpochSecond(seconds, nanos);
         }
         error.enter();
         throw UnsupportedMessageException.create();

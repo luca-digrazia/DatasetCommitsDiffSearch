@@ -205,18 +205,18 @@ public final class Target_java_lang_System {
 
     private static EspressoException throwOutOfBoundsEx(Meta meta, SubstitutionProfiler profiler) {
         profiler.profile(INDEXOUTOFBOUNDS_PROFILE);
-        throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
+        throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
     }
 
     private static EspressoException throwArrayStoreEx(Meta meta, SubstitutionProfiler profiler) {
         profiler.profile(ARRAYSTORE_PROFILE);
-        throw Meta.throwException(meta.java_lang_ArrayStoreException);
+        throw meta.throwException(meta.java_lang_ArrayStoreException);
     }
 
     @TruffleBoundary
     private static void handleForeignArray(Object src, int srcPos, Object dest, int destPos, int length, Klass destType, Meta meta, SubstitutionProfiler profiler) {
         InteropLibrary library = InteropLibrary.getUncached();
-        ToEspressoNode toEspressoNode = ToEspressoNodeGen.create();
+        ToEspressoNode toEspressoNode = ToEspressoNodeGen.getUncached();
         if (library.isNull(src) || library.isNull(dest)) {
             throw throwNullPointerEx(meta, profiler);
         }

@@ -23,10 +23,8 @@
 
 package com.oracle.truffle.espresso.nodes.quick.interop;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -35,7 +33,6 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
-import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
@@ -43,20 +40,6 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
-/**
- * ARRAYLENGTH bytecode with interop extensions.
- *
- * <p>
- * Augmented with two interop extensions:
- * <ul>
- * <li> For Truffle buffers ({@link InteropLibrary#hasBufferElements(Object) buffer-like} foreign objects) wrapped as {@code byte[]}, ARRAYLENGTH is mapped to {@link InteropLibrary#getBufferSize(Object)}.
- * <li> For {@link InteropLibrary#hasArrayElements(Object) array-like} foreign objects wrapped as {@code byte[]}, ARRAYLENGTH is mapped to {@link InteropLibrary#getBufferSize(Object)}.
- * </ul>
- *
- * <h3>Exceptions</h3>
- * <li>Throws guest {@link ClassCastException} if the length does not fit in an int.
- */
-@ImportStatic(Utils.class)
 public abstract class ArrayLengthNode extends QuickNode {
     protected static final int LIMIT = 3;
 
@@ -73,48 +56,23 @@ public abstract class ArrayLengthNode extends QuickNode {
 
     abstract int executeGetLength(StaticObject array);
 
-    @Specialization(guards = {
-                    "array.isForeignObject()",
-                    "isBufferLikeByteArray(context, interop, array)",
-    })
-    int doBufferLike(StaticObject array,
+    @Specialization(guards = "array.isForeignObject()")
+    int doForeign(StaticObject array,
                     @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile sizeOverflowProfile) {
-        try {
-            long bufferLength = interop.getBufferSize(array.rawForeignObject());
-            if (bufferLength > Integer.MAX_VALUE) {
-                sizeOverflowProfile.enter();
-                Meta meta = context.getMeta();
-                throw meta.throwExceptionWithMessage(meta.java_lang_ClassCastException, "The foreign array length does not fit in int");
-            }
-            return (int) bufferLength;
-        } catch (UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere(e);
-        }
-    }
-
-    @Specialization(guards = {
-                    "array.isForeignObject()",
-                    "!isBufferLikeByteArray(context, interop, array)",
-                    "isArrayLike(interop, array.rawForeignObject())"
-    })
-    int doArrayLike(StaticObject array,
-                    @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile sizeOverflowProfile) {
+                    @Cached BranchProfile exceptionProfile) {
         try {
             long arrayLength = interop.getArraySize(array.rawForeignObject());
             if (arrayLength > Integer.MAX_VALUE) {
-                sizeOverflowProfile.enter();
+                exceptionProfile.enter();
                 Meta meta = context.getMeta();
                 throw meta.throwExceptionWithMessage(meta.java_lang_ClassCastException, "The foreign array length does not fit in int");
             }
             return (int) arrayLength;
         } catch (UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere(e);
+            exceptionProfile.enter();
+            Meta meta = context.getMeta();
+            throw meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, "Called 'length' on a non-array object");
         }
     }
 
@@ -122,5 +80,9 @@ public abstract class ArrayLengthNode extends QuickNode {
     int doEspresso(StaticObject array) {
         return InterpreterToVM.arrayLength(array);
     }
-}
 
+    @Override
+    public final boolean producedForeignObject(Object[] refs) {
+        return false;
+    }
+}

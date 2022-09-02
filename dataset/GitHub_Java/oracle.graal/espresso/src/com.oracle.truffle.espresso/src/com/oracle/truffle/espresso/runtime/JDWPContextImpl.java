@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,9 @@ import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -62,13 +64,15 @@ import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 import com.oracle.truffle.espresso.jdwp.api.VMListener;
 import com.oracle.truffle.espresso.jdwp.impl.DebuggerController;
 import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
+import com.oracle.truffle.espresso.jdwp.impl.JDWP;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
-import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
 import com.oracle.truffle.espresso.jdwp.impl.TypeTag;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.nodes.BciProvider;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
+import com.oracle.truffle.espresso.nodes.quick.interop.ForeignArrayUtils;
+import com.oracle.truffle.espresso.runtime.dispatch.EspressoInterop;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
-import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 public final class JDWPContextImpl implements JDWPContext {
 
@@ -267,7 +271,7 @@ public final class JDWPContextImpl implements JDWPContext {
     public String getStringValue(Object object) {
         if (object instanceof StaticObject) {
             StaticObject staticObject = (StaticObject) object;
-            return (String) staticObject.toDisplayString(false);
+            return (String) EspressoInterop.toDisplayString(staticObject, false);
         }
         return object.toString();
     }
@@ -294,7 +298,7 @@ public final class JDWPContextImpl implements JDWPContext {
         if (classObject instanceof StaticObject) {
             StaticObject staticObject = (StaticObject) classObject;
             if (staticObject.getKlass().getType() == Symbol.Type.java_lang_Class) {
-                return (KlassRef) staticObject.getHiddenField(context.getMeta().HIDDEN_MIRROR_KLASS);
+                return (KlassRef) context.getMeta().HIDDEN_MIRROR_KLASS.getHiddenObject(staticObject);
             }
         }
         return null;
@@ -468,7 +472,19 @@ public final class JDWPContextImpl implements JDWPContext {
     public Object getArrayValue(Object array, int index) {
         StaticObject arrayRef = (StaticObject) array;
         Object value;
-        if (((ArrayKlass) arrayRef.getKlass()).getComponentType().isPrimitive()) {
+        if (arrayRef.isForeignObject()) {
+            value = ForeignArrayUtils.readForeignArrayElement(arrayRef, index, InteropLibrary.getUncached(), context.getMeta(), BranchProfile.create());
+            if (!(value instanceof StaticObject)) {
+                // For JDWP we have to have a ref type, so here we have to create a copy
+                // value when possible as a StaticObject based on the foreign type.
+                // Note: we only support Host String conversion for now
+                if (String.class.isInstance(value)) {
+                    return context.getMeta().toGuestString((String) value);
+                } else {
+                    throw new IllegalStateException("foreign object conversion not supported");
+                }
+            }
+        } else if (((ArrayKlass) arrayRef.getKlass()).getComponentType().isPrimitive()) {
             // primitive array type needs wrapping
             Object boxedArray = getUnboxedArray(array);
             value = Array.get(boxedArray, index);
@@ -481,7 +497,7 @@ public final class JDWPContextImpl implements JDWPContext {
     @Override
     public void setArrayValue(Object array, int index, Object value) {
         StaticObject arrayRef = (StaticObject) array;
-        arrayRef.putObject((StaticObject) value, index, context.getMeta());
+        context.getInterpreterToVM().setArrayObject((StaticObject) value, index, arrayRef);
     }
 
     @Override
@@ -581,9 +597,7 @@ public final class JDWPContextImpl implements JDWPContext {
     public long readBCIFromFrame(RootNode root, Frame frame) {
         if (root instanceof EspressoRootNode && frame != null) {
             EspressoRootNode rootNode = (EspressoRootNode) root;
-            if (rootNode.isBytecodeNode()) {
-                return rootNode.readBCI(frame);
-            }
+            return rootNode.readBCI(frame);
         }
         return -1;
     }
@@ -593,7 +607,7 @@ public final class JDWPContextImpl implements JDWPContext {
         Object currentThread = asGuestThread(Thread.currentThread());
         KlassRef klass = context.getMeta().java_lang_Object;
         MethodRef method = context.getMeta().java_lang_Object_wait.getMethodVersion();
-        return new CallFrame(ids.getIdAsLong(currentThread), TypeTag.CLASS, ids.getIdAsLong(klass), method, ids.getIdAsLong(method), 0, null, null, null, null);
+        return new CallFrame(ids.getIdAsLong(currentThread), TypeTag.CLASS, ids.getIdAsLong(klass), method, ids.getIdAsLong(method), 0, null, null, null, null, null);
     }
 
     @Override
@@ -603,6 +617,15 @@ public final class JDWPContextImpl implements JDWPContext {
             return asGuestThread(lock.getOwnerThread());
         }
         return null;
+    }
+
+    @Override
+    public int getMonitorEntryCount(Object monitor) {
+        if (monitor instanceof StaticObject) {
+            EspressoLock lock = ((StaticObject) monitor).getLock();
+            return lock.getEntryCount();
+        }
+        return -1;
     }
 
     @Override
@@ -633,14 +656,17 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean forceEarlyReturn(Object returnValue, CallFrame topFrame) {
-        // exit all monitors on the current top frame
-        MonitorStackInfo[] ownedMonitors = getOwnedMonitors(new CallFrame[]{topFrame});
-        for (MonitorStackInfo ownedMonitor : ownedMonitors) {
-            InterpreterToVM.monitorExit((StaticObject) ownedMonitor.getMonitor(), context.getMeta());
+    public void clearFrameMonitors(CallFrame frame) {
+        RootNode rootNode = frame.getRootNode();
+        if (rootNode instanceof EspressoRootNode) {
+            EspressoRootNode espressoRootNode = (EspressoRootNode) rootNode;
+            espressoRootNode.abortInternalMonitors(frame.getFrame());
         }
-        eventListener.forceEarlyReturn(returnValue);
-        return true;
+    }
+
+    @Override
+    public void abort(int exitCode) {
+        context.doExit(197);
     }
 
     @Override
@@ -648,10 +674,33 @@ public final class JDWPContextImpl implements JDWPContext {
         return EspressoLanguage.class;
     }
 
+    private static BciProvider getBciProviderNode(Node node) {
+        if (node instanceof BciProvider) {
+            return (BciProvider) node;
+        }
+        Node currentNode = node.getParent();
+        while (currentNode != null) {
+            if (currentNode instanceof BciProvider) {
+                return (BciProvider) currentNode;
+            }
+            currentNode = currentNode.getParent();
+        }
+        return null;
+    }
+
+    @Override
+    public long getBCI(Node rawNode, Frame frame) {
+        BciProvider bciProvider = getBciProviderNode(rawNode);
+        if (bciProvider == null) {
+            return -1;
+        }
+        return bciProvider.getBci(frame);
+    }
+
     @Override
     public synchronized int redefineClasses(RedefineInfo[] redefineInfos) {
         try {
-            JDWPLogger.log("Redefining %d classes", JDWPLogger.LogLevel.REDEFINE, redefineInfos.length);
+            JDWP.LOGGER.fine(() -> "Redefining " + redefineInfos.length + " classes");
             // list of sub classes that needs to refresh things like vtable
             List<ObjectKlass> refreshSubClasses = new ArrayList<>();
 
@@ -669,7 +718,7 @@ public final class JDWPContextImpl implements JDWPContext {
             // begin redefine transaction
             ClassRedefinition.begin();
             for (ChangePacket packet : changePackets) {
-                JDWPLogger.log("Redefining class %s", JDWPLogger.LogLevel.REDEFINE, packet.info.getNewName());
+                JDWP.LOGGER.fine(() -> "Redefining class " + packet.info.getNewName());
                 int result = ClassRedefinition.redefineClass(packet, getIds(), context, refreshSubClasses);
                 if (result != 0) {
                     return result;
@@ -678,7 +727,7 @@ public final class JDWPContextImpl implements JDWPContext {
             // refresh subclasses when needed
             Collections.sort(refreshSubClasses, new SubClassHierarchyComparator());
             for (ObjectKlass subKlass : refreshSubClasses) {
-                JDWPLogger.log("Updating sub class %s for redefined super class", JDWPLogger.LogLevel.REDEFINE, subKlass.getName());
+                JDWP.LOGGER.fine(() -> "Updating sub class " + subKlass.getName() + " for redefined super class");
                 subKlass.onSuperKlassUpdate();
             }
 
