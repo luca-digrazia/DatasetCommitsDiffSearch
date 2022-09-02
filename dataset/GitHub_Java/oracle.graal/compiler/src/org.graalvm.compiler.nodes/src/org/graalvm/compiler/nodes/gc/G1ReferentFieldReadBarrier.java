@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,18 +42,16 @@ import org.graalvm.compiler.nodes.memory.address.AddressNode;
 public final class G1ReferentFieldReadBarrier extends ObjectWriteBarrier {
     public static final NodeClass<G1ReferentFieldReadBarrier> TYPE = NodeClass.create(G1ReferentFieldReadBarrier.class);
 
-    private final boolean doLoad;
-
-    public G1ReferentFieldReadBarrier(AddressNode address, ValueNode expectedObject, boolean doLoad) {
+    public G1ReferentFieldReadBarrier(AddressNode address, ValueNode expectedObject) {
         super(TYPE, address, expectedObject, true);
-        this.doLoad = doLoad;
     }
 
     public ValueNode getExpectedObject() {
         return getValue();
     }
 
-    public boolean doLoad() {
-        return doLoad;
+    @Override
+    public Kind getKind() {
+        return Kind.PRE_BARRIER;
     }
 }
