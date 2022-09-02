@@ -41,7 +41,7 @@ import jdk.vm.ci.meta.Value;
 /**
  * Removes the current frame and tail calls the uncommon trap routine.
  */
-@Opcode("DEOPT_WITH_EXCEPTION_IN_CALLER")
+@Opcode("DEOPT_CALLER")
 public class AArch64HotSpotDeoptimizeWithExceptionCallerOp extends AArch64HotSpotEpilogueOp {
     public static final LIRInstructionClass<AArch64HotSpotDeoptimizeWithExceptionCallerOp> TYPE = LIRInstructionClass.create(AArch64HotSpotDeoptimizeWithExceptionCallerOp.class);
 
@@ -59,9 +59,9 @@ public class AArch64HotSpotDeoptimizeWithExceptionCallerOp extends AArch64HotSpo
         leaveFrame(crb, masm, /* emitSafepoint */false, false);
 
         // Save exception oop in TLS
-        masm.str(64, exc, masm.makeAddress(thread, config.threadExceptionOopOffset, 8));
+        masm.str(64, exc, masm.makeAddress(thread, config.threadExceptionOopOffset));
         // Store original return address in TLS
-        masm.str(64, lr, masm.makeAddress(thread, config.threadExceptionPcOffset, 8));
+        masm.str(64, lr, masm.makeAddress(thread, config.threadExceptionPcOffset));
 
         AArch64Call.directJmp(crb, masm, crb.foreignCalls.lookupForeignCall(DEOPT_BLOB_UNPACK_WITH_EXCEPTION_IN_TLS));
     }
