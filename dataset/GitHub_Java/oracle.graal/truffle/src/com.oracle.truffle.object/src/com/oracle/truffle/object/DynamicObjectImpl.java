@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,14 +42,7 @@ package com.oracle.truffle.object;
 
 import java.util.Iterator;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Shared;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.library.DynamicDispatchLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.LocationFactory;
 import com.oracle.truffle.api.object.ObjectType;
@@ -58,18 +51,23 @@ import com.oracle.truffle.api.object.Shape;
 
 /** @since 0.17 or earlier */
 @SuppressWarnings("deprecation")
-@ExportLibrary(DynamicDispatchLibrary.class)
 public abstract class DynamicObjectImpl extends DynamicObject implements Cloneable {
 
     /** @since 0.17 or earlier */
     protected DynamicObjectImpl(Shape shape) {
-        super(shape.getRoot(), LayoutImpl.ACCESS);
+        super(shape.getRoot());
         initialize(shape);
         setShapeImpl(shape);
 
         if (ObjectStorageOptions.Profile) {
             Debug.trackObject(this);
         }
+    }
+
+    /** @since 0.17 or earlier */
+    @Deprecated
+    public Object getTypeIdentifier() {
+        return getShape();
     }
 
     final ShapeImpl getShapeImpl() {
@@ -139,7 +137,7 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
     /** @since 0.17 or earlier */
     protected abstract void growPrimitiveStore(Shape oldShape, Shape newShape);
 
-    protected void resizeStore(Shape oldShape, Shape newShape) {
+    private void resizeStore(Shape oldShape, Shape newShape) {
         resizeObjectStore(oldShape, newShape);
         if (((ShapeImpl) newShape).hasPrimitiveArray) {
             resizePrimitiveStore(oldShape, newShape);
@@ -174,7 +172,11 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
     /** @since 0.17 or earlier */
     @Override
     protected final DynamicObject clone() {
-        return LayoutImpl.ACCESS.objectClone(this);
+        try {
+            return (DynamicObject) super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new IllegalStateException();
+        }
     }
 
     /** @since 0.17 or earlier */
@@ -321,40 +323,16 @@ public abstract class DynamicObjectImpl extends DynamicObject implements Cloneab
         return cloneWithShape(currentShape);
     }
 
-    @ExportMessage
-    static class Accepts {
-
-        @Specialization(limit = "1", guards = "cachedShape == receiver.getShape()")
-        @SuppressWarnings("unused")
-        static boolean doCachedShape(DynamicObjectImpl receiver,
-                        @Shared("cachedShape") @Cached("receiver.getShape()") Shape cachedShape,
-                        @Shared("cachedTypeClass") @Cached(value = "receiver.getShape().getObjectType().getClass()", allowUncached = true) Class<? extends ObjectType> typeClass) {
-            return true;
-        }
-
-        @Specialization(replaces = "doCachedShape")
-        static boolean doCachedTypeClass(DynamicObjectImpl receiver,
-                        @Shared("cachedTypeClass") @Cached(value = "receiver.getShape().getObjectType().getClass()", allowUncached = true) Class<? extends ObjectType> typeClass) {
-            return typeClass == receiver.getShape().getObjectType().getClass();
-        }
+    /**
+     * @since 0.17 or earlier
+     *
+     * @deprecated use {@link ObjectType#dispatch()} instead
+     */
+    @SuppressWarnings("deprecation")
+    @Override
+    @Deprecated
+    public com.oracle.truffle.api.interop.ForeignAccess getForeignAccess() {
+        return getShapeImpl().getForeignAccessFactory(this);
     }
 
-    @ExportMessage
-    static class Dispatch {
-
-        @Specialization(limit = "1", guards = "cachedShape == receiver.getShape()")
-        @SuppressWarnings("unused")
-        static Class<?> doCachedShape(DynamicObjectImpl receiver,
-                        @Shared("cachedShape") @Cached("receiver.getShape()") Shape cachedShape,
-                        @Shared("cachedTypeClass") @Cached(value = "receiver.getShape().getObjectType().getClass()", allowUncached = true) Class<? extends ObjectType> typeClass) {
-            return cachedShape.getObjectType().dispatch();
-        }
-
-        @Specialization(replaces = "doCachedShape")
-        static Class<?> doCachedTypeClass(DynamicObjectImpl receiver,
-                        @Shared("cachedTypeClass") @Cached(value = "receiver.getShape().getObjectType().getClass()", allowUncached = true) Class<? extends ObjectType> typeClass) {
-            ObjectType objectType = CompilerDirectives.castExact(receiver.getShape().getObjectType(), typeClass);
-            return objectType.dispatch();
-        }
-    }
 }
