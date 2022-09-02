@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -33,9 +35,9 @@ import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
 import org.graalvm.compiler.lir.LIRValueUtil;
 import org.graalvm.compiler.lir.Opcode;
+import org.graalvm.compiler.lir.StandardOp;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
-import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.meta.AllocatableValue;
@@ -44,7 +46,7 @@ import jdk.vm.ci.meta.AllocatableValue;
  * Restores registers from stack slots.
  */
 @Opcode("RESTORE_REGISTER")
-public class AArch64RestoreRegistersOp extends AArch64LIRInstruction {
+public class AArch64RestoreRegistersOp extends AArch64LIRInstruction implements StandardOp.RestoreRegistersOp {
     public static final LIRInstructionClass<AArch64RestoreRegistersOp> TYPE = LIRInstructionClass.create(AArch64RestoreRegistersOp.class);
 
     /**
