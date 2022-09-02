@@ -31,6 +31,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.AnnotatedType;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
@@ -54,7 +56,6 @@ import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
-import org.graalvm.compiler.serviceprovider.BufferUtil;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 
@@ -88,9 +89,9 @@ import com.oracle.svm.core.graal.code.CGlobalDataInfo;
 import com.oracle.svm.core.graal.code.CGlobalDataReference;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.util.UserError;
+import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.c.CGlobalDataFeature;
-import com.oracle.svm.hosted.c.GraalAccess;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.c.codegen.CSourceCodeWriter;
 import com.oracle.svm.hosted.c.codegen.QueryCodeWriter;
@@ -104,12 +105,7 @@ import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedUniverse;
 import com.oracle.svm.hosted.meta.MethodPointer;
-import com.oracle.svm.util.ReflectionUtil;
-import com.oracle.svm.util.ReflectionUtil.ReflectionUtilError;
 
-import jdk.vm.ci.aarch64.AArch64;
-import jdk.vm.ci.amd64.AMD64;
-import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.code.site.ConstantReference;
 import jdk.vm.ci.code.site.DataSectionReference;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -238,9 +234,17 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
     private static Header instantiateCHeader(Class<? extends CHeader.Header> header) {
         try {
-            return ReflectionUtil.newInstance(header);
-        } catch (ReflectionUtilError ex) {
-            throw UserError.abort("CHeader " + header.getName() + " cannot be instantiated. Please make sure that it has a nullary constructor and is not abstract.", ex.getCause());
+            Constructor<?> constructor = header.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            return (CHeader.Header) constructor.newInstance();
+        } catch (NoSuchMethodException e) {
+            throw UserError.abort("CHeader " + header.getName() + " can't be instantiated. Please make sure that it has a nullary constructor.");
+        } catch (InstantiationException e) {
+            throw UserError.abort("CHeader " + header.getName() + " can't be instantiated. Make sure that " + header.getSimpleName() + " is not abstract.");
+        } catch (IllegalAccessException e) {
+            throw VMError.shouldNotReachHere("We set the constructor to accessible.");
+        } catch (InvocationTargetException e) {
+            throw UserError.abort("CHeader " + header.getName() + " can't be instantiated. The constructor threw and exception: " + e.getTargetException().getMessage());
         }
     }
 
@@ -508,7 +512,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
      */
     @SuppressWarnings("cast")
     private static ByteBuffer castToByteBuffer(final RelocatableBuffer heapSectionBuffer) {
-        return (ByteBuffer) BufferUtil.asBaseBuffer(heapSectionBuffer.getBuffer().asReadOnlyBuffer()).position(0);
+        return (ByteBuffer) heapSectionBuffer.getBuffer().asReadOnlyBuffer().position(0);
     }
 
     private void markRelocationSitesFromMaps(RelocatableBuffer relocationMap, ProgbitsSectionImpl sectionImpl, Map<Object, NativeImageHeap.ObjectInfo> objectMap) {
@@ -519,7 +523,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
             final int offset = entry.getKey();
             final RelocatableBuffer.Info info = entry.getValue();
 
-            assert GraalAccess.getOriginalTarget().arch instanceof AArch64 || checkEmbeddedOffset(sectionImpl, offset, info);
+            assert checkEmbeddedOffset(sectionImpl, offset, info);
 
             // Figure out what kind of relocation site it is.
             if (info.getTargetObject() instanceof CFunctionPointer) {
@@ -546,7 +550,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
         final ByteBuffer dataBuf = ByteBuffer.wrap(sectionImpl.getContent()).order(sectionImpl.getElement().getOwner().getByteOrder());
         if (info.getRelocationSize() == Long.BYTES) {
             long value = dataBuf.getLong(offset);
-            assert value == 0 || value == 0xDEADDEADDEADDEADL : String.format("unexpected embedded offset: 0x%x, info: %s", value, info);
+            assert value == 0 || value == 0xDEADDEADDEADDEADL : "unexpected embedded offset";
         } else if (info.getRelocationSize() == Integer.BYTES) {
             int value = dataBuf.getInt(offset);
             assert value == 0 || value == 0xDEADDEAD : "unexpected embedded offset";
@@ -589,8 +593,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
     }
 
     private void markDataRelocationSiteFromText(RelocatableBuffer buffer, final ProgbitsSectionImpl sectionImpl, final int offset, final Info info, final Map<Object, ObjectInfo> objectMap) {
-        assert ConfigurationValues.getTarget().arch instanceof AArch64 ||
-                        ((info.getRelocationSize() == 4) || (info.getRelocationSize() == 8)) : "Data relocation size should be 4 or 8 bytes. Got size: " + info.getRelocationSize();
+        assert ((info.getRelocationSize() == 4) || (info.getRelocationSize() == 8)) : "Data relocation size should be 4 or 8 bytes.";
         Object target = info.getTargetObject();
         if (target instanceof DataSectionReference) {
             long addend = ((DataSectionReference) target).getOffset() - info.getExplicitAddend();
@@ -617,28 +620,12 @@ public abstract class NativeBootImage extends AbstractBootImage {
             int encShift = ImageSingletons.lookup(CompressEncoding.class).getShift();
             long targetValue = targetOffset >>> encShift;
             assert (targetValue << encShift) == targetOffset : "Reference compression shift discards non-zero bits: " + Long.toHexString(targetOffset);
-            Architecture arch = GraalAccess.getOriginalTarget().arch;
-            if (arch instanceof AMD64) {
-                if (info.getRelocationSize() == Long.BYTES) {
-                    buffer.getBuffer().putLong(offset, targetValue);
-                } else if (info.getRelocationSize() == Integer.BYTES) {
-                    buffer.getBuffer().putInt(offset, NumUtil.safeToInt(targetValue));
-                } else {
-                    new Exception().printStackTrace();
-                    shouldNotReachHere("Unsupported object reference size: " + info.getRelocationSize());
-                }
-            } else if (arch instanceof AArch64) {
-                int numInstrs = info.getRelocationSize() / 2;
-                long curValue = targetValue;
-
-                for (int i = 0; i < numInstrs; ++i) {
-                    int instrValue = (int) (curValue & 0xFFFF);
-                    instrValue = instrValue << 5;
-                    int prevValue = buffer.getBuffer().getInt(offset + (4 * i));
-                    int newValue = (prevValue & (~(0xFFFF << 5))) | instrValue;
-                    buffer.getBuffer().putInt(offset + (4 * i), 0xFFFFFFFF & newValue);
-                    curValue = curValue >> 16;
-                }
+            if (info.getRelocationSize() == Long.BYTES) {
+                buffer.getBuffer().putLong(offset, targetValue);
+            } else if (info.getRelocationSize() == Integer.BYTES) {
+                buffer.getBuffer().putInt(offset, NumUtil.safeToInt(targetValue));
+            } else {
+                shouldNotReachHere("Unsupported object reference size");
             }
         } else {
             throw shouldNotReachHere("Unsupported target object for relocation in text section");
@@ -873,7 +860,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
                 // the map starts out empty...
                 assert textBuffer.mapSize() == 0;
-                codeCache.patchMethods(debug, textBuffer, objectFile);
+                codeCache.patchMethods(textBuffer, objectFile);
                 // but now may be populated
 
                 /*
