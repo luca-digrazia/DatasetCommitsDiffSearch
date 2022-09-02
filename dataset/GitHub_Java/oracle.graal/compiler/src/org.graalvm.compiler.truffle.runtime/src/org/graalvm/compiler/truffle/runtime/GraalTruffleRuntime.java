@@ -25,6 +25,8 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import static org.graalvm.compiler.truffle.common.TruffleOutputGroup.GROUP_ID;
+import static org.graalvm.compiler.truffle.runtime.TruffleDebugOptions.PrintGraph;
+import static org.graalvm.compiler.truffle.runtime.TruffleDebugOptions.PrintGraphTarget.Disable;
 
 import java.io.CharArrayWriter;
 import java.io.PrintWriter;
@@ -34,6 +36,7 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,7 +45,6 @@ import java.util.ServiceLoader;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
@@ -69,8 +71,6 @@ import org.graalvm.compiler.truffle.runtime.debug.TraceCompilationPolymorphismLi
 import org.graalvm.compiler.truffle.runtime.debug.TraceInliningListener;
 import org.graalvm.compiler.truffle.runtime.debug.TraceSplittingListener;
 import org.graalvm.compiler.truffle.runtime.serviceprovider.TruffleRuntimeServices;
-import org.graalvm.nativeimage.ImageInfo;
-import org.graalvm.options.OptionDescriptors;
 
 import com.oracle.truffle.api.ArrayUtils;
 import com.oracle.truffle.api.Assumption;
@@ -110,12 +110,12 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.LayoutFactory;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.profiles.ConditionProfile;
-import java.util.HashMap;
 
 import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.stack.InspectedFrame;
 import jdk.vm.ci.code.stack.InspectedFrameVisitor;
 import jdk.vm.ci.code.stack.StackIntrospection;
+import jdk.vm.ci.common.NativeImageReinitialize;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -125,14 +125,10 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.services.Services;
-import org.graalvm.options.OptionDescriptor;
-import org.graalvm.options.OptionKey;
-import org.graalvm.options.OptionValues;
 
 /**
  * Implementation of the Truffle runtime when running on top of Graal. There is only one per VM.
  */
-
 public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleCompilerRuntime {
 
     private static final int JAVA_SPECIFICATION_VERSION = getJavaSpecificationVersion();
@@ -149,11 +145,17 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     private final GraalTruffleRuntimeListenerDispatcher listeners = new GraalTruffleRuntimeListenerDispatcher();
 
     protected volatile TruffleCompiler truffleCompiler;
-
+    protected LoopNodeFactory loopNodeFactory;
     protected CallMethods callMethods;
 
     private final GraalTVMCI tvmci = new GraalTVMCI();
+
     private volatile GraalTestTVMCI testTvmci;
+
+    /**
+     * Option values initialized from Truffle compiler runtime.
+     */
+    @NativeImageReinitialize private volatile Map<String, Object> initialOptions;
 
     /**
      * Utility method that casts the singleton {@link TruffleRuntime}.
@@ -162,19 +164,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return (GraalTruffleRuntime) Truffle.getRuntime();
     }
 
-    private final LoopNodeFactory loopNodeFactory;
-    private final EngineCacheSupport engineCacheSupport;
     private final UnmodifiableEconomicMap<String, Class<?>> lookupTypes;
-    private final OptionDescriptors engineOptions;
 
     public GraalTruffleRuntime(Iterable<Class<?>> extraLookupTypes) {
         this.lookupTypes = initLookupTypes(extraLookupTypes);
-        List<OptionDescriptors> options = new ArrayList<>();
-        this.loopNodeFactory = loadGraalRuntimeServiceProvider(LoopNodeFactory.class, options, true);
-        EngineCacheSupport support = loadGraalRuntimeServiceProvider(EngineCacheSupport.class, options, false);
-        this.engineCacheSupport = support == null ? new EngineCacheSupport.Disabled() : support;
-        options.add(PolyglotCompilerOptions.getDescriptors());
-        this.engineOptions = OptionDescriptors.createUnion(options.toArray(new OptionDescriptors[options.size()]));
     }
 
     @Override
@@ -249,49 +242,41 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return optimizedAssumption.registerDependency();
     }
 
+    @Override
+    public final Map<String, Object> getOptions() {
+        Map<String, Object> res = initialOptions;
+        if (res == null) {
+            synchronized (this) {
+                res = initialOptions;
+                if (res == null) {
+                    res = createInitialOptions();
+                    initialOptions = res;
+                }
+            }
+        }
+        return res;
+    }
+
     protected abstract JavaConstant forObject(Object object);
 
     protected abstract <T> T asObject(Class<T> type, JavaConstant constant);
 
-    protected abstract boolean isPrintGraphEnabled();
+    protected abstract Map<String, Object> createInitialOptions();
 
     public abstract TruffleCompiler newTruffleCompiler();
 
-    private static <T> T loadServiceProvider(Class<T> clazz, boolean failIfNotFound) {
-        Iterable<T> providers;
-        if (ImageInfo.inImageBuildtimeCode()) {
-            providers = ServiceLoader.load(clazz);
-        } else {
-            providers = TruffleRuntimeServices.load(clazz);
-        }
-        boolean priorityService = GraalRuntimeServiceProvider.class.isAssignableFrom(clazz);
+    private static <T extends PrioritizedServiceProvider> T loadPrioritizedServiceProvider(Class<T> clazz) {
+        Iterable<T> providers = TruffleRuntimeServices.load(clazz);
         T bestFactory = null;
-        int bestPriority = 0;
         for (T factory : providers) {
-            int currentPriority;
-            if (priorityService) {
-                currentPriority = ((GraalRuntimeServiceProvider) factory).getPriority();
-            } else {
-                currentPriority = 0;
-            }
-            if (bestFactory == null || currentPriority > bestPriority) {
+            if (bestFactory == null) {
                 bestFactory = factory;
-                bestPriority = currentPriority;
+            } else if (factory.getPriority() > bestFactory.getPriority()) {
+                bestFactory = factory;
             }
         }
-        if (bestFactory == null && failIfNotFound) {
+        if (bestFactory == null) {
             throw new IllegalStateException("Unable to load a factory for " + clazz.getName());
-        }
-        return bestFactory;
-    }
-
-    private static <T extends GraalRuntimeServiceProvider> T loadGraalRuntimeServiceProvider(Class<T> clazz, List<OptionDescriptors> descriptors, boolean failIfNotFound) {
-        T bestFactory = loadServiceProvider(clazz, failIfNotFound);
-        if (descriptors != null && bestFactory != null) {
-            OptionDescriptors serviceOptions = bestFactory.getEngineOptions();
-            if (serviceOptions != null) {
-                descriptors.add(serviceOptions);
-            }
         }
         return bestFactory;
     }
@@ -436,7 +421,15 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         TraceASTCompilationListener.install(this);
         JFRListener.install(this);
         TruffleSplittingStrategy.installListener(this);
-        Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
+        installShutdownHooks();
+    }
+
+    protected void installShutdownHooks() {
+        addShutdownHook(this::shutdown);
+    }
+
+    protected void addShutdownHook(Runnable hook) {
+        Runtime.getRuntime().addShutdownHook(new Thread(hook));
     }
 
     protected void lookupCallMethods(MetaAccessProvider metaAccess) {
@@ -461,12 +454,11 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return getLoopNodeFactory().create(repeatingNode);
     }
 
-    protected final LoopNodeFactory getLoopNodeFactory() {
+    protected LoopNodeFactory getLoopNodeFactory() {
+        if (loopNodeFactory == null) {
+            loopNodeFactory = loadPrioritizedServiceProvider(LoopNodeFactory.class);
+        }
         return loopNodeFactory;
-    }
-
-    public final EngineCacheSupport getEngineCacheSupport() {
-        return engineCacheSupport;
     }
 
     @Override
@@ -596,7 +588,11 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             return capability.cast(getTestTvmci());
         }
         try {
-            return loadServiceProvider(capability, false);
+            Iterator<T> services = TruffleRuntimeServices.load(capability).iterator();
+            if (services.hasNext()) {
+                return services.next();
+            }
+            return null;
         } catch (ServiceConfigurationError e) {
             // Happens on JDK 9 when a service type has not been exported to Graal
             // or Graal's module descriptor does not declare a use of capability.
@@ -638,7 +634,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         listeners.remove(listener);
     }
 
-    private void shutdown() {
+    protected void shutdown() {
         getListener().onShutdown();
         TruffleCompiler tcp = truffleCompiler;
         if (tcp != null) {
@@ -646,27 +642,19 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
-    protected final void doCompile(OptimizedCallTarget callTarget, TruffleCompilationTask task) {
-        List<OptimizedCallTarget> oldBlockCompilations = callTarget.blockCompilations;
-        if (oldBlockCompilations != null) {
-            for (OptimizedCallTarget blockTarget : oldBlockCompilations) {
-                if (blockTarget.isValid()) {
-                    continue;
-                }
-                int nodeCount = blockTarget.getNonTrivialNodeCount();
-                if (nodeCount > callTarget.engine.getEngineOptions().get(PolyglotCompilerOptions.PartialBlockMaximumSize)) {
-                    listeners.onCompilationDequeued(blockTarget, null, "Partial block is too big to be compiled.");
-                    continue;
-                }
-                compileImpl(blockTarget, task);
+    void onEngineClosed(EngineData runtimeData) {
+        getListener().onEngineClosed(runtimeData);
+    }
+
+    protected void doCompile(OptimizedCallTarget callTarget, TruffleCompilationTask task) {
+        List<OptimizedCallTarget> blockCompilations = OptimizedBlockNode.preparePartialBlockCompilations(callTarget);
+        for (OptimizedCallTarget blockTarget : blockCompilations) {
+            if (blockTarget.isValid()) {
+                continue;
             }
+            compileImpl(blockTarget, task);
         }
         compileImpl(callTarget, task);
-
-        if (oldBlockCompilations == null && callTarget.blockCompilations != null) {
-            // retry with block compilations
-            doCompile(callTarget, task);
-        }
     }
 
     @SuppressWarnings("try")
@@ -675,14 +663,14 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         try {
             TruffleCompiler compiler = getTruffleCompiler(callTarget);
             try (TruffleCompilation compilation = compiler.openCompilation(callTarget)) {
-                final Map<String, Object> optionsMap = getOptionsForCompiler(callTarget);
+                final Map<String, Object> optionsMap = TruffleRuntimeOptions.getOptionsForCompiler(callTarget);
                 try (TruffleDebugContext debug = compiler.openDebugContext(optionsMap, compilation)) {
                     compilationStarted = true;
                     listeners.onCompilationStarted(callTarget);
                     TruffleInlining inlining = createInliningPlan(callTarget, task);
                     try (AutoCloseable s = debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget))) {
                         // Open the "Truffle::methodName" dump group if dumping is enabled.
-                        try (TruffleOutputGroup o = !isPrintGraphEnabled() ? null
+                        try (TruffleOutputGroup o = TruffleDebugOptions.getValue(PrintGraph) == Disable ? null
                                         : TruffleOutputGroup.open(debug, callTarget, Collections.singletonMap(GROUP_ID, compilation))) {
                             // Create "AST" and "Call Tree" groups if dumping is enabled.
                             maybeDumpTruffleTree(debug, callTarget, inlining);
@@ -726,7 +714,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 listeners.onCompilationDequeued(callTarget, this, String.format("Failed to create Truffle compiler due to %s.", t.getMessage()));
             }
         } finally {
-            callTarget.onCompilationFailed(() -> CompilableTruffleAST.serializeException(t), false, false, false);
+            callTarget.onCompilationFailed(() -> CompilableTruffleAST.serializeException(t), false, false);
         }
     }
 
@@ -753,14 +741,14 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
-    public abstract BackgroundCompileQueue getCompileQueue();
+    protected abstract BackgroundCompileQueue getCompileQueue();
 
     @SuppressWarnings("try")
     public CancellableCompileTask submitForCompilation(OptimizedCallTarget optimizedCallTarget, boolean lastTierCompilation) {
         Priority priority = new Priority(optimizedCallTarget.getCallAndLoopCount(), lastTierCompilation ? Priority.Tier.LAST : Priority.Tier.FIRST);
-        return getCompileQueue().submitTask(priority, optimizedCallTarget, new BiConsumer<CancellableCompileTask, WeakReference<OptimizedCallTarget>>() {
+        return getCompileQueue().submitTask(priority, optimizedCallTarget, new BackgroundCompileQueue.Request() {
             @Override
-            public void accept(CancellableCompileTask task, WeakReference<OptimizedCallTarget> targetRef) {
+            protected void execute(CancellableCompileTask task, WeakReference<OptimizedCallTarget> targetRef) {
                 OptimizedCallTarget callTarget = targetRef.get();
                 if (callTarget != null && task.start()) {
                     try {
@@ -824,7 +812,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     public void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException {
         CancellableCompileTask task = optimizedCallTarget.getCompilationTask();
-        if (task != null) {
+        if (task != null && !task.isCancelled()) {
             try {
                 task.awaitCompletion(timeout, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
@@ -863,13 +851,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     private static LayoutFactory loadObjectLayoutFactory() {
-        return selectObjectLayoutFactory(loadService(LayoutFactory.class));
-    }
-
-    private static <T> List<ServiceLoader<T>> loadService(Class<T> service) {
-        ServiceLoader<T> graalLoader = ServiceLoader.load(service, GraalTruffleRuntime.class.getClassLoader());
+        ServiceLoader<LayoutFactory> graalLoader = ServiceLoader.load(LayoutFactory.class, GraalTruffleRuntime.class.getClassLoader());
         if (Java8OrEarlier) {
-            return Collections.singletonList(graalLoader);
+            return selectObjectLayoutFactory(Collections.singleton(graalLoader));
         } else {
             /*
              * The Graal module (i.e., jdk.internal.vm.compiler) is loaded by the platform class
@@ -877,12 +861,12 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
              * --module-path which means they are loaded by the app class loader. As such, we need
              * to search the app class loader path as well.
              */
-            ServiceLoader<T> appLoader = ServiceLoader.load(service, service.getClassLoader());
-            return Arrays.asList(graalLoader, appLoader);
+            ServiceLoader<LayoutFactory> appLoader = ServiceLoader.load(LayoutFactory.class, LayoutFactory.class.getClassLoader());
+            return selectObjectLayoutFactory(Arrays.asList(graalLoader, appLoader));
         }
     }
 
-    private static LayoutFactory selectObjectLayoutFactory(Iterable<? extends Iterable<LayoutFactory>> availableLayoutFactories) {
+    protected static LayoutFactory selectObjectLayoutFactory(Iterable<Iterable<LayoutFactory>> availableLayoutFactories) {
         String layoutFactoryImplName = Services.getSavedProperties().get("truffle.object.LayoutFactory");
         LayoutFactory bestLayoutFactory = null;
         for (Iterable<LayoutFactory> currentLayoutFactories : availableLayoutFactories) {
@@ -1091,45 +1075,4 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     protected long getCompilerIdleDelay(@SuppressWarnings("unused") OptimizedCallTarget callTarget) {
         return 0;
     }
-
-    final OptionDescriptors getEngineOptionDescriptors() {
-        return engineOptions;
-    }
-
-    /**
-     * Returns OptimizedCallTarget's {@link PolyglotCompilerOptions} as a {@link Map}. The returned
-     * map can be passed as a {@code options} to the {@link TruffleCompiler} methods.
-     */
-    public static Map<String, Object> getOptionsForCompiler(OptimizedCallTarget callTarget) {
-        Map<String, Object> map = new HashMap<>();
-        OptionValues values = callTarget == null ? null : callTarget.getOptionValues();
-
-        for (OptionDescriptor desc : PolyglotCompilerOptions.getDescriptors()) {
-            final OptionKey<?> key = desc.getKey();
-            if (values.hasBeenSet(key)) {
-                Object value = values.get(key);
-                if (!isPrimitiveType(value)) {
-                    value = GraalRuntimeAccessor.ENGINE.getUnparsedOptionValue(values, key);
-                }
-                if (value != null) {
-                    map.put(desc.getName(), value);
-                }
-            }
-        }
-        return map;
-    }
-
-    private static boolean isPrimitiveType(Object value) {
-        Class<?> valueClass = value.getClass();
-        return valueClass == Boolean.class ||
-                        valueClass == Byte.class ||
-                        valueClass == Short.class ||
-                        valueClass == Character.class ||
-                        valueClass == Integer.class ||
-                        valueClass == Long.class ||
-                        valueClass == Float.class ||
-                        valueClass == Double.class ||
-                        valueClass == String.class;
-    }
-
 }
