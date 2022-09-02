@@ -665,7 +665,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                 languageName = "Java"; // java is our host language for now
 
                 // hide meta objects of null
-                if (INTEROP.isNull(receiver)) {
+                if (metaObjectToString.equals("java.lang.Void")) {
                     hideType = true;
                 }
             } else {
