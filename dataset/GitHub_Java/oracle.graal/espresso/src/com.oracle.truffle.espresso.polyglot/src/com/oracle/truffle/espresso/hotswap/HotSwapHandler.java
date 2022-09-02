@@ -56,7 +56,6 @@ final class HotSwapHandler {
     private final Map<Class<?>, Set<HotSwapAction>> hotSwapActions = new HashMap<>();
     private final List<HotSwapAction> postHotSwapActions = Collections.synchronizedList(new ArrayList<>());
     private final Map<Class<?>, Boolean> staticInitializerHotSwap = new HashMap<>();
-    private final Map<Class<?>, List<HotSwapAction>> staticReInitCallBacks = new HashMap<>();
 
     private HotSwapHandler() {
     }
@@ -85,19 +84,11 @@ final class HotSwapHandler {
         postHotSwapActions.add(action);
     }
 
-    public void registerStaticClassInitHotSwap(Class<?> klass, boolean onChange, HotSwapAction callback) {
+    public void registerStaticClassInitHotSwap(Class<?> klass, boolean onChange) {
         if (!staticInitializerHotSwap.containsKey(klass)) {
             staticInitializerHotSwap.put(klass, onChange);
         } else if (!onChange) {
             staticInitializerHotSwap.put(klass, false);
-        }
-        if (callback != null) {
-            List<HotSwapAction> reInitCallbacks = staticReInitCallBacks.get(klass);
-            if (reInitCallbacks == null) {
-                reInitCallbacks = new ArrayList<>(1);
-                staticReInitCallBacks.put(klass, reInitCallbacks);
-            }
-            reInitCallbacks.add(callback);
         }
     }
 
@@ -106,35 +97,27 @@ final class HotSwapHandler {
         // fire all registered HotSwap actions
         for (Class<?> klass : changedClasses) {
             Set<HotSwapAction> actions = hotSwapActions.getOrDefault(klass, Collections.emptySet());
-            actions.forEach(HotSwapAction::fire);
+            actions.forEach(HotSwapAction::onHotSwap);
         }
         // fire a generic HotSwap plugin listener
         for (HotSwapPlugin plugin : plugins) {
-            plugin.postHotSwap(changedClasses);
+            plugin.postHotSwap();
         }
         // fire all registered post HotSwap actions
-        postHotSwapActions.forEach(HotSwapAction::fire);
+        postHotSwapActions.forEach(HotSwapAction::onHotSwap);
     }
 
     @SuppressWarnings("unused")
     public boolean rerunClassInit(Class<?> klass, boolean changed) {
         if (staticInitializerHotSwap.containsKey(klass)) {
             boolean onlyOnChange = staticInitializerHotSwap.get(klass);
-            boolean rerun = !onlyOnChange || changed;
-            if (rerun) {
-                staticReInitCallBacks.getOrDefault(klass, Collections.emptyList()).forEach(HotSwapAction::fire);
-            }
-            return rerun;
+            return !onlyOnChange || changed;
         } else {
             // check class hierarchy
             for (Map.Entry<Class<?>, Boolean> entry : staticInitializerHotSwap.entrySet()) {
                 Class<?> key = entry.getKey();
                 if (key.isAssignableFrom(klass)) {
-                    boolean rerun = !entry.getValue() || changed;
-                    if (rerun) {
-                        staticReInitCallBacks.getOrDefault(key, Collections.emptyList()).forEach(HotSwapAction::fire);
-                    }
-                    return rerun;
+                    return !entry.getValue() || changed;
                 }
             }
         }
