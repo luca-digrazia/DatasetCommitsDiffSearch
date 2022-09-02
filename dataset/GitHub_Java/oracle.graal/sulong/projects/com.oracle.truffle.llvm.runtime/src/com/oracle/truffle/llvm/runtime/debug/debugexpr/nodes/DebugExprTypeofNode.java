@@ -60,7 +60,7 @@ public class DebugExprTypeofNode extends LLVMExpressionNode {
                 if (library.isMemberReadable(vars, name)) {
                     Object member = library.readMember(vars, name);
                     LLVMDebuggerValue ldv = (LLVMDebuggerValue) member;
-                    Object metaObj = ldv.resolveMetaObject();
+                    Object metaObj = ldv.getMetaObject();
                     return (LLVMSourceType) metaObj;
                 }
 
