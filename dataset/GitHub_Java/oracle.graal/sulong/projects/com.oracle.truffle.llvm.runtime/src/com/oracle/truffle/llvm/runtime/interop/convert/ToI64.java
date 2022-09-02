@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -38,6 +38,7 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class ToI64 extends ForeignToLLVM {
@@ -106,10 +107,10 @@ public abstract class ToI64 extends ForeignToLLVM {
 
     @Specialization(limit = "5", guards = {"notLLVM(obj)", "!interop.isNumber(obj)"})
     @SuppressWarnings("unused")
-    protected Object fromForeignPointer(Object obj,
+    protected long fromForeignPointer(Object obj,
                     @CachedLibrary("obj") InteropLibrary interop,
-                    @Cached ToPointer toPointer) {
-        return toPointer.executeWithTarget(obj);
+                    @CachedLibrary("obj") LLVMNativeLibrary nativeLib) {
+        return nativeLib.toNativePointer(obj).asNative();
     }
 
     @TruffleBoundary
