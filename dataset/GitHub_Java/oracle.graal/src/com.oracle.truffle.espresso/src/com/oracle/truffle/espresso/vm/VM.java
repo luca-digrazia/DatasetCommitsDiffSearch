@@ -846,6 +846,19 @@ public final class VM extends NativeEnv implements ContextAccess {
         return guestBox(elem);
     }
 
+    private static Method getHostReflectiveMethodRoot(@Host(java.lang.reflect.Field.class) StaticObject seed) {
+        Meta meta = seed.getKlass().getMeta();
+        StaticObject curMethod = seed;
+        Method target = null;
+        while (target == null) {
+            target = (Method) ((StaticObjectImpl) curMethod).getHiddenField(Target_java_lang_Class.HIDDEN_METHOD_KEY);
+            if (target == null) {
+                curMethod = (StaticObject) meta.Method_root.get(curMethod);
+            }
+        }
+        return target;
+    }
+
     private static StaticObject getGuestReflectiveMethodRoot(@Host(java.lang.reflect.Field.class) StaticObject seed) {
         Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
@@ -869,7 +882,7 @@ public final class VM extends NativeEnv implements ContextAccess {
             return StaticObject.NULL;
         }
 
-        Method method = Method.getHostReflectiveMethodRoot(guestReflectionMethod);
+        Method method = getHostReflectiveMethodRoot(guestReflectionMethod);
         MethodParametersAttribute methodParameters = (MethodParametersAttribute) method.getAttribute(Name.MethodParameters);
         assert methodParameters != null;
 

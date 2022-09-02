@@ -360,7 +360,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getBooleanVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (boolean) ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return (boolean) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -369,7 +369,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getByteVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (byte) ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return (byte) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -378,7 +378,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getShortVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (short) ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return (short) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -387,7 +387,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getCharVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (char) ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return (char) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -396,7 +396,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getFloatVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (float) ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return (float) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -405,7 +405,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getIntVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (int) ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return (int) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -414,7 +414,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getLongVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (long) ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return (long) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -423,7 +423,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getDoubleVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return (double) ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return (double) f.get(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -432,7 +432,7 @@ public final class Target_sun_misc_Unsafe {
             return U.getObjectVolatile(((StaticObjectArray) holder).unwrap(), offset);
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        return ((StaticObjectImpl) holder).getFieldVolatile(f);
+        return f.get(holder);
     }
 
     // endregion get*Volatile(Object holder, long offset)
@@ -485,7 +485,7 @@ public final class Target_sun_misc_Unsafe {
         // TODO(peterssen): Current workaround assumes it's a field access, encoding is offset <->
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
-        ((StaticObjectImpl) holder).setFieldVolatile(f, value);
+        f.set(holder, value);
     }
 
     /**
@@ -498,7 +498,7 @@ public final class Target_sun_misc_Unsafe {
     }
 
     @Substitution(hasReceiver = true)
-    public static void copyMemory(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject srcBase, long srcOffset,
+    public static synchronized void copyMemory(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(Object.class) StaticObject srcBase, long srcOffset,
                     @Host(Object.class) StaticObject destBase,
                     long destOffset,
                     long bytes) {
@@ -778,8 +778,8 @@ public final class Target_sun_misc_Unsafe {
      * strange to place it elsewhere.
      */
     @Substitution(hasReceiver = true)
-    public static void park(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, boolean isAbsolute, long time) {
-        U.park(isAbsolute, time);
+    public static void park(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, boolean b, long l) {
+        U.park(b, l);
     }
 
     /**

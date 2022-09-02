@@ -1623,14 +1623,14 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    public static int MonitorEnter(@Host(Object.class) StaticObject object) {
-        InterpreterToVM.monitorEnter(object);
+    public static int MonitorEnter(Object obj) {
+        InterpreterToVM.monitorEnter(obj);
         return JNI_OK;
     }
 
     @JniImpl
-    public static int MonitorExit(@Host(Object.class) StaticObject object) {
-        InterpreterToVM.monitorExit(object);
+    public static int MonitorExit(Object obj) {
+        InterpreterToVM.monitorExit(obj);
         return JNI_OK;
     }
 
