@@ -206,11 +206,6 @@ public class LLVMForeignCallNode extends RootNode {
     }
 
     @Override
-    public String toString() {
-        return "LLVM:" + callNode.getCallTarget();
-    }
-
-    @Override
     public boolean isInternal() {
         return true;
     }
@@ -257,5 +252,10 @@ public class LLVMForeignCallNode extends RootNode {
     @SuppressWarnings("unchecked")
     private static <E extends Exception> RuntimeException silenceException(@SuppressWarnings("unused") Class<E> type, Exception ex) throws E {
         throw (E) ex;
+    }
+
+    @Override
+    public boolean isCloningAllowed() {
+        return true;
     }
 }
