@@ -28,7 +28,7 @@ package org.graalvm.compiler.truffle.runtime;
  * A cache that enables the Runtime options to be read without the lookup. This is intended to only
  * be used on performance critical paths.
  */
-public class RuntimeOptionsCache {
+class RuntimeOptionsCache {
 
     // Splitting
     private boolean legacySplitting;
