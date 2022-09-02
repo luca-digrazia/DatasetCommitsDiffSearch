@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.UTF8;
 import static com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
@@ -69,13 +68,6 @@ public interface MethodTypeConstant extends PoolConstant {
             Symbol<Signature> sig = getSignature(pool);
             Meta meta = accessingKlass.getContext().getMeta();
             return new Resolved(BytecodeNode.signatureToMethodType(meta.getSignatures().parsed(sig), accessingKlass, meta));
-        }
-
-        @Override
-        public void checkValidity(ConstantPool pool) {
-            if (pool.at(descriptorIndex).tag() != UTF8) {
-                throw new VerifyError("Invalid pool constant: " + tag());
-            }
         }
     }
 
