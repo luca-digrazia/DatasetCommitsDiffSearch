@@ -138,34 +138,7 @@ public final class SourceSectionFilter {
     }
 
     /**
-     *
-     * Checks if the filter includes the given root node, i.e. do the properties of the given source
-     * section meet the conditions set by the filter. The given root node is treated as a node with
-     * an implicit {@link StandardTags.RootTag}.
-     *
-     * @param node The root node to be checked against the filter.
-     * @param sourceSection The source section of the node to be checked against the filter.
-     * @return {@code true} if the filter includes the source section and node. {@code false}
-     *         otherwise.
-     * @since 20.3.0
-     *
-     */
-    public boolean includes(RootNode node, SourceSection sourceSection) {
-        Set<Class<?>> tags = node != null ? getProvidedTags(node) : Collections.emptySet();
-        if (!tags.contains(StandardTags.RootTag.class)) {
-            return false;
-        }
-        for (EventFilterExpression exp : expressions) {
-            if (!exp.isIncluded(tags, ProvidesRootTagNode.INSTANCE, sourceSection)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /*
-     * Since root nodes themselves cannot be instrumented, this node is used by the {@link
-     * #includes(RootNode, SourceSection)} method as a substitute node to check the tags
+     * TODO: write javadoc.
      */
     private static final class ProvidesRootTagNode extends Node implements InstrumentableNode {
 
@@ -186,6 +159,27 @@ public final class SourceSectionFilter {
         public boolean hasTag(Class<? extends Tag> tag) {
             return tag == StandardTags.RootTag.class;
         }
+    }
+
+    /**
+     * TODO: javadoc.
+     * 
+     * @param node
+     * @param sourceSection
+     * @return todo
+     * @since todo
+     */
+    public boolean includes(RootNode node, SourceSection sourceSection) {
+        Set<Class<?>> tags = node != null ? getProvidedTags(node) : Collections.emptySet();
+        if (!tags.contains(StandardTags.RootTag.class)) {
+            return false;
+        }
+        for (EventFilterExpression exp : expressions) {
+            if (!exp.isIncluded(tags, ProvidesRootTagNode.INSTANCE, sourceSection)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean includesImpl(Node node, SourceSection sourceSection) {
