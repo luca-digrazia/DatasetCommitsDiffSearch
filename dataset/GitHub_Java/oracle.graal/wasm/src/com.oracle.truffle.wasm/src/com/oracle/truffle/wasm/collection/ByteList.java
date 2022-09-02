@@ -17,10 +17,6 @@ public class ByteList {
         offset++;
     }
 
-    public int size() {
-        return offset;
-    }
-
     private void ensureSize() {
         if (array == null) {
             array = new byte[4];
