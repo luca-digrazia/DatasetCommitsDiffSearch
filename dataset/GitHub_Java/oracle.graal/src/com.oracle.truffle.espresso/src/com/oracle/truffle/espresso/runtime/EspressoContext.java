@@ -80,7 +80,6 @@ public final class EspressoContext {
     private final Substitutions substitutions;
     private final MethodHandleIntrinsics methodHandleIntrinsics;
     private final EspressoThreadManager threadManager;
-    private StaticObject systemThreadGroup;
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
     private boolean mainThreadCreated;
@@ -340,7 +339,7 @@ public final class EspressoContext {
      * HotSpot's implementation.
      */
     private void createMainThread() {
-        systemThreadGroup = meta.ThreadGroup.allocateInstance();
+        StaticObject systemThreadGroup = meta.ThreadGroup.allocateInstance();
         meta.ThreadGroup.lookupDeclaredMethod(Name.INIT, Signature._void) // private ThreadGroup()
                 .invokeDirect(systemThreadGroup);
         StaticObject mainThread = meta.Thread.allocateInstance();
@@ -567,10 +566,6 @@ public final class EspressoContext {
         }
         Object temp = threadGroup;
         return temp == threadGroup;
-    }
-
-    public Object getSystemThreadGroup() {
-        return systemThreadGroup;
     }
 
     // endregion Options

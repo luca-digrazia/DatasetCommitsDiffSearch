@@ -127,8 +127,8 @@ public class JDWPDebuggerController {
         }
     }
 
-    public void reInitialize(JDWPOptions jdwpOptions, JDWPContext context) {
-        initialize(languageEnv, jdwpOptions, context, true);
+    public void reInitialize(JDWPOptions jdwpOptions, JDWPContext context, boolean reconnect) {
+        initialize(languageEnv, jdwpOptions, context, reconnect);
     }
 
     public JDWPContext getContext() {
