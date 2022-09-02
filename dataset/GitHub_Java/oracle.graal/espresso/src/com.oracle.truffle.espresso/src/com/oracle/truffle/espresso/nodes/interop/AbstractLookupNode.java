@@ -23,13 +23,9 @@
 
 package com.oracle.truffle.espresso.nodes.interop;
 
-import static java.lang.Math.max;
-import static java.lang.Math.min;
-
 import java.util.BitSet;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
@@ -40,7 +36,7 @@ public abstract class AbstractLookupNode extends Node {
     abstract Method[] getMethodArray(Klass k);
 
     @TruffleBoundary
-    Method doLookup(Klass klass, String key, boolean publicOnly, boolean isStatic, int arity) throws ArityException {
+    Method doLookup(Klass klass, String key, boolean publicOnly, boolean isStatic, int arity) {
         String methodName;
         String signature = null;
         int separatorIndex = key.indexOf(METHOD_SELECTION_SEPARATOR);
@@ -51,14 +47,9 @@ public abstract class AbstractLookupNode extends Node {
             methodName = key;
         }
         Method result = null;
-        int minOverallArity = Integer.MAX_VALUE;
-        int maxOverallArity = -1;
         for (Method m : getMethodArray(klass)) {
             if (matchMethod(m, methodName, signature, isStatic, publicOnly)) {
-                int matchArity = m.getParameterCount();
-                minOverallArity = min(minOverallArity, matchArity);
-                maxOverallArity = max(maxOverallArity, matchArity);
-                if (matchArity == arity) {
+                if (m.getParameterCount() == arity) {
                     /* Multiple methods with the same name and arity, cannot disambiguate */
                     if (result != null) {
                         return null;
@@ -66,9 +57,6 @@ public abstract class AbstractLookupNode extends Node {
                     result = m;
                 }
             }
-        }
-        if (result == null && maxOverallArity >= 0) {
-            throw ArityException.create(arity > maxOverallArity ? maxOverallArity : minOverallArity, arity);
         }
         return result;
     }
