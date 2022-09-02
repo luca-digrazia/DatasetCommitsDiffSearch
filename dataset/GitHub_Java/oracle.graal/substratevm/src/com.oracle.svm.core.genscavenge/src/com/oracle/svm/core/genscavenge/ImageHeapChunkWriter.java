@@ -24,56 +24,16 @@
  */
 package com.oracle.svm.core.genscavenge;
 
-import java.nio.ByteBuffer;
+import java.util.List;
 
-import org.graalvm.compiler.core.common.NumUtil;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.struct.SizeOf;
+import com.oracle.svm.core.image.ImageHeapObject;
 
-import com.oracle.svm.core.c.struct.OffsetOf;
-import com.oracle.svm.core.config.ConfigurationValues;
-import com.oracle.svm.core.util.VMError;
+public interface ImageHeapChunkWriter {
+    void initializeAlignedChunk(int chunkPosition, long topOffset, long endOffset, long offsetToPreviousChunk, long offsetToNextChunk);
 
-@Platforms(Platform.HOSTED_ONLY.class)
-final class ImageHeapChunkWriter {
-    private final int headerSize;
-    private final int topOffsetAt;
-    private final int endOffsetAt;
-    private final int spaceOffsetAt;
-    private final int offsetToPreviousChunkAt;
-    private final int offsetToNextChunkAt;
+    void enableRememberedSetForAlignedChunk(int chunkPosition, List<ImageHeapObject> objects);
 
-    ImageHeapChunkWriter() {
-        headerSize = SizeOf.get(HeapChunk.Header.class);
-        topOffsetAt = OffsetOf.get(HeapChunk.Header.class, "TopOffset");
-        endOffsetAt = OffsetOf.get(HeapChunk.Header.class, "EndOffset");
-        spaceOffsetAt = OffsetOf.get(HeapChunk.Header.class, "Space");
-        offsetToPreviousChunkAt = OffsetOf.get(HeapChunk.Header.class, "OffsetToPreviousChunk");
-        offsetToNextChunkAt = OffsetOf.get(HeapChunk.Header.class, "OffsetToNextChunk");
-    }
+    void initializeUnalignedChunk(int chunkPosition, long topOffset, long endOffset, long offsetToPreviousChunk, long offsetToNextChunk);
 
-    void writeHeader(ByteBuffer buffer, int chunkPosition, long topOffset, long endOffset, long offsetToPreviousChunk, long offsetToNextChunk) {
-        for (int i = 0; i < headerSize; i++) {
-            assert buffer.get(chunkPosition + i) == 0 : "Header area must be zeroed out";
-        }
-        buffer.putLong(chunkPosition + topOffsetAt, topOffset);
-        buffer.putLong(chunkPosition + endOffsetAt, endOffset);
-        putObjectReference(buffer, chunkPosition + spaceOffsetAt, 0);
-        buffer.putLong(chunkPosition + offsetToPreviousChunkAt, offsetToPreviousChunk);
-        buffer.putLong(chunkPosition + offsetToNextChunkAt, offsetToNextChunk);
-    }
-
-    static void putObjectReference(ByteBuffer buffer, int position, long value) {
-        switch (ConfigurationValues.getObjectLayout().getReferenceSize()) {
-            case Integer.BYTES:
-                buffer.putInt(position, NumUtil.safeToInt(value));
-                break;
-            case Long.BYTES:
-                buffer.putLong(position, value);
-                break;
-            default:
-                VMError.shouldNotReachHere("Unsupported reference size");
-        }
-    }
+    void enableRememberedSetForUnalignedChunk(int chunkPosition);
 }

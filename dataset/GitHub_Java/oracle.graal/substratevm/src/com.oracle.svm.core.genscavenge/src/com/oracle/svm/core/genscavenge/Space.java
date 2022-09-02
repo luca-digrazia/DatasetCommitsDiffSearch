@@ -432,14 +432,8 @@ public final class Space {
 
         originalSpace.extractAlignedHeapChunk(chunk);
         appendAlignedHeapChunk(chunk);
-
-        if (this.isOldSpace()) {
-            if (originalSpace.isYoungSpace()) {
-                RememberedSet.get().enableRememberedSetForChunk(chunk);
-            } else {
-                assert originalSpace.isOldSpace();
-                RememberedSet.get().clearRememberedSet(chunk);
-            }
+        if (isOldSpace() && originalSpace.isYoungSpace()) {
+            RememberedSet.get().enableRememberedSetForChunk(chunk);
         }
     }
 
@@ -451,12 +445,7 @@ public final class Space {
         appendUnalignedHeapChunk(chunk);
 
         if (this.isOldSpace()) {
-            if (originalSpace.isYoungSpace()) {
-                RememberedSet.get().enableRememberedSetForChunk(chunk);
-            } else {
-                assert originalSpace.isOldSpace();
-                RememberedSet.get().clearRememberedSet(chunk);
-            }
+            RememberedSet.get().enableRememberedSetForChunk(chunk);
         }
     }
 

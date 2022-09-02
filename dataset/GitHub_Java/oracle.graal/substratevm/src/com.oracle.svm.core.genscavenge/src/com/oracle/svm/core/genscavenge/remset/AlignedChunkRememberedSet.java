@@ -98,12 +98,12 @@ final class AlignedChunkRememberedSet {
 
         Pointer fotStart = getFirstObjectTableStart(chunk);
         for (ImageHeapObject obj : objects) {
-            long offsetWithinChunk = obj.getOffset() - chunkPosition;
-            assert offsetWithinChunk > 0 && WordFactory.unsigned(offsetWithinChunk).aboveOrEqual(getFirstObjectTableStartOffset());
+            long startOffset = obj.getOffset() - chunkPosition;
+            long endOffset = startOffset + obj.getSize();
 
-            UnsignedWord startOffset = WordFactory.unsigned(offsetWithinChunk).subtract(getFirstObjectTableStartOffset());
-            UnsignedWord endOffset = startOffset.add(WordFactory.unsigned(obj.getSize()));
-            FirstObjectTable.setTableForObject(fotStart, startOffset, endOffset);
+            assert startOffset >= 0;
+            assert endOffset > 0;
+            FirstObjectTable.setTableForObject(fotStart, WordFactory.unsigned(startOffset), WordFactory.unsigned(endOffset));
             // The remembered set bit in the header will be set by the code that writes the objects.
         }
     }

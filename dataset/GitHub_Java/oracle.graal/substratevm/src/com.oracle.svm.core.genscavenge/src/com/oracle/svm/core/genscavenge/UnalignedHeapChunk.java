@@ -181,7 +181,7 @@ public final class UnalignedHeapChunk {
 class UnalignedHeapChunkMemoryWalkerAccessFeature implements Feature {
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return SubstrateOptions.UseSerialGC.getValue();
+        return SubstrateOptions.UseCardRememberedSetHeap.getValue();
     }
 
     @Override

@@ -93,14 +93,12 @@ public final class HostedImageHeapChunkWriter implements ImageHeapChunkWriter {
 
     @Override
     public void enableRememberedSetForAlignedChunk(int chunkPosition, List<ImageHeapObject> objects) {
-        int chunkOffset = getChunkOffsetInBuffer(chunkPosition);
-        RememberedSet.get().enableRememberedSetForAlignedChunk(new HostedByteBufferPointer(buffer, chunkOffset), chunkPosition, objects);
+        RememberedSet.get().enableRememberedSetForAlignedChunk(new HostedByteBufferPointer(buffer, chunkPosition), chunkPosition, objects);
     }
 
     @Override
     public void enableRememberedSetForUnalignedChunk(int chunkPosition) {
-        int chunkOffset = getChunkOffsetInBuffer(chunkPosition);
-        RememberedSet.get().enableRememberedSetForUnalignedChunk(new HostedByteBufferPointer(buffer, chunkOffset));
+        RememberedSet.get().enableRememberedSetForUnalignedChunk(new HostedByteBufferPointer(buffer, chunkPosition));
     }
 
     static void putObjectReference(ByteBuffer buffer, int offset, long value) {
