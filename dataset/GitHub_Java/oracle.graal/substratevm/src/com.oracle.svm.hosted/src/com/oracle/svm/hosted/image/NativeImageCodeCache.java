@@ -273,7 +273,7 @@ public abstract class NativeImageCodeCache {
 
     private boolean verifyMethods(CodeInfoEncoder codeInfoEncoder, CodeInfo codeInfo) {
         for (Entry<HostedMethod, CompilationResult> entry : compilations.entrySet()) {
-            CodeInfoEncoder.verifyMethod(entry.getKey(), entry.getValue(), entry.getKey().getCodeAddressOffset(), codeInfo);
+            CodeInfoEncoder.verifyMethod(entry.getValue(), entry.getKey().getCodeAddressOffset(), codeInfo);
         }
         codeInfoEncoder.verifyFrameInfo(codeInfo);
         return true;
@@ -289,10 +289,10 @@ public abstract class NativeImageCodeCache {
 
     public abstract void writeCode(RelocatableBuffer buffer);
 
-    public void writeConstants(NativeImageHeapWriter writer, RelocatableBuffer buffer) {
+    public void writeConstants(RelocatableBuffer buffer) {
         ByteBuffer bb = buffer.getBuffer();
         dataSection.buildDataSection(bb, (position, constant) -> {
-            writer.writeReference(buffer, position, SubstrateObjectConstant.asObject(constant), "VMConstant: " + constant);
+            imageHeap.writeReference(buffer, position, SubstrateObjectConstant.asObject(constant), "VMConstant: " + constant);
         });
     }
 
