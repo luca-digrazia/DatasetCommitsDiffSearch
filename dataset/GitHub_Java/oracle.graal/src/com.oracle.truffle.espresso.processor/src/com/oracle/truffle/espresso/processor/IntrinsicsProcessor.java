@@ -1,40 +1,56 @@
+/*
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.truffle.espresso.processor;
 
+import java.util.List;
+
 import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.AnnotationValue;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ReferenceType;
-import java.util.List;
 
 public abstract class IntrinsicsProcessor extends EspressoProcessor {
     static final String JNI_PACKAGE = "com.oracle.truffle.espresso.jni";
-    private static final String NFI_TYPE = JNI_PACKAGE + "." + "NFIType";
+    private static final String POINTER = JNI_PACKAGE + "." + "Pointer";
+    private static final String HANDLE = JNI_PACKAGE + "." + "Handle";
+
+    // @Pointer
+    TypeElement pointerAnnotation;
+
+    // @Handle
+    TypeElement handleAnnotation;
 
     private final String ENV_NAME;
-    // @NFIType
-    TypeElement nfiType;
-
-    // @NFIType.value()
-    ExecutableElement nfiTypeValueElement;
 
     public IntrinsicsProcessor(String ENV_NAME, String SUBSTITUTION_PACKAGE, String SUBSTITUTOR, String COLLECTOR, String COLLECTOR_INSTANCE_NAME) {
         super(SUBSTITUTION_PACKAGE, SUBSTITUTOR, COLLECTOR, COLLECTOR_INSTANCE_NAME);
         this.ENV_NAME = ENV_NAME;
     }
 
-    void initNfiType() {
-        this.nfiType = processingEnv.getElementUtils().getTypeElement(NFI_TYPE);
-        for (Element e : nfiType.getEnclosedElements()) {
-            if (e.getKind() == ElementKind.METHOD) {
-                if (e.getSimpleName().contentEquals("value")) {
-                    this.nfiTypeValueElement = (ExecutableElement) e;
-                }
-            }
-        }
+    protected void initNfiType() {
+        this.pointerAnnotation = processingEnv.getElementUtils().getTypeElement(POINTER);
+        this.handleAnnotation = processingEnv.getElementUtils().getTypeElement(HANDLE);
     }
 
     static void getEspressoTypes(ExecutableElement inner, List<String> parameterTypeNames, List<Boolean> referenceTypes) {
@@ -51,7 +67,7 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         // Prepend JNIEnv* . The raw pointer will be substituted by the proper `this` reference.
         boolean first = true;
         if (isJni) {
-            sb.append(NativeSimpleType.SINT64);
+            sb.append(NativeSimpleType.POINTER);
             first = false;
         }
         for (VariableElement param : method.getParameters()) {
@@ -62,19 +78,28 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
             }
 
             // Override NFI type.
-            AnnotationMirror nfi = getAnnotation(param.asType(), nfiType);
-            if (nfi != null) {
-                AnnotationValue value = nfi.getElementValues().get(nfiTypeValueElement);
-                if (value != null) {
-                    sb.append(NativeSimpleType.valueOf(((String) value.getValue()).toUpperCase()));
-                } else {
-                    sb.append(classToType(param.asType().toString(), false));
-                }
+            AnnotationMirror pointer = getAnnotation(param.asType(), pointerAnnotation);
+            AnnotationMirror handle = getAnnotation(param.asType(), handleAnnotation);
+            if (pointer != null) {
+                sb.append(NativeSimpleType.POINTER);
+            } else if (handle != null) {
+                sb.append(NativeSimpleType.SINT64);
             } else {
-                sb.append(classToType(param.asType().toString(), false));
+                sb.append(classToType(param.asType().toString()));
             }
         }
-        sb.append("): ").append(classToType(returnType, true));
+
+        sb.append("): ");
+
+        AnnotationMirror pointer = getAnnotation(method.getReturnType(), pointerAnnotation);
+        AnnotationMirror handle = getAnnotation(method.getReturnType(), handleAnnotation);
+        if (pointer != null) {
+            sb.append(NativeSimpleType.POINTER);
+        } else if (handle != null) {
+            sb.append(NativeSimpleType.SINT64);
+        } else {
+            sb.append(classToType(returnType));
+        }
         return sb.toString();
     }
 
@@ -82,7 +107,10 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         String decl = tabulation + clazz + " " + ARG_NAME + index + " = ";
         String obj = ARGS_NAME + "[" + (index + startAt) + "]";
         if (isNonPrimitive) {
-            return decl + genIsNull(obj) + " ? " + (clazz.equals("StaticObject") ? STATIC_OBJECT_NULL : "null") + " : " + castTo(obj, clazz) + ";\n";
+            if (!clazz.equals("StaticObject")) {
+                return decl + castTo(obj, clazz) + ";\n";
+            }
+            return decl + "env.getHandles().get(Math.toIntExact((long) " + obj + "))" + ";\n";
         }
         switch (clazz) {
             case "boolean":
@@ -110,7 +138,7 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
             }
             str.append(ARG_NAME).append(i);
         }
-        str.append(");\n");
+        str.append(")"); // ;\n");
         return str.toString();
     }
 
