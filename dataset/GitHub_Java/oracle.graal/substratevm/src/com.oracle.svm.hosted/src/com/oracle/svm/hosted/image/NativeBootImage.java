@@ -140,14 +140,14 @@ public abstract class NativeBootImage extends AbstractBootImage {
 
         uniqueEntryPoints.addAll(entryPoints);
 
-        int pageSize = NativeImageOptions.getPageSize();
         if (NativeImageOptions.MachODebugInfoTesting.getValue()) {
-            objectFile = new MachOObjectFile(pageSize);
+            objectFile = new MachOObjectFile();
         } else {
-            objectFile = ObjectFile.getNativeObjectFile(pageSize);
+            objectFile = ObjectFile.getNativeObjectFile();
         }
 
         objectFile.setByteOrder(ConfigurationValues.getTarget().arch.getByteOrder());
+        objectFile.setPageSize(NativeImageOptions.getPageSize());
         wordSize = FrameAccess.wordSize();
         assert objectFile.getWordSizeInBytes() == wordSize;
     }
