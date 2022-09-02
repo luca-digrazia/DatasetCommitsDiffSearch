@@ -30,7 +30,6 @@ import java.util.Collections;
 import java.util.List;
 
 import org.graalvm.compiler.options.Option;
-import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.svm.core.LinkerInvocation;
 import com.oracle.svm.core.option.HostedOptionKey;
@@ -44,7 +43,8 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
     }
 
     protected final List<String> additionalPreOptions = new ArrayList<>();
-    protected final List<Path> inputFilenames = new ArrayList<>();
+    private String compilerCommand = "cc";
+    protected final List<String> inputFilenames = new ArrayList<>();
     protected final List<String> rpaths = new ArrayList<>();
     protected final List<String> libpaths = new ArrayList<>();
     protected final List<String> libs = new ArrayList<>();
@@ -52,17 +52,17 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
     protected AbstractBootImage.NativeImageKind outputKind;
 
     @Override
-    public List<Path> getInputFiles() {
+    public List<String> getInputFiles() {
         return Collections.unmodifiableList(inputFilenames);
     }
 
     @Override
-    public void addInputFile(Path filename) {
+    public void addInputFile(String filename) {
         inputFilenames.add(filename);
     }
 
     @Override
-    public void addInputFile(int index, Path filename) {
+    public void addInputFile(int index, String filename) {
         inputFilenames.add(index, filename);
     }
 
@@ -133,8 +133,18 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
         libs.add(index, libname);
     }
 
-    protected List<String> getCompilerCommand() {
-        return ImageSingletons.lookup(CCompilerInvoker.class).createCompilerCommand(Collections.emptyList(), outputFile, inputFilenames.toArray(new Path[0]));
+    @Override
+    public String getCompilerCommand() {
+        String customCompiler = CCompilerInvoker.getCCompilerPath();
+        if (customCompiler != null) {
+            return customCompiler;
+        }
+        return compilerCommand;
+    }
+
+    @Override
+    public void setCompilerCommand(String command) {
+        compilerCommand = command;
     }
 
     protected abstract void setOutputKind(List<String> cmd);
@@ -142,13 +152,15 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
     @Override
     public List<String> getCommand() {
         ArrayList<String> cmd = new ArrayList<>();
-        cmd.addAll(getCompilerCommand());
-        setOutputKind(cmd);
-
+        cmd.add(getCompilerCommand());
         cmd.add("-v");
+        cmd.add("-o");
+        cmd.add(outputFile.toString());
+
         for (String opt : additionalPreOptions) {
             cmd.add(opt);
         }
+        setOutputKind(cmd);
         for (String libpath : libpaths) {
             cmd.add("-L" + libpath);
         }
@@ -156,6 +168,7 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
             cmd.add("-Wl,-rpath");
             cmd.add("-Wl," + rpath);
         }
+        cmd.addAll(inputFilenames);
         for (String lib : libs) {
             if (lib.startsWith("-")) {
                 cmd.add("-Wl," + lib.replace(" ", ","));
