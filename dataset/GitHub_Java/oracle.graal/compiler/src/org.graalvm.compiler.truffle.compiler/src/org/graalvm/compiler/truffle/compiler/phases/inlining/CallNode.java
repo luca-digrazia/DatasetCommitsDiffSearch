@@ -94,14 +94,16 @@ public final class CallNode extends Node {
     static CallNode makeRoot(CallTree callTree, PartialEvaluator.Request request) {
         Objects.requireNonNull(callTree);
         Objects.requireNonNull(request);
-        CallNode root = new CallNode(null, request.compilable, 1, 0);
+        final CallNode root = new CallNode(null, request.compilable, 1, 0);
         callTree.add(root);
         root.ir = request.graph;
         root.policyData = callTree.getPolicy().newCallNodeData(root);
+        assert root.state == State.Cutoff : "Cannot expand a non-cutoff node. State is " + root.state;
         root.addChildren();
-        EconomicMap<TruffleCallNode, Invoke> truffleCallNodeToInvoke = callTree.getGraphManager().peRoot();
+        assert root.getParent() == null;
+        final EconomicMap<TruffleCallNode, Invoke> truffleCallNodeToInvoke = callTree.getGraphManager().peRoot();
         for (CallNode child : root.children) {
-            Invoke invoke = truffleCallNodeToInvoke.get(child.getTruffleCaller());
+            final Invoke invoke = truffleCallNodeToInvoke.get(child.getTruffleCaller());
             child.setInvokeOrRemove(invoke);
         }
         root.state = State.Inlined;
@@ -114,17 +116,17 @@ public final class CallNode extends Node {
     }
 
     private static void handleInlineDecisionNode(Invoke invoke) {
-        NodeInputList<ValueNode> arguments = invoke.callTarget().arguments();
-        ValueNode argument = arguments.get(1);
+        final NodeInputList<ValueNode> arguments = invoke.callTarget().arguments();
+        final ValueNode argument = arguments.get(1);
         if (!(argument instanceof InlineDecisionInjectNode)) {
             GraalError.shouldNotReachHere("Agnostic inlining expectations not met by graph");
         }
-        InlineDecisionInjectNode injectNode = (InlineDecisionInjectNode) argument;
-        ValueNode maybeDecision = injectNode.getDecision();
+        final InlineDecisionInjectNode injectNode = (InlineDecisionInjectNode) argument;
+        final ValueNode maybeDecision = injectNode.getDecision();
         if (!(maybeDecision instanceof InlineDecisionNode)) {
             GraalError.shouldNotReachHere("Agnostic inlining expectations not met by graph");
         }
-        InlineDecisionNode inlineDecisionNode = (InlineDecisionNode) maybeDecision;
+        final InlineDecisionNode inlineDecisionNode = (InlineDecisionNode) maybeDecision;
         inlineDecisionNode.inlined();
         injectNode.resolve();
     }
@@ -148,7 +150,7 @@ public final class CallNode extends Node {
     }
 
     private double exploreInlineRatio() {
-        CallTree callTree = getCallTree();
+        final CallTree callTree = getCallTree();
         return isRoot() ? (double) callTree.expanded / callTree.inlined : Double.NaN;
     }
 
@@ -178,11 +180,11 @@ public final class CallNode extends Node {
     private void addChildren() {
         // In the current implementation, this may be called only once.
         for (TruffleCallNode childCallNode : truffleCallees) {
-            double relativeFrequency = calculateFrequency(truffleAST, childCallNode);
-            double childFrequency = relativeFrequency * rootRelativeFrequency;
-            CallNode callNode = new CallNode(childCallNode, childCallNode.getCurrentCallTarget(), childFrequency, depth + 1);
+            final double relativeFrequency = calculateFrequency(truffleAST, childCallNode);
+            final double childFrequency = relativeFrequency * this.rootRelativeFrequency;
+            CallNode callNode = new CallNode(childCallNode, childCallNode.getCurrentCallTarget(), childFrequency, this.depth + 1);
             getCallTree().add(callNode);
-            children.add(callNode);
+            this.children.add(callNode);
             callNode.policyData = getPolicy().newCallNodeData(callNode);
         }
         getPolicy().afterAddChildren(this);
@@ -200,19 +202,19 @@ public final class CallNode extends Node {
         if (newInvoke == null || !newInvoke.isAlive()) {
             remove();
         } else {
-            invoke = newInvoke;
+            this.invoke = newInvoke;
         }
     }
 
     public void remove() {
-        state = State.Removed;
+        this.state = State.Removed;
         getPolicy().removedNode(this);
     }
 
     private void addIndirectChildren(GraphManager.Entry entry) {
         for (Invoke indirectInvoke : entry.indirectInvokes) {
             if (indirectInvoke != null && indirectInvoke.isAlive()) {
-                CallNode child = new CallNode(null, null, 0, depth + 1);
+                final CallNode child = new CallNode(null, null, 0, depth + 1);
                 child.state = State.Indirect;
                 child.invoke = indirectInvoke;
                 getCallTree().add(child);
@@ -236,17 +238,17 @@ public final class CallNode extends Node {
     }
 
     private StructuredGraph copyGraphAndUpdateInvokes(GraphManager.Entry entry) {
-        StructuredGraph graph = entry.graph;
+        final StructuredGraph graph = entry.graph;
         return (StructuredGraph) graph.copy(new Consumer<UnmodifiableEconomicMap<Node, Node>>() {
             @Override
             public void accept(UnmodifiableEconomicMap<Node, Node> duplicates) {
                 for (CallNode child : children) {
-                    TruffleCallNode childTruffleCallNode = child.getTruffleCaller();
-                    Invoke original = entry.truffleCallNodeToInvoke.get(childTruffleCallNode);
+                    final TruffleCallNode childTruffleCallNode = child.getTruffleCaller();
+                    final Invoke original = entry.truffleCallNodeToInvoke.get(childTruffleCallNode);
                     if (original == null || !original.isAlive()) {
                         child.remove();
                     } else {
-                        Invoke replacement = (Invoke) duplicates.get((Node) original);
+                        final Invoke replacement = (Invoke) duplicates.get((Node) original);
                         child.setInvokeOrRemove(replacement);
                     }
                 }
@@ -262,7 +264,7 @@ public final class CallNode extends Node {
             return;
         }
         handleInlineDecisionNode(invoke);
-        UnmodifiableEconomicMap<Node, Node> replacements = getCallTree().getGraphManager().doInline(invoke, ir, truffleAST);
+        final UnmodifiableEconomicMap<Node, Node> replacements = getCallTree().getGraphManager().doInline(invoke, ir, truffleAST);
         updateChildInvokes(replacements);
         state = State.Inlined;
         getCallTree().inlined++;
@@ -271,12 +273,12 @@ public final class CallNode extends Node {
     private void updateChildInvokes(UnmodifiableEconomicMap<Node, Node> replacements) {
         for (CallNode child : children) {
             if (child.state != State.Removed) {
-                Node childInvoke = (Node) child.invoke;
+                final Node childInvoke = (Node) child.invoke;
                 if (childInvoke == null || !childInvoke.isAlive()) {
                     child.remove();
                     continue;
                 }
-                Invoke replacementInvoke = (Invoke) replacements.get(childInvoke);
+                final Invoke replacementInvoke = (Invoke) replacements.get(childInvoke);
                 child.setInvokeOrRemove(replacementInvoke);
             }
         }
@@ -347,9 +349,9 @@ public final class CallNode extends Node {
     }
 
     HashMap<String, Object> getStringProperties() {
-        HashMap<Object, Object> properties = new HashMap<>();
+        final HashMap<Object, Object> properties = new HashMap<>();
         putProperties(properties);
-        HashMap<String, Object> stringProperties = new HashMap<>();
+        final HashMap<String, Object> stringProperties = new HashMap<>();
         for (Object key : properties.keySet()) {
             stringProperties.put(key.toString(), properties.get(key));
         }

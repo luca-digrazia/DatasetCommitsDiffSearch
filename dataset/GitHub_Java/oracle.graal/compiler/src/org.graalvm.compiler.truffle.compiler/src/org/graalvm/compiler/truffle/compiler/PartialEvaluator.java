@@ -272,6 +272,8 @@ public abstract class PartialEvaluator {
             Objects.requireNonNull(compilable);
             Objects.requireNonNull(inliningPlan);
             Objects.requireNonNull(compilationId);
+            Objects.requireNonNull(log);
+            Objects.requireNonNull(cancellable);
             this.options = options;
             this.debug = debug;
             this.compilable = compilable;
@@ -309,7 +311,7 @@ public abstract class PartialEvaluator {
                 ComputeLoopFrequenciesClosure.compute(request.graph);
                 applyInstrumentationPhases(request);
                 handler.reportPerformanceWarnings(request.compilable, request.graph);
-                if (request.cancellable != null && request.cancellable.isCancelled()) {
+                if (request.cancellable.isCancelled()) {
                     return null;
                 }
                 new VerifyFrameDoesNotEscapePhase().apply(request.graph, false);
