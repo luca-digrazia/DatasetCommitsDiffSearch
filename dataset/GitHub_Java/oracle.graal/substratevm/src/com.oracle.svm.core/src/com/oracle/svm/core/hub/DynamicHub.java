@@ -90,10 +90,6 @@ import sun.security.util.SecurityConstants;
 @SuppressFBWarnings(value = "Se", justification = "DynamicHub must implement Serializable for compatibility with java.lang.Class, not because of actual serialization")
 public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedElement, java.lang.reflect.Type, GenericDeclaration, Serializable {
 
-    @Substitute //
-    @TargetElement(name = "EMPTY_CLASS_ARRAY", onlyWith = JDK9OrLater.class) //
-    private static Class<?>[] emptyClassArray = new Class<?>[0];
-
     /* Value copied from java.lang.Class. */
     private static final int SYNTHETIC = 0x00001000;
 
@@ -651,23 +647,13 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     public DynamicHub[] getInterfaces() {
-        return getInterfaces(this, true);
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    private DynamicHub[] getInterfaces(boolean cloneArray) {
-        return getInterfaces(this, cloneArray);
-    }
-
-    private static DynamicHub[] getInterfaces(DynamicHub hub, boolean cloneArray) {
-        if (hub.interfacesEncoding == null) {
+        if (interfacesEncoding == null) {
             return new DynamicHub[0];
-        } else if (hub.interfacesEncoding instanceof DynamicHub) {
-            return new DynamicHub[]{(DynamicHub) hub.interfacesEncoding};
+        } else if (interfacesEncoding instanceof DynamicHub) {
+            return new DynamicHub[]{(DynamicHub) interfacesEncoding};
         } else {
             /* The caller is allowed to modify the array, so we have to make a copy. */
-            return cloneArray ? ((DynamicHub[]) hub.interfacesEncoding).clone() : (DynamicHub[]) hub.interfacesEncoding;
+            return ((DynamicHub[]) interfacesEncoding).clone();
         }
     }
 
@@ -975,10 +961,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @KeepOriginal
     @TargetElement(name = "getMethod0", onlyWith = JDK9OrLater.class)
     private native Method getMethod0JDK9OrLater(@SuppressWarnings("hiding") String name, Class<?>[] parameterTypes);
-
-    @KeepOriginal
-    @TargetElement(onlyWith = JDK9OrLater.class)
-    private native Object getMethodsRecursive(@SuppressWarnings("hiding") String name, Class<?>[] parameterTypes, boolean includeStatic);
 
     @KeepOriginal
     @TargetElement(onlyWith = JDK8OrEarlier.class)
