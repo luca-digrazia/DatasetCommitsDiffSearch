@@ -820,14 +820,12 @@ final class Runner {
                     if (scope != null) {
                         String originalName = name.substring(idx + 1);
                         LLVMFunction originalSymbol = scope.getFunction(originalName);
-                        if (originalSymbol == null) {
-                            throw new LLVMLinkerException(String.format("The %s could not be imported because the symbol %s was not found in library %s", external.getName(), originalName, lib));
-                        }
+                        assert originalSymbol != null;
                         LLVMAlias alias = new LLVMAlias(parserResult.getRuntime().getLibrary(), name, originalSymbol);
                         parserResult.getRuntime().getFileScope().register(alias);
                         it.remove();
                     } else {
-                        throw new LLVMLinkerException(String.format("The %s could not be imported because library %s was not found", external.getName(), lib));
+                        throw new LLVMLinkerException(String.format("The %s could not be imported because library %s was not found.", external.getName(), lib));
                     }
                 }
             }

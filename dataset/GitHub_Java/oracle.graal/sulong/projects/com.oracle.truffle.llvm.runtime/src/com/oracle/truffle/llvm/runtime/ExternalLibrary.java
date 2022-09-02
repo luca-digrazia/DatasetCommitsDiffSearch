@@ -42,6 +42,7 @@ public final class ExternalLibrary {
     private final String name;
     private final Path path;
     private final TruffleFile file;
+    private static final String BC_EXT = ".bc";
 
     @CompilerDirectives.CompilationFinal private boolean isNative;
     private final boolean isInternal;
@@ -54,16 +55,8 @@ public final class ExternalLibrary {
         return ExternalLibrary.createFromName(name, isNative, true);
     }
 
-    public static ExternalLibrary externalFromPath(Path path, boolean isNative) {
-        return ExternalLibrary.createFromPath(path, isNative, false);
-    }
-
     public static ExternalLibrary internalFromPath(Path path, boolean isNative) {
         return ExternalLibrary.createFromPath(path, isNative, true);
-    }
-
-    public static ExternalLibrary externalFromFile(TruffleFile file, boolean isNative) {
-        return ExternalLibrary.createFromFile(file, isNative, false);
     }
 
     public static ExternalLibrary createFromName(String name, boolean isNative, boolean isInternal) {
@@ -97,9 +90,8 @@ public final class ExternalLibrary {
             throw new IllegalArgumentException("Path " + path + " is empty");
         }
         String nameWithExt = filename.toString();
-        int lengthWithoutExt = nameWithExt.lastIndexOf(".");
-        if (lengthWithoutExt > 0) {
-            return nameWithExt.substring(0, lengthWithoutExt);
+        if (nameWithExt.endsWith(BC_EXT)) {
+            return nameWithExt.substring(0, nameWithExt.length() - BC_EXT.length());
         }
         return nameWithExt;
     }
@@ -132,8 +124,8 @@ public final class ExternalLibrary {
         return isInternal;
     }
 
-    public void setIsNative(boolean isNative) {
-        this.isNative = isNative;
+    public void makeBitcodeLibrary() {
+        this.isNative = false;
     }
 
     public String getName() {
