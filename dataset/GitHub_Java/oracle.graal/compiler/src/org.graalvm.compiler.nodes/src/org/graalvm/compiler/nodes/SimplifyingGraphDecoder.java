@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,6 +30,7 @@ import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
 
 import java.util.List;
 
+import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.graph.Node;
@@ -46,12 +47,13 @@ import org.graalvm.compiler.nodes.java.ArrayLengthNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.nodes.spi.CoreProvidersDelegate;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.Assumptions;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
+import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
  * Graph decoder that simplifies nodes during decoding. The standard
@@ -65,13 +67,12 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
     protected final boolean canonicalizeReads;
     protected final CanonicalizerTool canonicalizerTool;
 
-    protected class PECanonicalizerTool extends CoreProvidersDelegate implements CanonicalizerTool {
+    protected class PECanonicalizerTool implements CanonicalizerTool {
 
         private final Assumptions assumptions;
         private final OptionValues options;
 
         public PECanonicalizerTool(Assumptions assumptions, OptionValues options) {
-            super(providers);
             this.assumptions = assumptions;
             this.options = options;
         }
@@ -79,6 +80,21 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
         @Override
         public OptionValues getOptions() {
             return options;
+        }
+
+        @Override
+        public MetaAccessProvider getMetaAccess() {
+            return providers.getMetaAccess();
+        }
+
+        @Override
+        public ConstantReflectionProvider getConstantReflection() {
+            return providers.getConstantReflection();
+        }
+
+        @Override
+        public ConstantFieldProvider getConstantFieldProvider() {
+            return providers.getConstantFieldProvider();
         }
 
         @Override
@@ -224,6 +240,20 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
         } else if (node instanceof ArrayLengthNode) {
             ArrayLengthNode arrayLengthNode = (ArrayLengthNode) node;
             return arrayLengthNode.canonical(canonicalizerTool);
+        } else if (node instanceof IntegerSwitchNode && ((IntegerSwitchNode) node).value().isConstant()) {
+            IntegerSwitchNode switchNode = (IntegerSwitchNode) node;
+            int value = switchNode.value().asJavaConstant().asInt();
+            AbstractBeginNode survivingSuccessor = switchNode.successorAtKey(value);
+            List<Node> allSuccessors = switchNode.successors().snapshot();
+
+            graph.removeSplit(switchNode, survivingSuccessor);
+            for (Node successor : allSuccessors) {
+                if (successor != survivingSuccessor) {
+                    assert ((AbstractBeginNode) successor).next() == null : "must not be parsed yet";
+                    successor.safeDelete();
+                }
+            }
+            return node;
         } else if (node instanceof Canonicalizable) {
             return ((Canonicalizable) node).canonical(canonicalizerTool);
         } else {
