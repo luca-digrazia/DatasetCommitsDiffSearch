@@ -72,7 +72,6 @@ public final class Meta implements ContextAccess {
         String = knownKlass(Type.String);
         Class_Array = Class.array();
         Class_forName_String = Class.lookupDeclaredMethod(Name.forName, Signature.Class_String);
-        HIDDEN_PROTECTION_DOMAIN = Class.lookupHiddenField(Name.HIDDEN_PROTECTION_DOMAIN);
 
         Object_array = Object.array();
 
@@ -195,8 +194,6 @@ public final class Meta implements ContextAccess {
         Method_override = Method.lookupDeclaredField(Name.override, Type._boolean);
         Method_parameterTypes = Method.lookupDeclaredField(Name.parameterTypes, Type.Class_array);
 
-        MethodAccessorImpl = knownKlass(Type.MethodAccessorImpl);
-
         Parameter = knownKlass(Type.Parameter);
 
         Field = knownKlass(Type.Field);
@@ -288,7 +285,6 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass String;
     public final ObjectKlass Class;
     public final Field HIDDEN_MIRROR_KLASS;
-    public final Field HIDDEN_PROTECTION_DOMAIN;
     public final Field HIDDEN_SIGNERS;
     public final ArrayKlass Class_Array;
     public final Method Class_forName_String;
@@ -370,8 +366,6 @@ public final class Meta implements ContextAccess {
     public final Field Method_clazz;
     public final Field Method_override;
     public final Field Method_parameterTypes;
-
-    public final ObjectKlass MethodAccessorImpl;
 
     public final ObjectKlass Parameter;
 

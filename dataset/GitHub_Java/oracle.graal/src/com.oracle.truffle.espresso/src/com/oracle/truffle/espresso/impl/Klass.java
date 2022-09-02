@@ -264,7 +264,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         return other.getHierarchyDepth() >= depth && other.getSuperTypes()[depth] == this;
     }
 
-    public final Klass findLeastCommonSupertype(Klass other) {
+    public final Klass getClosestCommonSupertype(Klass other) {
         if (isPrimitive() || other.isPrimitive()) {
             if (this == other) {
                 return this;
@@ -440,7 +440,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     private int getHierarchyDepth() {
         int result = hierarchyDepth;
         if (result == -1) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             if (getSupertype() == null) {
                 // Primitives or java.lang.Object
                 result = 0;
@@ -552,7 +551,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
 
     private Method findMethodHandleIntrinsic(@SuppressWarnings("unused") Symbol<Name> methodName, Symbol<Signature> signature, MethodHandleIntrinsics.PolySigIntrinsics id) {
         if (id == InvokeGeneric) {
-            return getMeta().invoke.findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
+            return (methodName == Name.invoke ? getMeta().invoke : getMeta().invokeExact).findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
                 // TODO(garcia) Create a whole new Node to handle MH invokes.
                 @Override
                 public EspressoBaseNode apply(Method method) {
