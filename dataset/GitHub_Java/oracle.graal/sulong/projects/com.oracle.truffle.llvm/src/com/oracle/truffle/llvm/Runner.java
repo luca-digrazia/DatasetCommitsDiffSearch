@@ -433,21 +433,19 @@ final class Runner {
         private void bindUnresolvedSymbols(LLVMContext ctx) {
             NFIContextExtension nfiContextExtension = ctx.getLanguage().getContextExtensionOrNull(NFIContextExtension.class);
             LLVMIntrinsicProvider intrinsicProvider = ctx.getLanguage().getCapability(LLVMIntrinsicProvider.class);
-            synchronized (ctx) {
-                for (LLVMSymbol symbol : fileScope.values()) {
-                    if (!symbol.isDefined()) {
-                        if (symbol instanceof LLVMGlobal) {
-                            LLVMGlobal global = (LLVMGlobal) symbol;
-                            bindGlobal(ctx, global, nfiContextExtension);
-                        } else if (symbol instanceof LLVMFunctionDescriptor) {
-                            LLVMFunctionDescriptor function = (LLVMFunctionDescriptor) symbol;
-                            bindUnresolvedFunction(ctx, function, nfiContextExtension, intrinsicProvider, nodeFactory);
-                        } else if (symbol instanceof LLVMAlias) {
-                            // nothing to do
-                        } else {
-                            CompilerDirectives.transferToInterpreter();
-                            throw new IllegalStateException("Unknown symbol: " + symbol.getClass());
-                        }
+            for (LLVMSymbol symbol : fileScope.values()) {
+                if (!symbol.isDefined()) {
+                    if (symbol instanceof LLVMGlobal) {
+                        LLVMGlobal global = (LLVMGlobal) symbol;
+                        bindGlobal(ctx, global, nfiContextExtension);
+                    } else if (symbol instanceof LLVMFunctionDescriptor) {
+                        LLVMFunctionDescriptor function = (LLVMFunctionDescriptor) symbol;
+                        bindUnresolvedFunction(ctx, function, nfiContextExtension, intrinsicProvider, nodeFactory);
+                    } else if (symbol instanceof LLVMAlias) {
+                        // nothing to do
+                    } else {
+                        CompilerDirectives.transferToInterpreter();
+                        throw new IllegalStateException("Unknown symbol: " + symbol.getClass());
                     }
                 }
             }
@@ -1030,7 +1028,7 @@ final class Runner {
         LLVMFunctionDescriptor mainFunctionDescriptor = findMainMethod(parserResults);
         LLVMFunctionDescriptor startFunctionDescriptor = findStartMethod();
         if (mainFunctionDescriptor != null && startFunctionDescriptor != null) {
-            RootCallTarget startCallTarget = startFunctionDescriptor.getLLVMIRFunctionSlowPath();
+            RootCallTarget startCallTarget = startFunctionDescriptor.getLLVMIRFunction();
             Path applicationPath = mainFunctionDescriptor.getLibrary().getPath();
             RootNode rootNode = new LLVMGlobalRootNode(language, StackManager.createRootFrame(), mainFunctionDescriptor, startCallTarget, Objects.toString(applicationPath, ""));
             mainFunctionCallTarget = Truffle.getRuntime().createCallTarget(rootNode);
@@ -1085,18 +1083,16 @@ final class Runner {
     }
 
     private void overrideSulongLibraryFunctionsWithIntrinsics(List<LLVMParserResult> sulongLibraries) {
-        synchronized (context) {
-            LLVMIntrinsicProvider intrinsicProvider = language.getCapability(LLVMIntrinsicProvider.class);
-            for (LLVMParserResult parserResult : sulongLibraries) {
-                for (LLVMSymbol symbol : parserResult.getRuntime().getFileScope().values()) {
-                    if (symbol.isFunction() && intrinsicProvider.isIntrinsified(symbol.getName())) {
-                        /*
-                         * If `symbol` is an alias, `symbol.asFunction()` will follow the alias to
-                         * the real function. We intrinsify that function instead.
-                         */
-                        LLVMFunctionDescriptor function = symbol.asFunction();
-                        function.define(intrinsicProvider, parserResult.getRuntime().getNodeFactory());
-                    }
+        LLVMIntrinsicProvider intrinsicProvider = language.getCapability(LLVMIntrinsicProvider.class);
+        for (LLVMParserResult parserResult : sulongLibraries) {
+            for (LLVMSymbol symbol : parserResult.getRuntime().getFileScope().values()) {
+                if (symbol.isFunction() && intrinsicProvider.isIntrinsified(symbol.getName())) {
+                    /*
+                     * If `symbol` is an alias, `symbol.asFunction()` will follow the alias to the
+                     * real function. We intrinsify that function instead.
+                     */
+                    LLVMFunctionDescriptor function = symbol.asFunction();
+                    function.define(intrinsicProvider, parserResult.getRuntime().getNodeFactory());
                 }
             }
         }
