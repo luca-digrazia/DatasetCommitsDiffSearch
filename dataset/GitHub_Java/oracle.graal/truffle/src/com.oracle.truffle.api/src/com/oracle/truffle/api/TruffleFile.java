@@ -795,9 +795,7 @@ public final class TruffleFile {
     public SeekableByteChannel newByteChannel(Set<? extends OpenOption> options, FileAttribute<?>... attributes) throws IOException {
         try {
             checkFileOperationPreconditions();
-            SeekableByteChannel res = ByteChannelDecorator.create(this, fileSystemContext.fileSystem.newByteChannel(normalizedPath, options, attributes));
-            LanguageAccessor.engineAccess().onCloseableCreated(fileSystemContext.engineObject, res);
-            return res;
+            return ByteChannelDecorator.create(fileSystemContext.fileSystem.newByteChannel(normalizedPath, options, attributes));
         } catch (IOException | UnsupportedOperationException | IllegalArgumentException | SecurityException e) {
             throw e;
         } catch (Throwable t) {
@@ -1460,9 +1458,7 @@ public final class TruffleFile {
     public DirectoryStream<TruffleFile> newDirectoryStream() throws IOException {
         try {
             checkFileOperationPreconditions();
-            DirectoryStream<TruffleFile> res = new TruffleFileDirectoryStream(this, fileSystemContext.fileSystem.newDirectoryStream(normalizedPath, AllFiles.INSTANCE));
-            LanguageAccessor.engineAccess().onCloseableCreated(fileSystemContext.engineObject, res);
-            return res;
+            return new TruffleFileDirectoryStream(this, fileSystemContext.fileSystem.newDirectoryStream(normalizedPath, AllFiles.INSTANCE));
         } catch (IOException | SecurityException e) {
             throw e;
         } catch (Throwable t) {
@@ -2050,7 +2046,7 @@ public final class TruffleFile {
 
     static final class FileSystemContext {
 
-        // instance of PolyglotLanguageContext or PolyglotSource.EmbedderFileSystemContext
+        // instance of PolyglotContextConfig or PolyglotSource.EmbedderFileSystemContext
         final Object engineObject;
 
         private volatile Map<String, Collection<? extends FileTypeDetector>> fileTypeDetectors;
@@ -2187,11 +2183,9 @@ public final class TruffleFile {
 
     private static final class ByteChannelDecorator implements SeekableByteChannel {
 
-        private final TruffleFile file;
         private final SeekableByteChannel delegate;
 
-        ByteChannelDecorator(TruffleFile file, SeekableByteChannel delegate) {
-            this.file = file;
+        ByteChannelDecorator(final SeekableByteChannel delegate) {
             this.delegate = delegate;
         }
 
@@ -2212,11 +2206,7 @@ public final class TruffleFile {
 
         @Override
         public void close() throws IOException {
-            try {
-                delegate.close();
-            } finally {
-                LanguageAccessor.engineAccess().onCloseableClosed(file.fileSystemContext.engineObject, this);
-            }
+            delegate.close();
         }
 
         @Override
@@ -2241,10 +2231,9 @@ public final class TruffleFile {
             return this;
         }
 
-        static SeekableByteChannel create(TruffleFile truffleFile, SeekableByteChannel delegate) {
-            Objects.requireNonNull(truffleFile, "TruffleFile must be non null.");
+        static SeekableByteChannel create(final SeekableByteChannel delegate) {
             Objects.requireNonNull(delegate, "Delegate must be non null.");
-            return new ByteChannelDecorator(truffleFile, delegate);
+            return new ByteChannelDecorator(delegate);
         }
     }
 
@@ -2277,8 +2266,6 @@ public final class TruffleFile {
                 throw e;
             } catch (Throwable t) {
                 throw directory.wrapHostException(t);
-            } finally {
-                LanguageAccessor.engineAccess().onCloseableClosed(directory.fileSystemContext.engineObject, this);
             }
         }
 
