@@ -24,11 +24,6 @@
  */
 package org.graalvm.compiler.lir.dfa;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.LIRFrameState;
@@ -44,6 +39,11 @@ import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.Value;
 import jdk.vm.ci.meta.ValueKind;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 /**
  * Record all derived reference base pointers in a frame state.
  */
@@ -58,13 +58,16 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
         private final class BasePointersSet extends ValueSet<Marker.BasePointersSet> {
 
+            private final IndexedValueMap variables;
             private final Map<Integer, Set<Value>> baseDerivedRefs;
 
             BasePointersSet() {
+                variables = new IndexedValueMap();
                 baseDerivedRefs = new HashMap<>();
             }
 
             private BasePointersSet(BasePointersSet other) {
+                variables = new IndexedValueMap(other.variables);
                 // Deep copy.
                 baseDerivedRefs = new HashMap<>(other.baseDerivedRefs.size());
                 for (Map.Entry<Integer, Set<Value>> entry : other.baseDerivedRefs.entrySet()) {
@@ -94,6 +97,7 @@ public final class MarkBasePointersPhase extends AllocationPhase {
             public void put(Value v) {
                 Variable base = (Variable) v.getValueKind(LIRKind.class).getDerivedReferenceBase();
                 assert !base.getValueKind(LIRKind.class).isValue();
+                variables.put(base.index, base);
 
                 Set<Value> derivedRefs = baseDerivedRefs.get(base.index);
                 assert verifyDerivedRefs(v, base.index);
@@ -108,6 +112,8 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
             @Override
             public void putAll(BasePointersSet v) {
+                variables.putAll(v.variables);
+
                 for (Map.Entry<Integer, Set<Value>> entry : v.baseDerivedRefs.entrySet()) {
                     Integer k = entry.getKey();
                     Set<Value> derivedRefsOther = entry.getValue();
@@ -129,6 +135,7 @@ public final class MarkBasePointersPhase extends AllocationPhase {
                 Set<Value> derivedRefs = baseDerivedRefs.get(base.index);
                 // Just mark the base pointer as null if no derived references exist.
                 if (derivedRefs == null) {
+                    variables.put(base.index, null);
                     return;
                 }
 
@@ -136,29 +143,17 @@ public final class MarkBasePointersPhase extends AllocationPhase {
                 if (derivedRefs.contains(v)) {
                     derivedRefs.remove(v);
                     if (derivedRefs.isEmpty()) {
+                        variables.put(base.index, null);
                         baseDerivedRefs.remove(base.index);
                     }
                 }
-            }
-
-            private IndexedValueMap getMap() {
-                IndexedValueMap result = new IndexedValueMap();
-                for (Set<Value> entry : baseDerivedRefs.values()) {
-                    if (entry.isEmpty()) {
-                        continue;
-                    }
-                    Value v = entry.iterator().next();
-                    Variable base = (Variable) v.getValueKind(LIRKind.class).getDerivedReferenceBase();
-                    result.put(base.index, base);
-                }
-                return result;
             }
 
             @Override
             public boolean equals(Object obj) {
                 if (obj instanceof Marker.BasePointersSet) {
                     BasePointersSet other = (BasePointersSet) obj;
-                    return baseDerivedRefs.equals(other.baseDerivedRefs);
+                    return variables.equals(other.variables) && baseDerivedRefs.equals(other.baseDerivedRefs);
                 } else {
                     return false;
                 }
@@ -172,7 +167,9 @@ public final class MarkBasePointersPhase extends AllocationPhase {
             @Override
             public String toString() {
                 StringBuilder sb = new StringBuilder();
-                sb.append("[BasePointersSet] baseDerivedRefs map: {");
+                sb.append("[BasePointersSet] variables: ");
+                sb.append(variables.toString());
+                sb.append(" baseDerivedRefs map: {");
 
                 boolean mapHaveElement = false;
                 for (Map.Entry<Integer, Set<Value>> entry : baseDerivedRefs.entrySet()) {
@@ -219,8 +216,7 @@ public final class MarkBasePointersPhase extends AllocationPhase {
 
         @Override
         protected void processState(LIRInstruction op, LIRFrameState info, BasePointersSet values) {
-            info.setLiveBasePointers(values.getMap());
+            info.setLiveBasePointers(new IndexedValueMap(values.variables));
         }
-
     }
 }
