@@ -99,7 +99,8 @@ public abstract class StaticShape<T> {
     @CompilationFinal //
     T factory;
 
-    StaticShape(Class<?> storageClass, boolean safetyChecks) {
+    StaticShape(PrivilegedToken privilegedToken, Class<?> storageClass, boolean safetyChecks) {
+        Objects.requireNonNull(privilegedToken);
         this.storageClass = storageClass;
         this.safetyChecks = safetyChecks;
     }
@@ -417,6 +418,24 @@ public abstract class StaticShape<T> {
                 default:
                     throw new IllegalArgumentException("Should not reach here. Unexpected storage strategy: " + strategy);
             }
+        }
+    }
+
+    abstract static class PrivilegedToken {
+        PrivilegedToken() {
+            if (!isKnownImplementation()) {
+                throw new AssertionError("Only known implementations can create a " + PrivilegedToken.class.getName() + ".\nGot: " + getClass().getName());
+            }
+        }
+
+        private boolean isKnownImplementation() {
+            for (String knownImplementation : new String[]{"com.oracle.truffle.api.staticobject.ArrayBasedStaticShape$ArrayBasedPrivilegedToken",
+                            "com.oracle.truffle.api.staticobject.FieldBasedStaticShape$FieldBasedPrivilegedToken"}) {
+                if (getClass().getName().equals(knownImplementation)) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
