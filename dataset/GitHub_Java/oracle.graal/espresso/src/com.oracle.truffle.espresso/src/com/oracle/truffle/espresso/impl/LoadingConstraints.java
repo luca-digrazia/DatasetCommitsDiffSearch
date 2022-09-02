@@ -397,7 +397,7 @@ final class LoadingConstraints implements ContextAccess {
 
     private LinkageError linkageError(String message) {
         Meta meta = getMeta();
-        throw meta.throwExceptionWithMessage(meta.java_lang_LinkageError, message);
+        throw Meta.throwExceptionWithMessage(meta.java_lang_LinkageError, message);
     }
 
     private static int getLoaderID(StaticObject loader, Meta meta) {

@@ -197,7 +197,7 @@ public final class Field extends Member<Type> implements FieldRef {
     private Object getObjectHelper(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        assert getKind() == JavaKind.Object;
+        assert !getKind().isSubWord();
         if (isVolatile() || forceVolatile) {
             return linkedField.getObjectVolatile(obj);
         } else {
@@ -208,7 +208,7 @@ public final class Field extends Member<Type> implements FieldRef {
     private void setObjectHelper(StaticObject obj, Object value, boolean forceVolatile) {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        assert getKind() == JavaKind.Object;
+        assert !getKind().isSubWord();
         if (isVolatile() || forceVolatile) {
             linkedField.setObjectVolatile(obj, value);
         } else {
@@ -232,7 +232,12 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public void setObject(StaticObject obj, Object value, boolean forceVolatile) {
-        assert !isHidden();
+        assert !(value instanceof StaticObject) ||
+                        (StaticObject.isNull((StaticObject) value)) ||
+                        !isHidden() ||
+                        obj.getKlass().getMeta().resolveSymbolOrFail(getType(),
+                                        obj.getKlass().getDefiningClassLoader(), obj.getKlass().protectionDomain()) //
+                                        .isAssignableFrom(((StaticObject) value).getKlass());
         setObjectHelper(obj, value, forceVolatile);
     }
 
@@ -240,7 +245,6 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert !isHidden();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        assert getKind() == JavaKind.Object;
         return (StaticObject) linkedField.getAndSetObject(obj, value);
     }
 
@@ -248,7 +252,6 @@ public final class Field extends Member<Type> implements FieldRef {
         obj.checkNotForeign();
         assert !isHidden();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        assert getKind() == JavaKind.Object;
         return linkedField.compareAndSwapObject(obj, before, after);
     }
 
@@ -258,6 +261,7 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public Object getHiddenObject(StaticObject obj, boolean forceVolatile) {
+        obj.checkNotForeign();
         assert isHidden();
         return getObjectHelper(obj, forceVolatile);
     }
@@ -267,6 +271,7 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public void setHiddenObject(StaticObject obj, Object value, boolean forceVolatile) {
+        obj.checkNotForeign();
         assert isHidden();
         setObjectHelper(obj, value, forceVolatile);
     }
@@ -457,7 +462,7 @@ public final class Field extends Member<Type> implements FieldRef {
     public void setInt(StaticObject obj, int value, boolean forceVolatile) {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        assert getKind() == JavaKind.Int;
+        assert getKind() == JavaKind.Int || getKind() == JavaKind.Float;
         if (isVolatile() || forceVolatile) {
             linkedField.setIntVolatile(obj, value);
         } else {
@@ -468,7 +473,7 @@ public final class Field extends Member<Type> implements FieldRef {
     public boolean compareAndSwapInt(StaticObject obj, int before, int after) {
         obj.checkNotForeign();
         assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
-        assert getKind() == JavaKind.Int;
+        assert getKind() == JavaKind.Int || getKind() == JavaKind.Float;
         return linkedField.compareAndSwapInt(obj, before, after);
     }
     // endregion int
