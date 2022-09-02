@@ -149,7 +149,6 @@ public abstract class NativeEnv {
         return buffer;
     }
 
-    @TruffleBoundary
     protected static long byteBufferAddress(ByteBuffer byteBuffer) {
         try {
             return (long) addressField.get(byteBuffer);

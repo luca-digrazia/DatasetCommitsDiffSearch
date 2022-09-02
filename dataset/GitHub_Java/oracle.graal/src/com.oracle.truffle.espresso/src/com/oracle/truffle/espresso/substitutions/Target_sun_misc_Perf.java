@@ -65,10 +65,11 @@ public final class Target_sun_misc_Perf {
     }
 
     @Substitution(hasReceiver = true)
-    @SuppressWarnings("unused")
     public static @Host(ByteBuffer.class) StaticObject createLong(@Host(typeName = "Lsun/misc/Perf;") StaticObject self,
-                    @SuppressWarnings("unused") @Host(String.class) StaticObject name, int variability, int units, long value,
-                    @InjectMeta Meta meta) {
+                    @SuppressWarnings("unused") @Host(String.class) StaticObject name, int variability, int units, long value) {
+        // TODO(tg): inject meta
+        Meta meta = self.getKlass().getMeta();
+
         if (units <= 0 || units > U_Last) {
             throw Meta.throwException(meta.java_lang_IllegalArgumentException);
         }
@@ -95,21 +96,4 @@ public final class Target_sun_misc_Perf {
     public static void registerNatives() {
         /* nop */
     }
-
-    public static class SharedPerf extends SubstitutionNamesProvider {
-        public static SubstitutionNamesProvider INSTANCE = new SharedPerf();
-        private static String[] NAMES = new String[]{
-                        TARGET_SUN_MISC_PERF,
-                        TARGET_JDK_INTERNAL_PERF_PERF
-        };
-
-        @Override
-        public String[] substitutionClassNames() {
-            return NAMES;
-        }
-
-    }
-
-    private static final String TARGET_SUN_MISC_PERF = "Target_sun_misc_Perf";
-    private static final String TARGET_JDK_INTERNAL_PERF_PERF = "Target_sun_misc_Perf";
 }
