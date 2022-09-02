@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -102,10 +102,10 @@ public class InlineExecutionTest {
         try {
             try {
                 final Value result = testRun.getSnippet().getExecutableValue().execute(testRun.getActualParameters().toArray());
-                TestUtil.validateResult(testRun, result, null, true);
+                TestUtil.validateResult(testRun, result, null);
                 success = true;
             } catch (PolyglotException pe) {
-                TestUtil.validateResult(testRun, null, pe, true);
+                TestUtil.validateResult(testRun, null, pe);
                 success = true;
             }
             if (verifier != null && verifier.exception != null) {
@@ -133,14 +133,14 @@ public class InlineExecutionTest {
         public void verify(Object ret) {
             Value result = context.getValue(ret);
             InlineSnippet inlineSnippet = testRun.getInlineSnippet();
-            TestUtil.validateResult(inlineSnippet.getResultVerifier(), testRun, result, null, true);
+            TestUtil.validateResult(inlineSnippet.getResultVerifier(), testRun, result, null);
         }
 
         @Override
         public void verify(PolyglotException pe) {
             InlineSnippet inlineSnippet = testRun.getInlineSnippet();
             try {
-                TestUtil.validateResult(inlineSnippet.getResultVerifier(), testRun, null, pe, true);
+                TestUtil.validateResult(inlineSnippet.getResultVerifier(), testRun, null, pe);
             } catch (Exception exc) {
                 exception = exc;
             }
