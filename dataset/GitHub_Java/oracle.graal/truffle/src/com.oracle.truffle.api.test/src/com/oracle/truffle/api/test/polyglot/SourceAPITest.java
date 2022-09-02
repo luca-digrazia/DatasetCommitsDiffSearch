@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
-import com.oracle.truffle.api.test.OSUtils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -77,7 +76,6 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.test.ReflectionUtils;
-import org.junit.Assume;
 
 public class SourceAPITest {
 
@@ -167,7 +165,7 @@ public class SourceAPITest {
         assertSame(sequence, source.getBytes());
         assertEquals("Unnamed", source.getName());
         assertNull(source.getURL());
-        assertEquals("truffle:9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a/Unnamed", source.getURI().toString());
+        assertEquals("truffle:239e496366395062c28730b535d8286f/Unnamed", source.getURI().toString());
     }
 
     @Test
@@ -660,8 +658,8 @@ public class SourceAPITest {
     public void testNoContentSource() {
         com.oracle.truffle.api.source.Source truffleSource = com.oracle.truffle.api.source.Source.newBuilder(ProxyLanguage.ID, "x", "name").content(
                         com.oracle.truffle.api.source.Source.CONTENT_NONE).build();
-        Class<?>[] sourceConstructorTypes = new Class[]{Object.class};
-        Source source = ReflectionUtils.newInstance(Source.class, sourceConstructorTypes, truffleSource);
+        Class<?>[] sourceConstructorTypes = new Class[]{String.class, Object.class};
+        Source source = ReflectionUtils.newInstance(Source.class, sourceConstructorTypes, ProxyLanguage.ID, truffleSource);
         assertFalse(source.hasCharacters());
         assertFalse(source.hasBytes());
         try {
@@ -683,23 +681,5 @@ public class SourceAPITest {
         assertTrue(section.hasLines());
         assertTrue(section.hasColumns());
         assertEquals("", section.getCharacters());
-        assertTrue(truffleSource.getURI().toString().contains("name"));
-    }
-
-    @Test
-    public void testNonResolvableURL() throws IOException {
-        Assume.assumeFalse("Query parameters are not supported by file URLConnection on Windows", OSUtils.isWindows());
-        File file = File.createTempFile("Test", ".java");
-        file.deleteOnExit();
-        String text;
-        try (FileWriter w = new FileWriter(file)) {
-            text = "// Test";
-            w.write(text);
-        }
-        URL url = new URL(file.toURI() + "?query");
-        Source src = Source.newBuilder("TestJava", url).build();
-        assertNotNull(src);
-        assertTrue(text.contentEquals(src.getCharacters()));
-        assertEquals("text/plain", Source.findMimeType(url));
     }
 }
