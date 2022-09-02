@@ -29,34 +29,35 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.others;
 
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.utilities.AssumedValue;
 import com.oracle.truffle.llvm.runtime.LLVMAlias;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.LLVMStackAccess;
+import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
+import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.func.LLVMRootNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
 
-    private boolean statement;
-    private LLVMSourceLocation sourceLocation;
-
     protected final LLVMSymbol symbol;
 
-    @CompilationFinal private Assumption singleContextAssumption;
-    @CompilationFinal private LLVMStackAccess stackAccess;
-    @CompilationFinal private ContextReference<LLVMContext> contextRef;
+    public LLVMAccessSymbolNode(LLVMSymbol symbol) {
+        this.symbol = resolveAlias(symbol);
+    }
 
-    LLVMAccessSymbolNode(LLVMSymbol symbol) {
-        this.symbol = LLVMAlias.resolveAlias(symbol);
+    public static LLVMSymbol resolveAlias(LLVMSymbol symbol) {
+        LLVMSymbol tmp = symbol;
+        while (tmp.isAlias()) {
+            tmp = ((LLVMAlias) tmp).getTarget();
+        }
+        return tmp;
     }
 
     @Override
@@ -68,47 +69,67 @@ public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
         return symbol;
     }
 
-    public LLVMPointer execute() {
-        if (contextRef == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            contextRef = lookupContextReference(LLVMLanguage.class);
+    public abstract LLVMPointer execute();
+
+    @Specialization
+    LLVMPointer doAccess(
+                    @CachedContext(LLVMLanguage.class) LLVMContext context) {
+        return getSymbol(context, symbol, this);
+    }
+
+    public static LLVMPointer getSymbol(LLVMContext context, LLVMSymbol symbol, Node node) {
+        assert !symbol.isAlias();
+        if (symbol.hasValidIndexAndID()) {
+            int bitcodeID = symbol.getBitcodeID(false);
+            if (context.symbolTableExists(bitcodeID)) {
+                AssumedValue<LLVMPointer>[] symbols = context.findSymbolTable(bitcodeID);
+                int index = symbol.getSymbolIndex(false);
+                AssumedValue<LLVMPointer> assumedValue = symbols[index];
+                if (assumedValue != null) {
+                    return assumedValue.get();
+                }
+            }
         }
-        return contextRef.get().getSymbol(symbol);
+        CompilerDirectives.transferToInterpreter();
+        throw new LLVMLinkerException(node, String.format("External %s %s cannot be found.", symbol.getKind(), symbol.getName()));
     }
 
-    @Override
-    public Object executeGeneric(VirtualFrame frame) {
-        if (singleContextAssumption == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            singleContextAssumption = singleContextAssumption();
+    /**
+     * This method is only intended to be used during initialization of a Sulong library.
+     */
+    @TruffleBoundary
+    public static void writeSymbol(LLVMSymbol symbol, LLVMPointer pointer, LLVMContext context, Node node) {
+        assert !symbol.isAlias();
+        AssumedValue<LLVMPointer>[] symbols = context.findSymbolTable(symbol.getBitcodeID(false));
+        synchronized (symbols) {
+            try {
+                int index = symbol.getSymbolIndex(false);
+                symbols[index] = new AssumedValue<>(symbol.getKind() + "." + symbol.getName(), pointer);
+            } catch (LLVMIllegalSymbolIndexException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new LLVMLinkerException(node, "Writing symbol into symbol table is inconsistent.");
+            }
         }
-        if (singleContextAssumption.isValid()) {
-            return execute();
+    }
+
+    /**
+     * This method is only intended to be used during initialization of a Sulong library.
+     */
+    public static boolean checkSymbol(LLVMSymbol symbol, LLVMContext context, Node node) {
+        assert !symbol.isAlias();
+        if (symbol.hasValidIndexAndID()) {
+            int bitcodeID = symbol.getBitcodeID(false);
+            if (context.symbolTableExists(bitcodeID)) {
+                AssumedValue<LLVMPointer>[] symbols = context.findSymbolTable(bitcodeID);
+                int index = symbol.getSymbolIndex(false);
+                AssumedValue<LLVMPointer> pointer = symbols[index];
+                if (pointer == null) {
+                    return false;
+                }
+                return pointer.get() != null;
+            }
         }
-        if (stackAccess == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            stackAccess = ((LLVMRootNode) getRootNode()).getStackAccess();
-        }
-        return stackAccess.executeGetStack(frame).getContext().getSymbol(symbol);
-    }
-
-    @Override
-    public LLVMSourceLocation getSourceLocation() {
-        return sourceLocation;
-    }
-
-    @Override
-    public void setSourceLocation(LLVMSourceLocation sourceLocation) {
-        this.sourceLocation = sourceLocation;
-    }
-
-    @Override
-    protected boolean isStatement() {
-        return statement;
-    }
-
-    @Override
-    protected void setStatement(boolean statementTag) {
-        this.statement = statementTag;
+        CompilerDirectives.transferToInterpreter();
+        throw new LLVMLinkerException(node, String.format("External %s %s cannot be found.", symbol.getKind(), symbol.getName()));
     }
 }
