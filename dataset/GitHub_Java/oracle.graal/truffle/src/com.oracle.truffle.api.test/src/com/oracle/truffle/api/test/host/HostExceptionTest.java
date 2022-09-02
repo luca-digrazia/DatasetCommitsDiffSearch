@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,7 +43,6 @@ package com.oracle.truffle.api.test.host;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
@@ -67,6 +66,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -419,29 +419,6 @@ public class HostExceptionTest {
         assertThat(exception, instanceOf(expectedException));
     }
 
-    @Test
-    public void testHostExceptionMetaInstance() {
-        expectedException = NoSuchElementException.class;
-        Value catcher = context.eval(ProxyLanguage.ID, "catcher");
-        Runnable thrower = HostExceptionTest::thrower;
-        Value result = catcher.execute(thrower);
-        assertTrue(result.isHostObject());
-        assertThat(result.asHostObject(), instanceOf(NoSuchElementException.class));
-
-        Value expectedClass = context.asValue(expectedException);
-        assertTrue(expectedClass.isMetaObject());
-        assertTrue(expectedClass.isMetaInstance(result));
-        Value throwableClass = context.asValue(Throwable.class);
-        assertTrue(throwableClass.isMetaObject());
-        assertTrue(throwableClass.isMetaInstance(result));
-        Value objectClass = context.asValue(Object.class);
-        assertTrue(objectClass.isMetaObject());
-        assertTrue(objectClass.isMetaInstance(result));
-        Value otherClass = context.asValue(Runnable.class);
-        assertTrue(otherClass.isMetaObject());
-        assertFalse(otherClass.isMetaInstance(result));
-    }
-
     static void shouldHaveThrown(Class<? extends Throwable> expected) {
         fail("Expected a " + expected + " but none was thrown");
     }
@@ -506,7 +483,7 @@ public class HostExceptionTest {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(e);
             } catch (Exception ex) {
-                if (interop.isException(ex)) {
+                if (ex instanceof TruffleException) {
                     return checkAndUnwrapException(ex);
                 }
                 throw ex;
@@ -516,16 +493,14 @@ public class HostExceptionTest {
 
     @TruffleBoundary
     Object checkAndUnwrapException(Throwable ex) {
-        assertTrue(env.isHostObject(ex));
+        Object exceptionObject = ((TruffleException) ex).getExceptionObject();
+        assertNotNull(exceptionObject);
+        assertTrue(env.isHostObject(exceptionObject));
         assertNotNull("Unexpected exception: " + ex, expectedException);
-        assertThat(env.asHostObject(ex), instanceOf(expectedException));
+        assertThat(env.asHostObject(exceptionObject), instanceOf(expectedException));
         assertThat(ProxyLanguage.getCurrentContext().getEnv().asHostException(ex), instanceOf(expectedException));
-        try {
-            assertTrue(InteropLibrary.getUncached().isMetaInstance(env.asHostSymbol(Throwable.class), ex));
-        } catch (UnsupportedMessageException e) {
-            throw new AssertionError(e);
-        }
-        return ex;
+        assertTrue(InteropLibrary.getFactory().getUncached().isException(exceptionObject));
+        return exceptionObject;
     }
 
     class RunnerRootNode extends RootNode {
@@ -587,10 +562,12 @@ public class HostExceptionTest {
                 CompilerDirectives.transferToInterpreter();
                 throw new AssertionError(e);
             } catch (Exception ex) {
-                if (interop.isException(ex)) {
-                    assertTrue(env.isHostObject(ex));
+                if (ex instanceof TruffleException) {
+                    Object exObj = ((TruffleException) ex).getExceptionObject();
+                    assertTrue(env.isHostObject(exObj));
+                    assertTrue(interop.isException(exObj));
                     try {
-                        throw interop.throwException(ex);
+                        throw interop.throwException(exObj);
                     } catch (UnsupportedMessageException e) {
                         throw new AssertionError(e);
                     }
