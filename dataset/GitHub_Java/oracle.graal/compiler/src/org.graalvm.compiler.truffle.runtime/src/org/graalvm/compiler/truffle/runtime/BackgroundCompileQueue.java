@@ -155,9 +155,9 @@ public class BackgroundCompileQueue {
         return new TruffleCompilerThreadFactory(threadNamePrefix, runtime);
     }
 
-    public CancellableCompileTask submitTask(Priority priority, OptimizedCallTarget target, BiConsumer<CancellableCompileTask, WeakReference<OptimizedCallTarget>> action) {
+    public CancellableCompileTask submitTask(Priority priority, OptimizedCallTarget target, BiConsumer<CancellableCompileTask, WeakReference<OptimizedCallTarget>> request) {
         final WeakReference<OptimizedCallTarget> targetReference = new WeakReference<>(target);
-        CancellableCompileTask cancellable = new CancellableCompileTask(priority, targetReference, action, nextId());
+        CancellableCompileTask cancellable = new CancellableCompileTask(priority, targetReference, request, nextId());
         cancellable.setFuture(getExecutorService(target).submit(cancellable));
         return cancellable;
     }
@@ -235,7 +235,7 @@ public class BackgroundCompileQueue {
         final Tier tier;
         final int value;
 
-        public Priority(int value, Tier tier) {
+        Priority(int value, Tier tier) {
             this.value = value;
             this.tier = tier;
         }
