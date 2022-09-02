@@ -28,13 +28,15 @@ package com.oracle.svm.core.heap;
 
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
-import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.Field;
+import java.util.function.BooleanSupplier;
 
+import com.oracle.svm.core.SubstrateUtil;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.ExcludeFromReferenceMap;
@@ -48,6 +50,7 @@ import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownClass;
 import com.oracle.svm.core.jdk.JDK11OrLater;
+import com.oracle.svm.core.jdk.JDK16OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.util.ReflectionUtil;
@@ -86,41 +89,28 @@ public final class Target_java_lang_ref_Reference<T> {
     @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FieldOffset, name = "discovered", declClass = Target_java_lang_ref_Reference.class) //
     static long discoveredFieldOffset;
 
-    /** @see ReferenceInternals#isInitialized */
-    @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ComputeTrue.class) //
-    final boolean initialized;
-
     /**
      * The object we reference. The field must not be in the regular reference map since we do all
      * the garbage collection support manually. The garbage collector performs Pointer-level access
      * to the field. This is fine from the point of view of the static analysis, because the field
      * stores by the garbage collector do not change the type of the referent.
+     *
+     * {@link Target_java_lang_ref_Reference#clear0()} may set this field to null.
      */
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ComputeReferenceValue.class) //
-    @ExcludeFromReferenceMap("Field is manually processed by the garbage collector.") //
+    @ExcludeFromReferenceMap(reason = "Field is manually processed by the garbage collector.") //
     T referent;
-
-    /**
-     * Whether this reference is currently either {@linkplain #discovered on a list} of references
-     * discovered during garbage collection or pending to be enqueued in a {@link ReferenceQueue}.
-     * <p>
-     * This cannot be replaced with the same self-link trick that is used for {@link #next} because
-     * during reference discovery, our reference object could have been moved, but
-     * {@link #discovered} might not have been updated yet, and {@code this == next} would fail.
-     * ({@link #discovered} != null is not valid either because there might not be a next node)
-     */
-    @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    boolean isDiscovered;
 
     @SuppressWarnings("unused") //
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    Target_java_lang_ref_Reference<?> discovered;
+    @ExcludeFromReferenceMap(reason = "Some GCs process this field manually.", onlyIf = NotSerialGC.class) //
+    transient Target_java_lang_ref_Reference<?> discovered;
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ComputeQueueValue.class) //
     volatile Target_java_lang_ref_ReferenceQueue<? super T> queue;
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    Reference<?> next;
+    volatile Reference<?> next;
 
     @Substitute
     Target_java_lang_ref_Reference(T referent) {
@@ -131,17 +121,32 @@ public final class Target_java_lang_ref_Reference<T> {
     @Uninterruptible(reason = "The initialization of the fields must be atomic with respect to collection.")
     Target_java_lang_ref_Reference(T referent, Target_java_lang_ref_ReferenceQueue<? super T> queue) {
         this.referent = referent;
-        this.discovered = null;
-        this.isDiscovered = false;
         this.queue = (queue == null) ? Target_java_lang_ref_ReferenceQueue.NULL : queue;
-        this.initialized = true;
     }
 
     @KeepOriginal
     native T get();
 
+    @Substitute
+    public void clear() {
+        ReferenceInternals.clear(SubstrateUtil.cast(this, Reference.class));
+    }
+
+    @Substitute
+    @TargetElement(onlyWith = JDK16OrLater.class)
+    private void clear0() {
+        clear();
+    }
+
     @KeepOriginal
-    native void clear();
+    @TargetElement(onlyWith = JDK16OrLater.class)
+    public native boolean refersTo(T obj);
+
+    @Substitute
+    @TargetElement(onlyWith = JDK16OrLater.class)
+    boolean refersTo0(Object obj) {
+        return ReferenceInternals.refersTo(SubstrateUtil.cast(this, Reference.class), obj);
+    }
 
     @KeepOriginal
     native boolean enqueue();
@@ -153,7 +158,25 @@ public final class Target_java_lang_ref_Reference<T> {
     @TargetElement(onlyWith = JDK8OrEarlier.class)
     @SuppressWarnings("unused")
     static boolean tryHandlePending(boolean waitForNotify) {
-        throw VMError.unimplemented();
+        /*
+         * This method in JDK 8 was replaced by waitForReferenceProcessing in JDK 11. On JDK 8, it
+         * helped with reference handling by handling a single reference (if one is available). The
+         * only caller (apart from the reference handling thread itself) in the JDK is
+         * `Bits.reserveMemory`, which passes `false` as the parameter `waitForNotify`. So our
+         * substitution, which always waits, is a considerable change in semantics. However, since
+         * `Bits.reserveMemory` did not change much between JDK 8 and JDK 11, this is OK.
+         */
+        try {
+            return ReferenceInternals.waitForReferenceProcessing();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            /*
+             * The caller might loop until "there is no more progress", i.e., until this method
+             * returns false. So returning true could lead to an infinite loop in the caller that is
+             * not interruptible.
+             */
+            return false;
+        }
     }
 
     /** May be used by {@code JavaLangRefAccess} via {@code SharedSecrets}. */
@@ -225,9 +248,9 @@ class ComputeQueueValue implements CustomFieldValueComputer {
 }
 
 @Platforms(Platform.HOSTED_ONLY.class)
-class ComputeTrue implements CustomFieldValueComputer {
+class NotSerialGC implements BooleanSupplier {
     @Override
-    public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
-        return true;
+    public boolean getAsBoolean() {
+        return !SubstrateOptions.UseSerialGC.getValue();
     }
 }
