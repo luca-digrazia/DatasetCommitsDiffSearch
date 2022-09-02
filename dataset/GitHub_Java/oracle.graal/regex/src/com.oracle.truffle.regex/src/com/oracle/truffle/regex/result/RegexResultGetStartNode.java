@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,7 +43,6 @@ package com.oracle.truffle.regex.result;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.GenerateUncached;
-import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ConditionProfile;
@@ -51,13 +50,16 @@ import com.oracle.truffle.regex.runtime.nodes.DispatchNode;
 import com.oracle.truffle.regex.runtime.nodes.LazyCaptureGroupGetResultNode;
 import com.oracle.truffle.regex.runtime.nodes.TraceFinderGetResultNode;
 
-@ReportPolymorphism
 @GenerateUncached
-abstract class RegexResultGetStartNode extends Node {
+public abstract class RegexResultGetStartNode extends Node {
 
     private static final int INVALID_RESULT = -1;
 
-    abstract int execute(Object receiver, int groupNumber);
+    public static RegexResultGetStartNode create() {
+        return RegexResultGetStartNodeGen.create();
+    }
+
+    public abstract int execute(Object receiver, int groupNumber);
 
     @Specialization
     static int doNoMatch(@SuppressWarnings("unused") NoMatchResult receiver, @SuppressWarnings("unused") int groupNumber) {
