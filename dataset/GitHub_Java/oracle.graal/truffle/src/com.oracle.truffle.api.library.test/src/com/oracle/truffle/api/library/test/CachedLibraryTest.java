@@ -103,18 +103,23 @@ public class CachedLibraryTest extends AbstractLibraryTest {
         }
 
         @ExportMessage
-        static final String call(Something s, @Cached(value = "0", uncached = "1") int cached) {
-            if (cached == 0) {
+        static final String call(Something s) {
+            if (s.name != null) {
+                return s.name + "_uncached";
+            } else {
+                return "uncached";
+            }
+
+        }
+
+        @ExportMessage
+        static class Call {
+            @Specialization
+            static final String call(Something s) {
                 if (s.name != null) {
                     return s.name + "_cached";
                 } else {
                     return "cached";
-                }
-            } else {
-                if (s.name != null) {
-                    return s.name + "_uncached";
-                } else {
-                    return "uncached";
                 }
             }
         }
@@ -515,7 +520,7 @@ public class CachedLibraryTest extends AbstractLibraryTest {
     @ExportLibrary(InExportsLibrary.class)
     final class InExportsDifferentLibraryObject {
 
-        @ExportMessage
+        @ExportMessage(limit = "4")
         String m0(@CachedLibrary("this") SomethingLibrary otherLibrary) {
             return otherLibrary.call(this);
         }
@@ -695,7 +700,7 @@ public class CachedLibraryTest extends AbstractLibraryTest {
     @ExportLibrary(LibraryWithExecute.class)
     public abstract static class LibraryThatUsesExecuteMethod {
 
-        @ExportMessage
+        @ExportMessage(limit = "5")
         public String execute(@CachedLibrary("this") SomethingLibrary somethings) {
             return somethings.call(this);
         }
@@ -704,10 +709,10 @@ public class CachedLibraryTest extends AbstractLibraryTest {
     @ExportLibrary(LibraryWithExecute.class)
     public abstract static class LibraryThatUsesExecuteNode {
 
-        @ExportMessage
+        @ExportMessage(limit = "5")
         static class Execute {
 
-            @Specialization
+            @Specialization(limit = "5")
             static String doDefault(LibraryThatUsesExecuteNode receiver, @CachedLibrary("receiver") SomethingLibrary somethings) {
                 return somethings.call(receiver);
             }
