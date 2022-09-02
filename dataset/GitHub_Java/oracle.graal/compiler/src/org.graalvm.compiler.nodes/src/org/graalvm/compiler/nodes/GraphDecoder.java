@@ -196,9 +196,7 @@ public class GraphDecoder {
         protected LoopScope(MethodScope methodScope) {
             this.methodScope = methodScope;
             this.outer = null;
-            this.nextIterations = methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN || methodScope.loopExplosion == LoopExplosionKind.FULL_UNROLL_UNTIL_RETURN
-                            ? new ArrayDeque<>(2)
-                            : null;
+            this.nextIterations = methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN ? new ArrayDeque<>(2) : null;
             this.loopDepth = 0;
             this.loopIteration = 0;
             this.iterationStates = null;
@@ -494,8 +492,7 @@ public class GraphDecoder {
         LoopScope successorAddScope = loopScope;
         boolean updatePredecessors = true;
         if (node instanceof LoopExitNode) {
-            if (methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN ||
-                            methodScope.loopExplosion == LoopExplosionKind.FULL_UNROLL_UNTIL_RETURN || (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE && loopScope.loopDepth > 1)) {
+            if (methodScope.loopExplosion == LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN || (methodScope.loopExplosion == LoopExplosionKind.MERGE_EXPLODE && loopScope.loopDepth > 1)) {
                 /*
                  * We do not want to merge loop exits of inner loops. Instead, we want to keep
                  * exploding the outer loop separately for every loop exit and then merge the outer
@@ -585,7 +582,6 @@ public class GraphDecoder {
         } else if (node instanceof Invoke) {
             InvokeData invokeData = readInvokeData(methodScope, nodeOrderId, (Invoke) node);
             resultScope = handleInvoke(methodScope, loopScope, invokeData);
-
         } else if (node instanceof ReturnNode || node instanceof UnwindNode) {
             methodScope.returnAndUnwindNodes.add((ControlSinkNode) node);
         } else {
@@ -750,7 +746,7 @@ public class GraphDecoder {
         loopEnd.safeDelete();
 
         assert methodScope.loopExplosion != LoopExplosionKind.NONE;
-        if (methodScope.loopExplosion != LoopExplosionKind.FULL_UNROLL && methodScope.loopExplosion != LoopExplosionKind.FULL_UNROLL_UNTIL_RETURN || loopScope.nextIterations.isEmpty()) {
+        if (methodScope.loopExplosion != LoopExplosionKind.FULL_UNROLL || loopScope.nextIterations.isEmpty()) {
             int nextIterationNumber = loopScope.nextIterations.isEmpty() ? loopScope.loopIteration + 1 : loopScope.nextIterations.getLast().loopIteration + 1;
             LoopScope nextIterationScope = new LoopScope(methodScope, loopScope.outer, loopScope.loopDepth, nextIterationNumber, loopScope.loopBeginOrderId,
                             Arrays.copyOf(loopScope.initialCreatedNodes, loopScope.initialCreatedNodes.length),
