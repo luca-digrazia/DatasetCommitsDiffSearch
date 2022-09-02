@@ -31,7 +31,8 @@ import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.impl.ObjectKlass;
+import com.oracle.truffle.espresso.impl.Method.MethodVersion;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -39,18 +40,24 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 public abstract class InvokeVirtualNode extends QuickNode {
 
     final Method resolutionSeed;
-    final int vtableIndex;
+    final int resultAt;
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
 
     protected abstract Object executeVirtual(StaticObject receiver, Object[] args);
 
     @SuppressWarnings("unused")
-    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "receiver.getKlass() == cachedKlass")
+    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "receiver.getKlass() == cachedKlass", assumptions = "resolvedMethod.getAssumption()")
     Object callVirtualDirect(StaticObject receiver, Object[] args,
                     @Cached("receiver.getKlass()") Klass cachedKlass,
-                    @Cached("methodLookup(receiver, vtableIndex)") Method resolvedMethod,
-                    @Cached("create(resolvedMethod.getCallTarget())") DirectCallNode directCallNode) {
+                    @Cached("methodLookup(receiver, resolutionSeed)") MethodVersion resolvedMethod,
+                    @Cached("create(resolvedMethod.getCallTargetNoInit())") DirectCallNode directCallNode) {
+        // getCallTarget doesn't ensure declaring class is initialized
+        // so we need the below check prior to executing the method
+        if (!resolvedMethod.getMethod().getDeclaringKlass().isInitialized()) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            resolvedMethod.getMethod().getDeclaringKlass().safeInitialize();
+        }
         return directCallNode.call(args);
     }
 
@@ -58,10 +65,11 @@ public abstract class InvokeVirtualNode extends QuickNode {
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
         // vtable lookup.
-        Method target = methodLookup(receiver, vtableIndex);
-        if (!target.hasCode()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw receiver.getKlass().getMeta().throwEx(AbstractMethodError.class);
+        MethodVersion target = methodLookup(receiver, resolutionSeed);
+        if (!target.getMethod().hasCode()) {
+            enterExceptionProfile();
+            Meta meta = receiver.getKlass().getMeta();
+            throw Meta.throwException(meta.java_lang_AbstractMethodError);
         }
         return indirectCallNode.call(target.getCallTarget(), arguments);
     }
@@ -70,35 +78,43 @@ public abstract class InvokeVirtualNode extends QuickNode {
         super(top, curBCI);
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
-        this.vtableIndex = resolutionSeed.getVTableIndex();
+        this.resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver;
     }
 
-    static Method methodLookup(StaticObject receiver, int vtableIndex) {
+    static MethodVersion methodLookup(StaticObject receiver, Method resolutionSeed) {
         // Suprisingly, invokeVirtuals can try to invoke interface methods, even non-default
         // ones.
         // Good thing is, miranda methods are taken care of at vtable creation !
         Klass receiverKlass = receiver.getKlass();
+        int vtableIndex = resolutionSeed.getVTableIndex();
         if (receiverKlass.isArray()) {
-            return receiverKlass.getSuperKlass().vtableLookup(vtableIndex);
+            return receiverKlass.getSuperKlass().vtableLookup(vtableIndex).getMethodVersion();
         }
-        return ((ObjectKlass) receiverKlass).vtableLookup(vtableIndex);
+        return receiverKlass.vtableLookup(vtableIndex).getMethodVersion();
     }
 
     @Override
-    public final int execute(final VirtualFrame frame) {
+    public final int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
         // Method signature does not change across methods.
         // Can safely use the constant signature from `resolutionSeed` instead of the non-constant
         // signature from the lookup.
-        // TODO(peterssen): Maybe refrain from exposing the whole root node?.
-        BytecodeNode root = getBytecodesNode();
-        // TODO(peterssen): IsNull Node?.
-        StaticObject receiver = root.peekReceiver(frame, top, resolutionSeed);
-        nullCheck(receiver);
-        Object[] args = root.peekAndReleaseArguments(frame, top, true, resolutionSeed.getParsedSignature());
-        assert receiver != null;
-        assert receiver == args[0] : "receiver must be the first argument";
+        Object[] args = BytecodeNode.popArguments(primitives, refs, top, true, resolutionSeed.getParsedSignature());
+        StaticObject receiver = nullCheck((StaticObject) args[0]);
         Object result = executeVirtual(receiver, args);
-        int resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
-        return (resultAt - top) + root.putKind(frame, resultAt, result, resolutionSeed.getReturnKind());
+        return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), result, resolutionSeed.getReturnKind());
+    }
+
+    @Override
+    public boolean removedByRedefintion() {
+        return resolutionSeed.isRemovedByRedefition();
+    }
+
+    @Override
+    public final boolean producedForeignObject(Object[] refs) {
+        return resolutionSeed.getReturnKind().isObject() && BytecodeNode.peekObject(refs, getResultAt()).isForeignObject();
+    }
+
+    private int getResultAt() {
+        return resultAt;
     }
 }
