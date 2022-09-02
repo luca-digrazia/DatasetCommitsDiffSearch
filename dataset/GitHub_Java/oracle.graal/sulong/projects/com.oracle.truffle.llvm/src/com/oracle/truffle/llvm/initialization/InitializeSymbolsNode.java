@@ -145,6 +145,10 @@ public final class InitializeSymbolsNode extends LLVMNode {
         this.writeSymbols = LLVMWriteSymbolNodeGen.create();
     }
 
+    /*
+     * public boolean shouldInitialize(LLVMContext ctx) { return !ctx.isScopeLoaded(fileScope); }
+     */
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     public void initializeSymbolTable(LLVMContext context) {
         context.registerSymbolTable(bitcodeID, new AssumedValue[globalLength]);
