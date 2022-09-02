@@ -62,11 +62,11 @@ import jdk.vm.ci.meta.Signature;
 public abstract class CCallStubMethod extends CustomSubstitutionMethod {
     private static final JavaKind cEnumKind = JavaKind.Int;
 
-    protected final int newThreadStatus;
+    protected final boolean needsTransition;
 
-    CCallStubMethod(ResolvedJavaMethod original, int newThreadStatus) {
+    CCallStubMethod(ResolvedJavaMethod original, boolean needsTransition) {
         super(original);
-        this.newThreadStatus = newThreadStatus;
+        this.needsTransition = needsTransition;
     }
 
     protected abstract String getCorrespondingAnnotationName();
@@ -79,10 +79,10 @@ public abstract class CCallStubMethod extends CustomSubstitutionMethod {
         FrameStateBuilder state = kit.getFrameState();
         List<ValueNode> arguments = kit.loadArguments(getParameterTypesForLoad(method));
         ValueNode callAddress = createTargetAddressNode(kit, providers, arguments);
-        Signature signature = adaptSignatureAndConvertArguments(providers, nativeLibraries, kit, method,
+        Signature signature = adaptSignatureAndConvertArguments(providers, nativeLibraries, kit,
                         method.getSignature().getReturnType(null), method.toParameterTypes(), arguments);
         state.clearLocals();
-        ValueNode returnValue = kit.createCFunctionCall(callAddress, arguments, signature, newThreadStatus, deoptimizationTarget);
+        ValueNode returnValue = kit.createCFunctionCall(callAddress, arguments, signature, needsTransition, deoptimizationTarget);
         returnValue = adaptReturnValue(method, providers, nativeLibraries, kit, returnValue);
         kit.createReturn(returnValue, signature.getReturnKind());
 
@@ -100,7 +100,7 @@ public abstract class CCallStubMethod extends CustomSubstitutionMethod {
     }
 
     protected Signature adaptSignatureAndConvertArguments(HostedProviders providers, NativeLibraries nativeLibraries,
-                    HostedGraphKit kit, @SuppressWarnings("unused") ResolvedJavaMethod method, JavaType returnType, JavaType[] parameterTypes, List<ValueNode> arguments) {
+                    HostedGraphKit kit, JavaType returnType, JavaType[] parameterTypes, List<ValueNode> arguments) {
 
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         for (int i = 0; i < parameterTypes.length; i++) {

@@ -77,7 +77,7 @@ public final class RawStructureLayoutPlanner extends NativeInfoTreeVisitor {
         ResolvedJavaType type = info.getAnnotatedElement();
         for (ResolvedJavaType t : type.getInterfaces()) {
             if (!nativeLibs.isPointerBase(t)) {
-                throw UserError.abort("Type %s must not implement %s", type, t);
+                throw UserError.abort("Type " + type + " must not implement " + t);
             }
 
             if (t.equals(nativeLibs.getPointerBaseType())) {
@@ -119,13 +119,13 @@ public final class RawStructureLayoutPlanner extends NativeInfoTreeVisitor {
         if (info.isObject()) {
             declaredSize = ConfigurationValues.getObjectLayout().getReferenceSize();
         } else {
-            /*
+            /**
              * Resolve field size using the declared type in its accessors. Note that the field
              * offsets are not calculated before visiting all StructFieldInfos and collecting all
              * field types.
              */
             final ResolvedJavaType fieldType;
-            AccessorInfo accessor = info.getAccessorInfoWithSize();
+            AccessorInfo accessor = info.getAccessorInfo();
             switch (accessor.getAccessorKind()) {
                 case GETTER:
                     fieldType = accessor.getReturnType();
@@ -186,14 +186,16 @@ public final class RawStructureLayoutPlanner extends NativeInfoTreeVisitor {
             try {
                 sizeProvider = ReflectionUtil.newInstance(sizeProviderClass);
             } catch (ReflectionUtilError ex) {
-                throw UserError.abort(ex.getCause(), "The size provider of @%s %s cannot be instantiated via no-argument constructor",
-                                RawStructure.class.getSimpleName(), info.getAnnotatedElement().toJavaName(true));
+                throw UserError.abort(
+                                ex.getCause(),
+                                "The size provider of @" + RawStructure.class.getSimpleName() + " " + info.getAnnotatedElement().toJavaName(true) +
+                                                " cannot be instantiated via no-argument constructor");
             }
 
             totalSize = sizeProvider.applyAsInt(currentOffset);
             if (totalSize < currentOffset) {
-                throw UserError.abort("The size provider of @%s %s computed size %d which is smaller than the minimum size of %d",
-                                RawStructure.class.getSimpleName(), info.getAnnotatedElement().toJavaName(true), totalSize, currentOffset);
+                throw UserError.abort("The size provider of @" + RawStructure.class.getSimpleName() + " " + info.getAnnotatedElement().toJavaName(true) + " computed size " + totalSize +
+                                " which is smaller than the minimum size of " + currentOffset);
             }
         }
 

@@ -35,6 +35,7 @@ import java.util.Set;
 
 import org.graalvm.nativeimage.hosted.Feature;
 
+import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.svm.core.FallbackExecutor;
@@ -45,7 +46,6 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.AfterAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 
-import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 @AutomaticFeature
@@ -97,7 +97,7 @@ public class FallbackFeature implements Feature {
     }
 
     private interface InvokeChecker {
-        void check(ReflectionInvocationCheck check, BytecodePosition invokeLocation);
+        void check(ReflectionInvocationCheck check, InvokeTypeFlow invoke);
     }
 
     private static class ReflectionInvocationCheck {
@@ -116,18 +116,22 @@ public class FallbackFeature implements Feature {
             trackedReflectionMethod.startTrackInvocations();
         }
 
-        void apply(BytecodePosition invokeLocation) {
-            ClassLoader classLoader = ((AnalysisMethod) invokeLocation.getMethod()).getDeclaringClass().getJavaClass().getClassLoader();
+        void apply(InvokeTypeFlow invoke) {
+            ClassLoader classLoader = getCallerMethod(invoke).getDeclaringClass().getJavaClass().getClassLoader();
             if (classLoader instanceof NativeImageClassLoader) {
-                checker.check(this, invokeLocation);
+                checker.check(this, invoke);
             }
         }
 
-        String locationString(BytecodePosition invokeLocation) {
-            ResolvedJavaMethod caller = invokeLocation.getMethod();
-            String callerLocation = caller.asStackTraceElement(invokeLocation.getBCI()).toString();
+        String locationString(InvokeTypeFlow invoke) {
+            AnalysisMethod caller = getCallerMethod(invoke);
+            String callerLocation = caller.asStackTraceElement(invoke.getLocation().getBci()).toString();
             return trackedReflectionMethod.format("%H.%n") + " invoked at " + callerLocation;
         }
+    }
+
+    private static AnalysisMethod getCallerMethod(InvokeTypeFlow invoke) {
+        return (AnalysisMethod) invoke.getSource().graph().method();
     }
 
     private void addCheck(Method reflectionMethod, InvokeChecker checker) {
@@ -172,21 +176,21 @@ public class FallbackFeature implements Feature {
         }
     }
 
-    private void collectReflectionInvokes(ReflectionInvocationCheck check, BytecodePosition invokeLocation) {
-        reflectionCalls.add("Reflection method " + check.locationString(invokeLocation));
+    private void collectReflectionInvokes(ReflectionInvocationCheck check, InvokeTypeFlow invoke) {
+        reflectionCalls.add("Reflection method " + check.locationString(invoke));
     }
 
-    private void collectResourceInvokes(ReflectionInvocationCheck check, BytecodePosition invokeLocation) {
-        resourceCalls.add("Resource access method " + check.locationString(invokeLocation));
+    private void collectResourceInvokes(ReflectionInvocationCheck check, InvokeTypeFlow invoke) {
+        resourceCalls.add("Resource access method " + check.locationString(invoke));
     }
 
-    private void collectJNIInvokes(ReflectionInvocationCheck check, BytecodePosition invokeLocation) {
-        jniCalls.add("System method " + check.locationString(invokeLocation));
+    private void collectJNIInvokes(ReflectionInvocationCheck check, InvokeTypeFlow invoke) {
+        jniCalls.add("System method " + check.locationString(invoke));
     }
 
-    private void collectProxyInvokes(ReflectionInvocationCheck check, BytecodePosition invokeLocation) {
-        if (!containsAutoProxyInvoke(invokeLocation.getMethod(), invokeLocation.getBCI())) {
-            proxyCalls.add("Dynamic proxy method " + check.locationString(invokeLocation));
+    private void collectProxyInvokes(ReflectionInvocationCheck check, InvokeTypeFlow invoke) {
+        if (!containsAutoProxyInvoke(getCallerMethod(invoke), invoke.getLocation().getBci())) {
+            proxyCalls.add("Dynamic proxy method " + check.locationString(invoke));
         }
     }
 
@@ -275,8 +279,8 @@ public class FallbackFeature implements Feature {
         }
 
         for (ReflectionInvocationCheck check : reflectionInvocationChecks) {
-            for (BytecodePosition invokeLocation : check.trackedReflectionMethod.getInvokeLocations()) {
-                check.apply(invokeLocation);
+            for (InvokeTypeFlow invoke : check.trackedReflectionMethod.getInvokeTypeFlows()) {
+                check.apply(invoke);
             }
         }
 

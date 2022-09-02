@@ -71,6 +71,8 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
         UNSAFE_ACCESSIBLE,
     }
 
+    private static final EnumSet<FieldFlag> NO_FIELD_FLAGS = EnumSet.noneOf(FieldFlag.class);
+
     private boolean modified;
     private boolean sealed;
 
@@ -136,24 +138,17 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
     public void register(boolean finalIsWritable, boolean allowUnsafeAccess, Field... fields) {
         checkNotSealed();
         for (Field field : fields) {
-            EnumSet<FieldFlag> flags = EnumSet.noneOf(FieldFlag.class);
-            if (finalIsWritable) {
-                flags.add(FieldFlag.FINAL_BUT_WRITABLE);
-            }
-            if (allowUnsafeAccess) {
-                flags.add(FieldFlag.UNSAFE_ACCESSIBLE);
-            }
-
+            boolean writable = finalIsWritable || !Modifier.isFinal(field.getModifiers());
+            EnumSet<FieldFlag> flags = writable && allowUnsafeAccess ? EnumSet.of(FieldFlag.FINAL_BUT_WRITABLE, FieldFlag.UNSAFE_ACCESSIBLE)
+                            : writable ? EnumSet.of(FieldFlag.FINAL_BUT_WRITABLE)
+                                            : allowUnsafeAccess ? EnumSet.of(FieldFlag.UNSAFE_ACCESSIBLE)
+                                                            : NO_FIELD_FLAGS;
             reflectionFields.compute(field, (key, existingFlags) -> {
-                if (existingFlags == null || !existingFlags.containsAll(flags)) {
+                boolean unregistered = existingFlags == null;
+                if (unregistered) {
                     modified = true;
                 }
-                if (existingFlags != null) {
-                    /* Preserve flags of existing registration. */
-                    flags.addAll(existingFlags);
-                }
-
-                if (finalIsWritable && (existingFlags == null || !existingFlags.contains(FieldFlag.FINAL_BUT_WRITABLE))) {
+                if (writable && (unregistered || !existingFlags.contains(FieldFlag.FINAL_BUT_WRITABLE))) {
                     UserError.guarantee(!analyzedFinalFields.contains(field),
                                     "A field that was already processed by the analysis cannot be re-registered as writable: %s", field);
                 }
@@ -413,9 +408,9 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
 
     boolean inspectFinalFieldWritableForAnalysis(Field field) {
         assert Modifier.isFinal(field.getModifiers());
-        EnumSet<FieldFlag> flags = reflectionFields.get(field);
+        EnumSet<FieldFlag> flags = reflectionFields.getOrDefault(field, NO_FIELD_FLAGS);
         analyzedFinalFields.add(field);
-        return flags != null && flags.contains(FieldFlag.FINAL_BUT_WRITABLE);
+        return flags.contains(FieldFlag.FINAL_BUT_WRITABLE);
     }
 
     static final class ReflectionDataAccessors {

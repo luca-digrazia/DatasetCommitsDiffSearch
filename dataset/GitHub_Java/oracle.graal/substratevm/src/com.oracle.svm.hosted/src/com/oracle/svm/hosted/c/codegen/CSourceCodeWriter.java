@@ -275,8 +275,6 @@ public class CSourceCodeWriter {
      * Appends definition of "flags" like macro.
      */
     public void appendMacroDefinition(String preDefine) {
-        appendln("#ifndef " + preDefine);
         appendln("#define " + preDefine);
-        appendln("#endif");
     }
 }

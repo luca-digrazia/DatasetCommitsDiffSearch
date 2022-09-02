@@ -34,10 +34,8 @@ import org.graalvm.compiler.core.common.calc.FloatConvert;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
-import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConstantNode;
-import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
@@ -213,6 +211,7 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
         ResolvedJavaMethod universeTargetMethod = unwrapMethodAndLookupInUniverse(metaAccess);
 
         int invokeBci = kit.bci();
+        int exceptionEdgeBci = kit.bci();
         // Also support non-static test methods (they are not allowed to use the receiver)
         InvokeKind invokeKind = universeTargetMethod.isStatic() ? InvokeKind.Static : InvokeKind.Special;
         ValueNode[] invokeArgs = args;
@@ -221,7 +220,7 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
             invokeArgs[0] = kit.createObject(null);
             System.arraycopy(args, 0, invokeArgs, 1, args.length);
         }
-        InvokeWithExceptionNode invoke = kit.startInvokeWithException(universeTargetMethod, invokeKind, kit.getFrameState(), invokeBci, invokeArgs);
+        InvokeWithExceptionNode invoke = kit.startInvokeWithException(universeTargetMethod, invokeKind, kit.getFrameState(), invokeBci, exceptionEdgeBci, invokeArgs);
         kit.exceptionPart();
         ExceptionObjectNode exception = kit.exceptionObject();
         generateExceptionHandler(providers, kit, exception, invoke.getStackKind());
@@ -304,7 +303,8 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
         }
 
         int invokeBci = kit.bci();
-        InvokeWithExceptionNode invoke = kit.startInvokeWithException(builtinCallee, InvokeKind.Static, kit.getFrameState(), invokeBci, builtinArgs);
+        int exceptionEdgeBci = kit.bci();
+        InvokeWithExceptionNode invoke = kit.startInvokeWithException(builtinCallee, InvokeKind.Static, kit.getFrameState(), invokeBci, exceptionEdgeBci, builtinArgs);
         kit.exceptionPart();
         ExceptionObjectNode exception = kit.exceptionObject();
 
@@ -501,9 +501,7 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
 
     private void generateExceptionHandler(HostedProviders providers, SubstrateGraphKit kit, ExceptionObjectNode exception, JavaKind returnKind) {
         if (entryPointData.getExceptionHandler() == CEntryPoint.FatalExceptionHandler.class) {
-            kit.appendStateSplitProxy(exception.stateAfter());
-            CEntryPointLeaveNode leave = new CEntryPointLeaveNode(LeaveAction.ExceptionAbort, exception);
-            kit.append(leave);
+            kit.append(new CEntryPointLeaveNode(LeaveAction.ExceptionAbort, exception));
             kit.append(new DeadEndNode());
         } else {
             ResolvedJavaType throwable = providers.getMetaAccess().lookupJavaType(Throwable.class);
@@ -515,7 +513,8 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
             UserError.guarantee(handlerParameterTypes.length == 1 &&
                             ((ResolvedJavaType) handlerParameterTypes[0]).isAssignableFrom(throwable),
                             "Exception handler method must have exactly one parameter of type Throwable: %s -> %s", targetMethod, handlerMethods[0]);
-            InvokeWithExceptionNode handlerInvoke = kit.startInvokeWithException(handlerMethods[0], InvokeKind.Static, kit.getFrameState(), kit.bci(), exception);
+            int handlerExceptionBci = kit.bci();
+            InvokeWithExceptionNode handlerInvoke = kit.startInvokeWithException(handlerMethods[0], InvokeKind.Static, kit.getFrameState(), kit.bci(), handlerExceptionBci, exception);
             kit.noExceptionPart();
             ValueNode returnValue = handlerInvoke;
             if (handlerInvoke.getStackKind() != returnKind) {
@@ -565,9 +564,7 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
             ConstantNode enumExceptionMessage = kit.createConstant(kit.getConstantReflection().forString("null return value cannot be converted to a C enum value"), JavaKind.Object);
             kit.createJavaCallWithExceptionAndUnwind(InvokeKind.Special, enumExceptionCtor.next(), enumException, enumExceptionMessage);
             assert !enumExceptionCtor.hasNext();
-            kit.appendStateSplitProxy(kit.getFrameState());
-            CEntryPointLeaveNode leave = new CEntryPointLeaveNode(LeaveAction.ExceptionAbort, enumException);
-            kit.append(leave);
+            kit.append(new CEntryPointLeaveNode(LeaveAction.ExceptionAbort, enumException));
             kit.append(new DeadEndNode());
             kit.endIf();
 
@@ -605,21 +602,9 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
     }
 
     private static void inlinePrologueAndEpilogue(SubstrateGraphKit kit, InvokeNode prologueInvoke, InvokeNode epilogueInvoke, JavaKind returnKind) {
+        assert (prologueInvoke != null) == (epilogueInvoke != null);
         if (prologueInvoke != null) {
-            FixedNode next = prologueInvoke.next();
-            FrameState stateAfterPrologue = prologueInvoke.stateAfter();
-            if (stateAfterPrologue == null) {
-                stateAfterPrologue = kit.getFrameState().create(prologueInvoke.bci(), null);
-            } else {
-                stateAfterPrologue = stateAfterPrologue.duplicateWithVirtualState();
-            }
             kit.inline(prologueInvoke, "Inline prologue.", "GraphBuilding");
-            if (next.isAlive() && next.predecessor() instanceof AbstractMergeNode) {
-                AbstractMergeNode merge = (AbstractMergeNode) next.predecessor();
-                if (merge.stateAfter() == null) {
-                    merge.setStateAfter(stateAfterPrologue);
-                }
-            }
             NodeIterable<CEntryPointPrologueBailoutNode> bailoutNodes = kit.getGraph().getNodes().filter(CEntryPointPrologueBailoutNode.class);
             for (CEntryPointPrologueBailoutNode node : bailoutNodes) {
                 ValueNode result = node.getResult();
@@ -642,10 +627,9 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
                 ReturnNode returnNode = kit.add(new ReturnNode(result));
                 node.replaceAndDelete(returnNode);
             }
-        }
-
-        if (epilogueInvoke != null && epilogueInvoke.isAlive()) {
-            kit.inline(epilogueInvoke, "Inline epilogue.", "GraphBuilding");
+            if (epilogueInvoke.isAlive()) {
+                kit.inline(epilogueInvoke, "Inline epilogue.", "GraphBuilding");
+            }
         }
     }
 
