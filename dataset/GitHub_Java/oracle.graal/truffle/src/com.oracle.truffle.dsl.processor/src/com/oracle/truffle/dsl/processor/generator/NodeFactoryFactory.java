@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,8 +41,10 @@
 package com.oracle.truffle.dsl.processor.generator;
 
 import static com.oracle.truffle.dsl.processor.java.ElementUtils.modifiers;
+import static javax.lang.model.element.Modifier.FINAL;
 import static javax.lang.model.element.Modifier.PRIVATE;
 import static javax.lang.model.element.Modifier.PUBLIC;
+import static javax.lang.model.element.Modifier.STATIC;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,9 +57,8 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
 
-import com.oracle.truffle.api.dsl.NodeFactory;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
+import com.oracle.truffle.dsl.processor.TruffleTypes;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeNames;
@@ -72,11 +73,13 @@ public class NodeFactoryFactory {
     private final ProcessorContext context;
     private final NodeData node;
     private final CodeTypeElement createdFactoryElement;
+    private final TruffleTypes types;
 
     NodeFactoryFactory(ProcessorContext context, NodeData node, CodeTypeElement createdClass) {
         this.context = context;
         this.node = node;
         this.createdFactoryElement = createdClass;
+        this.types = context.getTypes();
     }
 
     public static String factoryClassName(Element type) {
@@ -85,7 +88,7 @@ public class NodeFactoryFactory {
 
     public CodeTypeElement create() {
         Modifier visibility = ElementUtils.getVisibility(node.getTemplateType().getModifiers());
-        TypeMirror nodeFactory = ElementUtils.getDeclaredType(ElementUtils.fromTypeMirror(context.getType(NodeFactory.class)), node.getNodeType());
+        TypeMirror nodeFactory = ElementUtils.getDeclaredType(ElementUtils.fromTypeMirror(context.getTypes().NodeFactory), node.getNodeType());
 
         CodeTypeElement clazz = GeneratorUtils.createClass(node, null, modifiers(), factoryClassName(node.getTemplateType()), null);
         if (visibility != null) {
@@ -127,7 +130,7 @@ public class NodeFactoryFactory {
     }
 
     private CodeExecutableElement createCreateGetNodeSignatures() {
-        TypeMirror returnType = ElementUtils.findMethod(NodeFactory.class, "getNodeSignatures").getReturnType();
+        TypeMirror returnType = ElementUtils.findMethod(types.NodeFactory, "getNodeSignatures").getReturnType();
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), returnType, "getNodeSignatures");
         CodeTreeBuilder builder = method.createBuilder();
         builder.startReturn();
@@ -152,7 +155,7 @@ public class NodeFactoryFactory {
     }
 
     private CodeExecutableElement createCreateGetExecutionSignature() {
-        ExecutableElement overriddenMethod = ElementUtils.findMethod(NodeFactory.class, "getExecutionSignature");
+        ExecutableElement overriddenMethod = ElementUtils.findMethod(types.NodeFactory, "getExecutionSignature");
         CodeExecutableElement method = new CodeExecutableElement(modifiers(PUBLIC), overriddenMethod.getReturnType(), "getExecutionSignature");
         CodeTreeBuilder builder = method.createBuilder();
         builder.startReturn();
@@ -163,7 +166,7 @@ public class NodeFactoryFactory {
             if (nodeType != null) {
                 builder.typeLiteral(nodeType);
             } else {
-                builder.typeLiteral(context.getType(Node.class));
+                builder.typeLiteral(types.Node);
             }
         }
         builder.end();
@@ -180,7 +183,11 @@ public class NodeFactoryFactory {
         String className = createdFactoryElement.getSimpleName().toString();
         CodeTreeBuilder builder = method.createBuilder();
         builder.startReturn();
-        builder.string(className).string(".").string("UNCACHED");
+        if (node.isGenerateFactory()) {
+            builder.string(className).string(".").string("UNCACHED");
+        } else {
+            builder.string("UNCACHED");
+        }
         builder.end();
         return method;
     }
@@ -247,7 +254,7 @@ public class NodeFactoryFactory {
     }
 
     private ExecutableElement createGetInstanceMethod(Modifier visibility) {
-        TypeElement nodeFactoryType = ElementUtils.fromTypeMirror(context.getType(NodeFactory.class));
+        TypeElement nodeFactoryType = ElementUtils.fromTypeMirror(types.NodeFactory);
         TypeMirror returnType = ElementUtils.getDeclaredType(nodeFactoryType, node.getNodeType());
 
         CodeExecutableElement method = new CodeExecutableElement(modifiers(), returnType, "getInstance");
@@ -255,38 +262,22 @@ public class NodeFactoryFactory {
             method.getModifiers().add(visibility);
         }
         method.getModifiers().add(Modifier.STATIC);
-
-        String varName = instanceVarName(node);
-
-        CodeTreeBuilder builder = method.createBuilder();
-        builder.startIf();
-        builder.string(varName).string(" == null");
-        builder.end().startBlock();
-
-        builder.startStatement();
-        builder.string(varName);
-        builder.string(" = ");
-        builder.startNew(factoryClassName(node.getTemplateType())).end();
-        builder.end();
-
-        builder.end();
-        builder.startReturn().string(varName).end();
+        method.createBuilder().startReturn().string(instanceVarName(node)).end();
         return method;
     }
 
     private static String instanceVarName(NodeData node) {
         if (node.getDeclaringNode() != null) {
-            return ElementUtils.firstLetterLowerCase(factoryClassName(node.getTemplateType())) + "Instance";
+            return ElementUtils.createConstantName(factoryClassName(node.getTemplateType())) + "_INSTANCE";
         } else {
-            return "instance";
+            return "INSTANCE";
         }
     }
 
     private CodeVariableElement createInstanceConstant(TypeMirror factoryType) {
         String varName = instanceVarName(node);
-        CodeVariableElement var = new CodeVariableElement(modifiers(), factoryType, varName);
-        var.getModifiers().add(Modifier.PRIVATE);
-        var.getModifiers().add(Modifier.STATIC);
+        CodeVariableElement var = new CodeVariableElement(modifiers(PRIVATE, STATIC, FINAL), factoryType, varName);
+        var.createInitBuilder().startNew(factoryClassName(node.getTemplateType())).end();
         return var;
     }
 
@@ -318,7 +309,7 @@ public class NodeFactoryFactory {
         if (node.hasErrors()) {
             body.startNew(type);
             for (VariableElement var : method.getParameters()) {
-                body.string(var.getSimpleName().toString());
+                body.defaultValue(var.asType());
             }
             body.end();
         } else {
@@ -326,6 +317,7 @@ public class NodeFactoryFactory {
             body.string(typeElement.getSimpleName().toString(), ".UNCACHED");
         }
         body.end();
+        method.getParameters().clear();
         return method;
     }
 
