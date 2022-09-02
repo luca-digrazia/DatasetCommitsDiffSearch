@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,7 +40,7 @@
  */
 package com.oracle.truffle.api;
 
-import java.util.Objects;
+import java.util.List;
 
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -59,23 +59,9 @@ public final class TruffleStackTraceElement {
     private final Frame frame;
 
     TruffleStackTraceElement(Node location, RootCallTarget target, Frame frame) {
-        assert target != null;
         this.location = location;
         this.target = target;
         this.frame = frame;
-    }
-
-    /**
-     * Create a new stack trace element.
-     *
-     * @param location See {@link #getLocation()}
-     * @param target See {@link #getTarget()}
-     * @param frame See {@link #getFrame()}
-     * @since 20.1.0
-     */
-    public static TruffleStackTraceElement create(Node location, RootCallTarget target, Frame frame) {
-        Objects.requireNonNull(target, "RootCallTarget must not be null");
-        return new TruffleStackTraceElement(location, target, frame);
     }
 
     /**
@@ -114,23 +100,6 @@ public final class TruffleStackTraceElement {
      */
     public Frame getFrame() {
         return frame;
-    }
-
-    /**
-     * Returns an interop object representing this {@linkplain TruffleStackTraceElement} supporting
-     * the {@code hasExecutableName} and potentially {@code hasDeclaringMetaObject} and
-     * {@code hasSourceLocation} messages.
-     * <p>
-     * This method must only be called on an interpreter thread with a valid
-     * {@link TruffleContext#isEntered() entered} {@link TruffleContext context}. The current
-     * entered context can be accessed through the language or instrument environment.
-     * <p>
-     * Languages
-     *
-     * @since 20.3
-     */
-    public Object getGuestObject() {
-        return LanguageAccessor.nodesAccess().translateStackTraceElement(this);
     }
 
 }
