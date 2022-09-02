@@ -66,16 +66,21 @@ public class Dictionary implements TruffleObject {
     }
 
     @TruffleBoundary
-    private static UnknownIdentifierException unknown(String identifier) {
+    protected static UnknownIdentifierException unknown(String identifier) {
         return UnknownIdentifierException.create(identifier);
     }
 
     @SuppressWarnings({"unused"})
     @ExportMessage
     public Object readMember(String member) throws UnknownIdentifierException {
+        return get(member);
+    }
+
+    @TruffleBoundary
+    private Object get(String member) throws UnknownIdentifierException {
         final Object x = members.get(member);
         if (x != null) {
-            return null;
+            return x;
         } else {
             throw unknown(member);
         }
@@ -85,8 +90,12 @@ public class Dictionary implements TruffleObject {
         for (int i = 0; i < nameValuePairs.length; i += 2) {
             String name = (String) nameValuePairs[i];
             Object value = nameValuePairs[i + 1];
-            members.put(name, value);
+            addMember(name, value);
         }
+    }
+
+    public void addMember(String name, Object value) {
+        members.put(name, value);
     }
 
     @SuppressWarnings({"unused"})
@@ -99,7 +108,29 @@ public class Dictionary implements TruffleObject {
 
     @SuppressWarnings({"unused", "static-method"})
     @ExportMessage
-    final boolean isMemberReadable(String member) {
-        return true;
+    public boolean isMemberReadable(String member) {
+        return containsKey(member);
+    }
+
+    @TruffleBoundary
+    private boolean containsKey(String member) {
+        return members.containsKey(member);
+    }
+
+    public static Dictionary create(Object[] nameValuePairs) {
+        final Dictionary dictionary = new Dictionary();
+        dictionary.addMembers(nameValuePairs);
+        return dictionary;
+    }
+
+    @SuppressWarnings("unused")
+    @ExportMessage(name = "toDisplayString")
+    public Object toDisplayString(boolean allowSideEffects) {
+        return format();
+    }
+
+    @TruffleBoundary
+    private Object format() {
+        return this.getClass().getName() + "[" + members + "]";
     }
 }

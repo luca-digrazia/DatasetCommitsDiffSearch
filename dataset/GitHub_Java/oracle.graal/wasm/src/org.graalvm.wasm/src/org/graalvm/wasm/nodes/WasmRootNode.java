@@ -126,11 +126,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
         // https://webassembly.github.io/spec/core/exec/instructions.html#function-calls
         initializeLocals(stacklocals);
 
-        try {
-            body.execute(context, frame, stacklocals);
-        } catch (StackOverflowError e) {
-            throw WasmException.create(Failure.CALL_STACK_EXHAUSTED);
-        }
+        body.execute(context, frame, stacklocals);
 
         switch (body.returnTypeId()) {
             case 0x00:
