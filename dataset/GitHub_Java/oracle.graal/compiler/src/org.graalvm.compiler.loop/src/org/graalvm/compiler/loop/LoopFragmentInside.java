@@ -169,13 +169,12 @@ public class LoopFragmentInside extends LoopFragment {
         LoopBeginNode mainLoopBegin = loop.loopBegin();
         ArrayList<ValueNode> backedgeValues = new ArrayList<>();
         for (PhiNode mainPhiNode : mainLoopBegin.phis()) {
-            ValueNode originalNode = mainPhiNode.valueAt(1);
-            ValueNode duplicatedNode = getDuplicatedNode(originalNode);
+            ValueNode duplicatedNode = getDuplicatedNode(mainPhiNode.valueAt(1));
             if (duplicatedNode == null) {
-                if (mainLoopBegin.isPhiAtMerge(originalNode)) {
-                    duplicatedNode = ((PhiNode) (originalNode)).valueAt(1);
+                if (mainLoopBegin.isPhiAtMerge(mainPhiNode.valueAt(1))) {
+                    duplicatedNode = ((PhiNode) (mainPhiNode.valueAt(1))).valueAt(1);
                 } else {
-                    assert originalNode.isConstant() || loop.isOutsideLoop(originalNode) : "Not duplicated node " + originalNode;
+                    assert mainPhiNode.valueAt(1).isConstant() : mainPhiNode.valueAt(1);
                 }
             }
             backedgeValues.add(duplicatedNode);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -64,9 +64,7 @@ public class LoopFragmentWhole extends LoopFragment {
     public NodeBitMap nodes() {
         if (nodes == null) {
             Loop<Block> loop = loop().loop();
-            NodeBitMap loopNodes = graph().createNodeBitMap();
-            LoopFragment.computeNodes(loopNodes, graph(), loop(), LoopFragment.toHirBlocks(loop.getBlocks()), LoopFragment.toHirBlocks(loop.getLoopExits()));
-            nodes = loopNodes;
+            nodes = LoopFragment.computeNodes(graph(), LoopFragment.toHirBlocks(loop.getBlocks()), LoopFragment.toHirBlocks(loop.getLoopExits()));
         }
         return nodes;
     }
@@ -112,6 +110,7 @@ public class LoopFragmentWhole extends LoopFragment {
 
     @Override
     public void insertBefore(LoopEx loop) {
-        // nothing to do
+        // TODO Auto-generated method stub
+
     }
 }
