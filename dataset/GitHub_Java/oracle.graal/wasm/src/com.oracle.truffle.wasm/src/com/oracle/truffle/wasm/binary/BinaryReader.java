@@ -107,6 +107,11 @@ import static com.oracle.truffle.wasm.binary.Instructions.I32_SHL;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_S;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SUB;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_TRUNC_F32_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_TRUNC_F32_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_TRUNC_F64_S;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_TRUNC_F64_U;
+import static com.oracle.truffle.wasm.binary.Instructions.I32_WRAP_I64;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_XOR;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_ADD;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_AND;
@@ -142,7 +147,6 @@ import static com.oracle.truffle.wasm.binary.Instructions.IF;
 import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_GET;
 import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_SET;
 import static com.oracle.truffle.wasm.binary.Instructions.LOCAL_TEE;
-import static com.oracle.truffle.wasm.binary.Instructions.LOOP;
 import static com.oracle.truffle.wasm.binary.Instructions.NOP;
 import static com.oracle.truffle.wasm.binary.Instructions.UNREACHABLE;
 import static com.oracle.truffle.wasm.binary.Sections.CODE;
@@ -163,8 +167,6 @@ import java.util.ArrayList;
 
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.nodes.LoopNode;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.wasm.collection.ByteArrayList;
 
 /** Simple recursive-descend parser for the binary WebAssembly format.
@@ -342,13 +344,8 @@ public class BinaryReader extends BinaryStreamReader {
         return readBlock(codeEntry, state, blockTypeId);
     }
 
-    private WasmLoopNode readLoop(WasmCodeEntry codeEntry, ExecutionState state) {
-        byte blockTypeId = readBlockType();
-        return readLoop(codeEntry, state, blockTypeId);
-    }
-
     private WasmBlockNode readBlock(WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId) {
-        ArrayList<Node> nestedControlTable = new ArrayList<>();
+        ArrayList<WasmNode> nestedControlTable = new ArrayList<>();
         int startStackSize = state.stackSize();
         int startOffset = offset();
         int startByteConstantOffset = state.byteConstantOffset();
@@ -368,13 +365,6 @@ public class BinaryReader extends BinaryStreamReader {
                     state.popStackState();
                     break;
                 }
-                case LOOP: {
-                    state.pushStackState();
-                    WasmLoopNode loopBlock = readLoop(codeEntry, state);
-                    nestedControlTable.add(loopBlock);
-                    state.popStackState();
-                    break;
-                }
                 case IF: {
                     state.pushStackState();
                     WasmIfNode ifNode = readIf(codeEntry, state);
@@ -387,8 +377,7 @@ public class BinaryReader extends BinaryStreamReader {
                 case END:
                     break;
                 case BR: {
-                    // TODO: restore check
-                    // Assert.assertEquals(state.stackSize() - startStackSize, currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
+                    Assert.assertEquals(state.stackSize() - startStackSize, currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
                     int unwindLevel = readLabelIndex(bytesConsumed);
                     state.useByteConstant(bytesConsumed[0]);
                     state.useIntConstant(state.getStackState(unwindLevel));
@@ -396,8 +385,7 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case BR_IF: {
                     state.pop();
-                    // TODO: restore check
-                    // Assert.assertEquals(state.stackSize() - startStackSize, currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
+                    Assert.assertEquals(state.stackSize() - startStackSize, currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
                     int unwindLevel = readLabelIndex(bytesConsumed);
                     state.useByteConstant(bytesConsumed[0]);
                     state.useIntConstant(state.getStackState(unwindLevel));
@@ -431,6 +419,7 @@ public class BinaryReader extends BinaryStreamReader {
                     Assert.assertLess(localIndex, codeEntry.numLocals(), "Invalid local index for local.tee");
                     // Assert there is a value on the top of the stack.
                     Assert.assertLarger(state.stackSize(), 0, "local.tee requires at least one element in the stack");
+                    state.push();
                     break;
                 }
                 case I32_CONST:
@@ -610,11 +599,6 @@ public class BinaryReader extends BinaryStreamReader {
         currentBlock.setIntConstantLength(state.intConstantOffset() - startIntConstantOffset);
         checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
         return currentBlock;
-    }
-
-    private WasmLoopNode readLoop(WasmCodeEntry codeEntry, ExecutionState state, byte returnTypeId) {
-       WasmBlockNode loopBlock = readBlock(codeEntry, state, returnTypeId);
-       return new WasmLoopNode(loopBlock);
     }
 
     private WasmIfNode readIf(WasmCodeEntry codeEntry, ExecutionState state) {
