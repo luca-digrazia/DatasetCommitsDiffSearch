@@ -46,7 +46,6 @@ import java.util.Objects;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.memory.MemoryFence;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.ObjectType;
@@ -170,13 +169,6 @@ public abstract class LayoutImpl extends com.oracle.truffle.api.object.Layout {
     @SuppressWarnings("static-method")
     protected abstract static class Support extends Access {
         protected Support() {
-        }
-
-        public final void setShapeWithStoreFence(DynamicObject object, Shape shape) {
-            if (shape.isShared()) {
-                MemoryFence.storeStore();
-            }
-            super.setShape(object, shape);
         }
 
         public final void grow(DynamicObject object, Shape thisShape, Shape otherShape) {

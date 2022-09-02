@@ -98,7 +98,7 @@ public abstract class LocationImpl extends Location {
             } catch (IncompatibleLocationException ex) {
                 throw DynamicObjectLibraryImpl.shouldNotHappen(ex);
             }
-            LayoutImpl.ACCESS.setShapeWithStoreFence(store, newShape);
+            LayoutImpl.ACCESS.setShape(store, newShape);
         } else {
             throw incompatibleLocation();
         }
