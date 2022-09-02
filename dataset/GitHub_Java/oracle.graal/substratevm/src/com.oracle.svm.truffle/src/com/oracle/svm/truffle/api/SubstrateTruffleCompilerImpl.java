@@ -77,9 +77,10 @@ public class SubstrateTruffleCompilerImpl extends TruffleCompilerImpl implements
     }
 
     @Override
-    public void initialize(Map<String, Object> options, CompilableTruffleAST compilable, boolean firstInitialization) {
-        super.initialize(options, compilable, firstInitialization);
+    public String[] initialize(Map<String, Object> options) {
+        String[] warnings = super.initialize(options);
         SubstrateGraalUtils.updateGraalArchitectureWithHostCPUFeatures(getBackend());
+        return warnings;
     }
 
     @Override
