@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.espresso.EspressoBindings;
-import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
 import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.api.Assumption;
@@ -146,6 +145,7 @@ public final class EspressoContext {
     public final EspressoOptions.VerifyMode Verify;
     public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
     public final boolean IsolatedNamespace;
+    public final boolean Polyglot;
 
     // Debug option
     public final com.oracle.truffle.espresso.jdwp.api.JDWPOptions JDWPOptions;
@@ -209,8 +209,7 @@ public final class EspressoContext {
         this.timers = TimerCollection.create(env.getOptions().get(EspressoOptions.EnableTimers));
 
         // null if not specified
-        JDWPOptions jdwpOptions = env.getOptions().get(EspressoOptions.JDWPAgentOptions);
-        this.JDWPOptions = jdwpOptions != null ? jdwpOptions : env.getOptions().get(EspressoOptions.JDWPRunOptions);
+        this.JDWPOptions = env.getOptions().get(EspressoOptions.JDWPOptions);
 
         this.InlineFieldAccessors = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineFieldAccessors);
         this.InlineMethodHandle = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineMethodHandle);
@@ -221,9 +220,11 @@ public final class EspressoContext {
         this.EnableManagement = env.getOptions().get(EspressoOptions.EnableManagement);
         this.MultiThreaded = env.getOptions().get(EspressoOptions.MultiThreaded);
         this.SoftExit = env.getOptions().get(EspressoOptions.SoftExit);
+        this.Polyglot = env.getOptions().get(EspressoOptions.Polyglot);
 
         // Isolated (native) namespaces via dlmopen is only supported on Linux.
         this.IsolatedNamespace = env.getOptions().get(EspressoOptions.UseTruffleNFIIsolatedNamespace) && OS.getCurrent() == OS.Linux;
+
     }
 
     public ClassRegistries getRegistries() {
