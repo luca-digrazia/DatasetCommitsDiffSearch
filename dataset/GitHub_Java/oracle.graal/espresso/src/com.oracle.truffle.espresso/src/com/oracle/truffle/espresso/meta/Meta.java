@@ -258,12 +258,6 @@ public final class Meta implements ContextAccess {
         java_io_InputStream = knownKlass(Type.java_io_InputStream);
         java_io_InputStream_read = java_io_InputStream.lookupMethod(Name.read, Signature._int_byte_array_int_int);
         java_io_InputStream_close = java_io_InputStream.lookupMethod(Name.close, Signature._void);
-        java_io_PrintStream = knownKlass(Type.java_io_PrintStream);
-        java_io_PrintStream_println = java_io_PrintStream.lookupDeclaredMethod(Name.println, Signature._void_String);
-
-        sun_launcher_LauncherHelper = knownKlass(Type.sun_launcher_LauncherHelper);
-        sun_launcher_LauncherHelper_printHelpMessage = sun_launcher_LauncherHelper.lookupDeclaredMethod(Name.printHelpMessage, Signature._void_boolean);
-        sun_launcher_LauncherHelper_ostream = sun_launcher_LauncherHelper.lookupDeclaredField(Name.ostream, Type.java_io_PrintStream);
 
         // Guest reflection.
         java_lang_reflect_Executable = knownKlass(Type.java_lang_reflect_Executable);
@@ -415,13 +409,13 @@ public final class Meta implements ContextAccess {
         // References
         java_lang_ref_Reference = knownKlass(Type.java_lang_ref_Reference);
         java_lang_ref_Reference_referent = java_lang_ref_Reference.lookupDeclaredField(Name.referent, Type.java_lang_Object);
-        java_lang_ref_Reference_enqueue = java_lang_ref_Reference.lookupDeclaredMethod(Name.enqueue, Signature._boolean);
 
         java_lang_ref_Reference_discovered = java_lang_ref_Reference.lookupDeclaredField(Name.discovered, Type.java_lang_ref_Reference);
         java_lang_ref_Reference_next = java_lang_ref_Reference.lookupDeclaredField(Name.next, Type.java_lang_ref_Reference);
         java_lang_ref_Reference_queue = java_lang_ref_Reference.lookupDeclaredField(Name.queue, Type.java_lang_ref_ReferenceQueue);
         java_lang_ref_ReferenceQueue = knownKlass(Type.java_lang_ref_ReferenceQueue);
         java_lang_ref_ReferenceQueue_NULL = java_lang_ref_ReferenceQueue.lookupDeclaredField(Name.NULL, Type.java_lang_ref_ReferenceQueue);
+        java_lang_ref_ReferenceQueue_enqueue = java_lang_ref_ReferenceQueue.lookupDeclaredMethod(Name.enqueue, Signature._boolean_Reference);
 
         java_lang_ref_WeakReference = knownKlass(Type.java_lang_ref_WeakReference);
         java_lang_ref_SoftReference = knownKlass(Type.java_lang_ref_SoftReference);
@@ -497,16 +491,6 @@ public final class Meta implements ContextAccess {
 
         sun_misc_VM = knownKlassDiffVersion(Type.sun_misc_VM, Type.jdk_internal_misc_VM);
         sun_misc_VM_toThreadState = sun_misc_VM.lookupDeclaredMethod(Name.toThreadState, Signature.Thread$State_int);
-
-        sun_misc_Signal = knownKlassDiffVersion(Type.sun_misc_Signal, Type.jdk_internal_misc_Signal);
-        sun_misc_Signal_name = sun_misc_Signal.requireDeclaredField(Name.name, Type.java_lang_String);
-        sun_misc_Signal_init_String = sun_misc_Signal.lookupDeclaredMethod(Name._init_, Signature._void_String);
-        sun_misc_NativeSignalHandler = knownKlassDiffVersion(Type.sun_misc_NativeSignalHandler, Type.jdk_internal_misc_Signal$NativeHandler);
-        sun_misc_NativeSignalHandler_handler = sun_misc_NativeSignalHandler.requireDeclaredField(Name.handler, Type._long);
-        sun_misc_SignalHandler = knownKlassDiffVersion(Type.sun_misc_SignalHandler, Type.jdk_internal_misc_Signal$Handler);
-        sun_misc_SignalHandler_handle = lookupMethodDiffVersion(sun_misc_SignalHandler, Name.handle, Signature._void_sun_misc_Signal, Name.handle, Signature._void_jdk_internal_misc_Signal);
-        sun_misc_SignalHandler_SIG_DFL = lookupFieldDiffVersion(sun_misc_SignalHandler, Name.SIG_DFL, Type.sun_misc_SignalHandler, Name.SIG_DFL, Type.jdk_internal_misc_Signal$Handler);
-        sun_misc_SignalHandler_SIG_IGN = lookupFieldDiffVersion(sun_misc_SignalHandler, Name.SIG_IGN, Type.sun_misc_SignalHandler, Name.SIG_IGN, Type.jdk_internal_misc_Signal$Handler);
 
         sun_reflect_ConstantPool = knownKlassDiffVersion(Type.sun_reflect_ConstantPool, Type.jdk_internal_reflect_ConstantPool);
         sun_reflect_ConstantPool_constantPoolOop = sun_reflect_ConstantPool.lookupDeclaredField(Name.constantPoolOop, Type.java_lang_Object);
@@ -606,16 +590,6 @@ public final class Meta implements ContextAccess {
         // Load Espresso's Polyglot API.
         boolean polyglotSupport = getContext().getEnv().getOptions().get(EspressoOptions.Polyglot);
         this.polyglot = polyglotSupport ? new PolyglotSupport() : null;
-    }
-
-    private Method lookupMethodDiffVersion(ObjectKlass klass, Symbol<Name> n1, Symbol<Signature> s1, Symbol<Name> n2, Symbol<Signature> s2) {
-        if (getJavaVersion().java8OrEarlier()) {
-            return klass.lookupDeclaredMethod(n1, s1);
-        } else if (getJavaVersion().java9OrLater()) {
-            return klass.lookupDeclaredMethod(n2, s2);
-        } else {
-            throw EspressoError.shouldNotReachHere();
-        }
     }
 
     private Field lookupFieldDiffVersion(ObjectKlass klass, Symbol<Name> n1, Symbol<Type> t1, Symbol<Name> n2, Symbol<Type> t2) {
@@ -734,10 +708,6 @@ public final class Meta implements ContextAccess {
     public final Field HIDDEN_CLASS_LOADER_REGISTRY;
     public final Method java_lang_ClassLoader_getResourceAsStream;
     public final Method java_lang_ClassLoader_loadClass;
-
-    public final ObjectKlass sun_launcher_LauncherHelper;
-    public final Method sun_launcher_LauncherHelper_printHelpMessage;
-    public final Field sun_launcher_LauncherHelper_ostream;
 
     public final ObjectKlass jdk_internal_loader_ClassLoaders$PlatformClassLoader;
 
@@ -859,9 +829,6 @@ public final class Meta implements ContextAccess {
     public final Method java_io_InputStream_read;
     public final Method java_io_InputStream_close;
 
-    public final ObjectKlass java_io_PrintStream;
-    public final Method java_io_PrintStream_println;
-
     // Array support.
     public final ObjectKlass java_lang_Cloneable;
     public final ObjectKlass java_io_Serializable;
@@ -913,16 +880,6 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass sun_misc_VM;
     public final Method sun_misc_VM_toThreadState;
     public final ObjectKlass sun_reflect_ConstantPool;
-
-    public final ObjectKlass sun_misc_Signal;
-    public final Field sun_misc_Signal_name;
-    public final Method sun_misc_Signal_init_String;
-    public final ObjectKlass sun_misc_NativeSignalHandler;
-    public final Field sun_misc_NativeSignalHandler_handler;
-    public final ObjectKlass sun_misc_SignalHandler;
-    public final Method sun_misc_SignalHandler_handle;
-    public final Field sun_misc_SignalHandler_SIG_DFL;
-    public final Field sun_misc_SignalHandler_SIG_IGN;
 
     public final ObjectKlass java_lang_System;
     public final Method java_lang_System_initializeSystemClass;
@@ -1001,7 +958,6 @@ public final class Meta implements ContextAccess {
     public final Field java_lang_ref_Reference_next;
     public final Field java_lang_ref_Reference_queue;
     public final Field java_lang_ref_Reference_lock;
-    public final Method java_lang_ref_Reference_enqueue;
     public final ObjectKlass java_lang_ref_WeakReference;
     public final ObjectKlass java_lang_ref_SoftReference;
     public final ObjectKlass java_lang_ref_PhantomReference;
@@ -1011,6 +967,7 @@ public final class Meta implements ContextAccess {
     public final Field HIDDEN_HOST_REFERENCE;
 
     public final ObjectKlass java_lang_ref_ReferenceQueue;
+    public final Method java_lang_ref_ReferenceQueue_enqueue;
     public final Field java_lang_ref_ReferenceQueue_NULL;
     public final Method sun_reflect_Reflection_getCallerClass;
 
