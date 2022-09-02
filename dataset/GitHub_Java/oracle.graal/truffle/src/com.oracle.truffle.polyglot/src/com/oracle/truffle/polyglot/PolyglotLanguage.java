@@ -160,20 +160,22 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
 
     @Override
     public OptionDescriptors getOptions() {
-        try {
-            engine.checkState();
-            return getOptionsInternal();
-        } catch (Throwable e) {
-            throw PolyglotImpl.guestToHostException(this.engine, e);
-        }
-    }
-
-    OptionDescriptors getOptionsInternal() {
-        if (!this.initialized) {
+        engine.checkState();
+        if (!initialized) {
             synchronized (engine) {
-                if (!this.initialized) {
-                    this.initLanguage = ensureInitialized(new PolyglotLanguageInstance(this));
-                    this.initialized = true;
+                if (!initialized) {
+                    try {
+                        this.initLanguage = ensureInitialized(new PolyglotLanguageInstance(this));
+                    } catch (IllegalAccessError e) {
+                        // Do not swallow module access violations
+                        throw e;
+                    } catch (Throwable e) {
+                        // failing to initialize the language for getting the option descriptors
+                        // should not be a fatal error. this typically happens when an invalid
+                        // language is on the classpath.
+                        return OptionDescriptors.EMPTY;
+                    }
+                    initialized = true;
                 }
             }
         }
@@ -328,7 +330,7 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
         if (optionValues == null) {
             synchronized (engine) {
                 if (optionValues == null) {
-                    optionValues = new OptionValuesImpl(engine, getOptionsInternal(), false);
+                    optionValues = new OptionValuesImpl(engine, getOptions(), false);
                 }
             }
         }
