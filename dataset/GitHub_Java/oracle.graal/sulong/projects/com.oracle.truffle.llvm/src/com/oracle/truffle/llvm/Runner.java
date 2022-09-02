@@ -44,7 +44,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-import com.oracle.truffle.llvm.runtime.LibraryLocator;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -688,6 +687,7 @@ final class Runner {
             DataLayout targetDataLayout = new DataLayout(layout.getDataLayout());
             NodeFactory nodeFactory = context.getLanguage().getActiveConfiguration().createNodeFactory(context, targetDataLayout);
             // This needs to be removed once the nodefactory is taken out of the language.
+            context.getLanguage().setNodeFactory(nodeFactory);
             LLVMScope fileScope = new LLVMScope();
             LLVMParserRuntime runtime = new LLVMParserRuntime(context, library, fileScope, nodeFactory);
             LLVMParser parser = new LLVMParser(source, runtime);
@@ -697,7 +697,6 @@ final class Runner {
         } else if (!library.isNative()) {
             throw new LLVMParserException("The file '" + source.getName() + "' is not a bitcode file nor an ELF or Mach-O object file with an embedded bitcode section.");
         } else {
-            LibraryLocator.traceDelegateNative(context, library);
             return null;
         }
     }
@@ -1028,7 +1027,7 @@ final class Runner {
         LLVMFunctionDescriptor mainFunctionDescriptor = findMainMethod(parserResults);
         LLVMFunctionDescriptor startFunctionDescriptor = findStartMethod();
         if (mainFunctionDescriptor != null && startFunctionDescriptor != null) {
-            RootCallTarget startCallTarget = startFunctionDescriptor.getLLVMIRFunctionSlowPath();
+            RootCallTarget startCallTarget = startFunctionDescriptor.getLLVMIRFunction();
             Path applicationPath = mainFunctionDescriptor.getLibrary().getPath();
             RootNode rootNode = new LLVMGlobalRootNode(language, StackManager.createRootFrame(), mainFunctionDescriptor, startCallTarget, Objects.toString(applicationPath, ""));
             mainFunctionCallTarget = Truffle.getRuntime().createCallTarget(rootNode);
