@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@
 package org.graalvm.tools.lsp.server.request;
 
 import java.io.PrintWriter;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -40,11 +39,15 @@ import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogate;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogateMap;
 import org.graalvm.tools.lsp.server.utils.NearestSectionsFinder.NearestSections;
 
-import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+
+import com.oracle.truffle.api.interop.NodeLibrary;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -55,25 +58,28 @@ public abstract class AbstractRequestHandler {
     protected final TextDocumentSurrogateMap surrogateMap;
     protected final PrintWriter err;
     protected final ContextAwareExecutor contextAwareExecutor;
+    protected final TruffleLogger logger;
 
-    AbstractRequestHandler(TruffleInstrument.Env env, TextDocumentSurrogateMap surrogateMap, ContextAwareExecutor contextAwareExecutor) {
+    AbstractRequestHandler(TruffleInstrument.Env mainEnv, TruffleInstrument.Env env, TextDocumentSurrogateMap surrogateMap, ContextAwareExecutor contextAwareExecutor) {
         this.env = env;
-        this.err = new PrintWriter(env.err(), true);
+        this.err = new PrintWriter(mainEnv.err(), true);
         this.surrogateMap = surrogateMap;
         this.contextAwareExecutor = contextAwareExecutor;
+        this.logger = mainEnv.getLogger("");
     }
 
-    public InstrumentableNode findNodeAtCaret(TextDocumentSurrogate surrogate, int line, int character, Class<?>... tag) {
+    public final InstrumentableNode findNodeAtCaret(TextDocumentSurrogate surrogate, int line, int character, Class<?>... tag) {
         if (surrogate != null) {
             SourceWrapper sourceWrapper = surrogate.getSourceWrapper();
             if (sourceWrapper.isParsingSuccessful()) {
                 Source source = sourceWrapper.getSource();
                 if (SourceUtils.isLineValid(line, source)) {
                     int oneBasedLineNumber = SourceUtils.zeroBasedLineToOneBasedLine(line, source);
-                    NearestSections nearestSections = NearestSectionsFinder.findNearestSections(source, env, oneBasedLineNumber, character, true, tag);
+                    int oneBasedColumn = SourceUtils.zeroBasedColumnToOneBasedColumn(line, oneBasedLineNumber, character, source);
+                    NearestSections nearestSections = NearestSectionsFinder.findNearestSections(source, env, oneBasedLineNumber, oneBasedColumn, true, tag);
                     if (nearestSections.getNextSourceSection() != null) {
                         SourceSection nextNodeSection = nearestSections.getNextSourceSection();
-                        if (nextNodeSection.getStartLine() == oneBasedLineNumber && nextNodeSection.getStartColumn() == character + 1) {
+                        if (nextNodeSection.getStartLine() == oneBasedLineNumber && nextNodeSection.getStartColumn() == oneBasedColumn) {
                             // nextNodeSection is directly before the caret, so we use that one
                             return nearestSections.getInstrumentableNextNode();
                         }
@@ -85,12 +91,18 @@ public abstract class AbstractRequestHandler {
         return null;
     }
 
-    protected <T> T getFutureResultOrHandleExceptions(Future<T> future) {
+    protected final <T> T getFutureResultOrHandleExceptions(Future<T> future) {
         try {
             return future.get();
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof RuntimeException && e instanceof TruffleException) {
-                throw (RuntimeException) e.getCause();
+            Throwable cause = e.getCause();
+            InteropLibrary interopLib = InteropLibrary.getUncached();
+            if (cause != null && interopLib.isException(cause)) {
+                try {
+                    throw interopLib.throwException(cause);
+                } catch (UnsupportedMessageException ume) {
+                    throw CompilerDirectives.shouldNotReachHere(ume);
+                }
             } else {
                 e.printStackTrace(err);
             }
@@ -99,24 +111,29 @@ public abstract class AbstractRequestHandler {
         return null;
     }
 
-    protected LinkedList<Scope> getScopesOuterToInner(TextDocumentSurrogate surrogate, InstrumentableNode node) {
+    protected static Object getScope(TextDocumentSurrogate surrogate, InstrumentableNode node) {
         List<CoverageData> coverageData = surrogate.getCoverageData(((Node) node).getSourceSection());
-        VirtualFrame frame = null;
+        MaterializedFrame frame = null;
         if (coverageData != null) {
             CoverageData data = coverageData.stream().findFirst().orElse(null);
             if (data != null) {
                 frame = data.getFrame();
             }
         }
-        Iterable<Scope> scopesInnerToOuter = env.findLocalScopes((Node) node, frame);
-        LinkedList<Scope> scopesOuterToInner = new LinkedList<>();
-        for (Scope scope : scopesInnerToOuter) {
-            scopesOuterToInner.addFirst(scope);
+        NodeLibrary nodeLibrary = NodeLibrary.getUncached(node);
+        if (nodeLibrary.hasScope(node, frame)) {
+            try {
+                return nodeLibrary.getScope(node, frame, true);
+            } catch (UnsupportedMessageException e) {
+                throw CompilerDirectives.shouldNotReachHere(e);
+            }
+        } else {
+            return null;
         }
-        return scopesOuterToInner;
     }
 
-    protected SourcePredicateBuilder newDefaultSourcePredicateBuilder() {
+    protected final SourcePredicateBuilder newDefaultSourcePredicateBuilder() {
         return SourcePredicateBuilder.newBuilder().excludeInternal(env.getOptions()).newestSource(surrogateMap);
     }
+
 }

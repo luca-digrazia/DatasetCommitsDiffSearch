@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,27 +31,21 @@ import java.util.List;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 
+import org.graalvm.tools.lsp.server.ContextAwareExecutor;
 import org.graalvm.tools.lsp.server.types.Hover;
-import org.graalvm.tools.lsp.server.types.MarkedString;
 import org.graalvm.tools.lsp.server.types.MarkupContent;
 import org.graalvm.tools.lsp.server.types.MarkupKind;
-import org.graalvm.tools.lsp.api.ContextAwareExecutor;
-import org.graalvm.tools.lsp.instrument.LSOptions;
-import org.graalvm.tools.lsp.instrument.LSPInstrument;
 import org.graalvm.tools.lsp.server.utils.CoverageData;
 import org.graalvm.tools.lsp.server.utils.CoverageEventNode;
 import org.graalvm.tools.lsp.server.utils.SourceUtils;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogate;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogateMap;
 
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.TruffleLogger;
-import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.StandardTags.CallTag;
-import com.oracle.truffle.api.instrumentation.StandardTags.DeclarationTag;
 import com.oracle.truffle.api.instrumentation.StandardTags.ExpressionTag;
 import com.oracle.truffle.api.instrumentation.StandardTags.ReadVariableTag;
 import com.oracle.truffle.api.instrumentation.StandardTags.RootTag;
@@ -59,7 +53,12 @@ import com.oracle.truffle.api.instrumentation.StandardTags.StatementTag;
 import com.oracle.truffle.api.instrumentation.StandardTags.WriteVariableTag;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.NodeLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -68,13 +67,17 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
 public final class HoverRequestHandler extends AbstractRequestHandler {
-    private static final TruffleLogger LOG = TruffleLogger.getLogger(LSPInstrument.ID, HoverRequestHandler.class);
+
+    static final InteropLibrary INTEROP = InteropLibrary.getFactory().getUncached();
 
     private final CompletionRequestHandler completionHandler;
+    private final boolean developerMode;
 
-    public HoverRequestHandler(Env env, TextDocumentSurrogateMap surrogateMap, ContextAwareExecutor contextAwareExecutor, CompletionRequestHandler completionHandler) {
-        super(env, surrogateMap, contextAwareExecutor);
+    public HoverRequestHandler(Env envMain, Env env, TextDocumentSurrogateMap surrogateMap, ContextAwareExecutor contextAwareExecutor, CompletionRequestHandler completionHandler,
+                    boolean developerMode) {
+        super(envMain, env, surrogateMap, contextAwareExecutor);
         this.completionHandler = completionHandler;
+        this.developerMode = developerMode;
     }
 
     public Hover hoverWithEnteredContext(URI uri, int line, int column) {
@@ -82,13 +85,13 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
         InstrumentableNode nodeAtCaret = findNodeAtCaret(surrogate, line, column);
         if (nodeAtCaret != null) {
             SourceSection hoverSection = ((Node) nodeAtCaret).getSourceSection();
-            LOG.log(Level.FINER, "Hover: SourceSection({0})", hoverSection.getCharacters());
+            logger.log(Level.FINER, "Hover: SourceSection({0})", hoverSection.getCharacters());
             if (surrogate.hasCoverageData()) {
                 List<CoverageData> coverages = surrogate.getCoverageData(hoverSection);
                 if (coverages != null) {
                     return evalHoverInfos(coverages, hoverSection, surrogate.getLanguageInfo());
                 }
-            } else if (env.getOptions().get(LSOptions.DeveloperMode)) {
+            } else if (developerMode) {
                 String sourceText = hoverSection.getCharacters().toString();
                 MarkupContent content = MarkupContent.create(MarkupKind.PlainText,
                                 "Language: " + surrogate.getLanguageId() + ", Section: " + sourceText + "\n" +
@@ -103,7 +106,7 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static String getTags(InstrumentableNode nodeAtCaret) {
         List<String> tags = new ArrayList<>();
-        for (Class<Tag> tagClass : new Class[]{StatementTag.class, CallTag.class, RootTag.class, ExpressionTag.class, DeclarationTag.class, ReadVariableTag.class, WriteVariableTag.class}) {
+        for (Class<Tag> tagClass : new Class[]{StatementTag.class, CallTag.class, RootTag.class, ExpressionTag.class, ReadVariableTag.class, WriteVariableTag.class}) {
             if (nodeAtCaret.hasTag(tagClass)) {
                 tags.add(Tag.getIdentifier(tagClass));
             }
@@ -114,7 +117,7 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
     private Hover evalHoverInfos(List<CoverageData> coverages, SourceSection hoverSection, LanguageInfo langInfo) {
         String textAtHoverPosition = hoverSection.getCharacters().toString();
         for (CoverageData coverageData : coverages) {
-            Hover frameSlotHover = tryFrameSlot(coverageData.getFrame(), textAtHoverPosition, langInfo, hoverSection);
+            Hover frameSlotHover = tryFrameScope(coverageData.getFrame(), coverageData.getCoverageEventNode(), textAtHoverPosition, langInfo, hoverSection);
             if (frameSlotHover != null) {
                 return frameSlotHover;
             }
@@ -140,9 +143,6 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
             try {
                 executableNode = env.parseInline(inlineEvalSource, coverageData.getCoverageEventNode(), coverageData.getFrame());
             } catch (Exception e) {
-                if (!(e instanceof TruffleException)) {
-                    e.printStackTrace(err);
-                }
             }
             if (executableNode == null) {
                 return Hover.create(Collections.emptyList());
@@ -152,10 +152,10 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
             coverageEventNode.insertOrReplaceChild(executableNode);
             Object evalResult = null;
             try {
-                LOG.fine("Trying coverage-based eval...");
+                logger.fine("Trying coverage-based eval...");
                 evalResult = executableNode.execute(coverageData.getFrame());
             } catch (Exception e) {
-                if (!((e instanceof TruffleException) || (e instanceof ControlFlowException))) {
+                if (!(INTEROP.isException(e) || (e instanceof ControlFlowException))) {
                     e.printStackTrace(err);
                 }
                 return Hover.create(Collections.emptyList());
@@ -175,11 +175,12 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
         return getFutureResultOrHandleExceptions(future);
     }
 
+    @SuppressWarnings("deprecation")
     private Hover trySignature(SourceSection hoverSection, LanguageInfo langInfo, TruffleObject evalResult) {
         String formattedSignature = completionHandler.getFormattedSignature(evalResult, langInfo);
         if (formattedSignature != null) {
             List<Object> contents = new ArrayList<>();
-            contents.add(MarkedString.create(langInfo.getId(), formattedSignature));
+            contents.add(org.graalvm.tools.lsp.server.types.MarkedString.create(langInfo.getId(), formattedSignature));
 
             Object documentation = completionHandler.getDocumentation(evalResult, langInfo);
             if (documentation instanceof String) {
@@ -189,7 +190,7 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
                 if (markup.getKind().equals(MarkupKind.PlainText)) {
                     contents.add(markup.getValue());
                 } else {
-                    contents.add(MarkedString.create(langInfo.getId(), markup.getValue()));
+                    contents.add(org.graalvm.tools.lsp.server.types.MarkedString.create(langInfo.getId(), markup.getValue()));
                 }
             }
             return Hover.create(contents).setRange(SourceUtils.sourceSectionToRange(hoverSection));
@@ -198,19 +199,32 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
         return null;
     }
 
-    private Hover tryFrameSlot(MaterializedFrame frame, String textAtHoverPosition, LanguageInfo langInfo, SourceSection hoverSection) {
-        FrameSlot frameSlot = frame.getFrameDescriptor().getSlots().stream().filter(slot -> slot.getIdentifier().equals(textAtHoverPosition)).findFirst().orElseGet(() -> null);
-        if (frameSlot != null) {
-            Object frameSlotValue = frame.getValue(frameSlot);
-            return Hover.create(createDefaultHoverInfos(textAtHoverPosition, frameSlotValue, langInfo)).setRange(SourceUtils.sourceSectionToRange(hoverSection));
+    private Hover tryFrameScope(MaterializedFrame frame, CoverageEventNode node, String textAtHoverPosition, LanguageInfo langInfo, SourceSection hoverSection) {
+        Node instrumentedNode = node.getInstrumentedNode();
+        NodeLibrary nodeLibrary = NodeLibrary.getUncached(instrumentedNode);
+        if (nodeLibrary.hasScope(instrumentedNode, frame)) {
+            try {
+                Object scope = nodeLibrary.getScope(instrumentedNode, frame, true);
+                Object keys = INTEROP.getMembers(scope);
+                long size = INTEROP.getArraySize(keys);
+                for (long i = 0; i < size; i++) {
+                    String key = INTEROP.asString(INTEROP.readArrayElement(keys, i));
+                    if (key.equals(textAtHoverPosition)) {
+                        Object var = INTEROP.readMember(scope, key);
+                        return Hover.create(createDefaultHoverInfos(textAtHoverPosition, var, langInfo)).setRange(SourceUtils.sourceSectionToRange(hoverSection));
+                    }
+                }
+            } catch (UnsupportedMessageException | UnknownIdentifierException | InvalidArrayIndexException e) {
+            }
         }
         return null;
     }
 
+    @SuppressWarnings("deprecation")
     private List<Object> createDefaultHoverInfos(String textAtHoverPosition, Object evalResultObject, LanguageInfo langInfo) {
         List<Object> contents = new ArrayList<>();
-        contents.add(MarkedString.create(langInfo.getId(), textAtHoverPosition));
-        String result = evalResultObject != null ? env.toString(langInfo, evalResultObject) : "";
+        contents.add(org.graalvm.tools.lsp.server.types.MarkedString.create(langInfo.getId(), textAtHoverPosition));
+        String result = evalResultObject != null ? toString(evalResultObject, langInfo) : "";
         if (!textAtHoverPosition.equals(result)) {
             String resultObjectString = evalResultObject instanceof String ? "\"" + result + "\"" : result;
             contents.add(resultObjectString);
@@ -226,9 +240,18 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
             if (markup.getKind().equals(MarkupKind.PlainText)) {
                 contents.add(markup.getValue());
             } else {
-                contents.add(MarkedString.create(langInfo.getId(), markup.getValue()));
+                contents.add(org.graalvm.tools.lsp.server.types.MarkedString.create(langInfo.getId(), markup.getValue()));
             }
         }
         return contents;
+    }
+
+    private String toString(Object evalResultObject, LanguageInfo langInfo) {
+        Object view = env.getLanguageView(langInfo, evalResultObject);
+        try {
+            return INTEROP.asString(INTEROP.toDisplayString(view, true));
+        } catch (UnsupportedMessageException e) {
+            throw CompilerDirectives.shouldNotReachHere(e);
+        }
     }
 }
