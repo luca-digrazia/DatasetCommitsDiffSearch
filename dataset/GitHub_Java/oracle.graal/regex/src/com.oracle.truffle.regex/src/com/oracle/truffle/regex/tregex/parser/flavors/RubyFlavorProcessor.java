@@ -1473,10 +1473,11 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             switch (ch) {
                 case ']':
                     if (position == firstPosInside + 1) {
-                        throw syntaxErrorAt("empty char-class", beginPos);
+                        lowerBound = Optional.of((int) ']');
                     } else {
                         break classBody;
                     }
+                    break;
                 case '\\':
                     lowerBound = classEscape();
                     break;
