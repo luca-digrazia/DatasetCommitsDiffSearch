@@ -148,7 +148,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
         }
     }
 
-    void writeHeaderFiles(Path outputDir, String imageName, boolean dynamic) {
+    void writeHeaderFiles(Path outputDir, String imageName, Map<ResolvedJavaMethod, String> symbolAliases, boolean dynamic) {
         /* Group methods by header files. */
         Map<? extends Class<? extends Header>, List<HostedMethod>> hostedMethods = uniqueEntryPoints.stream()
                         .filter(this::shouldWriteHeader)
@@ -158,11 +158,11 @@ public abstract class NativeBootImage extends AbstractBootImage {
         hostedMethods.forEach((headerClass, methods) -> {
             methods.sort(NativeBootImage::sortMethodsByFileNameAndPosition);
             Header header = headerClass == Header.class ? defaultCHeaderAnnotation(imageName) : instantiateCHeader(headerClass);
-            writeHeaderFile(outputDir, header, methods, dynamic);
+            writeHeaderFile(outputDir, header, methods, symbolAliases, dynamic);
         });
     }
 
-    private void writeHeaderFile(Path outDir, Header header, List<HostedMethod> methods, boolean dynamic) {
+    private void writeHeaderFile(Path outDir, Header header, List<HostedMethod> methods, Map<ResolvedJavaMethod, String> symbolAliases, boolean dynamic) {
         CSourceCodeWriter writer = new CSourceCodeWriter(outDir.getParent());
         String imageHeaderGuard = "__" + header.name().toUpperCase().replaceAll("[^A-Z0-9]", "_") + "_H";
         String dynamicSuffix = dynamic ? "_dynamic.h" : ".h";
@@ -194,7 +194,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
             writer.appendln("#endif");
             writer.appendln();
 
-            methods.forEach(m -> writeMethodHeader(m, writer, dynamic));
+            methods.forEach(m -> writeMethodHeader(m, writer, symbolAliases, dynamic));
 
             writer.appendln("#if defined(__cplusplus)");
             writer.appendln("}");
@@ -271,7 +271,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
         return 0;
     }
 
-    private void writeMethodHeader(HostedMethod m, CSourceCodeWriter writer, boolean dynamic) {
+    private void writeMethodHeader(HostedMethod m, CSourceCodeWriter writer, Map<ResolvedJavaMethod, String> symbolAliases, boolean dynamic) {
         assert Modifier.isStatic(m.getModifiers()) : "Published methods that go into the header must be static.";
         CEntryPointData cEntryPointData = (CEntryPointData) m.getWrapped().getEntryPointData();
         String docComment = cEntryPointData.getDocumentation();
@@ -279,6 +279,11 @@ public abstract class NativeBootImage extends AbstractBootImage {
             writer.appendln("/*");
             Arrays.stream(docComment.split("\n")).forEach(l -> writer.appendln(" * " + l));
             writer.appendln(" */");
+        }
+
+        String symbolName = symbolAliases.get(m);
+        if (symbolName == null || symbolName.isEmpty()) {
+            symbolName = cEntryPointData.getSymbolName();
         }
 
         if (dynamic) {
@@ -294,7 +299,6 @@ public abstract class NativeBootImage extends AbstractBootImage {
                         metaAccess, nativeLibs));
         writer.append(" ");
 
-        String symbolName = cEntryPointData.getSymbolName();
         assert !symbolName.isEmpty();
         if (dynamic) {
             writer.append("(*").append(symbolName).append("_fn_t)");
@@ -387,18 +391,11 @@ public abstract class NativeBootImage extends AbstractBootImage {
             final String textSectionName = SectionName.TEXT.getFormatDependentName(objectFile.getFormat());
             textSection = objectFile.newProgbitsSection(textSectionName, objectFile.getPageSize(), false, true, textImpl);
 
-            /*
-             * Read-only data section
-             *
-             * The reason for making the read-only data section writable is for a workaround in
-             * order to use Graal on some platforms where you can't have relocations in a read-only
-             * section (eg. Android).
-             */
-            boolean roDataWritable = !SubstrateOptions.SpawnIsolates.getValue() && SubstrateOptions.UseOnlyWritableBootImageHeap.getValue();
+            // Read-only data section
             final RelocatableBuffer roDataBuffer = RelocatableBuffer.factory("roData", roSectionSize, objectFile.getByteOrder());
             final ProgbitsSectionImpl roDataImpl = new BasicProgbitsSectionImpl(roDataBuffer.getBytes());
             final String roDataSectionName = SectionName.RODATA.getFormatDependentName(objectFile.getFormat());
-            roDataSection = objectFile.newProgbitsSection(roDataSectionName, objectFile.getPageSize(), roDataWritable, false, roDataImpl);
+            roDataSection = objectFile.newProgbitsSection(roDataSectionName, objectFile.getPageSize(), false, false, roDataImpl);
 
             // Read-write data section
             final RelocatableBuffer rwDataBuffer = RelocatableBuffer.factory("rwData", rwSectionSize, objectFile.getByteOrder());
@@ -419,7 +416,7 @@ public abstract class NativeBootImage extends AbstractBootImage {
             final RelocatableBuffer heapSectionBuffer;
             final ProgbitsSectionImpl heapSectionImpl;
             if (SubstrateOptions.SpawnIsolates.getValue()) {
-                boolean writable = SubstrateOptions.UseOnlyWritableBootImageHeap.getValue();
+                boolean writable = !SubstrateOptions.SpawnIsolates.getValue();
                 final long heapSize = heap.getReadOnlySectionSize() + heap.getWritableSectionSize();
 
                 heapSectionBuffer = RelocatableBuffer.factory("heap", heapSize, objectFile.getByteOrder());
