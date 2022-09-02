@@ -339,13 +339,10 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * Generates a 64-bit immediate move code sequence.
      *
      * @param dst general purpose register. May not be null, stackpointer or zero-register.
-     * @param imm the value to move into the register
-     * @param annotateImm Flag denoting if annotation should be added.
+     * @param imm
      */
-    private void mov64(Register dst, long imm, boolean annotateImm) {
+    private void mov64(Register dst, long imm) {
         // We have to move all non zero parts of the immediate in 16-bit chunks
-        int numMovs = 0;
-        int pos = position();
         boolean firstMove = true;
         for (int offset = 0; offset < 64; offset += 16) {
             int chunk = (int) (imm >> offset) & NumUtil.getNbitNumberInt(16);
@@ -358,12 +355,8 @@ public class AArch64MacroAssembler extends AArch64Assembler {
             } else {
                 movk(64, dst, chunk, offset);
             }
-            ++numMovs;
         }
         assert !firstMove;
-        if (annotateImm) {
-            annotateImmediateMovSequence(pos, numMovs);
-        }
     }
 
     /**
@@ -385,6 +378,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      */
     public void mov(Register dst, long imm, boolean annotateImm) {
         assert dst.getRegisterCategory().equals(CPU);
+        int pos = position();
         if (imm == 0L) {
             movx(dst, zr);
         } else if (LogicalImmediateTable.isRepresentable(true, imm) != LogicalImmediateTable.Representable.NO) {
@@ -397,7 +391,10 @@ public class AArch64MacroAssembler extends AArch64Assembler {
             mov(dst, (int) imm);
             sxt(64, 32, dst, dst);
         } else {
-            mov64(dst, imm, annotateImm);
+            mov64(dst, imm);
+            if (annotateImm) {
+                annotatePatchingImmediateNativeAddress(pos, 64, 4);
+            }
         }
     }
 
@@ -451,7 +448,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
             }
         }
         if (annotateImm) {
-            annotateImmediateMovSequence(pos, 3);
+            annotatePatchingImmediateNativeAddress(pos, 48, 3);
         }
         assert !firstMove;
     }
@@ -1808,24 +1805,24 @@ public class AArch64MacroAssembler extends AArch64Assembler {
     }
 
     /**
-     * Emits elf patchable adrp ldr sequence.
+     * Emits elf patchable adrp add sequence.
      */
-    public void adrpLdr(int srcSize, Register result, AArch64Address a) {
+    public void adrAddRel(int srcSize, Register result, AArch64Address a) {
         if (codePatchingAnnotationConsumer != null) {
-            codePatchingAnnotationConsumer.accept(new AdrpLdrMacroInstruction(position()));
+            codePatchingAnnotationConsumer.accept(new ADRADDPRELMacroInstruction(position()));
         }
         super.adrp(a.getBase());
         this.ldr(srcSize, result, a);
     }
 
-    public static class AdrpLdrMacroInstruction extends CodeAnnotation implements MacroInstruction {
-        public AdrpLdrMacroInstruction(int position) {
+    public static class ADRADDPRELMacroInstruction extends CodeAnnotation implements MacroInstruction {
+        public ADRADDPRELMacroInstruction(int position) {
             super(position);
         }
 
         @Override
         public String toString() {
-            return "ADRP_LDR";
+            return "ADR_PREL_PG";
         }
 
         @Override

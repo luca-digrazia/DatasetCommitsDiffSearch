@@ -75,6 +75,7 @@ import java.util.EnumSet;
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address.Scale;
 import org.graalvm.compiler.asm.amd64.AVXKind.AVXSize;
+import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.debug.GraalError;
 
@@ -1949,11 +1950,11 @@ public class AMD64Assembler extends AMD64BaseAssembler {
     public final void jmpb(Label l) {
         if (l.isBound()) {
             int shortSize = 2;
-            // Displacement is relative to byte just after jmpb instruction
-            int displacement = l.position() - position() - shortSize;
-            GraalError.guarantee(isByte(displacement), "Displacement too large to be encoded as a byte: %d", displacement);
+            int entry = l.position();
+            assert isByte((entry - position()) + shortSize) : "Dispacement too large for a short jmp";
+            long offs = entry - position();
             emitByte(0xEB);
-            emitByte(displacement & 0xFF);
+            emitByte((int) ((offs - shortSize) & 0xFF));
         } else {
             l.addPatchAt(position(), this);
             emitByte(0xEB);
@@ -3395,7 +3396,9 @@ public class AMD64Assembler extends AMD64BaseAssembler {
              * Since a wrongly patched short branch can potentially lead to working but really bad
              * behaving code we should always fail with an exception instead of having an assert.
              */
-            GraalError.guarantee(isByte(imm8), "Displacement too large to be encoded as a byte: %d", imm8);
+            if (!NumUtil.isByte(imm8)) {
+                throw new InternalError("Displacement too large to be encoded as a byte: " + imm8);
+            }
             emitByte(imm8, branch + 1);
 
         } else {
