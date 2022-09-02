@@ -41,7 +41,7 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 
 public final class NativeUtils {
     public static ByteBuffer directByteBuffer(@Pointer TruffleObject addressPtr, long size, JavaKind kind) {
-        return directByteBuffer(addressPtr, Math.multiplyExact(size, kind.getByteCount()));
+        return directByteBuffer(interopAsPointer(addressPtr), Math.multiplyExact(size, kind.getByteCount()));
     }
 
     private static final Constructor<? extends ByteBuffer> constructor;
@@ -96,7 +96,15 @@ public final class NativeUtils {
 
     @TruffleBoundary
     public static ByteBuffer directByteBuffer(@Pointer TruffleObject addressPtr, long capacity) {
-        return directByteBuffer(interopAsPointer(addressPtr), capacity);
+        ByteBuffer buffer = null;
+        try {
+            long address = interopAsPointer(addressPtr);
+            buffer = constructor.newInstance(address, Math.toIntExact(capacity));
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
+        buffer.order(ByteOrder.nativeOrder());
+        return buffer;
     }
 
     @TruffleBoundary

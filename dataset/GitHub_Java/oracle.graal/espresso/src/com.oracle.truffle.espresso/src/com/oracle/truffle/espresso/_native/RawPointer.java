@@ -20,43 +20,47 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso._native.nfi;
+package com.oracle.truffle.espresso._native;
 
-import java.nio.file.Path;
-
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.espresso._native.NativeAccess;
-import com.oracle.truffle.espresso._native.Pointer;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-final class NFISulongNativeAccess extends NFINativeAccess {
+@ExportLibrary(InteropLibrary.class)
+public final class RawPointer implements TruffleObject {
+    private final long rawPtr;
 
-    NFISulongNativeAccess(TruffleLanguage.Env env) {
-        super(env);
+    private static final RawPointer NULL = new RawPointer(0L);
+
+    public static @Pointer TruffleObject nullInstance() {
+        return NULL;
     }
 
-    @Override
-    public @Pointer TruffleObject loadLibrary(Path libraryPath) {
-        CompilerAsserts.neverPartOfCompilation();
-        String nfiSource = String.format("with llvm load(RTLD_LAZY) '%s'", libraryPath);
-        return loadLibraryHelper(nfiSource);
+    public RawPointer(long rawPtr) {
+        this.rawPtr = rawPtr;
     }
 
-    @Override
-    public @Pointer TruffleObject loadDefaultLibrary() {
-        return null; // not supported
-    }
-
-    public static final class Provider implements NativeAccess.Provider {
-        @Override
-        public String id() {
-            return "nfi-sulong";
+    public static @Pointer TruffleObject create(long ptr) {
+        if (ptr == 0L) {
+            return NULL;
         }
+        return new RawPointer(ptr);
+    }
 
-        @Override
-        public NativeAccess create(TruffleLanguage.Env env) {
-            return new NFISulongNativeAccess(env);
-        }
+    @SuppressWarnings("static-method")
+    @ExportMessage
+    boolean isPointer() {
+        return true;
+    }
+
+    @ExportMessage
+    long asPointer() {
+        return rawPtr;
+    }
+
+    @ExportMessage
+    boolean isNull() {
+        return rawPtr == 0L;
     }
 }

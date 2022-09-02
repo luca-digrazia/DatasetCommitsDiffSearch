@@ -90,22 +90,13 @@ final class NFIIsolatedNativeAccess extends NFINativeAccess {
         this.realloc = lookupAndBindSymbol(edenLibrary, "realloc", NativeSignature.create(NativeType.POINTER, NativeType.POINTER, NativeType.LONG));
         this.free = lookupAndBindSymbol(edenLibrary, "free", NativeSignature.create(NativeType.VOID, NativeType.POINTER));
         this.dlsym = lookupAndBindSymbol(edenLibrary, "dlsym", NativeSignature.create(NativeType.POINTER, NativeType.POINTER, NativeType.POINTER));
-        this.ctypeInit = lookupAndBindSymbol(edenLibrary, "eden_ctypeInit", NativeSignature.create(NativeType.VOID));
+        this.ctypeInit = lookupAndBindSymbol(edenLibrary, "ctypeInit", NativeSignature.create(NativeType.VOID));
         /*
          * The default library provided by NFI does not work inside (dlmopen) isolated namespaces
          * because is based on calling dlsym located outside the isolated namespace. libeden.so,
          * loaded inside the isolated namespace provides a dlsym shim inside the namespace.
          */
-        this.defaultLibrary = new DefaultLibrary(this.dlsym, rtldDefault());
-    }
-
-    private TruffleObject rtldDefault() {
-        TruffleObject getRTLD_DEFAULT = lookupAndBindSymbol(edenLibrary, "eden_RTLD_DEFAULT", NativeSignature.create(NativeType.POINTER));
-        try {
-            return (TruffleObject) InteropLibrary.getUncached().execute(getRTLD_DEFAULT);
-        } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-            throw EspressoError.shouldNotReachHere(e);
-        }
+        this.defaultLibrary = new DefaultLibrary(this.dlsym);
     }
 
     @Override
@@ -123,12 +114,10 @@ final class NFIIsolatedNativeAccess extends NFINativeAccess {
     @ExportLibrary(InteropLibrary.class)
     static class DefaultLibrary implements TruffleObject {
 
-        final @Pointer TruffleObject dlsym;
-        final @Pointer TruffleObject rtldDefault;
+        final TruffleObject dlsym;
 
-        DefaultLibrary(@Pointer TruffleObject dlsym, @Pointer TruffleObject rtldDefault) {
+        DefaultLibrary(TruffleObject dlsym) {
             this.dlsym = Objects.requireNonNull(dlsym);
-            this.rtldDefault = Objects.requireNonNull(rtldDefault);
         }
 
         @ExportMessage
@@ -152,7 +141,10 @@ final class NFIIsolatedNativeAccess extends NFINativeAccess {
                         @CachedLibrary(limit = "2") InteropLibrary isNullInterop,
                         @Cached BranchProfile error) throws UnknownIdentifierException {
             try {
-                Object result = interop.execute(dlsym, this.rtldDefault, TruffleByteBuffer.allocateDirectStringUTF8(member));
+                Object result = interop.execute(dlsym,
+                                /* RTLD_DEFAULT */ RawPointer.nullInstance(),
+                                TruffleByteBuffer.allocateDirectStringUTF8(member));
+
                 if (isNullInterop.isNull(result)) {
                     error.enter();
                     throw UnknownIdentifierException.create(member);
