@@ -55,22 +55,15 @@ import com.oracle.svm.core.util.UserError;
 public class ClassInitializationConfiguration {
     private static final String ROOT_QUALIFIER = "";
     private static final int MAX_NUMBER_OF_REASONS = 3;
+    private InitializationNode root = new InitializationNode("", null, null);
 
-    private InitializationNode root = new InitializationNode("", null, null, false);
-
-    public synchronized void insert(String classOrPackage, InitKind kind, String reason, boolean strict) {
+    public synchronized void insert(String classOrPackage, InitKind kind, String reason) {
         assert kind != null;
-        insertRec(root, qualifierList(classOrPackage), kind, reason, strict);
+        insertRec(root, qualifierList(classOrPackage), kind, reason);
     }
 
     synchronized InitKind lookupKind(String classOrPackage) {
-        InitializationNode node = lookupRec(root, qualifierList(classOrPackage), null);
-        return node == null ? null : node.kind;
-    }
-
-    synchronized String lookupReason(String classOrPackage) {
-        assert lookupRec(root, qualifierList(classOrPackage), null) != null : "Path for a file should be ";
-        return String.join(" and ", lookupRec(root, qualifierList(classOrPackage), null).reasons);
+        return lookupKindRec(root, qualifierList(classOrPackage), null);
     }
 
     private static List<String> qualifierList(String classOrPackage) {
@@ -80,13 +73,12 @@ public class ClassInitializationConfiguration {
         return prefixed;
     }
 
-    private void insertRec(InitializationNode node, List<String> classOrPackage, InitKind kind, String reason, boolean strict) {
+    private void insertRec(InitializationNode node, List<String> classOrPackage, InitKind kind, String reason) {
         assert !classOrPackage.isEmpty();
         assert node.qualifier.equals(classOrPackage.get(0));
         if (classOrPackage.size() == 1) {
             if (node.kind == null) {
                 node.kind = kind;
-                node.strict = strict;
             } else if (node.kind == kind) {
                 if (node.reasons.size() < MAX_NUMBER_OF_REASONS) {
                     node.reasons.add(reason);
@@ -94,34 +86,30 @@ public class ClassInitializationConfiguration {
                     node.reasons.add("others");
                 }
             } else {
-                if (node.strict) {
-                    throw UserError.abort("Incompatible change of initialization policy for " + qualifiedName(node) + ": trying to change " + node.kind + " " + String.join(" and ", node.reasons) +
-                                    " to " + kind + " " + reason);
-                } else {
-                    node.kind = node.kind.max(kind);
-                }
+                throw UserError.abort("Incompatible change of initialization policy for " + qualifiedName(node) + ": trying to change " + node.kind + " " + String.join(" and ", node.reasons) +
+                                " to " + kind + " " + reason);
             }
         } else {
             List<String> tail = new ArrayList<>(classOrPackage);
             tail.remove(0);
             String nextQualifier = tail.get(0);
             if (!node.children.containsKey(nextQualifier)) {
-                node.children.put(nextQualifier, new InitializationNode(nextQualifier, node, null, false, reason));
+                node.children.put(nextQualifier, new InitializationNode(nextQualifier, node, null, reason));
                 assert node.children.containsKey(nextQualifier);
             }
-            insertRec(node.children.get(nextQualifier), tail, kind, reason, strict);
+            insertRec(node.children.get(nextQualifier), tail, kind, reason);
         }
     }
 
-    private InitializationNode lookupRec(InitializationNode node, List<String> classOrPackage, InitializationNode lastNonNullKind) {
+    private InitKind lookupKindRec(InitializationNode node, List<String> classOrPackage, InitKind lastNonNullKind) {
         List<String> tail = new ArrayList<>(classOrPackage);
         tail.remove(0);
         if (!tail.isEmpty() && node.children.containsKey(tail.get(0))) {
-            return lookupRec(node.children.get(tail.get(0)), tail, node.kind != null ? node : lastNonNullKind);
+            return lookupKindRec(node.children.get(tail.get(0)), tail, node.kind != null ? node.kind : lastNonNullKind);
         } else if (node.kind == null) {
             return lastNonNullKind;
         } else {
-            return node;
+            return node.kind;
         }
     }
 
@@ -157,18 +145,16 @@ public class ClassInitializationConfiguration {
 
 final class InitializationNode {
     final String qualifier;
-    boolean strict;
     InitKind kind;
     final EconomicSet<String> reasons = EconomicSet.create();
 
     final InitializationNode parent;
     final EconomicMap<String, InitializationNode> children = EconomicMap.create();
 
-    InitializationNode(String qualifier, InitializationNode parent, InitKind kind, boolean strict, String... reasons) {
+    InitializationNode(String qualifier, InitializationNode parent, InitKind kind, String... reasons) {
         this.parent = parent;
         this.qualifier = qualifier;
         this.kind = kind;
-        this.strict = strict;
         this.reasons.addAll(Arrays.asList(reasons));
     }
 }
