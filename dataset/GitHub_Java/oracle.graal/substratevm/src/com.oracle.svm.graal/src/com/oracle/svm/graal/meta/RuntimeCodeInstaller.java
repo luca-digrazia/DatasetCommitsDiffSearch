@@ -25,8 +25,11 @@
 package com.oracle.svm.graal.meta;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.code.CompilationResult.CodeAnnotation;
@@ -41,7 +44,6 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.NonmovableArray;
 import com.oracle.svm.core.code.CodeInfo;
@@ -89,11 +91,16 @@ public class RuntimeCodeInstaller {
 
     /** Installs the code in the current isolate, in a single step. */
     public static void install(SharedRuntimeMethod method, CompilationResult compilation, SubstrateInstalledCode installedCode) {
-        new RuntimeCodeInstaller(method, compilation).doInstall(installedCode);
+        install(method, compilation, installedCode, false);
+    }
+
+    public static void install(SharedRuntimeMethod method, CompilationResult compilation, SubstrateInstalledCode installedCode, boolean testTrampolineJumps) {
+        new RuntimeCodeInstaller(method, compilation, testTrampolineJumps).doInstall(installedCode);
     }
 
     protected final SharedRuntimeMethod method;
     private final int tier;
+    private final boolean testTrampolineJumps;
     private SubstrateCompilationResult compilation;
     private final DebugContext debug;
 
@@ -103,10 +110,11 @@ public class RuntimeCodeInstaller {
     private InstalledCodeObserver[] codeObservers;
     protected byte[] compiledBytes;
 
-    protected RuntimeCodeInstaller(SharedRuntimeMethod method, CompilationResult compilation) {
+    protected RuntimeCodeInstaller(SharedRuntimeMethod method, CompilationResult compilation, boolean testTrampolineJumps) {
         this.method = method;
         this.compilation = (SubstrateCompilationResult) compilation;
         this.tier = compilation.getName().endsWith(TruffleCompiler.FIRST_TIER_COMPILATION_SUFFIX) ? TruffleCompiler.FIRST_TIER_INDEX : TruffleCompiler.LAST_TIER_INDEX;
+        this.testTrampolineJumps = testTrampolineJumps;
         this.debug = new DebugContext.Builder(RuntimeOptionValues.singleton()).build();
     }
 
@@ -121,17 +129,64 @@ public class RuntimeCodeInstaller {
 
             int constantsSize = compilation.getDataSection().getSectionSize();
             codeSize = compilation.getTargetCodeSize();
-            constantsOffset = NumUtil.roundUp(codeSize, compilation.getDataSection().getSectionAlignment());
+            int tmpConstantsOffset = NumUtil.roundUp(codeSize, compilation.getDataSection().getSectionAlignment());
             if (!RuntimeCodeCache.Options.WriteableCodeCache.getValue()) {
                 // round up for readonly code cache, s.t. the data section can remain writeable
-                constantsOffset = (int) NumUtil.roundUp(constantsOffset, CommittedMemoryProvider.get().getGranularity().rawValue());
+                tmpConstantsOffset = (int) NumUtil.roundUp(tmpConstantsOffset, CommittedMemoryProvider.get().getGranularity().rawValue());
             }
+            int tmpMemorySize = tmpConstantsOffset + constantsSize;
 
             // Allocate executable memory. It contains the compiled code and the constants
-            code = allocateCodeMemory(constantsOffset + constantsSize);
+            code = allocateCodeMemory(tmpMemorySize);
+
+            /*
+             * Check if there are some direct calls where the PC displacement is out of the target's
+             * bit range. It should be a rare case, but we need to handle it. In such a case we
+             * insert trampoline jumps after the code.
+             */
+            Set<Long> directTargets = new HashSet<>();
+            boolean needTrampolineJumps = testTrampolineJumps;
+            for (Infopoint infopoint : compilation.getInfopoints()) {
+                if (infopoint instanceof Call && ((Call) infopoint).direct) {
+                    Call call = (Call) infopoint;
+                    long targetAddress = getTargetCodeAddress(call);
+                    long pcDisplacement = targetAddress - (code.rawValue() + call.pcOffset);
+                    if (!platformHelper().targetWithinPCDisplacement(pcDisplacement)) {
+                        needTrampolineJumps = true;
+                    }
+                    directTargets.add(targetAddress);
+                }
+            }
             compiledBytes = compilation.getTargetCode();
+            if (needTrampolineJumps) {
+                /*
+                 * Reserve some space after the code to insert the trampoline jumps + the target
+                 * addresses. We reserve space for _all_ calls (worst case), because we need to
+                 * re-allocate the memory (it got larger). So we don't know which calls will need
+                 * trampoline jumps with the new code address.
+                 */
+                releaseCodeMemory(code, tmpMemorySize);
+
+                // Add space for the actual trampoline jump instructions
+                tmpConstantsOffset = NumUtil.roundUp(codeSize + directTargets.size() * platformHelper().getTrampolineCallSize(), 8);
+                // Add space for the target addresses
+                // (which are referenced from the jump instructions)
+                tmpConstantsOffset = NumUtil.roundUp(tmpConstantsOffset + directTargets.size() * 8, compilation.getDataSection().getSectionAlignment());
+                if (!RuntimeCodeCache.Options.WriteableCodeCache.getValue()) {
+                    // round up for readonly code cache, s.t. the data section can remain writeable
+                    tmpConstantsOffset = (int) NumUtil.roundUp(tmpConstantsOffset, CommittedMemoryProvider.get().getGranularity().rawValue());
+                }
+                if (tmpConstantsOffset > compiledBytes.length) {
+                    compiledBytes = Arrays.copyOf(compiledBytes, tmpConstantsOffset);
+                }
+                tmpMemorySize = tmpConstantsOffset + constantsSize;
+
+                code = allocateCodeMemory(tmpMemorySize);
+            }
+            constantsOffset = tmpConstantsOffset;
 
             if (!RuntimeCodeCache.Options.WriteableCodeCache.getValue()) {
+                // make the data section NX
                 makeDataSectionNX(code.add(constantsOffset), constantsSize);
             }
 
@@ -177,11 +232,6 @@ public class RuntimeCodeInstaller {
     }
 
     protected void doPrepareInstall(ReferenceAdjuster adjuster, CodeInfo codeInfo) {
-        for (Infopoint infopoint : compilation.getInfopoints()) {
-            VMError.guarantee(!(infopoint instanceof Call) || !((Call) infopoint).direct,
-                            "No direct calls permitted: patching of runtime-compiled code intentionally not supported");
-        }
-
         prepareCodeMemory();
 
         /*
@@ -199,8 +249,11 @@ public class RuntimeCodeInstaller {
         }
         patchData(patches, objectConstants);
 
+        int updatedCodeSize = patchCalls(patches);
+        assert updatedCodeSize <= constantsOffset;
+
         // Store the compiled code
-        for (int index = 0; index < codeSize; index++) {
+        for (int index = 0; index < updatedCodeSize; index++) {
             code.writeByte(index, compiledBytes[index]);
         }
 
@@ -268,10 +321,8 @@ public class RuntimeCodeInstaller {
             adjuster.setConstantTargetAt(code.add(objectConstants.offsets[i]), objectConstants.lengths[i], constant);
         }
         CodeInfoAccess.setState(runtimeMethodInfo, CodeInfo.STATE_CODE_CONSTANTS_LIVE);
-        if (!SubstrateUtil.HOSTED) {
-            // after patching all the object data, notify the GC
-            Heap.getHeap().getRuntimeCodeInfoGCSupport().registerCodeConstants(runtimeMethodInfo);
-        }
+        // after patching all the object data, notify the GC
+        Heap.getHeap().registerCodeConstants(runtimeMethodInfo);
     }
 
     private void createCodeChunkInfos(CodeInfo runtimeMethodInfo, ReferenceAdjuster adjuster) {
@@ -301,8 +352,54 @@ public class RuntimeCodeInstaller {
         }
     }
 
+    private int patchCalls(Map<Integer, NativeImagePatcher> patches) {
+        /*
+         * Patch the direct call instructions.
+         */
+        Map<Long, Integer> directTargets = new HashMap<>();
+        int currentPos = codeSize;
+        for (Infopoint infopoint : compilation.getInfopoints()) {
+            if (infopoint instanceof Call && ((Call) infopoint).direct) {
+                Call call = (Call) infopoint;
+                long targetAddress = getTargetCodeAddress(call);
+                long pcDisplacement = targetAddress - (code.rawValue() + call.pcOffset);
+                if (!platformHelper().targetWithinPCDisplacement(pcDisplacement) || testTrampolineJumps) {
+                    /*
+                     * In case a trampoline jump is needed we just "call" the trampoline jump at the
+                     * end of the code.
+                     */
+                    Long destAddr = Long.valueOf(targetAddress);
+                    Integer trampolineOffset = directTargets.get(destAddr);
+                    if (trampolineOffset == null) {
+                        trampolineOffset = currentPos;
+                        directTargets.put(destAddr, trampolineOffset);
+                        currentPos += platformHelper().getTrampolineCallSize();
+                    }
+                    pcDisplacement = trampolineOffset - call.pcOffset;
+                }
+                assert platformHelper().targetWithinPCDisplacement(pcDisplacement) : "target not within pc displacement";
+
+                // Patch a PC-relative call.
+                patches.get(call.pcOffset).patchCode((int) pcDisplacement, compiledBytes);
+            }
+        }
+        if (directTargets.size() > 0) {
+            currentPos = platformHelper().insertTrampolineCalls(compiledBytes, currentPos, directTargets);
+        }
+        return currentPos;
+    }
+
     protected static RuntimeCodeInstallerPlatformHelper platformHelper() {
         return ImageSingletons.lookup(RuntimeCodeInstallerPlatformHelper.class);
+    }
+
+    private static long getTargetCodeAddress(Call callInfo) {
+        SharedMethod targetMethod = (SharedMethod) callInfo.target;
+        long callTargetStart = CodeInfoAccess.absoluteIP(CodeInfoTable.getImageCodeInfo(), targetMethod.getCodeOffsetInImage()).rawValue();
+        if (callTargetStart == 0) {
+            throw VMError.shouldNotReachHere("target method not compiled: " + targetMethod.format("%H.%n(%p)"));
+        }
+        return callTargetStart;
     }
 
     protected Pointer allocateCodeMemory(long size) {
@@ -321,10 +418,19 @@ public class RuntimeCodeInstaller {
         RuntimeCodeInfoAccess.makeCodeMemoryWriteableNonExecutable((CodePointer) start, WordFactory.unsigned(size));
     }
 
+    protected void releaseCodeMemory(Pointer start, long size) {
+        RuntimeCodeInfoAccess.releaseCodeMemory((CodePointer) start, WordFactory.unsigned(size));
+    }
+
     /**
      * Methods which are platform specific.
      */
     public interface RuntimeCodeInstallerPlatformHelper {
+        boolean targetWithinPCDisplacement(long pcDisplacement);
+
+        int getTrampolineCallSize();
+
+        int insertTrampolineCalls(byte[] compiledBytes, int currentPos, Map<Long, Integer> directTargets);
 
         /**
          * Method to enable platforms to perform any needed operations before code becomes visible.

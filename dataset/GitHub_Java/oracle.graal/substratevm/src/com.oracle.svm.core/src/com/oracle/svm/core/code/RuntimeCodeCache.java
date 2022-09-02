@@ -216,14 +216,13 @@ public class RuntimeCodeCache {
          */
         Deoptimizer.deoptimizeInRange(CodeInfoAccess.getCodeStart(info), CodeInfoAccess.getCodeEnd(info), false);
 
-        finishInvalidation(info, true);
+        finishInvalidation(info);
     }
 
     protected void invalidateNonStackMethod(CodeInfo info) {
-        assert VMOperation.isGCInProgress() : "must only be called by the GC";
         prepareInvalidation(info);
         assert codeNotOnStackVerifier.verify(info);
-        finishInvalidation(info, false);
+        finishInvalidation(info);
     }
 
     private void prepareInvalidation(CodeInfo info) {
@@ -231,7 +230,7 @@ public class RuntimeCodeCache {
         invalidateMethodCount.inc();
         assert verifyTable();
         if (Options.TraceCodeCache.getValue()) {
-            Log.log().string("[").string(INFO_INVALIDATE).string(" method: ");
+            Log.log().string("[" + INFO_INVALIDATE + " method: ");
             logCodeInfo(Log.log(), info);
             Log.log().string("]").newline();
         }
@@ -246,9 +245,10 @@ public class RuntimeCodeCache {
              */
             installedCode.clearAddress();
         }
+
     }
 
-    private void finishInvalidation(CodeInfo info, boolean notifyGC) {
+    private void finishInvalidation(CodeInfo info) {
         /*
          * Now it is guaranteed that the InstalledCode is not on the stack and cannot be invoked
          * anymore, so we can free the code and all metadata.
@@ -261,7 +261,7 @@ public class RuntimeCodeCache {
         numCodeInfos--;
         NonmovableArrays.setWord(codeInfos, numCodeInfos, WordFactory.nullPointer());
 
-        RuntimeCodeInfoAccess.partialReleaseAfterInvalidate(info, notifyGC);
+        RuntimeCodeInfoAccess.partialReleaseAfterInvalidate(info);
 
         if (Options.TraceCodeCache.getValue()) {
             logTable();
