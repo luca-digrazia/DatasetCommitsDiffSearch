@@ -49,6 +49,7 @@ import sun.misc.Unsafe;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -361,7 +362,7 @@ public abstract class StaticShape<T> {
             if (staticProperties.containsKey(id)) {
                 throw new IllegalArgumentException("This builder already contains a property with id '" + id + "'");
             }
-            if (modifiedUtfLength(id) > MAX_PROPERTY_ID_BYTE_LENGTH) {
+            if (id.getBytes(StandardCharsets.UTF_8).length > MAX_PROPERTY_ID_BYTE_LENGTH) {
                 hasLongPropertyId = true;
             }
             return id;
@@ -413,24 +414,6 @@ public abstract class StaticShape<T> {
                 newStaticProperties.put("field" + i, properties[i]);
             }
             return newStaticProperties;
-        }
-
-        private static int modifiedUtfLength(String str) {
-            int strlen = str.length();
-            int utflen = 0;
-
-            /* use charAt instead of copying String to char array */
-            for (int i = 0; i < strlen; i++) {
-                int c = str.charAt(i);
-                if ((c >= 0x0001) && (c <= 0x007F)) {
-                    utflen++;
-                } else if (c > 0x07FF) {
-                    utflen += 3;
-                } else {
-                    utflen += 2;
-                }
-            }
-            return utflen;
         }
 
         private static Method getCloneMethod(Class<?> c) {
