@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -210,7 +210,7 @@ public class OptimizedCallTargetTest extends TestWithSynchronousCompiling {
 
         assertNull("assumption is initially null", getRewriteAssumption(innermostCallTarget));
 
-        IntStream.range(0, compilationThreshold / 2).forEach(k -> {
+        IntStream.range(0, compilationThreshold / 2).parallel().forEach(k -> {
             assertEquals(42, outermostCallTarget.call(k));
             assertNull("assumption stays null in the interpreter", getRewriteAssumption(innermostCallTarget));
         });
@@ -221,7 +221,7 @@ public class OptimizedCallTargetTest extends TestWithSynchronousCompiling {
         assertNotNull("assumption must not be null after compilation", firstRewriteAssumption);
         assertTrue(firstRewriteAssumption.isValid());
 
-        List<Assumption> rewriteAssumptions = IntStream.range(0, 2 * compilationThreshold).mapToObj(k -> {
+        List<Assumption> rewriteAssumptions = IntStream.range(0, 2 * compilationThreshold).parallel().mapToObj(k -> {
             assertEquals(42, outermostCallTarget.call(k));
 
             Assumption rewriteAssumptionAfter = getRewriteAssumption(innermostCallTarget);
