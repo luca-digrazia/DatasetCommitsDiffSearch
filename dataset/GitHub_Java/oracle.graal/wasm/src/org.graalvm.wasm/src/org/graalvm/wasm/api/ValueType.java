@@ -40,9 +40,45 @@
  */
 package org.graalvm.wasm.api;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import org.graalvm.wasm.WasmType;
+import org.graalvm.wasm.exception.Failure;
+import org.graalvm.wasm.exception.WasmException;
+
 public enum ValueType {
-    i32,
-    i64,
-    f32,
-    f64
+    i32(WasmType.I32_TYPE),
+    i64(WasmType.I64_TYPE),
+    f32(WasmType.F32_TYPE),
+    f64(WasmType.F64_TYPE);
+
+    private final byte byteValue;
+
+    ValueType(byte byteValue) {
+        this.byteValue = byteValue;
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    public static ValueType parse(String name) {
+        return valueOf(name);
+    }
+
+    public static ValueType fromByteValue(byte value) {
+        switch (value) {
+            case WasmType.I32_TYPE:
+                return i32;
+            case WasmType.I64_TYPE:
+                return i64;
+            case WasmType.F32_TYPE:
+                return f32;
+            case WasmType.F64_TYPE:
+                return f64;
+            default:
+                CompilerDirectives.transferToInterpreter();
+                throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, null, "Unknown value type: 0x" + Integer.toHexString(value));
+        }
+    }
+
+    public byte byteValue() {
+        return byteValue;
+    }
 }

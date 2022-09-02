@@ -41,17 +41,19 @@
 
 package org.graalvm.wasm.predefined.wasi.fd;
 
-import com.oracle.truffle.api.TruffleFile;
-import com.oracle.truffle.api.TruffleLanguage;
-import org.graalvm.wasm.WasmOptions;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+
+import org.graalvm.wasm.WasmOptions;
+import org.graalvm.wasm.exception.Failure;
+import org.graalvm.wasm.exception.WasmException;
+
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleFile;
+import com.oracle.truffle.api.TruffleLanguage;
 
 public final class FdManager implements Closeable {
 
@@ -71,9 +73,11 @@ public final class FdManager implements Closeable {
 
         int fd = 3;
         for (final String dir : preopenedDirs.split(",")) {
-            final String[] parts = dir.split(":");
+            final String[] parts = dir.split("::", 2);
             if (parts.length > 2) {
-                throw WasmException.create(Failure.INVALID_WASI_DIRECTORIES_MAPPING, String.format("Wasi directory map '%s' is not valid.", dir));
+                CompilerDirectives.transferToInterpreter();
+                throw WasmException.create(Failure.INVALID_WASI_DIRECTORIES_MAPPING,
+                                String.format("Wasi directory map '%s' is not valid. Syntax: --WasiMapDirs <virtual_path>::<host_path>, or --WasiMapDirs <host_path>", dir));
             }
             final String virtualDirPath = parts[0];
             final String hostDirPath = parts.length == 2 ? parts[1] : parts[0];
@@ -81,8 +85,10 @@ public final class FdManager implements Closeable {
             final TruffleFile virtualDir = env.getPublicTruffleFile(virtualDirPath).normalize();
             final TruffleFile hostDir;
             try {
+                // Currently, we follow symbolic links.
                 hostDir = env.getPublicTruffleFile(hostDirPath).getCanonicalFile();
             } catch (IOException | SecurityException e) {
+                CompilerDirectives.transferToInterpreter();
                 throw WasmException.create(Failure.INVALID_WASI_DIRECTORIES_MAPPING);
             }
 

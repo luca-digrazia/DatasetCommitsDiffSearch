@@ -40,18 +40,21 @@
  */
 package org.graalvm.wasm.api;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleContext;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.exception.WasmTrap;
+import org.graalvm.wasm.exception.Failure;
+import org.graalvm.wasm.exception.WasmException;
 import org.graalvm.wasm.predefined.WasmBuiltinRootNode;
-
-import com.oracle.truffle.api.frame.VirtualFrame;
 
 public class ExecuteInParentContextNode extends WasmBuiltinRootNode {
     private final Object executable;
@@ -69,10 +72,16 @@ public class ExecuteInParentContextNode extends WasmBuiltinRootNode {
         try {
             return InteropLibrary.getUncached().execute(executable, frame.getArguments());
         } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException e) {
-            throw WasmTrap.format(this, "Call failed: %s", e.getMessage());
+            CompilerDirectives.transferToInterpreter();
+            throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Call failed: %s", getMessage(e));
         } finally {
             truffleContext.leave(this, prev);
         }
+    }
+
+    @TruffleBoundary
+    private static String getMessage(InteropException e) {
+        return e.getMessage();
     }
 
     @Override
