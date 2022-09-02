@@ -29,6 +29,7 @@ import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.FromAlias;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.Reset;
 
 import java.io.PrintStream;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +74,6 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.graal.hosted.FieldsOffsetsFeature;
 import com.oracle.svm.graal.hosted.GraalFeature;
 import com.oracle.svm.graal.meta.SubstrateMethod;
-import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -139,12 +139,18 @@ final class Target_org_graalvm_compiler_debug_DebugContext_Immutable {
         public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
             for (Class<?> c : DebugContext.class.getDeclaredClasses()) {
                 if (c.getSimpleName().equals("Immutable")) {
-                    Object[] cache = ReflectionUtil.readStaticField(c, "CACHE");
-                    Object[] clearedCache = cache.clone();
-                    for (int i = 0; i < clearedCache.length; i++) {
-                        clearedCache[i] = null;
+                    try {
+                        Field f = c.getDeclaredField("CACHE");
+                        f.setAccessible(true);
+                        Object[] cache = (Object[]) f.get(null);
+                        Object[] clearedCache = cache.clone();
+                        for (int i = 0; i < clearedCache.length; i++) {
+                            clearedCache[i] = null;
+                        }
+                        return clearedCache;
+                    } catch (Exception e) {
+                        throw VMError.shouldNotReachHere("Cannot read value of " + DebugContext.class.getName() + ".Immutable.CACHE", e);
                     }
-                    return clearedCache;
                 }
             }
             throw VMError.shouldNotReachHere("Cannot find " + DebugContext.class.getName() + ".Immutable");
@@ -211,7 +217,7 @@ final class Target_org_graalvm_compiler_debug_TimeSource {
     private static boolean USING_THREAD_CPU_TIME = false;
 }
 
-@TargetClass(value = org.graalvm.compiler.debug.TTY.class, onlyWith = GraalFeature.IsEnabledAndNotLibgraal.class)
+@TargetClass(value = org.graalvm.compiler.debug.TTY.class, onlyWith = GraalFeature.IsEnabled.class)
 final class Target_org_graalvm_compiler_debug_TTY {
 
     @Alias @RecomputeFieldValue(kind = FromAlias)//
@@ -256,7 +262,7 @@ final class Target_org_graalvm_compiler_core_match_MatchRuleRegistry {
     }
 }
 
-@TargetClass(value = org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode.class, onlyWith = GraalFeature.IsEnabledAndNotLibgraal.class)
+@TargetClass(value = org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode.class, onlyWith = GraalFeature.IsEnabled.class)
 @SuppressWarnings({"unused", "static-method"})
 final class Target_org_graalvm_compiler_replacements_nodes_BinaryMathIntrinsicNode {
 
