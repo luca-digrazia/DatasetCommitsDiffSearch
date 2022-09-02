@@ -46,8 +46,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        WasmContext context = null; // TODO: Read from the thread-local that holds the context.
-        body.execute(context, frame);
+        body.execute(frame);
         long returnValue = pop(frame, 0);
         switch (body.returnTypeId()) {
             case ValueTypes.I32_TYPE:
