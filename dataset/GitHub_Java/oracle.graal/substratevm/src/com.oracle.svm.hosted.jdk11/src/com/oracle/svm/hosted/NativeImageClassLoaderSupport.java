@@ -29,6 +29,7 @@ import java.lang.module.Configuration;
 import java.lang.module.ModuleFinder;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.SecureClassLoader;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -46,12 +47,12 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
     private final List<Path> imagemp;
     private final List<Path> buildmp;
 
-    private final ClassLoader classLoader;
+    private final SecureClassLoader classLoader;
     private final Function<String, Optional<Module>> moduleFinder;
     private final ModuleLayer.Controller moduleController;
 
-    NativeImageClassLoaderSupport(ClassLoader defaultSystemClassLoader, String[] classpath, String[] modulePath) {
-        super(defaultSystemClassLoader, classpath);
+    NativeImageClassLoaderSupport(NativeImageSystemClassLoader nativeImageSystemClassLoader, String[] classpath, String[] modulePath) {
+        super(nativeImageSystemClassLoader, classpath);
 
         imagemp = Arrays.stream(modulePath).map(Paths::get).collect(Collectors.toUnmodifiableList());
         buildmp = Arrays.stream(System.getProperty("jdk.module.path", "").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toUnmodifiableList());
@@ -66,7 +67,7 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
              * java.lang.ModuleLayer.defineModulesWithOneLoader creates a jdk.internal.loader.Loader
              * which is a SecureClassLoader.
              */
-            classLoader = moduleLayer.modules().iterator().next().getClassLoader();
+            classLoader = (SecureClassLoader) moduleLayer.modules().iterator().next().getClassLoader();
             moduleFinder = moduleLayer::findModule;
         }
     }
@@ -108,8 +109,15 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
         return clazz;
     }
 
-    public ClassLoader getClassLoader() {
+    public SecureClassLoader getClassLoader() {
         return classLoader;
+    }
+
+    boolean isNativeImageClassLoader(ClassLoader c) {
+        if (c == classLoader) {
+            return true;
+        }
+        return super.isNativeImageClassLoader(c);
     }
 
     private static class ClassInitWithModules extends ClassInit {
