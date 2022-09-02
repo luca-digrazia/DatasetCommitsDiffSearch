@@ -50,7 +50,6 @@ import org.graalvm.polyglot.Engine;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Assume;
-import org.junit.AssumptionViolatedException;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runners.Parameterized.Parameter;
@@ -65,7 +64,6 @@ public abstract class BaseSuiteHarness {
 
     @Parameter(value = 0) public Path path;
     @Parameter(value = 1) public String testName;
-    @Parameter(value = 2) public String reason;
 
     protected Path getTestDirectory() {
         return path;
@@ -73,10 +71,6 @@ public abstract class BaseSuiteHarness {
 
     protected String getTestName() {
         return testName;
-    }
-
-    protected String getReason() {
-        return reason;
     }
 
     private static final List<Path> passingTests = new ArrayList<>();
@@ -199,7 +193,6 @@ public abstract class BaseSuiteHarness {
 
     @Test
     public void test() throws IOException {
-        assumeNotExcluded();
         Path referenceBinary;
         ProcessResult referenceResult;
         try (Stream<Path> walk = Files.list(getTestDirectory())) {
@@ -219,12 +212,6 @@ public abstract class BaseSuiteHarness {
                 runCandidate(referenceBinary, referenceResult, candidate);
             }
             pass(getTestName());
-        }
-    }
-
-    protected void assumeNotExcluded() {
-        if (getReason() != null) {
-            throw new AssumptionViolatedException("Test excluded: " + getReason());
         }
     }
 
