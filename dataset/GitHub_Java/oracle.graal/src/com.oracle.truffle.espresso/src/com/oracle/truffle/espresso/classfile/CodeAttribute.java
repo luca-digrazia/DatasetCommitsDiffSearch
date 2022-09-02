@@ -34,8 +34,6 @@ import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.LocalVariableTable;
 import com.oracle.truffle.espresso.runtime.Attribute;
 
-import java.util.Arrays;
-
 public final class CodeAttribute extends Attribute {
 
     public static final Symbol<Name> NAME = Name.Code;
@@ -48,9 +46,6 @@ public final class CodeAttribute extends Attribute {
     @CompilationFinal(dimensions = 1) //
     private final byte[] code;
 
-    @CompilationFinal(dimensions = 1)
-    private final byte[] originalCode; // no bytecode patching
-
     @CompilationFinal(dimensions = 1) //
     private final ExceptionHandler[] exceptionHandlerEntries;
 
@@ -62,7 +57,6 @@ public final class CodeAttribute extends Attribute {
         this.maxStack = maxStack;
         this.maxLocals = maxLocals;
         this.code = code;
-        this.originalCode = Arrays.copyOf(code, code.length);
         this.exceptionHandlerEntries = exceptionHandlerEntries;
         this.attributes = attributes;
         this.majorVersion = majorVersion;
@@ -82,10 +76,6 @@ public final class CodeAttribute extends Attribute {
 
     public byte[] getCode() {
         return code;
-    }
-
-    public byte[] getOriginalCode() {
-        return originalCode;
     }
 
     public ExceptionHandler[] getExceptionHandlers() {
@@ -119,15 +109,6 @@ public final class CodeAttribute extends Attribute {
         return LocalVariableTable.EMPTY;
     }
 
-    public LocalVariableTable getLocalvariableTypeTable() {
-        for (Attribute attr : attributes) {
-            if (attr.getName() == Name.LocalVariableTypeTable) {
-                return (LocalVariableTable) attr;
-            }
-        }
-        return LocalVariableTable.EMPTY;
-    }
-
     public int bciToLineNumber(int bci) {
         LineNumberTable lnt = getLineNumberTableAttribute();
         if (lnt == LineNumberTable.EMPTY) {
@@ -142,6 +123,10 @@ public final class CodeAttribute extends Attribute {
 
     public int getMajorVersion() {
         return majorVersion;
+    }
+
+    public CodeAttribute forceSplit() {
+        return new CodeAttribute(getName(), maxStack, maxLocals, code.clone(), exceptionHandlerEntries, attributes, majorVersion);
     }
 
     public void print(Klass klass) {

@@ -126,8 +126,9 @@ public final class EspressoContext {
         this.JDWPOptions = env.getOptions().get(EspressoOptions.JDWPOptions); // null if not
                                                                               // specified
         this.InlineFieldAccessors = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineFieldAccessors);
+        this.InlineMethodHandle = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineMethodHandle);
+        this.SplitMethodHandles = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.SplitMethodHandles);
         this.Verify = env.getOptions().get(EspressoOptions.Verify);
-        this.SpecCompliancyMode = env.getOptions().get(EspressoOptions.SpecCompliancy);
     }
 
     public ClassRegistries getRegistries() {
@@ -604,14 +605,11 @@ public final class EspressoContext {
     // Checkstyle: stop field name check
 
     public final boolean InlineFieldAccessors;
+    public final boolean InlineMethodHandle;
+    public final boolean SplitMethodHandles;
 
     public final EspressoOptions.VerifyMode Verify;
     public final JDWPOptions JDWPOptions;
-    public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
-
-    public EspressoOptions.SpecCompliancyMode specCompliancyMode() {
-        return SpecCompliancyMode;
-    }
 
     // Checkstyle: resume field name check
 
@@ -623,6 +621,23 @@ public final class EspressoContext {
 
     public StaticObject getMainThread() {
         return threadManager.getMainThread();
+    }
+
+    public boolean isValidThread(Object thread) {
+        StaticObject[] activeThreads = threadManager.activeThreads();
+
+        for (StaticObject activeThread : activeThreads) {
+            if (activeThread == thread) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("static-method")
+    public boolean isValidThreadGroup(@SuppressWarnings("unused") Object threadGroup) {
+        // TODO(Gregersen) - validate if this is a valid threadgroup
+        return true;
     }
 
     public StaticObject getMainThreadGroup() {

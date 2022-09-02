@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -118,27 +118,6 @@ public final class EspressoOptions {
     @Option(help = "Enable system assertions.", //
                     category = OptionCategory.USER, stability = OptionStability.STABLE) //
     public static final OptionKey<Boolean> EnableSystemAssertions = new OptionKey<>(false);
-
-    public enum SpecCompliancyMode {
-        STRICT,
-        HOTSPOT
-    }
-
-    private static final OptionType<SpecCompliancyMode> SPEC_COMPLIANCY_OPTION_TYPE = new OptionType<>("SpecCompliancy",
-                    new Function<String, SpecCompliancyMode>() {
-                        @Override
-                        public SpecCompliancyMode apply(String s) {
-                            try {
-                                return SpecCompliancyMode.valueOf(s.toUpperCase());
-                            } catch (IllegalArgumentException e) {
-                                throw new IllegalArgumentException("--java.SpecCompliancy: Mode can be 'strict' or 'hotspot'.");
-                            }
-                        }
-                    });
-
-    @Option(help = "Force mimicking of hotspot behavior on unrespected specs points", //
-                    category = OptionCategory.EXPERT, stability = OptionStability.EXPERIMENTAL) //
-    public static final OptionKey<SpecCompliancyMode> SpecCompliancy = new OptionKey<>(SpecCompliancyMode.HOTSPOT, SPEC_COMPLIANCY_OPTION_TYPE);
 
     public enum VerifyMode {
         NONE,
