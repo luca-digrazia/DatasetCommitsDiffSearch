@@ -31,18 +31,18 @@ package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 
 public abstract class LLVMSymbol {
 
-    public static final LLVMSymbol[] EMPTY = new LLVMSymbol[0];
-
-    private final String name;
+    @CompilationFinal private String name;
+    @CompilationFinal private ExternalLibrary library;
     private final int moduleId;
     private final int symbolIndex;
     private final boolean exported;
-    private final boolean externalWeak;
+    static final LLVMSymbol[] EMPTY = {};
 
     // Index for non-parsed symbols, such as alias, and function symbol for inline assembly.
     public static final int INVALID_INDEX = -1;
@@ -50,29 +50,49 @@ public abstract class LLVMSymbol {
     // ID for non-parsed symbols, such as alias, function symbol for inline assembly.
     public static final int INVALID_ID = -1;
 
-    public LLVMSymbol(String name, int bitcodeID, int symbolIndex, boolean exported, boolean externalWeak) {
+    // ID reserved for non-parsed miscellaneous functions.
+    public static final int MISCFUNCTION_ID = 0;
+
+    // Index reserved for non-parsed miscellaneous functions.
+    private static int miscFunctionIndex = 0;
+
+    public LLVMSymbol(String name, ExternalLibrary library, int bitcodeID, int symbolIndex, boolean exported) {
         this.name = name;
+        this.library = library;
         this.moduleId = bitcodeID;
         this.symbolIndex = symbolIndex;
         this.exported = exported;
-        this.externalWeak = externalWeak;
     }
 
-    public final String getName() {
+    public String getName() {
         return name;
     }
 
-    public final String getKind() {
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public ExternalLibrary getLibrary() {
+        return library;
+    }
+
+    public void setLibrary(ExternalLibrary library) {
+        this.library = library;
+    }
+
+    public static int getMiscSymbolIndex() {
+        int index = miscFunctionIndex;
+        miscFunctionIndex++;
+        return index;
+    }
+
+    public String getKind() {
         CompilerAsserts.neverPartOfCompilation();
         return this.getClass().getSimpleName();
     }
 
-    public final boolean isExported() {
+    public boolean isExported() {
         return exported;
-    }
-
-    public final boolean isExternalWeak() {
-        return externalWeak;
     }
 
     /**
@@ -81,7 +101,7 @@ public abstract class LLVMSymbol {
      *
      * @param illegalOK if symbols created not from bitcode files can be retrieved.
      */
-    public final int getSymbolIndex(boolean illegalOK) {
+    public int getSymbolIndex(boolean illegalOK) {
         if (symbolIndex >= 0 || illegalOK) {
             return symbolIndex;
         }
@@ -96,7 +116,7 @@ public abstract class LLVMSymbol {
      *
      * @param illegalOK if symbols created not from bitcode files can be retrieved.
      */
-    public final int getBitcodeID(boolean illegalOK) {
+    public int getBitcodeID(boolean illegalOK) {
         if (moduleId >= 0 || illegalOK) {
             return moduleId;
         }
@@ -104,9 +124,11 @@ public abstract class LLVMSymbol {
         throw new LLVMIllegalSymbolIndexException("Invalid function ID: " + moduleId);
     }
 
-    public final boolean hasValidIndexAndID() {
+    public boolean hasValidIndexAndID() {
         return symbolIndex >= 0 && moduleId >= 0;
     }
+
+    public abstract boolean isDefined();
 
     public abstract boolean isGlobalVariable();
 
