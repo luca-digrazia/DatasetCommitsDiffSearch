@@ -320,7 +320,7 @@ public final class LLVMRuntimeDebugInformation implements LocalVariableDebugInfo
 
     private void initializePredecessors() {
         if (predecessors == null) {
-            @SuppressWarnings({"unchecked", "rawtypes"})
+            @SuppressWarnings("unchecked")
             ArrayList<Integer>[] result = new ArrayList[infos.length];
             for (int i = 0; i < infos.length; i++) {
                 result[i] = new ArrayList<>(2);
