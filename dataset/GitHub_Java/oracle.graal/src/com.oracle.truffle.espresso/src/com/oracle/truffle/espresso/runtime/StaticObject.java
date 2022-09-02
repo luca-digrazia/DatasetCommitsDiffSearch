@@ -2051,20 +2051,16 @@ public final class StaticObject implements TruffleObject {
         return this.<T[]> unwrap()[index];
     }
 
-    public void putObject(StaticObject value, int index, Meta meta) {
-        putObject(value, index, meta, BranchProfile.getUncached());
-    }
-
     /**
      * Workaround to avoid casting to Object[] in InterpreterToVM (non-leaf type check).
      */
-    public void putObject(StaticObject value, int index, Meta meta, BranchProfile exceptionCheck) {
+    public void putObject(StaticObject value, int index, Meta meta) {
         checkNotForeign();
         assert isArray();
         if (index >= 0 && index < length()) {
             UNSAFE.putObject(fields, getObjectFieldIndex(index), arrayStoreExCheck(value, ((ArrayKlass) klass).getComponentType(), meta));
         } else {
-            exceptionCheck.enter();
+            CompilerDirectives.transferToInterpreter();
             throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
     }
@@ -2198,31 +2194,21 @@ public final class StaticObject implements TruffleObject {
     }
 
     public void setArrayByte(byte value, int index, Meta meta) {
-        setArrayByte(value, index, meta, BranchProfile.getUncached());
-    }
-
-    public void setArrayByte(byte value, int index, Meta meta, BranchProfile exceptionProfile) {
         checkNotForeign();
         assert isArray() && (fields instanceof byte[] || fields instanceof boolean[]);
         if (index >= 0 && index < length()) {
             UNSAFE.putByte(fields, getArrayByteOffset(index), value);
         } else {
-            exceptionProfile.enter();
             throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
     }
 
     public byte getArrayByte(int index, Meta meta) {
-        return getArrayByte(index, meta, BranchProfile.getUncached());
-    }
-
-    public byte getArrayByte(int index, Meta meta, BranchProfile exceptionProfile) {
         checkNotForeign();
         assert isArray() && (fields instanceof byte[] || fields instanceof boolean[]);
         if (index >= 0 && index < length()) {
             return UNSAFE.getByte(fields, getArrayByteOffset(index));
         } else {
-            exceptionProfile.enter();
             throw Meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
         }
     }
