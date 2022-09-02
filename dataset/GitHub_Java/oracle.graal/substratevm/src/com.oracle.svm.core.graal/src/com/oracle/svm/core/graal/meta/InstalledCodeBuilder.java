@@ -42,6 +42,7 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
@@ -49,20 +50,24 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.code.CodeInfo;
-import com.oracle.svm.core.code.CodeInfoAccess;
 import com.oracle.svm.core.code.CodeInfoEncoder;
 import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.code.DeoptimizationSourcePositionEncoder;
 import com.oracle.svm.core.code.FrameInfoEncoder;
 import com.oracle.svm.core.code.InstalledCodeObserver;
 import com.oracle.svm.core.code.InstalledCodeObserverSupport;
-import com.oracle.svm.core.code.RuntimeMethodInfoAccess;
+import com.oracle.svm.core.code.RuntimeMethodInfo;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.deopt.SubstrateInstalledCode;
 import com.oracle.svm.core.graal.code.NativeImagePatcher;
 import com.oracle.svm.core.graal.code.SubstrateCompilationResult;
+import com.oracle.svm.core.heap.CodeReferenceMapDecoder;
 import com.oracle.svm.core.heap.CodeReferenceMapEncoder;
+import com.oracle.svm.core.heap.Heap;
+import com.oracle.svm.core.heap.NoAllocationVerifier;
+import com.oracle.svm.core.heap.ObjectReferenceVisitor;
+import com.oracle.svm.core.heap.ObjectReferenceWalker;
+import com.oracle.svm.core.heap.PinnedAllocator;
 import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.heap.SubstrateReferenceMap;
 import com.oracle.svm.core.log.Log;
@@ -92,6 +97,7 @@ import jdk.vm.ci.meta.JavaKind;
  *
  */
 public class InstalledCodeBuilder {
+
     private final SharedRuntimeMethod method;
     private final SubstrateInstalledCode installedCode;
     private final int tier;
@@ -104,7 +110,43 @@ public class InstalledCodeBuilder {
     private SubstrateCompilationResult compilation;
     private byte[] compiledBytes;
 
-    private CodeInfo runtimeMethodInfo;
+    /**
+     * Pinned allocation methods used when creating the pointer map and the code chunk infos when
+     * code is installed. These object become unpinned when the code is invalidated.
+     */
+    private final PinnedAllocator metaInfoAllocator;
+
+    private RuntimeMethodInfo runtimeMethodInfo;
+
+    /**
+     * The walker for the GC to visit object references in the installed code.
+     */
+    public static class ConstantsWalker extends ObjectReferenceWalker {
+        Pointer baseAddr;
+        int size;
+
+        byte[] referenceMapEncoding;
+        long referenceMapIndex;
+
+        /**
+         * Set to true after everything is set up and GC can operate on the constants area.
+         */
+        boolean pointerMapValid;
+
+        /** Called by the GC to walk over the object references in the constants-area. */
+        @Override
+        public boolean walk(final ObjectReferenceVisitor referenceVisitor) {
+            if (pointerMapValid) {
+                return CodeReferenceMapDecoder.walkOffsetsFromPointer(baseAddr, referenceMapEncoding, referenceMapIndex, referenceVisitor);
+            }
+            return false;
+        }
+    }
+
+    /**
+     * The pointer map for constant references, which are in the code or the data area.
+     */
+    private ConstantsWalker constantsWalker;
 
     private final boolean testTrampolineJumps;
 
@@ -130,6 +172,7 @@ public class InstalledCodeBuilder {
         this.installedCode = installedCode;
         this.allInstalledCode = allInstalledCode;
         this.testTrampolineJumps = testTrampolineJumps;
+        this.metaInfoAllocator = Heap.getHeap().createPinnedAllocator();
 
         DebugContext debug = DebugContext.forCurrentThread();
         try (Indent indent = debug.logAndIndent("create installed code of %s.%s", method.getDeclaringClass().getName(), method.getName())) {
@@ -256,7 +299,7 @@ public class InstalledCodeBuilder {
             ReferenceAccess.singleton().writeObjectAt(address, object, compressed);
         }
 
-        @Uninterruptible(reason = ".", mayBeInlined = true)
+        @Uninterruptible(reason = ".")
         @Override
         public int getPosition() {
             return position;
@@ -294,19 +337,37 @@ public class InstalledCodeBuilder {
             objectConstants.add(new DataSectionPatcher(constantsOffset + position), (SubstrateObjectConstant) constant);
         });
 
-        runtimeMethodInfo = RuntimeMethodInfoAccess.allocateMethodInfo();
-        RuntimeMethodInfoAccess.setCodeLocation(runtimeMethodInfo, code, codeSize);
+        // Open the PinnedAllocator for the meta-information.
+        metaInfoAllocator.open();
+        try {
+            runtimeMethodInfo = metaInfoAllocator.newInstance(RuntimeMethodInfo.class);
+            constantsWalker = metaInfoAllocator.newInstance(ConstantsWalker.class);
 
-        CodeReferenceMapEncoder encoder = new CodeReferenceMapEncoder();
-        encoder.add(objectConstants.referenceMap);
-        RuntimeMethodInfoAccess.setCodeObjectConstantsInfo(runtimeMethodInfo, encoder.encodeAll(), encoder.lookupEncoding(objectConstants.referenceMap));
-        writeObjectConstantsToCode(objectConstants);
+            CodeReferenceMapEncoder encoder = new CodeReferenceMapEncoder();
+            encoder.add(objectConstants.referenceMap);
+            constantsWalker.referenceMapEncoding = encoder.encodeAll(metaInfoAllocator);
+            constantsWalker.referenceMapIndex = encoder.lookupEncoding(objectConstants.referenceMap);
+            constantsWalker.baseAddr = code;
+            constantsWalker.size = codeSize;
+            Heap.getHeap().getGC().registerObjectReferenceWalker(constantsWalker);
 
-        createCodeChunkInfos();
+            /*
+             * We now have the constantsWalker initialized and registered, but it is still inactive.
+             * Writing the actual object constants to the code memory needs to be atomic regarding
+             * to GC. After everything is written, we activate the constantsWalker.
+             */
+            try (NoAllocationVerifier verifier = NoAllocationVerifier.factory("InstalledCodeBuilder.install")) {
+                writeObjectConstantsToCode(objectConstants);
+            }
 
-        InstalledCodeObserver.InstalledCodeObserverHandle[] observerHandles = InstalledCodeObserverSupport.installObservers(codeObservers);
+            createCodeChunkInfos();
 
-        RuntimeMethodInfoAccess.setData(runtimeMethodInfo, installedCode, tier, observerHandles);
+            InstalledCodeObserver.InstalledCodeObserverHandle[] observerHandles = InstalledCodeObserverSupport.installObservers(codeObservers, metaInfoAllocator);
+
+            runtimeMethodInfo.setData((CodePointer) code, WordFactory.unsigned(codeSize), installedCode, tier, constantsWalker, metaInfoAllocator, observerHandles);
+        } finally {
+            metaInfoAllocator.close();
+        }
 
         Throwable[] errorBox = {null};
         VMOperation.enqueueBlockingSafepoint("Install code", () -> {
@@ -333,22 +394,25 @@ public class InstalledCodeBuilder {
         throw (E) ex;
     }
 
-    @Uninterruptible(reason = "Must be atomic with regard to garbage collection.")
+    @Uninterruptible(reason = "Operates on raw pointers to objects")
     private void writeObjectConstantsToCode(ObjectConstantsHolder objectConstants) {
         for (int i = 0; i < objectConstants.count; i++) {
             objectConstants.patchers[i].patchData(code, objectConstants.values[i]);
         }
-        RuntimeMethodInfoAccess.setCodeConstantsLive(runtimeMethodInfo);
+        /* From now on the constantsWalker will operate on the constants area. */
+        constantsWalker.pointerMapValid = true;
     }
 
     private void createCodeChunkInfos() {
-        CodeInfoEncoder codeInfoEncoder = new CodeInfoEncoder(new FrameInfoEncoder.NamesFromImage());
+        CodeInfoEncoder codeInfoEncoder = new CodeInfoEncoder(new FrameInfoEncoder.NamesFromImage(), metaInfoAllocator);
         codeInfoEncoder.addMethod(method, compilation, 0);
-        codeInfoEncoder.encodeAllAndInstall(runtimeMethodInfo);
-        assert CodeInfoEncoder.verifyMethod(compilation, 0, runtimeMethodInfo);
+        codeInfoEncoder.encodeAll();
+        codeInfoEncoder.install(runtimeMethodInfo);
+        assert codeInfoEncoder.verifyMethod(compilation, 0);
 
-        DeoptimizationSourcePositionEncoder sourcePositionEncoder = new DeoptimizationSourcePositionEncoder();
-        sourcePositionEncoder.encodeAndInstall(compilation.getDeoptimizationSourcePositions(), runtimeMethodInfo);
+        DeoptimizationSourcePositionEncoder sourcePositionEncoder = new DeoptimizationSourcePositionEncoder(metaInfoAllocator);
+        sourcePositionEncoder.encode(compilation.getDeoptimizationSourcePositions());
+        sourcePositionEncoder.install(runtimeMethodInfo);
     }
 
     private void patchData(Map<Integer, NativeImagePatcher> patcher, @SuppressWarnings("unused") ObjectConstantsHolder objectConstants) {
@@ -428,7 +492,7 @@ public class InstalledCodeBuilder {
         // (e.g. native) functions.
         // This will change, and we will have to case-split here... but not yet.
         SharedMethod targetMethod = (SharedMethod) callInfo.target;
-        long callTargetStart = CodeInfoAccess.absoluteIP(CodeInfoTable.getImageCodeInfo(), targetMethod.getCodeOffsetInImage()).rawValue();
+        long callTargetStart = CodeInfoTable.getImageCodeCache().absoluteIP(targetMethod.getCodeOffsetInImage()).rawValue();
 
         if (allInstalledCode != null) {
             InstalledCodeBuilder targetInstalledCodeBuilder = allInstalledCode.get(targetMethod);
