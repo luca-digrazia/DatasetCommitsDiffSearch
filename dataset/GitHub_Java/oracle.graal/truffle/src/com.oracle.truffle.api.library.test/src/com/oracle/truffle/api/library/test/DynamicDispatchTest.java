@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -58,7 +58,6 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @RunWith(Parameterized.class)
@@ -86,7 +85,7 @@ public class DynamicDispatchTest extends AbstractParametrizedLibraryTest {
         }
 
         @ExportMessage
-        protected Class<?> dispatch() {
+        protected final Class<?> dispatch() {
             return dispatch;
         }
     }
@@ -332,40 +331,6 @@ public class DynamicDispatchTest extends AbstractParametrizedLibraryTest {
 
         TestOtherLibrary lib = createLibrary(TestOtherLibrary.class, dynamicDispatch);
         assertEquals("m1", lib.m1(dynamicDispatch));
-    }
-
-    static class DynamicDispatchSubclass extends DynamicDispatch {
-
-        DynamicDispatchSubclass(Class<?> dispatch) {
-            super(dispatch);
-        }
-
-        @Override
-        protected final Class<?> dispatch() {
-            return dispatch;
-        }
-    }
-
-    @ExportLibrary(value = TestDispatchLibrary.class, receiverType = DynamicDispatch.class)
-    static class DynamicDispatchObjectTarget {
-
-        @ExportMessage
-        static String m0(DynamicDispatch dispatch) {
-            return "m0_dynamic_dispatch_target1";
-        }
-
-    }
-
-    @Test
-    public void testExportUsedMultipleTimes() {
-        DynamicDispatch dispatch1 = new DynamicDispatch(DynamicDispatchObjectTarget.class);
-        DynamicDispatchSubclass dispatch2 = new DynamicDispatchSubclass(DynamicDispatchObjectTarget.class);
-        TestDispatchLibrary lib1 = createLibrary(TestDispatchLibrary.class, dispatch1);
-        TestDispatchLibrary lib2 = createLibrary(TestDispatchLibrary.class, dispatch2);
-
-        // must not fail.
-        lib1.m0(dispatch1);
-        lib2.m0(dispatch2);
     }
 
 }
