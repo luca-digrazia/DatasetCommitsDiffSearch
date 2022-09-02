@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,7 +35,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
@@ -98,7 +97,6 @@ import jdk.vm.ci.services.Services;
 public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     private static final boolean IS_AOT = Boolean.parseBoolean(Services.getSavedProperties().get("com.oracle.graalvm.isaot"));
-    private static final Supplier<HotSpotGraalManagementRegistration> AOT_INJECTED_MANAGEMENT = null;
 
     private static boolean checkArrayIndexScaleInvariants(MetaAccessProvider metaAccess) {
         assert metaAccess.getArrayIndexScale(JavaKind.Byte) == 1;
@@ -167,12 +165,12 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         compilerConfigurationName = compilerConfigurationFactory.getName();
 
         if (IS_AOT) {
-            management = AOT_INJECTED_MANAGEMENT == null ? null : AOT_INJECTED_MANAGEMENT.get();
+            management = null;
         } else {
             management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
-        }
-        if (management != null) {
-            management.initialize(this);
+            if (management != null) {
+                management.initialize(this);
+            }
         }
 
         BackendMap backendMap = compilerConfigurationFactory.createBackendMap();

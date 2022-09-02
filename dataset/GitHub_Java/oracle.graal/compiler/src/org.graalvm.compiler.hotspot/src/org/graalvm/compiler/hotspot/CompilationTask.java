@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -304,7 +304,7 @@ public class CompilationTask {
     public HotSpotCompilationRequestResult runCompilation(OptionValues initialOptions) {
         OptionValues options = filterOptions(initialOptions);
         HotSpotGraalRuntimeProvider graalRuntime = compiler.getGraalRuntime();
-        try (DebugContext debug = graalRuntime.openDebugContext(options, compilationId, getMethod(), compiler.getDebugHandlersFactories(), DebugContext.getDefaultLogStream())) {
+        try (DebugContext debug = graalRuntime.openDebugContext(options, compilationId, getMethod(), compiler.getDebugHandlersFactories(), DebugContext.DEFAULT_LOG_STREAM)) {
             return runCompilation(debug);
         }
     }
