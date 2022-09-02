@@ -63,7 +63,7 @@ import org.graalvm.nativeimage.ProcessProperties;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.util.DirectAnnotationAccess;
 
-import com.oracle.svm.core.RuntimeAssertionsSupport;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
@@ -176,11 +176,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      * Is this a Record Class (Since JDK 15).
      */
     private boolean isRecord;
-
-    /**
-     * Holds assertionStatus determined by {@link RuntimeAssertionsSupport}.
-     */
-    private final boolean assertionStatus;
 
     /**
      * The {@link Modifier modifiers} of this class.
@@ -349,7 +344,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public DynamicHub(String name, HubType hubType, ReferenceType referenceType, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName,
-                    int modifiers, ClassLoader classLoader, boolean isHidden, boolean isRecord, Class<?> nestHost, boolean assertionStatus) {
+                    int modifiers, ClassLoader classLoader, boolean isHidden, boolean isRecord, Class<?> nestHost) {
         this.name = name;
         this.hubType = hubType.getValue();
         this.referenceType = referenceType.getValue();
@@ -363,7 +358,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         this.isHidden = isHidden;
         this.isRecord = isRecord;
         this.nestHost = nestHost;
-        this.assertionStatus = assertionStatus;
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -1282,7 +1276,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     @Substitute
     public boolean desiredAssertionStatus() {
-        return assertionStatus;
+        return SubstrateOptions.getRuntimeAssertionsForClass(getName());
     }
 
     @Substitute //
@@ -1336,10 +1330,12 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         /* See open/src/hotspot/share/prims/jvm.cpp#1522. */
     }
 
-    @KeepOriginal //
+    @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
     @SuppressWarnings({"unused"})
-    private native List<Method> getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes);
+    List<Method> getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes) {
+        throw VMError.unsupportedFeature("JDK11OrLater: DynamicHub.getDeclaredPublicMethods(String nameArg, Class<?>... parameterTypes)");
+    }
 
     @Substitute
     @TargetElement(onlyWith = JDK11OrLater.class)
