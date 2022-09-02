@@ -25,6 +25,7 @@
 package org.graalvm.compiler.truffle.compiler.substitutions;
 
 import static java.lang.Character.toUpperCase;
+import static org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.getRuntime;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -200,18 +201,22 @@ public class TruffleGraphBuilderPlugins {
                 return true;
             }
         });
+        r.register0("inFirstTier", new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                if (b.getGraph().getCancellable() instanceof TruffleCompilationTask) {
+                    boolean isFirstTier = !((TruffleCompilationTask) b.getGraph().getCancellable()).isLastTier();
+                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(isFirstTier));
+                    return true;
+                }
+                return false;
+            }
+        });
         r.register0("inCompiledCode", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(true));
                 return true;
-            }
-        });
-        r.register0("inFirstTier", new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                // This method must not be intrinsified until after graph decoding.
-                return false;
             }
         });
         r.register0("inCompilationRoot", new InvocationPlugin() {
