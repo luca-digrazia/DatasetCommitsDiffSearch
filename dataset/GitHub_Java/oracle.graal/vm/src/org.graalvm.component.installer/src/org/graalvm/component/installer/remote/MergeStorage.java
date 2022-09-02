@@ -41,7 +41,6 @@ import org.graalvm.component.installer.SoftwareChannelSource;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.model.ComponentRegistry;
 import org.graalvm.component.installer.persist.AbstractCatalogStorage;
-import org.graalvm.component.installer.persist.MetadataLoader;
 
 /**
  * The Storage merges storages of individual providers.
@@ -54,18 +53,9 @@ public class MergeStorage extends AbstractCatalogStorage implements ComponentCat
     private final Map<SoftwareChannel, SoftwareChannelSource> channelInfos = new HashMap<>();
 
     private boolean ignoreCatalogErrors;
-    private boolean acceptAllSources = true;
 
     public MergeStorage(ComponentRegistry localRegistry, Feedback feedback) {
         super(localRegistry, feedback, null);
-    }
-
-    public boolean isAcceptAllSources() {
-        return acceptAllSources;
-    }
-
-    public void setAcceptAllSources(boolean acceptAllSources) {
-        this.acceptAllSources = acceptAllSources;
     }
 
     public void addChannel(SoftwareChannelSource info, SoftwareChannel delegate) {
@@ -141,16 +131,6 @@ public class MergeStorage extends AbstractCatalogStorage implements ComponentCat
         return channels;
     }
 
-    private int getChannelPriority(SoftwareChannel ch) {
-        SoftwareChannelSource src = this.channelInfos.get(ch);
-        if (src != null) {
-            return src.getPriority();
-        } else {
-            int index = channels.indexOf(ch);
-            return index == -1 ? 0 : index;
-        }
-    }
-
     @Override
     public Set<ComponentInfo> loadComponentMetadata(String id) throws IOException {
         Set<ComponentInfo> cis = new HashSet<>();
@@ -159,17 +139,12 @@ public class MergeStorage extends AbstractCatalogStorage implements ComponentCat
             if (newInfos == null || newInfos.isEmpty()) {
                 continue;
             }
-            if (!acceptAllSources) {
-                newInfos.removeAll(cis);
-            }
+            newInfos.removeAll(cis);
             for (ComponentInfo ci : newInfos) {
-                ci.setPriority(getChannelPriority(swch));
                 channelMap.put(ci, swch);
             }
             cis.addAll(newInfos);
-            if (!acceptAllSources) {
-                break;
-            }
+            break;
         }
         return cis;
     }
@@ -183,15 +158,4 @@ public class MergeStorage extends AbstractCatalogStorage implements ComponentCat
         SoftwareChannel orig = getOrigin(info);
         return orig != null ? orig.configureDownloader(info, dn) : dn;
     }
-
-    @Override
-    public MetadataLoader interceptMetadataLoader(ComponentInfo info, MetadataLoader delegate) {
-        SoftwareChannel orig = getOrigin(info);
-        if (orig instanceof ComponentCatalog.DownloadInterceptor) {
-            return ((ComponentCatalog.DownloadInterceptor) orig).interceptMetadataLoader(info, delegate);
-        } else {
-            return delegate;
-        }
-    }
-
 }
