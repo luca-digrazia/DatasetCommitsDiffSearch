@@ -23,57 +23,137 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Objects;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 
 public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
-    public abstract Object getLock();
+    private final HashMap<Symbol<Name>, T> entries = new HashMap<>();
 
-    public abstract T createEntry(Symbol<Name> name, K appendix);
+    private final BlockLock readBlock;
+    private final BlockLock writeBlock;
 
-    private ArrayList<T> entries = new ArrayList<>();
-
-    public interface NamedEntry {
-        Symbol<Name> getName();
+    protected EntryTable(ReadWriteLock lock) {
+        this.readBlock = new BlockLock(lock.readLock());
+        this.writeBlock = new BlockLock(lock.writeLock());
     }
 
+    public static final class BlockLock implements AutoCloseable {
+
+        private final Lock lock;
+
+        private BlockLock(Lock lock) {
+            this.lock = lock;
+        }
+
+        private BlockLock enter() {
+            lock.lock();
+            return this;
+        }
+
+        @Override
+        public void close() {
+            lock.unlock();
+        }
+
+    }
+
+    public BlockLock read() {
+        return readBlock.enter();
+    }
+
+    public BlockLock write() {
+        return writeBlock.enter();
+    }
+
+    protected abstract T createEntry(Symbol<Name> name, K data);
+
+    public abstract static class NamedEntry {
+        protected NamedEntry(Symbol<Name> name) {
+            this.name = name;
+        }
+
+        protected final Symbol<Name> name;
+
+        public Symbol<Name> getName() {
+            return name;
+        }
+
+        public String getNameAsString() {
+            if (name == null) {
+                return "unnamed";
+            }
+            return name.toString();
+        }
+
+        @Override
+        public int hashCode() {
+            if (name == null) {
+                return 0;
+            }
+            return name.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof NamedEntry) {
+                return Objects.equals(((NamedEntry) obj).getName(), this.getName());
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Lookups the EntryTable for the given name. Returns the corresponding entry if it exists, null
+     * otherwise.
+     */
+    @SuppressWarnings("try")
     public T lookup(Symbol<Name> name) {
-        for (T entry : entries) {
-            if (entry.getName().equals(name)) {
+        try (BlockLock block = read()) {
+            return entries.get(name);
+        }
+    }
+
+    /**
+     * Lookups the EntryTable for the given name. If an entry is found, returns it. Else, an entry
+     * is created and added into the table. This entry is then returned.
+     */
+    @SuppressWarnings("try")
+    public T lookupOrCreate(Symbol<Name> name, K data) {
+        T entry = lookup(name);
+        if (entry != null) {
+            return entry;
+        }
+        try (BlockLock block = write()) {
+            entry = lookup(name);
+            if (entry != null) {
                 return entry;
             }
-        }
-        return null;
-    }
-
-    public T lookupOrCreate(Symbol<Name> name, K appendix) {
-        T pkg = lookup(name);
-        if (pkg != null) {
-            return pkg;
-        }
-        synchronized (getLock()) {
-            pkg = lookup(name);
-            if (pkg != null) {
-                return pkg;
-            }
-            return addEntry(name, appendix);
+            return addEntry(name, data);
         }
     }
 
-    public T createAndAddEntry(Symbol<Name> pkg, K appendix) {
-        synchronized (getLock()) {
-            if (lookup(pkg) != null) {
+    /**
+     * Creates and adds an entry in the table. If an entry already exists, this is a nop, and
+     * returns null
+     */
+    @SuppressWarnings("try")
+    public T createAndAddEntry(Symbol<Name> name, K data) {
+        try (BlockLock block = write()) {
+            if (lookup(name) != null) {
                 return null;
             }
-            return addEntry(pkg, appendix);
+            return addEntry(name, data);
         }
     }
 
-    public T addEntry(Symbol<Name> pkg, K appendix) {
-        T entry = createEntry(pkg, appendix);
-        entries.add(entry);
+    private T addEntry(Symbol<Name> name, K data) {
+        T entry = createEntry(name, data);
+        entries.put(name, entry);
         return entry;
     }
 

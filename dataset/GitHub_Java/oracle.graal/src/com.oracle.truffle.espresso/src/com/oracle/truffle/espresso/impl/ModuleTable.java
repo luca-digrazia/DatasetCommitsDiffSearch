@@ -24,29 +24,38 @@
 package com.oracle.truffle.espresso.impl;
 
 import java.util.ArrayList;
+import java.util.concurrent.locks.ReadWriteLock;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegistry> {
-    public static final Object moduleLock = new Object();
 
-    @Override
-    public Object getLock() {
-        return moduleLock;
+    public ModuleTable(ReadWriteLock lock) {
+        super(lock);
     }
 
     @Override
-    public ModuleEntry createEntry(Symbol<Name> name, ClassRegistry registry) {
+    protected ModuleEntry createEntry(Symbol<Name> name, ClassRegistry registry) {
         return new ModuleEntry(name, registry);
     }
 
-    public static class ModuleEntry implements EntryTable.NamedEntry {
-        private Symbol<Name> name;
+    public ModuleEntry createAndAddEntry(Symbol<Name> name, ClassRegistry registry, boolean isOpen, StaticObject module) {
+        ModuleEntry moduleEntry = createAndAddEntry(name, registry);
+        if (moduleEntry == null) {
+            return null;
+        }
+        moduleEntry.setModule(module);
+        moduleEntry.isOpen = isOpen;
+        return moduleEntry;
+    }
+
+    public static class ModuleEntry extends EntryTable.NamedEntry {
 
         ModuleEntry(Symbol<Name> name, ClassRegistry data) {
-            this.name = name;
+            super(name);
             this.registry = data;
         }
 
@@ -60,55 +69,67 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
             return result;
         }
 
-        @Override
-        public Symbol<Name> getName() {
-            return name;
-        }
-
         private final ClassRegistry registry;
-        private StaticObject module;
-        private boolean canReadAllUnnamed = false;
+        private StaticObject module = StaticObject.NULL;
         private boolean isOpen = false;
+
+        private boolean canReadAllUnnamed = false;
 
         private ArrayList<ModuleEntry> reads;
 
-        public void addReads(ModuleEntry module) {
+        public ClassRegistry registry() {
+            return registry;
+        }
+
+        public void addReads(ModuleEntry from) {
             if (!isNamed()) {
                 return;
             }
-            synchronized (moduleLock) {
-                if (module == null) {
+            synchronized (this) {
+                if (from == null) {
                     setCanReadAllUnnamed();
                     return;
                 }
                 if (reads == null) {
                     reads = new ArrayList<>();
                 }
-                if (!reads.contains(module)) {
-                    reads.add(module);
+                if (!contains(from)) {
+                    reads.add(from);
                 }
             }
         }
 
-        public boolean canRead(ModuleEntry module) {
-            if (!module.isNamed() || module.isJavaBase()) {
+        public boolean canRead(ModuleEntry m, EspressoContext context) {
+            if (!isNamed() || m.isJavaBase(context)) {
                 return true;
             }
-            synchronized (moduleLock) {
+            synchronized (this) {
                 if (!hasReads()) {
                     return false;
                 } else {
-                    return reads.contains(module);
+                    return contains(m);
                 }
             }
+        }
+
+        private boolean contains(ModuleEntry from) {
+            return reads.contains(from);
         }
 
         public void setModule(StaticObject module) {
             this.module = module;
         }
 
+        public StaticObject module() {
+            return module;
+        }
+
         public void setCanReadAllUnnamed() {
             canReadAllUnnamed = true;
+        }
+
+        public boolean canReadAllUnnamed() {
+            return canReadAllUnnamed;
         }
 
         public boolean isOpen() {
@@ -119,21 +140,13 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
             return getName() != null;
         }
 
-        public boolean isJavaBase() {
-            return false;
+        public boolean isJavaBase(EspressoContext context) {
+            return this == context.getRegistries().getJavaBaseModule();
         }
 
         public boolean hasReads() {
             return reads != null && !reads.isEmpty();
         }
 
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof ModuleEntry)) {
-                return false;
-            }
-            ModuleEntry module = (ModuleEntry) obj;
-            return this.name == module.name;
-        }
     }
 }
