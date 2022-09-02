@@ -250,9 +250,9 @@ import com.oracle.truffle.api.nodes.CustomNodeCount;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.BytecodeLookupSwitch;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
@@ -337,10 +337,10 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     private final FrameSlot bciSlot;
 
     @CompilationFinal(dimensions = 1) //
-    private final int[] stackOverflowErrorInfo;
+    private final int[] SOEinfo;
 
     @CompilationFinal(dimensions = 2) //
-    private int[][] jsrBci = null;
+    private int[][] JSRbci = null;
 
     private final BytecodeStream bs;
 
@@ -359,7 +359,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         this.stackSlots = Arrays.copyOfRange(slots, method.getMaxLocals(), method.getMaxLocals() + method.getMaxStackSize());
         this.monitorSlot = monitorSlot;
         this.bciSlot = bciSlot;
-        this.stackOverflowErrorInfo = getMethod().getSOEHandlerInfo();
+        this.SOEinfo = getMethod().getSOEHandlerInfo();
     }
 
     public BytecodeNode(BytecodeNode copy) {
@@ -367,7 +367,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         System.err.println("Copying node for " + getMethod());
     }
 
-    public SourceSection getSourceSectionAtBCI(int bci) {
+    public final SourceSection getSourceSectionAtBCI(int bci) {
         Source s = getSource();
         if (s == null) {
             return null;
@@ -567,6 +567,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     // region Local accessors
 
     @Override
+    @SuppressWarnings("unchecked")
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.MERGE_EXPLODE)
     public Object execute(VirtualFrame frame) {
 
@@ -847,15 +848,15 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                         }
                         case RET: {
                             int targetBCI = getLocalReturnAddress(frame, bs.readLocalIndex(curBCI));
-                            if (jsrBci == null) {
+                            if (JSRbci == null) {
                                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                                jsrBci = new int[bs.endBCI()][];
+                                JSRbci = new int[bs.endBCI()][];
                             }
-                            if (jsrBci[curBCI] == null) {
+                            if (JSRbci[curBCI] == null) {
                                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                                jsrBci[curBCI] = new int[]{targetBCI};
+                                JSRbci[curBCI] = new int[]{targetBCI};
                             }
-                            for (int jsr : jsrBci[curBCI]) {
+                            for (int jsr : JSRbci[curBCI]) {
                                 if (jsr == targetBCI) {
                                     CompilerAsserts.partialEvaluationConstant(jsr);
                                     targetBCI = jsr;
@@ -870,8 +871,8 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                                 }
                             }
                             CompilerDirectives.transferToInterpreterAndInvalidate();
-                            jsrBci[curBCI] = Arrays.copyOf(jsrBci[curBCI], jsrBci[curBCI].length + 1);
-                            jsrBci[curBCI][jsrBci[curBCI].length - 1] = targetBCI;
+                            JSRbci[curBCI] = Arrays.copyOf(JSRbci[curBCI], JSRbci[curBCI].length + 1);
+                            JSRbci[curBCI][JSRbci[curBCI].length - 1] = targetBCI;
                             CompilerAsserts.partialEvaluationConstant(targetBCI);
                             checkBackEdge(curBCI, targetBCI, top, curOpcode);
                             if (instrument != null) {
@@ -1070,13 +1071,13 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                      * Note: no need to check for the stacktrace being null, as we reset the frames
                      * at each apparition of a host SOE.
                      */
-                    if (stackOverflowErrorInfo != null) {
-                        for (int i = 0; i < stackOverflowErrorInfo.length; i += 3) {
-                            if (curBCI >= stackOverflowErrorInfo[i] && curBCI < stackOverflowErrorInfo[i + 1]) {
+                    if (SOEinfo != null) {
+                        for (int i = 0; i < SOEinfo.length; i += 3) {
+                            if (curBCI >= SOEinfo[i] && curBCI < SOEinfo[i + 1]) {
                                 top = 0;
                                 putObject(frame, 0, e.getExceptionObject());
                                 top++;
-                                curBCI = stackOverflowErrorInfo[i + 2];
+                                curBCI = SOEinfo[i + 2];
                                 continue loop;
                             }
                         }
@@ -1203,8 +1204,8 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         return (MonitorStack) frameResult;
     }
 
-    private static final class MonitorStack {
-        private static final int DEFAULT_CAPACITY = 4;
+    private static class MonitorStack {
+        private static int DEFAULT_CAPACITY = 4;
 
         private StaticObject[] monitors = new StaticObject[DEFAULT_CAPACITY];
         private int top = 0;
@@ -1332,7 +1333,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     }
 
     @TruffleBoundary
-    private static void reportThrow(int curBCI, Method method, StaticObject e) {
+    static private void reportThrow(int curBCI, Method method, StaticObject e) {
         if (method.getName().toString().contains("refill") ||
                         method.getName().toString().contains("loadClass") ||
                         method.getName().toString().contains("findClass")) {
@@ -1342,7 +1343,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     }
 
     @TruffleBoundary
-    private static void reportRuntimeException(RuntimeException e, int curBCI, BytecodeNode thisNode) {
+    static private void reportRuntimeException(RuntimeException e, int curBCI, BytecodeNode thisNode) {
         Method m = thisNode.getMethod();
         System.err.println("Internal error (caught in invocation): " + m.report(curBCI));
         if (e.getCause() != null) {
@@ -1352,21 +1353,21 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     }
 
     @TruffleBoundary
-    private static void reportVMError(VirtualMachineError e, int curBCI, BytecodeNode thisNode) {
+    static private void reportVMError(VirtualMachineError e, int curBCI, BytecodeNode thisNode) {
         Method m = thisNode.getMethod();
         System.err.println("Internal error (caught in invocation): " + m.report(curBCI));
         e.printStackTrace();
     }
 
     @TruffleBoundary
-    private static void reportCatch(EspressoException e, int curBCI, BytecodeNode thisNode) {
+    static private void reportCatch(EspressoException e, int curBCI, BytecodeNode thisNode) {
         if (thisNode.getMethod().getName().toString().contains("refill") ||
                         thisNode.getMethod().getName().toString().contains("loadClass") ||
                         thisNode.getMethod().getName().toString().contains("findClass")) {
             return;
         }
         System.err.println("Caught: " + e.getExceptionObject().getKlass().getType() + ": " + e.getMessage() +
-                        "\n\t In: " + thisNode + " at line: " + thisNode.getMethod().bciToLineNumber(curBCI));
+                        "\n\t In: " + thisNode + " at line: " + thisNode.getMethod().BCItoLineNumber(curBCI));
     }
 
     private JavaKind peekKind(VirtualFrame frame, int slot) {
@@ -1632,7 +1633,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 quick = nodes[bs.readCPI(curBCI)];
             } else {
                 // During resolution of the symbolic reference to the method, any of the exceptions
-                // pertaining to method resolution (&sect;5.4.3.3) can be thrown.
+                // pertaining to method resolution (§5.4.3.3) can be thrown.
                 Method resolutionSeed = resolveMethod(opCode, bs.readCPI(curBCI));
                 QuickNode invoke = dispatchQuickened(top, curBCI, opCode, resolutionSeed, getContext().InlineFieldAccessors);
                 quick = injectQuick(curBCI, invoke);
@@ -1660,15 +1661,15 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         return invoke.invoke(frame);
     }
 
-    private QuickNode dispatchQuickened(int top, int curBCI, int opCode, Method resolutionSeed, boolean allowFieldAccessInlining) {
+    private QuickNode dispatchQuickened(int top, int curBCI, int opCode, Method _resolutionSeed, boolean allowFieldAccessInlining) {
         assert !allowFieldAccessInlining || EspressoLanguage.getCurrentContext().InlineFieldAccessors;
         QuickNode invoke;
-        Method resolved = resolutionSeed;
+        Method resolutionSeed = _resolutionSeed;
         switch (opCode) {
             case INVOKESTATIC:
                 // Otherwise, if the resolved method is an instance method, the invokestatic
                 // instruction throws an IncompatibleClassChangeError.
-                if (!resolved.isStatic()) {
+                if (!resolutionSeed.isStatic()) {
                     CompilerDirectives.transferToInterpreter();
                     throw getMeta().throwEx(IncompatibleClassChangeError.class);
                 }
@@ -1676,7 +1677,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             case INVOKEINTERFACE:
                 // Otherwise, if the resolved method is static or private, the invokeinterface
                 // instruction throws an IncompatibleClassChangeError.
-                if (resolved.isStatic() || resolved.isPrivate()) {
+                if (resolutionSeed.isStatic() || resolutionSeed.isPrivate()) {
                     CompilerDirectives.transferToInterpreter();
                     throw getMeta().throwEx(IncompatibleClassChangeError.class);
                 }
@@ -1684,7 +1685,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             case INVOKEVIRTUAL:
                 // Otherwise, if the resolved method is a class (static) method, the invokevirtual
                 // instruction throws an IncompatibleClassChangeError.
-                if (resolved.isStatic()) {
+                if (resolutionSeed.isStatic()) {
                     CompilerDirectives.transferToInterpreter();
                     throw getMeta().throwEx(IncompatibleClassChangeError.class);
                 }
@@ -1693,36 +1694,36 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 // Otherwise, if the resolved method is an instance initialization method, and the
                 // class in which it is declared is not the class symbolically referenced by the
                 // instruction, a NoSuchMethodError is thrown.
-                if (resolved.isConstructor()) {
-                    if (resolved.getDeclaringKlass().getName() != getConstantPool().methodAt(bs.readCPI(curBCI)).getHolderKlassName(getConstantPool())) {
+                if (resolutionSeed.isConstructor()) {
+                    if (resolutionSeed.getDeclaringKlass().getName() != getConstantPool().methodAt(bs.readCPI(curBCI)).getHolderKlassName(getConstantPool())) {
                         CompilerDirectives.transferToInterpreter();
                         throw getMeta().throwEx(NoSuchMethodError.class);
                     }
                 }
                 // Otherwise, if the resolved method is a class (static) method, the invokespecial
                 // instruction throws an IncompatibleClassChangeError.
-                if (resolved.isStatic()) {
+                if (resolutionSeed.isStatic()) {
                     CompilerDirectives.transferToInterpreter();
                     throw getMeta().throwEx(IncompatibleClassChangeError.class);
                 }
                 // If all of the following are true, let C be the direct superclass of the current
                 // class:
                 //
-                // * The resolved method is not an instance initialization method (&sect;2.9).
+                // * The resolved method is not an instance initialization method (§2.9).
                 //
                 // * If the symbolic reference names a class (not an interface), then that class is
                 // a superclass of the current class.
                 //
-                // * The ACC_SUPER flag is set for the class file (&sect;4.1). In Java SE 8 and
-                // above, the Java Virtual Machine considers the ACC_SUPER flag to be set in every
-                // class file, regardless of the actual value of the flag in the class file and the
+                // * The ACC_SUPER flag is set for the class file (§4.1). In Java SE 8 and above,
+                // the Java Virtual Machine considers the ACC_SUPER flag to be set in every class
+                // file, regardless of the actual value of the flag in the class file and the
                 // version of the class file.
-                if (!resolved.isConstructor()) {
+                if (!resolutionSeed.isConstructor()) {
                     Klass declaringKlass = getMethod().getDeclaringKlass();
                     Klass symbolicRef = ((MethodRefConstant.Indexes) getConstantPool().methodAt(bs.readCPI(curBCI))).getResolvedHolderKlass(declaringKlass, getConstantPool());
                     if (!symbolicRef.isInterface() && symbolicRef != declaringKlass && declaringKlass.getSuperKlass() != null && symbolicRef != declaringKlass.getSuperKlass() &&
                                     symbolicRef.isAssignableFrom(declaringKlass)) {
-                        resolved = declaringKlass.getSuperKlass().lookupMethod(resolved.getName(), resolved.getRawSignature(), declaringKlass);
+                        resolutionSeed = declaringKlass.getSuperKlass().lookupMethod(resolutionSeed.getName(), resolutionSeed.getRawSignature(), declaringKlass);
                     }
                 }
                 break;
@@ -1730,25 +1731,25 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 throw EspressoError.unimplemented("Quickening for " + Bytecodes.nameOf(opCode));
         }
 
-        if (allowFieldAccessInlining && resolved.isInlinableGetter()) {
-            invoke = InlinedGetterNode.create(resolved, top, opCode, curBCI);
-        } else if (allowFieldAccessInlining && resolved.isInlinableSetter()) {
-            invoke = InlinedSetterNode.create(resolved, top, opCode, curBCI);
-        } else if (resolved.isMethodHandleIntrinsic()) {
-            invoke = new MethodHandleInvokeNode(resolved, top, curBCI);
-        } else if (opCode == INVOKEINTERFACE && resolved.getITableIndex() < 0) {
+        if (allowFieldAccessInlining && resolutionSeed.isInlinableGetter()) {
+            invoke = InlinedGetterNode.create(resolutionSeed, top, opCode, curBCI);
+        } else if (allowFieldAccessInlining && resolutionSeed.isInlinableSetter()) {
+            invoke = InlinedSetterNode.create(resolutionSeed, top, opCode, curBCI);
+        } else if (resolutionSeed.isMethodHandleIntrinsic()) {
+            invoke = new MethodHandleInvokeNode(resolutionSeed, top, curBCI);
+        } else if (opCode == INVOKEINTERFACE && resolutionSeed.getITableIndex() < 0) {
             // Can happen in old classfiles that calls j.l.Object on interfaces.
-            invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI);
-        } else if (opCode == INVOKEVIRTUAL && (resolved.isFinalFlagSet() || resolved.getDeclaringKlass().isFinalFlagSet() || resolved.isPrivate())) {
-            invoke = new InvokeSpecialNode(resolved, top, curBCI);
+            invoke = InvokeVirtualNodeGen.create(resolutionSeed, top, curBCI);
+        } else if (opCode == INVOKEVIRTUAL && (resolutionSeed.isFinalFlagSet() || resolutionSeed.getDeclaringKlass().isFinalFlagSet() || resolutionSeed.isPrivate())) {
+            invoke = new InvokeSpecialNode(resolutionSeed, top, curBCI);
         } else {
             // @formatter:off
             // Checkstyle: stop
             switch (opCode) {
-                case INVOKESTATIC    : invoke = new InvokeStaticNode(resolved, top, curBCI);          break;
-                case INVOKEINTERFACE : invoke = InvokeInterfaceNodeGen.create(resolved, top, curBCI); break;
-                case INVOKEVIRTUAL   : invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI);   break;
-                case INVOKESPECIAL   : invoke = new InvokeSpecialNode(resolved, top, curBCI);         break;
+                case INVOKESTATIC    : invoke = new InvokeStaticNode(resolutionSeed, top, curBCI);          break;
+                case INVOKEINTERFACE : invoke = InvokeInterfaceNodeGen.create(resolutionSeed, top, curBCI); break;
+                case INVOKEVIRTUAL   : invoke = InvokeVirtualNodeGen.create(resolutionSeed, top, curBCI);   break;
+                case INVOKESPECIAL   : invoke = new InvokeSpecialNode(resolutionSeed, top, curBCI);         break;
                 default              :
                     throw EspressoError.unimplemented("Quickening for " + Bytecodes.nameOf(opCode));
             }
@@ -2406,7 +2407,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         /**
          * If transitioning between two statements, exits the current one, and enter the new one.
          */
-        void notifyStatement(VirtualFrame frame, int statementIndex, int nextStatementIndex) {
+        final void notifyStatement(VirtualFrame frame, int statementIndex, int nextStatementIndex) {
             CompilerAsserts.partialEvaluationConstant(statementIndex);
             CompilerAsserts.partialEvaluationConstant(nextStatementIndex);
             if (statementIndex == nextStatementIndex) {
@@ -2424,7 +2425,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             // TODO(Gregersen) - implement method return breakpoint hooks
         }
 
-        void notifyExceptionAt(VirtualFrame frame, Throwable t, int statementIndex) {
+        final void notifyExceptionAt(VirtualFrame frame, Throwable t, int statementIndex) {
             EspressoInstrumentableNodeWrapper wrapperNode = getWrapperAt(statementIndex);
             if (wrapperNode == null) {
                 return;
@@ -2491,14 +2492,14 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             }
         }
 
-        int getStatementIndexAfterJump(int statementIndex, int curBCI, int targetBCI) {
+        final int getStatementIndexAfterJump(int statementIndex, int curBCI, int targetBCI) {
             if (hookBCIToNodeIndex == null) {
                 return 0;
             }
             return hookBCIToNodeIndex.lookup(statementIndex, curBCI, targetBCI);
         }
 
-        int getNextStatementIndex(int statementIndex, int nextBCI) {
+        final int getNextStatementIndex(int statementIndex, int nextBCI) {
             if (hookBCIToNodeIndex == null) {
                 return 0;
             }
