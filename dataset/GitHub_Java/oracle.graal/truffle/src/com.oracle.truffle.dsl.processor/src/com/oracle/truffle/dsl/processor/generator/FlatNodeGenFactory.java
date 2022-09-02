@@ -165,6 +165,7 @@ import com.oracle.truffle.dsl.processor.parser.SpecializationGroup.TypeGuard;
 
 public class FlatNodeGenFactory {
 
+    private static final String METHOD_FALLBACK_GUARD = "fallbackGuard_";
     private static final String FRAME_VALUE = TemplateMethod.FRAME_NAME;
     private static final String STATE_VALUE = "state";
 
@@ -1009,7 +1010,7 @@ public class FlatNodeGenFactory {
 
         ExecutableTypeData executableType = node.findAnyGenericExecutableType(context, -1);
 
-        CodeExecutableElement method = new CodeExecutableElement(modifiers(PRIVATE), getType(boolean.class), createFallbackName());
+        CodeExecutableElement method = new CodeExecutableElement(modifiers(PRIVATE), getType(boolean.class), METHOD_FALLBACK_GUARD);
         FrameState frameState = FrameState.load(this, NodeExecutionMode.FALLBACK_GUARD, method);
         if (!frameUsed) {
             frameState.removeValue(FRAME_VALUE);
@@ -1475,18 +1476,6 @@ public class FlatNodeGenFactory {
             builder.tree(delegateBuilder.build());
         }
         return new ExecuteDelegationResult(builder.build(), !coversAllSpecializations);
-    }
-
-    private String createFallbackName() {
-        if (hasMultipleNodes()) {
-            String messageName = node.getNodeId();
-            if (messageName.endsWith("Node")) {
-                messageName = messageName.substring(0, messageName.length() - 4);
-            }
-            return firstLetterLowerCase(messageName) + "FallbackGuard_";
-        } else {
-            return "fallbackGuard_";
-        }
     }
 
     private String createExecuteAndSpecializeName() {
@@ -2522,7 +2511,7 @@ public class FlatNodeGenFactory {
         CodeTreeBuilder builder = parent.create();
         int ifCount = 0;
         if (specialization.isFallback()) {
-            builder.startIf().startCall(createFallbackName());
+            builder.startIf().startCall(METHOD_FALLBACK_GUARD);
             if (fallbackNeedsFrame) {
                 if (frameState.get(FRAME_VALUE) != null) {
                     builder.string(FRAME_VALUE);
