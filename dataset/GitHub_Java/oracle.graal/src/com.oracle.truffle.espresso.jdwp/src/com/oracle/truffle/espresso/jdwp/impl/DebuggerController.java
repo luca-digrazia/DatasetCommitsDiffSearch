@@ -282,12 +282,11 @@ public final class DebuggerController implements ContextsListener {
         susp.recordStep(DebuggerCommand.Kind.STEP_OUT);
     }
 
-    public boolean popFrames(Object guestThread, CallFrame frameToPop, int packetId) {
+    public boolean popFrames(Object guestThread, CallFrame frameToPop) {
         SuspendedInfo susp = suspendedInfos.get(guestThread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
             susp.getEvent().prepareUnwindFrame(frameToPop.getDebugStackFrame());
-            setCommandRequestId(guestThread, packetId, SuspendStrategy.NONE, true);
-            resume(guestThread, false);
+            setCommandRequestId(guestThread, -1, SuspendStrategy.NONE, true);
             return true;
         }
         return false;
@@ -723,6 +722,11 @@ public final class DebuggerController implements ContextsListener {
             SteppingInfo steppingInfo = commandRequestIds.remove(currentThread);
 
             if (steppingInfo != null) {
+                if (steppingInfo.isPopFrames()) {
+                    // Debug API always call onSuspend after re-enter of a frame after pop frames
+                    // JDWP doesn't expect that, so simply continue
+                    return;
+                }
                 // get the top frame for checking instance filters
                 CallFrame[] callFrames = createCallFrames(ids.getIdAsLong(currentThread), event.getStackFrames(), 1);
                 if (checkExclusionFilters(steppingInfo, event, currentThread, callFrames[0])) {
