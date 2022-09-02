@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import java.io.PrintStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
@@ -44,7 +43,6 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import org.graalvm.collections.EconomicMap;
 
 import com.oracle.truffle.api.CallTarget;
@@ -449,27 +447,19 @@ public final class LLVMContext {
         return Paths.get(lib);
     }
 
-    public ExternalLibrary addExternalLibrary(String lib, boolean isNative, Object reason) {
-        return addExternalLibrary(lib, isNative, reason, DefaultLibraryLocator.INSTANCE);
-    }
-
     /**
      * @return null if already loaded
      */
-    public ExternalLibrary addExternalLibrary(String lib, boolean isNative, Object reason, LibraryLocator locator) {
+    public ExternalLibrary addExternalLibrary(String lib, boolean isNative) {
         CompilerAsserts.neverPartOfCompilation();
         if (isInternalLibrary(lib)) {
             // Disallow loading internal libraries explicitly.
             return null;
         }
-        Path path = locator.locate(this, lib, reason);
+        Path path = locateExternalLibrary(lib);
         ExternalLibrary newLib = ExternalLibrary.external(path, isNative);
         ExternalLibrary existingLib = addExternalLibrary(newLib);
-        if (existingLib == newLib) {
-            return newLib;
-        }
-        traceLoader("library already located: %s\n", existingLib.path);
-        return null;
+        return existingLib == newLib ? newLib : null;
     }
 
     private boolean isInternalLibrary(String lib) {
@@ -520,9 +510,25 @@ public final class LLVMContext {
         // failures at the moment, because the library path is not always set correctly
     }
 
-    List<Path> getLibraryPaths() {
-        // TODO (je) should this be unmodifiable?
-        return libraryPaths;
+    @TruffleBoundary
+    private Path locateExternalLibrary(String lib) {
+        Path libPath = Paths.get(lib);
+        if (libPath.isAbsolute()) {
+            if (libPath.toFile().exists()) {
+                return libPath;
+            } else {
+                throw new LLVMLinkerException(String.format("Library \"%s\" does not exist.", lib));
+            }
+        }
+
+        for (Path p : libraryPaths) {
+            Path absPath = Paths.get(p.toString(), lib);
+            if (absPath.toFile().exists()) {
+                return absPath;
+            }
+        }
+
+        return libPath;
     }
 
     public LLVMLanguage getLanguage() {
@@ -889,50 +895,4 @@ public final class LLVMContext {
             return scopes.contains(scope);
         }
     }
-
-    @CompilationFinal private boolean traceLoaderEnabled;
-    @CompilationFinal private PrintStream traceLoaderStream;
-
-    private void cacheTrace() {
-        if (traceLoaderStream == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            traceLoaderStream = SulongEngineOption.getStream(getEnv().getOptions().get(SulongEngineOption.LD_DEBUG));
-            traceLoaderEnabled = SulongEngineOption.isTrue(getEnv().getOptions().get(SulongEngineOption.LD_DEBUG));
-        }
-    }
-
-    private boolean ldDebugEnabled() {
-        cacheTrace();
-        return traceLoaderEnabled;
-    }
-
-    private PrintStream ldDebugStream() {
-        cacheTrace();
-        return traceLoaderStream;
-    }
-
-    public void traceLoaderFind(Object lib, Object reason) {
-        traceLoader("find external library=%s; needed by %s\n", lib, reason);
-    }
-
-    public void traceLoaderTry(Object file) {
-        traceLoader("  trying file=%s\n", file);
-    }
-
-    public void traceLoaderSearchPath(List<?> paths) {
-        traceLoader(" search path=%s\n", paths);
-    }
-
-    public void traceLoaderSearchPath(List<?> paths, Object reason) {
-        traceLoader(" search path=%s (local path from %s)\n", paths, reason);
-    }
-
-    @TruffleBoundary
-    public void traceLoader(String format, Object... args) {
-        if (ldDebugEnabled()) {
-            ldDebugStream().printf("lli(%x): ", System.identityHashCode(this));
-            ldDebugStream().printf(format, args);
-        }
-    }
-
 }
