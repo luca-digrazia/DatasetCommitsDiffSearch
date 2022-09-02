@@ -45,7 +45,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 import org.graalvm.options.OptionCategory;
@@ -132,6 +131,9 @@ public final class SimpleCoverageInstrument extends TruffleInstrument {
         final OptionValues options = env.getOptions();
         if (ENABLED.getValue(options)) {
             enable(env);
+            if (PRINT_COVERAGE.getValue(options)) {
+                ensurePrintCoverage(env);
+            }
             env.registerService(this);
         }
     }
@@ -177,13 +179,19 @@ public final class SimpleCoverageInstrument extends TruffleInstrument {
     /**
      * Ensures that the coverage info gathered by the instrument is printed at the end of execution.
      *
+     * This is done by adding a shutdown hook to the runtime, so that when the execution is over,
+     * the {@link #printResults(com.oracle.truffle.api.instrumentation.TruffleInstrument.Env)
+     * results are printed}
+     *
      * @param env
      */
-    @Override
-    protected void onDispose(Env env) {
-        if (PRINT_COVERAGE.getValue(env.getOptions())) {
-            printResults(env);
-        }
+    private void ensurePrintCoverage(final Env env) {
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                SimpleCoverageInstrument.this.printResults(env);
+            }
+        }));
     }
 
     /**
@@ -199,13 +207,13 @@ public final class SimpleCoverageInstrument extends TruffleInstrument {
         for (Source source : coverageMap.keySet()) {
             final String path = source.getPath();
             final int lineCount = source.getLineCount();
-            final Set<Integer> nonCoveredLineNumbers = nonCoveredLineNumbers(source);
-            final int notYetCoveredSize = nonCoveredLineNumbers.size();
-            final double coveredPercentage = 100 * ((double) lineCount - notYetCoveredSize) / lineCount;
+            final List<Integer> notYetCoveredLineNumbers = nonCoveredLineNumbers(source);
+            final int notYetCoveredSize = notYetCoveredLineNumbers.size();
+            double coveredPercentage = 100 * ((double) lineCount - notYetCoveredSize) / lineCount;
             printStream.println("==");
             printStream.println("Coverage of " + path + " is " + String.format("%.2f%%", coveredPercentage));
             for (int i = 1; i <= source.getLineCount(); i++) {
-                String covered = nonCoveredLineNumbers.contains(i) ? "-" : "+";
+                String covered = notYetCoveredLineNumbers.contains(i) ? "-" : "+";
                 printStream.println(String.format("%s %s", covered, source.getCharacters(i)));
             }
         }
@@ -216,7 +224,7 @@ public final class SimpleCoverageInstrument extends TruffleInstrument {
      * @return A sorted list of line numbers for not-yet-covered lines of source code in the given
      *         {@link Source}
      */
-    public synchronized Set<Integer> nonCoveredLineNumbers(final Source source) {
+    public synchronized List<Integer> nonCoveredLineNumbers(final Source source) {
         return coverageMap.get(source).nonCoveredLineNumbers();
     }
 
