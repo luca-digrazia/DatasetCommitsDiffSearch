@@ -28,6 +28,7 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
+import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
@@ -65,7 +66,7 @@ public abstract class InvokeInterfaceNode extends QuickNode {
     }
 
     InvokeInterfaceNode(Method resolutionSeed, int top, int curBCI) {
-        super(top, curBCI);
+        super(top, curBCI, Bytecodes.INVOKEINTERFACE);
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
         this.itableIndex = resolutionSeed.getITableIndex();
@@ -91,8 +92,10 @@ public abstract class InvokeInterfaceNode extends QuickNode {
         // TODO(peterssen): Maybe refrain from exposing the whole root node?.
         BytecodeNode root = getBytecodesNode();
         // TODO(peterssen): IsNull Node?.
+        final StaticObject receiver = nullCheck(root.peekReceiver(frame, top, resolutionSeed));
+        assert receiver != null;
         final Object[] args = root.peekAndReleaseArguments(frame, top, true, resolutionSeed.getParsedSignature());
-        final StaticObject receiver = nullCheck((StaticObject) args[0]);
+        assert receiver == args[0] : "receiver must be the first argument";
         Object result = executeInterface(receiver, args);
         return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, Signatures.returnKind(resolutionSeed.getParsedSignature()));
     }

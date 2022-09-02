@@ -710,18 +710,113 @@ public final class BytecodeNode extends EspressoMethodNode {
                     case ALOAD_2: // fall through
                     case ALOAD_3: putObject(frame, top, getLocalObject(frame, curOpcode - ALOAD_0)); break;
 
-                    case IALOAD: // fall through
-                    case LALOAD: // fall through
-                    case FALOAD: // fall through
-                    case DALOAD: // fall through
-                    case BALOAD: // fall through
-                    case CALOAD: // fall through
-                    case SALOAD: arrayLoad(frame, top, curBCI, curOpcode); break;
+                    case IALOAD:
+                        if (noForeignObjects.isValid()) {
+                            putInt(frame, top - 2, getInterpreterToVM().getArrayInt(peekInt(frame, top - 1), nullCheck(peekAndReleaseObject(frame, top - 2))));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 2));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 2);
+                                putInt(frame, top - 2, getInterpreterToVM().getArrayInt(peekInt(frame, top - 1), array));
+                            } else {
+                                quickenArrayLoad(frame, top, curBCI, JavaKind.Int);
+                            }
+                        }
+                        break;
+                    case LALOAD:
+                        if (noForeignObjects.isValid()) {
+                            putLong(frame, top - 2, getInterpreterToVM().getArrayLong(peekInt(frame, top - 1), nullCheck(peekAndReleaseObject(frame, top - 2))));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 2));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 2);
+                                putLong(frame, top - 2, getInterpreterToVM().getArrayLong(peekInt(frame, top - 1), array));
+                            } else {
+                                quickenArrayLoad(frame, top, curBCI, JavaKind.Long);
+                            }
+                        }
+                        break;
+                    case FALOAD:
+                        if (noForeignObjects.isValid()) {
+                            putFloat(frame, top - 2, getInterpreterToVM().getArrayFloat(peekInt(frame, top - 1), nullCheck(peekAndReleaseObject(frame, top - 2))));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 2));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 2);
+                                putFloat(frame, top - 2, getInterpreterToVM().getArrayFloat(peekInt(frame, top - 1), array));
+                            } else {
+                                quickenArrayLoad(frame, top, curBCI, JavaKind.Float);
+                            }
+                        }
+                        break;
+                    case DALOAD:
+                        if (noForeignObjects.isValid()) {
+                            putDouble(frame, top - 2, getInterpreterToVM().getArrayDouble(peekInt(frame, top - 1), nullCheck(peekAndReleaseObject(frame, top - 2))));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 2));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 2);
+                                putDouble(frame, top - 2, getInterpreterToVM().getArrayDouble(peekInt(frame, top - 1), array));
+                            } else {
+                                quickenArrayLoad(frame, top, curBCI, JavaKind.Double);
+                            }
+                        }
+                        break;
                     case AALOAD:
-                        arrayLoad(frame, top, curBCI, curOpcode);
-                        if (noForeignObjects.isValid() && peekObject(frame, top - 2).isForeignObject()) {
-                            CompilerDirectives.transferToInterpreterAndInvalidate();
-                            noForeignObjects.invalidate();
+                        if (noForeignObjects.isValid()) {
+                            StaticObject arrayElement = getInterpreterToVM().getArrayObject(peekInt(frame, top - 1), nullCheck(peekAndReleaseObject(frame, top - 2)));
+                            putObject(frame, top - 2, arrayElement);
+                            if (arrayElement.isForeignObject()) {
+                                CompilerDirectives.transferToInterpreterAndInvalidate();
+                                noForeignObjects.invalidate();
+                            }
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 2));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 2);
+                                putObject(frame, top - 2, getInterpreterToVM().getArrayObject(peekInt(frame, top - 1), array));
+                            } else {
+                                quickenArrayLoad(frame, top, curBCI, JavaKind.Object);
+                            }
+                        }
+                        break;
+                    case BALOAD:
+                        if (noForeignObjects.isValid()) {
+                            putInt(frame, top - 2, getInterpreterToVM().getArrayByte(peekInt(frame, top - 1), nullCheck(peekAndReleaseObject(frame, top - 2))));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 2));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 2);
+                                putInt(frame, top - 2, getInterpreterToVM().getArrayByte(peekInt(frame, top - 1), array));
+                            } else {
+                                quickenArrayLoad(frame, top, curBCI, JavaKind.Byte);
+                            }
+                        }
+                        break;
+                    case CALOAD:
+                        if (noForeignObjects.isValid()) {
+                            putInt(frame, top - 2, getInterpreterToVM().getArrayChar(peekInt(frame, top - 1), nullCheck(peekAndReleaseObject(frame, top - 2))));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 2));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 2);
+                                putInt(frame, top - 2, getInterpreterToVM().getArrayChar(peekInt(frame, top - 1), array));
+                            } else {
+                                quickenArrayLoad(frame, top, curBCI, JavaKind.Char);
+                            }
+                        }
+                        break;
+                    case SALOAD:
+                        if (noForeignObjects.isValid()) {
+                            putInt(frame, top - 2, getInterpreterToVM().getArrayShort(peekInt(frame, top - 1), nullCheck(peekAndReleaseObject(frame, top - 2))));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 2));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 2);
+                                putInt(frame, top - 2, getInterpreterToVM().getArrayShort(peekInt(frame, top - 1), array));
+                            } else {
+                                quickenArrayLoad(frame, top, curBCI, JavaKind.Short);
+                            }
                         }
                         break;
 
@@ -752,14 +847,110 @@ public final class BytecodeNode extends EspressoMethodNode {
                     case ASTORE_2: // fall through
                     case ASTORE_3: setLocalObjectOrReturnAddress(frame, curOpcode - ASTORE_0, peekAndReleaseReturnAddressOrObject(frame, top - 1)); break;
 
-                    case IASTORE: // fall through
-                    case LASTORE: // fall through
-                    case FASTORE: // fall through
-                    case DASTORE: // fall through
-                    case AASTORE: // fall through
-                    case BASTORE: // fall through
-                    case CASTORE: // fall through
-                    case SASTORE: arrayStore(frame, top, curBCI, curOpcode); break;
+                    case IASTORE:
+                        if (noForeignObjects.isValid()) {
+                            getInterpreterToVM().setArrayInt(peekInt(frame, top - 1), peekInt(frame, top - 2), nullCheck(peekAndReleaseObject(frame, top - 3)));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 3));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 3);
+                                getInterpreterToVM().setArrayInt(peekInt(frame, top - 1), peekInt(frame, top - 2), array);
+                            } else {
+                                quickenArrayStore(frame, top, curBCI, JavaKind.Int);
+                            }
+                        }
+                        break;
+                    case LASTORE:
+                        if (noForeignObjects.isValid()) {
+                            getInterpreterToVM().setArrayLong(peekLong(frame, top - 1), peekInt(frame, top - 3), nullCheck(peekAndReleaseObject(frame, top - 4)));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 4));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 4);
+                                getInterpreterToVM().setArrayLong(peekLong(frame, top - 1), peekInt(frame, top - 3), array);
+                            } else {
+                                quickenArrayStore(frame, top, curBCI, JavaKind.Long);
+                            }
+                        }
+                        break;
+                    case FASTORE:
+                        if (noForeignObjects.isValid()) {
+                            getInterpreterToVM().setArrayFloat(peekFloat(frame, top - 1), peekInt(frame, top - 2), nullCheck(peekAndReleaseObject(frame, top - 3)));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 3));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 3);
+                                getInterpreterToVM().setArrayFloat(peekFloat(frame, top - 1), peekInt(frame, top - 2), array);
+                            } else {
+                                quickenArrayStore(frame, top, curBCI, JavaKind.Float);
+                            }
+                        }
+                        break;
+                    case DASTORE:
+                        if (noForeignObjects.isValid()) {
+                            getInterpreterToVM().setArrayDouble(peekDouble(frame, top - 1), peekInt(frame, top - 3), nullCheck(peekAndReleaseObject(frame, top - 4)));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 4));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 4);
+                                getInterpreterToVM().setArrayDouble(peekDouble(frame, top - 1), peekInt(frame, top - 3), array);
+                            } else {
+                                quickenArrayStore(frame, top, curBCI, JavaKind.Double);
+                            }
+                        }
+                        break;
+                    case AASTORE:
+                        if (noForeignObjects.isValid()) {
+                            getInterpreterToVM().setArrayObject(peekAndReleaseObject(frame, top - 1), peekInt(frame, top - 2), nullCheck(peekAndReleaseObject(frame, top - 3)));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 3));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 3);
+                                getInterpreterToVM().setArrayObject(peekObject(frame, top - 1), peekInt(frame, top - 2), array);
+                            } else {
+                                quickenArrayStore(frame, top, curBCI, JavaKind.Object);
+                            }
+                        }
+                        break;
+                    case BASTORE:
+                        if (noForeignObjects.isValid()) {
+                            getInterpreterToVM().setArrayByte((byte) peekInt(frame, top - 1), peekInt(frame, top - 2), nullCheck(peekAndReleaseObject(frame, top - 3)));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 3));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 3);
+                                getInterpreterToVM().setArrayByte((byte) peekInt(frame, top - 1), peekInt(frame, top - 2), array);
+                            } else {
+                                quickenArrayStore(frame, top, curBCI, JavaKind.Byte);
+                            }
+                        }
+                        break;
+                    case CASTORE:
+                        if (noForeignObjects.isValid()) {
+                            getInterpreterToVM().setArrayChar((char) peekInt(frame, top - 1), peekInt(frame, top - 2), nullCheck(peekAndReleaseObject(frame, top - 3)));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 3));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 3);
+                                getInterpreterToVM().setArrayChar((char) peekInt(frame, top - 1), peekInt(frame, top - 2), array);
+                            } else {
+                                quickenArrayStore(frame, top, curBCI, JavaKind.Char);
+                            }
+                        }
+                        break;
+                    case SASTORE:
+                        if (noForeignObjects.isValid()) {
+                            getInterpreterToVM().setArrayShort((short) peekInt(frame, top - 1), peekInt(frame, top - 2), nullCheck(peekAndReleaseObject(frame, top - 3)));
+                        } else {
+                            StaticObject array = nullCheck(peekObject(frame, top - 3));
+                            if (array.isEspressoObject()) {
+                                releaseObject(frame, top - 3);
+                                getInterpreterToVM().setArrayShort((short) peekInt(frame, top - 1), peekInt(frame, top - 2), array);
+                            } else {
+                                quickenArrayStore(frame, top, curBCI, JavaKind.Short);
+                            }
+                        }
+                        break;
 
                     case POP2:
                         putObject(frame, top - 1, null);
@@ -1082,7 +1273,21 @@ public final class BytecodeNode extends EspressoMethodNode {
                         throw EspressoError.unimplemented(Bytecodes.nameOf(curOpcode) + " not supported.");
 
                     case INVOKEDYNAMIC: top += quickenInvokeDynamic(frame, top, curBCI, curOpcode); break;
-                    case QUICK: top += nodes[bs.readCPI(curBCI)].execute(frame); break;
+                    case QUICK: {
+                        QuickNode quickNode = nodes[bs.readCPI(curBCI)];
+                        if (quickNode.redefined()) {
+                            CompilerDirectives.transferToInterpreterAndInvalidate();
+                            BytecodeStream original = new BytecodeStream(getMethodVersion().getCodeAttribute().getOriginalCode());
+                            char cpi = original.readCPI(curBCI);
+                            Method resolutionSeed = resolveMethod(quickNode.getOpcode(), cpi, true);
+                            QuickNode invoke = insert(dispatchQuickened(top, curBCI, cpi, quickNode.getOpcode(), statementIndex, resolutionSeed, getContext().InlineFieldAccessors));
+                            nodes[bs.readCPI(curBCI)] = invoke;
+                            top += invoke.execute(frame);
+                        } else {
+                            top += quickNode.execute(frame);
+                        }
+                        break;
+                    }
                     case SLIM_QUICK: top += sparseNodes[curBCI].execute(frame); break;
 
                     default:
@@ -1144,7 +1349,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                         wrappedException = getContext().getOutOfMemory();
                     }
 
-                    ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
+                    ExceptionHandler[] handlers = getMethodVersion().getExceptionHandlers();
                     ExceptionHandler handler = null;
                     for (ExceptionHandler toCheck : handlers) {
                         if (curBCI >= toCheck.getStartBCI() && curBCI < toCheck.getEndBCI()) {
@@ -1278,102 +1483,6 @@ public final class BytecodeNode extends EspressoMethodNode {
                 throw EspressoError.shouldNotReachHere("non-branching bytecode");
         }
         // @formatter:on
-    }
-
-    private static JavaKind arrayAccessKind(int opcode) {
-        assert (IALOAD <= opcode && opcode <= SALOAD) || (IASTORE <= opcode && opcode <= SASTORE);
-        switch (opcode) {
-            case IALOAD: // fall through
-            case IASTORE: return JavaKind.Int;
-            case LALOAD: // fall through
-            case LASTORE: return JavaKind.Long;
-            case FALOAD: // fall through
-            case FASTORE: return JavaKind.Float;
-            case DALOAD: // fall through
-            case DASTORE: return JavaKind.Double;
-            case AALOAD: // fall through
-            case AASTORE: return JavaKind.Object;
-            case BALOAD: // fall through
-            case BASTORE: return JavaKind.Byte; // or Boolean
-            case CALOAD: // fall through
-            case CASTORE: return JavaKind.Char;
-            case SALOAD: // fall through
-            case SASTORE: return JavaKind.Short;
-            default:
-                CompilerDirectives.transferToInterpreter();
-                throw EspressoError.shouldNotReachHere();
-        }
-    }
-
-    private void arrayLoad(VirtualFrame frame, int top, int curBCI, int loadOpcode) {
-        assert IALOAD <= loadOpcode && loadOpcode <= SALOAD;
-        JavaKind kind = arrayAccessKind(loadOpcode);
-        CompilerDirectives.isPartialEvaluationConstant(kind);
-        int index = peekInt(frame, top - 1);
-        StaticObject array = nullCheck(peekAndReleaseObject(frame, top - 2));
-        if (noForeignObjects.isValid() || array.isEspressoObject()) {
-            // @formatter:off
-            switch (kind) {
-                case Byte:    putInt(frame, top - 2, getInterpreterToVM().getArrayByte(index, array));      break;
-                case Short:   putInt(frame, top - 2, getInterpreterToVM().getArrayShort(index, array));     break;
-                case Char:    putInt(frame, top - 2, getInterpreterToVM().getArrayChar(index, array));      break;
-                case Int:     putInt(frame, top - 2, getInterpreterToVM().getArrayInt(index, array));       break;
-                case Float:   putFloat(frame, top - 2, getInterpreterToVM().getArrayFloat(index, array));   break;
-                case Long:    putLong(frame, top - 2, getInterpreterToVM().getArrayLong(index, array));     break;
-                case Double:  putDouble(frame, top - 2, getInterpreterToVM().getArrayDouble(index, array)); break;
-                case Object:  putObject(frame, top - 2, getInterpreterToVM().getArrayObject(index, array)); break;
-                default:
-                    CompilerDirectives.transferToInterpreter();
-                    throw EspressoError.shouldNotReachHere();
-            }
-            // @formatter:on
-        } else {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            // The array was released, it must be restored for the quickening.
-            putObject(frame, top - 2, array);
-            quickenArrayLoad(frame, top, curBCI, kind);
-        }
-    }
-
-    private void arrayStore(VirtualFrame frame, int top, int curBCI, int storeOpcode) {
-        assert IASTORE <= storeOpcode && storeOpcode <= SASTORE;
-        JavaKind kind = arrayAccessKind(storeOpcode);
-        CompilerDirectives.isPartialEvaluationConstant(kind);
-        int index;
-        StaticObject array;
-        if (kind.needsTwoSlots()) {
-            index = peekInt(frame, top - 3);
-            array = nullCheck(peekAndReleaseObject(frame, top - 4));
-        } else {
-            index = peekInt(frame, top - 2);
-            array = nullCheck(peekAndReleaseObject(frame, top - 3));
-        }
-        if (noForeignObjects.isValid() || array.isEspressoObject()) {
-            // @formatter:off
-            switch (kind) {
-                case Byte:    getInterpreterToVM().setArrayByte((byte) peekInt(frame, top - 1), index, array);   break;
-                case Short:   getInterpreterToVM().setArrayShort((short) peekInt(frame, top - 1), index, array); break;
-                case Char:    getInterpreterToVM().setArrayChar((char) peekInt(frame, top - 1), index, array);   break;
-                case Int:     getInterpreterToVM().setArrayInt(peekInt(frame, top - 1), index, array);           break;
-                case Float:   getInterpreterToVM().setArrayFloat(peekFloat(frame, top - 1), index, array);       break;
-                case Long:    getInterpreterToVM().setArrayLong(peekLong(frame, top - 1), index, array);         break;
-                case Double:  getInterpreterToVM().setArrayDouble(peekDouble(frame, top - 1), index, array);     break;
-                case Object:  getInterpreterToVM().setArrayObject(peekObject(frame, top - 1), index, array);     break;
-                default:
-                    CompilerDirectives.transferToInterpreter();
-                    throw EspressoError.shouldNotReachHere();
-            }
-            // @formatter:on
-        } else {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            // The array was released, it must be restored for the quickening.
-            if (kind.needsTwoSlots()) {
-                putObject(frame, top - 4, array);
-            } else {
-                putObject(frame, top - 3, array);
-            }
-            quickenArrayStore(frame, top, curBCI, kind);
-        }
     }
 
     private int checkBackEdge(int curBCI, int targetBCI, int top, int opcode) {
@@ -1595,7 +1704,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         CompilerAsserts.neverPartOfCompilation();
         Objects.requireNonNull(node);
         if (sparseNodes == QuickNode.EMPTY_ARRAY) {
-            sparseNodes = new QuickNode[getMethod().getCode().length];
+            sparseNodes = new QuickNode[getMethodVersion().getCodeAttribute().getCode().length];
         }
         sparseNodes[curBCI] = insert(node);
     }
@@ -1680,8 +1789,9 @@ public final class BytecodeNode extends EspressoMethodNode {
             } else {
                 // During resolution of the symbolic reference to the method, any of the exceptions
                 // pertaining to method resolution (&sect;5.4.3.3) can be thrown.
-                Method resolutionSeed = resolveMethod(opcode, bs.readCPI(curBCI));
-                QuickNode invoke = dispatchQuickened(top, curBCI, opcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors);
+                char cpi = bs.readCPI(curBCI);
+                Method resolutionSeed = resolveMethod(opcode, cpi);
+                QuickNode invoke = dispatchQuickened(top, curBCI, cpi, opcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors);
                 quick = injectQuick(curBCI, invoke, QUICK);
             }
         }
@@ -1699,8 +1809,8 @@ public final class BytecodeNode extends EspressoMethodNode {
         QuickNode invoke = null;
         synchronized (this) {
             assert bs.currentBC(curBCI) == QUICK;
-            invoke = dispatchQuickened(top, curBCI, opcode, statementIndex, resolutionSeed, false);
             char cpi = bs.readCPI(curBCI);
+            invoke = dispatchQuickened(top, curBCI, cpi, opcode, statementIndex, resolutionSeed, false);
             nodes[cpi] = nodes[cpi].replace(invoke);
         }
         // Perform the call outside of the lock.
@@ -1814,7 +1924,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
     // endregion quickenForeign
 
-    private QuickNode dispatchQuickened(int top, int curBCI, int opcode, int statementIndex, Method resolutionSeed, boolean allowFieldAccessInlining) {
+    private QuickNode dispatchQuickened(int top, int curBCI, char cpi, int opcode, int statementIndex, Method resolutionSeed, boolean allowFieldAccessInlining) {
         assert !allowFieldAccessInlining || getContext().InlineFieldAccessors;
         QuickNode invoke;
         Method resolved = resolutionSeed;
@@ -1849,7 +1959,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                 // class in which it is declared is not the class symbolically referenced by the
                 // instruction, a NoSuchMethodError is thrown.
                 if (resolved.isConstructor()) {
-                    if (resolved.getDeclaringKlass().getName() != getConstantPool().methodAt(bs.readCPI(curBCI)).getHolderKlassName(getConstantPool())) {
+                    if (resolved.getDeclaringKlass().getName() != getConstantPool().methodAt(cpi).getHolderKlassName(getConstantPool())) {
                         CompilerDirectives.transferToInterpreter();
                         throw Meta.throwException(getMeta().java_lang_NoSuchMethodError);
                     }
@@ -1874,7 +1984,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                 // version of the class file.
                 if (!resolved.isConstructor()) {
                     Klass declaringKlass = getMethod().getDeclaringKlass();
-                    Klass symbolicRef = ((MethodRefConstant.Indexes) getConstantPool().methodAt(bs.readCPI(curBCI))).getResolvedHolderKlass(declaringKlass, getConstantPool());
+                    Klass symbolicRef = ((MethodRefConstant.Indexes) getConstantPool().methodAt(cpi)).getResolvedHolderKlass(declaringKlass, getConstantPool());
                     if (!symbolicRef.isInterface() && symbolicRef != declaringKlass && declaringKlass.getSuperKlass() != null && symbolicRef != declaringKlass.getSuperKlass() &&
                                     symbolicRef.isAssignableFrom(declaringKlass)) {
                         resolved = declaringKlass.getSuperKlass().lookupMethod(resolved.getName(), resolved.getRawSignature(), declaringKlass);
@@ -1896,20 +2006,20 @@ public final class BytecodeNode extends EspressoMethodNode {
             if (resolved.isPrivate()) {
                 assert getJavaVersion().java9OrLater();
                 // Interface private methods do not appear in itables.
-                invoke = new InvokeSpecialNode(resolved, top, curBCI);
+                invoke = new InvokeSpecialNode(resolved, top, curBCI, opcode);
             } else {
                 // Can happen in old classfiles that calls j.l.Object on interfaces.
-                invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI);
+                invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI, opcode);
             }
         } else if (opcode == INVOKEVIRTUAL && (resolved.isFinalFlagSet() || resolved.getDeclaringKlass().isFinalFlagSet() || resolved.isPrivate())) {
-            invoke = new InvokeSpecialNode(resolved, top, curBCI);
+            invoke = new InvokeSpecialNode(resolved, top, curBCI, opcode);
         } else {
             // @formatter:off
             switch (opcode) {
                 case INVOKESTATIC    : invoke = new InvokeStaticNode(resolved, top, curBCI);          break;
                 case INVOKEINTERFACE : invoke = InvokeInterfaceNodeGen.create(resolved, top, curBCI); break;
-                case INVOKEVIRTUAL   : invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI);   break;
-                case INVOKESPECIAL   : invoke = new InvokeSpecialNode(resolved, top, curBCI);         break;
+                case INVOKEVIRTUAL   : invoke = InvokeVirtualNodeGen.create(resolved, top, curBCI, opcode);   break;
+                case INVOKESPECIAL   : invoke = new InvokeSpecialNode(resolved, top, curBCI, opcode);         break;
                 default              :
                     CompilerDirectives.transferToInterpreter();
                     throw EspressoError.unimplemented("Quickening for " + Bytecodes.nameOf(opcode));
@@ -1965,8 +2075,12 @@ public final class BytecodeNode extends EspressoMethodNode {
     }
 
     private Method resolveMethod(int opcode, char cpi) {
+        return resolveMethod(opcode, cpi, false);
+    }
+
+    private Method resolveMethod(int opcode, char cpi, boolean noCache) {
         assert Bytecodes.isInvoke(opcode);
-        return getConstantPool().resolvedMethodAt(getMethod().getDeclaringKlass(), cpi);
+        return getConstantPool().resolvedMethodAt(getMethod().getDeclaringKlass(), cpi, noCache);
     }
 
     private Field resolveField(int opcode, char cpi) {

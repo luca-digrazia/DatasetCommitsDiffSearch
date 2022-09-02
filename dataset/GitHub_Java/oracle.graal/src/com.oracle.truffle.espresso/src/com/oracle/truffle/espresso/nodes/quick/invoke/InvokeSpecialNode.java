@@ -70,7 +70,7 @@ public final class InvokeSpecialNode extends QuickNode {
     }
 
     @Override
-    public boolean removedByRedefintion() {
+    public boolean redefined() {
         return method.getMethod().isRemovedByRedefition();
     }
 }

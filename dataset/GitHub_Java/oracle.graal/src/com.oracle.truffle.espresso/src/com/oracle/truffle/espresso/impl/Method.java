@@ -974,9 +974,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     void onSubclassMethodChanged(Ids<Object> ids) {
         MethodVersion oldVersion = methodVersion;
-        CodeAttribute codeAttribute = oldVersion.getCodeAttribute();
-        codeAttribute.onRedefine();
-        methodVersion = new MethodVersion(oldVersion.pool, oldVersion.linkedMethod, codeAttribute);
+        methodVersion = new MethodVersion(oldVersion.pool, oldVersion.linkedMethod, oldVersion.getCodeAttribute());
         oldVersion.getAssumption().invalidate();
         ids.replaceObject(oldVersion, methodVersion);
     }

@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
@@ -88,6 +87,13 @@ public final class RuntimeConstantPool extends ConstantPool {
     }
 
     private Resolvable.ResolvedConstant resolvedAt(Klass accessingKlass, int index, String description) {
+        return resolvedAt(accessingKlass, index, description, false);
+    }
+
+    private Resolvable.ResolvedConstant resolvedAt(Klass accessingKlass, int index, String description, boolean noCache) {
+        if (noCache) {
+            return ((Resolvable) pool.at(index, description)).resolve(this, index, accessingKlass);
+        }
         Resolvable.ResolvedConstant c = constants[index];
         if (c == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -101,11 +107,6 @@ public final class RuntimeConstantPool extends ConstantPool {
             }
         }
         return c;
-    }
-
-    private Resolvable.ResolvedConstant resolvedAtNoCache(Klass accessingKlass, int index, String description) {
-        CompilerAsserts.neverPartOfCompilation();
-        return ((Resolvable) pool.at(index, description)).resolve(this, index, accessingKlass);
     }
 
     public StaticObject resolvedStringAt(int index) {
@@ -124,13 +125,11 @@ public final class RuntimeConstantPool extends ConstantPool {
     }
 
     public Method resolvedMethodAt(Klass accessingKlass, int index) {
-        Resolvable.ResolvedConstant resolved = resolvedAt(accessingKlass, index, "method");
-        return (Method) resolved.value();
+        return resolvedMethodAt(accessingKlass, index, false);
     }
 
-    public Method resolvedMethodAtNoCache(Klass accessingKlass, int index) {
-        CompilerAsserts.neverPartOfCompilation();
-        Resolvable.ResolvedConstant resolved = resolvedAtNoCache(accessingKlass, index, "method");
+    public Method resolvedMethodAt(Klass accessingKlass, int index, boolean noCache) {
+        Resolvable.ResolvedConstant resolved = resolvedAt(accessingKlass, index, "method", noCache);
         return (Method) resolved.value();
     }
 
