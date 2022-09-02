@@ -1133,7 +1133,8 @@ public class LLVMInteropTest {
         }
 
         @ExportMessage
-        void toNative(@CachedContext(LLVMLanguage.class) @SuppressWarnings("unused") LLVMContext context,
+        @SuppressWarnings("unused")
+        void toNative(@CachedContext(LLVMLanguage.class) LLVMContext context,
                         @Cached(value = "getTestToNative(context)", allowUncached = true) Object testToNative,
                         @CachedLibrary("testToNative") InteropLibrary interop) {
             try {
