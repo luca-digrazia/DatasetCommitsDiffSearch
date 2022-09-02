@@ -26,22 +26,49 @@
 package com.oracle.svm.core.heap;
 
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.word.BarrieredAccess;
-import org.graalvm.compiler.word.ObjectAccess;
+import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 
-import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.annotate.AlwaysInline;
-import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.config.ObjectLayout;
 
 /**
  * Means for accessing object references, explicitly distinguishing between compressed and
  * uncompressed references.
+ * <p>
+ * <p>
+ * SubstrateVM uses the following object reference variants:
+ * <p>
+ * <ol>
+ * <li>-H:-SpawnIsolates (explicitly disabled isolates support)
+ * <ul>
+ * <li>Regular reference: <code>address64 = val64</code>
+ * <li>Reference to hub: <code>address64 = val64 & GC-bits_bitmask</code>
+ * </ul>
+ * <blockquote>where <code>GC-bits_bitmask</code> is
+ * <code>~{@link ObjectHeader#getReservedBitsMask()}</code></blockquote> <br>
+ * <li>-H:+SpawnIsolates and -H:-UseCompressedReferences (CE default)
+ * <ul>
+ * <li>Regular reference: <code>address64 = val64 + r14</code>
+ * <li>Reference to hub:
+ * <code>address64 = ((val64 >>> num_GC_bits) << objectAlignmentBits) + r14</code>
+ * </ul>
+ * <blockquote>where <code>objectAlignmentBits</code> is defined by
+ * <code>Integer.bitCount({@link ObjectLayout#getAlignment()} - 1)</code></blockquote> <br>
+ * <li>-H:+SpawnIsolates and -H:+UseCompressedReferences (EE default)
+ * <ul>
+ * <li>Regular reference: <code>address64 = (val32 << compressShift) + r14</code>
+ * <li>Reference to hub: <code>address64 = ((val32 >>> num_GC_bits) << compressShift) + r14</code>
+ * <br>
+ * </ul>
+ * <blockquote>where <code>compressShift</code> is defined by
+ * {@link CompressEncoding#getShift()}</blockquote>
+ * </ol>
+ * <br>
+ * <blockquote> In 2. and 3. <code>num_GC_bits</code> is
+ * <code>Integer.bitCount({@link ObjectHeader#getReservedBitsMask()})</code> </blockquote>
  */
 public interface ReferenceAccess {
     @Fold
@@ -72,75 +99,22 @@ public interface ReferenceAccess {
     void writeObjectBarrieredAt(Object object, UnsignedWord offsetInObject, Object value, boolean compressed);
 
     /**
+     * Return the compressed representation of an object reference.
+     */
+    UnsignedWord getCompressedRepresentation(Object obj);
+
+    /**
+     * Get an object reference from its compressed representation.
+     */
+    Object uncompressReference(UnsignedWord ref);
+
+    /**
      * Returns true iff compressed references are available.
      */
     boolean haveCompressedReferences();
-}
 
-final class ReferenceAccessImpl implements ReferenceAccess {
-    static void initialize() {
-        ImageSingletons.add(ReferenceAccess.class, new ReferenceAccessImpl());
-    }
-
-    private ReferenceAccessImpl() {
-    }
-
-    @Override
-    @AlwaysInline("Performance")
-    @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
-    public Word readObjectAsUntrackedPointer(Pointer p, boolean compressed) {
-        assert !compressed || haveCompressedReferences();
-        Object obj = readObjectAt(p, compressed);
-        return Word.objectToUntrackedPointer(obj);
-    }
-
-    @Override
-    @AlwaysInline("Performance")
-    @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
-    public Object readObjectAt(Pointer p, boolean compressed) {
-        assert !compressed || haveCompressedReferences();
-        Word w = (Word) p;
-        if (compressed) {
-            return ObjectAccess.readObject(null, p);
-        } else {
-            return w.readObject(0);
-        }
-    }
-
-    @Override
-    @AlwaysInline("Performance")
-    @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
-    public void writeObjectAt(Pointer p, Object value, boolean compressed) {
-        assert !compressed || haveCompressedReferences();
-        Word w = (Word) p;
-        if (compressed) {
-            ObjectAccess.writeObject(null, p, value);
-        } else {
-            // this overload has no uncompression semantics
-            w.writeObject(0, value);
-        }
-    }
-
-    @Override
-    @AlwaysInline("Performance")
-    @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
-    public void writeObjectBarrieredAt(Object object, UnsignedWord offsetInObject, Object value, boolean compressed) {
-        assert compressed || !haveCompressedReferences() : "Heap object must contain only compressed references";
-        BarrieredAccess.writeObject(object, offsetInObject, value);
-    }
-
-    @Override
-    @AlwaysInline("Performance")
-    @Uninterruptible(reason = "for uninterruptible callers", mayBeInlined = true)
-    public boolean haveCompressedReferences() {
-        return SubstrateOptions.UseHeapBaseRegister.getValue();
-    }
-}
-
-@AutomaticFeature
-class ReferenceAccessFeature implements Feature {
-    @Override
-    public void afterRegistration(AfterRegistrationAccess access) {
-        ReferenceAccessImpl.initialize();
-    }
+    /**
+     * Returns the default compression encoding.
+     */
+    CompressEncoding getCompressEncoding();
 }
