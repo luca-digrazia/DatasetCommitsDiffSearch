@@ -30,10 +30,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ForkJoinPool;
 
+import org.graalvm.compiler.options.OptionValues;
+
 public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoaderSupport {
 
-    NativeImageClassLoaderSupport(String[] classpath, @SuppressWarnings("unused") String[] modulePath) {
-        super(classpath);
+    NativeImageClassLoaderSupport(ClassLoader defaultSystemClassLoader, String[] classpath, @SuppressWarnings("unused") String[] modulePath) {
+        super(defaultSystemClassLoader, classpath);
     }
 
     @Override
@@ -42,8 +44,27 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
     }
 
     @Override
+    List<Path> applicationModulePath() {
+        return Collections.emptyList();
+    }
+
+    @Override
     public Optional<Object> findModule(String moduleName) {
         return Optional.empty();
+    }
+
+    @Override
+    void processAddExportsAndAddOpens(OptionValues parsedHostedOptions) {
+        /* Nothing to do for Java 8 */
+    }
+
+    @Override
+    Class<?> loadClassFromModule(Object module, String className) throws ClassNotFoundException {
+        if (module != null) {
+            throw new ClassNotFoundException(className,
+                            new UnsupportedOperationException("NativeImageClassLoader for Java 8 does not support modules"));
+        }
+        return Class.forName(className, false, classPathClassLoader);
     }
 
     @Override

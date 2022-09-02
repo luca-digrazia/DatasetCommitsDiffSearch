@@ -28,7 +28,6 @@ import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -47,7 +46,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -57,12 +55,13 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.graalvm.compiler.options.OptionValues;
+
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.util.ClasspathUtils;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.util.ReflectionUtil;
 
 public abstract class AbstractNativeImageClassLoaderSupport {
 
@@ -74,128 +73,51 @@ public abstract class AbstractNativeImageClassLoaderSupport {
 
     final List<Path> imagecp;
     private final List<Path> buildcp;
-    private final NativeImageSystemClassLoader nativeImageSystemClassLoader;
 
     protected final URLClassLoader classPathClassLoader;
-    protected final ClassLoader defaultSystemClassLoader;
 
-    private static NativeImageSystemClassLoader nativeImageSystemClassLoader() {
-        if (!(ClassLoader.getSystemClassLoader() instanceof NativeImageSystemClassLoader)) {
-            String badCustomClassLoaderError = "SystemClassLoader is the default system class loader. This might create problems when using reflection " +
-                            "during class initialization at build-time. " +
-                            "To fix this error add -Djava.system.class.loader=" + NativeImageSystemClassLoader.class.getCanonicalName();
-            UserError.abort(badCustomClassLoaderError);
-        }
+    protected AbstractNativeImageClassLoaderSupport(ClassLoader defaultSystemClassLoader, String[] classpath) {
 
-        return (NativeImageSystemClassLoader) ClassLoader.getSystemClassLoader();
-    }
-
-    protected AbstractNativeImageClassLoaderSupport(String[] classpath) {
-
-        /*
-         * Make system class loader delegate to NativeImageClassLoader, enabling resolution of
-         * classes and resources during image build-time present in the image classpath.
-         */
-        nativeImageSystemClassLoader = nativeImageSystemClassLoader();
-        nativeImageSystemClassLoader.setDelegate(this);
-
-        defaultSystemClassLoader = nativeImageSystemClassLoader.getDefaultSystemClassLoader();
         classPathClassLoader = new URLClassLoader(Util.verifyClassPathAndConvertToURLs(classpath), defaultSystemClassLoader);
 
         imagecp = Collections.unmodifiableList(Arrays.stream(classPathClassLoader.getURLs()).map(Util::urlToPath).collect(Collectors.toList()));
-        buildcp = Collections.unmodifiableList(Arrays.stream(System.getProperty("java.class.path").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toList()));
+        String builderClassPathString = System.getProperty("java.class.path");
+        String[] builderClassPathEntries = builderClassPathString.isEmpty() ? new String[0] : builderClassPathString.split(File.pathSeparator);
+        if (Arrays.asList(builderClassPathEntries).contains(".")) {
+            VMError.shouldNotReachHere("The classpath of " + NativeImageGeneratorRunner.class.getName() +
+                            " must not contain \".\". This can happen implicitly if the builder runs exclusively on the --module-path" +
+                            " but specifies the " + NativeImageGeneratorRunner.class.getName() + " main class without --module.");
+        }
+        buildcp = Collections.unmodifiableList(Arrays.stream(builderClassPathEntries)
+                        .map(Paths::get).map(Path::toAbsolutePath)
+                        .collect(Collectors.toList()));
     }
 
-    public List<Path> classpath() {
+    List<Path> classpath() {
         return Stream.concat(buildcp.stream(), imagecp.stream()).collect(Collectors.toList());
     }
 
-    public Class<?> loadClassFromModule(Object module, String className) throws ClassNotFoundException {
-        if (module != null) {
-            throw new ClassNotFoundException(className,
-                            new UnsupportedOperationException("NativeImageClassLoader for Java 8 does not support modules"));
-        }
-        return Class.forName(className, false, classPathClassLoader);
+    List<Path> applicationClassPath() {
+        return imagecp;
     }
 
-    public ClassLoader getClassLoader() {
+    ClassLoader getClassLoader() {
         return classPathClassLoader;
     }
 
-    boolean isNativeImageClassLoader(ClassLoader c) {
-        if (c == nativeImageSystemClassLoader) {
-            return true;
-        } else if (c == classPathClassLoader) {
-            return true;
-        }
-        return false;
-    }
+    abstract Class<?> loadClassFromModule(Object module, String className) throws ClassNotFoundException;
 
-    public abstract List<Path> modulepath();
+    abstract List<Path> modulepath();
 
-    public abstract Optional<Object> findModule(String moduleName);
+    abstract List<Path> applicationModulePath();
 
-    public abstract void initAllClasses(ForkJoinPool executor, ImageClassLoader imageClassLoader);
+    abstract Optional<? extends Object> findModule(String moduleName);
+
+    abstract void processAddExportsAndAddOpens(OptionValues parsedHostedOptions);
+
+    abstract void initAllClasses(ForkJoinPool executor, ImageClassLoader imageClassLoader);
 
     protected static class Util {
-
-        /**
-         * Several classloader methods are terminal methods that get invoked when resolving a class
-         * or accessing resources, unfortunately they are protected methods meant to be overridden.
-         * Since this class delegates to the appropriate ClassLoader, the methods need to be called
-         * via reflection to by pass the protected visibility
-         */
-        private static final Method loadClass = ReflectionUtil.lookupMethod(ClassLoader.class, "loadClass",
-                        String.class, boolean.class);
-
-        private static final Method getClassLoadingLock = ReflectionUtil.lookupMethod(ClassLoader.class, "getClassLoadingLock",
-                        String.class);
-        private static final Method findResource = ReflectionUtil.lookupMethod(ClassLoader.class, "findResource",
-                        String.class);
-        private static final Method findResources = ReflectionUtil.lookupMethod(ClassLoader.class, "findResources",
-                        String.class);
-
-        static Class<?> loadClass(ClassLoader classLoader, String name, boolean resolve) throws ClassNotFoundException {
-            Class<?> loadedClass = null;
-            try {
-                final Object lock = getClassLoadingLock.invoke(classLoader, name);
-                synchronized (lock) {
-                    // invoke the "loadClass" method on the current class loader
-                    loadedClass = ((Class<?>) loadClass.invoke(classLoader, name, resolve));
-                }
-            } catch (Exception e) {
-                if (e.getCause() instanceof ClassNotFoundException) {
-                    throw ((ClassNotFoundException) e.getCause());
-                }
-                String message = String.format("Can not load class: %s, with class loader: %s", name, classLoader);
-                VMError.shouldNotReachHere(message, e);
-            }
-            return loadedClass;
-        }
-
-        static URL findResource(ClassLoader classLoader, String name) {
-            try {
-                // invoke the "findResource" method on the current class loader
-                return (URL) findResource.invoke(classLoader, name);
-            } catch (ReflectiveOperationException e) {
-                String message = String.format("Can not find resource: %s using class loader: %s", name, classLoader);
-                VMError.shouldNotReachHere(message, e);
-            }
-            return null;
-        }
-
-        @SuppressWarnings("unchecked")
-        static Enumeration<URL> findResources(ClassLoader classLoader, String name) {
-            try {
-                // invoke the "findResources" method on the current class loader
-                return (Enumeration<URL>) findResources.invoke(classLoader, name);
-            } catch (ReflectiveOperationException e) {
-                String message = String.format("Can not find resources: %s using class loader: %s", name, classLoader);
-                VMError.shouldNotReachHere(message, e);
-            }
-
-            return null;
-        }
 
         static URL[] verifyClassPathAndConvertToURLs(String[] classpath) {
             Stream<Path> pathStream = new LinkedHashSet<>(Arrays.asList(classpath)).stream().flatMap(Util::toClassPathEntries);
@@ -203,7 +125,7 @@ public abstract class AbstractNativeImageClassLoaderSupport {
                 try {
                     return v.toAbsolutePath().toUri().toURL();
                 } catch (MalformedURLException e) {
-                    throw UserError.abort("Invalid classpath element '" + v + "'. Make sure that all paths provided with '" + SubstrateOptions.IMAGE_CLASSPATH_PREFIX + "' are correct.");
+                    throw UserError.abort("Invalid classpath element '%s'. Make sure that all paths provided with '%s' are correct.", v, SubstrateOptions.IMAGE_CLASSPATH_PREFIX);
                 }
             }).toArray(URL[]::new);
         }
@@ -267,30 +189,28 @@ public abstract class AbstractNativeImageClassLoaderSupport {
         }
 
         private void loadClassesFromPath(Path path) {
-            if (Files.exists(path)) {
-                if (Files.isRegularFile(path)) {
+            if (ClasspathUtils.isJar(path)) {
+                try {
+                    URI jarURI = new URI("jar:" + path.toAbsolutePath().toUri());
+                    FileSystem probeJarFileSystem;
                     try {
-                        URI jarURI = new URI("jar:" + path.toAbsolutePath().toUri());
-                        FileSystem probeJarFileSystem;
-                        try {
-                            probeJarFileSystem = FileSystems.newFileSystem(jarURI, Collections.emptyMap());
-                        } catch (UnsupportedOperationException e) {
-                            /* Silently ignore invalid jar-files on image-classpath */
-                            probeJarFileSystem = null;
-                        }
-                        if (probeJarFileSystem != null) {
-                            try (FileSystem jarFileSystem = probeJarFileSystem) {
-                                loadClassesFromPath(jarFileSystem.getPath("/"), Collections.emptySet());
-                            }
-                        }
-                    } catch (ClosedByInterruptException ignored) {
-                        throw new InterruptImageBuilding();
-                    } catch (IOException | URISyntaxException e) {
-                        throw shouldNotReachHere(e);
+                        probeJarFileSystem = FileSystems.newFileSystem(jarURI, Collections.emptyMap());
+                    } catch (UnsupportedOperationException e) {
+                        /* Silently ignore invalid jar-files on image-classpath */
+                        probeJarFileSystem = null;
                     }
-                } else {
-                    loadClassesFromPath(path, excludeDirectories);
+                    if (probeJarFileSystem != null) {
+                        try (FileSystem jarFileSystem = probeJarFileSystem) {
+                            loadClassesFromPath(jarFileSystem.getPath("/"), Collections.emptySet());
+                        }
+                    }
+                } catch (ClosedByInterruptException ignored) {
+                    throw new InterruptImageBuilding();
+                } catch (IOException | URISyntaxException e) {
+                    throw shouldNotReachHere(e);
                 }
+            } else {
+                loadClassesFromPath(path, excludeDirectories);
             }
         }
 
@@ -310,9 +230,7 @@ public abstract class AbstractNativeImageClassLoaderSupport {
 
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                    if (excludes.contains(file.getParent())) {
-                        return FileVisitResult.SKIP_SIBLINGS;
-                    }
+                    assert !excludes.contains(file.getParent()) : "Visiting file '" + file + "' with excluded parent directory";
                     String fileName = root.relativize(file).toString();
                     if (fileName.endsWith(CLASS_EXTENSION)) {
                         executor.execute(() -> handleClassFileName(unversionedFileName(fileName), fileSystemSeparatorChar));
