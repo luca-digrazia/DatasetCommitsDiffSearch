@@ -24,7 +24,6 @@
 package com.oracle.truffle.espresso.meta;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
@@ -38,21 +37,7 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 public final class ExceptionDispatch implements ContextAccess {
     private final Meta meta;
 
-    @CompilerDirectives.CompilationFinal(dimensions = 1) //
-    private ObjectKlass[] fastExceptionKlasses;
-
-    private void initExceptionKlasses() {
-        fastExceptionKlasses = new ObjectKlass[]{
-                        meta.java_lang_NullPointerException,
-                        meta.java_lang_ClassCastException,
-                        meta.java_lang_IllegalArgumentException,
-                        meta.java_lang_ArrayIndexOutOfBoundsException,
-                        meta.java_lang_StringIndexOutOfBoundsException,
-                        meta.java_lang_IndexOutOfBoundsException,
-                        meta.java_lang_ArrayStoreException,
-                        meta.java_lang_ArithmeticException
-        };
-    }
+    private final ObjectKlass runtimeException;
 
     @Override
     public EspressoContext getContext() {
@@ -66,19 +51,16 @@ public final class ExceptionDispatch implements ContextAccess {
 
     public ExceptionDispatch(Meta meta) {
         this.meta = meta;
-        initExceptionKlasses();
+        this.runtimeException = meta.java_lang_RuntimeException;
     }
 
     /**
      * Quickly initializes frequent runtime exceptions without needing a boundary.
      */
-    @ExplodeLoop
     StaticObject initEx(ObjectKlass klass, StaticObject message, StaticObject cause) {
         if (!CompilerDirectives.inInterpreter() && CompilerDirectives.isPartialEvaluationConstant(klass)) {
-            for (ObjectKlass k : fastExceptionKlasses) {
-                if (k == klass) {
-                    return fastPath(klass, message, cause);
-                }
+            if (StaticObject.isNull(klass.getDefiningClassLoader()) && runtimeException.isAssignableFrom(klass)) {
+                return fastPath(klass, message, cause);
             }
         }
         return slowPath(klass, message, cause);
@@ -86,9 +68,12 @@ public final class ExceptionDispatch implements ContextAccess {
 
     private StaticObject fastPath(ObjectKlass klass, StaticObject message, StaticObject cause) {
         StaticObject ex = klass.allocateInstance();
+
+        // TODO: Remove this when truffle exceptions are reworked.
         InterpreterToVM.fillInStackTrace(ex, false, meta);
+
         if (message != null) {
-            ex.setField(meta.java_lang_Throwable_message, message);
+            ex.setField(meta.java_lang_Throwable_detailMessage, message);
         }
         if (cause != null) {
             ex.setField(meta.java_lang_Throwable_cause, cause);

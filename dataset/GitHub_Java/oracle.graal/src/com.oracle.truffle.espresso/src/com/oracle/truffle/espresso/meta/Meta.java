@@ -152,7 +152,7 @@ public final class Meta implements ContextAccess {
         java_lang_Throwable_getStackTrace = java_lang_Throwable.lookupDeclaredMethod(Name.getStackTrace, Signature.StackTraceElement_array);
         HIDDEN_FRAMES = java_lang_Throwable.lookupHiddenField(Name.HIDDEN_FRAMES);
         java_lang_Throwable_backtrace = java_lang_Throwable.lookupField(Name.backtrace, Type.java_lang_Object);
-        java_lang_Throwable_message = java_lang_Throwable.lookupField(Name.message, Type.java_lang_String);
+        java_lang_Throwable_detailMessage = java_lang_Throwable.lookupField(Name.detailMessage, Type.java_lang_String);
         java_lang_Throwable_cause = java_lang_Throwable.lookupField(Name.cause, Type.java_lang_Throwable);
 
         java_lang_StackTraceElement = knownKlass(Type.java_lang_StackTraceElement);
@@ -571,7 +571,7 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_Throwable_getStackTrace;
     public final Field HIDDEN_FRAMES;
     public final Field java_lang_Throwable_backtrace;
-    public final Field java_lang_Throwable_message;
+    public final Field java_lang_Throwable_detailMessage;
     public final Field java_lang_Throwable_cause;
 
     public final ObjectKlass java_lang_Error;
@@ -770,10 +770,10 @@ public final class Meta implements ContextAccess {
      * @param exceptionKlass guest exception class, subclass of guest {@link #java_lang_Throwable
      *            Throwable}.
      */
-    public @Host(Throwable.class) StaticObject initExceptionWithMessage(@Host(Throwable.class) ObjectKlass exceptionKlass, @Host(String.class) StaticObject message) {
+    public @Host(Throwable.class) static StaticObject initExceptionWithMessage(@Host(Throwable.class) ObjectKlass exceptionKlass, @Host(String.class) StaticObject message) {
         assert exceptionKlass.getMeta().java_lang_Throwable.isAssignableFrom(exceptionKlass);
         assert StaticObject.isNull(message) || exceptionKlass.getMeta().java_lang_String.isAssignableFrom(message.getKlass());
-        return dispatch.initEx(exceptionKlass, message, null);
+        return exceptionKlass.getMeta().dispatch.initEx(exceptionKlass, message, null);
     }
 
     /**
@@ -787,7 +787,7 @@ public final class Meta implements ContextAccess {
      * @param exceptionKlass guest exception class, subclass of guest {@link #java_lang_Throwable
      *            Throwable}.
      */
-    public @Host(Throwable.class) StaticObject initExceptionWithMessage(@Host(Throwable.class) ObjectKlass exceptionKlass, String message) {
+    public @Host(Throwable.class) static StaticObject initExceptionWithMessage(@Host(Throwable.class) ObjectKlass exceptionKlass, String message) {
         return initExceptionWithMessage(exceptionKlass, exceptionKlass.getMeta().toGuestString(message));
     }
 
@@ -801,9 +801,9 @@ public final class Meta implements ContextAccess {
      * @param exceptionKlass guest exception class, subclass of guest {@link #java_lang_Throwable
      *            Throwable}.
      */
-    public @Host(Throwable.class) StaticObject initException(@Host(Throwable.class) ObjectKlass exceptionKlass) {
+    public @Host(Throwable.class) static StaticObject initException(@Host(Throwable.class) ObjectKlass exceptionKlass) {
         assert exceptionKlass.getMeta().java_lang_Throwable.isAssignableFrom(exceptionKlass);
-        return dispatch.initEx(exceptionKlass, null, null);
+        return exceptionKlass.getMeta().dispatch.initEx(exceptionKlass, null, null);
     }
 
     /**
@@ -817,10 +817,10 @@ public final class Meta implements ContextAccess {
      * @param exceptionKlass guest exception class, subclass of guest {@link #java_lang_Throwable
      *            Throwable}.
      */
-    public @Host(Throwable.class) StaticObject initExceptionWithCause(@Host(Throwable.class) ObjectKlass exceptionKlass, @Host(Throwable.class) StaticObject cause) {
+    public @Host(Throwable.class) static StaticObject initExceptionWithCause(@Host(Throwable.class) ObjectKlass exceptionKlass, @Host(Throwable.class) StaticObject cause) {
         assert exceptionKlass.getMeta().java_lang_Throwable.isAssignableFrom(exceptionKlass);
         assert StaticObject.isNull(cause) || exceptionKlass.getMeta().java_lang_Throwable.isAssignableFrom(cause.getKlass());
-        return dispatch.initEx(exceptionKlass, null, cause);
+        return exceptionKlass.getMeta().dispatch.initEx(exceptionKlass, null, cause);
     }
 
     /**
@@ -833,7 +833,7 @@ public final class Meta implements ContextAccess {
      * @param exceptionKlass guest exception class, subclass of guest {@link #java_lang_Throwable
      *            Throwable}.
      */
-    public EspressoException throwException(@Host(Throwable.class) ObjectKlass exceptionKlass) {
+    public static EspressoException throwException(@Host(Throwable.class) ObjectKlass exceptionKlass) {
         throw throwException(initException(exceptionKlass));
     }
 
@@ -844,7 +844,7 @@ public final class Meta implements ContextAccess {
      * The given instance must be a non-{@link StaticObject#NULL NULL}, guest
      * {@link #java_lang_Throwable Throwable}.
      */
-    public EspressoException throwException(@Host(Throwable.class) StaticObject throwable) {
+    public static EspressoException throwException(@Host(Throwable.class) StaticObject throwable) {
         assert StaticObject.notNull(throwable);
         assert InterpreterToVM.instanceOf(throwable, throwable.getKlass().getMeta().java_lang_Throwable);
         throw EspressoException.wrap(throwable);
@@ -861,7 +861,7 @@ public final class Meta implements ContextAccess {
      * @param exceptionKlass guest exception class, subclass of guest {@link #java_lang_Throwable
      *            Throwable}.
      */
-    public EspressoException throwExceptionWithMessage(@Host(Throwable.class) ObjectKlass exceptionKlass, @Host(String.class) StaticObject message) {
+    public static EspressoException throwExceptionWithMessage(@Host(Throwable.class) ObjectKlass exceptionKlass, @Host(String.class) StaticObject message) {
         throw throwException(initExceptionWithMessage(exceptionKlass, message));
     }
 
@@ -876,7 +876,7 @@ public final class Meta implements ContextAccess {
      * @param exceptionKlass guest exception class, subclass of guest {@link #java_lang_Throwable
      *            Throwable}.
      */
-    public EspressoException throwExceptionWithMessage(@Host(Throwable.class) ObjectKlass exceptionKlass, String message) {
+    public static EspressoException throwExceptionWithMessage(@Host(Throwable.class) ObjectKlass exceptionKlass, String message) {
         throw throwExceptionWithMessage(exceptionKlass, exceptionKlass.getMeta().toGuestString(message));
     }
 
@@ -888,7 +888,7 @@ public final class Meta implements ContextAccess {
      * @param exceptionKlass guest exception class, subclass of guest {@link #java_lang_Throwable
      *            Throwable}.
      */
-    public EspressoException throwExceptionWithCause(@Host(Throwable.class) ObjectKlass exceptionKlass, @Host(Throwable.class) StaticObject cause) {
+    public static EspressoException throwExceptionWithCause(@Host(Throwable.class) ObjectKlass exceptionKlass, @Host(Throwable.class) StaticObject cause) {
         throw throwException(initExceptionWithCause(exceptionKlass, cause));
     }
 
