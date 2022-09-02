@@ -29,13 +29,22 @@
  */
 package com.oracle.truffle.llvm.tests.interop;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.Assert;
+import org.junit.rules.ExpectedException;
 
-public class ReadPolyglotArrayTestBase extends PolyglotArrayTestBase {
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+
+public class ReadPolyglotArrayTestBase extends ManagedMemAccessTestBase {
 
     // create test entries
 
@@ -48,23 +57,46 @@ public class ReadPolyglotArrayTestBase extends PolyglotArrayTestBase {
      * Adds a test that is expected to fail.
      */
     protected static void addUnsupported(Collection<Object[]> configs, String function, Object object, int index, ExpectedExceptionConsumer expectedException) {
-        addTestIntern(configs, function, PolyglotArrayTestBase::doNothing, expectedException, ExpectedResultMarker.UNSUPPORTED, object, index);
+        addTestIntern(configs, function, ReadPolyglotArrayTestBase::doNothing, expectedException, ExpectedResultMarker.UNSUPPORTED, object, index);
     }
 
     /**
      * Adds a test that is expected to succeed.
      */
     protected static void addSupported(Collection<Object[]> configs, String function, Object object, int index, ResultConsumer assertion) {
-        addTestIntern(configs, function, assertion, PolyglotArrayTestBase::doNothing, ExpectedResultMarker.SUPPORTED, object, index);
+        addTestIntern(configs, function, assertion, ReadPolyglotArrayTestBase::doNothing, ExpectedResultMarker.SUPPORTED, object, index);
+    }
+
+    // Helpers to make the test specification more readable.
+
+    protected static void doNothing(@SuppressWarnings("unused") Object obj) {
+    }
+
+    protected interface ExpectedExceptionConsumer extends Consumer<ExpectedException> {
     }
 
     protected interface ResultConsumer extends Consumer<Value> {
     }
 
-    // Helpers to make the test specification more readable.
+    enum ExpectedResultMarker {
+        SUPPORTED,
+        UNSUPPORTED;
+
+        @Override
+        public String toString() {
+            return String.format("%11s", super.toString().toLowerCase());
+        }
+    }
+
+    protected static ExpectedExceptionConsumer expectPolyglotException(String exceptionMessage) {
+        return (ExpectedException thrown) -> {
+            thrown.expect(PolyglotException.class);
+            thrown.expectMessage(exceptionMessage);
+        };
+    }
 
     protected static ResultConsumer resultEquals(byte expected) {
-        return (Value ret) -> PolyglotArrayTestBase.assertEqualsHex(expected, ret.asByte());
+        return (Value ret) -> assertEqualsHex(expected, ret.asByte());
     }
 
     protected static ResultConsumer resultNotEquals(byte unexpected) {
@@ -72,7 +104,7 @@ public class ReadPolyglotArrayTestBase extends PolyglotArrayTestBase {
     }
 
     protected static ResultConsumer resultEquals(short expected) {
-        return (Value ret) -> PolyglotArrayTestBase.assertEqualsHex(expected, ret.asShort());
+        return (Value ret) -> assertEqualsHex(expected, ret.asShort());
     }
 
     protected static ResultConsumer resultNotEquals(short unexpected) {
@@ -80,7 +112,7 @@ public class ReadPolyglotArrayTestBase extends PolyglotArrayTestBase {
     }
 
     protected static ResultConsumer resultEquals(int expected) {
-        return (Value ret) -> PolyglotArrayTestBase.assertEqualsHex(expected, ret.asInt());
+        return (Value ret) -> assertEqualsHex(expected, ret.asInt());
     }
 
     protected static ResultConsumer resultNotEquals(int unexpected) {
@@ -88,7 +120,7 @@ public class ReadPolyglotArrayTestBase extends PolyglotArrayTestBase {
     }
 
     protected static ResultConsumer resultEquals(long expected) {
-        return (Value ret) -> PolyglotArrayTestBase.assertEqualsHex(expected, ret.asLong());
+        return (Value ret) -> assertEqualsHex(expected, ret.asLong());
     }
 
     protected static ResultConsumer resultNotEquals(long unexpected) {
@@ -117,5 +149,71 @@ public class ReadPolyglotArrayTestBase extends PolyglotArrayTestBase {
 
     protected static ResultConsumer resultNotEquals(Object unexpected) {
         return (Value ret) -> Assert.assertNotEquals(Value.asValue(unexpected), ret);
+    }
+
+    protected static void assertEqualsHex(byte expected, byte actual) {
+        if (expected != actual) {
+            Assert.assertEquals("0x" + Integer.toHexString(Byte.toUnsignedInt(expected)), "0x" + Integer.toHexString(Byte.toUnsignedInt(actual)));
+        }
+    }
+
+    protected static void assertEqualsHex(short expected, short actual) {
+        if (expected != actual) {
+            Assert.assertEquals("0x" + Integer.toHexString(Short.toUnsignedInt(expected)), "0x" + Integer.toHexString(Short.toUnsignedInt(actual)));
+        }
+    }
+
+    protected static void assertEqualsHex(int expected, int actual) {
+        if (expected != actual) {
+            Assert.assertEquals("0x" + Integer.toHexString(expected), "0x" + Integer.toHexString(actual));
+        }
+    }
+
+    protected static void assertEqualsHex(long expected, long actual) {
+        if (expected != actual) {
+            Assert.assertEquals("0x" + Long.toHexString(expected), "0x" + Long.toHexString(actual));
+        }
+    }
+
+    protected static Object getElementFromPolyglotArray(Object o, long idx) {
+        try {
+            return InteropLibrary.getUncached(o).readArrayElement(o, idx);
+        } catch (UnsupportedMessageException | InvalidArrayIndexException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    /**
+     * Warp parameter to get nice toString.
+     */
+    protected static class ParameterArray {
+        protected final Object[] parameters;
+
+        ParameterArray(Object... parameters) {
+            this.parameters = parameters;
+        }
+
+        protected Object[] getArguments() {
+            return Arrays.stream(parameters).map(o -> (o instanceof Supplier ? ((Supplier<?>) o).get() : o)).toArray();
+        }
+
+        @Override
+        public String toString() {
+            return Arrays.stream(parameters).map(Object::toString).collect(Collectors.joining(", "));
+        }
+    }
+
+    // endianness checks
+
+    static short toNativeEndian(short x) {
+        return Short.reverseBytes(x);
+    }
+
+    static int toNativeEndian(int x) {
+        return Integer.reverseBytes(x);
+    }
+
+    static long toNativeEndian(long x) {
+        return Long.reverseBytes(x);
     }
 }
