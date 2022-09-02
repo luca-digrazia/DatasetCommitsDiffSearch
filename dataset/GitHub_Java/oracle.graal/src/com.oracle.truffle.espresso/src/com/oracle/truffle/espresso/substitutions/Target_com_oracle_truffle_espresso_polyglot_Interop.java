@@ -290,19 +290,19 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
 
     private static RuntimeException throwInteropException(InteropException e, Meta meta) {
         if (e instanceof UnsupportedMessageException) {
-            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_UnsupportedMessageException, e);
+            throw createInteropException(meta.java_lang_UnsupportedOperationException, e);
         }
         if (e instanceof UnknownIdentifierException) {
-            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_UnknownIdentifierException, e);
+            throw createInteropException(meta.java_lang_UnsupportedOperationException, e);
         }
         if (e instanceof ArityException) {
-            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_ArityException, e);
+            throw createInteropException(meta.java_lang_UnsupportedOperationException, e);
         }
         if (e instanceof UnsupportedTypeException) {
-            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_UnsupportedTypeException, e);
+            throw createInteropException(meta.java_lang_UnsupportedOperationException, e);
         }
         if (e instanceof InvalidArrayIndexException) {
-            throw createInteropException(meta.com_oracle_truffle_espresso_polyglot_InvalidArrayIndexException, e);
+            throw createInteropException(meta.java_lang_UnsupportedOperationException, e);
         }
         CompilerDirectives.transferToInterpreter();
         throw EspressoError.unexpected("Unexpected interop exception: ", e);
