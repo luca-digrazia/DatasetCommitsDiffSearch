@@ -50,16 +50,13 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
-import java.util.function.Predicate;
-
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.EconomicSet;
-import org.graalvm.collections.Equivalence;
-import org.graalvm.collections.MapCursor;
 
 /**
  * Represents the host access policy of a polyglot context. The host access policy specifies which
@@ -82,18 +79,20 @@ import org.graalvm.collections.MapCursor;
  * @since 1.0
  */
 public final class HostAccess {
+    private static final BiFunction<HostAccess, AnnotatedElement, Boolean> ACCESS = new BiFunction<HostAccess, AnnotatedElement, Boolean>() {
+        @Override
+        public Boolean apply(HostAccess t, AnnotatedElement u) {
+            return t.allowAccess(u);
+        }
+    };
 
     private final String name;
-    private final EconomicSet<Class<? extends Annotation>> annotations;
-    private final EconomicMap<Class<?>, Boolean> excludeTypes;
-    private final EconomicSet<AnnotatedElement> members;
-    private final List<Object> targetMappings;
+    private final Set<Class<? extends Annotation>> annotations;
+    private final Map<Class<?>, Boolean> excludeTypes;
+    private final Set<AnnotatedElement> members;
     private final boolean allowPublic;
-    final boolean allowArrayAccess;
-    final boolean allowListAccess;
-    volatile Object impl;
+    private Object impl;
 
-    private static final HostAccess EMPTY = new HostAccess(null, null, null, null, null, false, false, false);
     /**
      * Predefined host access policy that allows access to public host methods or fields that were
      * annotated with {@linkplain Export @Export} and were declared in public class. This is the
@@ -121,12 +120,12 @@ public final class HostAccess {
      * Equivalent of using the following builder configuration:
      *
      * <pre>
-     * HostAccess.newBuilder().allowPublicAccess(true).allowArrayAccess(true).allowListAccess(true).build();
+     * HostAccess.newBuilder().allowPublicAccess(true).build();
      * </pre>
      *
      * @since 1.0
      */
-    public static final HostAccess ALL = newBuilder().allowPublicAccess(true).allowArrayAccess(true).allowListAccess(true).name("HostAccess.ALL").build();
+    public static final HostAccess ALL = newBuilder().allowPublicAccess(true).name("HostAccess.ALL").build();
 
     /**
      * Predefined host access policy that disallows any access to public host methods or fields.
@@ -141,33 +140,12 @@ public final class HostAccess {
      */
     public static final HostAccess NONE = newBuilder().name("HostAccess.NONE").build();
 
-    HostAccess(EconomicSet<Class<? extends Annotation>> annotations, EconomicMap<Class<?>, Boolean> excludeTypes, EconomicSet<AnnotatedElement> members, List<Object> targetMappings,
-                    String name, boolean allowPublic,
-                    boolean allowArrayAccess,
-                    boolean allowListAccess) {
-        // create defensive copies
-        this.annotations = copySet(annotations, Equivalence.IDENTITY);
-        this.excludeTypes = copyMap(excludeTypes, Equivalence.IDENTITY);
-        this.members = copySet(members, Equivalence.DEFAULT);
-        this.targetMappings = targetMappings != null ? new ArrayList<>(targetMappings) : null;
+    HostAccess(Set<Class<? extends Annotation>> annotations, Map<Class<?>, Boolean> excludeTypes, Set<AnnotatedElement> members, String name, boolean allowPublic) {
+        this.annotations = annotations;
+        this.excludeTypes = excludeTypes;
+        this.members = members;
         this.name = name;
         this.allowPublic = allowPublic;
-        this.allowArrayAccess = allowArrayAccess;
-        this.allowListAccess = allowListAccess;
-    }
-
-    private static <T> EconomicSet<T> copySet(EconomicSet<T> values, Equivalence equivalence) {
-        if (values == null) {
-            return null;
-        }
-        return EconomicSet.create(equivalence, values);
-    }
-
-    private static <K, T> EconomicMap<K, T> copyMap(EconomicMap<K, T> values, Equivalence equivalence) {
-        if (values == null) {
-            return null;
-        }
-        return EconomicMap.create(equivalence, values);
     }
 
     /**
@@ -177,20 +155,15 @@ public final class HostAccess {
      * @since 1.0
      */
     public static Builder newBuilder() {
-        return EMPTY.new Builder();
+        return new HostAccess(null, null, null, null, false).new Builder();
     }
 
-    List<Object> getTargetMappings() {
-        return targetMappings;
-    }
-
-    boolean allowsAccess(AnnotatedElement member) {
+    boolean allowAccess(AnnotatedElement member) {
         if (excludeTypes != null) {
             Class<?> owner = getDeclaringClass(member);
-            MapCursor<Class<?>, Boolean> cursor = excludeTypes.getEntries();
-            while (cursor.advance()) {
-                Class<?> ban = cursor.getKey();
-                if (cursor.getValue()) {
+            for (Map.Entry<Class<?>, Boolean> entry : excludeTypes.entrySet()) {
+                Class<?> ban = entry.getKey();
+                if (entry.getValue()) {
                     // include subclasses
                     if (ban.isAssignableFrom(owner)) {
                         return false;
@@ -216,6 +189,13 @@ public final class HostAccess {
             }
         }
         return false;
+    }
+
+    synchronized <T> T connectHostAccess(Class<T> type, Function<BiFunction<HostAccess, AnnotatedElement, Boolean>, T> factory) {
+        if (impl == null) {
+            impl = factory.apply(ACCESS);
+        }
+        return type.cast(impl);
     }
 
     /**
@@ -299,13 +279,10 @@ public final class HostAccess {
      * @since 1.0
      */
     public final class Builder {
-        private EconomicSet<Class<? extends Annotation>> annotations;
-        private EconomicMap<Class<?>, Boolean> excludeTypes;
-        private EconomicSet<AnnotatedElement> members;
-        private List<Object> targetMappings;
+        private final Set<Class<? extends Annotation>> annotations = new HashSet<>();
+        private final Map<Class<?>, Boolean> excludeTypes = new HashMap<>();
+        private final Set<AnnotatedElement> members = new HashSet<>();
         private boolean allowPublic;
-        private boolean allowListAccess;
-        private boolean allowArrayAccess;
         private String name;
 
         Builder() {
@@ -319,9 +296,6 @@ public final class HostAccess {
          */
         public Builder allowAccessAnnotatedBy(Class<? extends Annotation> annotation) {
             Objects.requireNonNull(annotation);
-            if (annotations == null) {
-                annotations = EconomicSet.create(Equivalence.IDENTITY);
-            }
             annotations.add(annotation);
             return this;
         }
@@ -347,9 +321,6 @@ public final class HostAccess {
          */
         public Builder allowAccess(Executable element) {
             Objects.requireNonNull(element);
-            if (members == null) {
-                members = EconomicSet.create();
-            }
             members.add(element);
             return this;
         }
@@ -362,9 +333,6 @@ public final class HostAccess {
          */
         public Builder allowAccess(Field element) {
             Objects.requireNonNull(element);
-            if (members == null) {
-                members = EconomicSet.create();
-            }
             members.add(element);
             return this;
         }
@@ -390,150 +358,7 @@ public final class HostAccess {
          */
         public Builder denyAccess(Class<?> clazz, boolean includeSubclasses) {
             Objects.requireNonNull(clazz);
-            if (excludeTypes == null) {
-                excludeTypes = EconomicMap.create(Equivalence.IDENTITY);
-            }
             excludeTypes.put(clazz, includeSubclasses);
-            return this;
-        }
-
-        /**
-         * Allows the guest application to access arrays as values with
-         * {@link Value#hasArrayElements() array elements}. By default no array access is allowed.
-         *
-         * @see Value#hasArrayElements()
-         * @since 1.0
-         */
-        public Builder allowArrayAccess(boolean arrayAccess) {
-            this.allowArrayAccess = arrayAccess;
-            return this;
-        }
-
-        /**
-         * Allows the guest application to access lists as values with
-         * {@link Value#hasArrayElements() array elements}. By default no array access is allowed.
-         *
-         * @see Value#hasArrayElements()
-         * @since 1.0
-         */
-        public Builder allowListAccess(boolean listAccess) {
-            this.allowListAccess = listAccess;
-            return this;
-        }
-
-        /**
-         * Adds a custom source to target type mapping for Java host calls, host field assignments
-         * and {@link Value#as(Class) explicit value conversions}. The source type specifies the
-         * static source type for the conversion. The target type specifies the exact and static
-         * target type of the mapping. Sub or base target types won't trigger the mapping. Custom
-         * target type mappings always have precedence over default mappings specified in
-         * {@link Value#as(Class)}, therefore allow to customize their behavior. The provided
-         * converter takes a value of the source type and converts it to the target type. If the
-         * mapping is only conditionally applicable then an accepts predicate may be specified. If
-         * the mapping is applicable for all source values with the specified source type then a
-         * <code>null</code> accepts predicate should be specified. The converter may throw a
-         * {@link ClassCastException} if the mapping is not applicable. It is recommended to return
-         * <code>false</code> in the accepts predicate if the mapping is not applicable instead of
-         * throwing an exception. Implementing the accepts predicate instead of throwing an
-         * exception also allows the implementation to perform better overload selection when a
-         * method with multiple overloads is invoked.
-         * <p>
-         * All type mappings are applied recursively to generic types. A type mapping with the
-         * target type <code>String.class</code> will also be applied to the elements of a
-         * <code>List<String></code> mapping. This works for lists, maps, arrays and varargs
-         * parameters.
-         * <p>
-         * The source type uses the semantics of {@link Value#as(Class)} to convert to the source
-         * value. Custom type mappings are not applied there. If the source type is not applicable
-         * to a value then the mapping will not be applied. For conversions that may accept any
-         * value the {@link Value} should be used as source type.
-         * <p>
-         * Multiple mappings may be added for a source or target class. Multiple mappings are
-         * applied in the order they were added. The first mapping that accepts the source value
-         * will be used. Custom target type mappings all use the same precedence when an overloaded
-         * method is selected. This means that if two methods with a custom target type mapping are
-         * applicable for a set of arguments, an {@link IllegalArgumentException} is thrown at
-         * runtime.
-         * <p>
-         * Primitive boxed target types will be applied to the primitive and boxed values. It is
-         * therefore enough to specify a target mapping to {@link Integer} to also map to the target
-         * type <code>int.class</code>. Primitive target types can not be used as target types. They
-         * throw an {@link IllegalArgumentException} if used.
-         * <p>
-         * If the converter function or the accepts predicate calls {@link Value#as(Class)}
-         * recursively then custom target mappings are not applied. It is strongly discouraged that
-         * accept predicates or converter cause any side-effects or escape values for permanent
-         * storage.
-         * <p>
-         *
-         * Usage example:
-         *
-         * <pre>
-         * public static class MyClass {
-         *
-         *     &#64;HostAccess.Export
-         *     public void json(JsonObject c) {
-         *     }
-         *
-         *     &#64;HostAccess.Export
-         *     public String intToString(String c) {
-         *         return c;
-         *     }
-         * }
-         *
-         * public static class JsonObject {
-         *     JsonObject(Value v) {
-         *     }
-         * }
-         *
-         * public static void main(String[] args) {
-         *     HostAccess.Builder builder = HostAccess.newBuilder();
-         *     builder.allowAccessAnnotatedBy(HostAccess.Export.class);
-         *     builder.targetTypeMapping(Value.class, JsonObject.class,
-         *                     (v) -> v.hasMembers() || v.hasArrayElements(),
-         *                     (v) -> new JsonObject(v)).build();
-         *
-         *     builder.targetTypeMapping(Integer.class, String.class, null,
-         *                     (v) -> v.toString());
-         *
-         *     HostAccess access = builder.build();
-         *     try (Context c = Context.newBuilder().allowHostAccess(access).build()) {
-         *         c.getBindings("js").putMember("javaObject", new MyClass());
-         *         c.eval("js", "javaObject.json({})"); // works!
-         *         c.eval("js", "javaObject.json([])"); // works!
-         *         try {
-         *             c.eval("js", "javaObject.json(42)"); // fails!
-         *         } catch (PolyglotException e) {
-         *         }
-         *
-         *         c.eval("js", "javaObject.intToString(42)"); // returns "42"
-         *     }
-         * }
-         * </pre>
-         *
-         * @param sourceType the static source type to convert from with this mapping. The source
-         *            type must be applicable for a mapping to be accepted.
-         * @param targetType the exact and static target type to convert to with this mapping.
-         * @param accepts the predicate to check whether a mapping is applicable. Returns
-         *            <code>true</code> if the mapping is applicable else false. If set to
-         *            <code>null</code> then all values of a given source type are applicable.
-         * @param converter a function that produces the converted value of the mapping. May return
-         *            <code>null</code>. May throw {@link ClassCastException} if the source value is
-         *            not convertible.
-         * @throws IllegalArgumentException for primitive target types.
-         * @since 1.0
-         */
-        public <S, T> Builder targetTypeMapping(Class<S> sourceType, Class<T> targetType, Predicate<S> accepts, Function<S, T> converter) {
-            Objects.requireNonNull(sourceType);
-            Objects.requireNonNull(targetType);
-            Objects.requireNonNull(converter);
-            if (targetType.isPrimitive()) {
-                throw new IllegalArgumentException("Primitive target type is not supported as target mapping.");
-            }
-            if (targetMappings == null) {
-                targetMappings = new ArrayList<>();
-            }
-            targetMappings.add(Engine.getImpl().newTargetTypeMapping(sourceType, targetType, accepts, converter));
             return this;
         }
 
@@ -548,8 +373,7 @@ public final class HostAccess {
          * @since 1.0
          */
         public HostAccess build() {
-            return new HostAccess(annotations, excludeTypes, members, targetMappings, name, allowPublic, allowArrayAccess, allowListAccess);
+            return new HostAccess(annotations, excludeTypes, members, name, allowPublic);
         }
     }
-
 }
