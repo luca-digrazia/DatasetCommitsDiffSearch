@@ -235,10 +235,8 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.ToIntFunction;
 
@@ -347,7 +345,7 @@ public class BciBlockMapping implements JavaMethodContext {
             }
         }
 
-        public BciBlock(int startBci) {
+        BciBlock(int startBci) {
             this.startBci = startBci;
             this.successors = new ArrayList<>();
             this.loops = new BitSet();
@@ -721,7 +719,7 @@ public class BciBlockMapping implements JavaMethodContext {
     public boolean hasJsrBytecodes;
 
     protected final ExceptionHandler[] exceptionHandlers;
-    protected BitSet[] bciExceptionHandlerIDs;
+    private BitSet[] bciExceptionHandlerIDs;
     private BciBlock startBlock;
     private BciBlock[] loopHeaders;
 
@@ -877,26 +875,12 @@ public class BciBlockMapping implements JavaMethodContext {
         return bciExceptionHandlerIDs.length;
     }
 
-    /**
-     * Wrapper around makeBlock. This serves as a hook for subclasses.
-     */
-    protected BciBlock startNewBlock(int bci) {
-        return makeBlock(bci);
-    }
-
-    /**
-     * Makes exception entries and splits blocks at exception handlers if requested.
-     *
-     * @return blocks that were requested to be the start of new blocks.
-     */
-    protected Set<BciBlock> makeExceptionEntries(boolean splitRanges) {
-        Set<BciBlock> requestedBlockStarts = new HashSet<>();
+    private void makeExceptionEntries(boolean splitRanges) {
         // start basic blocks at all exception handler blocks and mark them as exception entries
         for (int i = 0; i < exceptionHandlers.length; i++) {
             ExceptionHandler h = exceptionHandlers[i];
-            BciBlock xhandler = startNewBlock(h.getHandlerBCI());
+            BciBlock xhandler = makeBlock(h.getHandlerBCI());
             xhandler.setIsExceptionEntry();
-            requestedBlockStarts.add(xhandler);
 
             /*
              * Split blocks at handler boundaries to help improve local liveness precision when
@@ -905,14 +889,13 @@ public class BciBlockMapping implements JavaMethodContext {
             if (splitRanges) {
                 int startBci = findConcreteBci(h.getStartBCI());
                 assert startBci < bciExceptionHandlerIDs.length;
-                requestedBlockStarts.add(startNewBlock(startBci));
+                makeBlock(startBci);
                 int endBci = findConcreteBci(h.getEndBCI());
                 if (endBci < bciExceptionHandlerIDs.length) {
-                    requestedBlockStarts.add(startNewBlock(endBci));
+                    makeBlock(endBci);
                 }
             }
         }
-        return requestedBlockStarts;
     }
 
     /**
@@ -968,7 +951,7 @@ public class BciBlockMapping implements JavaMethodContext {
                 }
                 case ATHROW: {
                     current = null;
-                    ExceptionDispatchBlock handler = handleExceptions(bci, true, false);
+                    ExceptionDispatchBlock handler = handleExceptions(false, bci);
                     if (handler != null) {
                         addSuccessor(bci, handler);
                     }
@@ -1037,7 +1020,7 @@ public class BciBlockMapping implements JavaMethodContext {
                 case INVOKEDYNAMIC: {
                     current = null;
                     addInvokeNormalSuccessor(bci, makeBlock(stream.nextBCI()));
-                    ExceptionDispatchBlock handler = handleExceptions(bci, true, true);
+                    ExceptionDispatchBlock handler = handleExceptions(true, bci);
                     if (handler != null) {
                         addSuccessor(bci, handler);
                     }
@@ -1084,7 +1067,7 @@ public class BciBlockMapping implements JavaMethodContext {
                      * because the class initializer is allowed to throw an exception, which
                      * requires proper exception handling.
                      */
-                    ExceptionDispatchBlock handler = handleExceptions(bci, true, false);
+                    ExceptionDispatchBlock handler = handleExceptions(false, bci);
                     if (handler != null) {
                         current = null;
                         addSuccessor(bci, makeBlock(stream.nextBCI()));
@@ -1387,7 +1370,7 @@ public class BciBlockMapping implements JavaMethodContext {
         return handler;
     }
 
-    protected ExceptionDispatchBlock handleExceptions(int bci, boolean processNewBlock, boolean isInvoke) {
+    private ExceptionDispatchBlock handleExceptions(boolean isInvoke, int bci) {
         ExceptionDispatchBlock lastHandler = null;
         int dispatchBlocks = 0;
 
@@ -1409,11 +1392,7 @@ public class BciBlockMapping implements JavaMethodContext {
             }
         }
         blocksNotYetAssignedId += dispatchBlocks;
-        if (processNewBlock) {
-            return processNewExceptionDispatchBlock(bci, isInvoke, lastHandler);
-        } else {
-            return lastHandler;
-        }
+        return processNewExceptionDispatchBlock(bci, isInvoke, lastHandler);
     }
 
     private void computeBlockOrder() {
@@ -1553,6 +1532,13 @@ public class BciBlockMapping implements JavaMethodContext {
     private void makeLoopHeader(BciBlock block) {
         assert !block.isLoopHeader;
         block.isLoopHeader = true;
+        if (block.isExceptionEntry()) {
+            // Loops that are implicitly formed by an exception handler lead to all sorts of
+            // corner cases.
+            // Don't compile such methods for now, until we see a concrete case that allows
+            // checking for correctness.
+            throw new PermanentBailoutException("Loop formed by an exception handler");
+        }
         if (nextLoop >= LOOP_HEADER_MAX_CAPACITY) {
             // This is an artificial restriction, a sanity check to avoid feeding the compiler an
             // unreasonable number of loops.

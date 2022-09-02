@@ -401,10 +401,9 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
         @Override
         protected boolean asyncExceptionLiveness() {
             /*
-             * If deoptimization is enabled, then must assume that any method can deoptimize at any
-             * point while throwing an exception.
+             * Currently native-image does not support asynchronous exceptions.
              */
-            return isDeoptimizationEnabled();
+            return false;
         }
 
         @Override
