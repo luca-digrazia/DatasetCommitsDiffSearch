@@ -57,12 +57,6 @@ public class ReferenceObjectProcessing {
      */
     private static UnsignedWord maxSoftRefAccessIntervalMs = UnsignedUtils.MAX_VALUE;
 
-    /**
-     * The first timestamp that was set as {@link SoftReference} clock, for examining references
-     * that were created earlier than that.
-     */
-    private static long initialSoftRefClock = 0;
-
     @AlwaysInline("GC performance")
     public static void discoverIfReference(Object object, ObjectReferenceVisitor refVisitor) {
         assert object != null;
@@ -109,9 +103,6 @@ public class ReferenceObjectProcessing {
         if (dr instanceof SoftReference) {
             long clock = ReferenceInternals.getSoftReferenceClock();
             long timestamp = ReferenceInternals.getSoftReferenceTimestamp((SoftReference<?>) dr);
-            if (timestamp == 0) { // created or last accessed before the clock was initialized
-                timestamp = initialSoftRefClock;
-            }
             UnsignedWord elapsed = WordFactory.unsigned(clock - timestamp);
             if (elapsed.belowThan(maxSoftRefAccessIntervalMs)) {
                 refVisitor.visitObjectReference(ReferenceInternals.getReferentFieldAddress(dr), true);
@@ -149,9 +140,6 @@ public class ReferenceObjectProcessing {
         UnsignedWord unusedMbytes = maxBytes.subtract(usedBytes).unsignedDivide(1024 * 1024 /* MB */);
         maxSoftRefAccessIntervalMs = unusedMbytes.multiply(HeapOptions.SoftRefLRUPolicyMSPerMB.getValue());
         ReferenceInternals.updateSoftReferenceClock();
-        if (initialSoftRefClock == 0) {
-            initialSoftRefClock = ReferenceInternals.getSoftReferenceClock();
-        }
     }
 
     /**

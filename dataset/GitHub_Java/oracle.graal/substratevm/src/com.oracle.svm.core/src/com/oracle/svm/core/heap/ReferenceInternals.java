@@ -24,9 +24,6 @@
  */
 package com.oracle.svm.core.heap;
 
-import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.LUDICROUSLY_FAST_PATH_PROBABILITY;
-import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probability;
-
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 
@@ -40,7 +37,6 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
-import com.oracle.svm.core.util.TimeUtils;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -181,10 +177,7 @@ public final class ReferenceInternals {
     }
 
     public static void updateSoftReferenceClock() {
-        long now = TimeUtils.divideNanosToMillis(System.nanoTime()); // should be monotonous, ensure
-        if (probability(LUDICROUSLY_FAST_PATH_PROBABILITY, now >= Target_java_lang_ref_SoftReference.clock)) {
-            Target_java_lang_ref_SoftReference.clock = now;
-        }
+        SoftReferenceClockAccessor.update();
     }
 
     public static long getSoftReferenceTimestamp(SoftReference<?> instance) {
