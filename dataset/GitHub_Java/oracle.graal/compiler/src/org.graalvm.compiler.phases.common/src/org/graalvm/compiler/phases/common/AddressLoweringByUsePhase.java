@@ -1,11 +1,13 @@
 /*
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2017, Red Hat Inc. All rights reserved.
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,7 +26,10 @@
 package org.graalvm.compiler.phases.common;
 
 import org.graalvm.compiler.core.common.type.Stamp;
+import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.nodes.NodeView;
+import org.graalvm.compiler.nodes.PrefetchAllocateNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.JavaReadNode;
@@ -33,9 +38,11 @@ import org.graalvm.compiler.nodes.memory.FloatingReadNode;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
-import org.graalvm.compiler.nodes.memory.address.RawAddressNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.Phase;
+
+import jdk.vm.ci.meta.JavaKind;
+
 /**
  * Created by adinn on 09/05/17.
  */
@@ -61,48 +68,51 @@ public class AddressLoweringByUsePhase extends Phase {
             AddressNode address;
             AddressNode lowered;
             if (node instanceof ReadNode) {
-                ReadNode readNode = (ReadNode)node;
-                Stamp stamp = readNode.stamp();
+                ReadNode readNode = (ReadNode) node;
+                Stamp stamp = readNode.getAccessStamp();
                 address = readNode.getAddress();
                 lowered = lowering.lower(readNode, stamp, address);
             } else if (node instanceof JavaReadNode) {
-                JavaReadNode javaReadNode = (JavaReadNode)node;
-                Stamp stamp = javaReadNode.stamp();
+                JavaReadNode javaReadNode = (JavaReadNode) node;
+                Stamp stamp = javaReadNode.stamp(NodeView.DEFAULT);
                 address = javaReadNode.getAddress();
                 lowered = lowering.lower(javaReadNode, stamp, address);
             } else if (node instanceof FloatingReadNode) {
-                FloatingReadNode floatingReadNode = (FloatingReadNode)node;
-                Stamp stamp = floatingReadNode.stamp();
+                FloatingReadNode floatingReadNode = (FloatingReadNode) node;
+                Stamp stamp = floatingReadNode.getAccessStamp();
                 address = floatingReadNode.getAddress();
                 lowered = lowering.lower(floatingReadNode, stamp, address);
             } else if (node instanceof AbstractWriteNode) {
-                AbstractWriteNode abstractWriteNode = (AbstractWriteNode)node;
-                Stamp stamp = abstractWriteNode.value().stamp();
+                AbstractWriteNode abstractWriteNode = (AbstractWriteNode) node;
+                Stamp stamp = abstractWriteNode.getAccessStamp();
                 address = abstractWriteNode.getAddress();
                 lowered = lowering.lower(abstractWriteNode, stamp, address);
-            // TODO -- PrefetchAllocateNode is not yet implemented for AArch64
-            // } else if (node instanceof PrefetchAllocateNode) {
-                // PrefetchAllocateNode prefetchAllocateNode = (PrefetchAllocateNode)node;
-                // Stamp stamp = prefetchAllocateNode.value().stamp();
-                // n.b.this getter is not provided!
-                // address = prefetchAllocateNode.getAddress();
-                // lowered = lowering.lower(prefetchAllocateNode, stamp, address);
+            } else if (node instanceof PrefetchAllocateNode) {
+                PrefetchAllocateNode prefetchAllocateNode = (PrefetchAllocateNode) node;
+                Stamp stamp = StampFactory.forKind(JavaKind.Object);
+                address = (AddressNode) prefetchAllocateNode.inputs().first();
+                lowered = lowering.lower(prefetchAllocateNode, stamp, address);
             } else {
                 continue;
             }
-            // the lowered address amy already be a replacement
+            // the lowered address may already be a replacement
             // in which case we want to use it not delete it!
             if (lowered != address) {
-                address.replaceAtUsages(lowered);
-                GraphUtil.killWithUnusedFloatingInputs(address);
+                // replace original with lowered at this usage only
+                // n.b. lowered is added unique so repeat lowerings will elide
+                node.replaceFirstInput(address, lowered);
+                // if that was the last reference we can kill the old (dead) node
+                if (address.hasNoUsages()) {
+                    GraphUtil.killWithUnusedFloatingInputs(address);
+                }
             }
         }
 
         // now replace any remaining unlowered address nodes
         for (Node node : graph.getNodes()) {
             AddressNode lowered;
-            if(node instanceof RawAddressNode || node instanceof OffsetAddressNode) {
-                AddressNode address = (AddressNode)node;
+            if (node instanceof OffsetAddressNode) {
+                AddressNode address = (AddressNode) node;
                 lowered = lowering.lower(address);
             } else {
                 continue;
