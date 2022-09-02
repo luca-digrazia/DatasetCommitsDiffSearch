@@ -119,7 +119,7 @@ public abstract class MemoryWalker {
 
         UnsignedWord getCodeAndDataMemorySize(T codeInfo);
 
-        UnsignedWord getNativeMetadataSize(T codeInfo);
+        UnsignedWord getMetadataSize(T codeInfo);
 
         String getName(T codeInfo);
     }

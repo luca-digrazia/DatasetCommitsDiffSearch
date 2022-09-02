@@ -35,17 +35,19 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.Pointer;
+import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.NonmovableArray;
-import com.oracle.svm.core.code.AbstractRuntimeCodeInstaller;
 import com.oracle.svm.core.code.CodeInfo;
 import com.oracle.svm.core.code.CodeInfoAccess;
 import com.oracle.svm.core.code.CodeInfoEncoder;
+import com.oracle.svm.core.code.CodeInfoTable;
 import com.oracle.svm.core.code.DeoptimizationSourcePositionEncoder;
 import com.oracle.svm.core.code.FrameInfoEncoder;
 import com.oracle.svm.core.code.InstalledCodeObserver;
@@ -64,9 +66,11 @@ import com.oracle.svm.core.heap.CodeReferenceMapEncoder;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.heap.SubstrateReferenceMap;
+import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.os.CommittedMemoryProvider;
+import com.oracle.svm.core.thread.JavaVMOperation;
 import com.oracle.svm.core.util.UnsignedUtils;
 import com.oracle.svm.core.util.VMError;
 
@@ -82,7 +86,7 @@ import jdk.vm.ci.meta.JavaKind;
  * Handles the installation of runtime-compiled code, allocating memory for code, data, and metadata
  * and patching call and jump targets, primitive constants, and object constants.
  */
-public class RuntimeCodeInstaller extends AbstractRuntimeCodeInstaller {
+public class RuntimeCodeInstaller {
 
     /** Installs the code in the current isolate, in a single step. */
     public static void install(SharedRuntimeMethod method, CompilationResult compilation, SubstrateInstalledCode installedCode) {
@@ -130,10 +134,10 @@ public class RuntimeCodeInstaller extends AbstractRuntimeCodeInstaller {
             compiledBytes = compilation.getTargetCode();
 
             if (!RuntimeCodeCache.Options.WriteableCodeCache.getValue()) {
-                makeCodeMemoryWriteableNonExecutable(code.add(dataOffset), codeAndDataMemorySize - dataOffset);
+                makeDataSectionNX(code.add(dataOffset), codeAndDataMemorySize - dataOffset);
             }
 
-            codeObservers = ImageSingletons.lookup(InstalledCodeObserverSupport.class).createObservers(debug, method, compilation, code, codeSize);
+            codeObservers = ImageSingletons.lookup(InstalledCodeObserverSupport.class).createObservers(debug, method, compilation, code);
         }
     }
 
@@ -216,7 +220,7 @@ public class RuntimeCodeInstaller extends AbstractRuntimeCodeInstaller {
         });
 
         NonmovableArray<InstalledCodeObserverHandle> observerHandles = InstalledCodeObserverSupport.installObservers(codeObservers);
-        RuntimeCodeInfoAccess.initialize(codeInfo, code, codeSize, dataOffset, dataSize, codeAndDataMemorySize, tier, observerHandles, true);
+        RuntimeCodeInfoAccess.initialize(codeInfo, code, codeSize, dataOffset, dataSize, codeAndDataMemorySize, tier, observerHandles);
 
         CodeReferenceMapEncoder encoder = new CodeReferenceMapEncoder();
         encoder.add(objectConstants.referenceMap);
@@ -225,6 +229,38 @@ public class RuntimeCodeInstaller extends AbstractRuntimeCodeInstaller {
 
         createCodeChunkInfos(codeInfo, adjuster);
         compilation = null;
+    }
+
+    protected static void doInstallPrepared(SharedMethod method, CodeInfo codeInfo, SubstrateInstalledCode installedCode) {
+        // The tether is acquired when it is created.
+        Object tether = RuntimeCodeInfoAccess.beforeInstallInCurrentIsolate(codeInfo, installedCode);
+        try {
+            Throwable[] errorBox = {null};
+            JavaVMOperation.enqueueBlockingSafepoint("Install code", () -> {
+                try {
+                    CodeInfoTable.getRuntimeCodeCache().addMethod(codeInfo);
+                    /*
+                     * This call makes the new code visible, i.e., other threads can start executing
+                     * it immediately. So all metadata must be registered at this point.
+                     */
+                    CodePointer codeStart = CodeInfoAccess.getCodeStart(codeInfo);
+                    platformHelper().performCodeSynchronization(codeInfo);
+                    installedCode.setAddress(codeStart.rawValue(), method);
+                } catch (Throwable e) {
+                    errorBox[0] = e;
+                }
+            });
+            if (errorBox[0] != null) {
+                throw rethrow(errorBox[0]);
+            }
+        } finally {
+            CodeInfoAccess.releaseTether(codeInfo, tether);
+        }
+    }
+
+    @SuppressWarnings({"unchecked"})
+    protected static <E extends Throwable> RuntimeException rethrow(Throwable ex) throws E {
+        throw (E) ex;
     }
 
     @Uninterruptible(reason = "Must be atomic with regard to garbage collection.")
@@ -265,5 +301,38 @@ public class RuntimeCodeInstaller extends AbstractRuntimeCodeInstaller {
                 objectConstants.add(patch.getOffset(), patch.getLength(), refConst);
             }
         }
+    }
+
+    protected static RuntimeCodeInstallerPlatformHelper platformHelper() {
+        return ImageSingletons.lookup(RuntimeCodeInstallerPlatformHelper.class);
+    }
+
+    protected Pointer allocateCodeMemory(long size) {
+        PointerBase result = RuntimeCodeInfoAccess.allocateCodeMemory(WordFactory.unsigned(size));
+        if (result.isNull()) {
+            throw new OutOfMemoryError();
+        }
+        return (Pointer) result;
+    }
+
+    protected void makeCodeMemoryReadOnly(Pointer start, long size) {
+        RuntimeCodeInfoAccess.makeCodeMemoryExecutableReadOnly((CodePointer) start, WordFactory.unsigned(size));
+    }
+
+    protected void makeDataSectionNX(Pointer start, long size) {
+        RuntimeCodeInfoAccess.makeCodeMemoryWriteableNonExecutable((CodePointer) start, WordFactory.unsigned(size));
+    }
+
+    /**
+     * Methods which are platform specific.
+     */
+    public interface RuntimeCodeInstallerPlatformHelper {
+
+        /**
+         * Method to enable platforms to perform any needed operations before code becomes visible.
+         *
+         * @param codeInfo the new code to be installed
+         */
+        void performCodeSynchronization(CodeInfo codeInfo);
     }
 }
