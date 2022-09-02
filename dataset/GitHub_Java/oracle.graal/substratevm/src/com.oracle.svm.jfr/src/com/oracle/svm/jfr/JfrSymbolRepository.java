@@ -44,37 +44,21 @@ import com.oracle.svm.core.MemoryUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.struct.PinnedObjectField;
 import com.oracle.svm.core.heap.Heap;
-import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
+import com.oracle.svm.core.thread.VMOperation;
 
 /**
  * In Native Image, we use {@link java.lang.String} objects that live in the image heap as symbols.
  */
 public class JfrSymbolRepository implements JfrRepository {
-    private final JfrSymbolHashtable table0;
-    private final JfrSymbolHashtable table1;
+    private final JfrSymbolHashtable table;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public JfrSymbolRepository() {
-        table0 = new JfrSymbolHashtable();
-        table1 = new JfrSymbolHashtable();
+        table = new JfrSymbolHashtable();
     }
 
     public void teardown() {
-        table0.teardown();
-        table1.teardown();
-    }
-
-    private JfrSymbolHashtable getTable() {
-        return getTable(false);
-    }
-
-    private JfrSymbolHashtable getTable(boolean previousEpoch) {
-        boolean epoch = previousEpoch ? JfrTraceIdEpoch.getInstance().previousEpoch() : JfrTraceIdEpoch.getInstance().currentEpoch();
-        if (epoch) {
-            return table0;
-        } else {
-            return table1;
-        }
+        table.teardown();
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
@@ -99,12 +83,16 @@ public class JfrSymbolRepository implements JfrRepository {
         int hashcode = (int) (rawPointerValue ^ (rawPointerValue >>> 32));
         symbol.setHash(hashcode);
 
-        return getTable().add(symbol);
+        return table.add(symbol);
     }
 
     @Override
     public void write(JfrChunkWriter writer) throws IOException {
-        JfrSymbolHashtable table = getTable(true);
+        // TODO: Epoch-based constant pool writing should allow for
+        // writing outside of a safepoint. However symbols can be
+        // marked in use directly by native events so the symbol
+        // repository probably needs to be epoch based as well
+        assert VMOperation.isInProgressAtSafepoint();
         writer.writeCompressedLong(JfrTypes.Symbol.getId());
         writer.writeCompressedLong(table.getSize());
 
@@ -141,7 +129,7 @@ public class JfrSymbolRepository implements JfrRepository {
 
     @Override
     public boolean hasItems() {
-        return getTable(true).getSize() > 0;
+        return table.getSize() > 0;
     }
 
     @RawStructure
