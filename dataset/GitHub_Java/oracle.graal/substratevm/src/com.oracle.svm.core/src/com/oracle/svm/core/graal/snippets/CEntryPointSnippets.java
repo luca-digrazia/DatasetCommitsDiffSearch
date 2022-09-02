@@ -31,6 +31,8 @@ import static com.oracle.svm.core.graal.nodes.WriteCurrentVMThreadNode.writeCurr
 import static com.oracle.svm.core.graal.nodes.WriteHeapBaseNode.writeCurrentVMHeapBase;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Map;
 
 import org.graalvm.compiler.api.replacements.Fold;
@@ -81,6 +83,7 @@ import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.nodes.CEntryPointEnterNode;
 import com.oracle.svm.core.graal.nodes.CEntryPointLeaveNode;
 import com.oracle.svm.core.graal.nodes.CEntryPointUtilityNode;
+import com.oracle.svm.core.heap.NoAllocationVerifier;
 import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
 import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
@@ -351,11 +354,9 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
             IsolateThread thread = CurrentIsolate.getCurrentThread();
             result = runtimeCall(DETACH_THREAD_MT, thread);
         }
-        /*
-         * Note that we do not reset the fixed registers used for the thread and isolate to null:
-         * Since these values are not copied to different registers when they are used, we need to
-         * keep the registers intact until the last possible point where we are in Java code.
-         */
+        if (SpawnIsolates.getValue()) {
+            writeCurrentVMHeapBase(WordFactory.nullPointer());
+        }
         return result;
     }
 
@@ -365,6 +366,7 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
     private static int detachThreadMT(IsolateThread currentThread) {
         try {
             VMThreads.singleton().detachThread(currentThread);
+            writeCurrentVMThread(WordFactory.nullPointer());
         } catch (Throwable t) {
             return CEntryPointErrors.UNCAUGHT_EXCEPTION;
         }
@@ -497,22 +499,23 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
         return runtimeCall(REPORT_EXCEPTION, exception);
     }
 
-    @Uninterruptible(reason = "Avoid StackOverflowError and safepoints until they are disabled permanently", calleeMustBe = false)
     @SubstrateForeignCallTarget(stubCallingConvention = false)
     private static int reportException(Throwable exception) {
-        VMThreads.StatusSupport.setStatusIgnoreSafepoints();
-        StackOverflowCheck.singleton().disableStackOverflowChecksForFatalError();
-
         logException(exception);
         ImageSingletons.lookup(LogHandler.class).fatalError();
         return CEntryPointErrors.UNSPECIFIED; // unreachable
     }
 
     private static void logException(Throwable exception) {
-        try {
-            Log.log().exception(exception);
-        } catch (Throwable ex) {
-            /* Logging failed, so there is nothing we can do anymore to log. */
+        Log log = Log.log();
+        if (log.isEnabled()) {
+            if (NoAllocationVerifier.isActive()) {
+                log.exception(exception);
+            } else {
+                StringWriter writer = new StringWriter();
+                exception.printStackTrace(new PrintWriter(writer));
+                log.string(writer.toString()); // no newline needed
+            }
         }
     }
 
