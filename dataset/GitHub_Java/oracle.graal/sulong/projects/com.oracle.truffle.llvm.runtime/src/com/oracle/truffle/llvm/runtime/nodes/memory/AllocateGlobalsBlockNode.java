@@ -29,9 +29,7 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory;
 
-import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
@@ -39,16 +37,18 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 
-public abstract class AllocateGlobalsBlockNode extends LLVMNode implements LLVMAllocateNode {
+public final class AllocateGlobalsBlockNode extends LLVMNode implements LLVMAllocateNode {
 
     private final long size;
+    private final LLVMMemory memory;
 
-    public AllocateGlobalsBlockNode(StructureType type, DataLayout dataLayout) {
+    public AllocateGlobalsBlockNode(LLVMContext context, StructureType type, DataLayout dataLayout) {
         this.size = type.getSize(dataLayout);
+        this.memory = context.getLanguage().getCapability(LLVMMemory.class);
     }
 
-    @Specialization
-    LLVMPointer doAllocate(@CachedLanguage LLVMLanguage language) {
-        return language.getCapability(LLVMMemory.class).allocateMemory(size);
+    @Override
+    public LLVMPointer executeWithTarget() {
+        return memory.allocateMemory(size);
     }
 }
