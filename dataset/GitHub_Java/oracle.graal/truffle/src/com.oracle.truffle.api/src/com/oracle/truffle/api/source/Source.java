@@ -1036,7 +1036,7 @@ public abstract class Source {
             useContent = useContent == CONTENT_UNSET ? null : useContent;
         } else if (useOrigin instanceof TruffleFile) {
             TruffleFile file = (TruffleFile) useOrigin;
-            if (useContent == CONTENT_NONE && !file.isAbsolute()) {
+            if (!file.isAbsolute() && useContent == CONTENT_NONE) {
                 if (useUri == null) {
                     useUri = file.toRelativeUri();
                 }
