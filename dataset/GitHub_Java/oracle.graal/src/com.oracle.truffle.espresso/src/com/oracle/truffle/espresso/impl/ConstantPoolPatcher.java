@@ -25,13 +25,19 @@ package com.oracle.truffle.espresso.impl;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.descriptors.ByteSequence;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.runtime.EspressoContext;
 
+import java.lang.instrument.IllegalClassFormatException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Map;
 
 public class ConstantPoolPatcher {
-    public static void getDirectInnerClassNames(String fileSystemName, byte[] bytes, ArrayList<String> innerNames) {
+    public static void getDirectInnerClassNames(Symbol<Symbol.Name> fileSystemName, byte[] bytes, ArrayList<Symbol<Symbol.Name>> innerNames, EspressoContext context)
+                    throws IllegalClassFormatException {
         ClassfileStream stream = new ClassfileStream(bytes, null);
-
+        ByteSequence fileNameBytes = fileSystemName.subSequence(0, fileSystemName.length());
         // skip magic and version - 8 bytes
         stream.skip(8);
         final int length = stream.readU2();
@@ -44,10 +50,9 @@ public class ConstantPoolPatcher {
             switch (tag) {
                 case UTF8:
                     ByteSequence byteSequence = stream.readByteSequenceUTF();
-                    String value = byteSequence.toString();
-                    if (value.startsWith(fileSystemName) && !value.equals(fileSystemName)) {
-                        if (InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(value).matches()) {
-                            innerNames.add(value);
+                    if (byteSequence.contentStartsWith(fileNameBytes) && !byteSequence.contentEquals(fileNameBytes)) {
+                        if (InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(byteSequence.toString()).matches()) {
+                            innerNames.add(context.getNames().getOrCreate(byteSequence));
                         }
                     }
                     break;
@@ -84,9 +89,96 @@ public class ConstantPoolPatcher {
                     stream.readU2();
                     break;
                 default:
-                    break;
+                    throw new IllegalClassFormatException();
             }
             i++;
         }
+    }
+
+    public static byte[] patchConstantPool(byte[] bytes, Map<Symbol<Symbol.Name>, Symbol<Symbol.Name>> rules, EspressoContext context) throws IllegalClassFormatException {
+        byte[] result = Arrays.copyOf(bytes, bytes.length);
+        ClassfileStream stream = new ClassfileStream(bytes, null);
+
+        // skip magic and version - 8 bytes
+        stream.skip(8);
+        final int length = stream.readU2();
+
+        int byteArrayGrowth = 0;
+        int i = 1;
+        while (i < length) {
+            final int tagByte = stream.readU1();
+            final ConstantPool.Tag tag = ConstantPool.Tag.fromValue(tagByte);
+
+            switch (tag) {
+                case UTF8:
+                    int position = stream.getPosition() + 2; // utfLength is first two bytes
+                    ByteSequence byteSequence = stream.readByteSequenceUTF();
+                    Symbol<Symbol.Name> asSymbol = context.getNames().getOrCreate(byteSequence);
+
+                    if (rules.containsKey(asSymbol)) {
+                        int originalLegth = byteSequence.length();
+                        Symbol<Symbol.Name> replacedSymbol = rules.get(asSymbol);
+                        if (originalLegth == replacedSymbol.length()) {
+                            replacedSymbol.writeTo(result, position + byteArrayGrowth);
+                        } else {
+                            int diff = replacedSymbol.length() - originalLegth;
+                            byteArrayGrowth += diff;
+
+                            // make room for the longer class name
+                            result = Arrays.copyOf(result, result.length + diff);
+
+                            int currentPosition = stream.getPosition();
+                            // shift the tail of array
+                            System.arraycopy(bytes, currentPosition, result, currentPosition + byteArrayGrowth, bytes.length - currentPosition);
+
+                            // update utfLength
+                            char utfLength = (char) replacedSymbol.length();
+                            int utfLengthPosition = position - 2 + byteArrayGrowth - diff;
+                            result[utfLengthPosition] = (byte) (utfLength >> 8);
+                            result[utfLengthPosition + 1] = (byte) (utfLength);
+
+                            // insert patched byte array
+                            replacedSymbol.writeTo(result, utfLengthPosition + 2);
+                        }
+                    }
+                    break;
+                case CLASS:
+                case STRING:
+                case METHODTYPE:
+                    stream.readU2();
+                    break;
+                case FIELD_REF:
+                case METHOD_REF:
+                case INTERFACE_METHOD_REF:
+                case NAME_AND_TYPE:
+                case DYNAMIC:
+                case INVOKEDYNAMIC:
+                    stream.readU2();
+                    stream.readU2();
+                    break;
+                case INTEGER:
+                    stream.readS4();
+                    break;
+                case FLOAT:
+                    stream.readFloat();
+                    break;
+                case LONG:
+                    stream.readS8();
+                    ++i;
+                    break;
+                case DOUBLE:
+                    stream.readDouble();
+                    ++i;
+                    break;
+                case METHODHANDLE:
+                    stream.readU1();
+                    stream.readU2();
+                    break;
+                default:
+                    throw new IllegalClassFormatException();
+            }
+            i++;
+        }
+        return result;
     }
 }
