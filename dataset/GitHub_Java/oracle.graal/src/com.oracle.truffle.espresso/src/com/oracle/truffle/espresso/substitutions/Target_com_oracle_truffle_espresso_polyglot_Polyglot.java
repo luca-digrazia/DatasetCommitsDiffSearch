@@ -56,7 +56,6 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         return createInteropObject(evalResult, meta);
     }
 
-    @Substitution
     public static @Host(Object.class) StaticObject getBinding(@Host(String.class) StaticObject name, @InjectMeta Meta meta) {
         if (!meta.getContext().getEnv().isPolyglotBindingsAccessAllowed()) {
             Meta.throwExceptionWithMessage(meta.java_lang_SecurityException,
@@ -69,7 +68,6 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         return createInteropObject(binding, meta);
     }
 
-    @Substitution
     public static void setBinding(@Host(String.class) StaticObject name, @Host(Object.class) StaticObject value, @InjectMeta Meta meta) {
         if (!meta.getContext().getEnv().isPolyglotBindingsAccessAllowed()) {
             Meta.throwExceptionWithMessage(meta.java_lang_SecurityException,
