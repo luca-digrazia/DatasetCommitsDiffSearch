@@ -368,7 +368,7 @@ public final class InspectorRuntime extends RuntimeDomain {
             if (isJS) {
                 // Add __proto__ when in JavaScript:
                 DebugValue prototype = value.getProperty("__proto__");
-                if (prototype != null && !prototype.isNull()) {
+                if (!prototype.isNull()) {
                     result.put(createPropertyJSON(prototype, null, generatePreview, true, false));
                 }
             }
