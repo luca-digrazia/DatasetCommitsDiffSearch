@@ -41,12 +41,10 @@ class ChunkedImageHeapAllocator {
     abstract static class Chunk {
         private final long begin;
         private final long endOffset;
-        private boolean writable;
 
-        Chunk(long begin, long endOffset, boolean writable) {
+        Chunk(long begin, long endOffset) {
             this.begin = begin;
             this.endOffset = endOffset;
-            this.writable = writable;
         }
 
         public long getBegin() {
@@ -62,19 +60,11 @@ class ChunkedImageHeapAllocator {
         }
 
         public abstract long getTopOffset();
-
-        public void setWritable() {
-            writable = true;
-        }
-
-        public boolean isWritable() {
-            return writable;
-        }
     }
 
     static final class UnalignedChunk extends Chunk {
-        UnalignedChunk(long begin, long endOffset, boolean writable) {
-            super(begin, endOffset, writable);
+        UnalignedChunk(long begin, long endOffset) {
+            super(begin, endOffset);
         }
 
         @Override
@@ -88,19 +78,15 @@ class ChunkedImageHeapAllocator {
         private long topOffset = alignedChunkObjectsOffset;
 
         AlignedChunk(long begin) {
-            super(begin, alignedChunkSize, false);
+            super(begin, alignedChunkSize);
         }
 
-        public long allocate(ImageHeapObject obj, boolean writable) {
+        public long allocate(ImageHeapObject obj) {
             long size = obj.getSize();
             VMError.guarantee(size <= getUnallocatedBytes(), "Object of size " + size + " does not fit in the chunk's remaining bytes");
             long objStart = getTop();
             topOffset += size;
             objects.add(obj);
-            if (writable) {
-                // Writable objects need a writable card table, so make the entire chunk writable
-                setWritable();
-            }
             return objStart;
         }
 
@@ -160,12 +146,12 @@ class ChunkedImageHeapAllocator {
         allocateRaw(computePadding(position, multiple));
     }
 
-    public long allocateUnalignedChunkForObject(ImageHeapObject obj, boolean writable) {
+    public long allocateUnalignedChunkForObject(ImageHeapObject obj) {
         assert currentAlignedChunk == null;
         UnsignedWord objSize = WordFactory.unsigned(obj.getSize());
         long chunkSize = UnalignedHeapChunk.getChunkSizeForObject(objSize).rawValue();
         long chunkBegin = allocateRaw(chunkSize);
-        unalignedChunks.add(new UnalignedChunk(chunkBegin, chunkSize, writable));
+        unalignedChunks.add(new UnalignedChunk(chunkBegin, chunkSize));
         return chunkBegin + unalignedChunkObjectsOffset;
     }
 
@@ -187,8 +173,8 @@ class ChunkedImageHeapAllocator {
         return currentAlignedChunk.getUnallocatedBytes();
     }
 
-    public long allocateObjectInAlignedChunk(ImageHeapObject obj, boolean writable) {
-        return currentAlignedChunk.allocate(obj, writable);
+    public long allocateObjectInAlignedChunk(ImageHeapObject obj) {
+        return currentAlignedChunk.allocate(obj);
     }
 
     public void alignInAlignedChunk(int multiple) {
