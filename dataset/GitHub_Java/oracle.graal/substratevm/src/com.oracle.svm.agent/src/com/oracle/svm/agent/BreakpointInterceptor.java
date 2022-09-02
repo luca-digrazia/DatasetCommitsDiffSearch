@@ -306,7 +306,7 @@ final class BreakpointInterceptor {
                 WordPointer holderPtr = StackValue.get(WordPointer.class);
                 if (jvmtiFunctions().GetMethodDeclaringClass().invoke(jvmtiEnv(), enclosingID, holderPtr) == JvmtiError.JVMTI_ERROR_NONE) {
                     holder = holderPtr.read();
-                    String holderName = getClassNameOrNull(jni, holderPtr.read());
+                    String holderName = (String) getClassNameOrNull(jni, holderPtr.read());
                     if (holderName != null) {
                         CCharPointerPointer namePtr = StackValue.get(CCharPointerPointer.class);
                         CCharPointerPointer signaturePtr = StackValue.get(CCharPointerPointer.class);
@@ -314,15 +314,14 @@ final class BreakpointInterceptor {
                             name = fromCString(namePtr.read());
                             signature = fromCString(signaturePtr.read());
                             result = holderName + "." + name + signature;
-                            jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), namePtr.read());
-                            jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), signaturePtr.read());
+                            jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), namePtr);
+                            jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), signaturePtr);
                         }
                     }
                 }
             }
         }
         if (enclosing.notEqual(nullHandle()) && accessVerifier != null && !accessVerifier.verifyGetEnclosingMethod(jni, holder, name, signature, enclosing, callerClass)) {
-            jvmtiFunctions().ForceEarlyReturnObject().invoke(jvmtiEnv(), nullHandle(), nullHandle());
             return false;
         }
         traceBreakpoint(jni, nullHandle(), nullHandle(), callerClass, bp.specification.methodName, result);
@@ -458,7 +457,7 @@ final class BreakpointInterceptor {
         if (clearException(jni)) {
             result = false;
         }
-        traceBreakpoint(jni, nullHandle(), nullHandle(), callerClass, bp.specification.methodName, result, TraceWriter.UNKNOWN_VALUE, ifaceNames);
+        traceBreakpoint(jni, nullHandle(), nullHandle(), callerClass, bp.specification.methodName, result, TraceWriter.UNKNOWN_VALUE, ifaceNames, TraceWriter.UNKNOWN_VALUE);
         return true;
     }
 
@@ -468,7 +467,7 @@ final class BreakpointInterceptor {
             classNames = TraceWriter.UNKNOWN_VALUE;
             int length = jniFunctions().getGetArrayLength().invoke(jni, classArray);
             if (!clearException(jni) && length >= 0) {
-                List<String> list = new ArrayList<>();
+                List<Object> list = new ArrayList<>();
                 for (int i = 0; i < length; i++) {
                     JNIObjectHandle clazz = jniFunctions().getGetObjectArrayElement().invoke(jni, classArray, i);
                     if (!clearException(jni)) {
@@ -477,7 +476,7 @@ final class BreakpointInterceptor {
                         list.add(TraceWriter.UNKNOWN_VALUE);
                     }
                 }
-                classNames = list.toArray(new String[0]);
+                classNames = list.toArray();
             }
         }
         return classNames;

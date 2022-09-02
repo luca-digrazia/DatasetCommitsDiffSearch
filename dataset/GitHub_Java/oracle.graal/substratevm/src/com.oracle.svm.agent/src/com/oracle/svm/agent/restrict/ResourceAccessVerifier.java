@@ -26,7 +26,6 @@ package com.oracle.svm.agent.restrict;
 
 import static com.oracle.svm.agent.Support.fromJniString;
 
-import com.oracle.svm.configure.config.ResourceConfiguration;
 import com.oracle.svm.configure.trace.AccessAdvisor;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
@@ -35,7 +34,7 @@ public class ResourceAccessVerifier extends AbstractAccessVerifier {
     private final ResourceConfiguration configuration;
 
     public ResourceAccessVerifier(ResourceConfiguration configuration, AccessAdvisor advisor) {
-        super(advisor);
+        super(null, advisor);
         this.configuration = configuration;
     }
 
