@@ -185,22 +185,10 @@ final class InstrumentationHandler {
     }
 
     void onLoad(RootNode root) {
-        if (TRACE) {
-            String name = root.getName();
-            if (name == null) {
-                name = root.getClass().getName();
-            }
-            String lang = "None";
-            LanguageInfo info = root.getLanguageInfo();
-            if (info != null) {
-                lang = info.getId();
-            }
-            trace("ON-LOAD: %-5s CallTarget: %s%n", lang, name);
-        }
-
-        if (InstrumentAccessor.nodesAccess().getPolyglotEngine(root) == null) {
+        if (!InstrumentAccessor.nodesAccess().isInstrumentable(root)) {
             return;
         }
+        assert root.getLanguageInfo() != null;
 
         loadedRoots.add(root);
 
@@ -219,6 +207,7 @@ final class InstrumentationHandler {
         if (!InstrumentAccessor.nodesAccess().isInstrumentable(root)) {
             return;
         }
+        assert root.getLanguageInfo() != null;
 
         executedRoots.add(root);
 
@@ -1142,14 +1131,6 @@ final class InstrumentationHandler {
     private static void visitRoot(RootNode root, final Node node, final Visitor visitor, boolean forceRootBitComputation, boolean firstExecution, boolean setExecutedRootNodeBit) {
         if (TRACE) {
             trace("BEGIN: Visit root %s for %s%n", root.toString(), visitor);
-        }
-
-        if (InstrumentAccessor.runtimeAccess().isOSRRootNode(root)) {
-            /*
-             * OSR Root nodes are always traversed by the parent root node. So walking OSR root
-             * nodes would be redundant work.
-             */
-            return;
         }
 
         visitor.preVisit(root, firstExecution);
