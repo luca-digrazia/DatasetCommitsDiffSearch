@@ -71,7 +71,6 @@ public final class InstrumentRegistrationProcessor extends AbstractRegistrationP
 
     private static final int NUMBER_OF_PROPERTIES_PER_ENTRY = 4;
 
-    @Override
     boolean validateRegistration(Element annotatedElement, AnnotationMirror registrationMirror, Annotation registration) {
         if (!annotatedElement.getModifiers().contains(Modifier.PUBLIC)) {
             emitError("Registered instrument class must be public", annotatedElement);
