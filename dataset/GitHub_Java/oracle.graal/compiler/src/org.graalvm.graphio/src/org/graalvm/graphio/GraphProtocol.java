@@ -78,11 +78,11 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
     private final ConstantPool constantPool;
     private final ByteBuffer buffer;
     private final WritableByteChannel channel;
-    private final boolean buffered;
+    private final boolean autoFlush;
     final int versionMajor;
     final int versionMinor;
 
-    GraphProtocol(WritableByteChannel channel, int major, int minor, boolean buffered, boolean writeProlog) throws IOException {
+    GraphProtocol(WritableByteChannel channel, int major, int minor, boolean autoFlush, boolean writeProlog) throws IOException {
         if (major > 6 || (major == 6 && minor > 0)) {
             throw new IllegalArgumentException("Unrecognized version " + major + "." + minor);
         }
@@ -91,7 +91,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         this.constantPool = new ConstantPool();
         this.buffer = ByteBuffer.allocateDirect(256 * 1024);
         this.channel = channel;
-        this.buffered = buffered;
+        this.autoFlush = autoFlush;
         if (writeProlog) {
             writeVersion();
             flushIfNeeded();
@@ -104,7 +104,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         this.constantPool = parent.constantPool;
         this.buffer = parent.buffer;
         this.channel = parent.channel;
-        this.buffered = parent.buffered;
+        this.autoFlush = parent.autoFlush;
     }
 
     @SuppressWarnings("all")
@@ -289,7 +289,7 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
     }
 
     private void flushIfNeeded() throws IOException {
-        if (!buffered) {
+        if (autoFlush) {
             flush();
             constantPool.reset();
         }
@@ -835,8 +835,8 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
         }
 
         void reset() {
-            availableIds.clear();
-            nextId = 0;
+//            availableIds.clear();
+//            nextId = 0;
         }
     }
 
