@@ -34,11 +34,9 @@ public class TargetOffset implements RepeatingNode.ShouldContinue {
 
     @CompilationFinal public static final TargetOffset MINUS_ONE = new TargetOffset(-1);
 
-    @CompilationFinal public static final TargetOffset ZERO = new TargetOffset(0);
-
     @CompilationFinal(dimensions = 1) private static final TargetOffset[] CACHE = new TargetOffset[] {
                     MINUS_ONE,
-                    ZERO,
+                    new TargetOffset(0),
                     new TargetOffset(1),
                     new TargetOffset(2),
                     new TargetOffset(3),
@@ -75,14 +73,6 @@ public class TargetOffset implements RepeatingNode.ShouldContinue {
 
     @Override
     public boolean shouldContinue() {
-        // This is a trick to avoid the load of the value field.
-        // In particular, we avoid:
-        //
-        // return this.value == 0;
-        //
-        // This helps the partial evaluator short-circuit the
-        // pattern with a diamond and a loop exit check,
-        // when br_if occurs in the loop body.
-        return this == ZERO;
+        return value == 0;
     }
 }
