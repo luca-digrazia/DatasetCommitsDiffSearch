@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.runtime.nodes.func;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
@@ -56,17 +57,16 @@ import com.oracle.truffle.llvm.runtime.NFIContextExtension.UnsupportedNativeType
 import com.oracle.truffle.llvm.runtime.except.LLVMNativePointerException;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.nfi.LLVMNativeConvertNode;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMDispatchNodeGen.LLVMLookupDispatchForeignNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
-import com.oracle.truffle.llvm.spi.NativeTypeLibrary;
 
 public abstract class LLVMDispatchNode extends LLVMNode {
 
@@ -100,8 +100,8 @@ public abstract class LLVMDispatchNode extends LLVMNode {
 
     /**
      * {@code function} is expected to be either {@link LLVMFunctionDescriptor},
-     * {@link LLVMNativePointer} or a foreign object, and it needs to be resolved using
-     * {@link LLVMLookupDispatchTargetNode}.
+     * {@link LLVMTypedForeignObject} or {@link LLVMNativePointer}, and it needs to be resolved
+     * using {@link LLVMLookupDispatchTargetNode}.
      */
     public abstract Object executeDispatch(Object function, Object[] arguments);
 
@@ -231,13 +231,28 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         return LLVMNativeConvertNode.createFromNative(type.getReturnType());
     }
 
-    @Specialization(guards = {"foreigns.isForeign(receiver)"})
-    protected Object doForeign(Object receiver, Object[] arguments,
-                    @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns,
-                    @CachedLibrary(limit = "3") NativeTypeLibrary natives,
+    /**
+     *
+     * There is a discrepancy between {@code LLVMTypedForeignObject.getType()} and the exported
+     * message {@code getNativeType}. While the former returns the attached type, the latter first
+     * asks the wrapped foreign object for its native type using {@code NativeTypeLibrary}. As in
+     * some cases (in GraalPython tests) the returned types differ, it is impossible to simply
+     * replace {@code LLVMTypedForeignObject.getType()} by {@code natives.getNativeType(receiver)}.
+     *
+     * <pre>
+     * &#64;Specialization(guards = {"foreigns.isForeign(receiver)", "natives.hasNativeType(receiver)"})
+     * protected Object doForeign(Object receiver, Object[] arguments,
+     *                 &#64;CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns,
+     *                 &#64;CachedLibrary(limit = "3") NativeTypeLibrary natives, @Cached("create(type)") LLVMLookupDispatchForeignNode lookupDispatchForeignNode) {
+     *     return lookupDispatchForeignNode.execute(foreigns.asForeign(receiver),
+     *                     natives.getNativeType(receiver), arguments);
+     * }
+     * </pre>
+     */
+    @Specialization
+    protected Object doForeign(LLVMTypedForeignObject foreign, Object[] arguments,
                     @Cached("create(type)") LLVMLookupDispatchForeignNode lookupDispatchForeignNode) {
-        return lookupDispatchForeignNode.execute(foreigns.asForeign(receiver),
-                        natives.getNativeType(receiver), arguments);
+        return lookupDispatchForeignNode.execute(foreign.getForeign(), foreign.getType(), arguments);
     }
 
     @Specialization
@@ -260,15 +275,10 @@ public abstract class LLVMDispatchNode extends LLVMNode {
     }
 
     abstract static class LLVMLookupDispatchForeignNode extends LLVMNode {
-
-        private final boolean isVoidReturn;
-        private final int argumentCount;
-        private final FunctionType type;
+        final FunctionType type;
 
         LLVMLookupDispatchForeignNode(FunctionType type) {
             this.type = type;
-            this.isVoidReturn = type.getReturnType() instanceof VoidType;
-            this.argumentCount = type.getNumberOfArguments();
         }
 
         abstract Object execute(Object function, Object interopType, Object[] arguments);
@@ -293,7 +303,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                 try (StackPointer save = ((StackPointer) arguments[0]).newFrame()) {
                     ret = crossLanguageCall.execute(function, args);
                 }
-                if (!isVoidReturn && functionType != null) {
+                if (!(type.getReturnType() instanceof VoidType) && functionType != null) {
                     LLVMInteropType retType = functionType.getReturnType();
                     if (retType instanceof LLVMInteropType.Value) {
                         return toLLVMNode.executeWithType(ret, ((LLVMInteropType.Value) retType).getBaseType());
@@ -310,11 +320,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
             }
         }
 
-        boolean isNotFunctionType(Object functionType) {
-            return !(functionType instanceof LLVMInteropType.Function);
-        }
-
-        @Specialization(guards = "isNotFunctionType(functionType)", limit = "5")
+        @Specialization(guards = "functionType == null", limit = "5")
         protected Object doUnknownType(TruffleObject function, @SuppressWarnings("unused") Object functionType, Object[] arguments,
                         @CachedLibrary("function") InteropLibrary crossLanguageCall,
                         @Cached("createLLVMDataEscapeNodes()") LLVMDataEscapeNode[] dataEscapeNodes,
@@ -324,7 +330,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
 
         @ExplodeLoop
         private Object[] getForeignArguments(LLVMDataEscapeNode[] dataEscapeNodes, Object[] arguments, LLVMInteropType.Function functionType) {
-            assert arguments.length == argumentCount;
+            assert arguments.length == type.getNumberOfArguments();
             Object[] args = new Object[dataEscapeNodes.length];
             int i = 0;
             if (functionType != null) {
@@ -352,8 +358,8 @@ public abstract class LLVMDispatchNode extends LLVMNode {
             return CommonNodeFactory.createForeignToLLVM(ForeignToLLVM.convert(type.getReturnType()));
         }
 
+        @TruffleBoundary
         protected LLVMDataEscapeNode[] createLLVMDataEscapeNodes() {
-            CompilerAsserts.neverPartOfCompilation();
             LLVMDataEscapeNode[] args = new LLVMDataEscapeNode[type.getNumberOfArguments() - LLVMCallNode.USER_ARGUMENT_OFFSET];
             for (int i = 0; i < args.length; i++) {
                 args[i] = LLVMDataEscapeNode.create(type.getArgumentType(i + LLVMCallNode.USER_ARGUMENT_OFFSET));

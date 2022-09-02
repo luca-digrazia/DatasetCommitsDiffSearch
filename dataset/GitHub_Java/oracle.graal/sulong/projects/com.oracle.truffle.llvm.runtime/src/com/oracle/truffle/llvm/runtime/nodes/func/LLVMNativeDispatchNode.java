@@ -119,14 +119,11 @@ public abstract class LLVMNativeDispatchNode extends LLVMNode {
         return nativeArgs;
     }
 
-    /**
-     * @param function
-     * @see #executeDispatch(Object, Object[])
-     */
     @Specialization(guards = "function.asNative() == cachedFunction.asNative()")
+    @SuppressWarnings("unused")
     protected Object doCached(LLVMNativePointer function, Object[] arguments,
                     @CachedContext(LLVMLanguage.class) ContextReference<LLVMContext> context,
-                    @Cached("function") @SuppressWarnings("unused") LLVMNativePointer cachedFunction,
+                    @Cached("function") LLVMNativePointer cachedFunction,
                     @Cached("dispatchIdentity(cachedFunction.asNative())") Object nativeFunctionHandle,
                     @CachedLibrary("nativeFunctionHandle") InteropLibrary nativeCall,
                     @Cached("createToNativeNodes()") LLVMNativeConvertNode[] toNative,
