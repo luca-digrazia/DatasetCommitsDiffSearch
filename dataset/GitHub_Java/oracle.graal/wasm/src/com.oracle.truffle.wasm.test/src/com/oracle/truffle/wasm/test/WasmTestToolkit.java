@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.wasm.test;
 
+import org.junit.Assert;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -37,8 +39,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.stream.Collectors;
-
-import org.junit.Assert;
 
 public class WasmTestToolkit {
 
