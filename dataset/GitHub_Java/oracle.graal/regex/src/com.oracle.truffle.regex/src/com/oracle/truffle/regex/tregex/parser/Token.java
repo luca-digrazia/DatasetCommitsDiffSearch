@@ -111,11 +111,7 @@ public class Token implements JsonConvertible {
     }
 
     public static Token createCharClass(CodePointSet codePointSet) {
-        return new CharacterClass(codePointSet, false);
-    }
-
-    public static Token createCharClass(CodePointSet codePointSet, boolean wasSingleChar) {
-        return new CharacterClass(codePointSet, wasSingleChar);
+        return new CharacterClass(codePointSet);
     }
 
     public static Token createLookAheadAssertionBegin(boolean negated) {
@@ -182,38 +178,6 @@ public class Token implements JsonConvertible {
             return greedy;
         }
 
-        @Override
-        public int hashCode() {
-            return 31 * min + 31 * max + (greedy ? 1 : 0);
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) {
-                return true;
-            }
-            if (!(obj instanceof Quantifier)) {
-                return false;
-            }
-            Quantifier o = (Quantifier) obj;
-            return min == o.min && max == o.max && greedy == o.greedy;
-        }
-
-        @TruffleBoundary
-        @Override
-        public String toString() {
-            if (min == 0 && max == 1) {
-                return "?";
-            }
-            if (min == 0 && isInfiniteLoop()) {
-                return "*";
-            }
-            if (min == 1 && isInfiniteLoop()) {
-                return "+";
-            }
-            return String.format("{%d,%s}", min, isInfiniteLoop() ? "" : String.valueOf(max));
-        }
-
         @TruffleBoundary
         @Override
         public JsonObject toJson() {
@@ -227,12 +191,10 @@ public class Token implements JsonConvertible {
     public static final class CharacterClass extends Token {
 
         private final CodePointSet codePointSet;
-        private final boolean wasSingleChar;
 
-        public CharacterClass(CodePointSet codePointSet, boolean wasSingleChar) {
+        public CharacterClass(CodePointSet codePointSet) {
             super(Kind.charClass);
             this.codePointSet = codePointSet;
-            this.wasSingleChar = wasSingleChar;
         }
 
         @TruffleBoundary
@@ -243,10 +205,6 @@ public class Token implements JsonConvertible {
 
         public CodePointSet getCodePointSet() {
             return codePointSet;
-        }
-
-        public boolean wasSingleChar() {
-            return wasSingleChar;
         }
     }
 
