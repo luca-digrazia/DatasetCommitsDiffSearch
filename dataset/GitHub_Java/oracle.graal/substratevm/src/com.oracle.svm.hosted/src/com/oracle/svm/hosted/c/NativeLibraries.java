@@ -63,7 +63,6 @@ import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
-import org.graalvm.nativeimage.c.struct.RawPointerTo;
 import org.graalvm.nativeimage.c.struct.RawStructure;
 import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.LocationIdentity;
@@ -77,7 +76,9 @@ import com.oracle.graal.pointsto.infrastructure.WrappedElement;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.SubstrateTargetDescription;
 import com.oracle.svm.core.c.libc.LibCBase;
+import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
@@ -293,8 +294,9 @@ public final class NativeLibraries {
         Path baseSearchPath = Paths.get(System.getProperty("java.home")).resolve("lib").toRealPath();
         if (JavaVersionUtil.JAVA_SPEC > 8) {
             Path staticLibPath = baseSearchPath.resolve("static");
-            Path platformDependentPath = staticLibPath.resolve((ImageSingletons.lookup(Platform.class).getOS() + "-" + ImageSingletons.lookup(Platform.class).getArchitecture()).toLowerCase());
-            if (ImageSingletons.lookup(Platform.class) instanceof Platform.LINUX) {
+            SubstrateTargetDescription target = ConfigurationValues.getTarget();
+            Path platformDependentPath = staticLibPath.resolve((OS.getCurrent().className + "-" + target.arch.getName()).toLowerCase());
+            if (OS.getCurrent() == OS.LINUX) {
                 platformDependentPath = platformDependentPath.resolve(LibCBase.singleton().getName());
                 if (LibCBase.singleton().requiresLibCSpecificStaticJDKLibraries()) {
                     return platformDependentPath;
@@ -323,8 +325,7 @@ public final class NativeLibraries {
             if (defaultBuiltInLibraries.stream().allMatch(hasStaticLibrary)) {
                 staticLibsDir = jdkLibDir;
             } else {
-                String libraryLocationHint = System.lineSeparator() + "(search path: " + jdkLibDir + ")";
-                hint = defaultBuiltInLibraries.stream().filter(hasStaticLibrary.negate()).collect(Collectors.joining(", ", "Missing libraries: ", libraryLocationHint));
+                hint = defaultBuiltInLibraries.stream().filter(hasStaticLibrary.negate()).collect(Collectors.joining(", ", "Missing libraries:", ""));
             }
         } catch (IOException e) {
             /* Fallthrough to next strategy */
@@ -343,7 +344,7 @@ public final class NativeLibraries {
                 /* Fail if we will statically link JDK libraries but do not have them available */
                 String libCMessage = "";
                 if (Platform.includedIn(Platform.LINUX.class)) {
-                    libCMessage = " (target libc: " + LibCBase.singleton().getName() + ")";
+                    libCMessage = "(target libc: " + LibCBase.singleton().getName() + ")";
                 }
                 String jdkDownloadURL = (JavaVersionUtil.JAVA_SPEC > 8 ? JVMCIVersionCheck.JVMCI11_RELEASES_URL : JVMCIVersionCheck.JVMCI8_RELEASES_URL);
                 UserError.guarantee(!Platform.includedIn(InternalPlatform.PLATFORM_JNI.class),
@@ -396,9 +397,7 @@ public final class NativeLibraries {
         } else if (type.getAnnotation(RawStructure.class) != null) {
             context.appendRawStructType(type);
         } else if (type.getAnnotation(CPointerTo.class) != null) {
-            context.appendCPointerToType(type);
-        } else if (type.getAnnotation(RawPointerTo.class) != null) {
-            context.appendRawPointerToType(type);
+            context.appendPointerToType(type);
         } else if (type.getAnnotation(CEnum.class) != null) {
             context.appendEnumType(type);
         } else {
