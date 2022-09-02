@@ -388,10 +388,7 @@ final class Runner {
     }
 
     /**
-     * Allocates global storage for a module and initializes the global table.
-     *
-     * @see InitializeGlobalNode
-     * @see InitializeModuleNode
+     * TODO JavaDoc.
      */
     private static final class InitializeSymbolsNode extends LLVMNode {
 
@@ -921,11 +918,7 @@ final class Runner {
     }
 
     /**
-     * Initializes the memory, allocated by {@link InitializeSymbolsNode}, for a module and protects
-     * the read only section.
-     *
-     * @see InitializeSymbolsNode
-     * @see InitializeModuleNode
+     * TODO JavaDoc.
      */
     private static final class InitializeGlobalNode extends LLVMNode implements LLVMHasDatalayoutNode {
 
@@ -956,11 +949,7 @@ final class Runner {
     }
 
     /**
-     * Registers the destructor and executes the constructor of a module. This happens after
-     * <emph>all</emph> globals have been initialized by {@link InitializeGlobalNode}.
-     *
-     * @see InitializeSymbolsNode
-     * @see InitializeGlobalNode
+     * TODO JavaDoc.
      */
     private static final class InitializeModuleNode extends LLVMNode implements LLVMHasDatalayoutNode {
 
