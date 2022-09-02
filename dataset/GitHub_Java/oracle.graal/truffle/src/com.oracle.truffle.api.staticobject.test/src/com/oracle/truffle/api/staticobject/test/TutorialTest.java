@@ -64,7 +64,7 @@ public class TutorialTest extends StaticObjectModelTest {
 
     @BeforeClass
     public static void setup() {
-        environments = getTestEnvironments();
+        environments = new TestEnvironment[]{new TestEnvironment(true), new TestEnvironment(false)};
     }
 
     @AfterClass
@@ -72,25 +72,6 @@ public class TutorialTest extends StaticObjectModelTest {
         for (TestEnvironment env : environments) {
             env.close();
         }
-    }
-
-    public static abstract class MyStaticObject {
-        final String arg1;
-        final Object arg2;
-
-        public MyStaticObject(String arg1) {
-            this(arg1, null);
-        }
-
-        public MyStaticObject(String arg1, Object arg2) {
-            this.arg1 = arg1;
-            this.arg2 = arg2;
-        }
-    }
-
-    public interface MyStaticObjectInterface {
-        MyStaticObject create(String arg1);
-        MyStaticObject create(String arg1, Object arg2);
     }
 
     @Theory
@@ -129,16 +110,6 @@ public class TutorialTest extends StaticObjectModelTest {
         assert s1p1.getInt(o2) == 42;
         assert s1p2.getObject(o2).equals("42");
         assert s2p1.getInt(o2) == 24;
-    }
-
-    @Theory
-    public void extendingCustomBaseClasses(TestEnvironment te) {
-        StaticProperty property = new DefaultStaticProperty("arg1", StaticPropertyKind.Object, false);
-        StaticShape<MyStaticObjectInterface> shape = StaticShape.newBuilder(te.testLanguage).property(property).build(MyStaticObject.class, MyStaticObjectInterface.class);
-        MyStaticObject staticObject = shape.getFactory().create("arg1");
-        property.setObject(staticObject, "42");
-        assert staticObject.arg1.equals("arg1"); // fields of the custom super class are directly accessible
-        assert property.getObject(staticObject).equals("42"); // static properties are accessible as usual
     }
 
     @Test
