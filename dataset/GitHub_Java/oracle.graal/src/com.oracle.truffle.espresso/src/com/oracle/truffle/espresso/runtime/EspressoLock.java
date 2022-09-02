@@ -46,8 +46,7 @@ public interface EspressoLock extends Lock {
      * <p>
      * Analogous to the {@link Object#wait(long)} method for built-in monitor locks.
      *
-     * @param timeout the maximum time to wait in milliseconds. {@code false} if the waiting time
-     *            detectably elapsed before return from the method, else {@code true}
+     * @param timeout the maximum time to wait in milliseconds.
      * @throws IllegalArgumentException if the value of timeout is negative.
      * @throws IllegalMonitorStateException if the current thread is not the owner of the object's
      *             monitor.
@@ -55,7 +54,7 @@ public interface EspressoLock extends Lock {
      *             current thread was waiting for a notification. The <i>interrupted status</i> of
      *             the current thread is cleared when this exception is thrown.
      */
-    boolean await(long timeout) throws InterruptedException;
+    void await(long timeout) throws InterruptedException;
 
     /**
      * Wakes up one waiting thread.
@@ -105,21 +104,6 @@ public interface EspressoLock extends Lock {
     static EspressoLock create() {
         return new EspressoLockImpl();
     }
-
-    /**
-     * Returns the number of entries for which the thread obtained the lock.
-     *
-     * @param thread a thread
-     * @return the hold count of the lock for the given thread
-     */
-    int getHoldCount(Thread thread);
-
-    /**
-     * Returns an array of all waiting threads of the lock.
-     *
-     * @return an estimate of all currently waiting threads
-     */
-    Thread[] getWaitingThreads();
 }
 
 final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
@@ -144,16 +128,15 @@ final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
 
     @SuppressFBWarnings(value = "WA_AWAIT_NOT_IN_LOOP", justification = "Espresso runtime method.")
     @Override
-    public boolean await(long timeout) throws InterruptedException {
+    public void await(long timeout) throws InterruptedException {
         if (timeout == 0) {
             // Wait without timeout, NOT equivalent to await(0L, TimeUnit.MILLISECONDS);
             getWaitCondition().await();
         } else if (timeout > 0) {
-            return getWaitCondition().await(timeout, TimeUnit.MILLISECONDS);
+            getWaitCondition().await(timeout, TimeUnit.MILLISECONDS);
         } else {
             throw new IllegalArgumentException();
         }
-        return false;
     }
 
     @Override
@@ -175,18 +158,5 @@ final class EspressoLockImpl extends ReentrantLock implements EspressoLock {
     public Condition newCondition() {
         // Disable arbitrary conditions.
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public Thread[] getWaitingThreads() {
-        return getQueuedThreads().toArray(new Thread[0]);
-    }
-
-    @Override
-    public int getHoldCount(Thread thread) {
-        if (thread != getOwnerThread()) {
-            return 0;
-        }
-        return getHoldCount();
     }
 }
