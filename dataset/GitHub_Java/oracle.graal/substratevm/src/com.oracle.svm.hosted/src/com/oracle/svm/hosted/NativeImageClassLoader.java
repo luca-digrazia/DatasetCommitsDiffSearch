@@ -33,6 +33,7 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -54,7 +55,18 @@ public class NativeImageClassLoader extends URLClassLoader {
         super(verifyClassPathAndConvertToURLs(classpath), parent);
 
         imagecp = Collections.unmodifiableList(Arrays.stream(getURLs()).map(NativeImageClassLoader::urlToPath).collect(Collectors.toList()));
-        buildcp = Collections.unmodifiableList(Arrays.stream(System.getProperty("java.class.path").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toList()));
+
+        ArrayList<Path> buildcp = Arrays.stream(System.getProperty("java.class.path").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toCollection(ArrayList::new));
+        /* If the GraalVM SDK is on the boot class path, and it contains annotated types. */
+        final String sunBootClassPath = System.getProperty("sun.boot.class.path");
+        if (sunBootClassPath != null) {
+            for (String s : sunBootClassPath.split(File.pathSeparator)) {
+                if (s.contains("graal-sdk")) {
+                    buildcp.add(Paths.get(s));
+                }
+            }
+        }
+        this.buildcp = buildcp;
     }
 
     private static URL[] verifyClassPathAndConvertToURLs(String[] classpath) {

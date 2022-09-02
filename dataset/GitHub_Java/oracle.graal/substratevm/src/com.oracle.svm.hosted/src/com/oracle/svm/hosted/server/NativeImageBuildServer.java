@@ -72,13 +72,11 @@ import java.util.stream.Collectors;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.ImageBuildTask;
-import com.oracle.svm.hosted.ImageClassLoader;
+import com.oracle.svm.hosted.NativeImageClassLoader;
 import com.oracle.svm.hosted.NativeImageGeneratorRunner;
-import com.oracle.svm.hosted.NativeImageSystemClassLoader;
 import com.oracle.svm.hosted.server.SubstrateServerMessage.ServerCommand;
 import com.oracle.svm.util.ModuleSupport;
 import com.oracle.svm.util.ReflectionUtil;
@@ -397,12 +395,12 @@ public final class NativeImageBuildServer {
     }
 
     private static Integer executeCompilation(ArrayList<String> arguments) {
-        final String[] classpath = NativeImageGeneratorRunner.extractImagePathEntries(arguments, SubstrateOptions.IMAGE_CLASSPATH_PREFIX);
-        ImageClassLoader imageClassLoader;
+        final String[] classpath = NativeImageGeneratorRunner.extractImageClassPath(arguments);
+        NativeImageClassLoader imageClassLoader;
         ClassLoader applicationClassLoader = Thread.currentThread().getContextClassLoader();
         try {
-            imageClassLoader = NativeImageGeneratorRunner.installNativeImageClassLoader(classpath, new String[0]);
-            final ImageBuildTask task = loadCompilationTask(arguments, NativeImageSystemClassLoader.singleton().getNativeImageClassLoader());
+            imageClassLoader = NativeImageGeneratorRunner.installNativeImageClassLoader(classpath);
+            final ImageBuildTask task = loadCompilationTask(arguments, imageClassLoader);
             try {
                 tasks.add(task);
                 return task.build(arguments.toArray(new String[arguments.size()]), imageClassLoader);
