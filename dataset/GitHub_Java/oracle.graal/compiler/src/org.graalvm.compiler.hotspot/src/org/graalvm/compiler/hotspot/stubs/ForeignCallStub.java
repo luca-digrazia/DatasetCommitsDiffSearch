@@ -66,14 +66,7 @@ public class ForeignCallStub extends AbstractForeignCallStub {
     }
 
     @Override
-    protected HotSpotForeignCallDescriptor getTargetSignature(HotSpotForeignCallDescriptor descriptor) {
-        Class<?>[] targetParameterTypes = createTargetParameters(descriptor);
-        HotSpotForeignCallDescriptor targetSig = new HotSpotForeignCallDescriptor(descriptor.getTransition(), descriptor.getReexecutability(), descriptor.getKilledLocations(),
-                        descriptor.getName() + ":C", descriptor.getResultType(), targetParameterTypes);
-        return targetSig;
-    }
-
-    private Class<?>[] createTargetParameters(ForeignCallDescriptor descriptor) {
+    protected Class<?>[] createTargetParameters(ForeignCallDescriptor descriptor) {
         Class<?>[] parameters = descriptor.getArgumentTypes();
         if (prependThread) {
             Class<?>[] newParameters = new Class<?>[parameters.length + 1];
@@ -95,7 +88,7 @@ public class ForeignCallStub extends AbstractForeignCallStub {
     }
 
     @Override
-    protected ValueNode createTargetCall(GraphKit kit, ReadRegisterNode thread) {
+    protected StubForeignCallNode createTargetCall(GraphKit kit, ReadRegisterNode thread) {
         ParameterNode[] params = createParameters(kit);
         Stamp stamp = StampFactory.forKind(JavaKind.fromJavaClass(target.getDescriptor().getResultType()));
         if (prependThread) {

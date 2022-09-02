@@ -46,6 +46,7 @@ import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition;
 import org.graalvm.compiler.hotspot.meta.HotSpotLoweringProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
+import org.graalvm.compiler.hotspot.nodes.StubForeignCallNode;
 import org.graalvm.compiler.hotspot.stubs.ForeignCallSnippets.Templates;
 import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.ParameterNode;
@@ -104,12 +105,12 @@ public abstract class AbstractForeignCallStub extends Stub {
         this.jvmciRuntime = runtime;
         this.prependThread = prependThread;
         MetaAccessProvider metaAccess = providers.getMetaAccess();
-        HotSpotForeignCallDescriptor targetSig = getTargetSignature(descriptor);
+        Class<?>[] targetParameterTypes = createTargetParameters(descriptor);
+        HotSpotForeignCallDescriptor targetSig = new HotSpotForeignCallDescriptor(descriptor.getTransition(), descriptor.getReexecutability(), descriptor.getKilledLocations(),
+                        descriptor.getName() + ":C", descriptor.getResultType(), targetParameterTypes);
         target = HotSpotForeignCallLinkageImpl.create(metaAccess, providers.getCodeCache(), providers.getWordTypes(), providers.getForeignCalls(), targetSig, address,
                         DESTROYS_ALL_CALLER_SAVE_REGISTERS, NativeCall, NativeCall);
     }
-
-    protected abstract HotSpotForeignCallDescriptor getTargetSignature(HotSpotForeignCallDescriptor descriptor);
 
     /**
      * Gets the linkage information for the call from this stub.
@@ -117,6 +118,8 @@ public abstract class AbstractForeignCallStub extends Stub {
     public final HotSpotForeignCallLinkage getTargetLinkage() {
         return target;
     }
+
+    protected abstract Class<?>[] createTargetParameters(ForeignCallDescriptor descriptor);
 
     @Override
     protected final ResolvedJavaMethod getInstalledCodeOwner() {
@@ -283,5 +286,5 @@ public abstract class AbstractForeignCallStub extends Stub {
         return params;
     }
 
-    protected abstract ValueNode createTargetCall(GraphKit kit, ReadRegisterNode thread);
+    protected abstract StubForeignCallNode createTargetCall(GraphKit kit, ReadRegisterNode thread);
 }
