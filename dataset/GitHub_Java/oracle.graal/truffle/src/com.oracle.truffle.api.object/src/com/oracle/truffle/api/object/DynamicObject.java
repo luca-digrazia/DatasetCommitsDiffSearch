@@ -248,23 +248,15 @@ public abstract class DynamicObject implements TruffleObject {
      * Returns the number of properties in this object.
      *
      * @since 0.8 or earlier
-     * @deprecated Use {@link Shape#getPropertyCount() getShape().getPropertyCount()} instead.
      */
-    @Deprecated
-    public int size() {
-        return getShape().getPropertyCount();
-    }
+    public abstract int size();
 
     /**
      * Returns {@code true} if this object contains no properties.
      *
      * @since 0.8 or earlier
-     * @deprecated Use {@link Shape#getPropertyCount() getShape().getPropertyCount() == 0} instead.
      */
-    @Deprecated
-    public boolean isEmpty() {
-        return size() == 0;
-    }
+    public abstract boolean isEmpty();
 
     /**
      * Set object shape and grow storage if necessary.
