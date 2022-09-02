@@ -45,16 +45,17 @@ import org.graalvm.nativeimage.hosted.Feature;
 import com.oracle.svm.core.ClassLoaderSupport;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.hosted.FeatureImpl;
+import com.oracle.svm.hosted.NativeImageClassLoaderSupport;
 import com.oracle.svm.hosted.NativeImageSystemClassLoader;
 
 import jdk.internal.module.Modules;
 
 public final class ClassLoaderSupportImplJDK11OrLater extends ClassLoaderSupport {
 
-    private final NativeImageClassLoaderSupportJDK11OrLater classLoaderSupport;
+    private final NativeImageClassLoaderSupport classLoaderSupport;
     private final Map<String, Set<Module>> packageToModules;
 
-    ClassLoaderSupportImplJDK11OrLater(NativeImageClassLoaderSupportJDK11OrLater classLoaderSupport) {
+    ClassLoaderSupportImplJDK11OrLater(NativeImageClassLoaderSupport classLoaderSupport) {
         this.classLoaderSupport = classLoaderSupport;
         packageToModules = new HashMap<>();
         buildPackageToModulesMap(classLoaderSupport);
@@ -107,7 +108,7 @@ public final class ClassLoaderSupportImplJDK11OrLater extends ClassLoaderSupport
         return bundleName.substring(0, classSep);
     }
 
-    private void buildPackageToModulesMap(NativeImageClassLoaderSupportJDK11OrLater classLoaderSupport) {
+    private void buildPackageToModulesMap(NativeImageClassLoaderSupport classLoaderSupport) {
         for (ModuleLayer layer : allLayers(classLoaderSupport.moduleLayerForImageBuild)) {
             for (Module module : layer.modules()) {
                 for (String packageName : module.getDescriptor().packages()) {
@@ -170,6 +171,6 @@ class ClassLoaderSupportFeatureJDK11OrLater implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess a) {
         FeatureImpl.AfterRegistrationAccessImpl access = (FeatureImpl.AfterRegistrationAccessImpl) a;
-        ImageSingletons.add(ClassLoaderSupport.class, new ClassLoaderSupportImplJDK11OrLater((NativeImageClassLoaderSupportJDK11OrLater) access.getImageClassLoader().classLoaderSupport));
+        ImageSingletons.add(ClassLoaderSupport.class, new ClassLoaderSupportImplJDK11OrLater(access.getImageClassLoader().classLoaderSupport));
     }
 }
