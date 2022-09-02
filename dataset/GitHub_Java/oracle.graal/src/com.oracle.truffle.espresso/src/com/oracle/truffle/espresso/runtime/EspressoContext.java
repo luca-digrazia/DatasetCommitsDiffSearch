@@ -34,18 +34,12 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso.jdwp.api.VMListener;
-import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
-import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import org.graalvm.polyglot.Engine;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleFile;
-
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.source.Source;
@@ -66,6 +60,7 @@ import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.EspressoReference;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
 
@@ -81,13 +76,10 @@ public final class EspressoContext {
     private final Substitutions substitutions;
     private final MethodHandleIntrinsics methodHandleIntrinsics;
     private final EspressoThreadManager threadManager;
-    private StaticObject mainThreadGroup;
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
-    private boolean mainThreadCreated;
-    private JDWPContextImpl jdwpContext;
-    private VMListener eventListener;
-    private boolean contextReady;
+
+    private StaticObject mainThreadGroup;
 
     public int getNewId() {
         return klassIdProvider.getAndIncrement();
@@ -124,10 +116,11 @@ public final class EspressoContext {
         this.substitutions = new Substitutions(this);
         this.methodHandleIntrinsics = new MethodHandleIntrinsics(this);
         this.threadManager = new EspressoThreadManager(this);
+
+        this.InlineFieldAccessors = env.getOptions().get(EspressoOptions.InlineFieldAccessors);
+        this.Verify = env.getOptions().get(EspressoOptions.Verify);
         this.JDWPOptions = env.getOptions().get(EspressoOptions.JDWPOptions); // null if not
                                                                               // specified
-        this.InlineFieldAccessors = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.InlineFieldAccessors);
-        this.Verify = env.getOptions().get(EspressoOptions.Verify);
     }
 
     public ClassRegistries getRegistries() {
@@ -196,29 +189,9 @@ public final class EspressoContext {
 
     public void initializeContext() {
         assert !this.initialized;
-        eventListener = new EmptyListener();
         spawnVM();
         this.initialized = true;
-        this.jdwpContext = new JDWPContextImpl(this);
-        this.eventListener = jdwpContext.jdwpInit(env);
-        eventListener.vmStarted(getMainThread());
         hostToGuestReferenceDrainThread.start();
-    }
-
-    public VMListener getJDWPListener() {
-        return eventListener;
-    }
-
-    public Source findOrCreateSource(Method method) {
-        String sourceFile = method.getSourceFile();
-        if (sourceFile == null) {
-            return null;
-        } else {
-            TruffleFile file = env.getInternalTruffleFile(sourceFile);
-            Source source = Source.newBuilder("java", file).content(Source.CONTENT_NONE).build();
-            // sources are interned so no cache needed (hopefully)
-            return source;
-        }
     }
 
     private Thread hostToGuestReferenceDrainThread;
@@ -358,8 +331,7 @@ public final class EspressoContext {
         mainThread.setIntField(meta.Thread_priority, Thread.NORM_PRIORITY);
         mainThread.setHiddenField(meta.HIDDEN_HOST_THREAD, Thread.currentThread());
         mainThread.setHiddenField(meta.HIDDEN_DEATH, Target_java_lang_Thread.KillStatus.NORMAL);
-        mainThreadGroup = getMainThreadGroup();
-
+        mainThreadGroup = meta.ThreadGroup.allocateInstance();
         threadManager.registerMainThread(Thread.currentThread(), mainThread);
 
         // Guest Thread.currentThread() must work as this point.
@@ -375,15 +347,6 @@ public final class EspressoContext {
                                         /* group */ mainThreadGroup,
                                         /* name */ meta.toGuestString("main"));
         mainThread.setIntField(meta.Thread_threadStatus, Target_java_lang_Thread.State.RUNNABLE.value);
-
-        mainThreadCreated = true;
-    }
-
-    private StaticObject getMainThreadGroup() {
-        if (mainThreadGroup == null) {
-            mainThreadGroup = meta.ThreadGroup.allocateInstance();
-        }
-        return mainThreadGroup;
     }
 
     /**
@@ -542,6 +505,7 @@ public final class EspressoContext {
     public EspressoException getOutOfMemory() {
         return outOfMemory;
     }
+
     // Thread management
 
     public StaticObject getGuestThreadFromHost(Thread host) {
@@ -552,22 +516,16 @@ public final class EspressoContext {
         return threadManager.getGuestThreadFromHost(Thread.currentThread());
     }
 
-    public StaticObject[] getActiveThreads() {
-        return threadManager.activeThreads();
-    }
-
     public void registerThread(Thread host, StaticObject self) {
         threadManager.registerThread(host, self);
-        if (eventListener != null) {
-            eventListener.threadStarted(self);
-        }
     }
 
     public void unregisterThread(StaticObject self) {
         threadManager.unregisterThread(self);
-        if (eventListener != null) {
-            eventListener.threadDied(self);
-        }
+    }
+
+    public StaticObject[] getActiveThreads() {
+        return threadManager.activeThreads();
     }
 
     public void invalidateNoThreadStop(String message) {
@@ -600,48 +558,7 @@ public final class EspressoContext {
     public final boolean InlineFieldAccessors;
 
     public final EspressoOptions.VerifyMode Verify;
-    public final JDWPOptions JDWPOptions;
-
-    public boolean isMainThreadCreated() {
-        return mainThreadCreated;
-    }
-
-    public StaticObject getMainThread() {
-        return threadManager.getMainThread();
-    }
-
-    public boolean isValidThread(Object thread) {
-        StaticObject[] activeThreads = threadManager.activeThreads();
-
-        for (StaticObject activeThread : activeThreads) {
-            if (activeThread == thread) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @SuppressWarnings("static-method")
-    public boolean isValidThreadGroup(@SuppressWarnings("unused") Object threadGroup) {
-        // TODO(Gregersen) - validate if this is a valid threadgroup
-        return true;
-    }
-
-    public Object getSystemThreadGroup() {
-        return getMainThreadGroup();
-    }
-
-    public void prepareDispose() {
-        jdwpContext.finalizeContext();
-    }
-
-    public void begin() {
-        this.contextReady = true;
-    }
-
-    public boolean canEnterOtherThread() {
-        return contextReady;
-    }
+    public final EspressoOptions.JDWPOptions JDWPOptions;
 
     // endregion Options
 }
