@@ -33,13 +33,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
-import com.oracle.truffle.wasm.test.next.suites.arithmetic.Float32Suite;
-import com.oracle.truffle.wasm.test.next.suites.arithmetic.Float64Suite;
-import com.oracle.truffle.wasm.test.next.suites.arithmetic.Integer32Suite;
-import com.oracle.truffle.wasm.test.next.suites.arithmetic.Integer64Suite;
-import com.oracle.truffle.wasm.test.next.suites.control.BlockWithLocalsSuite;
-import com.oracle.truffle.wasm.test.next.suites.control.BranchBlockSuite;
-import com.oracle.truffle.wasm.test.next.suites.control.SimpleBlockSuite;
+import com.oracle.truffle.wasm.test.next.arithmetic.Float32Suite;
+import com.oracle.truffle.wasm.test.next.arithmetic.Float64Suite;
+import com.oracle.truffle.wasm.test.next.arithmetic.Integer32Suite;
+import com.oracle.truffle.wasm.test.next.arithmetic.Integer64Suite;
+import com.oracle.truffle.wasm.test.next.control.BlockWithLocalsSuite;
+import com.oracle.truffle.wasm.test.next.control.SimpleBlockSuite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
@@ -49,7 +48,6 @@ import com.oracle.truffle.wasm.test.next.suites.control.SimpleBlockSuite;
         Float64Suite.class,
         SimpleBlockSuite.class,
         BlockWithLocalsSuite.class,
-        BranchBlockSuite.class,
 })
 public class WasmTestSuite {
     @Test
