@@ -27,8 +27,6 @@ import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.attributes.BootstrapMethodsAttribute;
-import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
@@ -49,16 +47,9 @@ public interface DynamicConstant extends PoolConstant {
         return Tag.DYNAMIC;
     }
 
-    Symbol<Type> getTypeSymbol(ConstantPool pool);
-
     final class Indexes extends BootstrapMethodConstant.Indexes implements DynamicConstant, Resolvable {
         Indexes(int bootstrapMethodAttrIndex, int nameAndTypeIndex) {
             super(bootstrapMethodAttrIndex, nameAndTypeIndex);
-        }
-
-        @Override
-        public Symbol<Type> getTypeSymbol(ConstantPool pool) {
-            return Types.fromSymbol(pool.nameAndTypeAt(nameAndTypeIndex).getDescriptor(pool));
         }
 
         private static Resolved makeResolved(Klass type, StaticObject result) {
@@ -122,7 +113,7 @@ public interface DynamicConstant extends PoolConstant {
                             thisIndex,
                             bootstrapmethodMethodHandle,
                             fieldName, fieldType.mirror(),
-                            StaticObject.wrap(args, meta));
+                            args);
             try {
                 return makeResolved(fieldType, (StaticObject) result);
             } catch (ClassCastException | NullPointerException e) {
@@ -139,11 +130,6 @@ public interface DynamicConstant extends PoolConstant {
 
     interface Resolved extends DynamicConstant, Resolvable.ResolvedConstant {
         void putResolved(VirtualFrame frame, int top, BytecodeNode node);
-
-        @Override
-        default Symbol<Type> getTypeSymbol(ConstantPool pool) {
-            throw EspressoError.shouldNotReachHere("Getting type symbol of a resolved dynamic constant");
-        }
     }
 
     final class ResolvedObject implements Resolved {
