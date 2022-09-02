@@ -25,7 +25,6 @@ package com.oracle.truffle.espresso.jdwp.api;
 import java.nio.file.Path;
 import java.util.List;
 
-import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.nodes.Node;
@@ -467,7 +466,7 @@ public interface JDWPContext {
      * @param redefineInfos the information about the original class and the new class bytes
      * @return 0 on success or the appropriate {@link ErrorCodes} if an error occur
      */
-    int redefineClasses(List<RedefineInfo> redefineInfos);
+    int redefineClasses(RedefineInfo[] redefineInfos);
 
     /**
      * Exit all monitors that was entered by the frame.
@@ -493,18 +492,11 @@ public interface JDWPContext {
     Node getInstrumentableNode(Node node);
 
     /**
-     * Determines if hostThread is a VM internal thread.
+     * Returns the current BCI of the node.
      *
-     * @param hostThread the thread
-     * @return true if hostThread is a VM internal thread
+     * @param rawNode the current node
+     * @param frame the current frame
+     * @return the current bci
      */
-    boolean isSystemThread(Thread hostThread);
-
-    /**
-     * Sets the Truffle context.
-     *
-     * @param con the Truffle context.
-     */
-    void setTruffleContext(TruffleContext con);
-
+    long getBCI(Node rawNode, Frame frame);
 }
