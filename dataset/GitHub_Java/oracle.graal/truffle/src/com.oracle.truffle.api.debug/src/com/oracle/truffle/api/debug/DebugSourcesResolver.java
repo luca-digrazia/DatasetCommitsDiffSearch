@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,16 +41,23 @@
 package com.oracle.truffle.api.debug;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
+import com.oracle.truffle.api.TruffleFile;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
+import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
@@ -60,8 +67,13 @@ import com.oracle.truffle.api.source.SourceSection;
  */
 final class DebugSourcesResolver {
 
+    private final Env env;
     private volatile URI[] sourcePath = new URI[0];
     private final Map<Source, Source> resolvedMap = new WeakHashMap<>();
+
+    DebugSourcesResolver(Env env) {
+        this.env = env;
+    }
 
     void setSourcePath(Iterable<URI> uris) {
         Collection<URI> collection;
@@ -70,14 +82,21 @@ final class DebugSourcesResolver {
         } else {
             List<URI> list = new ArrayList<>();
             for (URI uri : uris) {
-                if (!uri.isAbsolute()) {
-                    throw new IllegalArgumentException("URI " + uri + " is not absolute.");
-                }
                 list.add(uri);
             }
             collection = list;
         }
-        sourcePath = collection.toArray(new URI[collection.size()]);
+        URI[] array = collection.toArray(new URI[collection.size()]);
+        for (int i = 0; i < array.length; i++) {
+            if (!array[i].isAbsolute()) {
+                try {
+                    array[i] = new URI("file://" + array[i].toString());
+                } catch (URISyntaxException ex) {
+                    throw new IllegalArgumentException("URI " + array[i] + " is not absolute and can not be converted to a file: " + ex.getLocalizedMessage());
+                }
+            }
+        }
+        sourcePath = array;
     }
 
     Source resolve(Source source) {
@@ -97,11 +116,10 @@ final class DebugSourcesResolver {
 
     private Source doResolve(Source source) {
         URI uri = source.getURI();
-        URLConnection connection = null;
+        InputStream stream = null;
         if (uri.isAbsolute()) {
             try {
-                connection = uri.toURL().openConnection();
-                connection.connect();
+                stream = uri.toURL().openConnection().getInputStream();
             } catch (IOException ioex) {
                 return null;
             }
@@ -110,8 +128,7 @@ final class DebugSourcesResolver {
             for (URI root : roots) {
                 URI resolved = resolve(root, uri);
                 try {
-                    connection = resolved.toURL().openConnection();
-                    connection.connect();
+                    stream = resolved.toURL().openConnection().getInputStream();
                     uri = resolved;
                     break;
                 } catch (IOException ioex) {
@@ -119,15 +136,38 @@ final class DebugSourcesResolver {
                 }
             }
         }
-        if (connection == null) {
+        if (stream == null) {
             return null;
         }
-        String name = uri.getPath() != null ? uri.getPath() : uri.getSchemeSpecificPart();
         try {
-            return Source.newBuilder(source.getLanguage(), new InputStreamReader(connection.getInputStream()), name).uri(uri).cached(false).interactive(source.isInteractive()).internal(
-                            source.isInternal()).mimeType(source.getMimeType()).build();
-        } catch (IOException ex) {
-            return null;
+            Source.SourceBuilder builder = null;
+            if ("file".equals(uri.getScheme())) {
+                TruffleFile file = env.getTruffleFile(uri);
+                builder = Source.newBuilder(source.getLanguage(), file);
+            } else {
+                URL url;
+                try {
+                    url = uri.toURL();
+                    builder = Source.newBuilder(source.getLanguage(), url);
+                } catch (MalformedURLException | IllegalArgumentException ex) {
+                    // fallback to a general Source
+                }
+            }
+            if (builder == null) {
+                String name = uri.getPath() != null ? uri.getPath() : uri.getSchemeSpecificPart();
+                builder = Source.newBuilder(source.getLanguage(), new InputStreamReader(stream), name).uri(uri);
+            }
+            try {
+                return builder.cached(false).interactive(source.isInteractive()).internal(source.isInternal()).mimeType(source.getMimeType()).build();
+            } catch (IOException | SecurityException e) {
+                env.getLogger("").warning(String.format("Failed to resolve %s: %s%s", source.getURI(), e.getLocalizedMessage(), System.lineSeparator()));
+                return null;
+            }
+        } finally {
+            try {
+                stream.close();
+            } catch (IOException ioe) {
+            }
         }
     }
 
@@ -199,5 +239,23 @@ final class DebugSourcesResolver {
             // Thrown from createSection() when the section does not fit into the resolved source.
             return section;
         }
+    }
+
+    /**
+     * Finds an encapsulating source section, prefer instrumentable nodes and available sections.
+     */
+    static SourceSection findEncapsulatedSourceSection(Node node) {
+        Node n = node;
+        while (n != null) {
+            if (n instanceof InstrumentableNode && ((InstrumentableNode) n).isInstrumentable()) {
+                SourceSection sourceSection = n.getSourceSection();
+                if (sourceSection != null && sourceSection.isAvailable()) {
+                    return sourceSection;
+                }
+            }
+            n = n.getParent();
+        }
+        final RootNode rootNode = node.getRootNode();
+        return rootNode != null ? rootNode.getSourceSection() : null;
     }
 }
