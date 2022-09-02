@@ -52,10 +52,6 @@ public abstract class LLVMInteropMethodInvokeNode extends LLVMNode {
         return LLVMInteropMethodInvokeNodeGen.create();
     }
 
-    static boolean isVirtual(long virtualIndex) {
-        return virtualIndex >= 0;
-    }
-
     /**
      * @param methodName
      * @param type
@@ -63,7 +59,7 @@ public abstract class LLVMInteropMethodInvokeNode extends LLVMNode {
      * @param typeHash
      */
     @ExplodeLoop
-    @Specialization(guards = {"isVirtual(virtualIndex)", "type==typeHash"})
+    @Specialization(guards = {"virtualIndex>=0", "type==typeHash"})
     Object doVirtualCallCached(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type,
                     Method method, long virtualIndex, Object[] arguments,
                     @CachedLibrary(limit = "5") InteropLibrary interop,
@@ -84,7 +80,7 @@ public abstract class LLVMInteropMethodInvokeNode extends LLVMNode {
      * @param method
      */
     @ExplodeLoop
-    @Specialization(guards = "isVirtual(virtualIndex)", replaces = "doVirtualCallCached")
+    @Specialization(guards = "virtualIndex>=0", replaces = "doVirtualCallCached")
     Object doVirtualCall(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type, Method method, long virtualIndex, Object[] arguments,
                     @CachedLibrary(limit = "5") InteropLibrary interop,
                     @Cached LLVMInteropVtableAccessNode vtableAccessNode)
@@ -100,7 +96,7 @@ public abstract class LLVMInteropMethodInvokeNode extends LLVMNode {
     /**
      * @param virtualIndex
      */
-    @Specialization(guards = "!isVirtual(virtualIndex)")
+    @Specialization(guards = "virtualIndex<0")
     Object doNonvirtualCall(LLVMPointer receiver, String methodName, LLVMInteropType.Clazz type, Method method, long virtualIndex, Object[] arguments,
                     @Cached LLVMInteropNonvirtualCallNode call)
                     throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
