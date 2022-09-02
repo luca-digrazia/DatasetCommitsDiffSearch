@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExecutableNode;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
@@ -46,11 +45,6 @@ public class DebugExprExecutableNode extends ExecutableNode {
         this.root = root;
     }
 
-    @TruffleBoundary
-    private static String valueOf(Object objectToDisplay) {
-        return String.valueOf(objectToDisplay);
-    }
-
     @Override
     public Object execute(VirtualFrame frame) {
         try {
@@ -59,7 +53,7 @@ public class DebugExprExecutableNode extends ExecutableNode {
             if (objectToDisplay instanceof LLVMDebuggerValue) {
                 return objectToDisplay;
             } else {
-                return valueOf(objectToDisplay);
+                return String.valueOf(objectToDisplay);
             }
         } catch (DebugExprException | LLVMParserException e) {
             // return message of exception that occurred during AST execution

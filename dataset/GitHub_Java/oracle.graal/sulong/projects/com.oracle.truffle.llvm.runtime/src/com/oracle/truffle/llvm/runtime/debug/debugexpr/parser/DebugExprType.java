@@ -202,6 +202,7 @@ public final class DebugExprType {
             LLVMSourceBasicType basicType = (LLVMSourceBasicType) metaObj;
             LLVMSourceBasicType.Kind typeKind = basicType.getKind();
             long typeSize = basicType.getSize();
+            boolean signed = false;
             switch (typeKind) {
                 case BOOLEAN:
                     return DebugExprType.getIntType(1, false);
