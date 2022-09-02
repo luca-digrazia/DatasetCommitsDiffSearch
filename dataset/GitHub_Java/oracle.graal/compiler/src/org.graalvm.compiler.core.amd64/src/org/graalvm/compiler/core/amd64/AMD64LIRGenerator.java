@@ -106,6 +106,7 @@ import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.RegisterValue;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.meta.AllocatableValue;
+import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.PlatformKind;
@@ -391,9 +392,24 @@ public abstract class AMD64LIRGenerator extends LIRGenerator {
         } else if (isFloatComparison) {
             append(new FloatCondMoveOp(result, finalCondition, unorderedIsTrue, load(finalTrueValue), load(finalFalseValue)));
         } else {
-            append(new CondMoveOp(result, finalCondition, load(finalTrueValue), loadNonConst(finalFalseValue)));
+            if (isNarrowOop(finalFalseValue)) {
+                finalFalseValue = emitMove(finalFalseValue);
+            } else {
+                finalFalseValue = loadNonConst(finalFalseValue);
+            }
+            append(new CondMoveOp(result, finalCondition, load(finalTrueValue), finalFalseValue));
         }
         return result;
+    }
+
+    private static boolean isNarrowOop(Value value) {
+        if (isConstantValue(value)) {
+            Constant c = asConstant(value);
+            if (c instanceof JavaConstant && ((JavaConstant) c).getJavaKind() == JavaKind.Object && value.getPlatformKind().getSizeInBytes() != 8) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
