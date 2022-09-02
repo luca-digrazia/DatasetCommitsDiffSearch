@@ -31,7 +31,6 @@ import static org.graalvm.compiler.core.llvm.LLVMUtils.FALSE;
 import static org.graalvm.compiler.core.llvm.LLVMUtils.TRUE;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -110,6 +109,9 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
 
         try {
             basePath = Files.createTempDirectory("native-image-llvm");
+            if (!KeepLLVMBitcodeFiles.getValue()) {
+                basePath.toFile().deleteOnExit();
+            }
             if (LLVMOptions.DumpLLVMStackMap.hasBeenSet()) {
                 stackMapDump = new FileWriter(LLVMOptions.DumpLLVMStackMap.getValue());
             } else {
@@ -627,25 +629,16 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
     public String[] getCCInputFiles(Path tempDirectory, String imageName) {
         String bitcodeFileName = getLinkedPath().toString();
         String relocatableFileName = tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()).toString();
-        Path movedBitcodeFile;
         try {
-            Path bitcodeFile = Paths.get(bitcodeFileName);
+            Path src = Paths.get(bitcodeFileName);
             Path parent = Paths.get(relocatableFileName).getParent();
-            assert parent != null;
-            movedBitcodeFile = parent.resolve(bitcodeFile.getFileName());
-            Files.copy(bitcodeFile, movedBitcodeFile, StandardCopyOption.REPLACE_EXISTING);
+            if (parent != null) {
+                Path dst = parent.resolve(src.getFileName());
+                Files.copy(src, dst, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
             throw new GraalError("Error copying " + bitcodeFileName + ": " + e);
         }
-        if (!KeepLLVMBitcodeFiles.getValue()) {
-            File[] files = basePath.toFile().listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    file.delete();
-                }
-            }
-            basePath.toFile().delete();
-        }
-        return new String[]{relocatableFileName, movedBitcodeFile.toString()};
+        return new String[]{relocatableFileName, bitcodeFileName};
     }
 }

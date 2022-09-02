@@ -62,7 +62,7 @@ class PosixAArch64VaListSnippetsFeature implements GraalFeature {
     public void registerLowerings(RuntimeConfiguration runtimeConfig, OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers,
                     SnippetReflectionProvider snippetReflection, Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings, boolean hosted) {
 
-        PosixAArch64VaListSnippets.registerLowerings(options, factories, providers, snippetReflection, lowerings);
+        PosixAMD64VaListSnippets.registerLowerings(options, factories, providers, snippetReflection, lowerings);
     }
 }
 
