@@ -62,12 +62,8 @@ public final class ModuleSupport {
         Module declaringModule = declaringClass.getModule();
         String packageName = declaringClass.getPackageName();
         Module accessingModule = accessingClass.getModule();
-        if (accessingModule.isNamed()) {
-            if (!declaringModule.isOpen(packageName, accessingModule)) {
-                Modules.addOpens(declaringModule, packageName, accessingModule);
-            }
-        } else {
-            Modules.addOpensToAllUnnamed(declaringModule, packageName);
+        if (!declaringModule.isOpen(packageName, accessingModule)) {
+            Modules.addOpens(declaringModule, packageName, accessingModule);
         }
     }
 

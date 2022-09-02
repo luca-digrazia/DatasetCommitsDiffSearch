@@ -44,7 +44,6 @@ import java.util.ServiceLoader;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 import java.util.function.Consumer;
 
 import org.graalvm.collections.EconomicMap;
@@ -340,14 +339,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
-    /*
-     * Dummy field for initializing atomic long field updater.
-     */
-    @SuppressWarnings("unused")
-    private static class Dummy {
-        private volatile long dummy;
-    }
-
     private static UnmodifiableEconomicMap<String, Class<?>> initLookupTypes(Iterable<Class<?>> extraTypes) {
         EconomicMap<String, Class<?>> m = EconomicMap.create();
         for (Class<?> c : new Class<?>[]{
@@ -371,7 +362,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                         AbstractAssumption.class,
                         MaterializedFrame.class,
                         FrameWithoutBoxing.class,
-                        AtomicLongFieldUpdater.newUpdater(Dummy.class, "dummy").getClass(),
         }) {
             m.put(c.getName(), c);
         }
@@ -545,7 +535,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                     skipFrames--;
                 }
             } else if (frame.isMethod(methods.callDirectMethod) || frame.isMethod(methods.callIndirectMethod) || frame.isMethod(methods.callInlinedMethod) ||
-                            frame.isMethod(methods.callInlinedAgnosticMethod) ||
                             frame.isMethod(methods.callInliningForcedMethod)) {
                 callNodeFrame = frame;
             }
@@ -932,7 +921,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     protected static final class CallMethods {
         public final ResolvedJavaMethod callDirectMethod;
         public final ResolvedJavaMethod callInlinedMethod;
-        public final ResolvedJavaMethod callInlinedAgnosticMethod;
         public final ResolvedJavaMethod callInliningForcedMethod;
         public final ResolvedJavaMethod callIndirectMethod;
         public final ResolvedJavaMethod callTargetMethod;
@@ -943,12 +931,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             this.callDirectMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_DIRECT);
             this.callIndirectMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_INDIRECT);
             this.callInlinedMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_INLINED);
-            this.callInlinedAgnosticMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_INLINED_AGNOSTIC);
             this.callInliningForcedMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_INLINED_FORCED);
             this.callTargetMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_TARGET_METHOD);
             this.callOSRMethod = metaAccess.lookupJavaMethod(GraalFrameInstance.CALL_OSR_METHOD);
-            this.anyFrameMethod = new ResolvedJavaMethod[]{callDirectMethod, callIndirectMethod, callInlinedMethod, callInlinedAgnosticMethod, callTargetMethod, callOSRMethod,
-                            callInliningForcedMethod};
+            this.anyFrameMethod = new ResolvedJavaMethod[]{callDirectMethod, callIndirectMethod, callInlinedMethod, callTargetMethod, callOSRMethod, callInliningForcedMethod};
         }
 
         public static CallMethods lookup(MetaAccessProvider metaAccess) {

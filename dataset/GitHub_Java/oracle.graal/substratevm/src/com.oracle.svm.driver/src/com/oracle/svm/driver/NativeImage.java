@@ -694,9 +694,7 @@ public class NativeImage {
             String modulePath = config.getBuilderModulePath().stream()
                             .map(p -> canonicalize(p).toString())
                             .collect(Collectors.joining(File.pathSeparator));
-            if (!modulePath.isEmpty()) {
-                addImageBuilderJavaArgs(Arrays.asList("--module-path", modulePath));
-            }
+            addImageBuilderJavaArgs(Arrays.asList("--module-path", modulePath));
             String upgradeModulePath = config.getBuilderUpgradeModulePath().stream()
                             .map(p -> canonicalize(p).toString())
                             .collect(Collectors.joining(File.pathSeparator));
@@ -1641,15 +1639,9 @@ public class NativeImage {
      */
     public static class JDK9Plus {
 
-        // Must be distinct from NativeImage.IS_AOT since the module
-        // exporting must be executed prior to NativeImage being loaded.
-        private static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
-
         public static void main(String[] args) {
-            if (!IS_AOT) {
-                ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler", false);
-                ModuleSupport.exportAndOpenAllPackagesToUnnamed("com.oracle.graal.graal_enterprise", true);
-            }
+            ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler", false);
+            ModuleSupport.exportAndOpenAllPackagesToUnnamed("com.oracle.graal.graal_enterprise", true);
             NativeImage.main(args, DEFAULT_GENERATOR_CLASS_NAME + "$JDK9Plus");
         }
     }
