@@ -33,18 +33,30 @@ import com.oracle.svm.core.annotate.Uninterruptible;
 /**
  * The methods in this class are mainly used to fill or copy unmanaged (i.e., <b>non</b>-Java heap)
  * memory. None of the methods cares about Java semantics like GC barriers or the Java memory model.
- * They don't even guarantee the rather relaxed atomicity requirements of {@code Unsafe}.
- * <p>
  * The valid use cases are listed below. For all other use cases, use {@link JavaMemoryUtil}
  * instead.
  * <ul>
  * <li>Copying between unmanaged memory.</li>
  * <li>Filling unmanaged memory.</li>
  * </ul>
+ *
+ * <p>
+ * All operations in this class that copy memory guarantee to always use the largest-possible data
+ * type for each individual read and write operation, e.g.:
+ * <ul>
+ * <li>Copying 60 bytes may be split into 7 operations that copy 8, 8, 8, 8, 8, 8 and 4 bytes.
+ * However, it is guaranteed that no operation will copy less than 4 bytes.</li>
+ * <li>Copying 15 bytes may be split into 4 operations that copy 8, 4, 2, and 1 bytes.</li>
+ * </ul>
+ * <p>
+ * In some situations (e.g., during a serial GC or if it is guaranteed that all involved objects are
+ * not yet visible to other threads), the methods in this class may also be used for objects the
+ * live in the Java heap. However, those usages should be kept to a minimum.
  */
 public final class UnmanagedMemoryUtil {
     /**
-     * Copy bytes from one memory area to another. The memory areas may overlap.
+     * Copy bytes from one memory area to another. The memory areas may overlap. Guarantees to use
+     * the largest-possible data type for each individual read and write operation.
      */
     @IntrinsicCandidate
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -56,18 +68,73 @@ public final class UnmanagedMemoryUtil {
         }
     }
 
+    /**
+     * Copy bytes from one memory area to another. Guarantees to use the largest-possible data type
+     * for each individual read and write operation.
+     */
+    @IntrinsicCandidate
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private static void copyForward(Pointer from, Pointer to, UnsignedWord size) {
-        assert from.aboveThan(to);
-        UnsignedWord lowerSize = WordFactory.unsigned(0x8).subtract(from).and(0x7);
-        if (lowerSize.aboveThan(0)) {
-            if (size.belowThan(lowerSize)) {
-                lowerSize = size.and(lowerSize);
-            }
-            copyUnalignedLower(from, to, lowerSize);
-        }
+    public static void copyForward(Pointer from, Pointer to, UnsignedWord size) {
+        UnsignedWord alignBits = WordFactory.unsigned(0x7);
+        UnsignedWord alignedSize = size.and(alignBits.not());
+        copyLongsForward(from, to, alignedSize);
 
-        UnsignedWord offset = lowerSize;
+        if (alignedSize.notEqual(size)) {
+            UnsignedWord offset = alignedSize;
+            if (size.and(4).notEqual(0)) {
+                to.writeInt(offset, from.readInt(offset));
+                offset = offset.add(4);
+            }
+            if (size.and(2).notEqual(0)) {
+                to.writeShort(offset, from.readShort(offset));
+                offset = offset.add(2);
+            }
+            if (size.and(1).notEqual(0)) {
+                to.writeByte(offset, from.readByte(offset));
+                offset = offset.add(1);
+            }
+            assert offset.equal(size);
+        }
+    }
+
+    /**
+     * Copy bytes from one memory area to another. Guarantees to use the largest-possible data type
+     * for each individual read and write operation.
+     */
+    @IntrinsicCandidate
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static void copyBackward(Pointer from, Pointer to, UnsignedWord size) {
+        UnsignedWord alignBits = WordFactory.unsigned(0x7);
+        UnsignedWord alignedSize = size.and(alignBits.not());
+        UnsignedWord unalignedSize = size.subtract(alignedSize);
+        copyLongsBackward(from.add(unalignedSize), to.add(unalignedSize), alignedSize);
+
+        if (unalignedSize.aboveThan(0)) {
+            UnsignedWord offset = unalignedSize;
+            if (size.and(4).notEqual(0)) {
+                offset = offset.subtract(4);
+                to.writeInt(offset, from.readInt(offset));
+            }
+            if (size.and(2).notEqual(0)) {
+                offset = offset.subtract(2);
+                to.writeShort(offset, from.readShort(offset));
+            }
+            if (size.and(1).notEqual(0)) {
+                offset = offset.subtract(1);
+                to.writeByte(offset, from.readByte(offset));
+            }
+            assert offset.equal(0);
+        }
+    }
+
+    /**
+     * Copy bytes from one memory area to another.
+     */
+    @IntrinsicCandidate
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static void copyLongsForward(Pointer from, Pointer to, UnsignedWord size) {
+        assert size.unsignedRemainder(8).equal(0);
+        UnsignedWord offset = WordFactory.zero();
         for (UnsignedWord next = offset.add(32); next.belowOrEqual(size); next = offset.add(32)) {
             Pointer src = from.add(offset);
             Pointer dst = to.add(offset);
@@ -81,66 +148,20 @@ public final class UnmanagedMemoryUtil {
             dst.writeLong(24, l24);
             offset = next;
         }
-        for (UnsignedWord next = offset.add(8); next.belowOrEqual(size); next = offset.add(8)) {
+        while (offset.belowThan(size)) {
             to.writeLong(offset, from.readLong(offset));
-            offset = next;
-        }
-
-        if (offset.belowThan(size)) {
-            UnsignedWord upperSize = size.subtract(offset);
-            copyUnalignedUpper(from.add(offset), to.add(offset), upperSize);
+            offset = offset.add(8);
         }
     }
 
+    /**
+     * Copy bytes from one memory area to another.
+     */
+    @IntrinsicCandidate
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private static void copyUnalignedLower(Pointer from, Pointer to, UnsignedWord length) {
-        UnsignedWord offset = WordFactory.zero();
-        if (length.and(1).notEqual(0)) {
-            to.writeByte(offset, from.readByte(offset));
-            offset = offset.add(1);
-        }
-        if (length.and(2).notEqual(0)) {
-            to.writeShort(offset, from.readShort(offset));
-            offset = offset.add(2);
-        }
-        if (length.and(4).notEqual(0)) {
-            to.writeInt(offset, from.readInt(offset));
-        }
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private static void copyUnalignedUpper(Pointer from, Pointer to, UnsignedWord length) {
-        UnsignedWord offset = WordFactory.zero();
-        if (length.and(4).notEqual(0)) {
-            to.writeInt(offset, from.readInt(offset));
-            offset = offset.add(4);
-        }
-        if (length.and(2).notEqual(0)) {
-            to.writeShort(offset, from.readShort(offset));
-            offset = offset.add(2);
-        }
-        if (length.and(1).notEqual(0)) {
-            to.writeByte(offset, from.readByte(offset));
-        }
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private static void copyBackward(Pointer from, Pointer to, UnsignedWord size) {
-        assert from.belowThan(to);
-        /*
-         * Although the copyUnaligned methods do not copy backwards, it is safe to call them here
-         * because we never let them copy overlapping memory due to how we handle alignment.
-         */
+    public static void copyLongsBackward(Pointer from, Pointer to, UnsignedWord size) {
+        assert size.unsignedRemainder(8).equal(0);
         UnsignedWord offset = size;
-        UnsignedWord upperSize = from.add(size).and(0x7);
-        if (upperSize.aboveThan(0)) {
-            if (size.belowThan(upperSize)) {
-                upperSize = size.and(upperSize);
-            }
-            offset = offset.subtract(upperSize);
-            copyUnalignedUpper(from.add(offset), to.add(offset), upperSize);
-        }
-
         while (offset.aboveOrEqual(32)) {
             offset = offset.subtract(32);
             Pointer src = from.add(offset);
@@ -158,9 +179,39 @@ public final class UnmanagedMemoryUtil {
             offset = offset.subtract(8);
             to.writeLong(offset, from.readLong(offset));
         }
+    }
 
-        if (offset.aboveThan(0)) {
-            copyUnalignedLower(from, to, offset);
+    /**
+     * Set the bytes of a memory area to a given value. Does *NOT* guarantee any size for the
+     * individual read/write operations and therefore does not guarantee any atomicity.
+     */
+    @IntrinsicCandidate
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static void fill(Pointer to, UnsignedWord size, byte value) {
+        long v = value & 0xffL;
+        v = (v << 8) | v;
+        v = (v << 16) | v;
+        v = (v << 32) | v;
+
+        UnsignedWord alignBits = WordFactory.unsigned(0x7);
+        UnsignedWord alignedSize = size.and(alignBits.not());
+        fillLongs(to, alignedSize, v);
+
+        if (alignedSize.notEqual(size)) {
+            UnsignedWord offset = alignedSize;
+            if (size.and(4).notEqual(0)) {
+                to.writeInt(offset, (int) v);
+                offset = offset.add(4);
+            }
+            if (size.and(2).notEqual(0)) {
+                to.writeShort(offset, (short) v);
+                offset = offset.add(2);
+            }
+            if (size.and(1).notEqual(0)) {
+                to.writeByte(offset, (byte) v);
+                offset = offset.add(1);
+            }
+            assert offset.equal(size);
         }
     }
 
@@ -168,11 +219,21 @@ public final class UnmanagedMemoryUtil {
      * Set the bytes of a memory area to a given value.
      */
     @IntrinsicCandidate
-    @Uninterruptible(reason = "Called from uninterruptible code, but may be inlined.", mayBeInlined = true)
-    public static void fill(Pointer to, UnsignedWord size, byte value) {
-        // Even though this calls the atomic implementation, this still doesn't guarantee atomicity
-        // because this method may be intrinsified.
-        JavaMemoryUtil.fill(to, size, value);
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static void fillLongs(Pointer to, UnsignedWord size, long longValue) {
+        assert size.unsignedRemainder(8).equal(0);
+        UnsignedWord offset = WordFactory.zero();
+        for (UnsignedWord next = offset.add(32); next.belowOrEqual(size); next = offset.add(32)) {
+            Pointer p = to.add(offset);
+            p.writeLong(0, longValue);
+            p.writeLong(8, longValue);
+            p.writeLong(16, longValue);
+            p.writeLong(24, longValue);
+            offset = next;
+        }
+        for (; offset.belowThan(size); offset = offset.add(8)) {
+            to.writeLong(offset, longValue);
+        }
     }
 
     private UnmanagedMemoryUtil() {
