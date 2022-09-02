@@ -34,10 +34,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
@@ -191,18 +187,7 @@ public class AgentObjectTest {
     }
 
     @Test
-    public void evalFirstAndThenOnEnterCallback() throws Throwable {
-        Executor direct = (c) -> c.run();
-        evalFirstAndThenOnEnterCallbackImpl(direct);
-    }
-
-    @Test
-    public void evalFirstAndThenOnEnterCallbackInBackground() throws Throwable {
-        Executor background = Executors.newSingleThreadExecutor();
-        evalFirstAndThenOnEnterCallbackImpl(background);
-    }
-
-    private void evalFirstAndThenOnEnterCallbackImpl(Executor registerIn) throws Throwable {
+    public void evalFirstAndThenOnEnterCallback() throws Exception {
         try (Context c = AgentObjectFactory.newContext()) {
 
             // @formatter:off
@@ -230,22 +215,7 @@ public class AgentObjectTest {
                 assertNull("No function entered yet", functionName[0]);
                 functionName[0] = ctx.name();
             };
-
-            CountDownLatch await = new CountDownLatch(1);
-            Throwable[] err = {null};
-            registerIn.execute(() -> {
-                try {
-                    agentAPI.on("enter", listener, AgentObjectFactory.createConfig(false, false, true, null));
-                } catch (Throwable t) {
-                    err[0] = t;
-                } finally {
-                    await.countDown();
-                }
-            });
-            await.await(10, TimeUnit.SECONDS);
-            if (err[0] != null) {
-                throw err[0];
-            }
+            agentAPI.on("enter", listener, AgentObjectFactory.createConfig(false, false, true, null));
 
             // @formatter:off
             Source runScript = Source.newBuilder(InstrumentationTestLanguage.ID,
