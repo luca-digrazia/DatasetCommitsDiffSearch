@@ -22,12 +22,13 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
-
 import java.util.Objects;
+import java.util.logging.Level;
 
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -40,6 +41,10 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 public interface InterfaceMethodRefConstant extends MethodRefConstant {
+
+    static InterfaceMethodRefConstant create(int classIndex, int nameAndTypeIndex) {
+        return new Indexes(classIndex, nameAndTypeIndex);
+    }
 
     @Override
     default Tag tag() {
@@ -106,7 +111,7 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
          */
         @Override
         public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
-            resolveMethodCount.inc();
+            METHODREF_RESOLVE_COUNT.inc();
             EspressoContext context = pool.getContext();
             Meta meta = context.getMeta();
 
@@ -117,21 +122,21 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
             // 1. If C is not an interface, interface method resolution throws an
             // IncompatibleClassChangeError.
             if (!holderInterface.isInterface()) {
-                throw meta.throwExWithMessage(meta.IncompatibleClassChangeError, meta.toGuestString(name));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, meta.toGuestString(name));
             }
 
             Symbol<Signature> signature = getSignature(pool);
 
-            Method method = ((ObjectKlass) holderInterface).lookupInterfaceMethod(name, signature);
+            Method method = ((ObjectKlass) holderInterface).resolveInterfaceMethod(name, signature);
 
             if (method == null) {
-                throw meta.throwExWithMessage(meta.NoSuchMethodError, meta.toGuestString(name));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError, meta.toGuestString(name));
             }
 
             if (!MemberRefConstant.checkAccess(accessingKlass, holderInterface, method)) {
-                System.err.println(EspressoOptions.INCEPTION_NAME + " Interface method access check of: " + method.getName() + " in " + holderInterface.getType() + " from " +
+                context.getLogger().log(Level.WARNING, EspressoOptions.INCEPTION_NAME + " Interface method access check of: " + method.getName() + " in " + holderInterface.getType() + " from " +
                                 accessingKlass.getType() + " throws IllegalAccessError");
-                throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(name));
             }
 
             method.checkLoadingConstraints(accessingKlass.getDefiningClassLoader(), method.getDeclaringKlass().getDefiningClassLoader());

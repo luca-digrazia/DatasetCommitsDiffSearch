@@ -22,12 +22,13 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveFieldCount;
-
 import java.util.Objects;
+import java.util.logging.Level;
 
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -37,8 +38,15 @@ import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.object.DebugCounter;
 
 public interface FieldRefConstant extends MemberRefConstant {
+
+    /* static final */ DebugCounter FIELDREF_RESOLVE_COUNT = DebugCounter.create("FieldREf.resolve calls");
+
+    static FieldRefConstant create(int classIndex, int nameAndTypeIndex) {
+        return new Indexes(classIndex, nameAndTypeIndex);
+    }
 
     @Override
     default Tag tag() {
@@ -109,7 +117,7 @@ public interface FieldRefConstant extends MemberRefConstant {
 
         @Override
         public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
-            resolveFieldCount.inc();
+            FIELDREF_RESOLVE_COUNT.inc();
             Klass holderKlass = getResolvedHolderKlass(accessingKlass, pool);
             Symbol<Name> name = getName(pool);
             Symbol<Type> type = getType(pool);
@@ -117,14 +125,15 @@ public interface FieldRefConstant extends MemberRefConstant {
             Field field = lookupField(holderKlass, name, type);
             if (field == null) {
                 Meta meta = pool.getContext().getMeta();
-                throw meta.throwExWithMessage(meta.NoSuchFieldError, meta.toGuestString(name));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchFieldError, meta.toGuestString(name));
             }
 
             if (!MemberRefConstant.checkAccess(accessingKlass, holderKlass, field)) {
                 Meta meta = pool.getContext().getMeta();
-                System.err.println(EspressoOptions.INCEPTION_NAME + " Field access check of: " + field.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() +
-                                " throws IllegalAccessError");
-                throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
+                meta.getContext().getLogger().log(Level.WARNING,
+                                EspressoOptions.INCEPTION_NAME + " Field access check of: " + field.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() +
+                                                " throws IllegalAccessError");
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(name));
             }
 
             field.checkLoadingConstraints(accessingKlass.getDefiningClassLoader(), field.getDeclaringKlass().getDefiningClassLoader());

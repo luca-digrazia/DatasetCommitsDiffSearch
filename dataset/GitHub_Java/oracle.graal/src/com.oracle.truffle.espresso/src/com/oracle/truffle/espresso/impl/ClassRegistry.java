@@ -139,7 +139,7 @@ public abstract class ClassRegistry implements ContextAccess {
      * supporting fast, non-blocking lookup. There's no need for deletion as class unloading removes
      * a whole class registry and all its contained classes.
      */
-    protected final ConcurrentHashMap<Symbol<Type>, ClassRegistries.RegistryEntry> classes = new ConcurrentHashMap<>();
+    protected final ConcurrentHashMap<Symbol<Type>, Klass> classes = new ConcurrentHashMap<>();
 
     @Override
     public final EspressoContext getContext() {
@@ -163,13 +163,11 @@ public abstract class ClassRegistry implements ContextAccess {
      * Queries a registry to load a Klass for us.
      * 
      * @param type the symbolic reference to the Klass we want to load
-     * @param protectionDomain The protection domain extracted from the guest class, or
-     *            {@link StaticObject#NULL} if trusted.
      * @return The Klass corresponding to given type
      */
-    Klass loadKlass(Symbol<Type> type, StaticObject protectionDomain) {
+    Klass loadKlass(Symbol<Type> type) {
         if (Types.isArray(type)) {
-            Klass elemental = loadKlass(getTypes().getElementalType(type), protectionDomain);
+            Klass elemental = loadKlass(getTypes().getElementalType(type));
             if (elemental == null) {
                 return null;
             }
@@ -179,24 +177,19 @@ public abstract class ClassRegistry implements ContextAccess {
         loadKlassCountInc();
 
         // Double-checked locking on the symbol (globally unique).
-        ClassRegistries.RegistryEntry entry = classes.get(type);
-        if (entry == null) {
+        Klass klass = classes.get(type);
+        if (klass == null) {
             synchronized (type) {
-                entry = classes.get(type);
-                if (entry == null) {
-                    if (loadKlassImpl(type) == null) {
-                        return null;
-                    }
-                    entry = classes.get(type);
+                klass = classes.get(type);
+                if (klass == null) {
+                    klass = loadKlassImpl(type);
                 }
             }
         } else {
             // Grabbing a lock to fetch the class is not considered a hit.
             loadKlassCacheHitsInc();
         }
-        assert entry != null;
-        entry.checkPackageAccess(getMeta(), getClassLoader(), protectionDomain);
-        return entry.klass();
+        return klass;
     }
 
     protected abstract Klass loadKlassImpl(Symbol<Type> type);
@@ -220,11 +213,7 @@ public abstract class ClassRegistry implements ContextAccess {
             }
             return elementalKlass.getArrayClass(Types.getArrayDimensions(type));
         }
-        ClassRegistries.RegistryEntry entry = classes.get(type);
-        if (entry == null) {
-            return null;
-        }
-        return entry.klass();
+        return classes.get(type);
     }
 
     public ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes) {
@@ -311,9 +300,7 @@ public abstract class ClassRegistry implements ContextAccess {
             }
         }
 
-        ClassRegistries.RegistryEntry entry = new ClassRegistries.RegistryEntry(klass);
-        ClassRegistries.RegistryEntry previous = classes.putIfAbsent(type, entry);
-
+        Klass previous = classes.putIfAbsent(type, klass);
         EspressoError.guarantee(previous == null, "Class " + type + " is already defined");
 
         getRegistries().recordConstraint(type, klass, getClassLoader());
@@ -323,7 +310,7 @@ public abstract class ClassRegistry implements ContextAccess {
     private ObjectKlass loadKlassRecursively(Meta meta, Symbol<Type> type, boolean notInterface) {
         Klass klass;
         try {
-            klass = loadKlass(type, StaticObject.NULL);
+            klass = loadKlass(type);
         } catch (EspressoException e) {
             if (meta.java_lang_ClassNotFoundException.isAssignableFrom(e.getExceptionObject().getKlass())) {
                 // NoClassDefFoundError has no <init>(Throwable cause). Set cause manually.

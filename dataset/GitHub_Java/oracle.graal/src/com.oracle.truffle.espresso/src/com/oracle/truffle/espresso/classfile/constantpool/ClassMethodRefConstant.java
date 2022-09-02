@@ -22,13 +22,13 @@
  */
 package com.oracle.truffle.espresso.classfile.constantpool;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
-
 import java.util.Objects;
+import java.util.logging.Level;
 
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.classfile.ClassfileParser;
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
+import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -40,6 +40,10 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 public interface ClassMethodRefConstant extends MethodRefConstant {
+
+    static ClassMethodRefConstant create(int classIndex, int nameAndTypeIndex) {
+        return new Indexes(classIndex, nameAndTypeIndex);
+    }
 
     @Override
     default Tag tag() {
@@ -163,14 +167,14 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
 
         @Override
         public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
-            resolveMethodCount.inc();
+            METHODREF_RESOLVE_COUNT.inc();
 
             EspressoContext context = pool.getContext();
             Klass holderKlass = getResolvedHolderKlass(accessingKlass, pool);
 
             Meta meta = context.getMeta();
             if (holderKlass.isInterface()) {
-                throw meta.throwExWithMessage(meta.IncompatibleClassChangeError, meta.toGuestString(getName(pool)));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, meta.toGuestString(getName(pool)));
             }
 
             Symbol<Name> name = getName(pool);
@@ -178,16 +182,17 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
 
             Method method = holderKlass.lookupMethod(name, signature, accessingKlass);
             if (method == null) {
-                throw meta.throwExWithMessage(meta.NoSuchMethodError, meta.toGuestString(getName(pool)));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError, meta.toGuestString(holderKlass.getNameAsString() + "." + getName(pool) + signature));
             }
 
             if (!MemberRefConstant.checkAccess(accessingKlass, holderKlass, method)) {
-                System.err.println(EspressoOptions.INCEPTION_NAME + " Method access check of: " + method.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() +
-                                " throws IllegalAccessError");
-                throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(getName(pool)));
+                context.getLogger().log(Level.WARNING,
+                                EspressoOptions.INCEPTION_NAME + " Method access check of: " + method.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() +
+                                                " throws IllegalAccessError");
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(getName(pool)));
             }
 
-            if (!method.isMethodHandleIntrinsic()) {
+            if (!method.isPolySignatureIntrinsic()) {
                 method.checkLoadingConstraints(accessingKlass.getDefiningClassLoader(), method.getDeclaringKlass().getDefiningClassLoader());
             }
 
@@ -202,12 +207,11 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
             // initialization method (&sect;2.9). The return type of such a method must be void.
             pool.nameAndTypeAt(nameAndTypeIndex).validateMethod(pool, false);
             Symbol<Name> name = pool.nameAndTypeAt(nameAndTypeIndex).getName(pool);
-            if (name.equals(Name.INIT)) {
+            if (Name._init_.equals(name)) {
                 Symbol<? extends Descriptor> descriptor = pool.nameAndTypeAt(nameAndTypeIndex).getDescriptor(pool);
                 int len = descriptor.length();
-                // descriptor.endsWith(")V");
                 if (len <= 2 || (descriptor.byteAt(len - 2) != ')' || descriptor.byteAt(len - 1) != 'V')) {
-                    throw ClassfileParser.classFormatError("<init> method should have ()V signature");
+                    throw ConstantPool.classFormatError("<init> method should have ()V signature");
                 }
             }
         }

@@ -133,6 +133,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     // the parts of the method that can change when it's redefined
     // are encapsulated within the methodVersion
     @CompilationFinal volatile MethodVersion methodVersion;
+    @CompilationFinal private Assumption removedByRedefinition;
 
     public Method identity() {
         return proxy == null ? this : proxy;
@@ -154,7 +155,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return getMethodVersion().pool;
     }
 
-    private LinkedMethod getLinkedMethod() {
+    public LinkedMethod getLinkedMethod() {
         return getMethodVersion().linkedMethod;
     }
 
@@ -421,10 +422,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     public boolean canOverride(Method other) {
-        if (other.isPrivate() || other.isStatic()) {
+        if (isPrivate() || isStatic()) {
             return false;
         }
-        if (other.isPublic() || other.isProtected()) {
+        if (isPublic() || isProtected()) {
             return true;
         }
         return getDeclaringKlass().sameRuntimePackage(other.getDeclaringKlass());
@@ -639,7 +640,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     void setVTableIndex(int i) {
-        assert (vtableIndex == -1 || vtableIndex == i);
+        setVTableIndex(i, false);
+    }
+
+    void setVTableIndex(int i, boolean isRedefinition) {
+        assert (vtableIndex == -1 || vtableIndex == i || isRedefinition);
         assert itableIndex == -1;
         CompilerAsserts.neverPartOfCompilation();
         this.vtableIndex = i;
@@ -977,7 +982,23 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         ids.replaceObject(oldVersion, methodVersion);
     }
 
+    void onSubclassMethodChanged(Ids<Object> ids) {
+        MethodVersion oldVersion = methodVersion;
+        CodeAttribute codeAttribute = oldVersion.getCodeAttribute();
+        // create a copy of the code attribute using the original
+        // code of the old version. An obsolete method could be
+        // running quickened bytecode and we can't safely patch
+        // the bytecodes back to the original.
+        CodeAttribute newCodeAttribute = new CodeAttribute(codeAttribute);
+        methodVersion = new MethodVersion(oldVersion.pool, oldVersion.linkedMethod, newCodeAttribute);
+        oldVersion.getAssumption().invalidate();
+        ids.replaceObject(oldVersion, methodVersion);
+    }
+
     public MethodVersion getMethodVersion() {
+        // block execution during class redefinition
+        ClassRedefinition.check();
+
         MethodVersion version = methodVersion;
         if (!version.getAssumption().isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -986,6 +1007,18 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             } while (!version.getAssumption().isValid());
         }
         return version;
+    }
+
+    public void removedByRedefinition() {
+        if (removedByRedefinition == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            removedByRedefinition = Truffle.getRuntime().createAssumption();
+        }
+        removedByRedefinition.invalidate();
+    }
+
+    public boolean isRemovedByRedefition() {
+        return removedByRedefinition != null && !removedByRedefinition.isValid();
     }
 
     public final class MethodVersion implements MethodRef {
@@ -1012,6 +1045,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
         public CodeAttribute getCodeAttribute() {
             return codeAttribute;
+        }
+
+        public ExceptionHandler[] getExceptionHandlers() {
+            return codeAttribute.getExceptionHandlers();
         }
 
         public RuntimeConstantPool getPool() {
