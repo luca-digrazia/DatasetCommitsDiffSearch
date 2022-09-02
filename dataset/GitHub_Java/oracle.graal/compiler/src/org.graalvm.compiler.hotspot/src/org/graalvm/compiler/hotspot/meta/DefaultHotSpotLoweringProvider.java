@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -296,8 +296,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
                     if (instanceOfDynamicNode.allowsNull()) {
                         ValueNode object = instanceOfDynamicNode.getObject();
                         LogicNode newTypeCheck = graph.addOrUniqueWithInputs(
-                                        InstanceOfDynamicNode.create(graph.getAssumptions(), tool.getConstantReflection(), instanceOfDynamicNode.getMirrorOrHub(), object,
-                                                        false/* null checked below */, instanceOfDynamicNode.isExact()));
+                                        InstanceOfDynamicNode.create(graph.getAssumptions(), tool.getConstantReflection(), instanceOfDynamicNode.getMirrorOrHub(), object, false));
                         LogicNode newNode = LogicNode.or(graph.unique(IsNullNode.create(object)), newTypeCheck, GraalDirectives.UNLIKELY_PROBABILITY);
                         instanceOfDynamicNode.replaceAndDelete(newNode);
                     }
