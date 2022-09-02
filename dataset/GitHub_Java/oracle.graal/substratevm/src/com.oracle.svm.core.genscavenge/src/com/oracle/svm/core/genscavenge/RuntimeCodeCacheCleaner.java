@@ -39,7 +39,7 @@ import com.oracle.svm.core.code.RuntimeCodeInfoMemory;
  * Furthermore, it also actively invalidates and frees code that has references to otherwise no
  * longer reachable Java heap objects.
  */
-final class RuntimeCodeCacheCleaner implements CodeInfoVisitor {
+public class RuntimeCodeCacheCleaner implements CodeInfoVisitor {
     @Platforms(Platform.HOSTED_ONLY.class)
     RuntimeCodeCacheCleaner() {
     }
@@ -58,7 +58,7 @@ final class RuntimeCodeCacheCleaner implements CodeInfoVisitor {
     }
 
     private static void freeMemory(CodeInfo codeInfo) {
-        boolean removed = RuntimeCodeInfoMemory.singleton().removeDuringGC(codeInfo);
+        boolean removed = RuntimeCodeInfoMemory.singleton().remove(codeInfo);
         assert removed : "must have been present";
         RuntimeCodeInfoAccess.releaseMethodInfoMemory(codeInfo);
     }
