@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,14 +24,19 @@
  */
 package com.oracle.svm.hosted.analysis;
 
+import static com.oracle.graal.pointsto.reports.AnalysisReportsOptions.PrintAnalysisCallTree;
+import static com.oracle.svm.hosted.NativeImageOptions.MaxReachableTypes;
 import static jdk.vm.ci.common.JVMCIError.shouldNotReachHere;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedType;
+import java.lang.reflect.MalformedParameterizedTypeException;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -38,14 +45,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import com.oracle.svm.hosted.HostedConfiguration;
+import org.graalvm.compiler.core.common.SuppressSVMWarnings;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.word.WordBase;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.ObjectScanner;
-import com.oracle.graal.pointsto.api.HostVM;
+import com.oracle.graal.pointsto.ObjectScanner.ScanReason;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.flow.MethodTypeFlow;
 import com.oracle.graal.pointsto.flow.MethodTypeFlowBuilder;
@@ -56,17 +66,22 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.graal.pointsto.meta.HostedProviders;
+import com.oracle.graal.pointsto.reports.CallTreePrinter;
 import com.oracle.graal.pointsto.util.AnalysisError.TypeNotFoundError;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.UnknownObjectField;
 import com.oracle.svm.core.annotate.UnknownPrimitiveField;
+import com.oracle.svm.core.graal.meta.SubstrateReplacements;
+import com.oracle.svm.core.hub.AnnotatedSuperInfo;
+import com.oracle.svm.core.hub.AnnotationsEncoding;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.GenericInfo;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.SVMHost;
-import com.oracle.svm.hosted.analysis.flow.SVMMethodTypeFlowBuilder;
+import com.oracle.svm.hosted.meta.HostedType;
+import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
 
-import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -74,15 +89,19 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 public class Inflation extends BigBang {
     private Set<AnalysisField> handledUnknownValueFields;
     private Map<GenericInterfacesEncodingKey, Type[]> genericInterfacesMap;
+    private Map<AnnotatedInterfacesEncodingKey, AnnotatedType[]> annotatedInterfacesMap;
     private Map<InterfacesEncodingKey, DynamicHub[]> interfacesEncodings;
 
     private final Pattern illegalCalleesPattern;
     private final Pattern targetCallersPattern;
+    private final AnnotationSubstitutionProcessor annotationSubstitutionProcessor;
 
-    public Inflation(OptionValues options, AnalysisUniverse universe, HostedProviders providers, HostVM hostVM, ForkJoinPool executor) {
-        super(options, universe, providers, hostVM, executor, new SubstrateUnsupportedFeatures());
+    public Inflation(OptionValues options, AnalysisUniverse universe, HostedProviders providers, AnnotationSubstitutionProcessor annotationSubstitutionProcessor, ForkJoinPool executor,
+                    Runnable heartbeatCallback) {
+        super(options, universe, providers, universe.hostVM(), executor, heartbeatCallback, new SubstrateUnsupportedFeatures(), SubstrateOptions.parseOnce());
+        this.annotationSubstitutionProcessor = annotationSubstitutionProcessor;
 
-        String[] targetCallers = new String[]{"com\\.oracle\\.graal\\.", "org\\.graalvm"};
+        String[] targetCallers = new String[]{"com\\.oracle\\.graal\\.", "org\\.graalvm[^\\.polyglot\\.nativeapi]"};
         targetCallersPattern = buildPrefixMatchPattern(targetCallers);
 
         String[] illegalCallees = new String[]{"java\\.util\\.stream", "java\\.util\\.Collection\\.stream", "java\\.util\\.Arrays\\.stream"};
@@ -90,115 +109,119 @@ public class Inflation extends BigBang {
 
         handledUnknownValueFields = new HashSet<>();
         genericInterfacesMap = new HashMap<>();
+        annotatedInterfacesMap = new HashMap<>();
         interfacesEncodings = new HashMap<>();
-    }
-
-    public SVMAnalysisPolicy svmAnalysisPolicy() {
-        return (SVMAnalysisPolicy) super.analysisPolicy();
     }
 
     @Override
     public MethodTypeFlowBuilder createMethodTypeFlowBuilder(BigBang bb, MethodTypeFlow methodFlow) {
-        return new SVMMethodTypeFlowBuilder(bb, methodFlow);
-    }
-
-    @Override
-    public boolean addRoot(JavaConstant constant, Object root) {
-        SubstrateObjectConstant sConstant = (SubstrateObjectConstant) constant;
-        return sConstant.setRoot(root);
-    }
-
-    @Override
-    public Object getRoot(JavaConstant constant) {
-        SubstrateObjectConstant sConstant = (SubstrateObjectConstant) constant;
-        return sConstant.getRoot();
-    }
-
-    @Override
-    public void checkUnsupportedSynchronization(AnalysisMethod method, int bci, AnalysisType aType) {
-        /* Can not synchronize on a non-instance type. For example, an array. */
-        checkUnsupportedSynchronization(aType.isInstanceClass(), method, bci, aType);
-        /*
-         * We want DynamicHub instances to be immutable, but synchronization would require
-         * installing a Lock object. Static synchronized methods are handled by synchronizing on a
-         * dedicated type instead.
-         */
-        checkUnsupportedSynchronization(!aType.equals(metaAccess.lookupJavaType(DynamicHub.class)), method, bci, aType);
-        /*
-         * We want String instances to be immutable, because they are a major part of the boot image
-         * heap.
-         */
-        checkUnsupportedSynchronization(!aType.equals(metaAccess.lookupJavaType(String.class)), method, bci, aType);
-    }
-
-    public void checkUnsupportedSynchronization(boolean condition, AnalysisMethod method, int bci, AnalysisType aType) {
-        UserError.guarantee(condition,
-                        "Not supported: Synchronization on '%s' in %s",
-                        aType.toJavaName(true), method.asStackTraceElement(bci).toString());
+        return HostedConfiguration.instance().createMethodTypeFlowBuilder(bb, methodFlow);
     }
 
     @Override
     protected void checkObjectGraph(ObjectScanner objectScanner) {
         universe.getFields().forEach(this::handleUnknownValueField);
-        universe.getTypes().forEach(this::checkType);
+        universe.getTypes().stream().filter(AnalysisType::isReachable).forEach(this::checkType);
 
         /* Scan hubs of all types that end up in the native image. */
-        universe.getTypes().stream().filter(type -> type.isInstantiated() || type.isInTypeCheck() || type.isPrimitive()).forEach(type -> scanHub(objectScanner, type));
+        universe.getTypes().stream().filter(AnalysisType::isReachable).forEach(type -> scanHub(objectScanner, type));
+    }
+
+    @Override
+    public SVMHost getHostVM() {
+        return (SVMHost) hostVM;
     }
 
     private void checkType(AnalysisType type) {
-        SVMHost svmHost = (SVMHost) hostVM;
+        assert type.isReachable();
+        DynamicHub hub = getHostVM().dynamicHub(type);
+        if (hub.getGenericInfo() == null) {
+            fillGenericInfo(type, hub);
+        }
+        if (hub.getAnnotatedSuperInfo() == null) {
+            fillAnnotatedSuperInfo(type, hub);
+        }
 
         if (type.getJavaKind() == JavaKind.Object) {
-            if (type.isArray() && (type.isInstantiated() || type.isInTypeCheck())) {
-                svmHost.dynamicHub(type).getComponentHub().setArrayHub(svmHost.dynamicHub(type));
+            if (type.isArray()) {
+                hub.getComponentHub().setArrayHub(hub);
             }
 
             try {
                 AnalysisType enclosingType = type.getEnclosingType();
                 if (enclosingType != null) {
-                    svmHost.dynamicHub(type).setEnclosingClass(svmHost.dynamicHub(enclosingType));
+                    hub.setEnclosingClass(getHostVM().dynamicHub(enclosingType));
                 }
             } catch (UnsupportedFeatureException ex) {
                 getUnsupportedFeatures().addMessage(type.toJavaName(true), null, ex.getMessage(), null, ex);
             }
 
-            fillGenericInfo(type);
-            fillInterfaces(type);
+            if (hub.getInterfacesEncoding() == null) {
+                fillInterfaces(type, hub);
+            }
 
             /*
              * Support for Java annotations.
              */
-            svmHost.dynamicHub(type).setAnnotationsEncoding(encodeAnnotations(metaAccess, type.getAnnotations(), svmHost.dynamicHub(type).getAnnotationsEncoding()));
+            try {
+                /*
+                 * Get the annotations from the wrapped type since AnalysisType.getAnnotations()
+                 * defends against JDK-7183985 and we want to get the original behavior.
+                 */
+                Annotation[] annotations = type.getWrappedWithoutResolve().getAnnotations();
+                Annotation[] declared = type.getWrappedWithoutResolve().getDeclaredAnnotations();
+                hub.setAnnotationsEncoding(encodeAnnotations(metaAccess, annotations, declared, hub.getAnnotationsEncoding()));
+            } catch (ArrayStoreException e) {
+                /* If we hit JDK-7183985 just encode the exception. */
+                hub.setAnnotationsEncoding(e);
+            }
 
             /*
              * Support for Java enumerations.
              */
-            if (type.getSuperclass() != null && type.getSuperclass().equals(metaAccess.lookupJavaType(Enum.class)) && svmHost.dynamicHub(type).getEnumConstantsShared() == null) {
-                /*
-                 * We want to retrieve the enum constant array that is maintained as a private
-                 * static field in the enumeration class. We do not want a copy because that would
-                 * mean we have the array twice in the native image: as the static field, and in the
-                 * enumConstant field of DynamicHub. The only way to get the original value is via a
-                 * reflective field access, and we even have to guess the field name.
-                 */
-                AnalysisField found = null;
-                for (AnalysisField f : type.getStaticFields()) {
-                    if (f.getName().endsWith("$VALUES")) {
-                        if (found != null) {
-                            throw shouldNotReachHere("Enumeration has more than one static field with enumeration values: " + type);
+            if (type.isEnum() && hub.shouldInitEnumConstants()) {
+                if (getHostVM().getClassInitializationSupport().shouldInitializeAtRuntime(type)) {
+                    hub.initEnumConstantsAtRuntime(type.getJavaClass());
+                } else {
+                    /*
+                     * We want to retrieve the enum constant array that is maintained as a private
+                     * static field in the enumeration class. We do not want a copy because that
+                     * would mean we have the array twice in the native image: as the static field,
+                     * and in the enumConstant field of DynamicHub. The only way to get the original
+                     * value is via a reflective field access, and we even have to guess the field
+                     * name.
+                     */
+                    AnalysisField found = null;
+                    for (AnalysisField f : type.getStaticFields()) {
+                        if (f.getName().endsWith("$VALUES")) {
+                            if (found != null) {
+                                /*
+                                 * Enumeration has more than one static field with enumeration
+                                 * values. Bailout and use Class.getEnumConstants() to get the value
+                                 * instead.
+                                 */
+                                found = null;
+                                break;
+                            }
+                            found = f;
                         }
-                        found = f;
                     }
+                    Enum<?>[] enumConstants;
+                    if (found == null) {
+                        /*
+                         * We could not find a unique $VALUES field, so we use the value returned by
+                         * Class.getEnumConstants(). This is not ideal since
+                         * Class.getEnumConstants() returns a copy of the array, so we will have two
+                         * arrays with the same content in the image heap, but it is better than
+                         * failing image generation.
+                         */
+                        enumConstants = (Enum<?>[]) type.getJavaClass().getEnumConstants();
+                    } else {
+                        enumConstants = (Enum<?>[]) SubstrateObjectConstant.asObject(getConstantReflectionProvider().readFieldValue(found, null));
+                        assert enumConstants != null;
+                    }
+                    hub.initEnumConstants(enumConstants);
                 }
-                if (found == null) {
-                    throw shouldNotReachHere("Enumeration does not have static field with enumeration values: " + type);
-                }
-                AnalysisField field = found;
-                // field.registerAsRead(null);
-                Enum<?>[] enumConstants = (Enum[]) SubstrateObjectConstant.asObject(getConstantReflectionProvider().readFieldValue(field, null));
-                assert enumConstants != null;
-                svmHost.dynamicHub(type).setEnumConstants(enumConstants);
             }
         }
     }
@@ -208,10 +231,29 @@ public class Inflation extends BigBang {
         super.cleanupAfterAnalysis();
         handledUnknownValueFields = null;
         genericInterfacesMap = null;
+        annotatedInterfacesMap = null;
         interfacesEncodings = null;
     }
 
-    class GenericInterfacesEncodingKey {
+    @Override
+    public void checkUserLimitations() {
+        int maxReachableTypes = MaxReachableTypes.getValue();
+        if (maxReachableTypes >= 0) {
+            CallTreePrinter callTreePrinter = new CallTreePrinter(this);
+            callTreePrinter.buildCallTree();
+            int numberOfTypes = callTreePrinter.classesSet(false).size();
+            if (numberOfTypes > maxReachableTypes) {
+                throw UserError.abort("Reachable %d types but only %d allowed (because the %s option is set). To see all reachable types use %s; to change the maximum number of allowed types use %s.",
+                                numberOfTypes, maxReachableTypes, MaxReachableTypes.getName(), PrintAnalysisCallTree.getName(), MaxReachableTypes.getName());
+            }
+        }
+    }
+
+    public AnnotationSubstitutionProcessor getAnnotationSubstitutionProcessor() {
+        return annotationSubstitutionProcessor;
+    }
+
+    static class GenericInterfacesEncodingKey {
         final Type[] interfaces;
 
         GenericInterfacesEncodingKey(Type[] aInterfaces) {
@@ -229,25 +271,151 @@ public class Inflation extends BigBang {
         }
     }
 
-    private void fillGenericInfo(AnalysisType type) {
-        SVMHost svmHost = (SVMHost) hostVM;
-        DynamicHub hub = svmHost.dynamicHub(type);
+    /** Modified copy of {@link Arrays#equals(Object[], Object[])}. */
+    private static boolean shallowEquals(Object[] a, Object[] a2) {
+        if (a == a2) {
+            return true;
+        } else if (a == null || a2 == null) {
+            return false;
+        }
+        int length = a.length;
+        if (a2.length != length) {
+            return false;
+        }
+        for (int i = 0; i < length; i++) {
+            /* Modification: use reference equality. */
+            if (a[i] != a2[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 
+    /** Modified copy of {@link Arrays#hashCode(Object[])}. */
+    private static int shallowHashCode(Object[] a) {
+        if (a == null) {
+            return 0;
+        }
+        int result = 1;
+
+        for (Object element : a) {
+            /* Modification: use identity hash code. */
+            result = 31 * result + System.identityHashCode(element);
+        }
+        return result;
+    }
+
+    static class AnnotatedInterfacesEncodingKey {
+        final AnnotatedType[] interfaces;
+
+        AnnotatedInterfacesEncodingKey(AnnotatedType[] aInterfaces) {
+            this.interfaces = aInterfaces;
+        }
+
+        /*
+         * JDK 12 introduced a broken implementation of hashCode() and equals() for the
+         * implementation classes of annotated types, leading to an infinite recursion. Tracked as
+         * JDK-8224012. As a workaround, we use shallow implementations that only depend on the
+         * identity hash code and reference equality. This is the same behavior as on JDK 8 and JDK
+         * 11 anyway.
+         */
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof AnnotatedInterfacesEncodingKey && shallowEquals(interfaces, ((AnnotatedInterfacesEncodingKey) obj).interfaces);
+        }
+
+        @Override
+        public int hashCode() {
+            return shallowHashCode(interfaces);
+        }
+    }
+
+    private void fillGenericInfo(AnalysisType type, DynamicHub hub) {
         Class<?> javaClass = type.getJavaClass();
 
         TypeVariable<?>[] typeParameters = javaClass.getTypeParameters();
-        Type[] genericInterfaces = Arrays.stream(javaClass.getGenericInterfaces()).filter(this::filterGenericInterfaces).toArray(Type[]::new);
-        Type[] cachedGenericInterfaces = genericInterfacesMap.computeIfAbsent(new GenericInterfacesEncodingKey(genericInterfaces), k -> genericInterfaces);
-        Type genericSuperClass = javaClass.getGenericSuperclass();
+
+        Type[] allGenericInterfaces;
+        try {
+            allGenericInterfaces = javaClass.getGenericInterfaces();
+        } catch (MalformedParameterizedTypeException | TypeNotPresentException | LinkageError t) {
+            /*
+             * Loading generic interfaces can fail due to missing types. Ignore the exception and
+             * return an empty array.
+             */
+            allGenericInterfaces = new Type[0];
+        }
+
+        Type[] genericInterfaces = Arrays.stream(allGenericInterfaces).filter(this::isTypeAllowed).toArray(Type[]::new);
+        Type[] cachedGenericInterfaces;
+        try {
+            cachedGenericInterfaces = genericInterfacesMap.computeIfAbsent(new GenericInterfacesEncodingKey(genericInterfaces), k -> genericInterfaces);
+        } catch (MalformedParameterizedTypeException | TypeNotPresentException | LinkageError t) {
+            /*
+             * Computing the hash code of generic interfaces can fail due to missing types. Ignore
+             * the exception and proceed without caching. De-duplication of generic interfaces is an
+             * optimization and not necessary for correctness.
+             */
+            cachedGenericInterfaces = genericInterfaces;
+        }
+
+        Type genericSuperClass;
+        try {
+            genericSuperClass = javaClass.getGenericSuperclass();
+        } catch (MalformedParameterizedTypeException | TypeNotPresentException | LinkageError t) {
+            /*
+             * Loading the generic super class can fail due to missing types. Ignore the exception
+             * and return null.
+             */
+            genericSuperClass = null;
+        }
+        if (!isTypeAllowed(genericSuperClass)) {
+            genericSuperClass = null;
+        }
         hub.setGenericInfo(GenericInfo.factory(typeParameters, cachedGenericInterfaces, genericSuperClass));
     }
 
-    private boolean filterGenericInterfaces(Type t) {
-        if (t instanceof Class) {
-            Optional<? extends ResolvedJavaType> resolved = metaAccess.optionalLookupJavaType((Class<?>) t);
-            return resolved.isPresent() && universe.hostVM().platformSupported(resolved.get());
+    private void fillAnnotatedSuperInfo(AnalysisType type, DynamicHub hub) {
+        Class<?> javaClass = type.getJavaClass();
+
+        AnnotatedType annotatedSuperclass;
+        try {
+            annotatedSuperclass = javaClass.getAnnotatedSuperclass();
+        } catch (MalformedParameterizedTypeException | TypeNotPresentException | LinkageError t) {
+            /*
+             * Loading the annotated super class can fail due to missing types. Ignore the exception
+             * and return null.
+             */
+            annotatedSuperclass = null;
+        }
+        if (annotatedSuperclass != null && !isTypeAllowed(annotatedSuperclass.getType())) {
+            annotatedSuperclass = null;
         }
 
+        AnnotatedType[] allAnnotatedInterfaces;
+        try {
+            allAnnotatedInterfaces = javaClass.getAnnotatedInterfaces();
+        } catch (MalformedParameterizedTypeException | TypeNotPresentException | LinkageError t) {
+            /*
+             * Loading annotated interfaces can fail due to missing types. Ignore the exception and
+             * return an empty array.
+             */
+            allAnnotatedInterfaces = new AnnotatedType[0];
+        }
+
+        AnnotatedType[] annotatedInterfaces = Arrays.stream(allAnnotatedInterfaces)
+                        .filter(ai -> isTypeAllowed(ai.getType())).toArray(AnnotatedType[]::new);
+        AnnotatedType[] cachedAnnotatedInterfaces = annotatedInterfacesMap.computeIfAbsent(
+                        new AnnotatedInterfacesEncodingKey(annotatedInterfaces), k -> annotatedInterfaces);
+        hub.setAnnotatedSuperInfo(AnnotatedSuperInfo.factory(annotatedSuperclass, cachedAnnotatedInterfaces));
+    }
+
+    private boolean isTypeAllowed(Type t) {
+        if (t instanceof Class) {
+            Optional<? extends ResolvedJavaType> resolved = metaAccess.optionalLookupJavaType((Class<?>) t);
+            return resolved.isPresent() && universe.platformSupported(resolved.get());
+        }
         return true;
     }
 
@@ -281,9 +449,8 @@ public class Inflation extends BigBang {
     /**
      * Fill array returned by Class.getInterfaces().
      */
-    private void fillInterfaces(AnalysisType type) {
+    private void fillInterfaces(AnalysisType type, DynamicHub hub) {
         SVMHost svmHost = (SVMHost) hostVM;
-        DynamicHub hub = svmHost.dynamicHub(type);
 
         AnalysisType[] aInterfaces = type.getInterfaces();
         if (aInterfaces.length == 0) {
@@ -296,14 +463,14 @@ public class Inflation extends BigBang {
              * interfaces. We want to avoid duplicate arrays with the same content in the native
              * image heap.
              */
-            hub.setInterfacesEncoding(interfacesEncodings.computeIfAbsent(new InterfacesEncodingKey(aInterfaces), k -> k.createHubs()));
+            hub.setInterfacesEncoding(interfacesEncodings.computeIfAbsent(new InterfacesEncodingKey(aInterfaces), InterfacesEncodingKey::createHubs));
         }
     }
 
     private void scanHub(ObjectScanner objectScanner, AnalysisType type) {
         SVMHost svmHost = (SVMHost) hostVM;
         JavaConstant hubConstant = SubstrateObjectConstant.forObject(svmHost.dynamicHub(type));
-        objectScanner.scanConstant(hubConstant, "Hub");
+        objectScanner.scanConstant(hubConstant, ScanReason.HUB);
     }
 
     private void handleUnknownValueField(AnalysisField field) {
@@ -335,7 +502,7 @@ public class Inflation extends BigBang {
              * Use the annotation types, instead of the declared type, in the UnknownObjectField
              * annotated fields initialization.
              */
-            handleUnknownObjectField(field, aAnnotationTypes.toArray(new AnalysisType[aAnnotationTypes.size()]));
+            handleUnknownObjectField(field, aAnnotationTypes.toArray(new AnalysisType[0]));
 
         } else if (unknownPrimitiveField != null) {
             assert !Modifier.isFinal(field.getModifiers()) : "@UnknownPrimitiveField annotated field " + field.format("%H.%n") + " cannot be final";
@@ -425,32 +592,45 @@ public class Inflation extends BigBang {
         }
     }
 
-    public static Object encodeAnnotations(AnalysisMetaAccess metaAccess, Annotation[] allAnnotations, Object oldEncoding) {
+    private static Set<Annotation> filterUsedAnnotation(Set<Annotation> used, Annotation[] rest) {
+        if (rest == null) {
+            return null;
+        }
+
+        Set<Annotation> restUsed = new HashSet<>();
+        for (Annotation a : rest) {
+            if (used.contains(a)) {
+                restUsed.add(a);
+            }
+        }
+        return restUsed;
+    }
+
+    public static Object encodeAnnotations(AnalysisMetaAccess metaAccess, Annotation[] allAnnotations, Annotation[] declaredAnnotations, Object oldEncoding) {
         Object newEncoding;
-        if (allAnnotations.length == 0) {
+        if (allAnnotations.length == 0 && declaredAnnotations.length == 0) {
             newEncoding = null;
         } else {
-            List<Annotation> usedAnnotations = new ArrayList<>();
-            for (Annotation annotation : allAnnotations) {
-                try {
-                    AnalysisType annotationClass = metaAccess.lookupJavaType(annotation.getClass());
-                    if (isAnnotationUsed(annotationClass)) {
-                        usedAnnotations.add(annotation);
-                    }
-                } catch (TypeNotFoundError e) {
-                    /*
-                     * Silently ignore the annotation if its type was not discovered by the static
-                     * analysis.
-                     */
-                }
-            }
-            if (usedAnnotations.size() == 0) {
-                newEncoding = null;
-            } else if (usedAnnotations.size() == 1) {
-                newEncoding = usedAnnotations.get(0);
-            } else {
-                newEncoding = usedAnnotations.toArray(new Annotation[usedAnnotations.size()]);
-            }
+            Set<Annotation> all = new HashSet<>();
+            Collections.addAll(all, allAnnotations);
+            Collections.addAll(all, declaredAnnotations);
+            final Set<Annotation> usedAnnotations = all.stream()
+                            .filter(a -> {
+                                try {
+                                    AnalysisType annotationClass = metaAccess.lookupJavaType(a.getClass());
+                                    return isAnnotationUsed(annotationClass);
+                                } catch (TypeNotFoundError e) {
+                                    /*
+                                     * Silently ignore the annotation if its type was not discovered
+                                     * by the static analysis.
+                                     */
+                                    return false;
+                                }
+                            }).collect(Collectors.toSet());
+            Set<Annotation> usedDeclared = filterUsedAnnotation(usedAnnotations, declaredAnnotations);
+            newEncoding = usedAnnotations.size() == 0
+                            ? null
+                            : AnnotationsEncoding.encodeAnnotations(usedAnnotations, usedDeclared);
         }
 
         /*
@@ -458,7 +638,7 @@ public class Inflation extends BigBang {
          * for tests that do runtime compilation, the field appears as being continuously updated
          * during BigBang.checkObjectGraph.
          */
-        if (oldEncoding == newEncoding || (oldEncoding instanceof Annotation[] && newEncoding instanceof Annotation[] && Arrays.equals((Annotation[]) oldEncoding, (Annotation[]) newEncoding))) {
+        if (oldEncoding != null && oldEncoding.equals(newEncoding)) {
             return oldEncoding;
         } else {
             return newEncoding;
@@ -472,13 +652,23 @@ public class Inflation extends BigBang {
      * number of annotations on a class, then we might return a lower number.
      */
     private static boolean isAnnotationUsed(AnalysisType annotationType) {
-        if (annotationType.isInstantiated() || annotationType.isInTypeCheck()) {
+        if (annotationType.isReachable()) {
             return true;
         }
         assert annotationType.getInterfaces().length == 1 : annotationType;
 
         AnalysisType annotationInterfaceType = annotationType.getInterfaces()[0];
-        return annotationInterfaceType.isInstantiated() || annotationInterfaceType.isInTypeCheck();
+        return annotationInterfaceType.isReachable();
+    }
+
+    public static ResolvedJavaType toWrappedType(ResolvedJavaType type) {
+        if (type instanceof AnalysisType) {
+            return ((AnalysisType) type).getWrappedWithoutResolve();
+        } else if (type instanceof HostedType) {
+            return ((HostedType) type).getWrapped().getWrappedWithoutResolve();
+        } else {
+            return type;
+        }
     }
 
     @Override
@@ -491,41 +681,47 @@ public class Inflation extends BigBang {
          * type fields of type C can be of any type compatible with their declared type.
          */
 
-        if (SVMHost.isUnknownClass(type)) {
-            return false;
-        }
-
-        if (type.isArray() && SVMHost.isUnknownClass(type.getComponentType())) {
-            // TODO are arrays of unknown value types also unknown?
-            throw JVMCIError.unimplemented();
-        }
-
-        return true;
+        return !SVMHost.isUnknownClass(type);
     }
 
     /**
      * Builds a pattern that checks if the tested string starts with any of the target prefixes,
-     * like so: {@code str1(.*)|str2(.*)|str3(.*)}.
+     * like so: {@code ^(str1(.*)|str2(.*)|str3(.*))}.
      */
     private static Pattern buildPrefixMatchPattern(String[] targetPrefixes) {
-        String patternStr = "";
+        StringBuilder patternStr = new StringBuilder("^(");
         for (int i = 0; i < targetPrefixes.length; i++) {
             String prefix = targetPrefixes[i];
-            patternStr += prefix;
-            patternStr += "(.*)";
+            patternStr.append(prefix);
+            patternStr.append("(.*)");
             if (i < targetPrefixes.length - 1) {
-                patternStr += "|";
+                patternStr.append("|");
             }
         }
-        return Pattern.compile(patternStr);
+        patternStr.append(')');
+        return Pattern.compile(patternStr.toString());
     }
 
     @Override
     public boolean isCallAllowed(BigBang bb, AnalysisMethod caller, AnalysisMethod callee, NodeSourcePosition srcPosition) {
-        String calleeName = callee.format("%H.%n");
+        String calleeName = callee.getQualifiedName();
         if (illegalCalleesPattern.matcher(calleeName).find()) {
-            String callerName = caller.format("%H.%n");
+            String callerName = caller.getQualifiedName();
             if (targetCallersPattern.matcher(callerName).find()) {
+                SuppressSVMWarnings suppress = caller.getAnnotation(SuppressSVMWarnings.class);
+                AnalysisType callerType = caller.getDeclaringClass();
+                while (suppress == null && callerType != null) {
+                    suppress = callerType.getAnnotation(SuppressSVMWarnings.class);
+                    callerType = callerType.getEnclosingType();
+                }
+                if (suppress != null) {
+                    String[] reasons = suppress.value();
+                    for (String r : reasons) {
+                        if (r.equals("AllowUseOfStreamAPI")) {
+                            return true;
+                        }
+                    }
+                }
                 String message = "Illegal: Graal/Truffle use of Stream API: " + calleeName;
                 int bci = srcPosition.getBCI();
                 String trace = caller.asStackTraceElement(bci).toString();
@@ -536,4 +732,8 @@ public class Inflation extends BigBang {
         return true;
     }
 
+    @Override
+    public SubstrateReplacements getReplacements() {
+        return (SubstrateReplacements) super.getReplacements();
+    }
 }

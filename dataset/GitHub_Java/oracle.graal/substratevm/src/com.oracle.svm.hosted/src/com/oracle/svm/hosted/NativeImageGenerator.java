@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.hosted;
 
-import static com.oracle.svm.hosted.NativeImageOptions.DiagnosticsMode;
-import static com.oracle.svm.hosted.NativeImageOptions.DiagnosticsDir;
 import static org.graalvm.compiler.hotspot.JVMCIVersionCheck.JVMCI11_RELEASES_URL;
 import static org.graalvm.compiler.hotspot.JVMCIVersionCheck.JVMCI8_RELEASES_URL;
 import static org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.registerInvocationPlugins;
@@ -39,7 +37,6 @@ import java.lang.reflect.Type;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -158,6 +155,7 @@ import com.oracle.graal.pointsto.util.Timer;
 import com.oracle.graal.pointsto.util.Timer.StopTimer;
 import com.oracle.svm.core.BuildArtifacts;
 import com.oracle.svm.core.BuildArtifacts.ArtifactType;
+import com.oracle.svm.core.ClassLoaderQuery;
 import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.JavaMainWrapper.JavaMainSupport;
 import com.oracle.svm.core.LinkerInvocation;
@@ -265,6 +263,8 @@ import com.oracle.svm.hosted.option.HostedOptionProvider;
 import com.oracle.svm.hosted.phases.CInterfaceInvocationPlugin;
 import com.oracle.svm.hosted.phases.ConstantFoldLoadFieldPlugin;
 import com.oracle.svm.hosted.phases.EarlyConstantFoldLoadFieldPlugin;
+import com.oracle.svm.hosted.phases.ExperimentalNativeImageInlineDuringParsingPlugin;
+import com.oracle.svm.hosted.phases.ExperimentalNativeImageInlineDuringParsingSupport;
 import com.oracle.svm.hosted.phases.InjectedAccessorsPlugin;
 import com.oracle.svm.hosted.phases.IntrinsifyMethodHandlesInvocationPlugin;
 import com.oracle.svm.hosted.phases.SubstrateClassInitializationPlugin;
@@ -481,6 +481,7 @@ public class NativeImageGenerator {
             ImageSingletonsSupportImpl.HostedManagement.install(new ImageSingletonsSupportImpl.HostedManagement());
 
             ImageSingletons.add(BuildArtifacts.class, (type, artifact) -> buildArtifacts.computeIfAbsent(type, t -> new ArrayList<>()).add(artifact));
+            ImageSingletons.add(ClassLoaderQuery.class, new ClassLoaderQueryImpl(loader.getClassLoader()));
             ImageSingletons.add(HostedOptionValues.class, new HostedOptionValues(optionProvider.getHostedValues()));
             ImageSingletons.add(RuntimeOptionValues.class, new RuntimeOptionValues(optionProvider.getRuntimeValues(), allOptionNames));
             watchdog = new DeadlockWatchdog();
@@ -773,16 +774,16 @@ public class NativeImageGenerator {
              */
             if (bigbang != null) {
                 if (AnalysisReportsOptions.PrintAnalysisStatistics.getValue(options)) {
-                    StatisticsPrinter.print(bigbang, SubstrateOptions.reportsPath(), ReportUtils.extractImageName(imageName));
+                    StatisticsPrinter.print(bigbang, SubstrateOptions.Path.getValue(), ReportUtils.extractImageName(imageName));
                 }
 
                 if (AnalysisReportsOptions.PrintAnalysisCallTree.getValue(options)) {
-                    CallTreePrinter.print(bigbang, SubstrateOptions.reportsPath(), ReportUtils.extractImageName(imageName));
+                    CallTreePrinter.print(bigbang, SubstrateOptions.Path.getValue(), ReportUtils.extractImageName(imageName));
                 }
 
                 if (AnalysisReportsOptions.PrintImageObjectTree.getValue(options)) {
-                    ObjectTreePrinter.print(bigbang, SubstrateOptions.reportsPath(), ReportUtils.extractImageName(imageName));
-                    AnalysisHeapHistogramPrinter.print(bigbang, SubstrateOptions.reportsPath(), ReportUtils.extractImageName(imageName));
+                    ObjectTreePrinter.print(bigbang, SubstrateOptions.Path.getValue(), ReportUtils.extractImageName(imageName));
+                    AnalysisHeapHistogramPrinter.print(bigbang, SubstrateOptions.Path.getValue(), ReportUtils.extractImageName(imageName));
                 }
 
                 if (PointstoOptions.PrintPointsToStatistics.getValue(options)) {
@@ -833,9 +834,6 @@ public class NativeImageGenerator {
                 ImageSingletons.add(Platform.class, loader.platform);
                 ImageSingletons.add(SubstrateTargetDescription.class, target);
 
-                ImageSingletons.add(SubstrateOptions.ReportingSupport.class, new SubstrateOptions.ReportingSupport(
-                                DiagnosticsMode.getValue() ? DiagnosticsDir.getValue() : Paths.get("reports").toString()));
-
                 if (javaMainSupport != null) {
                     ImageSingletons.add(JavaMainSupport.class, javaMainSupport);
                 }
@@ -846,6 +844,9 @@ public class NativeImageGenerator {
                 ClassInitializationSupport classInitializationSupport = new ConfigurableClassInitialization(originalMetaAccess, loader);
                 ImageSingletons.add(RuntimeClassInitializationSupport.class, classInitializationSupport);
                 ClassInitializationFeature.processClassInitializationOptions(classInitializationSupport);
+
+                /* Initialize the registry for the inline decisions */
+                ImageSingletons.add(ExperimentalNativeImageInlineDuringParsingSupport.class, new ExperimentalNativeImageInlineDuringParsingSupport());
 
                 featureHandler.registerFeatures(loader, debug);
                 AfterRegistrationAccessImpl access = new AfterRegistrationAccessImpl(featureHandler, loader, originalMetaAccess, mainEntryPoint, debug);
@@ -1141,6 +1142,10 @@ public class NativeImageGenerator {
         SubstrateReplacements replacements = (SubstrateReplacements) providers.getReplacements();
         plugins.appendInlineInvokePlugin(replacements);
 
+        if (nativeImageInlineDuringParsingEnabled()) {
+            plugins.appendInlineInvokePlugin(new ExperimentalNativeImageInlineDuringParsingPlugin(reason, providers));
+        }
+
         plugins.appendNodePlugin(new IntrinsifyMethodHandlesInvocationPlugin(reason, providers, aUniverse, hUniverse));
         plugins.appendNodePlugin(new DeletedFieldsPlugin());
         plugins.appendNodePlugin(new InjectedAccessorsPlugin());
@@ -1234,6 +1239,12 @@ public class NativeImageGenerator {
                 ((HostedProviders) backend.getProviders()).setGraphBuilderPlugins(plugins);
             }
         }
+    }
+
+    public static boolean nativeImageInlineDuringParsingEnabled() {
+        return ExperimentalNativeImageInlineDuringParsingPlugin.Options.OldInlineBeforeAnalysis.getValue() &&
+                        !ImageSingletons.lookup(ExperimentalNativeImageInlineDuringParsingSupport.class).isNativeImageInlineDuringParsingDisabled() &&
+                        !DeoptTester.Options.DeoptimizeAll.getValue();
     }
 
     @SuppressWarnings("try")
