@@ -45,7 +45,6 @@ import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
-import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
@@ -166,8 +165,7 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
 
     private static void tryUseTrappingNullCheck(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, Speculation speculation, long implicitNullCheckLimit) {
         assert predecessor != null;
-        if (deoptimizationReason != DeoptimizationReason.NullCheckException && deoptimizationReason != DeoptimizationReason.UnreachedCode &&
-                        deoptimizationReason != DeoptimizationReason.TypeCheckedInliningViolated) {
+        if (deoptimizationReason != DeoptimizationReason.NullCheckException && deoptimizationReason != DeoptimizationReason.UnreachedCode) {
             deopt.getDebug().log(DebugContext.INFO_LEVEL, "Not a null check or unreached %s", predecessor);
             return;
         }
@@ -176,23 +174,17 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
             deopt.getDebug().log(DebugContext.INFO_LEVEL, "Has a speculation %s", predecessor);
             return;
         }
-
-        // Skip over loop exit nodes.
-        Node pred = predecessor;
-        while (pred instanceof LoopExitNode) {
-            pred = pred.predecessor();
-        }
-        if (pred instanceof AbstractMergeNode) {
-            AbstractMergeNode merge = (AbstractMergeNode) pred;
+        if (predecessor instanceof AbstractMergeNode) {
+            AbstractMergeNode merge = (AbstractMergeNode) predecessor;
             if (merge.phis().isEmpty()) {
                 for (AbstractEndNode end : merge.cfgPredecessors().snapshot()) {
                     checkPredecessor(deopt, end.predecessor(), deoptimizationReason, implicitNullCheckLimit);
                 }
             }
-        } else if (pred instanceof AbstractBeginNode) {
-            checkPredecessor(deopt, pred, deoptimizationReason, implicitNullCheckLimit);
+        } else if (predecessor instanceof AbstractBeginNode) {
+            checkPredecessor(deopt, predecessor, deoptimizationReason, implicitNullCheckLimit);
         } else {
-            deopt.getDebug().log(DebugContext.INFO_LEVEL, "Not a Begin or Merge %s", pred);
+            deopt.getDebug().log(DebugContext.INFO_LEVEL, "Not a Begin or Merge %s", predecessor);
         }
     }
 
