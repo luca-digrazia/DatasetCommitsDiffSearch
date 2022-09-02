@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -29,8 +31,12 @@ import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
 
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.collections.Equivalence;
+import org.graalvm.collections.MapCursor;
+import org.graalvm.collections.Pair;
 import org.graalvm.compiler.core.common.cfg.Loop;
-import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
@@ -39,9 +45,11 @@ import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
+import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValueProxyNode;
 import org.graalvm.compiler.nodes.cfg.Block;
@@ -53,24 +61,18 @@ import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
-import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
-import org.graalvm.compiler.nodes.spi.LoweringProvider;
+import org.graalvm.compiler.nodes.memory.MultiMemoryKill;
+import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
+import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.virtual.phases.ea.PEReadEliminationBlockState.ReadCacheEntry;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
-import org.graalvm.util.Equivalence;
-import org.graalvm.util.MapCursor;
-import org.graalvm.util.Pair;
 import org.graalvm.word.LocationIdentity;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadEliminationBlockState> {
@@ -84,9 +86,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         }
     }
 
-    public PEReadEliminationClosure(ScheduleResult schedule, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
-                    LoweringProvider loweringProvider) {
-        super(schedule, metaAccess, constantReflection, constantFieldProvider, loweringProvider);
+    public PEReadEliminationClosure(ScheduleResult schedule, CoreProviders providers) {
+        super(schedule, providers);
     }
 
     @Override
@@ -98,6 +99,14 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
     protected boolean processNode(Node node, PEReadEliminationBlockState state, GraphEffectList effects, FixedWithNextNode lastFixedNode) {
         if (super.processNode(node, state, effects, lastFixedNode)) {
             return true;
+        }
+
+        if (currentMode != EffectsClosureMode.REGULAR_VIRTUALIZATION) {
+            /*
+             * PEA closure decided it has to give up for this loop nest, do the same and stop
+             * processing nodes.
+             */
+            return false;
         }
 
         if (node instanceof LoadFieldNode) {
@@ -116,13 +125,13 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             return processUnsafeLoad((RawLoadNode) node, state, effects);
         } else if (node instanceof RawStoreNode) {
             return processUnsafeStore((RawStoreNode) node, state, effects);
-        } else if (node instanceof MemoryCheckpoint.Single) {
+        } else if (node instanceof SingleMemoryKill) {
             COUNTER_MEMORYCHECKPOINT.increment(node.getDebug());
-            LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
+            LocationIdentity identity = ((SingleMemoryKill) node).getKilledLocationIdentity();
             processIdentity(state, identity);
-        } else if (node instanceof MemoryCheckpoint.Multi) {
+        } else if (node instanceof MultiMemoryKill) {
             COUNTER_MEMORYCHECKPOINT.increment(node.getDebug());
-            for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
+            for (LocationIdentity identity : ((MultiMemoryKill) node).getKilledLocationIdentities()) {
                 processIdentity(state, identity);
             }
         }
@@ -130,9 +139,10 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
         return false;
     }
 
-    private boolean processStore(FixedNode store, ValueNode object, LocationIdentity identity, int index, ValueNode value, PEReadEliminationBlockState state, GraphEffectList effects) {
+    private boolean processStore(FixedNode store, ValueNode object, LocationIdentity identity, int index, JavaKind accessKind, boolean overflowAccess, ValueNode value,
+                    PEReadEliminationBlockState state, GraphEffectList effects) {
         ValueNode unproxiedObject = GraphUtil.unproxify(object);
-        ValueNode cachedValue = state.getReadCache(object, identity, index, this);
+        ValueNode cachedValue = state.getReadCache(object, identity, index, accessKind, this);
 
         ValueNode finalValue = getScalarAlias(value);
         boolean result = false;
@@ -141,49 +151,66 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             result = true;
         }
         state.killReadCache(identity, index);
-        state.addReadCache(unproxiedObject, identity, index, finalValue, this);
+        state.addReadCache(unproxiedObject, identity, index, accessKind, overflowAccess, finalValue, this);
         return result;
     }
 
-    private boolean processLoad(FixedNode load, ValueNode object, LocationIdentity identity, int index, PEReadEliminationBlockState state, GraphEffectList effects) {
+    private boolean processLoad(FixedNode load, ValueNode object, LocationIdentity identity, int index, JavaKind kind, PEReadEliminationBlockState state, GraphEffectList effects) {
         ValueNode unproxiedObject = GraphUtil.unproxify(object);
-        ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, this);
+        ValueNode cachedValue = state.getReadCache(unproxiedObject, identity, index, kind, this);
         if (cachedValue != null) {
-            if (!load.stamp().isCompatible(cachedValue.stamp())) {
-                /*
-                 * Can either be the first field of a two slot write to a one slot field which would
-                 * have a non compatible stamp or the second load which will see Illegal.
-                 */
-                assert load.stamp().getStackKind() == JavaKind.Int && (cachedValue.stamp().getStackKind() == JavaKind.Long || cachedValue.getStackKind() == JavaKind.Double ||
-                                cachedValue.getStackKind() == JavaKind.Illegal) : "Can only allow different stack kind two slot marker writes on one slot fields.";
-                return false;
-            } else {
-                // perform the read elimination
-                effects.replaceAtUsages(load, cachedValue, load);
-                addScalarAlias(load, cachedValue);
-                return true;
-            }
+            // perform the read elimination
+            effects.replaceAtUsages(load, cachedValue, load);
+            addScalarAlias(load, cachedValue);
+            return true;
         } else {
-            state.addReadCache(unproxiedObject, identity, index, load, this);
+            state.addReadCache(unproxiedObject, identity, index, kind, false, load, this);
             return false;
         }
     }
 
+    private static boolean isOverflowAccess(JavaKind accessKind, JavaKind declaredKind) {
+        if (accessKind == declaredKind) {
+            return false;
+        }
+        if (accessKind == JavaKind.Object) {
+            switch (declaredKind) {
+                case Object:
+                case Double:
+                case Long:
+                    return false;
+                default:
+                    return true;
+            }
+        }
+        assert accessKind.isPrimitive() : "Illegal access kind";
+        return declaredKind.isPrimitive() ? accessKind.getBitCount() > declaredKind.getBitCount() : true;
+    }
+
     private boolean processUnsafeLoad(RawLoadNode load, PEReadEliminationBlockState state, GraphEffectList effects) {
+        if (load.isVolatile()) {
+            state.killReadCache();
+            return false;
+        }
         if (load.offset().isConstant()) {
             ResolvedJavaType type = StampTool.typeOrNull(load.object());
             if (type != null && type.isArray()) {
+                JavaKind accessKind = load.accessKind();
+                JavaKind componentKind = type.getComponentType().getJavaKind();
                 long offset = load.offset().asJavaConstant().asLong();
-                int index = VirtualArrayNode.entryIndexForOffset(offset, load.accessKind(), type.getComponentType(), Integer.MAX_VALUE);
-                ValueNode object = GraphUtil.unproxify(load.object());
-                LocationIdentity location = NamedLocationIdentity.getArrayLocation(type.getComponentType().getJavaKind());
-                ValueNode cachedValue = state.getReadCache(object, location, index, this);
-                if (cachedValue != null && load.stamp().isCompatible(cachedValue.stamp())) {
-                    effects.replaceAtUsages(load, cachedValue, load);
-                    addScalarAlias(load, cachedValue);
-                    return true;
-                } else {
-                    state.addReadCache(object, location, index, load, this);
+                int index = VirtualArrayNode.entryIndexForOffset(tool.getMetaAccess(), offset, accessKind, type.getComponentType(), Integer.MAX_VALUE);
+                if (index >= 0) {
+                    ValueNode object = GraphUtil.unproxify(load.object());
+                    LocationIdentity location = NamedLocationIdentity.getArrayLocation(componentKind);
+                    ValueNode cachedValue = state.getReadCache(object, location, index, accessKind, this);
+                    assert cachedValue == null || load.stamp(NodeView.DEFAULT).isCompatible(cachedValue.stamp(NodeView.DEFAULT)) : "The RawLoadNode's stamp is not compatible with the cached value.";
+                    if (cachedValue != null) {
+                        effects.replaceAtUsages(load, cachedValue, load);
+                        addScalarAlias(load, cachedValue);
+                        return true;
+                    } else {
+                        state.addReadCache(object, location, index, accessKind, isOverflowAccess(accessKind, componentKind), load, this);
+                    }
                 }
             }
         }
@@ -191,13 +218,24 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
     }
 
     private boolean processUnsafeStore(RawStoreNode store, PEReadEliminationBlockState state, GraphEffectList effects) {
+        if (store.isVolatile()) {
+            state.killReadCache();
+            return false;
+        }
         ResolvedJavaType type = StampTool.typeOrNull(store.object());
         if (type != null && type.isArray()) {
-            LocationIdentity location = NamedLocationIdentity.getArrayLocation(type.getComponentType().getJavaKind());
+            JavaKind accessKind = store.accessKind();
+            JavaKind componentKind = type.getComponentType().getJavaKind();
+            LocationIdentity location = NamedLocationIdentity.getArrayLocation(componentKind);
             if (store.offset().isConstant()) {
                 long offset = store.offset().asJavaConstant().asLong();
-                int index = VirtualArrayNode.entryIndexForOffset(offset, store.accessKind(), type.getComponentType(), Integer.MAX_VALUE);
-                return processStore(store, store.object(), location, index, store.value(), state, effects);
+                boolean overflowAccess = isOverflowAccess(accessKind, componentKind);
+                int index = overflowAccess ? -1 : VirtualArrayNode.entryIndexForOffset(tool.getMetaAccess(), offset, accessKind, type.getComponentType(), Integer.MAX_VALUE);
+                if (index != -1) {
+                    return processStore(store, store.object(), location, index, accessKind, overflowAccess, store.value(), state, effects);
+                } else {
+                    state.killReadCache(location, index);
+                }
             } else {
                 processIdentity(state, location);
             }
@@ -208,7 +246,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
     }
 
     private boolean processArrayLength(ArrayLengthNode length, PEReadEliminationBlockState state, GraphEffectList effects) {
-        return processLoad(length, length.array(), ARRAY_LENGTH_LOCATION, -1, state, effects);
+        return processLoad(length, length.array(), ARRAY_LENGTH_LOCATION, -1, JavaKind.Int, state, effects);
     }
 
     private boolean processStoreField(StoreFieldNode store, PEReadEliminationBlockState state, GraphEffectList effects) {
@@ -216,7 +254,8 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             state.killReadCache();
             return false;
         }
-        return processStore(store, store.object(), new FieldLocationIdentity(store.field()), -1, store.value(), state, effects);
+        JavaKind kind = store.field().getJavaKind();
+        return processStore(store, store.object(), new FieldLocationIdentity(store.field()), -1, kind, false, store.value(), state, effects);
     }
 
     private boolean processLoadField(LoadFieldNode load, PEReadEliminationBlockState state, GraphEffectList effects) {
@@ -224,14 +263,15 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
             state.killReadCache();
             return false;
         }
-        return processLoad(load, load.object(), new FieldLocationIdentity(load.field()), -1, state, effects);
+        return processLoad(load, load.object(), new FieldLocationIdentity(load.field()), -1, load.field().getJavaKind(), state, effects);
     }
 
     private boolean processStoreIndexed(StoreIndexedNode store, PEReadEliminationBlockState state, GraphEffectList effects) {
-        LocationIdentity arrayLocation = NamedLocationIdentity.getArrayLocation(store.elementKind());
-        if (store.index().isConstant()) {
-            int index = ((JavaConstant) store.index().asConstant()).asInt();
-            return processStore(store, store.array(), arrayLocation, index, store.value(), state, effects);
+        int index = store.index().isConstant() ? ((JavaConstant) store.index().asConstant()).asInt() : -1;
+        JavaKind elementKind = store.elementKind();
+        LocationIdentity arrayLocation = NamedLocationIdentity.getArrayLocation(elementKind);
+        if (index != -1) {
+            return processStore(store, store.array(), arrayLocation, index, elementKind, false, store.value(), state, effects);
         } else {
             state.killReadCache(arrayLocation, -1);
         }
@@ -241,14 +281,15 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
     private boolean processLoadIndexed(LoadIndexedNode load, PEReadEliminationBlockState state, GraphEffectList effects) {
         if (load.index().isConstant()) {
             int index = ((JavaConstant) load.index().asConstant()).asInt();
-            LocationIdentity arrayLocation = NamedLocationIdentity.getArrayLocation(load.elementKind());
-            return processLoad(load, load.array(), arrayLocation, index, state, effects);
+            JavaKind elementKind = load.elementKind();
+            LocationIdentity arrayLocation = NamedLocationIdentity.getArrayLocation(elementKind);
+            return processLoad(load, load.array(), arrayLocation, index, elementKind, state, effects);
         }
         return false;
     }
 
     private boolean processUnbox(UnboxNode unbox, PEReadEliminationBlockState state, GraphEffectList effects) {
-        return processLoad(unbox, unbox.getValue(), UNBOX_LOCATIONS.get(unbox.getBoxingKind()), -1, state, effects);
+        return processLoad(unbox, unbox.getValue(), UNBOX_LOCATIONS.get(unbox.getBoxingKind()), -1, unbox.getBoxingKind(), state, effects);
     }
 
     private static void processIdentity(PEReadEliminationBlockState state, LocationIdentity identity) {
@@ -290,7 +331,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                     if (object != null) {
                         Pair<ValueNode, Object> pair = firstValueSet.get(object);
                         while (pair != null) {
-                            initialState.addReadCache(pair.getLeft(), entry.identity, entry.index, initialState.getReadCache().get(entry), this);
+                            initialState.addReadCache(pair.getLeft(), entry.identity, entry.index, entry.kind, entry.overflowAccess, initialState.getReadCache().get(entry), this);
                             pair = (Pair<ValueNode, Object>) pair.getRight();
                         }
                     }
@@ -302,12 +343,11 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
     @Override
     protected void processLoopExit(LoopExitNode exitNode, PEReadEliminationBlockState initialState, PEReadEliminationBlockState exitState, GraphEffectList effects) {
         super.processLoopExit(exitNode, initialState, exitState, effects);
-
-        if (exitNode.graph().hasValueProxies()) {
+        if (exitNode.graph().isBeforeStage(StageFlag.VALUE_PROXY_REMOVAL)) {
             MapCursor<ReadCacheEntry, ValueNode> entry = exitState.getReadCache().getEntries();
             while (entry.advance()) {
                 if (initialState.getReadCache().get(entry.getKey()) != entry.getValue()) {
-                    ValueNode value = exitState.getReadCache(entry.getKey().object, entry.getKey().identity, entry.getKey().index, this);
+                    ValueNode value = exitState.getReadCache(entry.getKey().object, entry.getKey().identity, entry.getKey().index, entry.getKey().kind, this);
                     assert value != null : "Got null from read cache, entry's value:" + entry.getValue();
                     if (!(value instanceof ProxyNode) || ((ProxyNode) value).proxyPoint() != exitNode) {
                         ProxyNode proxy = new ValueProxyNode(value, exitNode);
@@ -353,7 +393,7 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                     // e.g. unsafe loads / stores with different access kinds have different stamps
                     // although location, object and offset are the same, in this case we cannot
                     // create a phi nor can we set a common value
-                    if (otherValue == null || !value.stamp().isCompatible(otherValue.stamp())) {
+                    if (otherValue == null || !value.stamp(NodeView.DEFAULT).isCompatible(otherValue.stamp(NodeView.DEFAULT))) {
                         value = null;
                         phi = false;
                         break;
@@ -363,11 +403,11 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                     }
                 }
                 if (phi) {
-                    PhiNode phiNode = getPhi(key, value.stamp().unrestricted());
+                    PhiNode phiNode = getPhi(key, value.stamp(NodeView.DEFAULT).unrestricted());
                     mergeEffects.addFloatingNode(phiNode, "mergeReadCache");
                     for (int i = 0; i < states.size(); i++) {
-                        ValueNode v = states.get(i).getReadCache(key.object, key.identity, key.index, PEReadEliminationClosure.this);
-                        assert phiNode.stamp().isCompatible(v.stamp()) : "Cannot create read elimination phi for inputs with incompatible stamps.";
+                        ValueNode v = states.get(i).getReadCache(key.object, key.identity, key.index, key.kind, PEReadEliminationClosure.this);
+                        assert phiNode.stamp(NodeView.DEFAULT).isCompatible(v.stamp(NodeView.DEFAULT)) : "Cannot create read elimination phi for inputs with incompatible stamps.";
                         setPhiInput(phiNode, i, v);
                     }
                     newState.readCache.put(key, phiNode);
@@ -383,33 +423,33 @@ public final class PEReadEliminationClosure extends PartialEscapeClosure<PEReadE
                 if (phi.getStackKind() == JavaKind.Object) {
                     for (ReadCacheEntry entry : states.get(0).readCache.getKeys()) {
                         if (entry.object == getPhiValueAt(phi, 0)) {
-                            mergeReadCachePhi(phi, entry.identity, entry.index, states);
+                            mergeReadCachePhi(phi, entry.identity, entry.index, entry.kind, entry.overflowAccess, states);
                         }
                     }
                 }
             }
         }
 
-        private void mergeReadCachePhi(PhiNode phi, LocationIdentity identity, int index, List<PEReadEliminationBlockState> states) {
+        private void mergeReadCachePhi(PhiNode phi, LocationIdentity identity, int index, JavaKind kind, boolean overflowAccess, List<PEReadEliminationBlockState> states) {
             ValueNode[] values = new ValueNode[states.size()];
-            values[0] = states.get(0).getReadCache(getPhiValueAt(phi, 0), identity, index, PEReadEliminationClosure.this);
+            values[0] = states.get(0).getReadCache(getPhiValueAt(phi, 0), identity, index, kind, PEReadEliminationClosure.this);
             if (values[0] != null) {
                 for (int i = 1; i < states.size(); i++) {
-                    ValueNode value = states.get(i).getReadCache(getPhiValueAt(phi, i), identity, index, PEReadEliminationClosure.this);
+                    ValueNode value = states.get(i).getReadCache(getPhiValueAt(phi, i), identity, index, kind, PEReadEliminationClosure.this);
                     // e.g. unsafe loads / stores with same identity and different access kinds see
                     // mergeReadCache(states)
-                    if (value == null || !values[i - 1].stamp().isCompatible(value.stamp())) {
+                    if (value == null || !values[i - 1].stamp(NodeView.DEFAULT).isCompatible(value.stamp(NodeView.DEFAULT))) {
                         return;
                     }
                     values[i] = value;
                 }
 
-                PhiNode phiNode = getPhi(new ReadCacheEntry(identity, phi, index), values[0].stamp().unrestricted());
+                PhiNode phiNode = getPhi(new ReadCacheEntry(identity, phi, index, kind, overflowAccess), values[0].stamp(NodeView.DEFAULT).unrestricted());
                 mergeEffects.addFloatingNode(phiNode, "mergeReadCachePhi");
                 for (int i = 0; i < values.length; i++) {
                     setPhiInput(phiNode, i, values[i]);
                 }
-                newState.readCache.put(new ReadCacheEntry(identity, phi, index), phiNode);
+                newState.readCache.put(new ReadCacheEntry(identity, phi, index, kind, overflowAccess), phiNode);
             }
         }
     }

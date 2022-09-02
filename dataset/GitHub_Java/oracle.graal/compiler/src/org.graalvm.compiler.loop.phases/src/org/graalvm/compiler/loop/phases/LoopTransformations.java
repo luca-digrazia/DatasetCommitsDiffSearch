@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,8 +38,8 @@ import org.graalvm.compiler.graph.Graph.Mark;
 import org.graalvm.compiler.graph.Graph.NodeEventScope;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.Position;
-import org.graalvm.compiler.nodes.spi.Simplifiable;
-import org.graalvm.compiler.nodes.spi.SimplifierTool;
+import org.graalvm.compiler.graph.spi.Simplifiable;
+import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractEndNode;
@@ -386,7 +386,7 @@ public abstract class LoopTransformations {
         }
         double originalFrequency = loop.loopBegin().loopFrequency();
         preLoopBegin.setLoopFrequency(LoopFrequencyData.injected(1.0));
-        mainLoopBegin.setLoopFrequency(mainLoopBegin.profileData().decrementFrequency(2.0));
+        mainLoopBegin.setLoopFrequency(loop.loopBegin().profileData().decrementFrequency(2.0));
         postLoopBegin.setLoopFrequency(LoopFrequencyData.injected(1.0));
         preLoopBegin.setLoopOrigFrequency(originalFrequency);
         mainLoopBegin.setLoopOrigFrequency(originalFrequency);

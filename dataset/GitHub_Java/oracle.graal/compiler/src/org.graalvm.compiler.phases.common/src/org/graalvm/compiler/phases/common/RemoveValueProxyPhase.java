@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,8 +26,9 @@ package org.graalvm.compiler.phases.common;
 
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.LoopExitNode;
-import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.nodes.StructuredGraph.FrameStateVerification;
+import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.phases.Phase;
 
@@ -36,19 +37,17 @@ public class RemoveValueProxyPhase extends Phase {
     @Override
     protected void run(StructuredGraph graph) {
         for (LoopExitNode exit : graph.getNodes(LoopExitNode.TYPE)) {
-            for (ProxyNode vpn : exit.proxies().snapshot()) {
-                vpn.replaceAtUsagesAndDelete(vpn.value());
-            }
-            if (!exit.loopBegin().isOsrLoop()) {
-                FrameState stateAfter = exit.stateAfter();
-                if (stateAfter != null) {
-                    exit.setStateAfter(null);
-                    if (stateAfter.hasNoUsages()) {
-                        GraphUtil.killWithUnusedFloatingInputs(stateAfter);
-                    }
-                }
+            exit.removeProxies();
+            FrameState frameState = exit.stateAfter();
+            if (frameState != null && frameState.isExceptionHandlingBCI()) {
+                // The parser will create loop exits with such BCIs on the exception handling path.
+                // Loop optimizations must avoid duplicating such exits
+                // We clean them up here otherwise they could survive until code generation
+                exit.setStateAfter(null);
+                GraphUtil.tryKillUnused(frameState);
             }
         }
-        graph.setHasValueProxies(false);
+        graph.setAfterStage(StageFlag.VALUE_PROXY_REMOVAL);
+        graph.weakenFrameStateVerification(FrameStateVerification.ALL_EXCEPT_LOOP_EXIT);
     }
 }

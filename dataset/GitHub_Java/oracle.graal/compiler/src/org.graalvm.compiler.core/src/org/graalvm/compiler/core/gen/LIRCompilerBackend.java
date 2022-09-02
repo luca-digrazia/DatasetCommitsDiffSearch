@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,6 +39,7 @@ import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.CompilerPhaseScope;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.lir.LIR;
@@ -54,6 +55,7 @@ import org.graalvm.compiler.lir.phases.PostAllocationOptimizationPhase.PostAlloc
 import org.graalvm.compiler.lir.phases.PreAllocationOptimizationPhase.PreAllocationOptimizationContext;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
+import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 
@@ -66,6 +68,7 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.meta.VMConstant;
 
 public class LIRCompilerBackend {
@@ -77,13 +80,23 @@ public class LIRCompilerBackend {
     public static <T extends CompilationResult> void emitBackEnd(StructuredGraph graph, Object stub, ResolvedJavaMethod installedCodeOwner, Backend backend, T compilationResult,
                     CompilationResultBuilderFactory factory, RegisterConfig registerConfig, LIRSuites lirSuites) {
         DebugContext debug = graph.getDebug();
-        try (DebugContext.Scope s = debug.scope("BackEnd", graph.getLastSchedule()); DebugCloseable a = BackEnd.start(debug)) {
+        try (DebugContext.Scope s = debug.scope("BackEnd", graph, graph.getLastSchedule()); DebugCloseable a = BackEnd.start(debug)) {
             LIRGenerationResult lirGen = null;
             lirGen = emitLIR(backend, graph, stub, registerConfig, lirSuites);
             try (DebugContext.Scope s2 = debug.scope("CodeGen", lirGen, lirGen.getLIR())) {
                 int bytecodeSize = graph.method() == null ? 0 : graph.getBytecodeSize();
                 compilationResult.setHasUnsafeAccess(graph.hasUnsafeAccess());
-                emitCode(backend, graph.getAssumptions(), graph.method(), graph.getMethods(), graph.getFields(), bytecodeSize, lirGen, compilationResult, installedCodeOwner, factory);
+                emitCode(backend,
+                                graph.getAssumptions(),
+                                graph.method(),
+                                graph.getMethods(),
+                                graph.getFields(),
+                                graph.getSpeculationLog(),
+                                bytecodeSize,
+                                lirGen,
+                                compilationResult,
+                                installedCodeOwner,
+                                factory);
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
@@ -113,11 +126,15 @@ public class LIRCompilerBackend {
     }
 
     @SuppressWarnings("try")
-    private static LIRGenerationResult emitLIR0(Backend backend, StructuredGraph graph, Object stub, RegisterConfig registerConfig, LIRSuites lirSuites,
+    private static LIRGenerationResult emitLIR0(Backend backend,
+                    StructuredGraph graph,
+                    Object stub,
+                    RegisterConfig registerConfig,
+                    LIRSuites lirSuites,
                     String[] allocationRestrictedTo) {
         DebugContext debug = graph.getDebug();
         try (DebugContext.Scope ds = debug.scope("EmitLIR"); DebugCloseable a = EmitLIR.start(debug)) {
-            assert !graph.hasValueProxies();
+            assert graph.isAfterStage(StageFlag.VALUE_PROXY_REMOVAL);
 
             ScheduleResult schedule = graph.getLastSchedule();
             Block[] blocks = schedule.getCFG().getBlocks();
@@ -130,7 +147,8 @@ public class LIRCompilerBackend {
             LIR lir = new LIR(schedule.getCFG(), linearScanOrder, codeEmittingOrder, graph.getOptions(), graph.getDebug());
 
             LIRGenerationProvider lirBackend = (LIRGenerationProvider) backend;
-            LIRGenerationResult lirGenRes = lirBackend.newLIRGenerationResult(graph.compilationId(), lir, registerConfig, graph, stub);
+            RegisterAllocationConfig registerAllocationConfig = backend.newRegisterAllocationConfig(registerConfig, allocationRestrictedTo);
+            LIRGenerationResult lirGenRes = lirBackend.newLIRGenerationResult(graph.compilationId(), lir, registerAllocationConfig, graph, stub);
             LIRGeneratorTool lirGen = lirBackend.newLIRGenerator(lirGenRes);
             NodeLIRBuilderTool nodeLirGen = lirBackend.newNodeLIRBuilder(graph, lirGen);
 
@@ -141,7 +159,7 @@ public class LIRCompilerBackend {
             try (DebugContext.Scope s = debug.scope("LIRStages", nodeLirGen, lirGenRes, lir)) {
                 // Dump LIR along with HIR (the LIR is looked up from context)
                 debug.dump(DebugContext.BASIC_LEVEL, graph.getLastSchedule(), "After LIR generation");
-                LIRGenerationResult result = emitLowLevel(backend.getTarget(), lirGenRes, lirGen, lirSuites, backend.newRegisterAllocationConfig(registerConfig, allocationRestrictedTo));
+                LIRGenerationResult result = emitLowLevel(backend.getTarget(), lirGenRes, lirGen, lirSuites, registerAllocationConfig);
                 return result;
             } catch (Throwable e) {
                 throw debug.handle(e);
@@ -172,10 +190,19 @@ public class LIRCompilerBackend {
     }
 
     @SuppressWarnings("try")
-    public static void emitCode(Backend backend, Assumptions assumptions, ResolvedJavaMethod rootMethod, Collection<ResolvedJavaMethod> inlinedMethods, EconomicSet<ResolvedJavaField> accessedFields,
-                    int bytecodeSize, LIRGenerationResult lirGenRes, CompilationResult compilationResult, ResolvedJavaMethod installedCodeOwner, CompilationResultBuilderFactory factory) {
+    public static void emitCode(Backend backend,
+                    Assumptions assumptions,
+                    ResolvedJavaMethod rootMethod,
+                    Collection<ResolvedJavaMethod> inlinedMethods,
+                    EconomicSet<ResolvedJavaField> accessedFields,
+                    SpeculationLog speculationLog,
+                    int bytecodeSize,
+                    LIRGenerationResult lirGenRes,
+                    CompilationResult compilationResult,
+                    ResolvedJavaMethod installedCodeOwner,
+                    CompilationResultBuilderFactory factory) {
         DebugContext debug = lirGenRes.getLIR().getDebug();
-        try (DebugCloseable a = EmitCode.start(debug)) {
+        try (DebugCloseable a = EmitCode.start(debug); CompilerPhaseScope cps = debug.enterCompilerPhase("Emit code");) {
             LIRGenerationProvider lirBackend = (LIRGenerationProvider) backend;
 
             FrameMap frameMap = lirGenRes.getFrameMap();
@@ -188,6 +215,9 @@ public class LIRCompilerBackend {
                 compilationResult.setMethods(rootMethod, inlinedMethods);
                 compilationResult.setFields(accessedFields);
                 compilationResult.setBytecodeSize(bytecodeSize);
+            }
+            if (speculationLog != null) {
+                compilationResult.setSpeculationLog(speculationLog);
             }
             crb.finish();
             if (debug.isCountEnabled()) {

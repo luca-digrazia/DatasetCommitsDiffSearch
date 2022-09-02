@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -679,15 +679,14 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
      */
     @Override
     protected Graph copy(String newName, Consumer<UnmodifiableEconomicMap<Node, Node>> duplicationMapCallback, DebugContext debugForCopy) {
-        return copy(newName, rootMethod, getOptions(), duplicationMapCallback, compilationId, debugForCopy);
+        return copy(newName, duplicationMapCallback, compilationId, debugForCopy);
     }
 
     @SuppressWarnings("try")
-    private StructuredGraph copy(String newName, ResolvedJavaMethod rootMethodForCopy, OptionValues optionsForCopy, Consumer<UnmodifiableEconomicMap<Node, Node>> duplicationMapCallback,
-                    CompilationIdentifier newCompilationId, DebugContext debugForCopy) {
+    private StructuredGraph copy(String newName, Consumer<UnmodifiableEconomicMap<Node, Node>> duplicationMapCallback, CompilationIdentifier newCompilationId, DebugContext debugForCopy) {
         AllowAssumptions allowAssumptions = allowAssumptions();
         StructuredGraph copy = new StructuredGraph(newName,
-                        rootMethodForCopy,
+                        method(),
                         entryBCI,
                         assumptions == null ? null : new Assumptions(),
                         speculationLog,
@@ -696,7 +695,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
                         methods != null ? new ArrayList<>(methods) : null,
                         trackNodeSourcePosition,
                         newCompilationId,
-                        optionsForCopy, debugForCopy, null, callerContext);
+                        getOptions(), debugForCopy, null, callerContext);
         if (allowAssumptions == AllowAssumptions.YES && assumptions != null) {
             copy.assumptions.record(assumptions);
         }
@@ -728,11 +727,7 @@ public final class StructuredGraph extends Graph implements JavaMethodContext {
      *            accessed by multiple threads).
      */
     public StructuredGraph copyWithIdentifier(CompilationIdentifier newCompilationId, DebugContext debugForCopy) {
-        return copy(name, rootMethod, getOptions(), null, newCompilationId, debugForCopy);
-    }
-
-    public StructuredGraph copy(ResolvedJavaMethod rootMethodForCopy, OptionValues optionsForCopy, DebugContext debugForCopy) {
-        return copy(name, rootMethodForCopy, optionsForCopy, null, compilationId, debugForCopy);
+        return copy(name, null, newCompilationId, debugForCopy);
     }
 
     public ParameterNode getParameter(int index) {
