@@ -195,7 +195,8 @@ class ReflectionProcessor extends AbstractProcessor {
 
             case "newInstance": {
                 if (clazz.equals("java.lang.reflect.Array")) { // reflective array instantiation
-                    configuration.getOrCreateType((String) args.get(0));
+                    String qualifiedJavaName = MetaUtil.internalNameToJava((String) args.get(0), true, true);
+                    configuration.getOrCreateType(qualifiedJavaName);
                 } else {
                     configuration.getOrCreateType(clazz).addMethod(ConfigurationMethod.CONSTRUCTOR_NAME, "()V", ConfigurationMemberKind.DECLARED);
                 }

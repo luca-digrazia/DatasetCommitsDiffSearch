@@ -24,26 +24,23 @@
  */
 package com.oracle.svm.agent.restrict;
 
-import static com.oracle.svm.agent.Support.handles;
-import static com.oracle.svm.agent.Support.jniFunctions;
-import static com.oracle.svm.agent.Support.toCString;
+import static com.oracle.svm.configure.trace.LazyValueUtils.lazyNull;
+import static com.oracle.svm.configure.trace.LazyValueUtils.lazyValue;
 
 import java.util.Arrays;
 
-import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
+import org.graalvm.compiler.phases.common.LazyValue;
 
-import com.oracle.svm.agent.Agent;
 import com.oracle.svm.configure.config.ProxyConfiguration;
 import com.oracle.svm.configure.trace.AccessAdvisor;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 
 public class ProxyAccessVerifier extends AbstractAccessVerifier {
-
     private final ProxyConfiguration configuration;
 
     public ProxyAccessVerifier(ProxyConfiguration configuration, AccessAdvisor advisor) {
-        super(null, advisor);
+        super(advisor);
         this.configuration = configuration;
     }
 
@@ -56,24 +53,19 @@ public class ProxyAccessVerifier extends AbstractAccessVerifier {
     }
 
     private boolean verifyProxyAccess(JNIEnvironment env, Object interfaceNames, JNIObjectHandle callerClass) {
-        if (shouldApproveWithoutChecks(env, callerClass)) {
+        LazyValue<String> lazyCallerClass = lazyClassNameOrNull(env, callerClass);
+        if (shouldApproveWithoutChecks(lazyNull(), lazyCallerClass)) {
             return true;
         }
-        String interfaceString = "(unknown)";
-        if (interfaceNames instanceof String[]) {
-            if (configuration.contains(Arrays.asList((String[]) interfaceNames))) {
+        if (!(interfaceNames instanceof String[])) {
+            return false;
+        }
+        String[] interfaceNamesArray = (String[]) interfaceNames;
+        for (String name : interfaceNamesArray) {
+            if (shouldApproveWithoutChecks(lazyValue(name), lazyCallerClass)) {
                 return true;
             }
-            interfaceString = Arrays.toString((String[]) interfaceNames);
         }
-        try (CCharPointerHolder message = toCString(Agent.MESSAGE_PREFIX + "configuration does not permit proxy class for interfaces: " + interfaceString)) {
-            beforeThrow(message);
-            jniFunctions().getThrowNew().invoke(env, handles().javaLangSecurityException, message.get());
-        }
-        return false;
-    }
-
-    private static void beforeThrow(@SuppressWarnings("unused") CCharPointerHolder message) {
-        // System.err.println(Agent.MESSAGE_PREFIX + fromCString(message.get()));
+        return configuration.contains(Arrays.asList(interfaceNamesArray));
     }
 }
