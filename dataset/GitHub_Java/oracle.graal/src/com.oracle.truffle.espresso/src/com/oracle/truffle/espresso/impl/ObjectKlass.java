@@ -176,7 +176,7 @@ public final class ObjectKlass extends Klass {
 
     @Override
     public boolean isInstanceClass() {
-        return /* !isArray() && */ !isInterface();
+        throw EspressoError.unimplemented();
     }
 
     @Override
