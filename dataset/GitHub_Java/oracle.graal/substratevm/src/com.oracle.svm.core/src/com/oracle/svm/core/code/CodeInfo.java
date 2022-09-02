@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,172 +24,54 @@
  */
 package com.oracle.svm.core.code;
 
-import java.lang.ref.WeakReference;
-
-import org.graalvm.nativeimage.c.function.CodePointer;
-import org.graalvm.nativeimage.c.struct.RawField;
 import org.graalvm.nativeimage.c.struct.RawStructure;
-import org.graalvm.word.PointerBase;
-import org.graalvm.word.UnsignedWord;
 
-import com.oracle.svm.core.c.NonmovableArray;
-import com.oracle.svm.core.c.NonmovableObjectArray;
-import com.oracle.svm.core.code.InstalledCodeObserver.InstalledCodeObserverHandle;
-import com.oracle.svm.core.deopt.SubstrateInstalledCode;
+import com.oracle.svm.core.annotate.DuplicatedInNativeCode;
 
-import jdk.vm.ci.code.InstalledCode;
-
+/**
+ * A tethered {@link CodeInfo} object that can be accessed using the static methods on the class
+ * {@link CodeInfoAccess}. As long as the tether object is reachable, it is guaranteed that the GC
+ * won't free the {@link CodeInfo} object. For more details, refer to the documentation of
+ * {@link CodeInfoAccess}.
+ */
 @RawStructure
-public interface CodeInfo extends PointerBase {
+public interface CodeInfo extends UntetheredCodeInfo {
+    /** Initial state. */
+    @DuplicatedInNativeCode //
+    int STATE_CREATED = 0;
     /**
-     * Index of element in {@link #getObjectFields}: a "tether" object for which a {@code Cleaner}
-     * object is registered. Once the tether object is no longer referenced from anywhere, the
-     * cleaner will release the memory of this {@link CodeInfo} during garbage collection. This
-     * reference field is set to {@code null} on code invalidation. At that point, the tether object
-     * can still be {@linkplain CodeInfoAccess#acquireTether referenced} from stack walks or other
-     * code to keep the code information alive (prevent the cleaner from running) until it is no
-     * longer needed.
-     */
-    int TETHER_OBJFIELD = 0;
-
-    /**
-     * Index of element of type {@link String} in {@link #getObjectFields}: the
-     * {@linkplain InstalledCode#getName() name of the InstalledCode}. Stored here * so it remains
-     * available even after the code is no longer available. Note that the String is * not pinned,
-     * so this field must not be accessed during garbage collection.
-     */
-    int NAME_OBJFIELD = TETHER_OBJFIELD + 1;
-
-    /**
-     * Index of element of type {@link WeakReference} to {@link SubstrateInstalledCode} in
-     * {@link #getObjectFields}: The handle to the compiled code for the outside world. We only have
-     * a weak reference to it, to avoid keeping code alive. Note that the both the InstalledCode and
-     * the weak reference are not pinned, so this field must not be accessed during garbage
-     * collection.
-     */
-    int INSTALLEDCODE_OBJFIELD = NAME_OBJFIELD + 1;
-
-    /**
-     * Index of element of type {@link InstalledCodeObserverHandle}[] in {@link #getObjectFields}:
-     * observers for installation and removal of this code.
-     */
-    int OBSERVERS_OBJFIELD = INSTALLEDCODE_OBJFIELD + 1;
-
-    /** The size of the array in {@link #getObjectFields}. */
-    int OBJFIELDS_COUNT = OBSERVERS_OBJFIELD + 1;
-
-    /**
-     * The object "fields" of this structure, managed as an array for simplicity.
+     * Indicates that the code is fully installed from the GC point of view, i.e., the GC must visit
+     * the heap references that are directly embedded in the machine code.
      *
-     * @see #TETHER_OBJFIELD
-     * @see #OBJFIELDS_COUNT
+     * @see CodeInfoAccess#isAliveState
      */
-    @RawField
-    void setObjectFields(NonmovableObjectArray<Object> fields);
+    @DuplicatedInNativeCode //
+    int STATE_CODE_CONSTANTS_LIVE = STATE_CREATED + 1;
+    /**
+     * Indicates that the code can no longer be newly invoked, so that if there are no activations
+     * remaining, this {@link CodeInfo} object can be freed.
+     *
+     * @see CodeInfoAccess#isAliveState
+     */
+    @DuplicatedInNativeCode //
+    int STATE_NON_ENTRANT = STATE_CODE_CONSTANTS_LIVE + 1;
+    /**
+     * This state is only possible when the VM is at a safepoint. It indicates that the GC will
+     * invalidate and free this {@link CodeInfo} object during the current safepoint.
+     */
+    @DuplicatedInNativeCode //
+    int STATE_READY_FOR_INVALIDATION = STATE_NON_ENTRANT + 1;
+    /**
+     * Indicates that this {@link CodeInfo} object was invalidated and parts of its data were freed.
+     */
+    @DuplicatedInNativeCode //
+    int STATE_PARTIALLY_FREED = STATE_READY_FOR_INVALIDATION + 1;
+    /**
+     * This state is only possible when the VM is at a safepoint and indicates that a partially
+     * freed {@link CodeInfo} object is no longer reachable from the GC point of view. The GC will
+     * free the remaining data during the current safepoint.
+     */
+    @DuplicatedInNativeCode //
+    int STATE_UNREACHABLE = STATE_PARTIALLY_FREED + 1;
 
-    /** @see #setObjectFields */
-    @RawField
-    NonmovableObjectArray<Object> getObjectFields();
-
-    @RawField
-    int getTier();
-
-    @RawField
-    void setTier(int tier);
-
-    @RawField
-    CodePointer getCodeStart();
-
-    @RawField
-    UnsignedWord getCodeSize();
-
-    @RawField
-    NonmovableArray<Byte> getReferenceMapEncoding();
-
-    @RawField
-    void setCodeStart(CodePointer codeStart);
-
-    @RawField
-    void setCodeSize(UnsignedWord codeSize);
-
-    @RawField
-    NonmovableArray<Byte> getCodeInfoIndex();
-
-    @RawField
-    void setCodeInfoIndex(NonmovableArray<Byte> codeInfoIndex);
-
-    @RawField
-    NonmovableArray<Byte> getCodeInfoEncodings();
-
-    @RawField
-    void setCodeInfoEncodings(NonmovableArray<Byte> codeInfoEncodings);
-
-    @RawField
-    void setReferenceMapEncoding(NonmovableArray<Byte> referenceMapEncoding);
-
-    @RawField
-    NonmovableArray<Byte> getFrameInfoEncodings();
-
-    @RawField
-    void setFrameInfoEncodings(NonmovableArray<Byte> frameInfoEncodings);
-
-    @RawField
-    NonmovableObjectArray<Object> getFrameInfoObjectConstants();
-
-    @RawField
-    void setFrameInfoObjectConstants(NonmovableObjectArray<Object> frameInfoObjectConstants);
-
-    @RawField
-    NonmovableObjectArray<Class<?>> getFrameInfoSourceClasses();
-
-    @RawField
-    void setFrameInfoSourceClasses(NonmovableObjectArray<Class<?>> frameInfoSourceClasses);
-
-    @RawField
-    NonmovableObjectArray<String> getFrameInfoSourceMethodNames();
-
-    @RawField
-    void setFrameInfoSourceMethodNames(NonmovableObjectArray<String> frameInfoSourceMethodNames);
-
-    @RawField
-    NonmovableObjectArray<String> getFrameInfoNames();
-
-    @RawField
-    void setFrameInfoNames(NonmovableObjectArray<String> frameInfoNames);
-
-    @RawField
-    boolean getCodeConstantsLive();
-
-    @RawField
-    void setCodeConstantsLive(boolean codeConstantsLive);
-
-    @RawField
-    NonmovableArray<Byte> getObjectsReferenceMapEncoding();
-
-    @RawField
-    void setObjectsReferenceMapEncoding(NonmovableArray<Byte> objectsReferenceMapEncoding);
-
-    @RawField
-    long getObjectsReferenceMapIndex();
-
-    @RawField
-    void setObjectsReferenceMapIndex(long objectsReferenceMapIndex);
-
-    @RawField
-    NonmovableArray<Integer> getDeoptimizationStartOffsets();
-
-    @RawField
-    void setDeoptimizationStartOffsets(NonmovableArray<Integer> deoptimizationStartOffsets);
-
-    @RawField
-    NonmovableArray<Byte> getDeoptimizationEncodings();
-
-    @RawField
-    void setDeoptimizationEncodings(NonmovableArray<Byte> deoptimizationEncodings);
-
-    @RawField
-    NonmovableObjectArray<Object> getDeoptimizationObjectConstants();
-
-    @RawField
-    void setDeoptimizationObjectConstants(NonmovableObjectArray<Object> deoptimizationObjectConstants);
 }
