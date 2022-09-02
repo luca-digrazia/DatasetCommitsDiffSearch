@@ -38,7 +38,7 @@ import org.graalvm.compiler.options.OptionType;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 
-public class DeadlockWatchdog implements Closeable {
+class DeadlockWatchdog implements Closeable {
 
     public static class Options {
         @Option(help = "The interval in minutes between watchdog checks (0 disables the watchdog)", type = OptionType.Expert)//

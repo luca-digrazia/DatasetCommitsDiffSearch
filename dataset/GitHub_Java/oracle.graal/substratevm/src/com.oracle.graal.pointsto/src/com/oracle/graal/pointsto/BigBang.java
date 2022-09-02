@@ -151,7 +151,7 @@ public abstract class BigBang {
         unknownTypeFlow = new UnknownTypeFlow();
 
         trackTypeFlowInputs = PointstoOptions.TrackInputFlows.getValue(options);
-        reportAnalysisStatistics = PointstoOptions.PrintPointsToStatistics.getValue(options);
+        reportAnalysisStatistics = PointstoOptions.ReportAnalysisStatistics.getValue(options);
         if (reportAnalysisStatistics) {
             PointsToStats.init(this);
         }
@@ -263,7 +263,6 @@ public abstract class BigBang {
         unsafeLoads = null;
         unsafeStores = null;
         unknownTypeFlow = null;
-        scannedObjects = null;
 
         ConstantObjectsProfiler.constantTypes.clear();
 

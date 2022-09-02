@@ -141,8 +141,6 @@ import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.graal.pointsto.reports.AnalysisReportsOptions;
 import com.oracle.graal.pointsto.reports.CallTreePrinter;
 import com.oracle.graal.pointsto.reports.ObjectTreePrinter;
-import com.oracle.graal.pointsto.reports.ReportUtils;
-import com.oracle.graal.pointsto.reports.StatisticsPrinter;
 import com.oracle.graal.pointsto.typestate.PointsToStats;
 import com.oracle.graal.pointsto.typestate.TypeState;
 import com.oracle.graal.pointsto.util.Timer;
@@ -571,30 +569,30 @@ public class NativeImageGenerator {
                     throw UserError.abort("Warning: no entry points found, i.e., no method annotated with @" + CEntryPoint.class.getSimpleName());
                 }
 
+                ImageHeapLayouter heapLayouter = ImageSingletons.lookup(ImageHeapLayouter.class);
+                heap = new NativeImageHeap(aUniverse, hUniverse, hMetaAccess, heapLayouter);
+
+                BeforeCompilationAccessImpl config = new BeforeCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap, debug, runtime);
+                featureHandler.forEachFeature(feature -> feature.beforeCompilation(config));
+
+                runtime.updateLazyState(hMetaAccess);
+
                 bigbang.getUnsupportedFeatures().report(bigbang);
-
-                recordMethodsWithStackValues();
-                recordRestrictHeapAccessCallees(aUniverse.getMethods());
-
-                /*
-                 * After this point, all TypeFlow (and therefore also TypeState) objects are
-                 * unreachable and can be garbage collected. This is important to keep the overall
-                 * memory footprint low. However, this also means we no longer have complete call
-                 * chain information. Only the summarized information stored in the
-                 * StaticAnalysisResult objects is available after this point.
-                 */
-                bigbang.cleanupAfterAnalysis();
             } catch (UnsupportedFeatureException ufe) {
                 throw FallbackFeature.reportAsFallback(ufe);
             }
 
-            ImageHeapLayouter heapLayouter = ImageSingletons.lookup(ImageHeapLayouter.class);
-            heap = new NativeImageHeap(aUniverse, hUniverse, hMetaAccess, heapLayouter);
+            recordMethodsWithStackValues();
+            recordRestrictHeapAccessCallees(aUniverse.getMethods());
 
-            BeforeCompilationAccessImpl beforeCompilationConfig = new BeforeCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap, debug, runtime);
-            featureHandler.forEachFeature(feature -> feature.beforeCompilation(beforeCompilationConfig));
-
-            runtime.updateLazyState(hMetaAccess);
+            /*
+             * After this point, all TypeFlow (and therefore also TypeState) objects are unreachable
+             * and can be garbage collected. This is important to keep the overall memory footprint
+             * low. However, this also means we no longer have complete call chain information. Only
+             * the summarized information stored in the StaticAnalysisResult objects is available
+             * after this point.
+             */
+            bigbang.cleanupAfterAnalysis();
 
             NativeImageCodeCache codeCache;
             CompileQueue compileQueue;
@@ -608,7 +606,7 @@ public class NativeImageGenerator {
 
                 codeCache = NativeImageCodeCacheFactory.get().newCodeCache(compileQueue, heap, loader.platform, tempDirectory());
                 codeCache.layoutConstants();
-                codeCache.layoutMethods(debug, imageName, bigbang, compilationExecutor);
+                codeCache.layoutMethods(debug, imageName);
 
                 AfterCompilationAccessImpl config = new AfterCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap, debug);
                 featureHandler.forEachFeature(feature -> feature.afterCompilation(config));
@@ -626,6 +624,7 @@ public class NativeImageGenerator {
                         // Finish building the model of the native image heap.
                         heap.addTrailingObjects();
 
+                        ImageHeapLayouter heapLayouter = ImageSingletons.lookup(ImageHeapLayouter.class);
                         heapLayouter.initialize();
                         heapLayouter.assignPartitionRelativeOffsets(heap);
 
@@ -770,20 +769,18 @@ public class NativeImageGenerator {
              * are reported or the analysis fails due to any other reasons.
              */
             if (bigbang != null) {
-                if (AnalysisReportsOptions.PrintAnalysisStatistics.getValue(options)) {
-                    StatisticsPrinter.print(bigbang, SubstrateOptions.Path.getValue(), ReportUtils.extractImageName(imageName));
-                }
-
                 if (AnalysisReportsOptions.PrintAnalysisCallTree.getValue(options)) {
-                    CallTreePrinter.print(bigbang, SubstrateOptions.Path.getValue(), ReportUtils.extractImageName(imageName));
+                    String reportName = imageName.substring(imageName.lastIndexOf("/") + 1);
+                    CallTreePrinter.print(bigbang, SubstrateOptions.Path.getValue(), reportName);
                 }
 
                 if (AnalysisReportsOptions.PrintImageObjectTree.getValue(options)) {
-                    ObjectTreePrinter.print(bigbang, SubstrateOptions.Path.getValue(), ReportUtils.extractImageName(imageName));
+                    String reportName = imageName.substring(imageName.lastIndexOf("/") + 1);
+                    ObjectTreePrinter.print(bigbang, SubstrateOptions.Path.getValue(), reportName);
                 }
 
-                if (PointstoOptions.PrintPointsToStatistics.getValue(options)) {
-                    PointsToStats.report(bigbang, ReportUtils.extractImageName(imageName));
+                if (PointstoOptions.ReportAnalysisStatistics.getValue(options)) {
+                    PointsToStats.report(bigbang, imageName.replace("images/", ""));
                 }
 
                 if (PointstoOptions.PrintSynchronizedAnalysis.getValue(options)) {
