@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,8 +24,12 @@
  */
 package com.oracle.objectfile;
 
+// Checkstyle: allow reflection
+
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -40,12 +46,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Consumer;
 import java.util.stream.StreamSupport;
 
+import org.graalvm.compiler.debug.DebugContext;
+
+import com.oracle.objectfile.debuginfo.DebugInfoProvider;
 import com.oracle.objectfile.elf.ELFObjectFile;
 import com.oracle.objectfile.macho.MachOObjectFile;
+import com.oracle.objectfile.pecoff.PECoffObjectFile;
 
 import sun.misc.Unsafe;
+import sun.nio.ch.DirectBuffer;
 
 /**
  * Abstract superclass for object files. An object file is a binary container for sections,
@@ -96,7 +108,8 @@ public abstract class ObjectFile {
 
     public enum Format {
         ELF,
-        MACH_O
+        MACH_O,
+        PECOFF
     }
 
     public abstract Format getFormat();
@@ -109,6 +122,13 @@ public abstract class ObjectFile {
      */
     public interface ValueEnum {
         long value();
+    }
+
+    private final int pageSize;
+
+    public ObjectFile(int pageSize) {
+        assert pageSize > 0 : "invalid page size";
+        this.pageSize = pageSize;
     }
 
     /*
@@ -160,6 +180,8 @@ public abstract class ObjectFile {
             return "Linux";
         } else if (osName.startsWith("Mac OS X")) {
             return "Mac OS X";
+        } else if (osName.startsWith("Windows")) {
+            return "Windows";
         } else {
             throw new IllegalStateException("unsupported OS: " + osName);
         }
@@ -175,7 +197,15 @@ public abstract class ObjectFile {
     }
 
     public static String getFilenameSuffix() {
-        return ".o";
+        switch (ObjectFile.getNativeFormat()) {
+            case ELF:
+            case MACH_O:
+                return ".o";
+            case PECOFF:
+                return ".obj";
+            default:
+                throw new AssertionError("unreachable");
+        }
     }
 
     public static Format getNativeFormat() {
@@ -184,28 +214,32 @@ public abstract class ObjectFile {
                 return Format.ELF;
             case "Mac OS X":
                 return Format.MACH_O;
+            case "Windows":
+                return Format.PECOFF;
             default:
                 throw new AssertionError("unreachable"); // we must handle any output of getHostOS()
         }
     }
 
-    private static ObjectFile getNativeObjectFile(boolean runtimeDebugInfoGeneration) {
+    private static ObjectFile getNativeObjectFile(int pageSize, boolean runtimeDebugInfoGeneration) {
         switch (ObjectFile.getNativeFormat()) {
             case ELF:
-                return new ELFObjectFile(runtimeDebugInfoGeneration);
+                return new ELFObjectFile(pageSize, runtimeDebugInfoGeneration);
             case MACH_O:
-                return new MachOObjectFile();
+                return new MachOObjectFile(pageSize);
+            case PECOFF:
+                return new PECoffObjectFile(pageSize);
             default:
                 throw new AssertionError("unreachable");
         }
     }
 
-    public static ObjectFile getNativeObjectFile() {
-        return getNativeObjectFile(false);
+    public static ObjectFile getNativeObjectFile(int pageSize) {
+        return getNativeObjectFile(pageSize, true);
     }
 
-    public static ObjectFile createRuntimeDebugInfo() {
-        return getNativeObjectFile(true);
+    public static ObjectFile createRuntimeDebugInfo(int pageSize) {
+        return getNativeObjectFile(pageSize, true);
     }
 
     /*
@@ -218,41 +252,105 @@ public abstract class ObjectFile {
          * The relocation's symbol provides an address whose absolute value (plus addend) supplies
          * the fixup bytes.
          */
-        DIRECT,
+        DIRECT_1,
+        DIRECT_2,
+        DIRECT_4,
+        DIRECT_8,
         /**
-         * The relocation's symbol provides high fixup bytes.
+         * The index of the object file section containing the relocation's symbol supplies the
+         * fixup bytes. (used in CodeView debug information)
          */
-        DIRECT_HI,
+        SECTION_2,
         /**
-         * The relocation's symbol provides low fixup bytes.
+         * The address of the object file section containing the relocation's symbol (plus addend)
+         * supplies the fixup bytes. (used in CodeView debug information)
          */
-        DIRECT_LO,
+        SECREL_4,
         /**
          * The relocation's symbol provides an address whose PC-relative value (plus addend)
          * supplies the fixup bytes.
          */
-        PC_RELATIVE,
-        /**
-         * The relocation's symbol is ignored; the load-time offset of the program (FIXME: or shared
-         * object), plus addend, supplies the fixup bytes.
-         */
-        PROGRAM_BASE {
+        PC_RELATIVE_1,
+        PC_RELATIVE_2,
+        PC_RELATIVE_4,
+        PC_RELATIVE_8,
+        AARCH64_R_MOVW_UABS_G0,
+        AARCH64_R_MOVW_UABS_G0_NC,
+        AARCH64_R_MOVW_UABS_G1,
+        AARCH64_R_MOVW_UABS_G1_NC,
+        AARCH64_R_MOVW_UABS_G2,
+        AARCH64_R_MOVW_UABS_G2_NC,
+        AARCH64_R_MOVW_UABS_G3,
+        AARCH64_R_AARCH64_ADR_PREL_PG_HI21,
+        AARCH64_R_AARCH64_ADD_ABS_LO12_NC,
+        AARCH64_R_LD_PREL_LO19,
+        AARCH64_R_GOT_LD_PREL19,
+        AARCH64_R_AARCH64_LDST128_ABS_LO12_NC,
+        AARCH64_R_AARCH64_LDST64_ABS_LO12_NC,
+        AARCH64_R_AARCH64_LDST32_ABS_LO12_NC,
+        AARCH64_R_AARCH64_LDST16_ABS_LO12_NC,
+        AARCH64_R_AARCH64_LDST8_ABS_LO12_NC;
 
-            @Override
-            public boolean usesSymbolValue() {
-                return false;
+        public static RelocationKind getDirect(int relocationSize) {
+            switch (relocationSize) {
+                case 1:
+                    return DIRECT_1;
+                case 2:
+                    return DIRECT_2;
+                case 4:
+                    return DIRECT_4;
+                case 8:
+                    return DIRECT_8;
+                default:
+                    return UNKNOWN;
             }
-        };
+        }
 
-        /**
-         * Generally, relocation records come with symbols whose value is used to compute the
-         * fixed-up bytes at the relocation site. In some cases, though, no such symbol is needed.
-         *
-         * @return Whether the value of any symbol attached to the relocation record affects the
-         *         fixed-up contents of the relocation site.
-         */
-        public boolean usesSymbolValue() {
-            return true;
+        public static RelocationKind getPCRelative(int relocationSize) {
+            switch (relocationSize) {
+                case 1:
+                    return PC_RELATIVE_1;
+                case 2:
+                    return PC_RELATIVE_2;
+                case 4:
+                    return PC_RELATIVE_4;
+                case 8:
+                    return PC_RELATIVE_8;
+                default:
+                    return UNKNOWN;
+            }
+        }
+
+        public static boolean isPCRelative(RelocationKind kind) {
+            switch (kind) {
+                case PC_RELATIVE_1:
+                case PC_RELATIVE_2:
+                case PC_RELATIVE_4:
+                case PC_RELATIVE_8:
+                    return true;
+            }
+            return false;
+        }
+
+        public static int getRelocationSize(RelocationKind kind) {
+            switch (kind) {
+                case DIRECT_1:
+                case PC_RELATIVE_1:
+                    return 1;
+                case DIRECT_2:
+                case PC_RELATIVE_2:
+                case SECTION_2:
+                    return 2;
+                case DIRECT_4:
+                case PC_RELATIVE_4:
+                case SECREL_4:
+                    return 4;
+                case DIRECT_8:
+                case PC_RELATIVE_8:
+                    return 8;
+            }
+            // other types should not be queried
+            throw new IllegalArgumentException("Invalid RelocationKind provided: " + kind);
         }
     }
 
@@ -261,13 +359,9 @@ public abstract class ObjectFile {
      */
     public interface RelocationMethod {
 
-        RelocationKind getKind();
-
         boolean canUseImplicitAddend();
 
         boolean canUseExplicitAddend();
-
-        int getRelocatedByteSize();
 
         /*
          * If we were implementing a linker, we'd have a method something like
@@ -283,10 +377,6 @@ public abstract class ObjectFile {
     public interface RelocationSiteInfo {
 
         long getOffset();
-
-        int getRelocatedByteSize();
-
-        RelocationKind getKind();
     }
 
     /**
@@ -317,7 +407,6 @@ public abstract class ObjectFile {
          * this is true of our native native image code.
          *
          * @param offset the offset into the section contents of the beginning of the fixed-up bytes
-         * @param length the length of byte sequence to be fixed up
          * @param bb the byte buffer representing the encoded section contents, at least as far as
          *            offset + length bytes
          * @param k the kind of fixup to be applied
@@ -325,9 +414,8 @@ public abstract class ObjectFile {
          *            bytes
          * @param useImplicitAddend whether the current bytes are to be used as an addend
          * @param explicitAddend a full-width addend, or null if useImplicitAddend is true
-         * @return the relocation record created (or found, if it exists already)
          */
-        RelocationRecord markRelocationSite(int offset, int length, ByteBuffer bb, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend);
+        void markRelocationSite(int offset, ByteBuffer bb, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend);
 
         /**
          * Force the creation of a relocation section/element for this section, and return it. This
@@ -358,7 +446,7 @@ public abstract class ObjectFile {
          * passed a buffer. It uses the byte array accessed by {@link #getContent} and
          * {@link #setContent}.
          */
-        RelocationRecord markRelocationSite(int offset, int length, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend);
+        void markRelocationSite(int offset, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend);
     }
 
     public interface NobitsSectionImpl extends ElementImpl {
@@ -766,17 +854,12 @@ public abstract class ObjectFile {
         // are we the first section in any segment? are we in any explicit segment at all?
         boolean firstSection = false;
         boolean inAnySegment = false;
-        @SuppressWarnings("unused")
-        boolean predElementIsInAnySegment = false;
         for (List<Element> l : el.getOwner().getSegments()) {
             if (l.get(0) == el) {
                 firstSection = true;
             }
             if (l.contains(el)) {
                 inAnySegment = true;
-            }
-            if (l.contains(predElement)) {
-                predElementIsInAnySegment = true;
             }
         }
 
@@ -1049,6 +1132,17 @@ public abstract class ObjectFile {
         // flag compatibility
     }
 
+    /**
+     * API method provided to allow a native image generator to provide details of types, code and
+     * heap data inserted into a native image.
+     *
+     * @param debugInfoProvider an implementation of the provider interface that communicates
+     *            details of the relevant types, code and heap data.
+     */
+    public void installDebugInfo(@SuppressWarnings("unused") DebugInfoProvider debugInfoProvider) {
+        // do nothing by default
+    }
+
     protected static Iterable<LayoutDecision> allDecisions(final Map<Element, LayoutDecisionMap> decisions) {
         return () -> StreamSupport.stream(decisions.values().spliterator(), false)
                         .flatMap(layoutDecisionMap -> StreamSupport.stream(layoutDecisionMap.spliterator(), false)).iterator();
@@ -1171,15 +1265,52 @@ public abstract class ObjectFile {
     private final Map<Element, List<BuildDependency>> dependenciesByDependingElement = new IdentityHashMap<>();
     private final Map<Element, List<BuildDependency>> dependenciesByDependedOnElement = new IdentityHashMap<>();
 
+    @SuppressWarnings("try")
     public final void write(FileChannel outputChannel) {
         List<Element> sortedObjectFileElements = new ArrayList<>();
         int totalSize = bake(sortedObjectFileElements);
         try {
             ByteBuffer buffer = outputChannel.map(MapMode.READ_WRITE, 0, totalSize);
-            writeBuffer(sortedObjectFileElements, buffer);
-            outputChannel.close();
-        } catch (IOException e) {
+            try {
+                writeBuffer(sortedObjectFileElements, buffer);
+            } finally {
+                cleanBuffer(buffer); // unmap immediately
+            }
+        } catch (IOException | ReflectiveOperationException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private static void cleanBuffer(ByteBuffer buffer) throws ReflectiveOperationException {
+        try {
+            /*
+             * Trying to use sun.misc.Unsafe.invokeCleaner as the first approach restores forward
+             * compatibility to Java > 8. If it fails we know we are on Java 8 where we can use a
+             * non-forward compatible way of forcing to clean the ByteBuffer.
+             */
+            Method invokeCleanerMethod = Unsafe.class.getMethod("invokeCleaner", ByteBuffer.class);
+            invokeCleanerMethod.invoke(UNSAFE, buffer);
+        } catch (NoSuchMethodException e) {
+            /* On Java 8 we have to use the non-forward compatible approach. */
+            ((DirectBuffer) buffer).cleaner().clean();
+        }
+    }
+
+    private static final Unsafe UNSAFE = initUnsafe();
+
+    @SuppressWarnings("restriction")
+    private static Unsafe initUnsafe() {
+        try {
+            return Unsafe.getUnsafe();
+        } catch (SecurityException se) {
+            Field theUnsafe = null;
+            try {
+                theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                return (Unsafe) theUnsafe.get(null);
+            } catch (ReflectiveOperationException e) {
+                throw new RuntimeException("exception while trying to get Unsafe", e);
+            }
         }
     }
 
@@ -1565,12 +1696,19 @@ public abstract class ObjectFile {
         return decisionsByElement;
     }
 
+    /**
+     * See {@code org.graalvm.compiler.serviceprovider.BufferUtil}.
+     */
+    private static Buffer asBaseBuffer(Buffer obj) {
+        return obj;
+    }
+
     public void writeBuffer(List<Element> sortedObjectFileElements, ByteBuffer out) {
         /* Emit each one! */
         for (Element e : sortedObjectFileElements) {
             int off = (int) decisionsTaken.get(e).getDecision(LayoutDecision.Kind.OFFSET).getValue();
             assert off != Integer.MAX_VALUE; // not allowed any more -- this was a broken approach
-            out.position(off);
+            asBaseBuffer(out).position(off);
             int expectedSize = (int) decisionsTaken.get(e).getDecidedValue(LayoutDecision.Kind.SIZE);
             byte[] content = (byte[]) decisionsTaken.get(e).getDecidedValue(LayoutDecision.Kind.CONTENT);
             out.put(content);
@@ -1579,42 +1717,14 @@ public abstract class ObjectFile {
             if (emittedSize != expectedSize) {
                 throw new IllegalStateException("For element " + e + ", expected size " + expectedSize + " but emitted size " + emittedSize);
             }
+
         }
     }
 
     protected abstract int getMinimumFileSize();
 
-    private static Unsafe getUnsafe() {
-        try {
-            return Unsafe.getUnsafe();
-        } catch (SecurityException e) {
-        }
-        try {
-            Field theUnsafeInstance = Unsafe.class.getDeclaredField("theUnsafe");
-            theUnsafeInstance.setAccessible(true);
-            return (Unsafe) theUnsafeInstance.get(Unsafe.class);
-        } catch (Exception e) {
-            throw new RuntimeException("exception while trying to get Unsafe.theUnsafe via reflection:", e);
-        }
-    }
-
-    private static int hostPageSize = getHostPageSize();
-
-    public static int getHostPageSize() {
-        try {
-            return getUnsafe().pageSize();
-        } catch (IllegalArgumentException e) {
-            return 4096;
-        }
-    }
-
-    private int pageSize = hostPageSize;
-
-    public void setPageSize(int pageSize) {
-        this.pageSize = pageSize;
-    }
-
     public int getPageSize() {
+        assert pageSize > 0 : "must be initialized";
         return pageSize;
     }
 
@@ -1687,19 +1797,13 @@ public abstract class ObjectFile {
         long getDefinedAbsoluteValue();
 
         boolean isFunction();
+
+        boolean isGlobal();
     }
 
-    public abstract Symbol createDefinedSymbol(String name, Element baseSection, int position, int size, boolean isCode, boolean isGlobal);
-
-    public Symbol createDefinedDataSymbol(String name, Element baseSection, int position) {
-        return createDefinedSymbol(name, baseSection, position, getWordSizeInBytes(), false, true);
-    }
+    public abstract Symbol createDefinedSymbol(String name, Element baseSection, long position, int size, boolean isCode, boolean isGlobal);
 
     public abstract Symbol createUndefinedSymbol(String name, int size, boolean isCode);
-
-    public Symbol createUndefinedSymbol(String name, boolean isCode) {
-        return createUndefinedSymbol(name, 0, isCode);
-    }
 
     protected abstract SymbolTable createSymbolTable();
 
@@ -1711,6 +1815,52 @@ public abstract class ObjectFile {
             return t;
         } else {
             return createSymbolTable();
+        }
+    }
+
+    /**
+     * Temporary storage for a debug context installed in a nested scope under a call. to
+     * {@link #withDebugContext}
+     */
+    private DebugContext debugContext = null;
+
+    /**
+     * Allows a task to be executed with a debug context in a named subscope bound to the object
+     * file and accessible to code executed during the lifetime of the task. Invoked code may obtain
+     * access to the debug context using method {@link #debugContext}.
+     *
+     * @param context a context to be bound to the object file for the duration of the task
+     *            execution.
+     * @param scopeName a name to be used to define a subscope current while the task is being
+     *            executed.
+     * @param task a task to be executed while the context is bound to the object file.
+     */
+    @SuppressWarnings("try")
+    public void withDebugContext(DebugContext context, String scopeName, Runnable task) {
+        try (DebugContext.Scope s = context.scope(scopeName)) {
+            this.debugContext = context;
+            task.run();
+        } catch (Throwable e) {
+            throw debugContext.handle(e);
+        } finally {
+            debugContext = null;
+        }
+    }
+
+    /**
+     * Allows a consumer to retrieve the debug context currently bound to this object file. This
+     * method must only called underneath an invocation of method {@link #withDebugContext}.
+     *
+     * @param scopeName a name to be used to define a subscope current while the consumer is active.
+     * @param action an action parameterised by the debug context.
+     */
+    @SuppressWarnings("try")
+    public void debugContext(String scopeName, Consumer<DebugContext> action) {
+        assert debugContext != null;
+        try (DebugContext.Scope s = debugContext.scope(scopeName)) {
+            action.accept(debugContext);
+        } catch (Throwable e) {
+            throw debugContext.handle(e);
         }
     }
 }
