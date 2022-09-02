@@ -51,7 +51,6 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
-import org.graalvm.compiler.nodes.extended.LoadHubOrNullNode;
 import org.graalvm.compiler.nodes.extended.RawLoadNode;
 import org.graalvm.compiler.nodes.extended.StoreHubNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
@@ -186,6 +185,14 @@ public class HotSpotReplacementsUtil {
     @Fold
     public static boolean verifyOops(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.verifyOops;
+    }
+
+    /**
+     * @see GraalHotSpotVMConfig#doingUnsafeAccessOffset
+     */
+    @Fold
+    public static int doingUnsafeAccessOffset(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.doingUnsafeAccessOffset;
     }
 
     public static final LocationIdentity EXCEPTION_OOP_LOCATION = NamedLocationIdentity.mutable("ExceptionOop");
@@ -769,9 +776,6 @@ public class HotSpotReplacementsUtil {
 
     @NodeIntrinsic(value = LoadHubNode.class)
     public static native KlassPointer loadHubIntrinsic(Object object);
-
-    @NodeIntrinsic(value = LoadHubOrNullNode.class)
-    public static native KlassPointer loadHubOrNullIntrinsic(Object object);
 
     public static final LocationIdentity CLASS_STATE_LOCATION = NamedLocationIdentity.mutable("ClassState");
 
