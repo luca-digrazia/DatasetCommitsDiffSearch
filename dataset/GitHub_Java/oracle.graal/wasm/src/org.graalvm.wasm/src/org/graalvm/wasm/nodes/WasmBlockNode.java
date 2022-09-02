@@ -236,6 +236,7 @@ import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmFunction;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
+import org.graalvm.wasm.constants.TargetOffset;
 import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.exception.WasmTrap;
 import org.graalvm.wasm.memory.WasmMemory;
@@ -385,7 +386,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     intConstantOffset += block.intConstantLength();
                     longConstantOffset += block.longConstantLength();
                     branchTableOffset += block.branchTableLength();
-                    profileOffset += block.profileCount();
                     break;
                 }
                 case LOOP: {
@@ -405,12 +405,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     // "shallower" than the current loop block
                     // (break out of the loop and even further).
                     trace("loop ENTER");
-                    int unwindCounter = ((Integer) loopNode.execute(frame));
+                    int unwindCounter = ((TargetOffset) loopNode.execute(frame)).value;
                     trace("loop EXIT, target = %d", unwindCounter);
                     if (unwindCounter > 0) {
                         return unwindCounter - 1;
                     }
-                    // The unwind counter cannot be 0 at this point.
+                    // The unwind counter cannot be 0 at this point, because that corresponds to
+                    // CONTINUE_LOOP_STATUS.
                     assert unwindCounter == -1 : "Unwind counter after loop exit: " + unwindCounter;
 
                     childrenOffset++;
@@ -420,7 +421,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     intConstantOffset += loopBody.intConstantLength();
                     longConstantOffset += loopBody.longConstantLength();
                     branchTableOffset += loopBody.branchTableLength();
-                    profileOffset += loopBody.profileCount();
                     break;
                 }
                 case IF: {
@@ -439,7 +439,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     intConstantOffset += ifNode.intConstantLength();
                     longConstantOffset += ifNode.longConstantLength();
                     branchTableOffset += ifNode.branchTableLength();
-                    profileOffset += ifNode.profileCount();
                     break;
                 }
                 case ELSE:
@@ -2444,8 +2443,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             long value = pop(frame, stackPointer + i - 1);
             push(frame, continuationStackPointer + i, value);
         }
-        // This check will be removed in the next PR which makes continuationStackPointer always
-        // constants by improving the BR_TABLE implementation.
         if (CompilerDirectives.isPartialEvaluationConstant(continuationStackPointer)) {
             for (int i = continuationStackPointer + returnLength; i < stackPointer; ++i) {
                 pop(frame, i);
@@ -2454,8 +2451,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @Override
-    public Object initialLoopStatus() {
-        return 0;
+    public Object continueLoopStatus() {
+        return TargetOffset.ZERO;
+    }
+
+    public boolean shouldContinue(Object value) {
+        return ((TargetOffset) value).value == 0;
     }
 
     @Override
@@ -2464,8 +2465,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @Override
-    public Integer executeRepeatingWithValue(VirtualFrame frame) {
-        return execute(contextReference().get(), frame);
+    public TargetOffset executeRepeatingWithValue(VirtualFrame frame) {
+        return TargetOffset.get(execute(contextReference().get(), frame));
     }
 
     @Override

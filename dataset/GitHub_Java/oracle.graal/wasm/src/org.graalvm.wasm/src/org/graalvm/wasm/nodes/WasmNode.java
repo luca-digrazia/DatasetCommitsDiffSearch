@@ -45,11 +45,12 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import org.graalvm.wasm.WasmCodeEntry;
 import org.graalvm.wasm.WasmContext;
-import org.graalvm.wasm.WasmInstance;
+import org.graalvm.wasm.WasmModule;
+import org.graalvm.wasm.constants.TargetOffset;
 
 public abstract class WasmNode extends Node implements WasmNodeInterface {
     // TODO: We should not cache the module in the nodes, only the symbol table.
-    private final WasmInstance wasmInstance;
+    private final WasmModule wasmModule;
     private final WasmCodeEntry codeEntry;
 
     /**
@@ -58,8 +59,8 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
      */
     @CompilationFinal private int byteLength;
 
-    public WasmNode(WasmInstance wasmInstance, WasmCodeEntry codeEntry, int byteLength) {
-        this.wasmInstance = wasmInstance;
+    public WasmNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int byteLength) {
+        this.wasmModule = wasmModule;
         this.codeEntry = codeEntry;
         this.byteLength = byteLength;
     }
@@ -101,8 +102,8 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
         return codeEntry;
     }
 
-    public final WasmInstance module() {
-        return wasmInstance;
+    public final WasmModule module() {
+        return wasmModule;
     }
 
     int byteLength() {
