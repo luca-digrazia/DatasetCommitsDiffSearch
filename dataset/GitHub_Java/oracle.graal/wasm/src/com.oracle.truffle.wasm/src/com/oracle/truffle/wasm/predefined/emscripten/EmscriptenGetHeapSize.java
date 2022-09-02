@@ -47,7 +47,7 @@ public class EmscriptenGetHeapSize extends WasmPredefinedRootNode {
 
         logger.finest("EmscriptenGetHeapSize EXECUTE");
 
-        return (int) memory.byteSize();
+        return (int) memory.pageSize() * WasmMemory.PAGE_SIZE;
     }
 
     @Override
