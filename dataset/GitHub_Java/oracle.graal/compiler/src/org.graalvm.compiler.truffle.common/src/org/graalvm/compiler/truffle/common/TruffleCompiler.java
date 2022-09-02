@@ -79,10 +79,11 @@ public interface TruffleCompiler {
      *            openCompilation} to be used for the compilation
      * @param options option values relevant to compilation
      * @param inlining a guide for Truffle level inlining to be performed during compilation
-     * @param task an object that holds information about the compilation process itself (e.g. which tier, was the compilation canceled)
+     * @param task an object that must be periodically queried during compilation to see if the
+     *            compilation is cancelled
      * @param listener a listener receiving events about compilation success or failure
      */
-    void doCompile(TruffleDebugContext debug, TruffleCompilation compilation, Map<String, Object> options, TruffleMetaAccessProvider inlining, TruffleCompilationTask task,
+    void doCompile(TruffleDebugContext debug, TruffleCompilation compilation, Map<String, Object> options, TruffleInliningPlan inlining, TruffleCompilationTask task,
                     TruffleCompilerListener listener);
 
     /**

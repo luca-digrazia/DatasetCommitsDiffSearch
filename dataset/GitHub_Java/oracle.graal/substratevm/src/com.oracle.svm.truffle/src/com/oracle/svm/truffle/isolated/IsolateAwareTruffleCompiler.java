@@ -235,9 +235,7 @@ public class IsolateAwareTruffleCompiler implements SubstrateTruffleCompiler {
 
     @Override
     public void teardown() {
-        if (SubstrateOptions.shouldCompileInIsolates()) {
-            tearDownIsolateOnShutdown();
-        }
+        tearDownIsolateOnShutdown();
     }
 
     @Override
