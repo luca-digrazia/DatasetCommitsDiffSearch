@@ -24,20 +24,18 @@
  */
 package org.graalvm.compiler.nodes.debug;
 
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_IGNORED;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_IGNORED;
+import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_0;
+import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
 
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
+import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 
-/**
- * Compiler directives node that disabled strip mining of enclosing loops.
- */
-@NodeInfo(cycles = CYCLES_IGNORED, size = SIZE_IGNORED, cyclesRationale = "Directives node", sizeRationale = "Directives node")
+@NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 public final class NeverStripMineNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<NeverStripMineNode> TYPE = NodeClass.create(NeverStripMineNode.class);
@@ -50,6 +48,13 @@ public final class NeverStripMineNode extends FixedWithNextNode implements LIRLo
     public NeverStripMineNode() {
         super(TYPE, StampFactory.forVoid());
         this.unique = new Unique();
+    }
+
+    /**
+     * Used by MacroSubstitution.
+     */
+    public NeverStripMineNode(@SuppressWarnings("unused") Invoke invoke) {
+        this();
     }
 
     @Override

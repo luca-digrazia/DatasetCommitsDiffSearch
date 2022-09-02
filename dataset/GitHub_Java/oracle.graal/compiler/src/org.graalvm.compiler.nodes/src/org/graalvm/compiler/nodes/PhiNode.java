@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,8 +33,8 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
-import org.graalvm.compiler.graph.spi.Canonicalizable;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.Canonicalizable;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
@@ -132,15 +134,27 @@ public abstract class PhiNode extends FloatingNode implements Canonicalizable {
                 }
                 str.append(valueAt(i) == null ? "-" : valueAt(i).toString(Verbosity.Id));
             }
+            String description = valueDescription();
+            if (description.length() > 0) {
+                str.append(", ").append(description);
+            }
             return super.toString(Verbosity.Name) + "(" + str + ")";
         } else {
             return super.toString(verbosity);
         }
     }
 
+    /**
+     * String describing the kind of value this Phi merges. Used by {@link #toString(Verbosity)} and
+     * dumping.
+     */
+    protected String valueDescription() {
+        return "";
+    }
+
     public void addInput(ValueNode x) {
         assert !(x instanceof ValuePhiNode) || ((ValuePhiNode) x).merge() instanceof LoopBeginNode || ((ValuePhiNode) x).merge() != this.merge();
-        assert !(this instanceof ValuePhiNode) || x.stamp().isCompatible(stamp());
+        assert !(this instanceof ValuePhiNode) || x.stamp(NodeView.DEFAULT).isCompatible(stamp(NodeView.DEFAULT));
         values().add(x);
     }
 
@@ -192,9 +206,7 @@ public abstract class PhiNode extends FloatingNode implements Canonicalizable {
 
     @Override
     public ValueNode canonical(CanonicalizerTool tool) {
-
         if (isLoopPhi()) {
-
             int valueCount = valueCount();
             assert valueCount >= 2;
             int i;
@@ -233,4 +245,27 @@ public abstract class PhiNode extends FloatingNode implements Canonicalizable {
     public boolean isLoopPhi() {
         return merge() instanceof LoopBeginNode;
     }
+
+    /**
+     * @return {@code true} if this node's only usages are the node itself (only possible for
+     *         loops).
+     */
+    public boolean isDegenerated() {
+        for (Node use : usages()) {
+            if (use != this) {
+                return false;
+            }
+        }
+        assert isLoopPhi();
+        return true;
+    }
+
+    public abstract ProxyNode createProxyFor(LoopExitNode lex);
+
+    /**
+     * Create a phi of the same kind on the given merge.
+     *
+     * @param newMerge the merge to use for the newly created phi
+     */
+    public abstract PhiNode duplicateOn(AbstractMergeNode newMerge);
 }

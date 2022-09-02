@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,21 +24,21 @@
  */
 package org.graalvm.compiler.nodes;
 
+import java.util.Map;
+
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.spi.ArrayLengthProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
-import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.util.CollectionsUtil;
 
 /**
  * Value {@link PhiNode}s merge data flow values at control flow merges.
  */
-@NodeInfo(nameTemplate = "Phi({i#values})")
-public class ValuePhiNode extends PhiNode implements ArrayLengthProvider {
+@NodeInfo(nameTemplate = "Phi({i#values}, {p#valueDescription})")
+public class ValuePhiNode extends PhiNode {
 
     public static final NodeClass<ValuePhiNode> TYPE = NodeClass.create(ValuePhiNode.class);
     @Input protected NodeInputList<ValueNode> values;
@@ -78,39 +80,41 @@ public class ValuePhiNode extends PhiNode implements ArrayLengthProvider {
     }
 
     @Override
-    public ValueNode length() {
-        if (merge() instanceof LoopBeginNode) {
-            return null;
-        }
-        ValueNode length = null;
-        for (ValueNode input : values()) {
-            ValueNode l = GraphUtil.arrayLength(input);
-            if (l == null) {
-                return null;
-            }
-            if (length == null) {
-                length = l;
-            } else if (length != l) {
-                return null;
-            }
-        }
-        return length;
-    }
-
-    @Override
     public boolean verify() {
         Stamp s = null;
         for (ValueNode input : values()) {
             assert input != null;
             if (s == null) {
-                s = input.stamp();
+                s = input.stamp(NodeView.DEFAULT);
             } else {
-                if (!s.isCompatible(input.stamp())) {
+                if (!s.isCompatible(input.stamp(NodeView.DEFAULT))) {
                     fail("Phi Input Stamps are not compatible. Phi:%s inputs:%s", this,
-                                    CollectionsUtil.mapAndJoin(values(), x -> x.toString() + ":" + x.stamp(), ", "));
+                                    CollectionsUtil.mapAndJoin(values(), x -> x.toString() + ":" + x.stamp(NodeView.DEFAULT), ", "));
                 }
             }
         }
         return super.verify();
+    }
+
+    @Override
+    protected String valueDescription() {
+        return stamp(NodeView.DEFAULT).unrestricted().toString();
+    }
+
+    @Override
+    public Map<Object, Object> getDebugProperties(Map<Object, Object> map) {
+        Map<Object, Object> properties = super.getDebugProperties(map);
+        properties.put("valueDescription", valueDescription());
+        return properties;
+    }
+
+    @Override
+    public PhiNode duplicateOn(AbstractMergeNode newMerge) {
+        return graph().addWithoutUnique(new ValuePhiNode(stamp(NodeView.DEFAULT), newMerge));
+    }
+
+    @Override
+    public ProxyNode createProxyFor(LoopExitNode lex) {
+        return graph().addWithoutUnique(new ValueProxyNode(this, lex));
     }
 }

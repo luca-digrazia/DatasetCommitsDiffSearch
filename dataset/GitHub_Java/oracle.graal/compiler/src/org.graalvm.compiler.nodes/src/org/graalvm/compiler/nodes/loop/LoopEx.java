@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,6 @@ import java.util.Queue;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
@@ -52,9 +51,11 @@ import org.graalvm.compiler.nodes.FullInfopointNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
+import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode;
+import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
@@ -71,8 +72,10 @@ import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.debug.ControlFlowAnchored;
+import org.graalvm.compiler.nodes.debug.NeverStripMineNode;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.loop.InductionVariable.Direction;
+import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
 public class LoopEx {
@@ -111,6 +114,19 @@ public class LoopEx {
     public void invalidateFragments() {
         inside = null;
         whole = null;
+    }
+
+    public void invalidateFragmentsAndIVs() {
+        inside = null;
+        whole = null;
+        /*
+         * IVs might contain dead nodes for inverted loops for prev iterations. We cannot limit this
+         * to inverted loops only, since e.g. unrolling can create situations where IVs are still
+         * inverted form but the loop body is not since there are no fixed body nodes any more, thus
+         * the condition is in a head counted form but the IVs are in inverted (next iteration)
+         * form.
+         */
+        ivs = null;
     }
 
     @SuppressWarnings("unused")
@@ -292,13 +308,13 @@ public class LoopEx {
             if (negated) {
                 condition = condition.negate();
             }
-            boolean oneOff = false;
+            boolean isLimitIncluded = false;
             boolean unsigned = false;
             switch (condition) {
                 case EQ:
                     if (iv.initNode() == limit) {
                         // allow "single iteration" case
-                        oneOff = true;
+                        isLimitIncluded = true;
                     } else {
                         return false;
                     }
@@ -331,7 +347,7 @@ public class LoopEx {
                 case BE:
                     unsigned = true; // fall through
                 case LE:
-                    oneOff = true;
+                    isLimitIncluded = true;
                     if (iv.direction() != Direction.Up) {
                         return false;
                     }
@@ -346,7 +362,7 @@ public class LoopEx {
                 case AE:
                     unsigned = true; // fall through
                 case GE:
-                    oneOff = true;
+                    isLimitIncluded = true;
                     if (iv.direction() != Direction.Down) {
                         return false;
                     }
@@ -361,13 +377,13 @@ public class LoopEx {
                 default:
                     throw GraalError.shouldNotReachHere(condition.toString());
             }
-            counted = new CountedLoopInfo(this, iv, ifNode, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor(), unsigned);
+            counted = new CountedLoopInfo(this, iv, ifNode, limit, isLimitIncluded, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor(), unsigned);
             return true;
         }
         return false;
     }
 
-    private boolean isCfgLoopExit(AbstractBeginNode begin) {
+    public boolean isCfgLoopExit(AbstractBeginNode begin) {
         Block block = data.getCFG().blockFor(begin);
         return loop.getDepth() > block.getLoopDepth() || loop.isNaturalExit(block);
     }
@@ -402,7 +418,7 @@ public class LoopEx {
 
     public EconomicMap<Node, InductionVariable> getInductionVariables() {
         if (ivs == null) {
-            ivs = findInductionVariables(this);
+            ivs = findInductionVariables();
         }
         return ivs;
     }
@@ -411,24 +427,23 @@ public class LoopEx {
      * Collect all the basic induction variables for the loop and the find any induction variables
      * which are derived from the basic ones.
      *
-     * @param loop
      * @return a map from node to induction variable
      */
-    private static EconomicMap<Node, InductionVariable> findInductionVariables(LoopEx loop) {
-        EconomicMap<Node, InductionVariable> ivs = EconomicMap.create(Equivalence.IDENTITY);
+    private EconomicMap<Node, InductionVariable> findInductionVariables() {
+        EconomicMap<Node, InductionVariable> currentIvs = EconomicMap.create(Equivalence.IDENTITY);
 
         Queue<InductionVariable> scanQueue = new LinkedList<>();
-        LoopBeginNode loopBegin = loop.loopBegin();
+        LoopBeginNode loopBegin = this.loopBegin();
         AbstractEndNode forwardEnd = loopBegin.forwardEnd();
         for (PhiNode phi : loopBegin.valuePhis()) {
             ValueNode backValue = phi.singleBackValueOrThis();
             if (backValue == phi) {
                 continue;
             }
-            ValueNode stride = addSub(loop, backValue, phi);
+            ValueNode stride = addSub(this, backValue, phi);
             if (stride != null) {
-                BasicInductionVariable biv = new BasicInductionVariable(loop, (ValuePhiNode) phi, phi.valueAt(forwardEnd), stride, (BinaryArithmeticNode<?>) backValue);
-                ivs.put(phi, biv);
+                BasicInductionVariable biv = new BasicInductionVariable(this, (ValuePhiNode) phi, phi.valueAt(forwardEnd), stride, (BinaryArithmeticNode<?>) backValue);
+                currentIvs.put(phi, biv);
                 scanQueue.add(biv);
             }
         }
@@ -437,7 +452,7 @@ public class LoopEx {
             InductionVariable baseIv = scanQueue.remove();
             ValueNode baseIvNode = baseIv.valueNode();
             for (ValueNode op : baseIvNode.usages().filter(ValueNode.class)) {
-                if (loop.isOutsideLoop(op)) {
+                if (this.isOutsideLoop(op)) {
                     continue;
                 }
                 if (op.hasExactlyOneUsage() && op.usages().first() == baseIvNode) {
@@ -448,14 +463,14 @@ public class LoopEx {
                     continue;
                 }
                 InductionVariable iv = null;
-                ValueNode offset = addSub(loop, op, baseIvNode);
+                ValueNode offset = addSub(this, op, baseIvNode);
                 ValueNode scale;
                 if (offset != null) {
-                    iv = new DerivedOffsetInductionVariable(loop, baseIv, offset, (BinaryArithmeticNode<?>) op);
+                    iv = new DerivedOffsetInductionVariable(this, baseIv, offset, (BinaryArithmeticNode<?>) op);
                 } else if (op instanceof NegateNode) {
-                    iv = new DerivedScaledInductionVariable(loop, baseIv, (NegateNode) op);
-                } else if ((scale = mul(loop, op, baseIvNode)) != null) {
-                    iv = new DerivedScaledInductionVariable(loop, baseIv, scale, op);
+                    iv = new DerivedScaledInductionVariable(this, baseIv, (NegateNode) op);
+                } else if ((scale = mul(this, op, baseIvNode)) != null) {
+                    iv = new DerivedScaledInductionVariable(this, baseIv, scale, op);
                 } else {
                     boolean isValidConvert = op instanceof PiNode || op instanceof SignExtendNode;
                     if (!isValidConvert && op instanceof ZeroExtendNode) {
@@ -464,21 +479,21 @@ public class LoopEx {
                     }
                     if (!isValidConvert && op instanceof NarrowNode) {
                         NarrowNode narrow = (NarrowNode) op;
-                        isValidConvert = NumUtil.isSignedNbit(narrow.getResultBits(), ((IntegerStamp) narrow.getValue().stamp(NodeView.DEFAULT)).upMask());
+                        isValidConvert = narrow.isLossless();
                     }
 
                     if (isValidConvert) {
-                        iv = new DerivedConvertedInductionVariable(loop, baseIv, op.stamp(NodeView.DEFAULT), op);
+                        iv = new DerivedConvertedInductionVariable(this, baseIv, op.stamp(NodeView.DEFAULT), op);
                     }
                 }
 
                 if (iv != null) {
-                    ivs.put(op, iv);
+                    currentIvs.put(op, iv);
                     scanQueue.offer(iv);
                 }
             }
         }
-        return ivs;
+        return currentIvs;
     }
 
     private static ValueNode addSub(LoopEx loop, ValueNode op, ValueNode base) {
@@ -527,16 +542,53 @@ public class LoopEx {
      */
     public boolean canDuplicateLoop() {
         for (Node node : inside().nodes()) {
+            /*
+             * Control flow anchored nodes must not be duplicated.
+             */
             if (node instanceof ControlFlowAnchored) {
                 return false;
             }
             if (node instanceof FrameState) {
                 FrameState frameState = (FrameState) node;
+                /*
+                 * Exception handling frame states can cause problems when they are duplicated and
+                 * one needs to create a framestate at the duplication merge.
+                 */
                 if (frameState.isExceptionHandlingBCI()) {
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    public boolean canStripMine() {
+        for (Node node : inside().nodes()) {
+            if (node instanceof NeverStripMineNode) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Remove loop proxies that became obsolete over time, i.e., they proxy a value that already
+     * flowed out of a loop and dominates the loop now.
+     */
+    public static void removeObsoleteProxies(StructuredGraph graph, CoreProviders context) {
+        LoopsData loopsData = context.getLoopsDataProvider().getLoopsData(graph);
+        for (LoopEx loop : loopsData.loops()) {
+            removeObsoleteProxiesForLoop(loop);
+        }
+    }
+
+    public static void removeObsoleteProxiesForLoop(LoopEx loop) {
+        for (LoopExitNode lex : loop.loopBegin().loopExits()) {
+            for (ProxyNode proxy : lex.proxies().snapshot()) {
+                if (loop.isOutsideLoop(proxy.value())) {
+                    proxy.replaceAtUsagesAndDelete(proxy.getOriginalNode());
+                }
+            }
+        }
     }
 }
