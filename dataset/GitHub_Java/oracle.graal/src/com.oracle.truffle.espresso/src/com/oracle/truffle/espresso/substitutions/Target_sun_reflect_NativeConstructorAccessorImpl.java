@@ -18,7 +18,16 @@ public class Target_sun_reflect_NativeConstructorAccessorImpl {
         if (klass.isArray() || klass.isPrimitive() || klass.isInterface() || klass.isAbstract()) {
             throw meta.throwEx(InstantiationException.class);
         }
-        Method reflectedMethod = Method.getHostReflectiveConstructorRoot(constructor);
+        StaticObject curMethod = constructor;
+
+        Method reflectedMethod = null;
+        while (reflectedMethod == null) {
+            reflectedMethod = (Method) curMethod.getHiddenField(meta.HIDDEN_CONSTRUCTOR_KEY);
+            if (reflectedMethod == null) {
+                curMethod = (StaticObject) meta.Constructor_root.get(curMethod);
+            }
+        }
+
         StaticObject instance = klass.allocateInstance();
         StaticObject parameterTypes = (StaticObject) meta.Constructor_parameterTypes.get(constructor);
         Target_sun_reflect_NativeMethodAccessorImpl.callMethodReflectively(meta, instance, args0, reflectedMethod, klass, parameterTypes);

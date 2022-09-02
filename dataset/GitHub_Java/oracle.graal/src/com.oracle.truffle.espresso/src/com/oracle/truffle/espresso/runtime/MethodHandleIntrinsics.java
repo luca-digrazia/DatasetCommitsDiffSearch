@@ -27,11 +27,9 @@ import java.util.function.Function;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.EspressoBaseNode;
 
 public final class MethodHandleIntrinsics implements ContextAccess {
@@ -53,37 +51,6 @@ public final class MethodHandleIntrinsics implements ContextAccess {
 
     public static int firstStaticSigPoly = PolySigIntrinsics.LinkToVirtual.value;
     public static int lastSigPoly = PolySigIntrinsics.LinkToInterface.value;
-
-    public static boolean isMethodHandleIntrinsic(Method m, Meta meta) {
-        if (m.getDeclaringKlass() == meta.MethodHandle) {
-            PolySigIntrinsics id = getId(m);
-            return (id != PolySigIntrinsics.None && id != PolySigIntrinsics.InvokeGeneric);
-        }
-        return false;
-    }
-
-    private static PolySigIntrinsics getId(Method m) {
-        Symbol<Name> name = m.getName();
-        if (name == Name.invoke || name == Name.invokeExact) {
-            return PolySigIntrinsics.InvokeGeneric;
-        }
-        if (name == Name.linkToStatic) {
-            return PolySigIntrinsics.LinkToStatic;
-        }
-        if (name == Name.linkToVirtual) {
-            return PolySigIntrinsics.LinkToVirtual;
-        }
-        if (name == Name.linkToSpecial) {
-            return PolySigIntrinsics.LinkToSpecial;
-        }
-        if (name == Name.linkToInterface) {
-            return PolySigIntrinsics.LinkToInterface;
-        }
-        if (name == Name.invokeBasic) {
-            return PolySigIntrinsics.InvokeBasic;
-        }
-        return PolySigIntrinsics.None;
-    }
 
     private final EspressoContext context;
 
@@ -118,11 +85,8 @@ public final class MethodHandleIntrinsics implements ContextAccess {
             return method;
         }
         CompilerAsserts.neverPartOfCompilation();
-        method = thisMethod.createIntrinsic(signature, baseNodeFactory);
-        Method previous = intrinsics.putIfAbsent(signature, method);
-        if (previous != null) {
-            return previous;
-        }
+        method = Method.createIntrinsic(thisMethod, signature, baseNodeFactory);
+        intrinsics.put(signature, method);
         return method;
     }
 

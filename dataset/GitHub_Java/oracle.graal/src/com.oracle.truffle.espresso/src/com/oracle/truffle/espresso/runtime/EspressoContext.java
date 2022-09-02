@@ -29,7 +29,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -67,12 +66,6 @@ public final class EspressoContext {
 
     private final ConcurrentHashMap<Thread, StaticObject> host2guest = new ConcurrentHashMap<>();
     private final Set<Thread> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<Thread, Boolean>());
-
-    private final AtomicInteger klassIdProvider = new AtomicInteger();
-
-    public int getNewId() {
-        return klassIdProvider.getAndIncrement();
-    }
 
     private boolean initialized = false;
 

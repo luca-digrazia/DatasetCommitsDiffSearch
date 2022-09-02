@@ -25,7 +25,6 @@ package com.oracle.truffle.espresso.classfile;
 import static com.oracle.truffle.espresso.classfile.Constants.CHOP_BOUND;
 import static com.oracle.truffle.espresso.classfile.Constants.SAME_FRAME_BOUND;
 
-import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
 public abstract class StackMapFrame {
@@ -56,12 +55,6 @@ public abstract class StackMapFrame {
     }
 
     public abstract int getOffset();
-
-    @SuppressWarnings("unused")
-    public void print(Klass klass) {
-        System.err.println("        " + this.getClass().getSimpleName() + " {");
-        System.err.println("            Offset: " + getOffset());
-    }
 }
 
 class SameFrame extends StackMapFrame {
@@ -73,13 +66,6 @@ class SameFrame extends StackMapFrame {
     @Override
     public int getOffset() {
         return frameType;
-    }
-
-    @Override
-    public void print(Klass klass) {
-        System.err.println("        " + this.getClass().getSimpleName() + " {");
-        System.err.println("            Offset: " + getOffset());
-        System.err.println("        }");
     }
 }
 
@@ -99,13 +85,6 @@ class SameLocals1StackItemFrame extends StackMapFrame {
     @Override
     public VerificationTypeInfo getStackItem() {
         return stackItem;
-    }
-
-    @Override
-    public void print(Klass klass) {
-        super.print(klass);
-        System.err.println("            Stack: " + stackItem.toString(klass));
-        System.err.println("        }");
     }
 
 }
@@ -129,13 +108,6 @@ class SameLocals1StackItemFrameExtended extends StackMapFrame {
     public VerificationTypeInfo getStackItem() {
         return stackItem;
     }
-
-    @Override
-    public void print(Klass klass) {
-        super.print(klass);
-        System.err.println("            Stack: " + stackItem.toString(klass));
-        System.err.println("        }");
-    }
 }
 
 class ChopFrame extends StackMapFrame {
@@ -155,13 +127,6 @@ class ChopFrame extends StackMapFrame {
     public int getChopped() {
         return CHOP_BOUND - frameType;
     }
-
-    @Override
-    public void print(Klass klass) {
-        super.print(klass);
-        System.err.println("            cut locals: " + getChopped());
-        System.err.println("        }");
-    }
 }
 
 class SameFrameExtended extends StackMapFrame {
@@ -175,12 +140,6 @@ class SameFrameExtended extends StackMapFrame {
     @Override
     public int getOffset() {
         return offsetDelta;
-    }
-
-    @Override
-    public void print(Klass klass) {
-        super.print(klass);
-        System.err.println("        }");
     }
 }
 
@@ -202,17 +161,6 @@ class AppendFrame extends StackMapFrame {
     @Override
     public VerificationTypeInfo[] getLocals() {
         return newLocals;
-    }
-
-    @Override
-    public void print(Klass klass) {
-        super.print(klass);
-        System.err.println("            Add Locals: [");
-        for (VerificationTypeInfo vti : newLocals) {
-            System.err.println("                " + vti.toString(klass));
-        }
-        System.err.println("            ]");
-        System.err.println("        }");
     }
 
 }
@@ -242,21 +190,5 @@ class FullFrame extends StackMapFrame {
     @Override
     public VerificationTypeInfo[] getStack() {
         return stack;
-    }
-
-    @Override
-    public void print(Klass klass) {
-        super.print(klass);
-        System.err.println("            Locals: [");
-        for (VerificationTypeInfo vti : locals) {
-            System.err.println("                " + vti.toString(klass));
-        }
-        System.err.println("            ]");
-        System.err.println("            Stack: [");
-        for (VerificationTypeInfo vti : stack) {
-            System.err.println("                " + vti.toString(klass));
-        }
-        System.err.println("            ]");
-        System.err.println("        }");
     }
 }
