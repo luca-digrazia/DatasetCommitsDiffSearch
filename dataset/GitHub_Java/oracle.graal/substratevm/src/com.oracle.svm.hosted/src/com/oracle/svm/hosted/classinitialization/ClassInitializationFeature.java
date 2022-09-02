@@ -24,24 +24,26 @@
  */
 package com.oracle.svm.hosted.classinitialization;
 
-import static com.oracle.svm.hosted.classinitialization.ClassInitializationSupport.InitKind.DELAY;
-import static com.oracle.svm.hosted.classinitialization.ClassInitializationSupport.InitKind.EAGER;
-import static com.oracle.svm.hosted.classinitialization.ClassInitializationSupport.InitKind.RERUN;
-import static com.oracle.svm.hosted.classinitialization.ClassInitializationSupport.InitKind.SEPARATOR;
+import static com.oracle.svm.hosted.classinitialization.InitKind.BUILD_TIME;
+import static com.oracle.svm.hosted.classinitialization.InitKind.RERUN;
+import static com.oracle.svm.hosted.classinitialization.InitKind.RUN_TIME;
 
-import java.lang.reflect.Modifier;
+import java.io.PrintWriter;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 
 import org.graalvm.collections.Pair;
-import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionType;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.compiler.debug.DebugHandlersFactory;
+import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.phases.util.Providers;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
@@ -52,117 +54,59 @@ import com.oracle.graal.pointsto.reports.ReportUtils;
 import com.oracle.graal.pointsto.util.Timer;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.hub.ClassInitializationInfo;
+import com.oracle.svm.core.classinitialization.ClassInitializationInfo;
+import com.oracle.svm.core.classinitialization.EnsureClassInitializedSnippets;
+import com.oracle.svm.core.graal.GraalFeature;
+import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
+import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
+import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.hub.DynamicHub;
-import com.oracle.svm.core.option.APIOption;
-import com.oracle.svm.core.option.HostedOptionKey;
+import com.oracle.svm.core.option.SubstrateOptionsParser;
+import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.util.UserError;
+import com.oracle.svm.hosted.ExceptionSynthesizer;
 import com.oracle.svm.hosted.FeatureImpl;
-import com.oracle.svm.hosted.analysis.Inflation;
+import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
+import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.meta.MethodPointer;
-import com.oracle.svm.hosted.phases.SubstrateClassInitializationPlugin;
-
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 @AutomaticFeature
-public class ClassInitializationFeature implements Feature {
+public class ClassInitializationFeature implements GraalFeature {
 
+    public static final String REPORTS_PATH = Paths.get(Paths.get(SubstrateOptions.Path.getValue()).toString(), "reports").toAbsolutePath().toString();
     private ClassInitializationSupport classInitializationSupport;
-    private AnalysisMethod ensureInitializedMethod;
     private AnalysisUniverse universe;
     private AnalysisMetaAccess metaAccess;
 
-    public static class Options {
-
-        private static class InitializationValueTransformer implements Function<Object, Object> {
-            private final String val;
-
-            InitializationValueTransformer(String val) {
-                this.val = val;
-            }
-
-            @Override
-            public Object apply(Object o) {
-                String[] elements = o.toString().split(",");
-                if (elements.length == 0) {
-                    return SEPARATOR + val;
+    public static void processClassInitializationOptions(ClassInitializationSupport initializationSupport) {
+        initializeNativeImagePackagesAtBuildTime(initializationSupport);
+        ClassInitializationOptions.ClassInitialization.getValue().getValuesWithOrigins().forEach(entry -> {
+            for (String info : entry.getLeft().split(",")) {
+                boolean noMatches = Arrays.stream(InitKind.values()).noneMatch(v -> info.endsWith(v.suffix()));
+                String origin = entry.getRight();
+                if (noMatches) {
+                    throw UserError.abort("Element in class initialization configuration must end in %s, %s, or %s. Found: %s (from %s)",
+                                    RUN_TIME.suffix(), RERUN.suffix(), BUILD_TIME.suffix(), info, origin);
                 }
-                String[] results = new String[elements.length];
-                for (int i = 0; i < elements.length; i++) {
-                    results[i] = elements[i] + SEPARATOR + val;
-                }
-                return String.join(",", results);
+
+                Pair<String, InitKind> elementType = InitKind.strip(info);
+                elementType.getRight().stringConsumer(initializationSupport, origin).accept(elementType.getLeft());
             }
-        }
-
-        private static class InitializationValueDelay extends InitializationValueTransformer {
-            InitializationValueDelay() {
-                super(DELAY.name().toLowerCase());
-            }
-        }
-
-        private static class InitializationValueRerun extends InitializationValueTransformer {
-            InitializationValueRerun() {
-                super(RERUN.name().toLowerCase());
-            }
-        }
-
-        private static class InitializationValueEager extends InitializationValueTransformer {
-            InitializationValueEager() {
-                super(EAGER.name().toLowerCase());
-            }
-        }
-
-        @APIOption(name = "delay-class-initialization", valueTransformer = InitializationValueDelay.class, defaultValue = "", //
-                        customHelp = "A comma-separated list of packages and classes (and implicitly all of their subclasses) that are initialized at runtime and not during image building. An empty string designates all packages.")//
-        @APIOption(name = "rerun-class-initialization", valueTransformer = InitializationValueRerun.class, defaultValue = "", //
-                        customHelp = "A comma-separated list of packages and classes (and implicitly all of their subclasses) that are initialized both at runtime and during image building. An empty string designates all packages.")//
-        @APIOption(name = "eager-class-initialization", valueTransformer = InitializationValueEager.class, defaultValue = "", //
-                        customHelp = "A comma-separated list of packages and classes  (and implicitly all of their superclasses) that are initialized during image generation. An empty string designates all packages.")//
-        @APIOption(name = "delay-class-initialization-to-runtime", valueTransformer = InitializationValueDelay.class, deprecated = "Use --delay-class-initialization.", //
-                        defaultValue = "", customHelp = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized at runtime and not during image building")//
-        @APIOption(name = "rerun-class-initialization-at-runtime", valueTransformer = InitializationValueRerun.class, deprecated = "Use --rerun-class-initialization.", //
-                        defaultValue = "", customHelp = "A comma-separated list of classes (and implicitly all of their subclasses) that are initialized both at runtime and during image building")//
-        @Option(help = "A comma-separated list of classes appended with their initialization strategy (':delay', ':rerun', or ':eager')", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> ClassInitialization = new HostedOptionKey<>(new String[0]);
-
-        @Option(help = "Prints class initialization info for all classes detected by analysis.", type = OptionType.Debug)//
-        public static final HostedOptionKey<Boolean> PrintClassInitialization = new HostedOptionKey<>(false);
+        });
     }
 
-    public static void processClassInitializationOptions(FeatureImpl.AfterRegistrationAccessImpl access, ClassInitializationSupport initializationSupport) {
-        String[] initializationInfo = Options.ClassInitialization.getValue();
-        Package[] pkgs = access.getImageClassLoader().getPackages();
-        for (String infos : initializationInfo) {
-            for (String info : infos.split(",")) {
-                boolean noMatches = Arrays.stream(ClassInitializationSupport.InitKind.values()).noneMatch(v -> info.endsWith(v.suffix()));
-                if (noMatches) {
-                    throw UserError.abort("Element in class initialization configuration must end in " + DELAY.suffix() + ", " + RERUN.suffix() + ", or " + EAGER.suffix() + ". Found: " + info);
-                }
+    private static void initializeNativeImagePackagesAtBuildTime(ClassInitializationSupport initializationSupport) {
+        initializationSupport.initializeAtBuildTime("com.oracle.svm", "Native Image classes are always initialized at build time");
+        initializationSupport.initializeAtBuildTime("com.oracle.graal", "Native Image classes are always initialized at build time");
 
-                Pair<String, ClassInitializationSupport.InitKind> elementType = ClassInitializationSupport.InitKind.strip(info);
-
-                /* check for setting the whole hierarchy */
-                if (elementType.getLeft().isEmpty()) {
-                    elementType.getRight().stringConsumer(initializationSupport).accept(elementType.getLeft());
-                } else {
-                    String classOrPackageName = elementType.getLeft();
-                    Class<?> clazz = access.findClassByName(classOrPackageName);
-                    if (clazz != null) {
-                        elementType.getRight().classConsumer(initializationSupport).accept(clazz);
-                    }
-
-                    boolean pkgFound = Arrays.stream(pkgs).anyMatch(p -> p.getName().startsWith(classOrPackageName));
-                    if (pkgFound) {
-                        elementType.getRight().stringConsumer(initializationSupport).accept(classOrPackageName);
-                    }
-                    if (!pkgFound && clazz == null) {
-                        throw UserError.abort("Could not find class or package called " + classOrPackageName + " that is configured for " + elementType.getRight() + " class initialization.");
-                    }
-                }
-            }
-        }
+        initializationSupport.initializeAtBuildTime("org.graalvm.collections", "Native Image classes are always initialized at build time");
+        initializationSupport.initializeAtBuildTime("org.graalvm.compiler", "Native Image classes are always initialized at build time");
+        initializationSupport.initializeAtBuildTime("org.graalvm.word", "Native Image classes are always initialized at build time");
+        initializationSupport.initializeAtBuildTime("org.graalvm.nativeimage", "Native Image classes are always initialized at build time");
+        initializationSupport.initializeAtBuildTime("org.graalvm.util", "Native Image classes are always initialized at build time");
+        initializationSupport.initializeAtBuildTime("org.graalvm.home", "Native Image classes are always initialized at build time");
+        initializationSupport.initializeAtBuildTime("org.graalvm.polyglot", "Native Image classes are always initialized at build time");
+        initializationSupport.initializeAtBuildTime("org.graalvm.options", "Native Image classes are always initialized at build time");
     }
 
     @Override
@@ -177,13 +121,40 @@ public class ClassInitializationFeature implements Feature {
 
     private Object checkImageHeapInstance(Object obj) {
         /*
-         * Note that computeInitKind also memoizes the class as InitKind.EAGER, which means that the
-         * user cannot later manually register it as RERUN or DELAY.
+         * Note that computeInitKind also memoizes the class as InitKind.BUILD_TIME, which means
+         * that the user cannot later manually register it as RERUN or RUN_TIME.
          */
         if (obj != null && classInitializationSupport.shouldInitializeAtRuntime(obj.getClass())) {
-            throw new UnsupportedFeatureException("No instances are allowed in the image heap for a class that is initialized or reinitialized at image runtime: " + obj.getClass().getTypeName());
+            String msg = "No instances of " + obj.getClass().getTypeName() + " are allowed in the image heap as this class should be initialized at image runtime.";
+            msg += classInitializationSupport.objectInstantiationTraceMessage(obj,
+                            " To fix the issue mark " + obj.getClass().getTypeName() + " for build-time initialization with " +
+                                            SubstrateOptionsParser.commandArgument(ClassInitializationOptions.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-build-time") +
+                                            " or use the the information from the trace to find the culprit and " +
+                                            SubstrateOptionsParser.commandArgument(ClassInitializationOptions.ClassInitialization, "<culprit>", "initialize-at-run-time") +
+                                            " to prevent its instantiation.\n");
+            throw new UnsupportedFeatureException(msg);
         }
         return obj;
+    }
+
+    @Override
+    public void beforeAnalysis(BeforeAnalysisAccess a) {
+        BeforeAnalysisAccessImpl access = (BeforeAnalysisAccessImpl) a;
+        for (SnippetRuntime.SubstrateForeignCallDescriptor descriptor : EnsureClassInitializedSnippets.FOREIGN_CALLS) {
+            access.getBigBang().addRootMethod((AnalysisMethod) descriptor.findMethod(access.getMetaAccess()));
+        }
+    }
+
+    @Override
+    public void registerForeignCalls(RuntimeConfiguration runtimeConfig, Providers providers, SnippetReflectionProvider snippetReflection, SubstrateForeignCallsProvider foreignCalls, boolean hosted) {
+        foreignCalls.register(providers, EnsureClassInitializedSnippets.FOREIGN_CALLS);
+    }
+
+    @Override
+    @SuppressWarnings("unused")
+    public void registerLowerings(RuntimeConfiguration runtimeConfig, OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers,
+                    SnippetReflectionProvider snippetReflection, Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings, boolean hosted) {
+        EnsureClassInitializedSnippets.registerLowerings(options, factories, providers, snippetReflection, lowerings);
     }
 
     @Override
@@ -198,7 +169,7 @@ public class ClassInitializationFeature implements Feature {
         classInitializationSupport.checkDelayedInitialization();
 
         for (AnalysisType type : access.getUniverse().getTypes()) {
-            if (type.isInTypeCheck() || type.isInstantiated()) {
+            if (type.isReachable()) {
                 DynamicHub hub = access.getHostVM().dynamicHub(type);
                 if (hub.getClassInitializationInfo() == null) {
                     buildClassInitializationInfo(access, type, hub);
@@ -208,49 +179,37 @@ public class ClassInitializationFeature implements Feature {
         }
     }
 
-    @Override
-    public void beforeAnalysis(BeforeAnalysisAccess access) {
-        ensureInitializedMethod = ((FeatureImpl.BeforeAnalysisAccessImpl) access).getBigBang().getMetaAccess().lookupJavaMethod(SubstrateClassInitializationPlugin.ENSURE_INITIALIZED_METHOD);
-    }
-
     /**
      * Initializes classes that can be proven safe and prints class initialization statistics.
      */
     @Override
     @SuppressWarnings("try")
-    public void beforeCompilation(BeforeCompilationAccess access) {
-        String imageName = ((FeatureImpl.BeforeCompilationAccessImpl) access).getUniverse().getBigBang().getHostVM().getImageName();
-        try (Timer.StopTimer t = new Timer(imageName, "(class-initialization)").start()) {
+    public void afterAnalysis(AfterAnalysisAccess access) {
+        String imageName = ((FeatureImpl.AfterAnalysisAccessImpl) access).getBigBang().getHostVM().getImageName();
+        try (Timer.StopTimer ignored = new Timer(imageName, "(clinit)").start()) {
             classInitializationSupport.setUnsupportedFeatures(null);
 
-            String path = Paths.get(Paths.get(SubstrateOptions.Path.getValue()).toString(), "reports").toAbsolutePath().toString();
-            assert ensureInitializedMethod != null;
+            String path = REPORTS_PATH;
             assert classInitializationSupport.checkDelayedInitialization();
 
-            TypeInitializerGraph initGraph = new TypeInitializerGraph(universe, ensureInitializedMethod);
+            TypeInitializerGraph initGraph = new TypeInitializerGraph(universe);
             initGraph.computeInitializerSafety();
 
-            Set<AnalysisType> provenSafe = initializeSafeDelayedClasses(initGraph);
+            classInitializationSupport.setProvenSafeLate(initializeSafeDelayedClasses(initGraph));
+            if (ClassInitializationOptions.PrintClassInitialization.getValue()) {
+                reportInitializerDependencies(universe, initGraph, path);
+                reportClassInitializationInfo(path);
+            }
 
-            if (Options.PrintClassInitialization.getValue()) {
-                List<ClassInitializationSupport.ClassOrPackageConfig> allConfigs = classInitializationSupport.getClassInitializationConfiguration();
-                allConfigs.sort(Comparator.comparing(ClassInitializationSupport.ClassOrPackageConfig::getName));
-                ReportUtils.report("initializer configuration", path, "initializer_configuration", "txt", writer -> {
-                    for (ClassInitializationSupport.ClassOrPackageConfig config : allConfigs) {
-                        writer.append(config.getName()).append(" -> ").append(config.getKind().toString()).append(" reasons: ")
-                                        .append(String.join(" and ", config.getReasons())).append(System.lineSeparator());
-                    }
-                });
-                reportSafeTypeInitiazliation(universe, initGraph, path, provenSafe);
-                reportMethodInitializationInfo(path);
+            if (SubstrateOptions.TraceClassInitialization.hasBeenSet()) {
+                reportTrackedClassInitializationTraces(path);
             }
         }
-
     }
 
-    private static void reportSafeTypeInitiazliation(AnalysisUniverse universe, TypeInitializerGraph initGraph, String path, Set<AnalysisType> provenSafe) {
-        ReportUtils.report("initializer dependencies", path, "initializer_dependencies", "dot", writer -> {
-            writer.println("digraph initializer_dependencies {");
+    private static void reportInitializerDependencies(AnalysisUniverse universe, TypeInitializerGraph initGraph, String path) {
+        ReportUtils.report("class initialization dependencies", path, "class_initialization_dependencies", "dot", writer -> {
+            writer.println("digraph class_initializer_dependencies {");
             universe.getTypes().stream()
                             .filter(ClassInitializationFeature::isRelevantForPrinting)
                             .forEach(t -> writer.println(quote(t.toClassName()) + "[fillcolor=" + (initGraph.isUnsafe(t) ? "red" : "green") + "]"));
@@ -260,27 +219,47 @@ public class ClassInitializationFeature implements Feature {
                                             .forEach(t1 -> writer.println(quote(t.toClassName()) + " -> " + quote(t1.toClassName()))));
             writer.println("}");
         });
-
-        ReportUtils.report(provenSafe.size() + " classes of type SAFE", path, "safe_classes", "txt", printWriter -> provenSafe.forEach(t -> printWriter.println(t.toClassName())));
     }
 
     /**
      * Prints a file for every type of class initialization. Each file contains a list of classes
      * that belong to it.
      */
-    private void reportMethodInitializationInfo(String path) {
-        for (ClassInitializationSupport.InitKind kind : ClassInitializationSupport.InitKind.values()) {
-            Set<Class<?>> classes = classInitializationSupport.classesWithKind(kind);
-            ReportUtils.report(classes.size() + " classes of type " + kind, path, kind.toString().toLowerCase() + "_classes", "txt",
-                            writer -> classes.stream()
-                                            .map(Class::getTypeName)
-                                            .sorted()
-                                            .forEach(writer::println));
+    private void reportClassInitializationInfo(String path) {
+        ReportUtils.report("class initialization report", path, "class_initialization_report", "csv", writer -> {
+            writer.println("Class Name, Initialization Kind, Reason for Initialization");
+            reportKind(writer, BUILD_TIME);
+            reportKind(writer, RERUN);
+            reportKind(writer, RUN_TIME);
+        });
+    }
+
+    private void reportKind(PrintWriter writer, InitKind kind) {
+        List<Class<?>> allClasses = new ArrayList<>(classInitializationSupport.classesWithKind(kind));
+        allClasses.sort(Comparator.comparing(Class::getTypeName));
+        allClasses.forEach(clazz -> {
+            writer.print(clazz.getTypeName() + ", ");
+            writer.print(kind + ", ");
+            writer.println(classInitializationSupport.reasonForClass(clazz));
+        });
+    }
+
+    private static void reportTrackedClassInitializationTraces(String path) {
+        Map<Class<?>, StackTraceElement[]> initializedClasses = ConfigurableClassInitialization.getInitializedClasses();
+        int size = initializedClasses.size();
+        if (size > 0) {
+            ReportUtils.report(size + " class initialization trace(s) of class(es) traced by " + SubstrateOptions.TraceClassInitialization.getName(), path, "traced_class_initialization", "txt",
+                            writer -> initializedClasses.forEach((k, v) -> {
+                                writer.println(k.getName());
+                                writer.println("---------------------------------------------");
+                                writer.println(ConfigurableClassInitialization.getTraceString(v));
+                                writer.println();
+                            }));
         }
     }
 
     private static boolean isRelevantForPrinting(AnalysisType type) {
-        return !type.isPrimitive() && !type.isArray() && type.isInTypeCheck();
+        return !type.isPrimitive() && !type.isArray() && type.isReachable();
     }
 
     private static String quote(String className) {
@@ -291,17 +270,27 @@ public class ClassInitializationFeature implements Feature {
      * Initializes all classes that are considered delayed by the system. Classes specified by the
      * user will not be delayed.
      */
-    private Set<AnalysisType> initializeSafeDelayedClasses(TypeInitializerGraph initGraph) {
-        Set<AnalysisType> provenSafe = new HashSet<>();
-        classInitializationSupport.classesWithKind(DELAY).stream()
+    private Set<Class<?>> initializeSafeDelayedClasses(TypeInitializerGraph initGraph) {
+        Set<Class<?>> provenSafe = new HashSet<>();
+        classInitializationSupport.setConfigurationSealed(false);
+        classInitializationSupport.classesWithKind(RUN_TIME).stream()
                         .filter(t -> metaAccess.optionalLookupJavaType(t).isPresent())
-                        .filter(t -> metaAccess.lookupJavaType(t).isInTypeCheck())
-                        .filter(t -> classInitializationSupport.specifiedInitKindFor(t) == null)
+                        .filter(t -> metaAccess.lookupJavaType(t).isReachable())
+                        .filter(t -> classInitializationSupport.canBeProvenSafe(t))
                         .forEach(c -> {
                             AnalysisType type = metaAccess.lookupJavaType(c);
                             if (!initGraph.isUnsafe(type)) {
-                                provenSafe.add(type);
-                                classInitializationSupport.forceInitializeHosted(c, "proven safe to initialize");
+                                classInitializationSupport.forceInitializeHosted(c, "proven safe to initialize", true);
+                                /*
+                                 * See if initialization worked--it can fail due to implicit
+                                 * exceptions.
+                                 */
+                                if (!classInitializationSupport.shouldInitializeAtRuntime(c)) {
+                                    provenSafe.add(c);
+                                    ClassInitializationInfo initializationInfo = type.getClassInitializer() == null ? ClassInitializationInfo.NO_INITIALIZER_INFO_SINGLETON
+                                                    : ClassInitializationInfo.INITIALIZED_INFO_SINGLETON;
+                                    ((SVMHost) universe.hostVM()).dynamicHub(type).setClassInitializationInfo(initializationInfo);
+                                }
                             }
                         });
         return provenSafe;
@@ -319,50 +308,46 @@ public class ClassInitializationFeature implements Feature {
     private void buildClassInitializationInfo(FeatureImpl.DuringAnalysisAccessImpl access, AnalysisType type, DynamicHub hub) {
         ClassInitializationInfo info;
         if (classInitializationSupport.shouldInitializeAtRuntime(type)) {
-            AnalysisMethod classInitializer = type.getClassInitializer();
-            /*
-             * If classInitializer.getCode() returns null then the type failed to initialize due to
-             * verification issues triggered by missing types.
-             */
-            if (classInitializer != null && classInitializer.getCode() != null) {
-                access.registerAsCompiled(classInitializer);
-            }
-            info = new ClassInitializationInfo(MethodPointer.factory(classInitializer));
-
+            info = buildRuntimeInitializationInfo(access, type);
         } else {
-            info = ClassInitializationInfo.INITIALIZED_INFO_SINGLETON;
+            assert type.isInitialized();
+            info = type.getClassInitializer() == null ? ClassInitializationInfo.NO_INITIALIZER_INFO_SINGLETON : ClassInitializationInfo.INITIALIZED_INFO_SINGLETON;
         }
-
-        hub.setClassInitializationInfo(info, hasDefaultMethods(type), declaresDefaultMethods(type));
+        hub.setClassInitializationInfo(info, type.hasDefaultMethods(), type.declaresDefaultMethods());
     }
 
-    private static boolean hasDefaultMethods(ResolvedJavaType type) {
-        if (!type.isInterface() && type.getSuperclass() != null && hasDefaultMethods(type.getSuperclass())) {
-            return true;
-        }
-        for (ResolvedJavaType iface : type.getInterfaces()) {
-            if (hasDefaultMethods(iface)) {
-                return true;
-            }
-        }
-        return declaresDefaultMethods(type);
-    }
+    private static ClassInitializationInfo buildRuntimeInitializationInfo(FeatureImpl.DuringAnalysisAccessImpl access, AnalysisType type) {
+        assert !type.isInitialized();
+        try {
+            /*
+             * Check if there are any linking errors. This method throws an error even if linking
+             * already failed in a previous attempt.
+             */
+            type.link();
 
-    static boolean declaresDefaultMethods(ResolvedJavaType type) {
-        if (!type.isInterface()) {
-            /* Only interfaces can declare default methods. */
-            return false;
+        } catch (VerifyError e) {
+            /* Synthesize a VerifyError to be thrown at run time. */
+            AnalysisMethod throwVerifyError = access.getMetaAccess().lookupJavaMethod(ExceptionSynthesizer.throwExceptionMethod(VerifyError.class));
+            access.registerAsCompiled(throwVerifyError);
+            return new ClassInitializationInfo(MethodPointer.factory(throwVerifyError));
+        } catch (Throwable t) {
+            /*
+             * All other linking errors will be reported as NoClassDefFoundError when initialization
+             * is attempted at run time.
+             */
+            return ClassInitializationInfo.FAILED_INFO_SINGLETON;
         }
+
         /*
-         * We call getDeclaredMethods() directly on the wrapped type. We avoid calling it on the
-         * AnalysisType because it resolves all the methods in the AnalysisUniverse.
+         * Now we now that there are no linking errors, we can register the class initialization
+         * information.
          */
-        for (ResolvedJavaMethod method : Inflation.toWrappedType(type).getDeclaredMethods()) {
-            if (method.isDefault()) {
-                assert !Modifier.isStatic(method.getModifiers()) : "Default method that is static?";
-                return true;
-            }
+        assert type.isLinked();
+        AnalysisMethod classInitializer = type.getClassInitializer();
+        if (classInitializer != null) {
+            assert classInitializer.getCode() != null;
+            access.registerAsCompiled(classInitializer);
         }
-        return false;
+        return new ClassInitializationInfo(MethodPointer.factory(classInitializer));
     }
 }

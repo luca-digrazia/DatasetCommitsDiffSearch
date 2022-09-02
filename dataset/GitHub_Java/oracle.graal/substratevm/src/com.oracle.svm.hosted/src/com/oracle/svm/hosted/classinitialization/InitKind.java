@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.hosted.classinitialization;
 
-import static com.oracle.svm.hosted.NativeImageOptions.DiagnosticsMode;
-
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -69,12 +67,8 @@ public enum InitKind {
             return name -> support.rerunInitialization(name, reason(origin, name));
         } else {
             return name -> {
-                if (name.equals("") && !DiagnosticsMode.getValue()) {
-                    System.err.println(
-                                    "--initialize-at-build-time without arguments has been deprecated when not using --diagnostics-mode. With GraalVM 22.0.0." +
-                                                    " --initialize-at-build-time will only work with --diagnostics-mode for debugging purposes.\n" +
-                                                    "The reason for deprecation is that --initalize-at-build-time does not compose, i.e., a single library can make assumptions that the whole classpath can be safely initialized at build time;" +
-                                                    " that assumption is often incorrect.");
+                if (name.equals("")) {
+                    System.err.println("--initialize-at-build-time without arguments has been deprecated and will be removed in GraalVM 22.0.");
                 }
                 support.initializeAtBuildTime(name, reason(origin, name));
             };
