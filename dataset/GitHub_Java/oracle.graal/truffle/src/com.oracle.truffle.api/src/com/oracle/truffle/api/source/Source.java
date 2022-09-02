@@ -273,8 +273,7 @@ public abstract class Source {
         }
 
         boolean result = getSourceId().equals(((Source) obj).getSourceId());
-        // Can be turned into "result == ..." once GR-26875 is fixed
-        assert !result || getSourceKey().equals(((Source) obj).getSourceKey());
+        assert result == getSourceKey().equals(((Source) obj).getSourceKey());
         return result;
     }
 
