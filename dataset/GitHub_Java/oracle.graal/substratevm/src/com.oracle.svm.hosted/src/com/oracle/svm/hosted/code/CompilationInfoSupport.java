@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -96,12 +95,10 @@ public class CompilationInfoSupport {
                             expectedKinds.size() == otherKinds.size();
             if (!matchingSizes) {
                 StringBuilder errorMessage = new StringBuilder();
-                errorMessage.append("Unexpected number of values in state to merge. Please report this problem.\n");
-                errorMessage.append(String.format("****Merge FrameState****\n%s************************\n", state.toString(Verbosity.Debugger)));
-                errorMessage.append(String.format("bci: %d, duringCall: %b, rethrowException: %b\n", state.bci, state.duringCall(), state.rethrowException()));
+                errorMessage.append("Unexpected number of values in state to merge.\n");
                 errorMessage.append(String.format("DeoptSourceFrameInfo: locals-%d, stack-%d, locks-%d.\n", numLocals, numStack, numLocks));
                 errorMessage.append(String.format("Merge FrameState: locals-%d, stack-%d, locks-%d.\n", state.localsSize(), state.stackSize(), state.locksSize()));
-                throw VMError.shouldNotReachHere(errorMessage.toString());
+                VMError.shouldNotReachHere(errorMessage.toString());
             }
 
             for (int i = 0; i < expectedKinds.size(); i++) {
