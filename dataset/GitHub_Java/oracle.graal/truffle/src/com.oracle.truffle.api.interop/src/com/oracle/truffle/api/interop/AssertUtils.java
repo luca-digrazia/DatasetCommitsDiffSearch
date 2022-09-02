@@ -44,6 +44,8 @@ import java.util.concurrent.Callable;
 
 final class AssertUtils {
 
+    static final boolean ASSERTIONS_ENABLED = initAssertionsEnabled();
+
     private AssertUtils() {
     }
 
@@ -142,6 +144,13 @@ final class AssertUtils {
     static boolean isInteropValue(Object o) {
         return o instanceof TruffleObject || o instanceof Boolean || o instanceof Byte || o instanceof Short || o instanceof Integer || o instanceof Long || o instanceof Float ||
                         o instanceof Double || o instanceof Character || o instanceof String;
+    }
+
+    @SuppressWarnings("all")
+    private static boolean initAssertionsEnabled() {
+        boolean enabled = false;
+        assert enabled = true;
+        return enabled;
     }
 
     static boolean validArguments(Object receiver, Object[] args) {
