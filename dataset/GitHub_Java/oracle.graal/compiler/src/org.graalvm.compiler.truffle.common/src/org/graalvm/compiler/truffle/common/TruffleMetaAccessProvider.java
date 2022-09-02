@@ -53,12 +53,4 @@ public interface TruffleMetaAccessProvider {
      * {@link #addTargetToDequeue(CompilableTruffleAST) added}.
      */
     void dequeueTargets();
-
-    void setCallCount(int count);
-
-    int countCalls();
-
-    void setInlinedCallCount(int count);
-
-    int countInlinedCalls();
 }
