@@ -70,6 +70,7 @@ public class SwitchCanonicalizerTest extends GraalCompilerTest {
     }
 
     @Test
+    @Ignore("rem by power of 2 does not preserve the stamp information.")
     public void testRemByPowerOf2() {
         shouldFoldSwitch("remByPowerOf2");
     }
