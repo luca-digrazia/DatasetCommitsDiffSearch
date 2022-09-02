@@ -32,14 +32,13 @@ import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
+import com.oracle.truffle.espresso.runtime.CallSiteObject;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 
 public abstract class InvokeInterfaceNode extends QuickNode {
 
     final Method resolutionSeed;
-    final Klass interfKlass;
-    final int itableIndex;
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
 
@@ -57,16 +56,15 @@ public abstract class InvokeInterfaceNode extends QuickNode {
     @Specialization(replaces = "callVirtualDirect")
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
-        // itable Lookup
-        Method targetMethod = receiver.getKlass().lookupMethod(interfKlass, itableIndex);
+        // Brute virtual method resolution, walk the whole klass hierarchy.
+        // TODO(peterssen): Implement itable-based lookup.
+        Method targetMethod = methodLookup(resolutionSeed, receiver);
         return indirectCallNode.call(targetMethod.getCallTarget(), arguments);
     }
 
     InvokeInterfaceNode(Method resolutionSeed) {
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
-        this.interfKlass = resolutionSeed.getDeclaringKlass();
-        this.itableIndex = resolutionSeed.getITableIndex();
     }
 
     @TruffleBoundary
@@ -94,6 +92,11 @@ public abstract class InvokeInterfaceNode extends QuickNode {
         // TODO(peterssen): IsNull Node?.
         final StaticObject receiver = nullCheck(root.peekReceiver(frame, top, resolutionSeed));
         assert receiver != null;
+        //return executeBranch(receiver, frame, top, root);
+        if (receiver.isCallSite()) {
+            CallSiteObject cso = (CallSiteObject) receiver;
+            return cso.invoke(frame, top, root);
+        }
         final Object[] args = root.peekArguments(frame, top, true, resolutionSeed.getParsedSignature());
         assert receiver == args[0] : "receiver must be the first argument";
         Object result = executeVirtual(receiver, args);

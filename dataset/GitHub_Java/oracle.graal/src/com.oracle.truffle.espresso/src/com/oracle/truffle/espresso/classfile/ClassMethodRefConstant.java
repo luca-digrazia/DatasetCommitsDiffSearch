@@ -220,6 +220,7 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
             EspressoContext context = pool.getContext();
             Klass holderKlass = getResolvedHolderKlass(accessingKlass, pool);
 
+
             Meta meta = context.getMeta();
             if (holderKlass.isInterface()) {
                 throw meta.throwExWithMessage(meta.IncompatibleClassChangeError, meta.toGuestString(getName(pool)));

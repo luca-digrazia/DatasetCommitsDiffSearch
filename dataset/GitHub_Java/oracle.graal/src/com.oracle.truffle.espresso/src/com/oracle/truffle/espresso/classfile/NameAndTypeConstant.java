@@ -27,8 +27,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 
-import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.UTF8;
-
 public interface NameAndTypeConstant extends PoolConstant {
 
     /**
@@ -96,13 +94,6 @@ public interface NameAndTypeConstant extends PoolConstant {
         @SuppressWarnings("unchecked")
         public Symbol<Symbol.Signature> getSignature(ConstantPool pool) {
             return (Symbol<Symbol.Signature>) getDescriptor(pool);
-        }
-
-        @Override
-        public void checkValidity(ConstantPool pool) {
-            if (pool.at(nameIndex).tag() != UTF8 || pool.at(typeIndex).tag() != UTF8) {
-                throw new VerifyError("Ill-formed constant: " + tag());
-            }
         }
     }
 }

@@ -99,6 +99,9 @@ public interface ClassConstant extends PoolConstant {
             resolveKlassCount.inc();
             CompilerDirectives.transferToInterpreterAndInvalidate();
             Symbol<Name> klassName = getName(pool);
+            if (klassName.toString().contains("Lambda$")) {
+                int i = 1;
+            }
             try {
                 EspressoContext context = pool.getContext();
                 Symbol<Symbol.Type> type = context.getTypes().fromName(klassName);
@@ -176,16 +179,16 @@ public interface ClassConstant extends PoolConstant {
         public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
             resolveKlassCount.inc();
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            Symbol<Name> klassName = getName(pool);
+            Symbol<Name> name = getName(pool);
             try {
                 EspressoContext context = pool.getContext();
                 Klass klass = context.getRegistries().loadKlass(
-                        context.getTypes().fromName(klassName), accessingKlass.getDefiningClassLoader());
+                        context.getTypes().fromName(name), accessingKlass.getDefiningClassLoader());
 
                 if (!checkAccess(klass.getElementalType(), accessingKlass)) {
                     Meta meta = context.getMeta();
                     System.err.println(EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
-                    throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(klassName));
+                    throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
                 }
 
                 return new Resolved(klass);

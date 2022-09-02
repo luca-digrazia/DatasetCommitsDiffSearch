@@ -1,6 +1,5 @@
 package com.oracle.truffle.espresso.nodes;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -19,10 +18,11 @@ public class InvokeDynamicNode extends QuickNode {
     private final StaticObjectImpl methodHandle;
     private final boolean isConstantCallSite;
     private final Method invoke;
-    @CompilerDirectives.CompilationFinal(dimensions = 1) private final Symbol<Type>[] invokeSignature;
+    private final Symbol<Type>[] invokeSignature;
     private final StaticObjectImpl target;
 
     public InvokeDynamicNode(StaticObjectImpl dynamicInvoker, Meta meta) {
+        //TODO(garcia) check subinstance
         if (meta.MethodHandle.isAssignableFrom(dynamicInvoker.getKlass())) {
             this.callSite = null;
             this.methodHandle = dynamicInvoker;
@@ -32,7 +32,7 @@ public class InvokeDynamicNode extends QuickNode {
         }
         this.isConstantCallSite = callSite == null;
         if (isConstantCallSite) {
-            StaticObjectImpl mtype =  (StaticObjectImpl)methodHandle.getField(meta.MHtype);
+            StaticObjectImpl mtype =  (StaticObjectImpl)methodHandle.getField(meta.type);
             String descriptor = Meta.toHostString((StaticObject) meta.toMethodDescriptorString.invokeDirect(mtype));
             Symbol<Symbol.Signature> sig = meta.getSignatures().lookupValidSignature(descriptor);
             this.invoke = meta.MethodHandle.lookupPolysigMethod(Name.invokeExact, sig);

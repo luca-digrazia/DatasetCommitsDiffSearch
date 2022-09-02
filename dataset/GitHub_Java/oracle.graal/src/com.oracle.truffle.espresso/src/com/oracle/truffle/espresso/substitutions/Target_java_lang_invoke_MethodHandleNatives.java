@@ -38,7 +38,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         }
     }
 
-    @SuppressWarnings("unused")
+
     @Substitution
     public static int getNamedCon(int which, @Host(Object[].class) StaticObjectArray name) {
         return 0;
@@ -84,7 +84,6 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         return findMemberNames(((StaticObjectClass)defc).getMirrorKlass(), name, sig, matchFlags, caller, skip, results);
     }
 
-    @SuppressWarnings("unused")
     private static int findMemberNames(Klass klass, Symbol<Name> name, String sig, int matchFlags, Klass caller, int skip, StaticObject[] results) {
         // TODO(Garcia) this.
         throw EspressoError.unimplemented();
@@ -216,7 +215,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                         );
                         StaticObject getAppendix = appendix.get(0);
                         //TODO(garcia)
-                        throw EspressoError.unimplemented(result.toString() + getAppendix.toString());
+                        throw EspressoError.unimplemented();
                     }
                 } else if (refKind == REF_invokeVirtual || refKind == REF_invokeSpecial) {
                     plantMethodMemberName(memberName, sig, defKlass, nSymbol, flagField, refKind);
@@ -237,9 +236,9 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         return memberName;
     }
 
-//    private Method makeIntrinsic(int id, Symbol<Signature> signature) {
-//        throw EspressoError.unimplemented();
-//    }
+    private Method makeIntrinsic(int id, Symbol<Signature> signature) {
+        throw EspressoError.unimplemented();
+    }
 
     public static Symbol<Signature> toBasic(Symbol<Type>[] sig, boolean keepLastArg, Signatures signatures) {
         int pcount = Signatures.parameterCount(sig, false);
@@ -333,7 +332,6 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         return _none;
     }
 
-    @SuppressWarnings("unused")
     private static boolean isMHinvoke(Klass klass, Symbol<Name> name) {
         if (klass == null) {
             return false;

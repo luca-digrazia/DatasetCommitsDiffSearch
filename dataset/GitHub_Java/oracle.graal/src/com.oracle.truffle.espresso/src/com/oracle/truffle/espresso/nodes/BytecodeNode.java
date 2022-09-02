@@ -227,6 +227,7 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.SWAP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
 
+import java.lang.invoke.CallSite;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -477,6 +478,10 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         int top = 0;
 
         initArguments(frame);
+
+        if (getMethod().getName().toString().contains("get$")) {
+            int i =1 ;
+        }
 
         loop: while (true) {
             int curOpcode;
@@ -1437,6 +1442,8 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         assert (Bytecodes.INVOKEDYNAMIC == opCode);
 
+        int BASE_BSM_ARGS = 3;
+
         Meta meta = getMeta();
 
         RuntimeConstantPool pool = getConstantPool();
@@ -1454,6 +1461,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         StaticObject bsmMH = pool.resolvedMethodHandleAt(declaringKlass, bsEntry.getBootstrapMethodRef());
 
         StaticObject[] args = new StaticObject[bsEntry.numBootstrapArguments()];
+//        Object[] args = new Object[bsEntry.numBootstrapArguments() + BASE_BSM_ARGS];
         for (int i = 0; i < bsEntry.numBootstrapArguments() ; i++) {
             PoolConstant pc = pool.at(bsEntry.argAt(i));
             switch (pc.tag()) {
@@ -1499,7 +1507,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                 appendix);
 
         StaticObjectImpl unboxedAppendix = appendix.get(0);
-
         return injectAndCall(frame, top, curBCI, new InvokeDynamicNode(unboxedAppendix, meta), opCode);
 
 //        Method target = resolveMethod(opCode, mh.getRefIndex());

@@ -83,8 +83,8 @@ public final class StaticObjectArray extends StaticObject {
     }
 
     public void put(int index, Object value) {
-        assert ((getKlass()).getComponentType().getType() == ((StaticObject) value).getKlass().getType());
-        ((Object[]) array)[index] = value;
+        assert((getKlass()).getComponentType().getType() == ((StaticObject) value).getKlass().getType());
+        ((Object[])array)[index] = value;
     }
 
     public int length() {
@@ -173,6 +173,11 @@ public final class StaticObjectArray extends StaticObject {
 
     public StaticObjectArray copy() {
         return new StaticObjectArray(getKlass(), cloneWrapped());
+    }
+
+    @Override
+    public boolean isCallSite() {
+        return false;
     }
 
     // endregion
