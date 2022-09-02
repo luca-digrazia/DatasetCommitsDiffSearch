@@ -80,7 +80,7 @@ import jdk.vm.ci.meta.SpeculationLog;
 public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootCallTarget, ReplaceObserver {
 
     private static final String NODE_REWRITING_ASSUMPTION_NAME = "nodeRewritingAssumption";
-    static final String CALL_BOUNDARY_METHOD_NAME = "executeRootNode";
+    static final String CALL_BOUNDARY_METHOD_NAME = "callProxy";
     static final String CALL_INLINED_METHOD_NAME = "call";
     private static final AtomicReferenceFieldUpdater<OptimizedCallTarget, SpeculationLog> SPECULATION_LOG_UPDATER = AtomicReferenceFieldUpdater.newUpdater(OptimizedCallTarget.class,
                     SpeculationLog.class, "speculationLog");
@@ -375,10 +375,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
-    public final Object partialEvaluationRootForInlining(Node location, Object... arguments) {
+    public final Object callInlined(Node location, Object... arguments) {
         ensureInitialized();
         try {
-            return executeRootNode(createFrame(getRootNode().getFrameDescriptor(), arguments));
+            return callProxy(createFrame(getRootNode().getFrameDescriptor(), arguments));
         } finally {
             // this assertion is needed to keep the values from being cleared as non-live locals
             assert keepAlive(location);
@@ -386,15 +386,16 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
-    public final Object partialEvaluationRootForAgnosticInlining(Object... arguments) {
+    public final Object callInlinedAgnostic(Object... arguments) {
         ensureInitialized();
-        return executeRootNode(createFrame(getRootNode().getFrameDescriptor(), arguments));
+        return callProxy(createFrame(getRootNode().getFrameDescriptor(), arguments));
     }
 
+    // Note: {@code PartialEvaluator} looks up this method by name and signature.
     public final Object callInlinedForced(Node location, Object... arguments) {
         ensureInitialized();
         try {
-            return executeRootNode(createFrame(getRootNode().getFrameDescriptor(), arguments));
+            return callProxy(createFrame(getRootNode().getFrameDescriptor(), arguments));
         } finally {
             // this assertion is needed to keep the values from being cleared as non-live locals
             assert keepAlive(location);
@@ -413,7 +414,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         /*
          * Note this method compiles without any inlining or other optimizations. It is therefore
          * important that this method stays small. It is compiled as a special stub that calls into
-         * the optimized code or if the call target is not yet optimized calls into partialEvaluationRoot
+         * the optimized code or if the call target is not yet optimized calls into callRoot
          * directly. In order to avoid deoptimizations in this method it has optimizations disabled.
          * Any additional code here will likely have significant impact on the intepreter call
          * performance.
@@ -421,7 +422,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         if (interpreterCall()) {
             return doInvoke(args);
         }
-        return partialEvaluationRoot(args);
+        return callRoot(args);
     }
 
     private boolean interpreterCall() {
@@ -447,7 +448,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
-    protected final Object partialEvaluationRoot(Object[] originalArguments) {
+    protected final Object callRoot(Object[] originalArguments) {
         Object[] args = originalArguments;
         if (GraalCompilerDirectives.inFirstTier()) {
             firstTierCall();
@@ -455,7 +456,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         if (CompilerDirectives.inCompiledCode()) {
             args = injectArgumentProfile(originalArguments);
         }
-        Object result = executeRootNode(createFrame(getRootNode().getFrameDescriptor(), args));
+        Object result = callProxy(createFrame(getRootNode().getFrameDescriptor(), args));
         profileReturnValue(result);
         return result;
     }
@@ -477,10 +478,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return callTarget.compile(true);
     }
 
-    protected final Object executeRootNode(VirtualFrame frame) {
+    protected final Object callProxy(VirtualFrame frame) {
         final boolean inCompiled = CompilerDirectives.inCompilationRoot();
         try {
-            return rootNode.execute(frame);
+            return getRootNode().execute(frame);
         } catch (ControlFlowException t) {
             throw rethrow(profileExceptionType(t));
         } catch (Throwable t) {
@@ -691,14 +692,14 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     @Override
     public final void onCompilationFailed(Supplier<String> reasonAndStackTrace, boolean bailout, boolean permanentBailout) {
         ExceptionAction action;
-        if (bailout && !permanentBailout) {
+        if (bailout && !permanentBailout && !TruffleDebugOptions.bailoutsAsErrors(engine.engineOptions)) {
             /*
              * Non-permanent bailouts are expected cases. A non-permanent bailout would be for
              * example class redefinition during code installation. As opposed to permanent
              * bailouts, non-permanent bailouts will trigger recompilation and are not considered a
              * failure state.
              */
-            action = ExceptionAction.Silent;
+            action = TruffleDebugOptions.verboseBailouts(engine.engineOptions) ? ExceptionAction.Print : ExceptionAction.Silent;
         } else {
             compilationFailed = true;
             action = engine.compilationFailureAction;
