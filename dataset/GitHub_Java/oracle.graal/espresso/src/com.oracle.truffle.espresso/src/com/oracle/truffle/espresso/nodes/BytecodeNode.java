@@ -686,12 +686,9 @@ public final class BytecodeNode extends EspressoMethodNode {
                 CompilerDirectives.ensureVirtualized(refs);
 
                 if (instrument != null) {
+                    setBCI(frame, curBCI);
                     instrument.notifyStatement(frame, statementIndex, nextStatementIndex);
                     statementIndex = nextStatementIndex;
-                }
-                if (instrument != null || Bytecodes.canTrap(curOpcode)) {
-                    // curOpcode can be == WIDE, but none of the WIDE-prefixed bytecodes throw exceptions.
-                    setBCI(frame, curBCI);
                 }
 
                 // @formatter:off
@@ -1156,6 +1153,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                     case INVOKESPECIAL: // fall through
                     case INVOKESTATIC:  // fall through
                     case INVOKEINTERFACE:
+                        setBCI(frame, curBCI);
                         top += quickenInvoke(frame, primitives, refs, top, curBCI, curOpcode, statementIndex); break;
 
                     case NEW         : putObject(refs, top, InterpreterToVM.newObject(resolveType(NEW, readCPI(curBCI)), true)); break;
@@ -1165,6 +1163,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                     case ARRAYLENGTH : arrayLength(frame, primitives, refs, top, curBCI); break;
 
                     case ATHROW      :
+                        setBCI(frame, curBCI);
                         throw getMeta().throwException(nullCheck(popObject(refs, top - 1)));
 
                     case CHECKCAST   : top += quickenCheckCast(frame, primitives, refs, top, curBCI, CHECKCAST); break;
@@ -1236,10 +1235,12 @@ public final class BytecodeNode extends EspressoMethodNode {
                         throw EspressoError.unimplemented(Bytecodes.nameOf(curOpcode) + " not supported.");
 
                     case INVOKEDYNAMIC:
+                        setBCI(frame, curBCI);
                         top += quickenInvokeDynamic(frame, primitives, refs, top, curBCI, INVOKEDYNAMIC);
                         break;
 
                     case QUICK: {
+                        setBCI(frame, curBCI);
                         // Force a volatile read of the opcode.
                         if (bs.currentVolatileBC(curBCI) != QUICK) {
                             // Possible case of read reordering. Retry handling the bytecode to make sure we get a correct CPI.
@@ -1272,6 +1273,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                         break;
                     }
                     case SLIM_QUICK:
+                        setBCI(frame, curBCI);
                         top += sparseNodes[curBCI].execute(frame, primitives, refs);
                         break;
 
@@ -1281,6 +1283,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                 }
                 // @formatter:on
             } catch (EspressoException | AbstractTruffleException | StackOverflowError | OutOfMemoryError e) {
+                setBCI(frame, curBCI);
                 if (instrument != null && e instanceof EspressoException) {
                     instrument.notifyExceptionAt(frame, e, statementIndex);
                 }
@@ -1375,6 +1378,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                 }
             } catch (EspressoExitException e) {
                 CompilerDirectives.transferToInterpreter();
+                setBCI(frame, curBCI);
                 getRoot().abortMonitor(frame);
                 // Tearing down the VM, no need to report loop count.
                 throw e;

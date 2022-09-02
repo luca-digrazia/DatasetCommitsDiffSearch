@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,11 +28,14 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Types;
+import com.oracle.truffle.espresso.impl.ClassRedefinition;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
+import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.VM;
 
 public final class InvokeStaticNode extends QuickNode {
@@ -43,6 +46,7 @@ public final class InvokeStaticNode extends QuickNode {
     @Child private DirectCallNode directCallNode;
 
     final int resultAt;
+    final boolean returnsPrimitiveType;
 
     public InvokeStaticNode(Method method, int top, int curBCI) {
         super(top, curBCI);
@@ -52,6 +56,7 @@ public final class InvokeStaticNode extends QuickNode {
                         Name.doPrivileged.equals(method.getName());
         this.resultAt = top - Signatures.slotsForParameters(method.getParsedSignature()); // no
                                                                                           // receiver
+        this.returnsPrimitiveType = Types.isPrimitive(Signatures.returnType(method.getParsedSignature()));
     }
 
     @Override
@@ -59,15 +64,21 @@ public final class InvokeStaticNode extends QuickNode {
         if (!method.getAssumption().isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             directCallNode = null;
-            // update to the latest method version
-            method = method.getMethod().getMethodVersion();
+            if (removedByRedefintion()) {
+                // accept a slow path once the method has been removed
+                // put method behind a boundary to avoid a deopt loop
+                method = ClassRedefinition.handleRemovedMethod(method.getMethod(), method.getMethod().getDeclaringKlass(), null).getMethodVersion();
+            } else {
+                // update to the latest method version
+                method = method.getMethod().getMethodVersion();
+            }
         }
         // TODO(peterssen): Constant fold this check.
         if (directCallNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             // insert call node though insertion method so that
             // stack frame iteration will see this node as parent
-            directCallNode = insert(DirectCallNode.create(method.getMethod().getCallTarget()));
+            directCallNode = insert(DirectCallNode.create(method.getCallTarget()));
         }
 
         // Support for AccessController.doPrivileged*.
@@ -81,12 +92,10 @@ public final class InvokeStaticNode extends QuickNode {
 
         Object[] args = BytecodeNode.popArguments(primitives, refs, top, false, method.getMethod().getParsedSignature());
         Object result = directCallNode.call(args);
+        if (!returnsPrimitiveType) {
+            getBytecodeNode().checkNoForeignObjectAssumption((StaticObject) result);
+        }
         return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), result, method.getMethod().getReturnKind());
-    }
-
-    @Override
-    public boolean producedForeignObject(Object[] refs) {
-        return method.getMethod().getReturnKind().isObject() && BytecodeNode.peekObject(refs, getResultAt()).isForeignObject();
     }
 
     private int getResultAt() {
