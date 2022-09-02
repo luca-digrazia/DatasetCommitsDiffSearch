@@ -42,17 +42,19 @@ package com.oracle.truffle.regex.tregex.nfa;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.regex.tregex.automaton.AbstractTransition;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.regex.tregex.parser.ast.Group;
 import com.oracle.truffle.regex.tregex.parser.ast.GroupBoundaries;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.util.json.Json;
+import com.oracle.truffle.regex.tregex.util.json.JsonArray;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 
 /**
  * Provides information about a transition from one NFAState to another state.
  */
-public class NFAStateTransition implements AbstractTransition<NFAState, NFAStateTransition>, JsonConvertible {
+public class NFAStateTransition implements JsonConvertible {
 
     private final short id;
     @CompilationFinal private NFAState source;
@@ -66,12 +68,10 @@ public class NFAStateTransition implements AbstractTransition<NFAState, NFAState
         this.groupBoundaries = groupBoundaries;
     }
 
-    @Override
-    public int getId() {
+    public short getId() {
         return id;
     }
 
-    @Override
     public NFAState getSource() {
         return source;
     }
@@ -80,9 +80,12 @@ public class NFAStateTransition implements AbstractTransition<NFAState, NFAState
         this.source = source;
     }
 
-    @Override
     public NFAState getTarget() {
         return target;
+    }
+
+    public NFAState getTarget(boolean forward) {
+        return forward ? target : source;
     }
 
     public NFAState getSource(boolean forward) {
@@ -97,13 +100,27 @@ public class NFAStateTransition implements AbstractTransition<NFAState, NFAState
     }
 
     @TruffleBoundary
+    private JsonArray sourceSectionsToJson() {
+        if (!groupBoundaries.hasIndexUpdates()) {
+            return Json.array();
+        }
+        RegexAST ast = source.getStateSet().getAst();
+        return Json.array(groupBoundaries.getUpdateIndices().stream().mapToObj(x -> {
+            Group group = source.getStateSet().getAst().getGroupByBoundaryIndex(x);
+            SourceSection sourceSection = ast.getSourceSections(group).get(x & 1);
+            return Json.obj(Json.prop("start", sourceSection.getCharIndex()),
+                            Json.prop("end", sourceSection.getCharEndIndex()));
+        }));
+    }
+
+    @TruffleBoundary
     @Override
     public JsonValue toJson() {
         return Json.obj(Json.prop("id", id),
                         Json.prop("source", source.getId()),
                         Json.prop("target", target.getId()),
                         Json.prop("groupBoundaries", groupBoundaries),
-                        Json.prop("sourceSections", groupBoundaries.indexUpdateSourceSectionsToJson((RegexAST) source.getStateSet().getStateIndex())));
+                        Json.prop("sourceSections", sourceSectionsToJson()));
     }
 
     @TruffleBoundary
@@ -112,6 +129,6 @@ public class NFAStateTransition implements AbstractTransition<NFAState, NFAState
                         Json.prop("source", getSource(forward).getId()),
                         Json.prop("target", getTarget(forward).getId()),
                         Json.prop("groupBoundaries", groupBoundaries),
-                        Json.prop("sourceSections", groupBoundaries.indexUpdateSourceSectionsToJson((RegexAST) source.getStateSet().getStateIndex())));
+                        Json.prop("sourceSections", sourceSectionsToJson()));
     }
 }

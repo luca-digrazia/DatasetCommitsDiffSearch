@@ -40,8 +40,11 @@
  */
 package com.oracle.truffle.regex.tregex.nfa;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -49,16 +52,13 @@ import java.util.stream.Collectors;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.charset.CharSet;
-import com.oracle.truffle.regex.tregex.TRegexOptions;
-import com.oracle.truffle.regex.tregex.automaton.StateSet;
+import com.oracle.truffle.regex.tregex.automaton.IndexedState;
 import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
-import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexASTNode;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonArray;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonObject;
-import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 /**
  * Represents a single state in the NFA form of a regular expression. States may either be matcher
@@ -69,7 +69,7 @@ import com.oracle.truffle.regex.util.CompilationFinalBitSet;
  * matches both the 'a' in the lookahead assertion as well as following 'a' in the expression, and
  * therefore will have a state set containing two AST nodes.
  */
-public class NFAState implements JsonConvertible {
+public class NFAState implements IndexedState, JsonConvertible {
 
     private static final byte FLAGS_NONE = 0;
     private static final byte FLAG_HAS_PREFIX_STATES = 1;
@@ -83,7 +83,7 @@ public class NFAState implements JsonConvertible {
     private static final NFAStateTransition[] EMPTY_TRANSITIONS = new NFAStateTransition[0];
 
     private final short id;
-    private final StateSet<? extends RegexASTNode> stateSet;
+    private final ASTNodeSet<? extends RegexASTNode> stateSet;
     @CompilationFinal private byte flags;
     @CompilationFinal private short transitionToAnchoredFinalState = -1;
     @CompilationFinal private short transitionToUnAnchoredFinalState = -1;
@@ -92,12 +92,12 @@ public class NFAState implements JsonConvertible {
     @CompilationFinal(dimensions = 1) private NFAStateTransition[] next;
     @CompilationFinal(dimensions = 1) private NFAStateTransition[] prev;
     private short prevLength = 0;
-    private CompilationFinalBitSet possibleResults;
+    private List<Integer> possibleResults;
     private final CharSet matcherBuilder;
     private final Set<LookBehindAssertion> finishedLookBehinds;
 
     public NFAState(short id,
-                    StateSet<? extends RegexASTNode> stateSet,
+                    ASTNodeSet<? extends RegexASTNode> stateSet,
                     CharSet matcherBuilder,
                     Set<LookBehindAssertion> finishedLookBehinds,
                     boolean hasPrefixStates) {
@@ -106,7 +106,7 @@ public class NFAState implements JsonConvertible {
     }
 
     private NFAState(short id,
-                    StateSet<? extends RegexASTNode> stateSet,
+                    ASTNodeSet<? extends RegexASTNode> stateSet,
                     byte flags,
                     CharSet matcherBuilder,
                     Set<LookBehindAssertion> finishedLookBehinds) {
@@ -114,11 +114,11 @@ public class NFAState implements JsonConvertible {
     }
 
     private NFAState(short id,
-                    StateSet<? extends RegexASTNode> stateSet,
+                    ASTNodeSet<? extends RegexASTNode> stateSet,
                     byte flags,
                     NFAStateTransition[] next,
                     NFAStateTransition[] prev,
-                    CompilationFinalBitSet possibleResults,
+                    List<Integer> possibleResults,
                     CharSet matcherBuilder,
                     Set<LookBehindAssertion> finishedLookBehinds) {
         this.id = id;
@@ -143,7 +143,7 @@ public class NFAState implements JsonConvertible {
         return finishedLookBehinds;
     }
 
-    public StateSet<? extends RegexASTNode> getStateSet() {
+    public ASTNodeSet<? extends RegexASTNode> getStateSet() {
         return stateSet;
     }
 
@@ -371,6 +371,7 @@ public class NFAState implements JsonConvertible {
         return forward ? prev : next;
     }
 
+    @Override
     public short getId() {
         return id;
     }
@@ -383,9 +384,9 @@ public class NFAState implements JsonConvertible {
      * priority, so when a single 'a' is encountered when searching for a match, the pre-calculated
      * result corresponding to capture group 1 must be preferred.
      */
-    public CompilationFinalBitSet getPossibleResults() {
+    public List<Integer> getPossibleResults() {
         if (possibleResults == null) {
-            return CompilationFinalBitSet.getEmptyInstance();
+            return Collections.emptyList();
         }
         return possibleResults;
     }
@@ -396,9 +397,12 @@ public class NFAState implements JsonConvertible {
 
     public void addPossibleResult(int index) {
         if (possibleResults == null) {
-            possibleResults = new CompilationFinalBitSet(TRegexOptions.TRegexTraceFinderMaxNumberOfResults);
+            possibleResults = new ArrayList<>();
         }
-        possibleResults.set(index);
+        int searchResult = Collections.binarySearch(possibleResults, index);
+        if (searchResult < 0) {
+            possibleResults.add((searchResult + 1) * -1, index);
+        }
     }
 
     public boolean isDead(boolean forward) {
@@ -428,7 +432,7 @@ public class NFAState implements JsonConvertible {
 
     @TruffleBoundary
     private JsonArray sourceSectionsToJson() {
-        return Json.array(getStateSet().stream().map(x -> ((RegexAST) getStateSet().getStateIndex()).getSourceSections(x)).filter(Objects::nonNull).flatMap(Collection::stream).map(x -> Json.obj(
+        return Json.array(getStateSet().stream().map(x -> getStateSet().getAst().getSourceSections(x)).filter(Objects::nonNull).flatMap(Collection::stream).map(x -> Json.obj(
                         Json.prop("start", x.getCharIndex()),
                         Json.prop("end", x.getCharEndIndex()))));
     }

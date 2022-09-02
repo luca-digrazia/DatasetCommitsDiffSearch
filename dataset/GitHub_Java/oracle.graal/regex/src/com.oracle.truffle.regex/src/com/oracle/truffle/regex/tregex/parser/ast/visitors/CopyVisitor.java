@@ -45,6 +45,7 @@ import com.oracle.truffle.regex.tregex.parser.ast.CharacterClass;
 import com.oracle.truffle.regex.tregex.parser.ast.Group;
 import com.oracle.truffle.regex.tregex.parser.ast.LookAheadAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
+import com.oracle.truffle.regex.tregex.parser.ast.MatchFound;
 import com.oracle.truffle.regex.tregex.parser.ast.PositionAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexASTNode;
@@ -55,8 +56,8 @@ import com.oracle.truffle.regex.tregex.parser.ast.Term;
 /**
  * An AST visitor that produces a deep copy of a given {@link Term} and its subtree, and registers
  * all new nodes in the {@link RegexAST} provided at instantiation. This visitor should be preferred
- * over recursively copying with {@link RegexASTNode#copy(RegexAST)} whenever possible, since it is
- * non-recursive. Note that this visitor is not thread-safe!
+ * over recursively copying with {@link RegexASTNode#copy(RegexAST, boolean)} whenever possible,
+ * since it is non-recursive. Note that this visitor is not thread-safe!
  *
  * @see DepthFirstTraversalRegexASTVisitor
  */
@@ -95,7 +96,7 @@ public class CopyVisitor extends DepthFirstTraversalRegexASTVisitor {
 
     @Override
     protected void visit(Sequence sequence) {
-        Sequence copy = sequence.copy(ast);
+        Sequence copy = sequence.copy(ast, false);
         ((Group) curParent).add(copy);
         curParent = copy;
     }
@@ -135,13 +136,18 @@ public class CopyVisitor extends DepthFirstTraversalRegexASTVisitor {
         doCopy(characterClass);
     }
 
+    @Override
+    protected void visit(MatchFound matchFound) {
+        throw new IllegalStateException();
+    }
+
     private void goToUpperParent() {
         assert curParent != null;
         curParent = curParent.getParent();
     }
 
     private Term doCopy(Term t) {
-        Term copy = t.copy(ast);
+        Term copy = t.copy(ast, false);
         ast.addSourceSections(copy, ast.getSourceSections(t));
         if (curParent == null) {
             assert copyRoot == null;

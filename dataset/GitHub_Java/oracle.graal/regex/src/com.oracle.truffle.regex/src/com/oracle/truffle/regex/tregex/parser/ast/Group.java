@@ -254,10 +254,6 @@ public final class Group extends Term implements RegexASTVisitorIterable {
         this.enclosedCaptureGroupsHigh = (byte) enclosedCaptureGroupsHigh;
     }
 
-    public boolean hasEnclosedCaptureGroups() {
-        return enclosedCaptureGroupsHigh > enclosedCaptureGroupsLow;
-    }
-
     /**
      * Returns the list of alternatives that make up this {@link Group}.
      * <p>
