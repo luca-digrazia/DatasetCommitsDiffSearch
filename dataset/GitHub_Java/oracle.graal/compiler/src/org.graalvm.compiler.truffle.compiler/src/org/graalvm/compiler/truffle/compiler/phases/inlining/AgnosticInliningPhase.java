@@ -58,14 +58,12 @@ public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
     private final TruffleMetaAccessProvider truffleMetaAccessProvider;
     private final CompilableTruffleAST compilableTruffleAST;
     private final OptionValues options;
-    private final PartialEvaluator.Request request;
 
-    public AgnosticInliningPhase(OptionValues options, PartialEvaluator partialEvaluator, TruffleMetaAccessProvider truffleMetaAccessProvider, CompilableTruffleAST compilableTruffleAST, PartialEvaluator.Request request) {
+    public AgnosticInliningPhase(OptionValues options, PartialEvaluator partialEvaluator, TruffleMetaAccessProvider truffleMetaAccessProvider, CompilableTruffleAST compilableTruffleAST) {
         this.options = options;
         this.partialEvaluator = partialEvaluator;
         this.truffleMetaAccessProvider = truffleMetaAccessProvider;
         this.compilableTruffleAST = compilableTruffleAST;
-        this.request = request;
     }
 
     private static InliningPolicyProvider chosenProvider(List<? extends InliningPolicyProvider> providers, String name) {
@@ -85,7 +83,7 @@ public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
     @Override
     protected void run(StructuredGraph graph, CoreProviders coreProviders) {
         final InliningPolicy policy = getInliningPolicyProvider().get(options, coreProviders);
-        final CallTree tree = new CallTree(options, partialEvaluator, truffleMetaAccessProvider, compilableTruffleAST, graph, policy, request);
+        final CallTree tree = new CallTree(options, partialEvaluator, truffleMetaAccessProvider, compilableTruffleAST, graph, policy);
         tree.dumpBasic("Before Inline", "");
         if (getPolyglotOptionValue(options, PolyglotCompilerOptions.Inlining)) {
             policy.run(tree);
