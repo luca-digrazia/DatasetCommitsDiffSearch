@@ -29,6 +29,12 @@
  */
 package com.oracle.truffle.llvm.parser.factories;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
@@ -44,6 +50,7 @@ import com.oracle.truffle.llvm.parser.model.attributes.AttributesGroup;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionDeclaration;
 import com.oracle.truffle.llvm.runtime.ArithmeticOperation;
 import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
+import com.oracle.truffle.llvm.runtime.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
@@ -332,12 +339,6 @@ import com.oracle.truffle.llvm.runtime.types.VariableBitWidthType;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.symbols.LocalVariableDebugInfo;
 import com.oracle.truffle.llvm.runtime.types.symbols.Symbol;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class BasicNodeFactory implements NodeFactory {
     protected final LLVMContext context;
@@ -1117,7 +1118,7 @@ public class BasicNodeFactory implements NodeFactory {
     }
 
     @Override
-    public LLVMExpressionNode createInlineAssemblerExpression(String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type.TypeArrayBuilder argTypes,
+    public LLVMExpressionNode createInlineAssemblerExpression(ExternalLibrary library, String asmExpression, String asmFlags, LLVMExpressionNode[] args, Type.TypeArrayBuilder argTypes,
                     Type retType) {
         Type[] retTypes = null;
         long[] retOffsets = null;
@@ -1151,8 +1152,8 @@ public class BasicNodeFactory implements NodeFactory {
             assemblyRoot = getLazyUnsupportedInlineRootNode(asmExpression, e);
         }
         LLVMIRFunction function = new LLVMIRFunction(Truffle.getRuntime().createCallTarget(assemblyRoot), null);
-        LLVMFunction functionDetail = LLVMFunction.create("<asm>", function, new FunctionType(MetaType.UNKNOWN, 0, false), LLVMSymbol.INVALID_INDEX, LLVMSymbol.INVALID_INDEX,
-                        false, assemblyRoot.getName());
+        LLVMFunction functionDetail = LLVMFunction.create("<asm>", library, function, new FunctionType(MetaType.UNKNOWN, 0, false), LLVMSymbol.INVALID_INDEX, LLVMSymbol.INVALID_INDEX,
+                        false);
         LLVMFunctionDescriptor asm = context.createFunctionDescriptor(functionDetail);
         LLVMManagedPointerLiteralNode asmFunction = LLVMManagedPointerLiteralNodeGen.create(LLVMManagedPointer.create(asm));
 
@@ -1411,7 +1412,6 @@ public class BasicNodeFactory implements NodeFactory {
                 case "llvm.stackrestore":
                     return LLVMStackRestoreNodeGen.create(args[1]);
                 case "llvm.frameaddress":
-                case "llvm.frameaddress.p0i8":
                     return LLVMFrameAddressNodeGen.create(args[1]);
                 case "llvm.va_start":
                     return LLVMVAStartNodeGen.create(callerArgumentCount, args[1]);
