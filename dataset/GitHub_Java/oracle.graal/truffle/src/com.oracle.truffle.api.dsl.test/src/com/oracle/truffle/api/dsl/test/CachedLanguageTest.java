@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -62,11 +62,10 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 
 @SuppressWarnings("unused")
-public class CachedLanguageTest extends AbstractLibraryTest {
+public class CachedLanguageTest extends AbstractPolyglotTest {
 
     @Test
     public void testCachedLanguage() {
@@ -124,6 +123,11 @@ public class CachedLanguageTest extends AbstractLibraryTest {
         @Override
         protected Env createContext(Env env) {
             return env;
+        }
+
+        @Override
+        protected boolean isObjectOfLanguage(Object object) {
+            return false;
         }
 
         public static CachedLanguageTestLanguage getCurrentLanguage() {
@@ -186,6 +190,10 @@ public class CachedLanguageTest extends AbstractLibraryTest {
             return env;
         }
 
+        @Override
+        protected boolean isObjectOfLanguage(Object object) {
+            return false;
+        }
     }
 
     abstract static class CachedLanguageError1Node extends Node {
@@ -262,9 +270,9 @@ public class CachedLanguageTest extends AbstractLibraryTest {
     @GenerateLibrary
     public abstract static class CachedLanguageTestLibrary extends Library {
 
-        public abstract CachedLanguageTestLanguage m0(Object receiver);
+        public abstract Object m0(Object receiver);
 
-        public abstract CachedLanguageTestLanguage m1(Object receiver);
+        public abstract Object m1(Object receiver);
     }
 
     @ExportLibrary(CachedLanguageTestLibrary.class)
@@ -272,31 +280,14 @@ public class CachedLanguageTest extends AbstractLibraryTest {
     static class CachedLanguageLibraryReceiver {
 
         @ExportMessage
-        final CachedLanguageTestLanguage m0(@CachedLanguage CachedLanguageTestLanguage env) {
-            return env;
+        final Object m0(@CachedLanguage CachedLanguageTestLanguage env) {
+            return "m0";
         }
 
         @ExportMessage
-        final CachedLanguageTestLanguage m1(@CachedLanguage LanguageReference<CachedLanguageTestLanguage> env) {
-            return env.get();
+        final Object m1(@CachedLanguage LanguageReference<CachedLanguageTestLanguage> env) {
+            return "m1";
         }
-    }
-
-    @Test
-    public void testCachedLanguageReceiver() {
-        setupEnv();
-        context.initialize(TEST_LANGUAGE);
-        CachedLanguageLibraryReceiver receiver = new CachedLanguageLibraryReceiver();
-
-        CachedLanguageTestLibrary cached = createCached(CachedLanguageTestLibrary.class, receiver);
-
-        assertSame(CachedLanguageTestLanguage.getCurrentLanguage(), cached.m0(receiver));
-        assertSame(CachedLanguageTestLanguage.getCurrentLanguage(), cached.m1(receiver));
-
-        CachedLanguageTestLibrary uncached = getUncached(CachedLanguageTestLibrary.class, receiver);
-
-        assertSame(CachedLanguageTestLanguage.getCurrentLanguage(), uncached.m0(receiver));
-        assertSame(CachedLanguageTestLanguage.getCurrentLanguage(), uncached.m1(receiver));
     }
 
 }
