@@ -39,6 +39,7 @@ import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatures;
@@ -49,6 +50,7 @@ import com.oracle.svm.core.WeakIdentityHashMap;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.ImageClassLoader;
+import com.oracle.svm.hosted.NativeImageGenerator;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.c.GraalAccess;
 
@@ -132,17 +134,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
 
     @Override
     public InitKind specifiedInitKindFor(Class<?> clazz) {
-        return classInitializationConfiguration.lookupKind(clazz.getTypeName()).getLeft();
-    }
-
-    @Override
-    public boolean canBeProvenSafe(Class<?> clazz) {
-        InitKind initKind = specifiedInitKindFor(clazz);
-        return initKind == null || (initKind.isDelayed() && !isStrictlyDefined(clazz));
-    }
-
-    private Boolean isStrictlyDefined(Class<?> clazz) {
-        return classInitializationConfiguration.lookupKind(clazz.getTypeName()).getRight();
+        return classInitializationConfiguration.lookupKind(clazz.getTypeName());
     }
 
     @Override
@@ -515,7 +507,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
                                                     c.getTypeName(), "initialize-at-build-time")))
                                     .append("\n");
                 } else {
-                    assert specifiedKind.isDelayed() : "Specified kind must be the same as actual kind for type " + c.getTypeName();
+                    assert specifiedKind.isDelayed() : "Specified kind must be the same as actual kind";
                     String reason = classInitializationConfiguration.lookupReason(c.getTypeName());
                     detailedMessage.append(c.getTypeName()).append(" the class was requested to be initialized at run time (").append(reason).append("). ")
                                     .append(classInitializationErrorMessage(c, "Try avoiding to initialize the class that caused initialization of " + c.getTypeName()))
@@ -572,7 +564,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         }
         superResult = superResult.max(processInterfaces(clazz, memoize));
 
-        if (memoize && superResult == InitKind.BUILD_TIME && clazzResult == InitKind.RUN_TIME && canBeProvenSafe(clazz)) {
+        if (memoize && superResult == InitKind.BUILD_TIME && clazzResult == InitKind.RUN_TIME && specifiedInitKindFor(clazz) == null) {
             /*
              * Check if the class initializer is side-effect free using a simple intraprocedural
              * analysis.
@@ -639,12 +631,22 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
             return InitKind.BUILD_TIME;
         } else if (clazz.getTypeName().contains("$$StringConcat")) {
             return InitKind.BUILD_TIME;
-        } else if (specifiedInitKindFor(clazz) != null) {
-            return specifiedInitKindFor(clazz);
         } else {
-            /* The default value. */
-            return InitKind.RUN_TIME;
+            ClassLoader typeClassLoader = clazz.getClassLoader();
+            if (typeClassLoader == null ||
+                            typeClassLoader == NativeImageGenerator.class.getClassLoader() ||
+                            typeClassLoader == com.sun.crypto.provider.SunJCE.class.getClassLoader() ||
+                            /* JDK 11 */
+                            typeClassLoader == OptionKey.class.getClassLoader() ||
+                            /* JDK 15 */
+                            typeClassLoader == ConfigurableClassInitialization.class.getClassLoader()) {
+                return InitKind.BUILD_TIME;
+            } else if (specifiedInitKindFor(clazz) != null) {
+                return specifiedInitKindFor(clazz);
+            }
         }
+
+        return InitKind.RUN_TIME;
     }
 
     private static boolean isProxyFromAnnotation(Class<?> clazz) {
