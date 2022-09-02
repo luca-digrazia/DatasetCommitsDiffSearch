@@ -58,12 +58,12 @@ public interface RepeatingNode extends NodeInterface {
     /**
      * A value indicating that the loop should be repeated.
      */
-    Object CONTINUE_LOOP_STATUS = new Object();
+    int CONTINUE_LOOP_STATUS = 0;
 
     /**
      * A value indicating that the loop should not be repeated.
      */
-    Object BREAK_LOOP_STATUS = new Object();
+    int BREAK_LOOP_STATUS = -1;
 
     /**
      * Repeatedly invoked by a {@link LoopNode loop node} implementation until the method returns
@@ -86,7 +86,7 @@ public interface RepeatingNode extends NodeInterface {
      * @return <code>CONTINUE_LOOP_STATUS</code> if the method should be executed again to
      *         complete the loop and any other (language-specific) value if it must not.
      */
-    default Object executeRepeatingWithStatus(VirtualFrame frame) {
+    default int executeRepeatingWithStatus(VirtualFrame frame) {
         if (executeRepeating(frame)) {
             return CONTINUE_LOOP_STATUS;
         } else {

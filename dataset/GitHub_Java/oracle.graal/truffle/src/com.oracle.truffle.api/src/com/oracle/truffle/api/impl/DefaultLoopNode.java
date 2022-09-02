@@ -61,11 +61,6 @@ public final class DefaultLoopNode extends LoopNode {
     }
 
     @Override
-    public void executeLoop(VirtualFrame frame) {
-        executeLoopWithStatus(frame);
-    }
-
-    @Override
     public int executeLoopWithStatus(VirtualFrame frame) {
         int status;
         while ((status = repeatNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS) {

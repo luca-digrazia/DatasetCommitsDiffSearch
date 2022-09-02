@@ -45,11 +45,6 @@ public final class OptimizedLoopNode extends LoopNode {
     }
 
     @Override
-    public void executeLoop(VirtualFrame frame) {
-        executeLoopWithStatus(frame);
-    }
-
-    @Override
     public int executeLoopWithStatus(VirtualFrame frame) {
         int status;
         int loopCount = 0;

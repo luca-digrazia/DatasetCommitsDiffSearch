@@ -107,11 +107,6 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     }
 
     @Override
-    public void executeLoop(VirtualFrame frame) {
-        executeLoopWithStatus(frame);
-    }
-
-    @Override
     public int executeLoopWithStatus(VirtualFrame frame) {
         if (CompilerDirectives.inInterpreter()) {
             try {
