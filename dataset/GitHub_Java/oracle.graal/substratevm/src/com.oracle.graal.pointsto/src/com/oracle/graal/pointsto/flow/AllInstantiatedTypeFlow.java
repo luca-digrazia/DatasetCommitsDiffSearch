@@ -39,11 +39,6 @@ public final class AllInstantiatedTypeFlow extends TypeFlow<AnalysisType> {
     }
 
     @Override
-    public boolean canSaturate() {
-        return false;
-    }
-
-    @Override
     public String toString() {
         return "AllInstantiated" + super.toString();
     }

@@ -211,14 +211,17 @@ public class MethodFlowsGraph {
 
     @SuppressWarnings("unchecked")
     public <T extends TypeFlow<?>> T lookupCloneOf(BigBang bb, T original) {
-        assert original != null : "Looking for the clone of a 'null' flow in " + this;
-        assert !original.isClone() : "Looking for the clone of the already cloned flow " + original + " in " + this;
+        assert original != null && !original.isClone();
         assert !(original instanceof FieldTypeFlow) : "Trying to clone a field type flow";
         assert !(original instanceof ArrayElementsTypeFlow) : "Trying to clone an mixed elements type flow";
 
         if (original instanceof AllInstantiatedTypeFlow || original instanceof AllSynchronizedTypeFlow) {
             /* All instantiated is not cloneable. */
             return original;
+        }
+        if (original instanceof ProxyTypeFlow) {
+            /* The ProxyTypeFlow is just a place holder in the original graph for its input. */
+            return (T) ((ProxyTypeFlow) original).getInput();
         }
 
         int slot = original.getSlot();
@@ -326,11 +329,11 @@ public class MethodFlowsGraph {
     }
 
     public void linearizeGraph() {
-        linearizedGraph = doLinearizeGraph();
+        linearizedGraph = getLinearizeGraph();
         isLinearized = true;
     }
 
-    private TypeFlow<?>[] doLinearizeGraph() {
+    public TypeFlow<?>[] getLinearizeGraph() {
 
         Deque<TypeFlow<?>> worklist = new ArrayDeque<>();
 
