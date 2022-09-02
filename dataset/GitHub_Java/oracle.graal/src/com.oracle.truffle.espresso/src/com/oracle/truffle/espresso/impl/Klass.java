@@ -52,6 +52,7 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
+import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
@@ -88,7 +89,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     private volatile ArrayKlass arrayClass;
 
     @CompilationFinal //
-    private StaticObjectImpl mirrorCache;
+    private StaticObjectClass mirrorCache;
 
     public final ObjectKlass[] getSuperInterfaces() {
         return superInterfaces;
@@ -119,8 +120,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         // TODO(peterssen): Make thread-safe.
         if (mirrorCache == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            mirrorCache = new StaticObjectImpl(getMeta().Class);
-            mirrorCache.setHiddenField(getMeta().HIDDEN_MIRROR_KLASS, this);
+            mirrorCache = new StaticObjectClass(this);
         }
         return mirrorCache;
     }
@@ -478,7 +478,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         return null;
     }
 
-    public abstract Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature); /*{
+    public final Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
         methodLookupCount.inc();
         // TODO(peterssen): Improve lookup performance.
         Method method = lookupDeclaredMethod(methodName, signature);
@@ -489,7 +489,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
             method = getSuperKlass().lookupMethod(methodName, signature);
         }
         return method;
-    }*/
+    }
 
     public abstract Method vtableLookup(int vtableIndex);
 
