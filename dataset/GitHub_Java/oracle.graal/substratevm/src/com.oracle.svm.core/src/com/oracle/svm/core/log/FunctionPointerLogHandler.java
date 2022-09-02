@@ -69,11 +69,12 @@ public class FunctionPointerLogHandler implements LogHandlerExtension {
     }
 
     @Override
-    public Log enterFatalContext(CodePointer callerIP, String msg, Throwable ex) {
+    public boolean fatalContext(CodePointer callerIP, String msg, Throwable ex) {
+        boolean res = true;
         if (delegate instanceof LogHandlerExtension) {
-            return ((LogHandlerExtension) delegate).enterFatalContext(callerIP, msg, ex);
+            res = ((LogHandlerExtension) delegate).fatalContext(callerIP, msg, ex);
         }
-        return fatalLog;
+        return res;
     }
 
     /**
@@ -100,6 +101,11 @@ public class FunctionPointerLogHandler implements LogHandlerExtension {
     }
 
     private final FatalLog fatalLog = new FatalLog();
+
+    @Override
+    public Log getFatalLog() {
+        return fatalLogFunctionPointer.isNonNull() ? fatalLog : Log.log();
+    }
 
     @Override
     public void fatalError() {
