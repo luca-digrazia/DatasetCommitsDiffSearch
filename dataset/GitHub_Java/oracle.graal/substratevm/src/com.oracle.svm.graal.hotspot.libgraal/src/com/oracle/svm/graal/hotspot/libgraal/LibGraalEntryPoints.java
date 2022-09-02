@@ -35,27 +35,18 @@ import java.util.Map;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.hotspot.CompilationTask;
 import org.graalvm.compiler.hotspot.HotSpotGraalCompiler;
-import org.graalvm.compiler.hotspot.HotSpotTTYStreamProvider;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.libgraal.LibGraal;
+import org.graalvm.libgraal.OptionsEncoder;
 import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.function.CEntryPoint.Builtin;
-import org.graalvm.nativeimage.c.function.CEntryPoint.IsolateContext;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.util.OptionsEncoder;
-import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
-import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.c.CGlobalData;
-import com.oracle.svm.core.c.CGlobalDataFactory;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 
 import jdk.vm.ci.code.InstalledCode;
@@ -74,14 +65,8 @@ public final class LibGraalEntryPoints {
 
     private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
 
-    /**
-     * @see org.graalvm.compiler.hotspot.HotSpotTTYStreamProvider.Locker
-     */
-    static final CGlobalData<Pointer> LOG_FILE_LOCK = CGlobalDataFactory.createWord((Pointer) WordFactory.unsigned(HotSpotTTYStreamProvider.Locker.UNLOCKED));
-
-    @SuppressWarnings("unused")
-    @CEntryPoint(builtin = Builtin.GET_CURRENT_THREAD, name = "Java_org_graalvm_libgraal_LibGraal_getCurrentIsolateThread")
-    private static native IsolateThread getCurrentIsolateThread(PointerBase env, PointerBase hsClazz, @IsolateContext Isolate isolate);
+    @CEntryPoint(builtin = CEntryPoint.Builtin.ATTACH_THREAD, name = "Java_org_graalvm_libgraal_LibGraal_attachThread")
+    private static native IsolateThread attachThread(PointerBase env, PointerBase hsClazz, Isolate isolate);
 
     private static long cachedOptionsHash;
     private static OptionValues cachedOptions;
@@ -106,21 +91,6 @@ public final class LibGraalEntryPoints {
             cachedOptions = new OptionValues(dstMap);
         }
         return cachedOptions;
-    }
-
-    @SuppressWarnings({"unused"})
-    @CEntryPoint(name = "Java_org_graalvm_libgraal_LibGraal_setCurrentThreadName")
-    @CEntryPointOptions(include = LibGraalFeature.IsEnabled.class)
-    private static void setCurrentThreadName(PointerBase jniEnv,
-                    PointerBase jclass,
-                    @CEntryPoint.IsolateThreadContext long isolateThread,
-                    CCharPointer nameCString) {
-        try {
-            String name = CTypeConversion.toJavaString(nameCString);
-            Thread.currentThread().setName(name);
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
     }
 
     /**
@@ -154,7 +124,7 @@ public final class LibGraalEntryPoints {
      */
     @SuppressWarnings({"unused", "try"})
     @CEntryPoint(name = "Java_org_graalvm_compiler_hotspot_test_CompileTheWorld_compileMethodInLibgraal")
-    @CEntryPointOptions(include = LibGraalFeature.IsEnabled.class)
+    @CEntryPointOptions(include = HotSpotGraalLibraryFeature.IsEnabled.class)
     private static long compileMethod(PointerBase jniEnv,
                     PointerBase jclass,
                     @CEntryPoint.IsolateThreadContext long isolateThread,
