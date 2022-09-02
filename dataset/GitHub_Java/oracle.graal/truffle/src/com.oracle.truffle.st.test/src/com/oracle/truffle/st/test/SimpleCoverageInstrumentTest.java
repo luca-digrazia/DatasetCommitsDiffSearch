@@ -1,22 +1,62 @@
+/*
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * The Universal Permissive License (UPL), Version 1.0
+ *
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
+ *
+ * (a) the Software, and
+ *
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 package com.oracle.truffle.st.test;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Source;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
-import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.st.Coverage;
 import com.oracle.truffle.st.SimpleCoverageInstrument;
 
 public class SimpleCoverageInstrumentTest {
 
-    private final String JS_SOURCE = "var N = 2000;\n" +
+    private static final String JS_SOURCE = "var N = 2000;\n" +
                     "var EXPECTED = 17393;\n" +
                     "\n" +
                     "function Natural() {\n" +
@@ -89,7 +129,7 @@ public class SimpleCoverageInstrumentTest {
     @Test
     public void exampleJSTest() throws IOException {
         // This test only makes sense if JS is available.
-        Assume.assumeTrue(Context.create().getEngine().getLanguages().containsKey("js"));
+        Assume.assumeTrue(Engine.create().getLanguages().containsKey("js"));
         // This is how we can create a context with our tool enabled if we are embeddined in java
         try (Context context = Context.newBuilder("js").option(SimpleCoverageInstrument.ID, "true").option(SimpleCoverageInstrument.ID + ".PrintCoverage", "false").build()) {
             Source source = Source.newBuilder("js", JS_SOURCE, "main").build();
@@ -104,22 +144,22 @@ public class SimpleCoverageInstrumentTest {
     // class path issolation is disabled in the pom.xml file by adding -XX:-UseJVMCIClassLoader to
     // the command line.
     // This command line flag should never be used in production.
-    private void assertJSCorrect(final Context context) {
+    private static void assertJSCorrect(final Context context) {
         // We can lookup services exported by the instrument, in our case this is
         // the instrument itself but it does not have to be.
-        SimpleCoverageInstrument coverage = context.getEngine().getInstruments().get(SimpleCoverageInstrument.ID).lookup(SimpleCoverageInstrument.class);
+        SimpleCoverageInstrument coverageInstrument = context.getEngine().getInstruments().get(SimpleCoverageInstrument.ID).lookup(SimpleCoverageInstrument.class);
         // We then use the looked up service to assert that it behaves as expected, just like in any
         // other test.
-        Map<com.oracle.truffle.api.source.Source, Set<SourceSection>> sourceToNotYetCoveredSections = coverage.getSourceToNotYetCoveredSections();
-        Assert.assertEquals(1, sourceToNotYetCoveredSections.size());
-        sourceToNotYetCoveredSections.forEach((com.oracle.truffle.api.source.Source s, Set<SourceSection> v) -> {
-            List<Integer> notYetCoveredLineNumbers = coverage.notYetCoveredLineNumbers(s);
+        Map<com.oracle.truffle.api.source.Source, Coverage> coverageMap = coverageInstrument.getCoverageMap();
+        Assert.assertEquals(1, coverageMap.size());
+        coverageMap.forEach((com.oracle.truffle.api.source.Source s, Coverage v) -> {
+            Set<Integer> notYetCoveredLineNumbers = coverageInstrument.nonCoveredLineNumbers(s);
             Object[] expected = new Integer[]{47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 61, 67};
-            Assert.assertArrayEquals(expected, notYetCoveredLineNumbers.toArray());
+            Assert.assertArrayEquals(expected, notYetCoveredLineNumbers.stream().sorted().toArray());
         });
     }
 
-    private final String SL_SOURCE = "\n" +
+    private static final String SL_SOURCE = "\n" +
                     "function neverCalled() {\n" +
                     "    x = 5;\n" +
                     "    y = 9;\n" +
@@ -136,22 +176,22 @@ public class SimpleCoverageInstrumentTest {
     @Test
     public void exampleSLTest() throws IOException {
         // This test only makes sense if SL is available.
-        Assume.assumeTrue(Context.create().getEngine().getLanguages().containsKey("sl"));
+        Assume.assumeTrue(Engine.create().getLanguages().containsKey("sl"));
         // This is how we can create a context with our tool enabled if we are embeddined in java
         try (Context context = Context.newBuilder("sl").option(SimpleCoverageInstrument.ID, "true").option(SimpleCoverageInstrument.ID + ".PrintCoverage", "false").build()) {
             Source source = Source.newBuilder("sl", SL_SOURCE, "main").build();
             context.eval(source);
             // We can lookup services exported by the instrument, in our case this is
             // the instrument itself but it does not have to be.
-            SimpleCoverageInstrument coverage = context.getEngine().getInstruments().get(SimpleCoverageInstrument.ID).lookup(SimpleCoverageInstrument.class);
-            // We then use the looked up service to assert that it behaves as expected, just like in any
-            // other test.
-            Map<com.oracle.truffle.api.source.Source, Set<SourceSection>> sourceToNotYetCoveredSections = coverage.getSourceToNotYetCoveredSections();
-            Assert.assertEquals(1, sourceToNotYetCoveredSections.size());
-            sourceToNotYetCoveredSections.forEach((com.oracle.truffle.api.source.Source s, Set<SourceSection> v) -> {
-                List<Integer> notYetCoveredLineNumbers = coverage.notYetCoveredLineNumbers(s);
+            SimpleCoverageInstrument coverageInstrument = context.getEngine().getInstruments().get(SimpleCoverageInstrument.ID).lookup(SimpleCoverageInstrument.class);
+            // We then use the looked up service to assert that it behaves as expected, just like in
+            // any other test.
+            Map<com.oracle.truffle.api.source.Source, Coverage> coverageMap = coverageInstrument.getCoverageMap();
+            Assert.assertEquals(1, coverageMap.size());
+            coverageMap.forEach((com.oracle.truffle.api.source.Source s, Coverage v) -> {
+                Set<Integer> notYetCoveredLineNumbers = coverageInstrument.nonCoveredLineNumbers(s);
                 Object[] expected = new Integer[]{3, 4, 5};
-                Assert.assertArrayEquals(expected, notYetCoveredLineNumbers.toArray());
+                Assert.assertArrayEquals(expected, notYetCoveredLineNumbers.stream().sorted().toArray());
             });
         }
     }
