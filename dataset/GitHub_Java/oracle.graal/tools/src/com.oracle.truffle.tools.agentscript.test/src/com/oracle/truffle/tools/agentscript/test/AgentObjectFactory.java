@@ -37,7 +37,6 @@ import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Value;
 import static org.junit.Assert.assertNotNull;
 import com.oracle.truffle.tools.agentscript.AgentScript;
-import java.io.ByteArrayOutputStream;
 import java.util.function.Predicate;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
@@ -56,12 +55,7 @@ final class AgentObjectFactory extends ProxyLanguage {
     }
 
     static Context newContext() {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        return newContext(os, os);
-    }
-
-    static Context newContext(ByteArrayOutputStream out, ByteArrayOutputStream err) {
-        return Context.newBuilder().out(out).err(err).allowExperimentalOptions(true).allowHostAccess(HostAccess.ALL).build();
+        return Context.newBuilder().allowExperimentalOptions(true).allowHostAccess(HostAccess.ALL).build();
     }
 
     @Override
@@ -89,7 +83,6 @@ final class AgentObjectFactory extends ProxyLanguage {
     }
 
     public static Value createAgentObject(Context context) {
-        cleanAgentObject();
         ProxyLanguage.setDelegate(new AgentObjectFactory());
 
         // BEGIN: AgentObjectFactory#createAgentObject
@@ -101,13 +94,10 @@ final class AgentObjectFactory extends ProxyLanguage {
         access.registerAgentScript(agentSrc);
         // END: AgentObjectFactory#createAgentObject
 
+        agentObject = null;
         Value value = context.eval(ProxyLanguage.ID, "");
         assertNotNull("Agent object has been initialized", agentObject);
         return value;
-    }
-
-    static void cleanAgentObject() {
-        agentObject = null;
     }
 
     private static Source createAgentSource() {
