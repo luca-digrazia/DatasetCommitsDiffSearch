@@ -338,7 +338,7 @@ public final class AllocationReporter {
             return;
         }
         // TruffleObject is O.K.
-        boolean isTO = InstrumentAccessor.ACCESSOR.isTruffleObject(value);
+        boolean isTO = InstrumentationHandler.ACCESSOR.isTruffleObject(value);
         assert isTO : "Wrong value class, TruffleObject is required. Was: " + value.getClass().getName();
     }
 
@@ -361,10 +361,6 @@ class AllocationReporterSnippets extends TruffleLanguage<ContextObject> {
     void example() {
     }
 
-    static ContextObject getCurrentContext() {
-        return getCurrentContext(AllocationReporterSnippets.class);
-    }
-
     // @formatter:off
     // BEGIN: AllocationReporterSnippets#example
     @Override
@@ -374,7 +370,7 @@ class AllocationReporterSnippets extends TruffleLanguage<ContextObject> {
     }
 
     Object allocateNew() {
-        AllocationReporter reporter = getCurrentContext().getReporter();
+        AllocationReporter reporter = getContextReference().get().getReporter();
         // Test if the reporter is active, we should compute the size estimate
         if (reporter.isActive()) {
             long size = findSizeEstimate();
@@ -392,7 +388,7 @@ class AllocationReporterSnippets extends TruffleLanguage<ContextObject> {
     }
 
     Object allocateComplex() {
-        AllocationReporter reporter = getCurrentContext().getReporter();
+        AllocationReporter reporter = getContextReference().get().getReporter();
         // If the allocated size is a constant, onEnter() and onReturnValue()
         // can be called without a fast-path performance penalty when not active
         reporter.onEnter(null, 0, 16);

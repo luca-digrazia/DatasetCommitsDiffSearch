@@ -2085,23 +2085,6 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Returns the path separator used to separate filenames in a path list. On UNIX the path
-         * separator is {@code ':'}. On Windows it's {@code ';'}.
-         *
-         * @return the path separator
-         * @since 20.0.0 beta 1
-         */
-        @TruffleBoundary
-        public String getPathSeparator() {
-            checkDisposed();
-            try {
-                return fileSystemContext.fileSystem.getPathSeparator();
-            } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystemContext.fileSystem);
-            }
-        }
-
-        /**
          * Registers additional services provided by the language. The registered services are made
          * available to users via
          * {@link #lookup(com.oracle.truffle.api.nodes.LanguageInfo, java.lang.Class)} query method.
@@ -2125,15 +2108,6 @@ public abstract class TruffleLanguage<C> {
                 throw new IllegalStateException("The registerService method can only be called during the execution of the Env.createContext method.");
             }
             languageServicesCollector.add(service);
-        }
-
-        public TruffleProcessBuilder newProcessBuilder(String... command) {
-            if (!AccessAPI.engineAccess().isCreateProcessAllowed(vmObject)) {
-                throw new SecurityException("Process creation is not allowed, to enable it set Context.Builder.allowCreateProcess(true).");
-            }
-            List<String> cmd = new ArrayList<>(command.length);
-            Collections.addAll(cmd, command);
-            return new TruffleProcessBuilder(this.vmObject, cmd);
         }
 
         @SuppressWarnings("rawtypes")

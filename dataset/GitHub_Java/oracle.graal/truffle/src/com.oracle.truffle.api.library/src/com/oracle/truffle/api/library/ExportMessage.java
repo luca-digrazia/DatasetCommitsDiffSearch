@@ -46,8 +46,17 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import com.oracle.truffle.api.dsl.Specialization;
+
 /**
- * Exports the annotated receiver type element as active library message.
+ * Exports the annotated method or class as library message. The annotation can only be applied to
+ * method or classes with an enclosing class annotated by {@link ExportLibrary}. Exported messages
+ * are inherited to subclasses of the enclosing class. If they are redeclared in the sub-class then
+ * the semantics of the overridden message is replaced by the semantics of the sub-class. A class
+ * and a method cannot be exported at the same time for a single message and enclosing class.
+ *
+ * @see ExportLibrary For usage examples.
+ * @since 19.0
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD, ElementType.TYPE})
@@ -55,26 +64,54 @@ import java.lang.annotation.Target;
 public @interface ExportMessage {
 
     /**
-     * The library exported. Default inherited from the method name.
+     * Returns the message simple name to export. If not specified, the exported message name is
+     * inherited from the enclosing method name or class. In case of an exported class the first
+     * letter is automatically translated to lower-case. The name attribute should be specified if
+     * the exported message does not match the exported method or class name or if multiple messages
+     * need to be exported for a method or class.
+     *
+     * @since 19.0
      */
     String name() default "";
 
     /**
-     * Automatically selected if the name of the message is unique. Needs to be specified if the
-     * name is not unique when implementing multiple libraries.
+     * Returns the library to export by this method or class. Automatically selected if the name of
+     * the message is unique. Needs to be specified if the name is not unique when implementing
+     * multiple libraries.
+     *
+     * @since 19.0
      */
     Class<? extends Library> library() default Library.class;
 
+    /***
+     * Specifies the limit of an exported message. The limit specifies the number of specialized
+     * instances of {@link CachedLibrary cached library} should be used until the library rewrites
+     * itself to an uncached case.
+     *
+     * @see Specialization#limit()
+     * @see CachedLibrary
+     * @since 19.0
+     */
     String limit() default "";
 
+    /***
+     * @since 19.0
+     */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.METHOD, ElementType.TYPE})
     public @interface Repeat {
-
+        /***
+         * @since 19.0
+         */
         ExportMessage[] value();
 
     }
 
+    /***
+     * Explicitly ignores warning messages originating from the {@link ExportLibrary} annotation.
+     *
+     * @since 19.0
+     */
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.METHOD, ElementType.TYPE})
     public @interface Ignore {

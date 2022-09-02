@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,9 +40,6 @@
  */
 package org.graalvm.nativeimage;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-
 import org.graalvm.nativeimage.impl.VMRuntimeSupport;
 
 /**
@@ -73,16 +70,6 @@ public final class VMRuntime {
      */
     public static void shutdown() {
         ImageSingletons.lookup(VMRuntimeSupport.class).shutdown();
-    }
-
-    /**
-     * If implemented, a heap dump is generated in hprof binary format. Otherwise
-     * UnsupportedOperationException gets thrown.
-     *
-     * @since 20.1
-     */
-    public static boolean dumpHeap(FileOutputStream fileOutputStream, boolean gcBefore) throws IOException {
-        return ImageSingletons.lookup(VMRuntimeSupport.class).dumpHeap(fileOutputStream, gcBefore);
     }
 
     private VMRuntime() {

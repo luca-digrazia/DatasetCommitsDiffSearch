@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -45,10 +45,8 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
 import com.oracle.truffle.api.frame.FrameInstance;
@@ -114,26 +112,6 @@ public final class DebugException extends RuntimeException {
 
     Throwable getRawException() {
         return exception;
-    }
-
-    /**
-     * Returns the guest language representation of the exception, or <code>null</code> if the
-     * requesting language class does not match the root node language at the throw location.
-     *
-     * @param languageClass the requesting Truffle language class object
-     * @return the throwable guest language object
-     *
-     * @since 20.1
-     */
-    public Throwable asGuestException(Class<? extends TruffleLanguage<?>> languageClass) {
-        Objects.requireNonNull(languageClass);
-        RootNode rootNode = throwLocation.getRootNode();
-        if (languageClass == null || rootNode == null) {
-            return null;
-        }
-        // check if language class of the root node corresponds to the input language
-        TruffleLanguage<?> language = Debugger.ACCESSOR.nodeSupport().getLanguage(rootNode);
-        return language != null && language.getClass() == languageClass ? getRawException() : null;
     }
 
     /**

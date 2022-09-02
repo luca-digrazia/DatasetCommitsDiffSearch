@@ -765,15 +765,12 @@ public final class NodeUtil {
                     return nodeClass.getFieldName(field);
                 }
             } else if (nodeClass.isChildrenField(field)) {
-                Object[] arrayNodes = (Object[]) nodeClass.getFieldObject(field, parent);
-                if (arrayNodes != null) {
-                    int index = 0;
-                    for (Object arrayNode : arrayNodes) {
-                        if (arrayNode == node) {
-                            return nodeClass.getFieldName(field) + "[" + index + "]";
-                        }
-                        index++;
+                int index = 0;
+                for (Object arrayNode : (Object[]) nodeClass.getFieldObject(field, parent)) {
+                    if (arrayNode == node) {
+                        return nodeClass.getFieldName(field) + "[" + index + "]";
                     }
+                    index++;
                 }
             } else if (nodeClass.nodeFieldsOrderedByKind()) {
                 break;

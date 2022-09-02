@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,23 +40,12 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.NodeLibrary;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import java.util.Iterator;
+
+import com.oracle.truffle.api.Scope;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
@@ -70,36 +59,33 @@ import com.oracle.truffle.api.source.SourceSection;
  */
 public final class DebugScope {
 
-    private static final InteropLibrary INTEROP = InteropLibrary.getUncached();
-    private static final NodeLibrary NODE = NodeLibrary.getUncached();
-
-    private final Object scope;
+    private final Scope scope;
+    private final Iterator<Scope> iterator;
     private final DebuggerSession session;
     private final SuspendedEvent event;
-    private final Node node;
-    private final Frame frame;
+    private final MaterializedFrame frame;
     private final RootNode root;
     private final LanguageInfo language;
     private DebugScope parent;
     private ValuePropertiesCollection variables;
 
-    DebugScope(Object scope, DebuggerSession session,
-                    SuspendedEvent event, Node node, Frame frame, RootNode root) {
-        this(scope, session, event, node, frame, root, null);
+    DebugScope(Scope scope, Iterator<Scope> iterator, DebuggerSession session,
+                    SuspendedEvent event, MaterializedFrame frame, RootNode root) {
+        this(scope, iterator, session, event, frame, root, null);
     }
 
-    DebugScope(Object scope, DebuggerSession session,
+    DebugScope(Scope scope, Iterator<Scope> iterator, DebuggerSession session,
                     LanguageInfo language) {
-        this(scope, session, null, null, null, null, language);
+        this(scope, iterator, session, null, null, null, language);
     }
 
-    private DebugScope(Object scope, DebuggerSession session,
-                    SuspendedEvent event, Node node, Frame frame, RootNode root,
+    private DebugScope(Scope scope, Iterator<Scope> iterator, DebuggerSession session,
+                    SuspendedEvent event, MaterializedFrame frame, RootNode root,
                     LanguageInfo language) {
         this.scope = scope;
+        this.iterator = iterator;
         this.session = session;
         this.event = event;
-        this.node = node;
         this.frame = frame;
         this.root = root;
         this.language = language;
@@ -111,11 +97,7 @@ public final class DebugScope {
      * @since 0.26
      */
     public String getName() {
-        try {
-            return INTEROP.asString(INTEROP.toDisplayString(scope));
-        } catch (UnsupportedMessageException ex) {
-            throw DebugException.create(session, ex, language, node, true, null);
-        }
+        return scope.getName();
     }
 
     /**
@@ -128,55 +110,26 @@ public final class DebugScope {
     public DebugScope getParent() throws DebugException {
         verifyValidState();
         try {
-            if (parent == null && INTEROP.hasScopeParent(scope)) {
-                parent = new DebugScope(INTEROP.getScopeParent(scope), session, event, node, frame, root, language);
+            if (parent == null && iterator.hasNext()) {
+                parent = new DebugScope(iterator.next(), iterator, session, event, frame, root, language);
             }
         } catch (ThreadDeath td) {
             throw td;
         } catch (Throwable ex) {
-            throw DebugException.create(session, ex, language);
+            throw new DebugException(session, ex, language, null, true, null);
         }
         return parent;
     }
 
     /**
      * Test if this scope represents the function scope at the frame it was
-     * {@link DebugStackFrame#getScope() obtained from}.
+     * {@link DebugStackFrame#getScope() obtained from}. {@link #getArguments() arguments} of
+     * function scope represent arguments of the appropriate function.
      *
      * @since 0.26
      */
     public boolean isFunctionScope() {
-        SourceSection rootSourceSection = getRootSourceSection();
-        try {
-            return rootSourceSection != null && INTEROP.hasSourceLocation(scope) && rootSourceSection.equals(INTEROP.getSourceLocation(scope));
-        } catch (UnsupportedMessageException e) {
-            return false;
-        }
-    }
-
-    private SourceSection getRootSourceSection() {
-        if (root == null) {
-            return null;
-        }
-        SourceSection rootSourceSection = root.getSourceSection();
-        if (rootSourceSection == null) {
-            SourceSection[] rootSection = new SourceSection[]{null};
-            root.accept(new NodeVisitor() {
-                @Override
-                public boolean visit(Node n) {
-                    if (n instanceof InstrumentableNode) {
-                        InstrumentableNode inode = (InstrumentableNode) n;
-                        if (inode.isInstrumentable() && inode.hasTag(StandardTags.RootTag.class)) {
-                            rootSection[0] = n.getSourceSection();
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-            });
-            rootSourceSection = rootSection[0];
-        }
-        return rootSourceSection;
+        return root != null && root.equals(scope.getNode());
     }
 
     /**
@@ -190,19 +143,16 @@ public final class DebugScope {
      */
     public SourceSection getSourceSection() throws DebugException {
         try {
-            if (!INTEROP.hasSourceLocation(scope)) {
-                return null;
-            }
-            SourceSection location = INTEROP.getSourceLocation(scope);
-            if (location != null) {
-                return session.resolveSection(location);
+            Node node = scope.getNode();
+            if (node != null) {
+                return session.resolveSection(node.getEncapsulatingSourceSection());
             } else {
                 return null;
             }
         } catch (ThreadDeath td) {
             throw td;
         } catch (Throwable ex) {
-            throw DebugException.create(session, ex, language);
+            throw new DebugException(session, ex, language, null, true, null);
         }
     }
 
@@ -217,37 +167,13 @@ public final class DebugScope {
      *         concept of arguments.
      * @throws DebugException when guest language code throws an exception
      * @since 0.26
-     * @deprecated since 20.3 Use {@link #getDeclaredValues()} on the {@link SourceElement#ROOT}.
      */
-    @Deprecated
     public Iterable<DebugValue> getArguments() throws DebugException {
         verifyValidState();
-        if (node == null) {
-            return null;
-        }
         try {
-            Node argNode = node;
-            while (argNode != null && (!(argNode instanceof InstrumentableNode) || !((InstrumentableNode) argNode).hasTag(StandardTags.RootTag.class))) {
-                argNode = argNode.getParent();
-            }
-            if (argNode == null || !NODE.hasScope(argNode, frame)) {
-                return null;
-            }
-            Object argumentsObj;
-            try {
-                argumentsObj = NODE.getScope(argNode, frame, true);
-                if (INTEROP.hasScopeParent(argumentsObj)) {
-                    argumentsObj = new SubtractedVariables(argumentsObj, INTEROP.getScopeParent(argumentsObj));
-                }
-            } catch (UnsupportedMessageException e) {
-                return null;
-            }
+            Object argumentsObj = scope.getArguments();
             if (argumentsObj != null) {
-                String receiverName = null;
-                if (NODE.hasReceiverMember(argNode, frame)) {
-                    receiverName = INTEROP.asString(NODE.getReceiverMember(argNode, frame));
-                }
-                ValuePropertiesCollection properties = DebugValue.getProperties(argumentsObj, receiverName, session, getLanguage(), this);
+                ValuePropertiesCollection properties = DebugValue.getProperties(argumentsObj, session, getLanguage(), this);
                 if (properties != null) {
                     return properties;
                 }
@@ -258,7 +184,7 @@ public final class DebugScope {
         } catch (ThreadDeath td) {
             throw td;
         } catch (Throwable ex) {
-            throw DebugException.create(session, ex, language);
+            throw new DebugException(session, ex, language, null, true, null);
         }
         return null;
     }
@@ -280,53 +206,22 @@ public final class DebugScope {
         verifyValidState();
         DebugValue receiverValue = null;
         try {
-            if (node == null || !NODE.hasReceiverMember(node, frame)) {
-                return null;
+            Object receiver = scope.getReceiver();
+            if (receiver != null) {
+                receiverValue = new DebugValue.HeapValue(session, getLanguage(), scope.getReceiverName(), receiver);
             }
-            String name = INTEROP.asString(NODE.getReceiverMember(node, frame));
-            if (!INTEROP.isMemberReadable(scope, name)) {
-                return null;
-            }
-            Object receiver = INTEROP.readMember(scope, name);
-            receiverValue = new DebugValue.HeapValue(session, getLanguage(), name, receiver);
         } catch (ThreadDeath td) {
             throw td;
         } catch (Throwable ex) {
-            throw DebugException.create(session, ex, language);
+            throw new DebugException(session, ex, language, null, true, null);
         }
         return receiverValue;
     }
 
     /**
-     * Get value that represents root instance of this scope. The value is an instance of guest
-     * language representation of the root node of this scope, e.g. a guest language function.
-     *
-     * @return the root instance value, or <code>null</code> when no such value exists.
-     * @since 19.3.0
-     */
-    public DebugValue getRootInstance() {
-        verifyValidState();
-        DebugValue functionValue = null;
-        try {
-            if (node == null || !NODE.hasRootInstance(node, frame)) {
-                return null;
-            }
-            Object function = NODE.hasRootInstance(node, frame);
-            if (function != null) {
-                functionValue = new DebugValue.HeapValue(session, getLanguage(), root.getName(), function);
-            }
-        } catch (ThreadDeath td) {
-            throw td;
-        } catch (Throwable ex) {
-            throw DebugException.create(session, ex, language);
-        }
-        return functionValue;
-    }
-
-    /**
      * Get local variables declared in this scope, valid at the current suspension point. Call this
      * method on {@link #getParent() parent}, to get values of variables declared in parent scope,
-     * if any. The declared values do not contain a {@link #getReceiver() receiver}.
+     * if any.
      * <p>
      * This method is not thread-safe and will throw an {@link IllegalStateException} if called on
      * another thread than it was created with.
@@ -353,38 +248,17 @@ public final class DebugScope {
         return getVariables().get(name);
     }
 
-    RootNode getRoot() {
-        return root;
-    }
-
     private ValuePropertiesCollection getVariables() {
         verifyValidState();
         try {
             if (variables == null) {
-                Object scopeParent = null;
-                if (INTEROP.hasScopeParent(scope)) {
-                    try {
-                        scopeParent = INTEROP.getScopeParent(scope);
-                    } catch (UnsupportedMessageException ex) {
-                        throw CompilerDirectives.shouldNotReachHere(ex);
-                    }
-                }
-                Object variablesObj;
-                if (scopeParent != null) {
-                    variablesObj = new SubtractedVariables(scope, scopeParent);
-                } else {
-                    variablesObj = scope;
-                }
-                String receiverName = null;
-                if (node != null && NODE.hasReceiverMember(node, frame)) {
-                    receiverName = INTEROP.asString(NODE.getReceiverMember(node, frame));
-                }
-                variables = DebugValue.getProperties(variablesObj, receiverName, session, getLanguage(), this);
+                Object variablesObj = scope.getVariables();
+                variables = DebugValue.getProperties(variablesObj, session, getLanguage(), this);
             }
         } catch (ThreadDeath td) {
             throw td;
         } catch (Throwable ex) {
-            throw DebugException.create(session, ex, language);
+            throw new DebugException(session, ex, language, null, true, null);
         }
         return variables;
     }
@@ -402,156 +276,4 @@ public final class DebugScope {
             event.verifyValidState(false);
         }
     }
-
-    @ExportLibrary(InteropLibrary.class)
-    static class SubtractedVariables implements TruffleObject {
-
-        private final Object allVariables;
-        private final InteropLibrary allLibrary;
-        private final Object removedVariables;
-        private final InteropLibrary removedLibrary;
-
-        SubtractedVariables(Object allVariables, Object removedVariables) {
-            this.allVariables = allVariables;
-            this.allLibrary = InteropLibrary.getUncached(allVariables);
-            this.removedVariables = removedVariables;
-            this.removedLibrary = InteropLibrary.getUncached(removedVariables);
-        }
-
-        @ExportMessage
-        @TruffleBoundary
-        final boolean hasMembers() {
-            return allLibrary.hasMembers(allVariables) && removedLibrary.hasMembers(removedVariables);
-        }
-
-        @ExportMessage
-        @TruffleBoundary
-        final Object getMembers(boolean includeInternal) throws UnsupportedMessageException {
-            return new SubtractedKeys(allLibrary.getMembers(allVariables, includeInternal), removedLibrary.getMembers(removedVariables, includeInternal));
-        }
-
-        @ExportMessage
-        @TruffleBoundary
-        final boolean isMemberReadable(String member) {
-            if (!allLibrary.isMemberReadable(allVariables, member)) {
-                return false;
-            }
-            if (!removedLibrary.isMemberReadable(removedVariables, member)) {
-                return true;
-            }
-            // Test if it's among subtracted members:
-            return isAmongMembers(member);
-        }
-
-        private boolean isAmongMembers(String member) {
-            try {
-                Object members = getMembers(true);
-                InteropLibrary membersLibrary = InteropLibrary.getUncached(members);
-                long n = membersLibrary.getArraySize(members);
-                for (long i = 0; i < n; i++) {
-                    String m = INTEROP.asString(membersLibrary.readArrayElement(members, i));
-                    if (member.equals(m)) {
-                        return true;
-                    }
-                }
-            } catch (UnsupportedMessageException | InvalidArrayIndexException e) {
-                throw CompilerDirectives.shouldNotReachHere(e);
-            }
-            return false;
-        }
-
-        @ExportMessage
-        @TruffleBoundary
-        final Object readMember(String member) throws UnknownIdentifierException, UnsupportedMessageException {
-            if (isMemberReadable(member)) {
-                return allLibrary.readMember(allVariables, member);
-            } else {
-                throw UnknownIdentifierException.create(member);
-            }
-        }
-
-        @ExportMessage
-        @TruffleBoundary
-        final boolean isMemberModifiable(String member) {
-            if (!allLibrary.isMemberModifiable(allVariables, member)) {
-                return false;
-            }
-            if (!removedLibrary.isMemberModifiable(removedVariables, member)) {
-                return true;
-            }
-            // If it's among members, it might be modifiable
-            return isAmongMembers(member);
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        final boolean isMemberInsertable(@SuppressWarnings("unused") String member) {
-            return false;
-        }
-
-        @ExportMessage
-        @TruffleBoundary
-        final void writeMember(String member, Object value) throws UnsupportedMessageException, UnknownIdentifierException, UnsupportedTypeException {
-            if (isMemberModifiable(member)) {
-                allLibrary.writeMember(allVariables, member, value);
-            } else {
-                throw UnknownIdentifierException.create(member);
-            }
-        }
-
-        @ExportMessage
-        final boolean hasMemberReadSideEffects(String member) {
-            return isMemberReadable(member) && allLibrary.hasMemberReadSideEffects(allVariables, member);
-        }
-
-        @ExportMessage
-        final boolean hasMemberWriteSideEffects(String member) {
-            return isMemberModifiable(member) && allLibrary.hasMemberWriteSideEffects(allVariables, member);
-        }
-
-    }
-
-    @ExportLibrary(InteropLibrary.class)
-    static final class SubtractedKeys implements TruffleObject {
-
-        private final Object allKeys;
-        private final long allSize;
-        private final long removedSize;
-
-        SubtractedKeys(Object allKeys, Object removedKeys) throws UnsupportedMessageException {
-            this.allKeys = allKeys;
-            this.allSize = INTEROP.getArraySize(allKeys);
-            this.removedSize = INTEROP.getArraySize(removedKeys);
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        boolean hasArrayElements() {
-            return true;
-        }
-
-        @ExportMessage
-        long getArraySize() {
-            return allSize - removedSize;
-        }
-
-        @ExportMessage
-        Object readArrayElement(long index) throws InvalidArrayIndexException, UnsupportedMessageException {
-            if (0 <= index && index < getArraySize()) {
-                return INTEROP.readArrayElement(allKeys, index);
-            } else {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @ExportMessage
-        boolean isArrayElementReadable(long index) {
-            if (0 <= index && index < getArraySize()) {
-                return INTEROP.isArrayElementReadable(allKeys, index);
-            } else {
-                return false;
-            }
-        }
-    }
-
 }

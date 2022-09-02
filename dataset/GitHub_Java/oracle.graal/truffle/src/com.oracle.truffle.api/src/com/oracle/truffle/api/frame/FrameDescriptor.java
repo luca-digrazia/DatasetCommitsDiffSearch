@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -50,7 +50,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import org.graalvm.collections.EconomicMap;
 
 import com.oracle.truffle.api.Assumption;
@@ -58,6 +57,7 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.TVMCI;
 
 /**
@@ -347,8 +347,8 @@ public final class FrameDescriptor implements Cloneable {
         return frameSlot.descriptor == this;
     }
 
-    @TruffleBoundary
     private boolean checkFrameSlotOwnership(FrameSlot frameSlot) {
+        CompilerAsserts.neverPartOfCompilation(NEVER_PART_OF_COMPILATION_MESSAGE);
         synchronized (lock) {
             return checkFrameSlotOwnershipUnsafe(frameSlot);
         }
@@ -583,5 +583,34 @@ public final class FrameDescriptor implements Cloneable {
             sb.append("}");
             return sb.toString();
         }
+    }
+
+    /** @since 0.14 */
+    static final class AccessorFrames extends Accessor {
+        @Override
+        protected Frames framesSupport() {
+            return new FramesImpl();
+        }
+
+        static final class FramesImpl extends Frames {
+            @Override
+            protected void markMaterializeCalled(FrameDescriptor descriptor) {
+                descriptor.materializeCalled = true;
+            }
+
+            @Override
+            protected boolean getMaterializeCalled(FrameDescriptor descriptor) {
+                return descriptor.materializeCalled;
+            }
+        }
+    }
+
+    private static AccessorFrames initialize() {
+        return new AccessorFrames();
+    }
+
+    static {
+        // registers into Accessor.FRAMES
+        initialize();
     }
 }

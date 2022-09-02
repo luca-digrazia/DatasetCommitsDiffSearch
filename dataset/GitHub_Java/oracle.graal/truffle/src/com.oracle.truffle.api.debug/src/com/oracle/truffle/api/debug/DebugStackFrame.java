@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -45,7 +45,6 @@ import java.util.Iterator;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.DebugValue.HeapValue;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
@@ -164,7 +163,7 @@ public final class DebugStackFrame {
         } else {
             Node callNode = currentFrame.getCallNode();
             if (callNode != null) {
-                return event.getSession().resolveSection(callNode);
+                return event.getSession().resolveSection(callNode.getEncapsulatingSourceSection());
             }
             return null;
         }
@@ -184,26 +183,6 @@ public final class DebugStackFrame {
             return null;
         }
         return root.getLanguageInfo();
-    }
-
-    /**
-     * Returns the root node of this frame, or <code>null</code> if the requesting language class
-     * does not match the root node guest language.
-     *
-     * @param languageClass the Truffle languageClass class object
-     * @return the root node associated with the frame
-     *
-     * @since 20.1
-     */
-    public RootNode getRootNode(Class<? extends TruffleLanguage> languageClass) {
-        Objects.requireNonNull(languageClass);
-        RootNode rootNode = findCurrentRoot();
-        if (languageClass == null || rootNode == null) {
-            return null;
-        }
-        // check if language class of the root node corresponds to the input language
-        TruffleLanguage<?> language = Debugger.ACCESSOR.nodeSupport().getLanguage(rootNode);
-        return language != null && language.getClass() == languageClass ? rootNode : null;
     }
 
     /**

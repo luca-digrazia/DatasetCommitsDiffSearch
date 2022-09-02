@@ -40,12 +40,9 @@
  */
 package org.graalvm.options;
 
-import java.util.AbstractMap;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -56,13 +53,8 @@ import java.util.function.Function;
  */
 public final class OptionType<T> {
 
-    private static final Consumer<?> EMPTY_VALIDATOR = new Consumer<Object>() {
-        public void accept(Object t) {
-        }
-    };
-
     private final String name;
-    private final Converter<T> converter;
+    private final Function<String, T> stringConverter;
     private final Consumer<T> validator;
 
     /**
@@ -78,20 +70,11 @@ public final class OptionType<T> {
      * @since 19.0
      */
     public OptionType(String name, Function<String, T> stringConverter, Consumer<T> validator) {
-        this(name, new Converter<T>() {
-            @Override
-            public T convert(T previousValue, String key, String value) {
-                return stringConverter.apply(value);
-            }
-        }, validator);
-    }
-
-    private OptionType(String name, Converter<T> converter, Consumer<T> validator) {
         Objects.requireNonNull(name);
-        Objects.requireNonNull(converter);
+        Objects.requireNonNull(stringConverter);
         Objects.requireNonNull(validator);
         this.name = name;
-        this.converter = converter;
+        this.stringConverter = stringConverter;
         this.validator = validator;
     }
 
@@ -105,9 +88,11 @@ public final class OptionType<T> {
      *
      * @since 19.0
      */
-    @SuppressWarnings("unchecked")
     public OptionType(String name, Function<String, T> stringConverter) {
-        this(name, stringConverter, (Consumer<T>) EMPTY_VALIDATOR);
+        this(name, stringConverter, new Consumer<T>() {
+            public void accept(T t) {
+            }
+        });
     }
 
     /**
@@ -154,25 +139,8 @@ public final class OptionType<T> {
      * @throws IllegalArgumentException if the value is invalid or cannot be converted.
      * @since 19.0
      */
-    @Deprecated
     public T convert(String value) {
-        T v = converter.convert(null, null, value);
-        validate(v);
-        return v;
-    }
-
-    /**
-     * Converts a string value, validates it, and converts it to an object of this type. For prefix
-     * options include the previous value stored for the option, and the name/key of the option.
-     *
-     * @param nameSuffix the key for prefix options.
-     * @param previousValue the previous value holded by option.
-     * @throws IllegalArgumentException if the value is invalid or cannot be converted.
-     * @since 19.0
-     */
-    @SuppressWarnings("unchecked")
-    public T convert(Object previousValue, String nameSuffix, String value) {
-        T v = converter.convert((T) previousValue, nameSuffix, value);
+        T v = stringConverter.apply(value);
         validate(v);
         return v;
     }
@@ -261,27 +229,6 @@ public final class OptionType<T> {
         }));
     }
 
-    private static class ReadOnlyOptionMap<V> extends OptionMap<V> {
-
-        final Map<String, V> backingMap;
-        final Map<String, V> readonlyMap;
-
-        ReadOnlyOptionMap(Map<String, V> map) {
-            this.readonlyMap = Collections.unmodifiableMap(map);
-            this.backingMap = map;
-        }
-
-        @Override
-        public V get(String key) {
-            return readonlyMap.get(key);
-        }
-
-        @Override
-        public Set<Map.Entry<String, V>> entrySet() {
-            return readonlyMap.entrySet();
-        }
-    }
-
     /**
      * Returns the default option type for a given value. Returns <code>null</code> if no default
      * option type is available for the Java type of this value.
@@ -291,36 +238,6 @@ public final class OptionType<T> {
     @SuppressWarnings("unchecked")
     public static <T> OptionType<T> defaultType(T value) {
         return defaultType((Class<T>) value.getClass());
-    }
-
-    /**
-     * Returns the default option type for option maps for the given value class. Returns
-     * <code>null</code> if no default option type is available for the value class.
-     *
-     * @since 19.0
-     */
-    @SuppressWarnings("unchecked")
-    static <V> OptionType<OptionMap<V>> mapOf(Class<V> valueClass) {
-        final OptionType<V> valueType = defaultType(valueClass);
-        if (valueType == null) {
-            return null;
-        }
-        return new OptionType<OptionMap<V>>("Map", new Converter<OptionMap<V>>() {
-            public OptionMap<V> convert(OptionMap<V> previousValue, String key, String value) {
-                OptionMap<V> map = previousValue;
-                if (!(map instanceof OptionType.ReadOnlyOptionMap)) {
-
-                    Map<String, V> copy = new HashMap<String, V>();
-                    for (Map.Entry<String, V> entry : previousValue.entrySet()) {
-                        copy.put(entry.getKey(), entry.getValue());
-                    }
-
-                    map = new ReadOnlyOptionMap<V>(copy);
-                }
-                ((ReadOnlyOptionMap<V>) map).backingMap.put(key, valueType.convert(map.get(key), key, value));
-                return map;
-            }
-        }, (Consumer<OptionMap<V>>) EMPTY_VALIDATOR);
     }
 
     /**
@@ -334,10 +251,4 @@ public final class OptionType<T> {
         return (OptionType<T>) DEFAULTTYPES.get(clazz);
     }
 
-    @FunctionalInterface
-    private interface Converter<T> {
-
-        T convert(T previousValue, String key, String value);
-
-    }
 }

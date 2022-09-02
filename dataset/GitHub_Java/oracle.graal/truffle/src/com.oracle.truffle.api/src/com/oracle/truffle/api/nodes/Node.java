@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,6 +47,7 @@ import java.lang.annotation.Target;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
@@ -58,11 +59,13 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ReplaceObserver;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.impl.Accessor.InstrumentSupport;
 import com.oracle.truffle.api.nodes.ExecutableNode.ReferenceCache;
 import com.oracle.truffle.api.source.Source;
@@ -106,6 +109,9 @@ public abstract class Node implements NodeInterface, Cloneable {
     protected Node() {
         CompilerAsserts.neverPartOfCompilation("do not create a Node from compiled code");
         assert NodeClass.get(getClass()) != null; // ensure NodeClass constructor does not throw
+        if (TruffleOptions.TraceASTJSON) {
+            dump(this, null, null);
+        }
     }
 
     NodeClass getNodeClass() {
@@ -250,7 +256,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (rootNode == null) {
             throw new IllegalStateException("Node is not yet adopted and cannot be updated.");
         }
-        InstrumentSupport support = NodeAccessor.ACCESSOR.instrumentSupport();
+        InstrumentSupport support = ACCESSOR.instrumentSupport();
         if (support != null) {
             support.onNodeInserted(rootNode, node);
         }
@@ -273,6 +279,9 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (newChild.isAdoptable()) {
             assert checkSameLanguages(newChild);
             newChild.parent = this;
+            if (TruffleOptions.TraceASTJSON) {
+                dump(this, newChild, null);
+            }
             NodeUtil.adoptChildrenHelper(newChild);
         }
     }
@@ -292,6 +301,9 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (newChild.isAdoptable()) {
             assert checkSameLanguages(newChild);
             newChild.parent = this;
+            if (TruffleOptions.TraceASTJSON) {
+                dump(this, newChild, null);
+            }
             count += NodeUtil.adoptChildrenAndCountHelper(newChild);
         }
         return count;
@@ -439,6 +451,18 @@ public abstract class Node implements NodeInterface, Cloneable {
         if (TruffleOptions.TraceRewrites) {
             NodeUtil.traceRewrite(this, newNode, reason);
         }
+        if (TruffleOptions.TraceASTJSON) {
+            dump(this, newNode, reason);
+        }
+    }
+
+    private static void dump(Node node, Node newChild, CharSequence reason) {
+        if (ACCESSOR != null) {
+            Accessor.DumpSupport dumpSupport = ACCESSOR.dumpSupport();
+            if (dumpSupport != null) {
+                dumpSupport.dump(node, newChild, reason);
+            }
+        }
     }
 
     /**
@@ -535,7 +559,7 @@ public abstract class Node implements NodeInterface, Cloneable {
      */
     protected final void reportPolymorphicSpecialize() {
         CompilerAsserts.neverPartOfCompilation();
-        NodeAccessor.ACCESSOR.nodeSupport().reportPolymorphicSpecialize(this);
+        Node.ACCESSOR.nodes().reportPolymorphicSpecialize(this);
     }
 
     /**
@@ -679,14 +703,14 @@ public abstract class Node implements NodeInterface, Cloneable {
         ExecutableNode executableNode = getExecutableNode();
         if (executableNode != null) {
             if (executableNode.language != null && executableNode.language.getClass() == languageClass) {
-                return NodeAccessor.ACCESSOR.engineSupport().getDirectLanguageReference(executableNode.polyglotEngine,
+                return Node.ACCESSOR.engineSupport().getDirectLanguageReference(executableNode.sourceVM,
                                 executableNode.language, languageClass);
             } else {
                 ReferenceCache cache = executableNode.lookupReferenceCache(languageClass);
                 if (cache != null) {
                     return (LanguageReference<T>) cache.languageReference;
                 } else {
-                    return NodeAccessor.ACCESSOR.engineSupport().lookupLanguageReference(executableNode.polyglotEngine,
+                    return Node.ACCESSOR.engineSupport().lookupLanguageReference(executableNode.sourceVM,
                                     executableNode.language, languageClass);
                 }
             }
@@ -703,7 +727,7 @@ public abstract class Node implements NodeInterface, Cloneable {
                 @Override
                 @TruffleBoundary
                 public TruffleLanguage<?> get() {
-                    return NodeAccessor.ACCESSOR.engineSupport().getCurrentLanguage(languageClass);
+                    return Node.ACCESSOR.engineSupport().getCurrentLanguage(languageClass);
                 }
             };
             UNCACHED_LANGUAGE_REFERENCES.put(languageClass, result);
@@ -789,14 +813,14 @@ public abstract class Node implements NodeInterface, Cloneable {
         ExecutableNode executableNode = getExecutableNode();
         if (executableNode != null) {
             if (executableNode.language != null && executableNode.language.getClass() == languageClass) {
-                return NodeAccessor.ACCESSOR.engineSupport().getDirectContextReference(executableNode.polyglotEngine,
+                return Node.ACCESSOR.engineSupport().getDirectContextReference(executableNode.sourceVM,
                                 executableNode.language, languageClass);
             } else {
                 ReferenceCache cache = executableNode.lookupReferenceCache(languageClass);
                 if (cache != null) {
                     return (ContextReference<C>) cache.contextReference;
                 } else {
-                    return NodeAccessor.ACCESSOR.engineSupport().lookupContextReference(executableNode.polyglotEngine,
+                    return Node.ACCESSOR.engineSupport().lookupContextReference(executableNode.sourceVM,
                                     executableNode.language, languageClass);
                 }
             }
@@ -827,7 +851,7 @@ public abstract class Node implements NodeInterface, Cloneable {
                 @Override
                 @TruffleBoundary
                 public Object get() {
-                    return NodeAccessor.ACCESSOR.engineSupport().getCurrentContext(language);
+                    return Node.ACCESSOR.engineSupport().getCurrentContext(language);
                 }
             };
             UNCACHED_CONTEXT_REFERENCES.put(language, result);
@@ -840,6 +864,134 @@ public abstract class Node implements NodeInterface, Cloneable {
     private boolean inAtomicBlock() {
         return ((ReentrantLock) getLock()).isHeldByCurrentThread();
     }
+
+    static final class AccessorNodes extends Accessor {
+
+        @Override
+        protected ThreadLocal<Object> createFastThreadLocal() {
+            return super.createFastThreadLocal();
+        }
+
+        @Override
+        protected void onLoopCount(Node source, int iterations) {
+            super.onLoopCount(source, iterations);
+        }
+
+        @Override
+        protected IndirectCallNode createUncachedIndirectCall() {
+            IndirectCallNode callNode = super.createUncachedIndirectCall();
+            assert !callNode.isAdoptable();
+            return callNode;
+        }
+
+        @Override
+        protected EngineSupport engineSupport() {
+            return super.engineSupport();
+        }
+
+        @Override
+        protected Accessor.Nodes nodes() {
+            return new AccessNodes();
+        }
+
+        @Override
+        protected LanguageSupport languageSupport() {
+            return super.languageSupport();
+        }
+
+        @Override
+        protected DumpSupport dumpSupport() {
+            return super.dumpSupport();
+        }
+
+        @Override
+        protected InstrumentSupport instrumentSupport() {
+            return super.instrumentSupport();
+        }
+
+        @Override
+        protected Frames framesSupport() {
+            return super.framesSupport();
+        }
+
+        static final class AccessNodes extends Accessor.Nodes {
+
+            @Override
+            public boolean isInstrumentable(RootNode rootNode) {
+                return rootNode.isInstrumentable();
+            }
+
+            @Override
+            public void setCallTarget(RootNode rootNode, RootCallTarget callTarget) {
+                rootNode.setCallTarget(callTarget);
+            }
+
+            @Override
+            public boolean isTaggedWith(Node node, Class<?> tag) {
+                return node.isTaggedWith(tag);
+            }
+
+            @Override
+            public boolean isCloneUninitializedSupported(RootNode rootNode) {
+                return rootNode.isCloneUninitializedSupported();
+            }
+
+            @Override
+            public RootNode cloneUninitialized(RootNode rootNode) {
+                return rootNode.cloneUninitialized();
+            }
+
+            @Override
+            public int adoptChildrenAndCount(RootNode rootNode) {
+                return rootNode.adoptChildrenAndCount();
+            }
+
+            @Override
+            public Object getEngineObject(LanguageInfo languageInfo) {
+                return languageInfo.getEngineObject();
+            }
+
+            @Override
+            public LanguageInfo createLanguage(Object vmObject, String id, String name, String version, String defaultMimeType, Set<String> mimeTypes, boolean internal, boolean interactive) {
+                return new LanguageInfo(vmObject, id, name, version, defaultMimeType, mimeTypes, internal, interactive);
+            }
+
+            @Override
+            public Object getSourceVM(RootNode rootNode) {
+                return rootNode.sourceVM;
+            }
+
+            @Override
+            public TruffleLanguage<?> getLanguage(RootNode rootNode) {
+                return rootNode.language;
+            }
+
+            @Override
+            public int getRootNodeBits(RootNode root) {
+                return root.instrumentationBits;
+            }
+
+            @Override
+            public void setRootNodeBits(RootNode root, int bits) {
+                assert ((byte) bits) == bits : "root bits currently limit to a byte";
+                root.instrumentationBits = (byte) bits;
+            }
+
+            @Override
+            public Lock getLock(Node node) {
+                return node.getLock();
+            }
+
+            @Override
+            public void makeSharableRoot(RootNode rootNode) {
+                rootNode.sourceVM = null;
+            }
+
+        }
+    }
+
+    // registers into Accessor.NODES
+    static final AccessorNodes ACCESSOR = new AccessorNodes();
 
 }
 

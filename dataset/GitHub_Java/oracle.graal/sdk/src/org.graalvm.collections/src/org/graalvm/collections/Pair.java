@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -169,7 +169,6 @@ public final class Pair<L, R> {
      */
     @Override
     public String toString() {
-        // String.format isn't used here since it tends to pull a lot of types into image.
-        return "(" + left + ", " + right + ")";
+        return String.format("(%s, %s)", left, right);
     }
 }

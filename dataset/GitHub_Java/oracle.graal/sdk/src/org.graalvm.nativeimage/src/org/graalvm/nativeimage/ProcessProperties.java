@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -157,40 +157,6 @@ public final class ProcessProperties {
      */
     public static void exec(Path executable, String... args) {
         ImageSingletons.lookup(ProcessPropertiesSupport.class).exec(executable, args);
-    }
-
-    /**
-     * If the running image is an executable (not a shared library) the program name that is stored
-     * in the argument vector of the running process gets returned.
-     *
-     * @since 20.1
-     */
-    public static String getArgumentVectorProgramName() {
-        return ImageSingletons.lookup(ProcessPropertiesSupport.class).getArgumentVectorProgramName();
-    }
-
-    /**
-     * If the running image is an executable (not a shared library) the program name that is stored
-     * in the argument vector of the running process gets replaced with the give name. If the size
-     * of the argument vector is too small for the given name it gets truncated so that the
-     * environment vector next to the argument vector does not get corrupted.
-     *
-     * @return true, if given name had to be truncated to fit in the argument vector
-     *
-     * @since 20.1
-     */
-    public static boolean setArgumentVectorProgramName(String name) {
-        return ImageSingletons.lookup(ProcessPropertiesSupport.class).setArgumentVectorProgramName(name);
-    }
-
-    /**
-     * If the running image is an executable (not a shared library) the total size of the argument
-     * vector of the running process gets returned.
-     *
-     * @since 20.1
-     */
-    public static int getArgumentVectorBlockSize() {
-        return ImageSingletons.lookup(ProcessPropertiesSupport.class).getArgumentVectorBlockSize();
     }
 
     private ProcessProperties() {

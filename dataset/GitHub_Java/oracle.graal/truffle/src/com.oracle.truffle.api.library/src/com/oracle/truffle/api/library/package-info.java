@@ -44,8 +44,9 @@
  * Libraries enable modularity and encapsulation for representation types in language
  * implementations.
  * <p>
- * Before reading the javadoc make sure you have read the <a href=
- * "https://github.com/oracle/graal/blob/master/truffle/docs/TruffleLibaries.md">tutorial</a>.
+ * Before reading the javadoc make sure you have read the
+ * <a href= "https://github.com/oracle/graal/blob/master/truffle/docs/TruffleLibraries.md">tutorial
+ * </a>.
  * <p>
  * Start learning Truffle Libraries by reading the following articles:
  * <ul>
@@ -70,10 +71,10 @@
  * receivers that dynamically dispatch to exported message implementations.
  * </ul>
  *
- * @see com.oracle.truffle.api.library.GenerateLibrary to specify libraries
- * @see com.oracle.truffle.api.library.ExportLibrary to export libraries
- * @see com.oracle.truffle.api.library.CachedLibrary to dispatch libraries from nodes
- * @see com.oracle.truffle.api.library.LibraryFactory to manually dispatch messages
- * @since 1.0
+ * @see com.oracle.truffle.api.library.GenerateLibrary To specify libraries
+ * @see com.oracle.truffle.api.library.ExportLibrary To export libraries
+ * @see com.oracle.truffle.api.library.CachedLibrary To dispatch libraries from nodes
+ * @see com.oracle.truffle.api.library.LibraryFactory To manually dispatch messages
+ * @since 19.0
  */
 package com.oracle.truffle.api.library;

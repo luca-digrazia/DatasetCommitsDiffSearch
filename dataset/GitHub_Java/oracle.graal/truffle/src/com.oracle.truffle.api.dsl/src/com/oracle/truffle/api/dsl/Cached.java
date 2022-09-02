@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,7 +46,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -72,12 +71,11 @@ import com.oracle.truffle.api.nodes.Node;
  * </p>
  * <p>
  * The initializer expression of a cached parameter is defined using a subset of Java. This subset
- * includes field/parameter accesses, function calls, type exact infix comparisons (==, !=, <, <=,
- * >, >=), logical negation (!), logical disjunction (||), null, true, false, and integer literals.
- * The return type of the initializer expression must be assignable to the parameter type. If the
- * annotated parameter type is derived from {@link Node} then the {@link Node} instance is allowed
- * to use the {@link Node#replace(Node)} method to replace itself. Bound elements without receivers
- * are resolved using the following order:
+ * includes field/parameter accesses, function calls, type exact infix comparisons (==, !=,
+ * <, <=, >, >=) and integer literals. The return type of the initializer expression must be
+ * assignable to the parameter type. If the annotated parameter type is derived from {@link Node}
+ * then the {@link Node} instance is allowed to use the {@link Node#replace(Node)} method to replace
+ * itself. Bound elements without receivers are resolved using the following order:
  * <ol>
  * <li>Dynamic and cached parameters of the enclosing specialization.</li>
  * <li>Fields defined using {@link NodeField} for the enclosing node.</li>
@@ -158,7 +156,7 @@ import com.oracle.truffle.api.nodes.Node;
  * instantiated. Alternatively if the <code>replaces</code> relation is omitted then all
  * <code>doCached</code> instances remain but no new instances are created.
  *
- * <pre>
+ * <code>
  * &#064;Specialization(guards = &quot;operand == cachedOperand&quot;)
  * void doCached(int operand, {@code @Cached}(&quot;operand&quot;) int cachedOperand) {
  *    CompilerAsserts.compilationConstant(cachedOperand);
@@ -184,7 +182,7 @@ import com.oracle.truffle.api.nodes.Node;
  * execute(3) => doNormal(3)    // new instantiation of doNormal due to limit overflow
  * execute(1) => doCached(1, 1)
  *
- * </pre>
+ * </code>
  *
  * </li>
  * <li>This next example shows how methods from the enclosing node can be used to initialize cached
@@ -300,26 +298,6 @@ public @interface Cached {
      * @since 19.0
      */
     String[] parameters() default {};
-
-    /**
-     * If set to <code>true</code> then weak references will be used to refer to this cached value
-     * in the generated node. The default value is <code>false</code>. The weak cached parameter is
-     * guaranteed to not become <code>null</code> in guards or specialization method invocations. If
-     * a weak cached parameter gets collected by the GC, then any compiled code will get
-     * {@link CompilerDirectives#transferToInterpreterAndInvalidate() deoptimized}, the old
-     * specialization instance will be removed and a new specialization will get instantiated. For
-     * specializations with multiple instances all specialization instances where caches were
-     * collected will be removed. Initializer expressions of cached and weak parameters must not
-     * return <code>null</code>, to avoid immediate removal of the specialization instance. If the
-     * initializer result becomes <code>null</code> a {@link NullPointerException} is thrown. Weak
-     * cached parameters that are used as part of {@link GenerateUncached uncached} nodes, execute
-     * the cached initializer for each execution and therefore don't need to use a weak reference.
-     * Uncached initializers must also never become <code>null</code>.
-     *
-     * @see com.oracle.truffle.api.utilities.TruffleWeakReference
-     * @since 20.2
-     */
-    boolean weak() default false;
 
     /**
      * Allows sharing between multiple Cached parameters between multiple specializations or

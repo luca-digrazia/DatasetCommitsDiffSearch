@@ -57,30 +57,25 @@ public interface OptionValues {
     /**
      * Sets the value of {@code optionKey} to {@code value}.
      *
-     * @throws UnsupportedOperationException because this operation has been deprecated and is no
-     *             longer supported, in order for OptionValues to be read-only.
+     * @throws IllegalArgumentException if the given value is not {@link OptionType#validate(Object)
+     *             validated} by the {@link OptionKey#getType() option type} of the key. Note that
+     *             the operation succeeds if the option key is not described by any of the
+     *             associated {@link #getDescriptors() descriptors}.
      *
      * @since 19.0
-     * @deprecated {@link OptionValues} should be read-only. If the value of an option needs to be
-     *             altered after options are set, then the new value should be stored in the
-     *             language's context or instrument fields and read from there.
      */
-    @Deprecated
     <T> void set(OptionKey<T> optionKey, T value);
 
     /**
-     * Returns the value of a given option. {@link #hasBeenSet(OptionKey)} can be used to know
-     * whether the value was explicitly set, or is the {@link OptionKey#getDefaultValue() default
-     * value}.
+     * Returns the value of a given option.
      *
      * @since 19.0
      */
     <T> T get(OptionKey<T> optionKey);
 
     /**
-     * Determines if a value for {@code optionKey} has been set explicitly by the {@code Context} or
-     * {@code Engine}, and therefore {@link #get(OptionKey)} does not call
-     * {@link OptionKey#getDefaultValue()}.
+     * Determines if a value for {@code optionKey} has been {@link #set} in this set of option
+     * values.
      *
      * @since 19.0
      */
@@ -88,7 +83,7 @@ public interface OptionValues {
 
     /**
      * Determines if a value for any of the option keys in {@link #getDescriptors() option
-     * descriptors} {@link #hasBeenSet(OptionKey) has been set}.
+     * descriptors} has been {@link #set} in this set of option values.
      *
      * @since 19.0
      */

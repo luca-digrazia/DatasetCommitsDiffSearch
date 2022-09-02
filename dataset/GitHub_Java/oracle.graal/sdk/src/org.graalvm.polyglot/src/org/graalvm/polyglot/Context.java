@@ -54,7 +54,6 @@ import java.util.logging.Level;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
-import org.graalvm.polyglot.io.ProcessHandler;
 import org.graalvm.polyglot.proxy.Proxy;
 
 /**
@@ -761,8 +760,6 @@ public final class Context implements AutoCloseable {
         private FileSystem customFileSystem;
         private MessageTransport messageTransport;
         private Object customLogHandler;
-        private Boolean allowCreateProcess;
-        private ProcessHandler processHandler;
 
         Builder(String... onlyLanguages) {
             Objects.requireNonNull(onlyLanguages);
@@ -1230,17 +1227,6 @@ public final class Context implements AutoCloseable {
             return this;
         }
 
-        public Builder allowCreateProcess(boolean enabled) {
-            this.allowCreateProcess = enabled;
-            return this;
-        }
-
-        public Builder processHandler(ProcessHandler handler) {
-            Objects.requireNonNull(handler, "Handler must be non null.");
-            this.processHandler = handler;
-            return this;
-        }
-
         /**
          * Creates a new context instance from the configuration provided in the builder. The same
          * context builder can be used to create multiple context instances.
@@ -1290,7 +1276,6 @@ public final class Context implements AutoCloseable {
                 localHostLookupFilter = NO_HOST_CLASSES;
             }
 
-            boolean createProcess = orAllAccess(allowCreateProcess);
             if (!io && customFileSystem != null) {
                 throw new IllegalStateException("Cannot install custom FileSystem when IO is disabled.");
             }
@@ -1320,7 +1305,7 @@ public final class Context implements AutoCloseable {
                 return engine.impl.createContext(null, null, null, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
                                 io, hostClassLoading, experimentalOptions,
                                 localHostLookupFilter, Collections.emptyMap(), arguments == null ? Collections.emptyMap() : arguments,
-                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler);
+                                onlyLanguages, customFileSystem, customLogHandler);
             } else {
                 if (messageTransport != null) {
                     throw new IllegalStateException("Cannot use MessageTransport in a context that shares an Engine.");
@@ -1328,7 +1313,7 @@ public final class Context implements AutoCloseable {
                 return engine.impl.createContext(out, err, in, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
                                 io, hostClassLoading, experimentalOptions,
                                 localHostLookupFilter, options == null ? Collections.emptyMap() : options, arguments == null ? Collections.emptyMap() : arguments,
-                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler);
+                                onlyLanguages, customFileSystem, customLogHandler);
             }
         }
 

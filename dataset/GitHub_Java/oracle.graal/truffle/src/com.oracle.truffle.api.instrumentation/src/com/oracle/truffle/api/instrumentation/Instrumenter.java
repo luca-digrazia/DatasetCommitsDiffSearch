@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,7 +46,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -77,7 +76,9 @@ public abstract class Instrumenter {
      * <p>
      * By default no
      * {@link ExecutionEventNode#onInputValue(com.oracle.truffle.api.frame.VirtualFrame, EventContext, int, Object)
-     * input value events} are delivered to the listener.
+     * input value events} are delivered to the listener. To deliver inputs events use
+     * {@link #attachExecutionEventListener(SourceSectionFilter, SourceSectionFilter, ExecutionEventListener)}
+     * instead.
      *
      * @param eventFilter filters the events that are reported to the given
      *            {@link ExecutionEventListener listener}
@@ -140,13 +141,7 @@ public abstract class Instrumenter {
      * @see ExecutionEventListener#onInputValue(EventContext,
      *      com.oracle.truffle.api.frame.VirtualFrame, EventContext, int, Object)
      * @since 0.33
-     * @deprecated inputFilters do not work for execution event listeners Use
-     *             {@link #attachExecutionEventFactory(SourceSectionFilter, SourceSectionFilter, ExecutionEventNodeFactory)}
-     *             or use
-     *             {@link #attachExecutionEventListener(SourceSectionFilter, ExecutionEventListener)}
-     *             instead.
      */
-    @Deprecated
     public abstract <T extends ExecutionEventListener> EventBinding<T> attachExecutionEventListener(SourceSectionFilter eventFilter, SourceSectionFilter inputFilter, T listener);
 
     /**
@@ -326,20 +321,6 @@ public abstract class Instrumenter {
      * @since 0.30
      */
     public abstract <T extends ThreadsListener> EventBinding<T> attachThreadsListener(T listener, boolean includeInitializedThreads);
-
-    /**
-     * Attach a {@link ThreadsActivationListener listener} to be notified about when a thread gets
-     * entered or left in guest language applications.
-     * <p>
-     * The event notification starts after the listener registration is completed. This means that
-     * currently activated threads won't get a notification. It is also possible that
-     * {@link ThreadsActivationListener#onLeaveThread(TruffleContext)} is called without ever
-     * invoking {@link ThreadsActivationListener#onEnterThread(TruffleContext)}.
-     *
-     * @return a handle for unregistering the listener.
-     * @since 20.3
-     */
-    public abstract EventBinding<? extends ThreadsActivationListener> attachThreadsActivationListener(ThreadsActivationListener listener);
 
     /**
      * Returns a filtered list of loaded {@link SourceSection} instances.

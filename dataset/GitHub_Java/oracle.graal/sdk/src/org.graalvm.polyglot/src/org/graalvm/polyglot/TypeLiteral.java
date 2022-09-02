@@ -60,7 +60,6 @@ import java.lang.reflect.Type;
  *
  *
  * @since 19.0
- * @see org.graalvm.polyglot.Value#as(TypeLiteral)
  */
 public abstract class TypeLiteral<T> {
 

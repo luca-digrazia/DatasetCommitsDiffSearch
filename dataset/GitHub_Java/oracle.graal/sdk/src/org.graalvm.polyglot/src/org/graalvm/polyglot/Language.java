@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,7 +44,7 @@ import java.util.Set;
 
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractLanguageDispatch;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractLanguageImpl;
 
 /**
  * A handle for a Graal language installed in an {@link Engine engine}. The handle provides access
@@ -56,12 +56,10 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractLanguageDispatch;
  */
 public final class Language {
 
-    final AbstractLanguageDispatch dispatch;
-    final Object receiver;
+    final AbstractLanguageImpl impl;
 
-    Language(AbstractLanguageDispatch dispatch, Object receiver) {
-        this.dispatch = dispatch;
-        this.receiver = receiver;
+    Language(AbstractLanguageImpl impl) {
+        this.impl = impl;
     }
 
     /**
@@ -72,7 +70,7 @@ public final class Language {
      * @since 19.0
      */
     public String getId() {
-        return dispatch.getId(receiver);
+        return impl.getId();
     }
 
     /**
@@ -82,7 +80,7 @@ public final class Language {
      * @since 19.0
      */
     public String getName() {
-        return dispatch.getName(receiver);
+        return impl.getName();
     }
 
     /**
@@ -92,7 +90,7 @@ public final class Language {
      * @since 19.0
      */
     public String getImplementationName() {
-        return dispatch.getImplementationName(receiver);
+        return impl.getImplementationName();
     }
 
     /**
@@ -101,7 +99,7 @@ public final class Language {
      * @since 19.0
      */
     public String getVersion() {
-        return dispatch.getVersion(receiver);
+        return impl.getVersion();
     }
 
     /**
@@ -112,7 +110,7 @@ public final class Language {
      * @since 19.0
      */
     public boolean isInteractive() {
-        return dispatch.isInteractive(receiver);
+        return impl.isInteractive();
     }
 
     /**
@@ -124,7 +122,7 @@ public final class Language {
      * @since 19.0
      */
     public OptionDescriptors getOptions() {
-        return dispatch.getOptions(receiver);
+        return impl.getOptions();
     }
 
     /**
@@ -137,7 +135,7 @@ public final class Language {
      * @since 19.0
      */
     public String getDefaultMimeType() {
-        return dispatch.getDefaultMimeType(receiver);
+        return impl.getDefaultMimeType();
     }
 
     /**
@@ -147,7 +145,7 @@ public final class Language {
      * @since 19.0
      */
     public Set<String> getMimeTypes() {
-        return dispatch.getMimeTypes(receiver);
+        return impl.getMimeTypes();
     }
 
 }

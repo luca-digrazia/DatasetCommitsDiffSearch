@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -76,7 +76,6 @@ public abstract class Message {
     private final Class<?> returnType;
     private final Class<? extends Library> libraryClass;
     private final List<Class<?>> parameterTypes;
-    @CompilationFinal(dimensions = 1) private final Class<?>[] parameterTypesArray;
     private final int parameterCount;
     @CompilationFinal LibraryFactory<Library> library;
 
@@ -91,7 +90,6 @@ public abstract class Message {
         this.libraryClass = libraryClass;
         this.simpleName = messageName.intern();
         this.returnType = returnType;
-        this.parameterTypesArray = parameterTypes;
         this.parameterTypes = Collections.unmodifiableList(Arrays.asList(parameterTypes));
         this.qualifiedName = (getLibraryName() + "." + simpleName).intern();
         this.parameterCount = parameterTypes.length;
@@ -155,7 +153,7 @@ public abstract class Message {
      * @since 19.0
      */
     public final Class<?> getReceiverType() {
-        return parameterTypesArray[0];
+        return parameterTypes.get(0);
     }
 
     /**
@@ -168,16 +166,6 @@ public abstract class Message {
      */
     public final List<Class<?>> getParameterTypes() {
         return parameterTypes;
-    }
-
-    /**
-     * Just like {@link #getParameterTypes()} but returns the parameter of a given index in a
-     * partial evaluation safe way.
-     *
-     * @since 21.3
-     */
-    public final Class<?> getParameterType(int index) {
-        return parameterTypesArray[index];
     }
 
     /**

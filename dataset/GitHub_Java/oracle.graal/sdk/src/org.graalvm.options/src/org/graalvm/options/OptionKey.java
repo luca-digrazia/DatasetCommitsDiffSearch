@@ -80,23 +80,6 @@ public final class OptionKey<T> {
     }
 
     /**
-     * Constructs a new option key to group options with common prefixes. This type of options allow
-     * to collect key=value pairs whose keys are unknown beforehand e.g. user defined properties.
-     * 
-     * Throws {@link IllegalArgumentException} if no default {@link OptionType} could be
-     * {@link OptionType#defaultType(Object) resolved} for the value type.
-     * 
-     * @since 20.0
-     */
-    public static <V> OptionKey<OptionMap<V>> mapOf(Class<V> valueClass) {
-        OptionType<OptionMap<V>> type = OptionType.mapOf(valueClass);
-        if (type == null) {
-            throw new IllegalArgumentException("No default type specified for type " + valueClass.getName());
-        }
-        return new OptionKey<>(OptionMap.empty(), type);
-    }
-
-    /**
      * Returns the option type of this key.
      *
      * @since 19.0

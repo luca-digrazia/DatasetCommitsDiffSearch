@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -93,17 +93,6 @@ public interface LogHandler {
      * @since 19.0
      */
     void flush();
-
-    /**
-     * If the VM finds itself in a fatal, non-recoverable error situation it will - before anything
-     * else - call this method. All subsequent log messages should be interpreted as information
-     * that further describes the specific instance of the fatal error. Once the VM has written all
-     * log messages related to the fatal error it will finally call {@link #fatalError()} from where
-     * it is expected to never return.
-     *
-     * @since 20.3
-     */
-    void fatalContext();
 
     /**
      * Exit the VM because a fatal, non-recoverable error situation has been detected. The

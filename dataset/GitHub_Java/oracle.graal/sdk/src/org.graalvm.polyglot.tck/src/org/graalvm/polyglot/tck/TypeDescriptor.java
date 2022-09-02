@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -123,41 +123,6 @@ public final class TypeDescriptor {
     public static final TypeDescriptor NATIVE_POINTER = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.NATIVE_POINTER));
 
     /**
-     * Type descriptor for date.
-     *
-     * @since 20.0.0 beta 2
-     */
-    public static final TypeDescriptor DATE = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.DATE));
-
-    /**
-     * Type descriptor for time.
-     *
-     * @since 20.0.0 beta 2
-     */
-    public static final TypeDescriptor TIME = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.TIME));
-
-    /**
-     * Type descriptor for time zone.
-     *
-     * @since 20.0.0 beta 2
-     */
-    public static final TypeDescriptor TIME_ZONE = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.TIME_ZONE));
-
-    /**
-     * Type descriptor for duration.
-     *
-     * @since 20.0.0 beta 2
-     */
-    public static final TypeDescriptor DURATION = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.DURATION));
-
-    /**
-     * Type descriptor for duration.
-     *
-     * @since 19.3
-     */
-    public static final TypeDescriptor EXCEPTION = new TypeDescriptor(new PrimitiveImpl(PrimitiveKind.EXCEPTION));
-
-    /**
      * Represents an executable type returning any type and accepting any number of parameters of
      * any type. To create an executable type with concrete types use
      * {@link TypeDescriptor#executable(org.graalvm.polyglot.tck.TypeDescriptor, org.graalvm.polyglot.tck.TypeDescriptor...)}
@@ -225,12 +190,10 @@ public final class TypeDescriptor {
      * @since 0.30
      */
     public static final TypeDescriptor ANY = new TypeDescriptor(new UnionImpl(new HashSet<>(Arrays.asList(
-                    NOTYPE.impl, NULL.impl, BOOLEAN.impl, NUMBER.impl, STRING.impl, HOST_OBJECT.impl, NATIVE_POINTER.impl, OBJECT.impl, ARRAY.impl, EXECUTABLE_ANY.impl, INSTANTIABLE_ANY.impl,
-                    DATE.impl, TIME.impl, TIME_ZONE.impl, DURATION.impl, EXCEPTION.impl))));
+                    NOTYPE.impl, NULL.impl, BOOLEAN.impl, NUMBER.impl, STRING.impl, HOST_OBJECT.impl, NATIVE_POINTER.impl, OBJECT.impl, ARRAY.impl, EXECUTABLE_ANY.impl, INSTANTIABLE_ANY.impl))));
 
     private static final TypeDescriptor[] PREDEFINED_TYPES = new TypeDescriptor[]{
-                    NOTYPE, NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, DATE, TIME, TIME_ZONE, DURATION, EXCEPTION, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE, EXECUTABLE_ANY, INSTANTIABLE,
-                    INSTANTIABLE_ANY, ANY
+                    NOTYPE, NULL, BOOLEAN, NUMBER, STRING, HOST_OBJECT, NATIVE_POINTER, OBJECT, ARRAY, EXECUTABLE, EXECUTABLE_ANY, INSTANTIABLE, INSTANTIABLE_ANY, ANY
     };
 
     private final TypeDescriptorImpl impl;
@@ -621,22 +584,6 @@ public final class TypeDescriptor {
         if (value.isNativePointer()) {
             descs.add(NATIVE_POINTER);
         }
-        if (value.isDate()) {
-            descs.add(DATE);
-        }
-        if (value.isTime()) {
-            descs.add(TIME);
-        }
-        if (value.isTimeZone()) {
-            descs.add(TIME_ZONE);
-        }
-        if (value.isDuration()) {
-            descs.add(DURATION);
-        }
-        if (value.isException()) {
-            descs.add(EXCEPTION);
-        }
-
         if (value.hasArrayElements()) {
             final Set<TypeDescriptor> contentTypes = new HashSet<>();
             for (int i = 0; i < value.getArraySize(); i++) {
@@ -693,12 +640,7 @@ public final class TypeDescriptor {
         STRING("string"),
         HOST_OBJECT("hostObject"),
         NATIVE_POINTER("nativePointer"),
-        DATE("date"),
-        TIME("time"),
-        TIME_ZONE("timeZone"),
-        DURATION("duration"),
-        OBJECT("object"),
-        EXCEPTION("exception");
+        OBJECT("object");
 
         private final String displayName;
 

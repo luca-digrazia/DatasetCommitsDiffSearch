@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -96,7 +96,7 @@ public final class RuntimeClassInitialization {
     public static void initializeAtRunTime(Class<?>... classes) {
         StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
         for (Class<?> aClass : classes) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtRunTime(aClass, classReason(stacktrace, aClass.getSimpleName() + ".class'"));
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtRunTime(aClass, MESSAGE + getCaller(stacktrace));
         }
     }
 
@@ -115,7 +115,7 @@ public final class RuntimeClassInitialization {
     public static void initializeAtBuildTime(Class<?>... classes) {
         StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
         for (Class<?> aClass : classes) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtBuildTime(aClass, classReason(stacktrace, aClass.getSimpleName() + ".class'"));
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtBuildTime(aClass, MESSAGE + getCaller(stacktrace));
         }
     }
 
@@ -135,7 +135,7 @@ public final class RuntimeClassInitialization {
     public static void initializeAtRunTime(String... packages) {
         StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
         for (String aPackage : packages) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtRunTime(aPackage, classReason(stacktrace, aPackage));
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtRunTime(aPackage, MESSAGE + getCaller(stacktrace));
         }
     }
 
@@ -154,7 +154,7 @@ public final class RuntimeClassInitialization {
     public static void initializeAtBuildTime(String... packages) {
         StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
         for (String aPackage : packages) {
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtBuildTime(aPackage, classReason(stacktrace, aPackage));
+            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).initializeAtBuildTime(aPackage, MESSAGE + getCaller(stacktrace));
         }
     }
 
@@ -163,9 +163,7 @@ public final class RuntimeClassInitialization {
         return e.getClassName() + "." + e.getMethodName();
     }
 
-    private static String classReason(StackTraceElement[] stacktrace, String simpleName) {
-        return "from feature " + getCaller(stacktrace) + " with '" + simpleName + "'";
-    }
+    private static final String MESSAGE = "from feature ";
 
     private RuntimeClassInitialization() {
     }

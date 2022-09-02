@@ -1,40 +1,45 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.tck;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.Message;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.tck.TruffleRunner.Inject;
-import com.oracle.truffle.tck.TruffleRunner.Warmup;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -42,8 +47,18 @@ import java.lang.annotation.Target;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+
+import org.graalvm.polyglot.Context;
+import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
 import org.junit.runner.RunWith;
 import org.junit.runner.Runner;
 import org.junit.runners.BlockJUnit4ClassRunner;
@@ -54,9 +69,23 @@ import org.junit.runners.Parameterized.UseParametersRunnerFactory;
 import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.Statement;
+import org.junit.runners.model.TestClass;
 import org.junit.runners.parameterized.BlockJUnit4ClassRunnerWithParameters;
 import org.junit.runners.parameterized.ParametersRunnerFactory;
 import org.junit.runners.parameterized.TestWithParameters;
+
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage.Env;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.tck.TruffleRunner.Inject;
+import com.oracle.truffle.tck.TruffleRunner.RunWithPolyglotRule;
+import com.oracle.truffle.tck.TruffleRunner.Warmup;
+import com.oracle.truffle.tck.TruffleTestInvoker.TruffleTestClass;
 
 /**
  * JUnit test runner for unit testing Truffle AST interpreters.
@@ -84,6 +113,13 @@ import org.junit.runners.parameterized.TestWithParameters;
  * <p>
  * {@codesnippet TruffleRunnerSnippets#ExampleTest}
  *
+ * <h4>Running a test in the polyglot engine</h4>
+ *
+ * If a test should be run in the context of a polyglot engine, {@link RunWithPolyglotRule} can be
+ * used.
+ * <p>
+ * {@codesnippet TruffleRunnerSnippets#RunWithPolyglotRule}
+ *
  * @see Warmup warmup iterations and compilation
  * @see ParametersFactory parameterized Truffle AST tests
  *
@@ -91,7 +127,7 @@ import org.junit.runners.parameterized.TestWithParameters;
  */
 public final class TruffleRunner extends BlockJUnit4ClassRunner {
 
-    private static final TruffleTestInvoker<?> truffleTestInvoker = TruffleTestInvoker.create();
+    private static final TruffleTestInvoker<?, ?> truffleTestInvoker = TruffleTestInvoker.create();
 
     /**
      * A parameter annotated with {@link Inject} specifies the {@link RootNode} of the test AST.
@@ -106,6 +142,8 @@ public final class TruffleRunner extends BlockJUnit4ClassRunner {
 
         /**
          * Defines the {@link RootNode root node} of the Truffle tree that should be tested.
+         *
+         * @since 0.25
          */
         Class<? extends RootNode> value();
     }
@@ -135,6 +173,8 @@ public final class TruffleRunner extends BlockJUnit4ClassRunner {
 
         /**
          * The number of warmup iterations to run before a test is compiled.
+         *
+         * @since 0.25
          */
         int value();
     }
@@ -175,6 +215,82 @@ public final class TruffleRunner extends BlockJUnit4ClassRunner {
         }
     }
 
+    /**
+     * JUnit rule to run the tests in the context of a polyglot engine. This can be used as a
+     * {@link ClassRule} or as a {@link Rule}.
+     * <p>
+     * If used as {@link ClassRule}, a single context is created for all unit tests in this class,
+     * and all tests (and also other methods like {@link BeforeClass}, {@link Before} {@link After}
+     * and {@link AfterClass}) are executed in this context.
+     * <p>
+     * If used as {@link Rule}, a new context is created for each unit test. The {@link Before} and
+     * {@link After} actions are also executed in this context. No context is available in the
+     * {@link BeforeClass} and {@link AfterClass} methods.
+     *
+     * @since 0.27
+     */
+    public static final class RunWithPolyglotRule implements TestRule {
+
+        Context.Builder contextBuilder;
+
+        Context context = null;
+        Env testEnv = null;
+
+        /**
+         * @since 0.27
+         */
+        public RunWithPolyglotRule() {
+            this(Context.newBuilder().allowAllAccess(true));
+        }
+
+        /**
+         * @param contextBuilder a custom context builder
+         * @since 19.0
+         */
+        public RunWithPolyglotRule(Context.Builder contextBuilder) {
+            this.contextBuilder = contextBuilder;
+        }
+
+        /**
+         * Internal method used by the JUnit framework. Do not call directly.
+         *
+         * @since 0.27
+         */
+        @Override
+        public Statement apply(Statement stmt, Description description) {
+            return TruffleTestInvoker.withTruffleContext(this, stmt);
+        }
+
+        /**
+         * Get the current {@link Context}. This should only be called from code that is executed by
+         * the {@link TruffleRunner}. In particular, this method can not be called from static
+         * initializers and constructors of test classes. Use {@link Before} or {@link BeforeClass}
+         * methods instead, or put the initialization code into the constructor of the
+         * {@link RootNode} of the test.
+         *
+         * @since 0.27
+         */
+        public Context getPolyglotContext() {
+            assert context != null;
+            return context;
+        }
+
+        /**
+         * Get an environment to access the polyglot engine using interop. This can be used to run
+         * setup tasks, and to do mock interop access into the polyglot engine. This should only be
+         * called from code that is executed by the {@link TruffleRunner}. In particular, this
+         * method can not be called from static initializers and constructors of test classes. Use
+         * {@link Before} or {@link BeforeClass} methods instead, or put the initialization code
+         * into the constructor of the {@link RootNode} of the test.
+         *
+         * @since 0.27
+         */
+        public Env getTruffleTestEnv() {
+            assert testEnv != null;
+            return testEnv;
+        }
+    }
+
     private static final class ParameterizedRunner extends BlockJUnit4ClassRunnerWithParameters {
 
         ParameterizedRunner(TestWithParameters test) throws InitializationError {
@@ -183,7 +299,7 @@ public final class TruffleRunner extends BlockJUnit4ClassRunner {
 
         @Override
         protected Statement methodInvoker(FrameworkMethod method, Object test) {
-            Statement ret = truffleTestInvoker.createStatement(getName(), getTestClass(), method, test);
+            Statement ret = truffleTestInvoker.createStatement(getTestClass().getJavaClass().getSimpleName() + "#" + testName(method), method, test);
             if (ret == null) {
                 ret = super.methodInvoker(method, test);
             }
@@ -193,6 +309,16 @@ public final class TruffleRunner extends BlockJUnit4ClassRunner {
         @Override
         protected void validateTestMethods(List<Throwable> errors) {
             TruffleTestInvoker.validateTestMethods(getTestClass(), errors);
+        }
+
+        /**
+         * Internal method used by the JUnit framework. Do not call directly.
+         *
+         * @since 0.27
+         */
+        @Override
+        protected TestClass createTestClass(Class<?> testClass) {
+            return new TruffleTestClass(testClass);
         }
     }
 
@@ -215,7 +341,7 @@ public final class TruffleRunner extends BlockJUnit4ClassRunner {
      */
     @Override
     protected Statement methodInvoker(FrameworkMethod method, Object test) {
-        Statement ret = truffleTestInvoker.createStatement(testName(method), getTestClass(), method, test);
+        Statement ret = truffleTestInvoker.createStatement(getTestClass().getJavaClass().getSimpleName() + "#" + testName(method), method, test);
         if (ret == null) {
             ret = super.methodInvoker(method, test);
         }
@@ -231,6 +357,16 @@ public final class TruffleRunner extends BlockJUnit4ClassRunner {
     protected void validateTestMethods(List<Throwable> errors) {
         TruffleTestInvoker.validateTestMethods(getTestClass(), errors);
     }
+
+    /**
+     * Internal method used by the JUnit framework. Do not call directly.
+     *
+     * @since 0.27
+     */
+    @Override
+    protected TestClass createTestClass(Class<?> testClass) {
+        return new TruffleTestClass(testClass);
+    }
 }
 
 class TruffleRunnerSnippets {
@@ -239,18 +375,18 @@ class TruffleRunnerSnippets {
     // BEGIN: TruffleRunnerSnippets#TestExecuteNode
     public class TestExecuteNode extends RootNode {
 
-        @Child Node executeNode;
+        @Child InteropLibrary interop;
 
         public TestExecuteNode() {
             super(null);
-            executeNode = Message.createExecute(1).createNode();
+            interop = InteropLibrary.getFactory().createDispatched(5);
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
-            TruffleObject obj = (TruffleObject) frame.getArguments()[0];
+            Object obj = frame.getArguments()[0];
             try {
-                return ForeignAccess.sendExecute(executeNode, obj);
+                return interop.execute(obj);
             } catch (InteropException ex) {
                 CompilerDirectives.transferToInterpreter();
                 Assert.fail(ex.getMessage());
@@ -314,7 +450,7 @@ class TruffleRunnerSnippets {
             private final int iArg;
             private final String sArg;
 
-            @Child Node executeNode;
+            @Child InteropLibrary interop;
 
             public TestConstArgNode() {
                 super(null);
@@ -326,7 +462,7 @@ class TruffleRunnerSnippets {
             public Object execute(VirtualFrame frame) {
                 TruffleObject obj = (TruffleObject) frame.getArguments()[0];
                 try {
-                    return ForeignAccess.sendExecute(executeNode, obj, iArg, sArg);
+                    return interop.execute(obj, iArg, sArg);
                 } catch (InteropException ex) {
                     CompilerDirectives.transferToInterpreter();
                     Assert.fail(ex.getMessage());
@@ -343,5 +479,28 @@ class TruffleRunnerSnippets {
         }
     }
     // END: TruffleRunnerSnippets#ParameterizedTest
+    // Checkstyle: resume
+
+    // Checkstyle: stop
+    // BEGIN: TruffleRunnerSnippets#RunWithPolyglotRule
+    @RunWith(TruffleRunner.class)
+    public static class PolyglotTest {
+
+        @ClassRule RunWithPolyglotRule runWithPolyglot = new RunWithPolyglotRule();
+
+        private static Object prepared;
+
+        @BeforeClass
+        public void prepare() {
+            prepared = runWithPolyglot.getTruffleTestEnv().importSymbol("...");
+        }
+
+        @Test
+        public void executeTest(@Inject(TestExecuteNode.class) CallTarget target) {
+            Object ret = target.call(prepared);
+            Assert.assertEquals(expectedRetValue(), ret);
+        }
+    }
+    // END: TruffleRunnerSnippets#RunWithPolyglotRule
     // Checkstyle: resume
 }

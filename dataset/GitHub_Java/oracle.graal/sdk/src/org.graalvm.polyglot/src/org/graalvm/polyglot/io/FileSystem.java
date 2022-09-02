@@ -40,7 +40,6 @@
  */
 package org.graalvm.polyglot.io;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.channels.SeekableByteChannel;
@@ -348,17 +347,6 @@ public interface FileSystem {
      */
     default String getSeparator() {
         return parsePath("").getFileSystem().getSeparator();
-    }
-
-    /**
-     * Returns the path separator used to separate filenames in a path list. On UNIX the path
-     * separator is {@code ':'}. On Windows it's {@code ';'}.
-     *
-     * @return the path separator
-     * @since 19.1.0
-     */
-    default String getPathSeparator() {
-        return File.pathSeparator;
     }
 
     /**

@@ -1498,17 +1498,11 @@ public final class SourceSectionFilter {
 
             @Override
             boolean isIncluded(Set<Class<?>> providedTags, Node instrumentedNode, SourceSection s) {
-                return s == null || !s.getSource().isInternal();
+                return true;
             }
 
             @Override
             boolean isRootIncluded(Set<Class<?>> providedTags, SourceSection rootSection, RootNode rootNode, int rootNodeBits) {
-                // assert that the RootNode is internal when it's Source is internal
-                assert rootNode == null ||
-                                rootSection == null ||
-                                !rootSection.getSource().isInternal() ||
-                                rootSection.getSource().isInternal() && rootNode.isInternal() : //
-                "The root's source is internal, but the root node is not. Root node = " + rootNode.getClass();
                 return rootNode == null || !rootNode.isInternal();
             }
 
