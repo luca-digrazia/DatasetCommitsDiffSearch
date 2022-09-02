@@ -25,6 +25,9 @@ package com.oracle.truffle.espresso.debugger.jdwp;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Breakpoint;
+import com.oracle.truffle.api.debug.DebugScope;
+import com.oracle.truffle.api.debug.DebugStackFrame;
+import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
 import com.oracle.truffle.api.debug.SourceElement;
@@ -33,33 +36,39 @@ import com.oracle.truffle.api.debug.SuspendAnchor;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.debug.SuspensionFilter;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.debugger.BreakpointInfo;
 import com.oracle.truffle.espresso.debugger.SourceLocation;
 import com.oracle.truffle.espresso.debugger.SuspendStrategy;
+import com.oracle.truffle.espresso.debugger.VMEventListener;
 import com.oracle.truffle.espresso.debugger.VMEventListeners;
-import com.oracle.truffle.espresso.debugger.exception.ClassNotLoadedException;
 import com.oracle.truffle.espresso.debugger.exception.NoSuchSourceLineException;
-import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.GuestClassLoadingNotifier;
-import com.oracle.truffle.espresso.runtime.GuestClassLoadingSubscriber;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
 
-public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
+public class JDWPDebuggerController {
 
     private static final StepConfig STEP_CONFIG = StepConfig.newBuilder().suspendAnchors(SourceElement.ROOT, SuspendAnchor.AFTER).build();
-
-    private final ArrayList<SourceLocation> notInstalled = new ArrayList<>(16);
 
     private EspressoOptions.JDWPOptions options;
     private DebuggerSession debuggerSession;
     private final JDWPInstrument instrument;
     private Object suspendLock = new Object();
     private SuspendedInfo suspendedInfo;
+    private volatile int commandRequestId = -1;
+
+    // justification for this being a map is that lookups only happen when at a breakpoint
     private Map<Breakpoint, BreakpointInfo> breakpointInfos = new HashMap<>();
 
     public JDWPDebuggerController(JDWPInstrument instrument) {
@@ -69,7 +78,6 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
     public void initialize(EspressoOptions.JDWPOptions options, EspressoContext context) {
         this.options = options;
         instrument.init(context);
-        GuestClassLoadingNotifier.getInstance().subscribe(this);
 
         // setup the debugger session object early to make sure instrumentable nodes are materialized
         TruffleLanguage.Env languageEnv = instrument.getContext().getEnv();
@@ -83,6 +91,10 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
         return instrument.getContext();
     }
 
+    public SuspendedInfo getSuspendedInfo() {
+        return suspendedInfo;
+    }
+
     public boolean shouldWaitForAttach() {
         return options.suspend;
     }
@@ -93,6 +105,10 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
 
     public String getTransport() {
         return options.transport;
+    }
+
+    public void setCommandRequestId(int commandRequestId) {
+        this.commandRequestId = commandRequestId;
     }
 
     /**
@@ -108,9 +124,6 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
             mapBrekpoint(bp, command.getInfo());
             debuggerSession.install(bp);
             //System.out.println("Breakpoint submitted at " + bp.getLocationDescription());
-        } catch (ClassNotLoadedException e) {
-            installOnClassLoad(location);
-            return;
         } catch (NoSuchSourceLineException ex) {
             // perhaps the debugger's view on the source is out of sync, in which case
             // the bytecode and source does not match.
@@ -121,13 +134,13 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
     @CompilerDirectives.TruffleBoundary
     private void mapBrekpoint(Breakpoint bp, BreakpointInfo info) {
         breakpointInfos.put(bp, info);
+        info.setBreakpoint(bp);
     }
 
     public void resume() {
         SuspendedInfo susp = suspendedInfo;
         if (susp != null) {
-            susp.getEvent().prepareContinue();
-            doResume();
+            doResume(suspendedInfo.getThread());
         }
     }
 
@@ -135,7 +148,7 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
         SuspendedInfo susp = suspendedInfo;
         if (susp != null) {
             susp.getEvent().prepareStepOver(STEP_CONFIG);
-            doResume();
+            susp.recordStep(DebuggerCommand.Kind.STEP_OVER);
         }
     }
 
@@ -143,26 +156,7 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
         SuspendedInfo susp = suspendedInfo;
         if (susp != null) {
             susp.getEvent().prepareStepInto(STEP_CONFIG);
-            doResume();
-        }
-    }
-
-    public void stepIntoSpecific(SourceLocation location) {
-        SuspendedInfo susp = suspendedInfo;
-        if (susp != null) {
-            // this can be implemented in multiple ways. One way that doesn't
-            // require changes to the Truffle Debug API is to use a one-shot breakpoint
-            Source source = null;
-            try {
-                source = location.getSource();
-                Breakpoint bp = Breakpoint.newBuilder(source).oneShot().lineIs(location.getLineNumber()).build();
-                debuggerSession.install(bp);
-            } catch (ClassNotLoadedException e) {
-                e.printStackTrace();
-            } catch (NoSuchSourceLineException e) {
-                e.printStackTrace();
-            }
-            doResume();
+            susp.recordStep(DebuggerCommand.Kind.STEP_INTO);
         }
     }
 
@@ -170,26 +164,14 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
         SuspendedInfo susp = suspendedInfo;
         if (susp != null) {
             susp.getEvent().prepareStepOut(STEP_CONFIG);
-            doResume();
+            susp.recordStep(DebuggerCommand.Kind.STEP_OUT);
         }
     }
 
-    private void doResume() {
+    private void doResume(StaticObject thread) {
         synchronized (suspendLock) {
+            ThreadSuspension.resumeThread(thread);
             suspendLock.notifyAll();
-        }
-    }
-
-    public void installOnClassLoad(SourceLocation location) {
-        notInstalled.add(location);
-    }
-
-    public void notifyClassLoaded(Symbol<Symbol.Type> type) {
-        for (SourceLocation location : notInstalled) {
-            if (type.equals(location.getType())) {
-                //submitLineBreakpoint(location);
-                return;
-            }
         }
     }
 
@@ -205,26 +187,159 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
                 firstSuspensionCalled = true;
                 return;
             }
-            //System.out.println("Suspended at: " + event.getSourceSection().toString());
 
-            byte strategy = SuspendStrategy.EVENT_THREAD;
-            for (Breakpoint bp : event.getBreakpoints()) {
-                // TODO(Gregersen) - look for the BP suspend strategy
-                // TODO(Gregersen) - if multiple BPs at this location we have to adhere to
-                // TODO(Gregersen) - the strongest suspension policy ALL -> THREAD -> NONE
-                if (!bp.isOneShot()) {
-                    //System.out.println("BP at suspension point: " + bp.getLocationDescription());
-                    VMEventListeners.getDefault().breakpointHit(breakpointInfos.get(bp));
+            StaticObject currentThread = getContext().getHost2Guest(Thread.currentThread());
+
+            if (commandRequestId != -1) {
+                if (checkExclusionFilters(event)) {
+                    //System.out.println("not suspending here: " + event.getSourceSection());
+                    return;
                 }
             }
 
-            suspendedInfo = new SuspendedInfo(event, strategy);
+            //System.out.println("Suspended at: " + event.getSourceSection().toString() + " in thread: " + currentThread);
 
+            byte strategy = SuspendStrategy.EVENT_THREAD;
+            JDWPCallFrame[] callFrames = createCallFrames(Ids.getIdAsLong(currentThread), event.getStackFrames());
+            suspendedInfo = new SuspendedInfo(event, strategy, callFrames, currentThread);
+
+
+            boolean alreadySuspended = false;
+            for (Breakpoint bp : event.getBreakpoints()) {
+                //System.out.println("BP at suspension point: " + bp.getLocationDescription());
+                // register the thread as suspended before sending the breakpoint hit event.
+                // The debugger will verify thread status as part of registering if a breakpoint is hit
+                if (strategy == SuspendStrategy.EVENT_THREAD && !alreadySuspended) {
+                    alreadySuspended = true;
+                    ThreadSuspension.suspendThread(currentThread);
+                }
+                VMEventListeners.getDefault().breakpointHit(breakpointInfos.get(bp), currentThread);
+            }
             // now, suspend the current thread until resumed by e.g. a debugger command
-            suspend(strategy);
+            suspend(strategy, callFrames[0], currentThread, alreadySuspended);
         }
 
-        private void suspend(byte strategy) {
+        private boolean checkExclusionFilters(SuspendedEvent event) {
+            RequestFilter requestFilter = EventFilters.getDefault().getRequestFilter(commandRequestId);
+
+            if (requestFilter != null && requestFilter.isStepping()) {
+            // we're currently stepping, so check if suspension point
+            // matches any exclusion filters
+
+                DebugStackFrame topFrame = event.getTopStackFrame();
+
+                if (topFrame.getSourceSection() != null) {
+                    RootNode root = findCurrentRoot(topFrame);
+                    if (root != null && root instanceof EspressoRootNode) {
+                        EspressoRootNode node = (EspressoRootNode) root;
+                        Method method = node.getMethod();
+                        Klass klass = method.getDeclaringKlass();
+                        if (requestFilter.isKlassExcluded(klass)) {
+                            // should not suspend here then, tell the event to keep going
+                            continueStepping(event);
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        private void continueStepping(SuspendedEvent event) {
+            switch (suspendedInfo.getStepKind()) {
+                case STEP_INTO:
+                    // stepping into unwanted code which was filtered
+                    // so step out and try step into again
+                    event.prepareStepOut(STEP_CONFIG).prepareStepInto(STEP_CONFIG);
+                    break;
+                case STEP_OVER:
+                    event.prepareStepOver(STEP_CONFIG);
+                    break;
+                case STEP_OUT:
+                    event.prepareStepOut(STEP_CONFIG);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private JDWPCallFrame[] createCallFrames(long threadId, Iterable<DebugStackFrame> stackFrames) {
+            LinkedList<JDWPCallFrame> list = new LinkedList<>();
+            for (DebugStackFrame frame : stackFrames) {
+                // byte type tag, long classId, long methodId, long codeIndex
+
+                if (frame.getSourceSection() == null) {
+                    continue;
+                }
+
+                RootNode root = findCurrentRoot(frame);
+                if (root instanceof EspressoRootNode) {
+                    EspressoRootNode node = (EspressoRootNode) root;
+                    Method method = node.getMethod();
+                    Klass klass = method.getDeclaringKlass();
+
+                    long klassId = Ids.getIdAsLong(klass);
+                    long methodId = Ids.getIdAsLong(method);
+                    byte typeTag = TypeTag.getKind(klass);
+                    int line = frame.getSourceSection().getStartLine();
+
+                    long codeIndex = method.getLineNumberTable().getBCI(line);
+
+                    DebugScope scope = frame.getScope();
+
+                    //System.out.println("collected frame info for method: " + klass.getName().toString() + "." + method.getName() + "(" + line + ") : BCI(" + codeIndex + ")") ;
+
+                    StaticObject thisValue = null;
+                    ArrayList<Object> realVariables = new ArrayList<>();
+
+                    if (scope != null ) {
+                        Iterator<DebugValue> variables = scope.getDeclaredValues().iterator();
+                        while (variables.hasNext()) {
+                            DebugValue var = variables.next();
+                            if ("this".equals(var.getName())) {
+                                // get the real object reference and register it with Id
+                                thisValue = (StaticObject) getRealValue(var);
+                            } else {
+                                // add to variables list
+                                realVariables.add(getRealValue(var));
+                            }
+                        }
+                    }
+                    list.addLast(new JDWPCallFrame(threadId, typeTag, klassId, methodId, codeIndex, thisValue, realVariables.toArray(new Object[realVariables.size()])));
+                } else {
+                    throw new RuntimeException("stack walking not implemented for root node type! " + root);
+                }
+            }
+            return list.toArray(new JDWPCallFrame[list.size()]);
+        }
+
+        private Object getRealValue(DebugValue value) {
+            // TODO(Gregersen) - hacked in with reflection currently
+            // awaiting a proper API for this
+            try {
+                java.lang.reflect.Method getMethod = DebugValue.class.getDeclaredMethod("get");
+                getMethod.setAccessible(true);
+                return getMethod.invoke(value);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        private RootNode findCurrentRoot(DebugStackFrame frame) {
+            // TODO(Gregersen) - replace with new API when available
+            // for now just use reflection to get the current root
+            try {
+                java.lang.reflect.Method getRoot = DebugStackFrame.class.getDeclaredMethod("findCurrentRoot");
+                getRoot.setAccessible(true);
+                return (RootNode) getRoot.invoke(frame);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        private void suspend(byte strategy, JDWPCallFrame currentFrame, StaticObject thread, boolean alreadySuspended) {
             switch(strategy) {
                 case SuspendStrategy.NONE:
                     // nothing to suspend
@@ -232,6 +347,17 @@ public class JDWPDebuggerController implements GuestClassLoadingSubscriber {
                 case SuspendStrategy.EVENT_THREAD:
                     synchronized (suspendLock) {
                         try {
+                            if (!alreadySuspended) {
+                                ThreadSuspension.suspendThread(thread);
+                            }
+
+                            // if during stepping, send a step completed event back to the debugger
+                            if (commandRequestId != -1) {
+                                VMEventListeners.getDefault().stepCompleted(commandRequestId, currentFrame);
+                            }
+                            // reset
+                            commandRequestId = -1;
+                            //System.out.println("suspending...");
                             suspendLock.wait();
                         } catch (InterruptedException e) {
 
