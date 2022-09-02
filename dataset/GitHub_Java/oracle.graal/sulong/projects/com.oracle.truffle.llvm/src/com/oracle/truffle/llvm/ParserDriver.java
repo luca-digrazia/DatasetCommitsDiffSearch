@@ -170,7 +170,7 @@ final class ParserDriver {
             }
 
             // renaming is attempted only for internal libraries.
-            resolveRenamedSymbols(result, language);
+            resolveRenamedSymbols(result, language, context);
         }
 
         addExternalSymbolsToScopes(result);
@@ -217,7 +217,7 @@ final class ParserDriver {
     static final String SULONG_RENAME_MARKER = "___sulong_import_";
     static final int SULONG_RENAME_MARKER_LEN = SULONG_RENAME_MARKER.length();
 
-    protected static void resolveRenamedSymbols(LLVMParserResult parserResult, LLVMLanguage language) {
+    protected static void resolveRenamedSymbols(LLVMParserResult parserResult, LLVMLanguage language, LLVMContext context) {
         ListIterator<FunctionSymbol> it = parserResult.getExternalFunctions().listIterator();
         while (it.hasNext()) {
             FunctionSymbol external = it.next();
