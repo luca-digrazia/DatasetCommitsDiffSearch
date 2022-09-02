@@ -75,7 +75,7 @@ final class DefaultIntegerExports {
     static boolean fitsInFloat(Integer receiver) {
         int i = receiver;
         float f = i;
-        return (int) f == i;
+        return f == i;
     }
 
     @ExportMessage
