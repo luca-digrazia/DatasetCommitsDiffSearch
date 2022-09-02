@@ -43,7 +43,6 @@ package com.oracle.truffle.regex;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
@@ -203,11 +202,5 @@ public final class RegexFlags extends AbstractConstantKeysObject implements Json
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw UnknownIdentifierException.create(symbol);
         }
-    }
-
-    @ExportMessage
-    @TruffleBoundary
-    public Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
-        return "TRegexJSFlags{flags=" + toString() + '}';
     }
 }

@@ -79,10 +79,10 @@ public final class RegexLexer {
     private final CodePointSetAccumulator curCharClass = new CodePointSetAccumulator();
     private final CodePointSetAccumulator charClassCaseFoldTmp = new CodePointSetAccumulator();
 
-    public RegexLexer(RegexSource source, RegexFlags flags, RegexOptions options) {
+    public RegexLexer(RegexSource source, RegexOptions options) {
         this.source = source;
         this.pattern = source.getPattern();
-        this.flags = flags;
+        this.flags = source.getFlags();
         this.encoding = source.getEncoding();
         this.options = options;
     }

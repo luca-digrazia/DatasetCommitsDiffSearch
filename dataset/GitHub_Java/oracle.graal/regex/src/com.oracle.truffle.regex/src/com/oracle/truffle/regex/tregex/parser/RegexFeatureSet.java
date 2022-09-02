@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,81 +38,44 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex;
+package com.oracle.truffle.regex.tregex.parser;
 
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.nodes.Node;
+import java.util.Optional;
 
-@SuppressWarnings("serial")
-public final class UnsupportedRegexException extends RuntimeException implements TruffleException {
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.regex.RegexSource;
+import com.oracle.truffle.regex.UnsupportedRegexException;
 
-    private String reason;
-    private RegexSource regexSrc;
-
-    public UnsupportedRegexException(String reason) {
-        super();
-        this.reason = reason;
-    }
-
-    public UnsupportedRegexException(String reason, Throwable cause) {
-        super(cause);
-        this.reason = reason;
-    }
-
-    public UnsupportedRegexException(String reason, RegexSource regexSrc) {
-        this(reason);
-        this.regexSrc = regexSrc;
-    }
-
-    public RegexSource getRegex() {
-        return regexSrc;
-    }
-
-    public void setRegex(RegexSource regexSrc) {
-        this.regexSrc = regexSrc;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(String reason) {
-        this.reason = reason;
-    }
-
-    @Override
-    public String getMessage() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Unsupported regular expression");
-        if (regexSrc != null) {
-            sb.append(" /");
-            sb.append(regexSrc.getPattern());
-            sb.append("/");
-            sb.append(regexSrc.getFlags().getSource());
-        }
-        if (reason != null) {
-            sb.append(": ");
-            sb.append(reason);
-        }
-        return sb.toString();
-    }
+/**
+ * A predicate that describes the set of regular expressions supported by the regex compilers being
+ * used.
+ */
+@FunctionalInterface
+public interface RegexFeatureSet {
 
     /**
-     * For performance reasons, this exception does not record any stack trace information.
+     * Tests whether or not a regular expression is supported. Returns a descriptive error message
+     * if it is not.
+     *
+     * @param source the regular expression whose features are in question
+     * @param features a record of features detected in the expression by the parser that validated
+     *            its well-formedness
+     * @return
+     *         <ul>
+     *         <li>{@code Optional.empty()} if the regex is supported</li>
+     *         <li>{@code Optional.of(err)} if the regex is not supported; {@code err} is the error
+     *         message</li>
+     *         </ul>
      */
-    @SuppressWarnings("sync-override")
-    @Override
-    public Throwable fillInStackTrace() {
-        return this;
+    Optional<String> testSupport(RegexSource source, RegexFeatures features);
+
+    @TruffleBoundary
+    default void checkSupport(RegexSource source, RegexFeatures features) throws UnsupportedRegexException {
+        Optional<String> maybeError = testSupport(source, features);
+        if (maybeError.isPresent()) {
+            throw new UnsupportedRegexException(maybeError.get(), source);
+        }
     }
 
-    @Override
-    public boolean isSyntaxError() {
-        return true;
-    }
-
-    @Override
-    public Node getLocation() {
-        return null;
-    }
+    RegexFeatureSet DEFAULT = (RegexSource source, RegexFeatures features) -> Optional.empty();
 }

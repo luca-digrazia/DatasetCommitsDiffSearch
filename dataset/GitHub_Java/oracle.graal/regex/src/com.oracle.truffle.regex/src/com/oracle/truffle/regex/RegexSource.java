@@ -51,13 +51,13 @@ import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 public final class RegexSource implements JsonConvertible {
 
     private final String pattern;
-    private final String flags;
+    private final RegexFlags flags;
     private final Encoding encoding;
     private Source source;
     private boolean hashComputed = false;
     private int cachedHash;
 
-    public RegexSource(String pattern, String flags, Encoding encoding) {
+    public RegexSource(String pattern, RegexFlags flags, Encoding encoding) {
         this.pattern = pattern;
         this.flags = flags;
         this.encoding = encoding;
@@ -67,7 +67,7 @@ public final class RegexSource implements JsonConvertible {
         return pattern;
     }
 
-    public String getFlags() {
+    public RegexFlags getFlags() {
         return flags;
     }
 
@@ -125,7 +125,7 @@ public final class RegexSource implements JsonConvertible {
                 i++;
             }
         }
-        if (!flags.isEmpty()) {
+        if (!flags.isNone()) {
             sb.append('_').append(flags);
         }
         return sb.toString();

@@ -313,7 +313,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                     if (state.treeTransitionMatching()) {
                         int c = inputReadAndDecode(locals);
                         int treeSuccessor = state.getTreeMatcher().checkMatchTree(c);
-                        assert !isRegressionTestMode() || state.sameResultAsRegularMatchers(c, treeSuccessor);
+                        assert !isRegressionTestMode() || state.sameResultAsRegularMatchers(c, compactString, treeSuccessor);
                         // TODO: this switch loop should be replaced with a PE intrinsic
                         for (int i = 0; i < successors.length; i++) {
                             if (i == treeSuccessor) {
@@ -329,7 +329,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                         CharMatcher[] cMatchers = ((SimpleMatchers) matchers).getMatchers();
                         if (cMatchers != null) {
                             for (int i = 0; i < cMatchers.length; i++) {
-                                if (match(cMatchers, i, c)) {
+                                if (match(cMatchers, i, c, compactString)) {
                                     ip = transitionMatch(state, i);
                                     continue outer;
                                 }
@@ -349,7 +349,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                             inputIncNextIndexRaw(locals);
                             if (ascii != null) {
                                 for (int i = 0; i < ascii.length; i++) {
-                                    if (match(ascii, i, c)) {
+                                    if (match(ascii, i, c, compactString)) {
                                         ip = transitionMatch(state, i);
                                         continue outer;
                                     }
@@ -379,7 +379,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                                     if (enc2 != null) {
                                         codepoint = inputUTF8Decode2(locals, c, codepoint);
                                         for (int i = 0; i < enc2.length; i++) {
-                                            if (match(enc2, i, codepoint)) {
+                                            if (match(enc2, i, codepoint, compactString)) {
                                                 ip = transitionMatch(state, i);
                                                 continue outer;
                                             }
@@ -390,7 +390,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                                     if (enc3 != null) {
                                         codepoint = inputUTF8Decode3(locals, c, codepoint);
                                         for (int i = 0; i < enc3.length; i++) {
-                                            if (match(enc3, i, codepoint)) {
+                                            if (match(enc3, i, codepoint, compactString)) {
                                                 ip = transitionMatch(state, i);
                                                 continue outer;
                                             }
@@ -401,7 +401,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                                     if (enc4 != null) {
                                         codepoint = inputUTF8Decode4(locals, c, codepoint);
                                         for (int i = 0; i < enc4.length; i++) {
-                                            if (match(enc4, i, codepoint)) {
+                                            if (match(enc4, i, codepoint, compactString)) {
                                                 ip = transitionMatch(state, i);
                                                 continue outer;
                                             }
@@ -419,14 +419,14 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                         CharMatcher[] bmp = ((UTF16RawMatchers) matchers).getBmp();
                         if (latin1 != null && (bmp == null || compactString || getInputProfile().profile(c < 256))) {
                             for (int i = 0; i < latin1.length; i++) {
-                                if (match(latin1, i, c)) {
+                                if (match(latin1, i, c, compactString)) {
                                     ip = transitionMatch(state, i);
                                     continue outer;
                                 }
                             }
                         } else if (bmp != null) {
                             for (int i = 0; i < bmp.length; i++) {
-                                if (match(bmp, i, c)) {
+                                if (match(bmp, i, c, compactString)) {
                                     ip = transitionMatch(state, i);
                                     continue outer;
                                 }
@@ -453,7 +453,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                                 if (astral != null) {
                                     c = inputUTF16ToCodePoint(c, c2);
                                     for (int i = 0; i < astral.length; i++) {
-                                        if (match(astral, i, c)) {
+                                        if (match(astral, i, c, compactString)) {
                                             ip = transitionMatch(state, i);
                                             continue outer;
                                         }
@@ -464,7 +464,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                             }
                         } else if (latin1 != null && (bmp == null || compactString || getInputProfile().profile(c < 256))) {
                             for (int i = 0; i < latin1.length; i++) {
-                                if (match(latin1, i, c)) {
+                                if (match(latin1, i, c, compactString)) {
                                     ip = transitionMatch(state, i);
                                     continue outer;
                                 }
@@ -472,7 +472,7 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
                         }
                         if (bmp != null) {
                             for (int i = 0; i < bmp.length; i++) {
-                                if (match(bmp, i, c)) {
+                                if (match(bmp, i, c, compactString)) {
                                     ip = transitionMatch(state, i);
                                     continue outer;
                                 }
@@ -530,8 +530,8 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
         }
     }
 
-    private static boolean match(CharMatcher[] matchers, int i, final int c) {
-        return matchers[i] != null && matchers[i].execute(c);
+    private static boolean match(CharMatcher[] matchers, int i, final int c, boolean compactString) {
+        return matchers[i] != null && matchers[i].execute(c, compactString);
     }
 
     private static int transitionMatch(DFAStateNode state, int i) {

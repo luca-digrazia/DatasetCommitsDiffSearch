@@ -164,6 +164,7 @@ public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
         // to a final state.
         for (int i = 0; i < maxTransitionIndex(state); i++) {
             NFAStateTransition t = state.getSuccessors()[i];
+            NFAState target = t.getTarget();
             int targetId = t.getTarget().getId();
             int markIndex = targetId >> 6;
             long markBit = 1L << targetId;
@@ -171,7 +172,7 @@ public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
                 locals.getMarks()[markIndex] |= markBit;
                 if (t.getTarget().isUnAnchoredFinalState(true)) {
                     locals.pushResult(t, !isLoopBack);
-                } else if (t.getCodePointSet().contains(c)) {
+                } else if (target.getCharSet().contains(c)) {
                     locals.pushSuccessor(t, !isLoopBack);
                 }
             }

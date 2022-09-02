@@ -295,9 +295,9 @@ public class DFAStateNode extends DFAAbstractStateNode {
         checkFinalState(locals, executor);
     }
 
-    boolean sameResultAsRegularMatchers(int c, int allTransitionsMatcherResult) {
+    boolean sameResultAsRegularMatchers(int c, boolean compactString, int allTransitionsMatcherResult) {
         CompilerAsserts.neverPartOfCompilation();
-        return allTransitionsMatcherResult == matchers.match(c);
+        return allTransitionsMatcherResult == matchers.match(c, compactString);
     }
 
     private void checkFinalState(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor) {

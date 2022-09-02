@@ -233,7 +233,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
                             // successors.
                             assert isForward();
                             while (inputHasNext(locals)) {
-                                if (loopbackInitialStateMatcher.execute(inputReadAndDecode(locals))) {
+                                if (loopbackInitialStateMatcher.execute(inputReadAndDecode(locals), compactString)) {
                                     break;
                                 }
                                 inputAdvance(locals);
@@ -519,7 +519,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
                 assert !target.isInitialState(isForward());
                 return target.isAnchoredFinalState(isForward()) ? atEnd : true;
             case PureNFAState.KIND_CHARACTER_CLASS:
-                return !atEnd && matchers[target.getId()].execute(c);
+                return !atEnd && matchers[target.getId()].execute(c, compactString);
             case PureNFAState.KIND_LOOK_AROUND:
                 if (canInlineLookAroundIntoTransition(target)) {
                     return checkSubMatcherInline(locals, compactString, transition, target);

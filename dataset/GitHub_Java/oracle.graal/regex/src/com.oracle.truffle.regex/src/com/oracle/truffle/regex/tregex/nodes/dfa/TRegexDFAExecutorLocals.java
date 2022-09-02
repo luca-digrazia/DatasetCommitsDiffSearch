@@ -38,81 +38,76 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex;
+package com.oracle.truffle.regex.tregex.nodes.dfa;
 
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.regex.tregex.nodes.TRegexExecutorLocals;
+import com.oracle.truffle.regex.tregex.nodes.TRegexExecutorNode;
 
-@SuppressWarnings("serial")
-public final class UnsupportedRegexException extends RuntimeException implements TruffleException {
+/**
+ * Container for all local variables used in {@link TRegexDFAExecutorNode}.
+ */
+public final class TRegexDFAExecutorLocals extends TRegexExecutorLocals {
 
-    private String reason;
-    private RegexSource regexSrc;
+    private int curMinIndex;
+    private int result;
+    private short lastTransition;
+    private int lastIndex;
+    private final DFACaptureGroupTrackingData cgData;
 
-    public UnsupportedRegexException(String reason) {
-        super();
-        this.reason = reason;
-    }
-
-    public UnsupportedRegexException(String reason, Throwable cause) {
-        super(cause);
-        this.reason = reason;
-    }
-
-    public UnsupportedRegexException(String reason, RegexSource regexSrc) {
-        this(reason);
-        this.regexSrc = regexSrc;
-    }
-
-    public RegexSource getRegex() {
-        return regexSrc;
-    }
-
-    public void setRegex(RegexSource regexSrc) {
-        this.regexSrc = regexSrc;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(String reason) {
-        this.reason = reason;
-    }
-
-    @Override
-    public String getMessage() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Unsupported regular expression");
-        if (regexSrc != null) {
-            sb.append(" /");
-            sb.append(regexSrc.getPattern());
-            sb.append("/");
-            sb.append(regexSrc.getFlags().getSource());
-        }
-        if (reason != null) {
-            sb.append(": ");
-            sb.append(reason);
-        }
-        return sb.toString();
+    public TRegexDFAExecutorLocals(Object input, int fromIndex, int index, int maxIndex, DFACaptureGroupTrackingData cgData) {
+        super(input, fromIndex, maxIndex, index);
+        result = TRegexDFAExecutorNode.NO_MATCH;
+        this.cgData = cgData;
     }
 
     /**
-     * For performance reasons, this exception does not record any stack trace information.
+     * The minimum index as checked by
+     * {@link TRegexExecutorNode#inputHasNext(TRegexExecutorLocals)}. In most cases this value is
+     * {@code 0}, but backward matching nodes change this value while matching.
+     *
+     * @return the minimum index as checked by
+     *         {@link TRegexExecutorNode#inputHasNext(TRegexExecutorLocals)}.
+     *
+     * @see BackwardDFAStateNode
      */
-    @SuppressWarnings("sync-override")
-    @Override
-    public Throwable fillInStackTrace() {
-        return this;
+    public int getCurMinIndex() {
+        return curMinIndex;
     }
 
-    @Override
-    public boolean isSyntaxError() {
-        return true;
+    public void setCurMinIndex(int curMinIndex) {
+        this.curMinIndex = curMinIndex;
     }
 
-    @Override
-    public Node getLocation() {
-        return null;
+    public short getLastTransition() {
+        return lastTransition;
+    }
+
+    public void setLastTransition(short lastTransition) {
+        lastIndex = getIndex();
+        this.lastTransition = lastTransition;
+    }
+
+    public int getLastIndex() {
+        return lastIndex;
+    }
+
+    public void setLastIndex(int lastIndex) {
+        this.lastIndex = lastIndex;
+    }
+
+    public int getResultInt() {
+        return result;
+    }
+
+    public void setResultInt(int result) {
+        this.result = result;
+    }
+
+    public DFACaptureGroupTrackingData getCGData() {
+        return cgData;
+    }
+
+    public TRegexDFAExecutorLocals toInnerLiteralBackwardLocals() {
+        return new TRegexDFAExecutorLocals(getInput(), getFromIndex(), getIndex(), getMaxIndex(), cgData);
     }
 }
