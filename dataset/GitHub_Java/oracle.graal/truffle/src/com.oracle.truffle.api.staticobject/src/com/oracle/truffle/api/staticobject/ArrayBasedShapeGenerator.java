@@ -2,33 +2,53 @@
  * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.staticobject;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.asm.ClassVisitor;
 import com.oracle.truffle.api.impl.asm.ClassWriter;
@@ -37,6 +57,7 @@ import com.oracle.truffle.api.impl.asm.MethodVisitor;
 import com.oracle.truffle.api.impl.asm.Opcodes;
 import com.oracle.truffle.api.impl.asm.Type;
 import org.graalvm.collections.Pair;
+import org.graalvm.nativeimage.ImageInfo;
 
 import static com.oracle.truffle.api.impl.asm.Opcodes.ACC_FINAL;
 import static com.oracle.truffle.api.impl.asm.Opcodes.ACC_PUBLIC;
@@ -69,8 +90,7 @@ import static com.oracle.truffle.api.impl.asm.Opcodes.T_BYTE;
 import static com.oracle.truffle.api.impl.asm.Opcodes.V1_8;
 
 final class ArrayBasedShapeGenerator<T> extends ShapeGenerator<T> {
-    private static final int UNINITIALIZED_NATIVE_OFFSET = -1;
-    private static final ConcurrentHashMap<Pair<Class<?>, Class<?>>, ArrayBasedShapeGenerator<?>> generatorCache = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Pair<Class<?>, Class<?>>, Object> generatorCache = TruffleOptions.AOT ? new ConcurrentHashMap<>() : null;
     private static final String[] ARRAY_SIZE_FIELDS = new String[]{"primitiveArraySize", "objectArraySize"};
 
     private final Class<?> generatedStorageClass;
@@ -79,26 +99,6 @@ final class ArrayBasedShapeGenerator<T> extends ShapeGenerator<T> {
     @CompilationFinal private int byteArrayOffset;
     @CompilationFinal private int objectArrayOffset;
     @CompilationFinal private int shapeOffset;
-
-    static {
-        if (TruffleOptions.AOT) {
-            try {
-                // When this class will be in truffle we will remove this code and introduce a
-                // SubstrateVM feature that locates these classes at image build time.
-                Class<?> defaultStorageSuperClass = Class.forName("com.oracle.truffle.espresso.runtime.StaticObject");
-                Class<?> defaultStorageFactoryInterface = Class.forName("com.oracle.truffle.espresso.runtime.StaticObject$StaticObjectFactory");
-                Class<?> defaultStorageClass = Class.forName("com.oracle.truffle.espresso.runtime.StaticObject$DefaultArrayBasedStaticObject");
-                Class<?> defaultFactoryClass = Class.forName("com.oracle.truffle.espresso.runtime.StaticObject$DefaultArrayBasedStaticObjectFactory");
-                // The offsets of the byte and object arrays cannot be computed at image build time.
-                // They would refer to a Java object, not to a Native object.
-                ArrayBasedShapeGenerator<?> sg = new ArrayBasedShapeGenerator<>(defaultStorageClass, defaultFactoryClass, UNINITIALIZED_NATIVE_OFFSET, UNINITIALIZED_NATIVE_OFFSET,
-                                UNINITIALIZED_NATIVE_OFFSET);
-                generatorCache.putIfAbsent(Pair.create(defaultStorageSuperClass, defaultStorageFactoryInterface), sg);
-            } catch (ClassNotFoundException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
 
     private ArrayBasedShapeGenerator(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass) {
         this(
@@ -117,23 +117,40 @@ final class ArrayBasedShapeGenerator<T> extends ShapeGenerator<T> {
         this.shapeOffset = shapeOffset;
     }
 
+    int getByteArrayOffset() {
+        return byteArrayOffset;
+    }
+
+    int getObjectArrayOffset() {
+        return objectArrayOffset;
+    }
+
+    int getShapeOffset() {
+        return shapeOffset;
+    }
+
+    // Invoked also from TruffleFeature.StaticObjectSupport
     @SuppressWarnings("unchecked")
-    static <T> ArrayBasedShapeGenerator<T> getShapeGenerator(GeneratorClassLoader gcl, Class<?> storageSuperClass, Class<T> storageFactoryInterface) {
+    static <T> ArrayBasedShapeGenerator<T> getShapeGenerator(TruffleLanguage<?> language, GeneratorClassLoader gcl, Class<?> storageSuperClass, Class<T> storageFactoryInterface) {
+        ConcurrentHashMap<Pair<Class<?>, Class<?>>, Object> cache;
+        if (TruffleOptions.AOT) {
+            cache = generatorCache;
+        } else {
+            cache = SomAccessor.ENGINE.getGeneratorCache(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language));
+        }
         Pair<Class<?>, Class<?>> pair = Pair.create(storageSuperClass, storageFactoryInterface);
-        ArrayBasedShapeGenerator<T> sg = (ArrayBasedShapeGenerator<T>) generatorCache.get(pair);
+        ArrayBasedShapeGenerator<T> sg = (ArrayBasedShapeGenerator<T>) cache.get(pair);
         if (sg == null) {
-            assert !TruffleOptions.AOT;
+            if (ImageInfo.inImageRuntimeCode()) {
+                throw new IllegalStateException("This code should not be executed at Native Image run time. Please report this issue");
+            }
             Class<?> generatedStorageClass = generateStorage(gcl, storageSuperClass);
             Class<? extends T> generatedFactoryClass = generateFactory(gcl, generatedStorageClass, storageFactoryInterface);
             sg = new ArrayBasedShapeGenerator<>(generatedStorageClass, generatedFactoryClass);
-            ArrayBasedShapeGenerator<T> prevSg = (ArrayBasedShapeGenerator<T>) generatorCache.putIfAbsent(pair, sg);
+            ArrayBasedShapeGenerator<T> prevSg = (ArrayBasedShapeGenerator<T>) cache.putIfAbsent(pair, sg);
             if (prevSg != null) {
                 sg = prevSg;
             }
-        } else if (TruffleOptions.AOT && sg.byteArrayOffset == UNINITIALIZED_NATIVE_OFFSET) {
-            sg.byteArrayOffset = getObjectFieldOffset(sg.generatedStorageClass, "primitive");
-            sg.objectArrayOffset = getObjectFieldOffset(sg.generatedStorageClass, "object");
-            sg.shapeOffset = getObjectFieldOffset(sg.generatedStorageClass, "shape");
         }
         return sg;
     }
@@ -147,8 +164,17 @@ final class ArrayBasedShapeGenerator<T> extends ShapeGenerator<T> {
     }
 
     @Override
-    StaticShape<T> generateShape(StaticShape<T> parentShape, Collection<StaticProperty> staticProperties) {
-        return ArrayBasedStaticShape.create(generatedStorageClass, generatedFactoryClass, (ArrayBasedStaticShape<T>) parentShape, staticProperties, byteArrayOffset, objectArrayOffset, shapeOffset);
+    StaticShape<T> generateShape(StaticShape<T> parentShape, Map<String, StaticProperty> staticProperties, boolean safetyChecks) {
+        return ArrayBasedStaticShape.create(this, generatedStorageClass, generatedFactoryClass, (ArrayBasedStaticShape<T>) parentShape, staticProperties.values(), safetyChecks);
+    }
+
+    // Invoked from TruffleFeature.StaticObjectSupport
+    void patchOffsets(int nativeByteArrayOffset, int nativeObjectArrayOffset, int nativeShapeOffset) {
+        assert TruffleOptions.AOT;
+        CompilerAsserts.neverPartOfCompilation();
+        byteArrayOffset = nativeByteArrayOffset;
+        objectArrayOffset = nativeObjectArrayOffset;
+        shapeOffset = nativeShapeOffset;
     }
 
     private static String getStorageConstructorDescriptor(Constructor<?> superConstructor) {
