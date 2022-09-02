@@ -93,8 +93,9 @@ public abstract class ClangLikeBase extends Driver {
                     showHelp = true;
                     break;
                 case "-fembed-bitcode":
-                    String s = "-fembed-bitcode";
-                    unsupportedFlagExit(s);
+                    System.err.println("Using `-fembed-bitcode` is not supported.");
+                    System.err.println("Try calling the the wrapped tool directly: " + exe);
+                    System.exit(1);
                     break;
                 case "--graalvm-help":
                     showHelp = true;
@@ -113,9 +114,6 @@ public abstract class ClangLikeBase extends Driver {
                     args[i] = null;
                     break;
             }
-            if (arg.startsWith("-fuse-ld=")) {
-                unsupportedFlagExit("-fuse-ld");
-            }
         }
         this.args = keepArgs ? args : Arrays.stream(args).filter(Objects::nonNull).toArray(String[]::new);
         this.needLinkerFlags = mayBeLinkerInvocation & mayHaveInputFiles;
@@ -125,12 +123,6 @@ public abstract class ClangLikeBase extends Driver {
         this.earlyExit = shouldExitEarly;
         this.outputFlagPos = outputFlagIdx;
         this.nostdincxx = noStdIncxx;
-    }
-
-    private void unsupportedFlagExit(String flag) {
-        System.err.println("Using `" + flag + "` is not supported.");
-        System.err.println("Try calling the the wrapped tool directly: " + exe);
-        System.exit(1);
     }
 
     private static boolean stageSelectionFlag(String s) {
@@ -153,6 +145,8 @@ public abstract class ClangLikeBase extends Driver {
         List<String> sulongArgs = new ArrayList<>();
         if (os == OS.DARWIN && Files.isExecutable(Paths.get(XCRUN)) && Files.isExecutable(Paths.get(exe))) {
             sulongArgs.add(XCRUN);
+            sulongArgs.add("--sdk");
+            sulongArgs.add("macosx");
         }
         sulongArgs.add(exe);
 

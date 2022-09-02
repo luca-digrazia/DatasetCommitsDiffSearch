@@ -49,10 +49,13 @@ public class ClangLike extends ClangLikeBase {
     protected void getCompilerArgs(List<String> sulongArgs) {
         sulongArgs.add("-I" + getSulongHome().resolve(platform).resolve("include"));
         sulongArgs.add("-I" + getSulongHome().resolve("include"));
-        // Add libc++ unconditionally as C++ might be compiled via clang [GR-23036]
-        sulongArgs.add("-stdlib=libc++");
-        // Suppress warning because of libc++
-        sulongArgs.add("-Wno-unused-command-line-argument");
+        // c++ specific flags
+        if (cxx) {
+            // avoid "warning: argument unused during compilation: '-stdlib=libc++'"
+            if (needLinkerFlags || !nostdincxx) {
+                sulongArgs.add("-stdlib=libc++");
+            }
+        }
         super.getCompilerArgs(sulongArgs);
     }
 
