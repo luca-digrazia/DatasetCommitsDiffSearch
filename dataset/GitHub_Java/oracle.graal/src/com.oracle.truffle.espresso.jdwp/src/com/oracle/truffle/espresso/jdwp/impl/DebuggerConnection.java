@@ -460,9 +460,6 @@ public final class DebuggerConnection implements Commands {
                                 case JDWP.ThreadGroupReference.PARENT.ID:
                                     result = JDWP.ThreadGroupReference.PARENT.createReply(packet, context);
                                     break;
-                                case JDWP.ThreadGroupReference.CHILDREN.ID:
-                                    result = JDWP.ThreadGroupReference.CHILDREN.createReply(packet, context);
-                                    break;
                             }
                             break;
                         case JDWP.ArrayReference.ID: {
