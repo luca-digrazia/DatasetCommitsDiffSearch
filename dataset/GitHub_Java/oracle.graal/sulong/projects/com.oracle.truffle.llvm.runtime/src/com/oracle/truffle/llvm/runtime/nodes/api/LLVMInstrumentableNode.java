@@ -130,7 +130,7 @@ public abstract class LLVMInstrumentableNode extends LLVMNode implements Instrum
 
     @ExportMessage
     boolean hasScope(@SuppressWarnings("unused") Frame frame) {
-        return sourceLocation != null;
+        return true;
     }
 
     @ExportMessage
@@ -159,7 +159,6 @@ public abstract class LLVMInstrumentableNode extends LLVMNode implements Instrum
             if (LLVMManagedPointer.isInstance(pointer)) {
                 return LLVMManagedPointer.cast(pointer).getObject();
             }
-            throw new IllegalStateException("Current LLVM context does not have a root instance.");
         }
         throw UnsupportedMessageException.create();
     }

@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.runtime.nodes.func;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
@@ -140,13 +139,4 @@ public final class LLVMFunctionStartNode extends LLVMRootNode implements LLVMHas
         }
         return properties;
     }
-
-    @Override
-    protected ExecutionSignature prepareForAOT() {
-
-        // TODO: use the FunctionDefinition to prepare the right signature
-
-        return ExecutionSignature.GENERIC;
-    }
-
 }
