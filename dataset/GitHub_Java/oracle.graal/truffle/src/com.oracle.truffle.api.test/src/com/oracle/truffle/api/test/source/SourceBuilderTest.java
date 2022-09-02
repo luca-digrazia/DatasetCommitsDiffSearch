@@ -48,8 +48,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static java.nio.file.StandardOpenOption.CREATE;
-import static java.nio.file.StandardOpenOption.WRITE;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -72,6 +70,7 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
+import com.oracle.truffle.api.impl.Accessor;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.Source.LiteralBuilder;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
@@ -79,9 +78,6 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 import static com.oracle.truffle.api.test.polyglot.ValueAssert.assertFails;
-import java.nio.ByteBuffer;
-import java.nio.channels.SeekableByteChannel;
-import java.util.EnumSet;
 
 public class SourceBuilderTest extends AbstractPolyglotTest {
 
@@ -223,23 +219,19 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
     public void testRelativeSourceWithContent() throws Exception {
         setupEnv();
         TruffleFile cwd = languageEnv.getCurrentWorkingDirectory();
-        String relativeName = "Test.java";
-        TruffleFile file = cwd.resolve(relativeName);
+        Path cwdPath = TestAPIAccessor.languageAccess().getPath(cwd);
+        Path tempFile = Files.createTempFile(cwdPath, "Test", ".java");
+        tempFile.toFile().deleteOnExit();
         String content = "// Test";
-        try {
-            try (SeekableByteChannel c = file.newByteChannel(EnumSet.of(WRITE, CREATE))) {
-                c.write(ByteBuffer.wrap(content.getBytes("UTF-8")));
-            }
-            TruffleFile relativeFile = languageEnv.getTruffleFile(relativeName);
-            Source source = Source.newBuilder("", relativeFile).build();
-            assertFalse(source.hasBytes());
-            assertTrue(source.hasCharacters());
-            // Constructed from relativeFile TruffleFile, but loads content and should be absolute
-            assertTrue(source.getURI().toString(), source.getURI().isAbsolute());
-            assertEquals(content, source.getCharacters().toString());
-        } finally {
-            file.delete();
-        }
+        Files.write(tempFile, content.getBytes("UTF-8"));
+        String relativeName = tempFile.getFileName().toString();
+        TruffleFile relativeFile = languageEnv.getTruffleFile(relativeName);
+        Source source = Source.newBuilder("", relativeFile).build();
+        assertFalse(source.hasBytes());
+        assertTrue(source.hasCharacters());
+        // Constructed from relativeFile TruffleFile, but loads content and should be absolute
+        assertTrue(source.getURI().toString(), source.getURI().isAbsolute());
+        assertEquals(content, source.getCharacters().toString());
     }
 
     @Test
@@ -431,7 +423,6 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
 
     @Test
     public void assignMimeTypeAndIdentityForURL() throws IOException {
-        setupEnv();
         File file = File.createTempFile("Hello", ".java");
         file.deleteOnExit();
 
@@ -441,6 +432,7 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
             w.write(text);
         }
         SourceBuilder builder = Source.newBuilder("TestJava", file.toURI().toURL()).name("Hello.java").mimeType(Source.findMimeType(file.toURI().toURL()));
+
         Source s1 = builder.build();
         assertEquals("Recognized as Java", "text/x-java", s1.getMimeType());
         Source s2 = builder.mimeType("text/x-c").build();
@@ -507,7 +499,6 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
 
     @Test
     public void jarURLGetsAName() throws IOException {
-        setupEnv();
         File sample = File.createTempFile("sample", ".jar");
         sample.deleteOnExit();
         JarOutputStream os = new JarOutputStream(new FileOutputStream(sample));
@@ -780,5 +771,13 @@ public class SourceBuilderTest extends AbstractPolyglotTest {
         TruffleFile unknownMimeTypeFile = languageEnv.getTruffleFile("test.unknown");
         assertEquals("application/test-js", Source.findMimeType(knownMimeTypeFile));
         assertNull(Source.findMimeType(unknownMimeTypeFile));
+    }
+
+    private static final TestAPIAccessor API = new TestAPIAccessor();
+
+    private static final class TestAPIAccessor extends Accessor {
+        static LanguageSupport languageAccess() {
+            return API.languageSupport();
+        }
     }
 }

@@ -24,9 +24,9 @@
  */
 package com.oracle.svm.core.posix.linux;
 
-import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.impl.DeprecatedPlatform;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.type.CIntPointer;
@@ -50,7 +50,7 @@ import com.oracle.svm.core.posix.headers.Unistd;
  * operations. Where the implementations are identical between platforms, the shared code lives in
  * {@link PosixJavaNetClose}.
  */
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class})
 public class LinuxJavaNetCloseImpl extends PosixJavaNetClose {
 
     protected LinuxJavaNetCloseImpl() {
@@ -222,7 +222,7 @@ public class LinuxJavaNetCloseImpl extends PosixJavaNetClose {
     /* } Allow names with underscores: Checkstyle: resume */
 }
 
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class})
 @AutomaticFeature
 class LinuxJavaNetCloseFeature implements Feature {
     @Override

@@ -26,28 +26,28 @@ package com.oracle.svm.core.posix.darwin;
 
 import java.io.IOException;
 
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.headers.Errno;
-import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
+import com.oracle.svm.core.jdk.JDK9OrLater;
 import com.oracle.svm.core.posix.PosixUtils;
+import com.oracle.svm.core.headers.Errno;
 import com.oracle.svm.core.posix.headers.Socket;
 import com.oracle.svm.core.posix.headers.Time;
 import com.oracle.svm.core.posix.headers.Unistd;
 import com.oracle.svm.core.posix.headers.darwin.DarwinEvent;
 
-@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.DARWIN.class})
 public final class DarwinNIOSubstitutions {
 
     /* Private constructor: No instances. */
@@ -56,7 +56,7 @@ public final class DarwinNIOSubstitutions {
 
     /* { Do not reformat commented-out code: @formatter:off */
     /** Translations of jdk/src/solaris/native/sun/nio/ch/KQueue.c?v=Java_1.8.0_40_b10. */
-    @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+    @Platforms({Platform.DARWIN.class})
     @TargetClass(className = "sun.nio.ch.KQueue")
     static final class Target_sun_nio_ch_KQueue {
 
@@ -105,7 +105,7 @@ public final class DarwinNIOSubstitutions {
 
         // static native int create() throws IOException;
         @Substitute
-        @TargetElement(onlyWith = JDK11OrLater.class)
+        @TargetElement(onlyWith = JDK9OrLater.class)
         static int create() throws IOException {
             return Util_sun_nio_ch_KQueue.create();
         }
@@ -119,7 +119,7 @@ public final class DarwinNIOSubstitutions {
 
         // static native int register(int kqfd, int fd, int filter, int flags);
         @Substitute
-        @TargetElement(onlyWith = JDK11OrLater.class)
+        @TargetElement(onlyWith = JDK9OrLater.class)
         static int register(int kqfd, int fd, int filter, int flags) {
             return Util_sun_nio_ch_KQueue.register(kqfd, fd, filter, flags);
         }
@@ -133,7 +133,7 @@ public final class DarwinNIOSubstitutions {
 
         // static native int poll(int kqfd, long pollAddress, int nevents, long timeout) throws IOException;
         @Substitute
-        @TargetElement(onlyWith = JDK11OrLater.class)
+        @TargetElement(onlyWith = JDK9OrLater.class)
         @SuppressWarnings({"unused"})
         static int poll(int kqfd, long pollAddress, int nevents, long timeout) throws IOException {
             return Util_sun_nio_ch_KQueue.poll(kqfd, pollAddress, nevents);
@@ -218,7 +218,7 @@ public final class DarwinNIOSubstitutions {
 
     /* { Do not reformat commented-out code: @formatter:off */
     /** Translations of jdk/src/macosx/native/sun/nio/ch/KQueueArrayWrapper.c?v=Java_1.8.0_40_b10. */
-    @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+    @Platforms({Platform.DARWIN.class})
     @TargetClass(className = "sun.nio.ch.KQueueArrayWrapper", onlyWith = JDK8OrEarlier.class)
     static final class Target_sun_nio_ch_KQueueArrayWrapper {
 
@@ -350,7 +350,7 @@ public final class DarwinNIOSubstitutions {
 
     /* { Do not reformat commented-out code: @formatter:off */
     /** Translations of jdk/src/solaris/native/sun/nio/ch/KQueuePort.c?v=Java_1.8.0_40_b10. */
-    @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+    @Platforms({Platform.DARWIN.class})
     @TargetClass(className = "sun.nio.ch.KQueuePort")
     static final class Target_sun_nio_ch_KQueuePort {
 
