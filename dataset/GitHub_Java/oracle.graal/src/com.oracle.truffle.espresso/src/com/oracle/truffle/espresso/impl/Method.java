@@ -56,9 +56,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
-import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.Constants;
-import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.attributes.BootstrapMethodsAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.ExceptionsAttribute;
@@ -66,6 +64,8 @@ import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute
 import com.oracle.truffle.espresso.classfile.attributes.LocalVariableTable;
 import com.oracle.truffle.espresso.classfile.attributes.SignatureAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SourceFileAttribute;
+import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool;
+import com.oracle.truffle.espresso.classfile.constantpool.RuntimeConstantPool;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -82,8 +82,8 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
-import com.oracle.truffle.espresso.nodes.NativeRootNode;
 import com.oracle.truffle.espresso.nodes.methodhandle.MethodHandleIntrinsicNode;
+import com.oracle.truffle.espresso.nodes.NativeRootNode;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
@@ -314,7 +314,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     public int[] getSOEHandlerInfo() {
         ArrayList<Integer> toArray = new ArrayList<>();
         for (ExceptionHandler handler : getExceptionHandlers()) {
-            if (handler.getCatchType() == Type.java_lang_StackOverflowError) {
+            if (handler.getCatchType() == Type.StackOverflowError) {
                 toArray.add(handler.getStartBCI());
                 toArray.add(handler.getEndBCI());
                 toArray.add(handler.getHandlerBCI());
@@ -414,7 +414,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                             }
                         }
 
-                        Method findNative = getMeta().java_lang_ClassLoader_findNative;
+                        Method findNative = getMeta().ClassLoader_findNative;
 
                         // Lookup the short name first, otherwise lookup the long name (with
                         // signature).
@@ -427,7 +427,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                         // (print_jni_name_suffix_on ...)
 
                         if (callTarget == null) {
-                            if (getDeclaringKlass() == getMeta().java_lang_invoke_MethodHandle && (getName() == Name.invokeExact || getName() == Name.invoke)) {
+                            if (getDeclaringKlass() == getMeta().MethodHandle && (getName() == Name.invokeExact || getName() == Name.invoke)) {
                                 /*
                                  * Happens only when trying to obtain call target of
                                  * MethodHandle.invoke(Object... args), or
@@ -668,28 +668,28 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     public static Method getHostReflectiveMethodRoot(StaticObject seed) {
-        assert seed.getKlass().getMeta().java_lang_reflect_Method.isAssignableFrom(seed.getKlass());
+        assert seed.getKlass().getMeta().Method.isAssignableFrom(seed.getKlass());
         Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
             target = (Method) curMethod.getHiddenField(meta.HIDDEN_METHOD_KEY);
             if (target == null) {
-                curMethod = (StaticObject) meta.java_lang_reflect_Method_root.get(curMethod);
+                curMethod = (StaticObject) meta.Method_root.get(curMethod);
             }
         }
         return target;
     }
 
     public static Method getHostReflectiveConstructorRoot(StaticObject seed) {
-        assert seed.getKlass().getMeta().java_lang_reflect_Constructor.isAssignableFrom(seed.getKlass());
+        assert seed.getKlass().getMeta().Constructor.isAssignableFrom(seed.getKlass());
         Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
             target = (Method) curMethod.getHiddenField(meta.HIDDEN_CONSTRUCTOR_KEY);
             if (target == null) {
-                curMethod = (StaticObject) meta.java_lang_reflect_Constructor_root.get(curMethod);
+                curMethod = (StaticObject) meta.Constructor_root.get(curMethod);
             }
         }
         return target;
@@ -756,11 +756,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     public boolean isMethodHandleInvokeIntrinsic() {
-        return isNative() && declaringKlass == getMeta().java_lang_invoke_MethodHandle && MethodHandleIntrinsics.getId(this) == MethodHandleIntrinsics.PolySigIntrinsics.InvokeGeneric;
+        return isNative() && declaringKlass == getMeta().MethodHandle && MethodHandleIntrinsics.getId(this) == MethodHandleIntrinsics.PolySigIntrinsics.InvokeGeneric;
     }
 
     public boolean isMethodHandleIntrinsic() {
-        return isNative() && declaringKlass == getMeta().java_lang_invoke_MethodHandle && MethodHandleIntrinsics.getId(this) != MethodHandleIntrinsics.PolySigIntrinsics.None;
+        return isNative() && declaringKlass == getMeta().MethodHandle && MethodHandleIntrinsics.getId(this) != MethodHandleIntrinsics.PolySigIntrinsics.None;
     }
 
     public boolean isInlinableGetter() {
