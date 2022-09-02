@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -45,16 +45,14 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.WeakHashMap;
@@ -63,11 +61,17 @@ import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.TruffleJDKServices;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
+import java.util.Objects;
+import java.util.ServiceLoader;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+//TODO (chumer): maybe this class should share some code with LanguageCache?
 final class InstrumentCache {
 
+    private static final boolean JDK8OrEarlier = System.getProperty("java.specification.version").compareTo("1.9") < 0;
+
     private static final List<InstrumentCache> nativeImageCache = TruffleOptions.AOT ? new ArrayList<>() : null;
-    private static Map<List<ClassLoader>, List<InstrumentCache>> runtimeCaches = new WeakHashMap<>();
+    private static Map<ClassLoader, List<InstrumentCache>> runtimeCaches = new WeakHashMap<>();
 
     private final String className;
     private final String id;
@@ -86,7 +90,7 @@ final class InstrumentCache {
      */
     @SuppressWarnings("unused")
     private static void initializeNativeImageState(ClassLoader imageClassLoader) {
-        nativeImageCache.addAll(doLoad(Arrays.asList(imageClassLoader)));
+        nativeImageCache.addAll(doLoad(Collections.emptyList(), imageClassLoader));
     }
 
     /**
@@ -118,26 +122,31 @@ final class InstrumentCache {
         return internal;
     }
 
-    static List<InstrumentCache> load() {
+    static List<InstrumentCache> load(Collection<ClassLoader> loaders, ClassLoader additionalLoader) {
         if (TruffleOptions.AOT) {
             return nativeImageCache;
         }
         synchronized (InstrumentCache.class) {
-            List<ClassLoader> classLoaders = EngineAccessor.locatorOrDefaultLoaders();
-            List<InstrumentCache> cache = runtimeCaches.get(classLoaders);
+            List<InstrumentCache> cache = runtimeCaches.get(additionalLoader);
             if (cache == null) {
-                cache = doLoad(classLoaders);
-                runtimeCaches.put(classLoaders, cache);
+                cache = doLoad(loaders, additionalLoader);
+                runtimeCaches.put(additionalLoader, cache);
             }
             return cache;
         }
     }
 
-    static List<InstrumentCache> doLoad(List<ClassLoader> loaders) {
+    private static List<InstrumentCache> doLoad(Collection<ClassLoader> loaders, ClassLoader additionalLoader) {
         List<InstrumentCache> list = new ArrayList<>();
         Set<String> classNamesUsed = new HashSet<>();
         for (ClassLoader loader : loaders) {
             Loader.load(loader, list, classNamesUsed);
+        }
+        if (additionalLoader != null) {
+            Loader.load(additionalLoader, list, classNamesUsed);
+        }
+        if (!JDK8OrEarlier) {
+            Loader.load(ModuleResourceLocator.createLoader(), list, classNamesUsed);
         }
         Collections.sort(list, new Comparator<InstrumentCache>() {
             @Override
@@ -181,9 +190,24 @@ final class InstrumentCache {
         abstract TruffleInstrument newInstance();
 
         abstract Class<? extends TruffleInstrument> aotInitializeAtBuildTime();
+
+        static void exportTruffle(ClassLoader loader) {
+            if (!TruffleOptions.AOT) {
+                // In JDK 9+, the Truffle API packages must be dynamically exported to
+                // a Truffle instrument since the Truffle API module descriptor only
+                // exports the packages to modules known at build time (such as the
+                // Graal module).
+                TruffleJDKServices.exportTo(loader, null);
+            }
+        }
     }
 
     private abstract static class Loader {
+
+        private static final Loader[] INSTANCES = new Loader[]{
+                        new LegacyLoader(),
+                        new ServicesLoader()
+        };
 
         static void load(ClassLoader loader, List<? super InstrumentCache> list, Set<? super String> classNamesUsed) {
             if (loader == null) {
@@ -197,17 +221,8 @@ final class InstrumentCache {
             } catch (ClassNotFoundException ex) {
                 return;
             }
-            LegacyLoader.INSTANCE.loadImpl(loader, list, classNamesUsed);
-            ServicesLoader.INSTANCE.loadImpl(loader, list, classNamesUsed);
-        }
-
-        static void exportTruffle(ClassLoader loader) {
-            if (!TruffleOptions.AOT) {
-                // In JDK 9+, the Truffle API packages must be dynamically exported to
-                // a Truffle instrument since the Truffle API module descriptor only
-                // exports the packages to modules known at build time (such as the
-                // Graal module).
-                TruffleJDKServices.exportTo(loader, null);
+            for (Loader instance : INSTANCES) {
+                instance.loadImpl(loader, list, classNamesUsed);
             }
         }
 
@@ -224,11 +239,6 @@ final class InstrumentCache {
     }
 
     private static final class LegacyLoader extends Loader {
-
-        static final Loader INSTANCE = new LegacyLoader();
-
-        private LegacyLoader() {
-        }
 
         @Override
         void loadImpl(ClassLoader loader, List<? super InstrumentCache> list, Set<? super String> classNamesUsed) {
@@ -317,9 +327,10 @@ final class InstrumentCache {
 
             @Override
             Class<? extends TruffleInstrument> aotInitializeAtBuildTime() {
-                initializeInstrumentClass();
-                assert instrumentClass != null;
-                return instrumentClass;
+                throw new UnsupportedOperationException("Not supported yet."); // To change body of
+                                                                               // generated methods,
+                                                                               // choose Tools |
+                                                                               // Templates.
             }
 
             private Class<? extends TruffleInstrument> getInstrumentationClass() {
@@ -348,70 +359,43 @@ final class InstrumentCache {
 
     private static final class ServicesLoader extends Loader {
 
-        static final Loader INSTANCE = new ServicesLoader();
-        private static final String DEBUGGER_CLASS = "com.oracle.truffle.api.debug.impl.DebuggerInstrument";
-        private static final String DEBUGGER_PROVIDER = "com.oracle.truffle.api.debug.impl.DebuggerInstrumentProvider";
-
-        private ServicesLoader() {
+        ServicesLoader() {
         }
 
         @Override
         void loadImpl(ClassLoader loader, List<? super InstrumentCache> list, Set<? super String> classNamesUsed) {
-            exportTruffle(loader);
             for (TruffleInstrument.Provider provider : ServiceLoader.load(TruffleInstrument.Provider.class, loader)) {
-                loadInstrumentImpl(provider, list, classNamesUsed);
-            }
-
-            /*
-             * Make sure the builtin debugger instrument is loaded if the service loader does not
-             * pick them up. This may happen on JDK 11 if the loader delegates to the platform class
-             * loader and does see the Truffle module only through the special named module behavior
-             * for the platform class loader. However, while truffle classes are visible, Java
-             * services are not enumerated from there. This is a workaround, that goes around this
-             * problem by hardcoding instruments that are included in the Truffle module. The
-             * behavior is actually beneficial as this also avoids languages to be picked up from
-             * the application classpath.
-             */
-            if (!classNamesUsed.contains(DEBUGGER_CLASS)) {
-                try {
-                    loadInstrumentImpl((TruffleInstrument.Provider) loader.loadClass(DEBUGGER_PROVIDER).getConstructor().newInstance(), list,
-                                    classNamesUsed);
-                } catch (Exception e) {
-                    throw new AssertionError("Failed to discover debugger instrument.", e);
+                Registration reg = provider.getClass().getAnnotation(Registration.class);
+                if (reg == null) {
+                    PrintStream out = System.err;
+                    out.println("Provider " + provider.getClass() + " is missing @Registration annotation.");
+                    continue;
                 }
-            }
-        }
-
-        static void loadInstrumentImpl(TruffleInstrument.Provider provider, List<? super InstrumentCache> list, Set<? super String> classNamesUsed) {
-            Registration reg = provider.getClass().getAnnotation(Registration.class);
-            if (reg == null) {
-                PrintStream out = System.err;
-                out.println("Provider " + provider.getClass() + " is missing @Registration annotation.");
-                return;
-            }
-            String className = provider.getInstrumentClassName();
-            String name = reg.name();
-            String id = reg.id();
-            if (id == null || id.isEmpty()) {
-                id = defaultId(className);
-            }
-            String version = reg.version();
-            boolean internal = reg.internal();
-            Set<String> servicesClassNames = new TreeSet<>();
-            for (String service : provider.getServicesClassNames()) {
-                servicesClassNames.add(service);
-            }
-            // we don't want multiple instruments with the same class name
-            if (!classNamesUsed.contains(className)) {
-                classNamesUsed.add(className);
-                InstrumentReflection reflection = new ServiceLoaderInstrumentReflection(provider);
-                list.add(new InstrumentCache(id, name, version, className, internal, servicesClassNames, reflection));
+                String className = provider.getInstrumentClassName();
+                String name = reg.name();
+                String id = reg.id();
+                if (id == null || id.isEmpty()) {
+                    id = defaultId(className);
+                }
+                String version = reg.version();
+                boolean internal = reg.internal();
+                Set<String> servicesClassNames = new TreeSet<>();
+                for (Class<?> service : reg.services()) {
+                    servicesClassNames.add(service.getCanonicalName());
+                }
+                // we don't want multiple instruments with the same class name
+                if (!classNamesUsed.contains(className)) {
+                    classNamesUsed.add(className);
+                    InstrumentReflection reflection = new ServiceLoaderInstrumentReflection(provider);
+                    list.add(new InstrumentCache(id, name, version, className, internal, servicesClassNames, reflection));
+                }
             }
         }
 
         private static final class ServiceLoaderInstrumentReflection extends InstrumentReflection {
 
             private final TruffleInstrument.Provider provider;
+            private final AtomicBoolean exported = new AtomicBoolean();
 
             ServiceLoaderInstrumentReflection(TruffleInstrument.Provider provider) {
                 assert provider != null;
@@ -420,6 +404,9 @@ final class InstrumentCache {
 
             @Override
             TruffleInstrument newInstance() {
+                if (exported.compareAndSet(false, true)) {
+                    exportTruffle(provider.getClass().getClassLoader());
+                }
                 return provider.create();
             }
 

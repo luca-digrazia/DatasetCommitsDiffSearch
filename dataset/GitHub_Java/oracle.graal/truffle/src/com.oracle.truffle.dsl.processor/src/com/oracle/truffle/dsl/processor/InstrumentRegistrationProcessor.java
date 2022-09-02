@@ -41,13 +41,9 @@
 package com.oracle.truffle.dsl.processor;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Predicate;
-
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
@@ -57,24 +53,26 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
 import javax.tools.FileObject;
 import javax.tools.StandardLocation;
 
+import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
+import java.lang.annotation.Annotation;
+import java.util.Collections;
 
-@SupportedAnnotationTypes(TruffleTypes.TruffleInstrument_Registration_Name)
+@SupportedAnnotationTypes("com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration")
 public final class InstrumentRegistrationProcessor extends AbstractRegistrationProcessor {
 
     private static final int NUMBER_OF_PROPERTIES_PER_ENTRY = 4;
 
     @Override
-    boolean validateRegistration(Element annotatedElement, AnnotationMirror registrationMirror) {
+    boolean validateRegistration(Element annotatedElement, AnnotationMirror registrationMirror, Annotation registration) {
         if (!annotatedElement.getModifiers().contains(Modifier.PUBLIC)) {
             emitError("Registered instrument class must be public", annotatedElement);
             return false;
@@ -83,9 +81,8 @@ public final class InstrumentRegistrationProcessor extends AbstractRegistrationP
             emitError("Registered instrument inner-class must be static", annotatedElement);
             return false;
         }
-        TruffleTypes types = ProcessorContext.getInstance().getTypes();
-        TypeMirror truffleInstrument = types.TruffleInstrument;
-        TypeMirror truffleInstrumentProvider = types.TruffleInstrument_Provider;
+        TypeMirror truffleInstrument = ProcessorContext.getInstance().getType(TruffleInstrument.class);
+        TypeMirror truffleInstrumentProvider = ProcessorContext.getInstance().getType(TruffleInstrument.Provider.class);
         boolean processingTruffleInstrument;
         if (processingEnv.getTypeUtils().isAssignable(annotatedElement.asType(), truffleInstrument)) {
             processingTruffleInstrument = true;
@@ -100,23 +97,13 @@ public final class InstrumentRegistrationProcessor extends AbstractRegistrationP
     }
 
     @Override
-    DeclaredType getProviderClass() {
-        TruffleTypes types = ProcessorContext.getInstance().getTypes();
-        return types.TruffleInstrument_Provider;
+    Class<?> getProviderClass() {
+        return TruffleInstrument.Provider.class;
     }
 
     @Override
     Iterable<AnnotationMirror> getProviderAnnotations(TypeElement annotatedElement) {
-        TruffleTypes types = ProcessorContext.getInstance().getTypes();
-        DeclaredType registrationType = types.TruffleInstrument_Registration;
-        AnnotationMirror registration = copyAnnotations(ElementUtils.findAnnotationMirror(annotatedElement.getAnnotationMirrors(), registrationType),
-                        new Predicate<ExecutableElement>() {
-                            @Override
-                            public boolean test(ExecutableElement t) {
-                                return !"services".contentEquals(t.getSimpleName());
-                            }
-                        });
-        return Collections.singleton(registration);
+        return Collections.singleton(ElementUtils.findAnnotationMirror(annotatedElement.getAnnotationMirrors(), ProcessorContext.getInstance().getType(TruffleInstrument.Registration.class)));
     }
 
     @Override
@@ -126,31 +113,11 @@ public final class InstrumentRegistrationProcessor extends AbstractRegistrationP
             case "create":
                 builder.startReturn().startNew(annotatedElement.asType()).end().end();
                 break;
-            case "getInstrumentClassName": {
+            case "getInstrumentClassName":
                 ProcessorContext context = ProcessorContext.getInstance();
                 Elements elements = context.getEnvironment().getElementUtils();
                 builder.startReturn().doubleQuote(elements.getBinaryName(annotatedElement).toString()).end();
                 break;
-            }
-            case "getServicesClassNames": {
-                ProcessorContext context = ProcessorContext.getInstance();
-                AnnotationMirror registration = ElementUtils.findAnnotationMirror(annotatedElement.getAnnotationMirrors(),
-                                context.getTypes().TruffleInstrument_Registration);
-                List<TypeMirror> services = ElementUtils.getAnnotationValueList(TypeMirror.class, registration, "services");
-                if (services.isEmpty()) {
-                    builder.startReturn().startStaticCall(context.getType(Collections.class), "emptySet").end().end();
-                } else {
-                    builder.startReturn();
-                    builder.startStaticCall(context.getType(Arrays.class), "asList");
-                    for (TypeMirror service : services) {
-                        Elements elements = context.getEnvironment().getElementUtils();
-                        Types types = context.getEnvironment().getTypeUtils();
-                        builder.startGroup().doubleQuote(elements.getBinaryName((TypeElement) ((DeclaredType) types.erasure(service)).asElement()).toString()).end();
-                    }
-                    builder.end(2);
-                }
-                break;
-            }
             default:
                 throw new IllegalStateException("Unsupported method: " + methodToImplement.getSimpleName());
         }
@@ -163,16 +130,14 @@ public final class InstrumentRegistrationProcessor extends AbstractRegistrationP
 
     @Override
     void storeRegistrations(Properties into, Iterable<? extends TypeElement> instruments) {
-        TruffleTypes types = ProcessorContext.getInstance().getTypes();
         int numInstruments = loadIfFileAlreadyExists(getRegistrationFileName(), into);
         for (TypeElement l : instruments) {
-            AnnotationMirror annotation = ElementUtils.findAnnotationMirror(l, types.TruffleInstrument_Registration);
+            Registration annotation = l.getAnnotation(Registration.class);
             if (annotation == null) {
                 continue;
             }
 
-            String id = ElementUtils.getAnnotationValue(String.class, annotation, "id");
-            int instNum = findInstrument(id, into);
+            int instNum = findInstrument(annotation.id(), into);
             if (instNum == 0) { // not found
                 numInstruments += 1;
                 instNum = numInstruments;
@@ -181,21 +146,26 @@ public final class InstrumentRegistrationProcessor extends AbstractRegistrationP
             String prefix = "instrument" + instNum + ".";
             String className = processingEnv.getElementUtils().getBinaryName(l).toString();
 
-            into.setProperty(prefix + "id", id);
-            into.setProperty(prefix + "name", ElementUtils.getAnnotationValue(String.class, annotation, "name"));
-            into.setProperty(prefix + "version", ElementUtils.getAnnotationValue(String.class, annotation, "version"));
+            into.setProperty(prefix + "id", annotation.id());
+            into.setProperty(prefix + "name", annotation.name());
+            into.setProperty(prefix + "version", annotation.version());
             into.setProperty(prefix + "className", className);
-            into.setProperty(prefix + "internal", Boolean.toString(ElementUtils.getAnnotationValue(Boolean.class, annotation, "internal")));
+            into.setProperty(prefix + "internal", Boolean.toString(annotation.internal()));
 
             int serviceCounter = 0;
-            for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : annotation.getElementValues().entrySet()) {
-                final Name attrName = entry.getKey().getSimpleName();
-                if (attrName.contentEquals("services")) {
-                    AnnotationValue attrValue = entry.getValue();
-                    List<?> classes = (List<?>) attrValue.getValue();
-                    for (Object clazz : classes) {
-                        AnnotationValue clazzValue = (AnnotationValue) clazz;
-                        into.setProperty(prefix + "service" + serviceCounter++, clazzValue.getValue().toString());
+            for (AnnotationMirror anno : l.getAnnotationMirrors()) {
+                final String annoName = anno.getAnnotationType().asElement().toString();
+                if (Registration.class.getCanonicalName().equals(annoName)) {
+                    for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : anno.getElementValues().entrySet()) {
+                        final Name attrName = entry.getKey().getSimpleName();
+                        if (attrName.contentEquals("services")) {
+                            AnnotationValue attrValue = entry.getValue();
+                            List<?> classes = (List<?>) attrValue.getValue();
+                            for (Object clazz : classes) {
+                                AnnotationValue clazzValue = (AnnotationValue) clazz;
+                                into.setProperty(prefix + "service" + serviceCounter++, clazzValue.getValue().toString());
+                            }
+                        }
                     }
                 }
             }
