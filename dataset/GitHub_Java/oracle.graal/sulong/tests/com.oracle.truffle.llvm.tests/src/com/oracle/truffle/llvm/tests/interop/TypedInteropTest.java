@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.tests.interop;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.tests.interop.values.ArrayObject;
 import com.oracle.truffle.llvm.tests.interop.values.NullValue;
@@ -376,7 +375,7 @@ public class TypedInteropTest extends InteropTestBase {
         return ret;
     }
 
-    private static void checkNested(Object ret) throws InvalidArrayIndexException {
+    private static void checkNested(Object ret) {
         int value = 42;
         Object obj = ret;
         while (obj instanceof StructObject) {
@@ -397,7 +396,7 @@ public class TypedInteropTest extends InteropTestBase {
     }
 
     @Test
-    public void testFillNested(@Inject(FillNestedNode.class) CallTarget fillNested) throws InvalidArrayIndexException {
+    public void testFillNested(@Inject(FillNestedNode.class) CallTarget fillNested) {
         Assume.assumeFalse("Skipping AArch64 failing test", Platform.isAArch64());
         Object nested = createNested();
         fillNested.call(nested);
@@ -444,7 +443,7 @@ public class TypedInteropTest extends InteropTestBase {
         return new StructObject(ret);
     }
 
-    private static void checkFusedArray(Object res) throws InvalidArrayIndexException {
+    private static void checkFusedArray(Object res) {
         Assert.assertTrue(res instanceof StructObject);
         if (res instanceof StructObject) {
             StructObject struct = (StructObject) res;
@@ -458,7 +457,7 @@ public class TypedInteropTest extends InteropTestBase {
     }
 
     @Test
-    public void testFillFusedArray(@Inject(FillFusedArrayNode.class) CallTarget fillFusedArray) throws InvalidArrayIndexException {
+    public void testFillFusedArray(@Inject(FillFusedArrayNode.class) CallTarget fillFusedArray) {
         Assume.assumeFalse("Skipping AArch64 failing test", Platform.isAArch64());
         Object fusedArray = createFusedArray();
         fillFusedArray.call(fusedArray);
