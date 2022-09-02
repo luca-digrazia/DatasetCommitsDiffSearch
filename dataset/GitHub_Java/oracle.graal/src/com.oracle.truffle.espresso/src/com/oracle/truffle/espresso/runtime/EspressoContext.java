@@ -71,7 +71,6 @@ import com.oracle.truffle.espresso.perf.DebugCloseable;
 import com.oracle.truffle.espresso.perf.DebugTimer;
 import com.oracle.truffle.espresso.perf.TimerCollection;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_ref_Reference;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
@@ -229,15 +228,7 @@ public final class EspressoContext {
         this.SpecCompliancyMode = env.getOptions().get(EspressoOptions.SpecCompliancy);
         this.livenessAnalysisMode = env.getOptions().get(EspressoOptions.LivenessAnalysis);
         this.EnableManagement = env.getOptions().get(EspressoOptions.EnableManagement);
-        if (!env.isCreateThreadAllowed()) {
-            if (env.getOptions().hasBeenSet(EspressoOptions.MultiThreaded)) {
-                throw new IllegalStateException("Creating threads is not allowed by the env; cannot set 'MultiThreaded=true'");
-            } else {
-                this.MultiThreaded = false;
-            }
-        } else {
-            this.MultiThreaded = env.getOptions().get(EspressoOptions.MultiThreaded);
-        }
+        this.MultiThreaded = env.getOptions().get(EspressoOptions.MultiThreaded);
         this.Polyglot = env.getOptions().get(EspressoOptions.Polyglot);
 
         // Isolated (native) namespaces via dlmopen is only supported on Linux.
@@ -577,8 +568,7 @@ public final class EspressoContext {
             return;
         }
         if (hostThread != Thread.currentThread()) {
-            String guestName = Target_java_lang_Thread.getThreadName(meta, guestThread);
-            getLogger().warning("unimplemented: disposeThread for non-current thread: " + hostThread + " / " + guestName);
+            getLogger().warning("unimplemented: disposeThread for non-current thread: " + hostThread);
             return;
         }
         if (vm.DetachCurrentThread() != JNI_OK) {
