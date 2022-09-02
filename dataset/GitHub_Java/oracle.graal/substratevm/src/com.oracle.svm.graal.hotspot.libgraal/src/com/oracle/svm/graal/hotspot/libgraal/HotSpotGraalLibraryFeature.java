@@ -42,7 +42,6 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
@@ -57,10 +56,7 @@ import org.graalvm.compiler.hotspot.HotSpotReplacementsImpl;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.MethodSubstitutionPlugin;
-import org.graalvm.compiler.options.OptionDescriptors;
-import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
@@ -499,46 +495,26 @@ final class Target_org_graalvm_compiler_hotspot_HotSpotGraalOptionValues {
 
     @Substitute
     private static OptionValues initializeOptions() {
-        // Sanity check
-        if (!XOptions.getXmn().getPrefix().equals("-X")) {
-            throw new InternalError("Expected " + XOptions.getXmn().getPrefixAndName() + " to start with -X");
-        }
-
         // Parse "graal." options.
         RuntimeOptionValues options = RuntimeOptionValues.singleton();
         options.update(HotSpotGraalOptionValues.parseOptions());
 
-        // Parse "libgraal." options. This include the XOptions as well
-        // as normal Graal options that are specified with the "libgraal."
-        // prefix so as to be parsed only in libgraal and not by JavaGraal.
-        // A motivating use case for this is CompileTheWorld + libgraal
-        // where one may want to see GC stats with the VerboseGC option.
-        // Since CompileTheWorld also initializes JavaGraal, specifying this
-        // option with -Dgraal.VerboseGC would cause the VM to exit with an
-        // unknown option error. Specifying it as -Dlibgraal.VerboseGC=true
-        // avoids the error and provides the desired behavior.
+        // Parse "libgraal." options.
         Map<String, String> savedProps = jdk.vm.ci.services.Services.getSavedProperties();
-        EconomicMap<String, String> optionSettings = EconomicMap.create();
+        if (!XOptions.getXmn().getPrefix().equals("-X")) {
+            throw new InternalError("Expected " + XOptions.getXmn().getPrefixAndName() + " to start with -X");
+        }
         for (Map.Entry<String, String> e : savedProps.entrySet()) {
             String name = e.getKey();
-            if (name.startsWith("libgraal.")) {
-                if (name.startsWith("libgraal.X")) {
-                    String[] xarg = {"-" + name.substring("libgraal.".length()) + e.getValue()};
-                    String[] unknown = XOptions.singleton().parse(xarg, false);
-                    if (unknown.length == 0) {
-                        continue;
-                    }
-                } else {
-                    String value = e.getValue();
-                    optionSettings.put(name.substring("libgraal.".length()), value);
+            if (name.startsWith("libgraal.X")) {
+                String[] xarg = {"-" + name.substring("libgraal.".length()) + e.getValue()};
+                String[] unknown = XOptions.singleton().parse(xarg, false);
+                if (unknown.length != 0) {
+                    throw new IllegalArgumentException("Unknown libgraal option: " + name);
                 }
+            } else if (name.startsWith("libgraal.")) {
+                throw new IllegalArgumentException("Unknown libgraal option: " + name);
             }
-        }
-        if (!optionSettings.isEmpty()) {
-            EconomicMap<OptionKey<?>, Object> values = OptionValues.newOptionMap();
-            Iterable<OptionDescriptors> loader = OptionsParser.getOptionsLoader();
-            OptionsParser.parseOptions(optionSettings, values, loader);
-            options.update(values);
         }
         return options;
     }

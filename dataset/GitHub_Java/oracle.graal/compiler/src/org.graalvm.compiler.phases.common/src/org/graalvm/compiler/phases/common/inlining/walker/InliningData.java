@@ -45,7 +45,6 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.CallTargetNode;
-import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
@@ -192,12 +191,11 @@ public class InliningData {
         MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
 
-        InvokeKind invokeKind = callTarget.invokeKind();
-        if (invokeKind == CallTargetNode.InvokeKind.Special || invokeKind == CallTargetNode.InvokeKind.Static || targetMethod.canBeStaticallyBound()) {
+        if (callTarget.invokeKind() == CallTargetNode.InvokeKind.Special || targetMethod.canBeStaticallyBound()) {
             return getExactInlineInfo(invoke, targetMethod);
         }
 
-        assert invokeKind.isIndirect();
+        assert callTarget.invokeKind().isIndirect();
 
         ResolvedJavaType holder = targetMethod.getDeclaringClass();
         if (!(callTarget.receiver().stamp(NodeView.DEFAULT) instanceof ObjectStamp)) {

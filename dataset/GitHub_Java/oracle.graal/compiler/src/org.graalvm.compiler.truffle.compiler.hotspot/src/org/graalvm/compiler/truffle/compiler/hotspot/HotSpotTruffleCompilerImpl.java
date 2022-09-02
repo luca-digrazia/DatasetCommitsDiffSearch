@@ -53,7 +53,6 @@ import org.graalvm.compiler.hotspot.HotSpotCompilationIdentifier;
 import org.graalvm.compiler.hotspot.HotSpotCompiledCodeBuilder;
 import org.graalvm.compiler.hotspot.HotSpotGraalCompilerFactory;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-import org.graalvm.compiler.hotspot.HotSpotGraalServices;
 import org.graalvm.compiler.java.GraphBuilderPhase;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
 import org.graalvm.compiler.lir.phases.LIRSuites;
@@ -100,7 +99,7 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
 
     public static class Options {
         // @formatter:off
-        @Option(help = "Select a compiler configuration for Truffle compilation (default: use Graal system compiler configuration).")
+        @Option(help = "Select a Graal compiler configuration for Truffle compilation (default: use Graal system compiler configuration).")
         public static final OptionKey<String> TruffleCompilerConfiguration = new OptionKey<>(null);
         // @formatter:on
     }
@@ -316,11 +315,6 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
             }
         }
         return true;
-    }
-
-    @Override
-    protected void exitHostVM(int status) {
-        HotSpotGraalServices.exit(-1);
     }
 
     @Override

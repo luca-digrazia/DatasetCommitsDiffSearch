@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.hosted;
 
-import static com.oracle.svm.hosted.code.CompileQueue.afterParseCanonicalization;
 import static org.graalvm.compiler.replacements.StandardGraphBuilderPlugins.registerInvocationPlugins;
 import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.JAVA_SPECIFICATION_VERSION;
 
@@ -564,7 +563,7 @@ public class NativeImageGenerator {
 
                 heap = new NativeImageHeap(aUniverse, hUniverse, hMetaAccess);
 
-                BeforeCompilationAccessImpl config = new BeforeCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap, debug, runtime);
+                BeforeCompilationAccessImpl config = new BeforeCompilationAccessImpl(featureHandler, loader, aUniverse, hUniverse, hMetaAccess, heap, debug);
                 featureHandler.forEachFeature(feature -> feature.beforeCompilation(config));
 
                 bigbang.getUnsupportedFeatures().report(bigbang);
@@ -1244,26 +1243,24 @@ public class NativeImageGenerator {
         return true;
     }
 
-    public static Suites createSuites(FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig, SnippetReflectionProvider snippetReflection, boolean hosted,
-                    boolean requiresPostParseCanonicalization) {
+    public static Suites createSuites(FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig, SnippetReflectionProvider snippetReflection, boolean hosted) {
         SubstrateBackend backend = runtimeConfig.getBackendForNormalMethod();
 
         OptionValues options = hosted ? HostedOptionValues.singleton() : RuntimeOptionValues.singleton();
         Suites suites = GraalConfiguration.instance().createSuites(options, hosted);
-        return modifySuites(backend, suites, featureHandler, runtimeConfig, snippetReflection, hosted, false, requiresPostParseCanonicalization);
+        return modifySuites(backend, suites, featureHandler, runtimeConfig, snippetReflection, hosted, false);
     }
 
-    public static Suites createFirstTierSuites(FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig, SnippetReflectionProvider snippetReflection, boolean hosted,
-                    boolean requiresPostParseCanonicalization) {
+    public static Suites createFirstTierSuites(FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig, SnippetReflectionProvider snippetReflection, boolean hosted) {
         SubstrateBackend backend = runtimeConfig.getBackendForNormalMethod();
         OptionValues options = hosted ? HostedOptionValues.singleton() : RuntimeOptionValues.singleton();
         Suites suites = GraalConfiguration.instance().createFirstTierSuites(options, hosted);
-        return modifySuites(backend, suites, featureHandler, runtimeConfig, snippetReflection, hosted, true, requiresPostParseCanonicalization);
+        return modifySuites(backend, suites, featureHandler, runtimeConfig, snippetReflection, hosted, true);
     }
 
     @SuppressWarnings("unused")
     private static Suites modifySuites(SubstrateBackend backend, Suites suites, FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig,
-                    SnippetReflectionProvider snippetReflection, boolean hosted, boolean firstTier, boolean requiresPostParseCanonicalization) {
+                    SnippetReflectionProvider snippetReflection, boolean hosted, boolean firstTier) {
         Providers runtimeCallProviders = backend.getProviders();
 
         PhaseSuite<HighTierContext> highTier = suites.getHighTier();
@@ -1272,7 +1269,7 @@ public class NativeImageGenerator {
 
         ListIterator<BasePhase<? super HighTierContext>> position;
         if (hosted) {
-            position = GraalConfiguration.instance().createHostedInliners(highTier, requiresPostParseCanonicalization);
+            position = GraalConfiguration.instance().createHostedInliners(highTier);
         } else {
             /* Find the runtime inliner. */
             position = highTier.findPhase(InliningPhase.class);
@@ -1335,14 +1332,6 @@ public class NativeImageGenerator {
         }
 
         featureHandler.forEachGraalFeature(feature -> feature.registerGraalPhases(runtimeCallProviders, snippetReflection, suites, hosted));
-
-        if (hosted && requiresPostParseCanonicalization) {
-            List<BasePhase<? super HighTierContext>> reverseAfterParsePhases = new ArrayList<>(afterParseCanonicalization().getPhases());
-            Collections.reverse(reverseAfterParsePhases);
-            for (BasePhase<? super HighTierContext> phase : reverseAfterParsePhases) {
-                highTier.prependPhase(phase);
-            }
-        }
 
         return suites;
     }

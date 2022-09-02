@@ -26,9 +26,7 @@ package org.graalvm.compiler.hotspot;
 
 import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
 import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
-import static org.graalvm.compiler.core.common.GraalOptions.UseEncodedGraphs;
-import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
-import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
+import static org.graalvm.compiler.replacements.ReplacementsImpl.Options.UseEncodedSnippets;
 
 import java.util.Set;
 
@@ -41,12 +39,10 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.hotspot.meta.HotSpotWordOperationPlugin;
 import org.graalvm.compiler.hotspot.word.HotSpotOperation;
-import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderPlugin;
-import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.MethodSubstitutionPlugin;
 import org.graalvm.compiler.options.OptionValues;
@@ -77,58 +73,31 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
         return method.getAnnotation(HotSpotOperation.class) != null ? HotSpotWordOperationPlugin.class : super.getIntrinsifyingPlugin(method);
     }
 
-    @Override
-    public void registerMethodSubstitution(MethodSubstitutionPlugin plugin, ResolvedJavaMethod original, IntrinsicContext.CompilationContext context, OptionValues options) {
+    public void registerMethodSubstitution(ResolvedJavaMethod method, ResolvedJavaMethod original, OptionValues options) {
         if (!IS_IN_NATIVE_IMAGE) {
-            if (IS_BUILDING_NATIVE_IMAGE || UseEncodedGraphs.getValue(options)) {
+            if (IS_BUILDING_NATIVE_IMAGE || UseEncodedSnippets.getValue(options)) {
                 synchronized (HotSpotReplacementsImpl.class) {
                     if (snippetEncoder == null) {
                         snippetEncoder = new SymbolicSnippetEncoder(this);
                     }
-                    snippetEncoder.registerMethodSubstitution(plugin, original, context, options);
+                    snippetEncoder.registerMethodSubstitution(method, original, options);
                 }
             }
         }
     }
 
     @Override
-    public StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, CompilationIdentifier compilationId, DebugContext debug, Cancellable cancellable) {
-        boolean useEncodedGraphs = UseEncodedGraphs.getValue(debug.getOptions());
-        if (IS_IN_NATIVE_IMAGE || useEncodedGraphs) {
+    public StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, CompilationIdentifier compilationId, DebugContext debug) {
+        if (IS_IN_NATIVE_IMAGE) {
             HotSpotReplacementsImpl replacements = (HotSpotReplacementsImpl) providers.getReplacements();
             InvocationPlugin plugin = replacements.getGraphBuilderPlugins().getInvocationPlugins().lookupInvocation(method);
             if (plugin instanceof MethodSubstitutionPlugin) {
                 MethodSubstitutionPlugin msp = (MethodSubstitutionPlugin) plugin;
-                if (useEncodedGraphs) {
-                    replacements.registerMethodSubstitution(msp, method, ROOT_COMPILATION, debug.getOptions());
-                }
-                StructuredGraph methodSubstitution = replacements.getMethodSubstitution(msp, method, ROOT_COMPILATION, StructuredGraph.AllowAssumptions.YES, cancellable, debug.getOptions());
-                methodSubstitution.resetDebug(debug);
-                return methodSubstitution;
+                return replacements.getMethodSubstitution(msp, method, debug.getOptions());
             }
             return null;
         }
-        return super.getIntrinsicGraph(method, compilationId, debug, cancellable);
-    }
-
-    @Override
-    public StructuredGraph getSubstitution(ResolvedJavaMethod targetMethod, int invokeBci, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition, OptionValues options) {
-        boolean useEncodedGraphs = UseEncodedGraphs.getValue(options);
-        if (IS_IN_NATIVE_IMAGE || useEncodedGraphs) {
-            InvocationPlugin plugin = getGraphBuilderPlugins().getInvocationPlugins().lookupInvocation(targetMethod);
-            if (plugin instanceof MethodSubstitutionPlugin && (!plugin.inlineOnly() || invokeBci >= 0)) {
-                MethodSubstitutionPlugin msPlugin = (MethodSubstitutionPlugin) plugin;
-                if (!IS_IN_NATIVE_IMAGE && useEncodedGraphs) {
-                    registerMethodSubstitution(msPlugin, targetMethod, INLINE_AFTER_PARSING, options);
-                }
-                // This assumes the normal path creates the graph using
-                // GraphBuilderConfiguration.getSnippetDefault with omits exception edges
-                StructuredGraph subst = getMethodSubstitution(msPlugin, targetMethod, INLINE_AFTER_PARSING, StructuredGraph.AllowAssumptions.NO, null, options);
-                return subst;
-            }
-        }
-
-        return super.getSubstitution(targetMethod, invokeBci, trackNodeSourcePosition, replaceePosition, options);
+        return super.getIntrinsicGraph(method, compilationId, debug);
     }
 
     @Override
@@ -153,7 +122,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
         if (!IS_IN_NATIVE_IMAGE) {
             assert !snippetRegistrationClosed : "Cannot register snippet after registration is closed: " + method.format("%H.%n(%p)");
             assert registeredSnippets.add(method) : "Cannot register snippet twice: " + method.format("%H.%n(%p)");
-            if (IS_BUILDING_NATIVE_IMAGE || UseEncodedGraphs.getValue(options)) {
+            if (IS_BUILDING_NATIVE_IMAGE || UseEncodedSnippets.getValue(options)) {
                 synchronized (HotSpotReplacementsImpl.class) {
                     if (snippetEncoder == null) {
                         snippetEncoder = new SymbolicSnippetEncoder(this);
@@ -194,12 +163,12 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
 
     private static volatile SymbolicSnippetEncoder.EncodedSnippets encodedSnippets;
 
-    @NativeImageReinitialize private static SymbolicSnippetEncoder snippetEncoder;
+    @NativeImageReinitialize static SymbolicSnippetEncoder snippetEncoder;
 
     @Override
     public StructuredGraph getSnippet(ResolvedJavaMethod method, ResolvedJavaMethod recursiveEntry, Object[] args, boolean trackNodeSourcePosition, NodeSourcePosition replaceePosition,
                     OptionValues options) {
-        StructuredGraph graph = getEncodedSnippet(method, args, StructuredGraph.AllowAssumptions.NO, options);
+        StructuredGraph graph = getEncodedSnippet(method, args, options);
         if (graph != null) {
             return graph;
         }
@@ -208,42 +177,34 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
         return super.getSnippet(method, recursiveEntry, args, trackNodeSourcePosition, replaceePosition, options);
     }
 
-    private StructuredGraph getEncodedSnippet(ResolvedJavaMethod method, Object[] args, StructuredGraph.AllowAssumptions allowAssumptions, OptionValues options) {
-        boolean useEncodedGraphs = UseEncodedGraphs.getValue(options);
-        if (IS_IN_NATIVE_IMAGE || useEncodedGraphs) {
+    public StructuredGraph getEncodedSnippet(ResolvedJavaMethod method, Object[] args, OptionValues options) {
+        if (IS_IN_NATIVE_IMAGE || UseEncodedSnippets.getValue(options)) {
             synchronized (HotSpotReplacementsImpl.class) {
-                if (!IS_IN_NATIVE_IMAGE) {
+                if (!IS_IN_NATIVE_IMAGE && UseEncodedSnippets.getValue(options)) {
                     snippetEncoder.encode(options);
                 }
 
                 if (getEncodedSnippets() == null) {
                     throw GraalError.shouldNotReachHere("encoded snippets not found");
                 }
-                StructuredGraph graph = getEncodedSnippets().getEncodedSnippet(method, this, args, allowAssumptions, options);
+                StructuredGraph graph = getEncodedSnippets().getEncodedSnippet(method, this, args, options);
                 if (graph == null) {
                     throw GraalError.shouldNotReachHere("snippet not found: " + method.format("%H.%n(%p)"));
                 }
                 return graph;
             }
-        } else {
-            assert registeredSnippets == null || registeredSnippets.contains(method) : "Asking for snippet method that was never registered: " + method.format("%H.%n(%p)");
+        } else if (registeredSnippets != null) {
+            assert registeredSnippets.contains(method) : "Asking for snippet method that was never registered: " + method.format("%H.%n(%p)");
         }
         return null;
     }
 
-    @Override
-    public StructuredGraph getMethodSubstitution(MethodSubstitutionPlugin plugin, ResolvedJavaMethod original, IntrinsicContext.CompilationContext context,
-                    StructuredGraph.AllowAssumptions allowAssumptions, Cancellable cancellable, OptionValues options) {
-        boolean useEncodedGraphs = UseEncodedGraphs.getValue(options);
-        if (IS_IN_NATIVE_IMAGE || useEncodedGraphs) {
-            if (!IS_IN_NATIVE_IMAGE) {
-                snippetEncoder.encode(options);
-            }
-
+    public StructuredGraph getMethodSubstitution(MethodSubstitutionPlugin plugin, ResolvedJavaMethod original, OptionValues options) {
+        if (IS_IN_NATIVE_IMAGE || UseEncodedSnippets.getValue(options)) {
             if (getEncodedSnippets() == null) {
                 throw GraalError.shouldNotReachHere("encoded snippets not found");
             }
-            return getEncodedSnippets().getMethodSubstitutionGraph(plugin, original, this, context, allowAssumptions, cancellable, options);
+            return getEncodedSnippets().getMethodSubstitutionGraph(plugin, original, this, options);
         }
         return null;
     }

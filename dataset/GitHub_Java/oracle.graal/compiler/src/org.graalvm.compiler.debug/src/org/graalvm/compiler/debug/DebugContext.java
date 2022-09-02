@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1842,46 +1842,23 @@ public final class DebugContext implements AutoCloseable {
     }
 
     /**
-     * Gets the name to use for a class based on whether it appears to be an obfuscated name. The
-     * heuristic for an obfuscated name is that it is less than 6 characters in length and consists
-     * only of lower case letters.
-     */
-    private static String getBaseName(Class<?> c) {
-        String simpleName = c.getSimpleName();
-        if (simpleName.length() < 6) {
-            for (int i = 0; i < simpleName.length(); i++) {
-                if (!Character.isLowerCase(simpleName.charAt(0))) {
-                    return simpleName;
-                }
-            }
-            // Looks like an obfuscated simple class name so use qualified class name
-            return c.getName();
-        }
-        return simpleName;
-    }
-
-    /**
      * There are paths where construction of formatted class names are common and the code below is
      * surprisingly expensive, so compute it once and cache it.
      */
     private static final ClassValue<String> formattedClassName = new ClassValue<String>() {
         @Override
         protected String computeValue(Class<?> c) {
-            String baseName = getBaseName(c);
-            if (Character.isLowerCase(baseName.charAt(0))) {
-                // Looks like an obfuscated simple class name so use qualified class name
-                baseName = c.getName();
-            }
+            final String simpleName = c.getSimpleName();
             Class<?> enclosingClass = c.getEnclosingClass();
             if (enclosingClass != null) {
                 String prefix = "";
                 while (enclosingClass != null) {
-                    prefix = getBaseName(enclosingClass) + "_" + prefix;
+                    prefix = enclosingClass.getSimpleName() + "_" + prefix;
                     enclosingClass = enclosingClass.getEnclosingClass();
                 }
-                return prefix + baseName;
+                return prefix + simpleName;
             } else {
-                return baseName;
+                return simpleName;
             }
         }
     };

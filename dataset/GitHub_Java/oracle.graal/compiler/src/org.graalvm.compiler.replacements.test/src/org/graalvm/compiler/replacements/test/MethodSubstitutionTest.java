@@ -56,21 +56,13 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
         return testGraph(snippet, null);
     }
 
-    protected StructuredGraph testGraph(final String snippet, boolean assertInvoke) {
-        return testGraph(snippet, null, assertInvoke);
-    }
-
+    @SuppressWarnings("try")
     protected StructuredGraph testGraph(final String snippet, String name) {
-        return testGraph(snippet, name, false);
+        return testGraph(getResolvedJavaMethod(snippet), name);
     }
 
     @SuppressWarnings("try")
-    protected StructuredGraph testGraph(final String snippet, String name, boolean assertInvoke) {
-        return testGraph(getResolvedJavaMethod(snippet), name, assertInvoke);
-    }
-
-    @SuppressWarnings("try")
-    protected StructuredGraph testGraph(final ResolvedJavaMethod method, String name, boolean assertInvoke) {
+    protected StructuredGraph testGraph(final ResolvedJavaMethod method, String name) {
         DebugContext debug = getDebugContext();
         try (DebugContext.Scope s = debug.scope("MethodSubstitutionTest", method)) {
             StructuredGraph graph = parseEager(method, AllowAssumptions.YES, debug);
@@ -94,22 +86,13 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
                         Invoke invoke = (Invoke) node;
                         if (invoke.callTarget() instanceof MethodCallTargetNode) {
                             MethodCallTargetNode call = (MethodCallTargetNode) invoke.callTarget();
-                            boolean found = call.targetMethod().getName().equals(name);
-                            if (assertInvoke) {
-                                assertTrue(found, "Expected to find a call to %s", name);
-                            } else {
-                                assertFalse(found, "Unexpected call to %s", name);
-                            }
+                            assertTrue(!call.targetMethod().getName().equals(name), "Unexpected invoke of intrinsic %s", call.targetMethod());
                         }
                     }
 
                 }
             } else {
-                if (assertInvoke) {
-                    assertInGraph(graph, Invoke.class);
-                } else {
-                    assertNotInGraph(graph, Invoke.class);
-                }
+                assertNotInGraph(graph, Invoke.class);
             }
             return graph;
         } catch (Throwable e) {

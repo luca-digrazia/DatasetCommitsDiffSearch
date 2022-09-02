@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,7 +46,6 @@ public class InlineEverythingPolicy implements InliningPolicy {
 
     @Override
     public Decision isWorthInlining(Replacements replacements, MethodInvocation invocation, InlineInfo calleeInfo, int inliningDepth, boolean fullyProcessed) {
-        boolean isTracing = GraalOptions.TraceInlining.getValue(calleeInfo.graph().getOptions()) || calleeInfo.graph().getDebug().hasCompilationListener();
-        return Decision.YES.withReason(isTracing, "inline everything");
+        return Decision.YES.withReason(GraalOptions.TraceInlining.getValue(calleeInfo.graph().getOptions()), "inline everything");
     }
 }

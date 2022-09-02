@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,29 +24,27 @@
  */
 package org.graalvm.compiler.replacements.test;
 
-import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
-import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.nodes.StructuredGraph.Builder;
+import org.graalvm.compiler.phases.PhaseSuite;
+import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
-import org.graalvm.compiler.replacements.Snippets;
 import org.graalvm.compiler.replacements.classfile.ClassfileBytecodeProvider;
 
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-
-public abstract class SnippetsTest extends ReplacementsTest implements Snippets {
+public abstract class SnippetsTest extends ReplacementsTest {
 
     protected final ReplacementsImpl installer;
+    protected final ClassfileBytecodeProvider bytecodeProvider;
 
     protected SnippetsTest() {
         ReplacementsImpl d = (ReplacementsImpl) getReplacements();
-        ClassfileBytecodeProvider bytecodeProvider = getSystemClassLoaderBytecodeProvider();
-        installer = new ReplacementsImpl(getInitialOptions(), d.providers, d.snippetReflection, bytecodeProvider, d.target);
+        bytecodeProvider = getSystemClassLoaderBytecodeProvider();
+        installer = new ReplacementsImpl(null, d.getProviders(), d.snippetReflection, bytecodeProvider, d.target);
         installer.setGraphBuilderPlugins(d.getGraphBuilderPlugins());
     }
 
     @Override
-    protected StructuredGraph parseEager(ResolvedJavaMethod m, AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, OptionValues options) {
-        return installer.makeGraph(m, null, null);
+    protected StructuredGraph parse(Builder builder, PhaseSuite<HighTierContext> graphBuilderSuite) {
+        return installer.makeGraph(getDebugContext(), bytecodeProvider, builder.getMethod(), null, null, false, null);
     }
 }

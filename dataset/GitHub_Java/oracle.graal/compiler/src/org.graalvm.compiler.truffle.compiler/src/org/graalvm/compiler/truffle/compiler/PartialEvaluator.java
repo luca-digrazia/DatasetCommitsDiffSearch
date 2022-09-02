@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.compiler;
 
-import java.io.Closeable;
 import static org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
 import static org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions.TraceTruffleStackTraceLimit;
 import static org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions.TruffleFunctionInlining;
@@ -78,7 +77,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
@@ -89,16 +87,15 @@ import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.ConditionalEliminationPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.CachingPEGraphDecoder;
 import org.graalvm.compiler.replacements.InlineDuringParsingPlugin;
 import org.graalvm.compiler.replacements.PEGraphDecoder;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
 import org.graalvm.compiler.serviceprovider.GraalServices;
-import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
-import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.InlineKind;
 import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.common.TruffleSourceLanguagePosition;
 import org.graalvm.compiler.truffle.compiler.debug.HistogramInlineInvokePlugin;
@@ -108,7 +105,6 @@ import org.graalvm.compiler.truffle.compiler.nodes.frame.AllowMaterializeNode;
 import org.graalvm.compiler.truffle.compiler.phases.InstrumentBranchesPhase;
 import org.graalvm.compiler.truffle.compiler.phases.InstrumentPhase;
 import org.graalvm.compiler.truffle.compiler.phases.InstrumentTruffleBoundariesPhase;
-import org.graalvm.compiler.truffle.compiler.phases.DeoptimizeOnExceptionPhase;
 import org.graalvm.compiler.truffle.compiler.phases.VerifyFrameDoesNotEscapePhase;
 import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
 import org.graalvm.compiler.truffle.compiler.substitutions.TruffleGraphBuilderPlugins;
@@ -123,7 +119,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
 
 /**
  * Class performing the partial evaluation starting from the root node of an AST.
@@ -222,43 +217,42 @@ public abstract class PartialEvaluator {
     @SuppressWarnings("try")
     public StructuredGraph createGraph(DebugContext debug, final CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan,
                     AllowAssumptions allowAssumptions, CompilationIdentifier compilationId, SpeculationLog log, Cancellable cancellable) {
-        try (PerformanceInformationHandler handler = PerformanceInformationHandler.install()) {
-            String name = compilable.toString();
-            OptionValues options = TruffleCompilerOptions.getOptions();
-            ResolvedJavaMethod rootMethod = rootForCallTarget(compilable);
-            // @formatter:off
-            StructuredGraph.Builder builder = new StructuredGraph.Builder(options, debug, allowAssumptions).
-                            name(name).
-                            method(rootMethod).
-                            speculationLog(log).
-                            compilationId(compilationId).
-                            trackNodeSourcePosition(configForParsing.trackNodeSourcePosition()).
-                            cancellable(cancellable);
-            // @formatter:on
-            builder = customizeStructuredGraphBuilder(builder);
-            final StructuredGraph graph = builder.build();
 
-            try (DebugContext.Scope s = debug.scope("CreateGraph", graph);
-                            Indent indent = debug.logAndIndent("createGraph %s", graph);) {
+        String name = compilable.toString();
+        OptionValues options = TruffleCompilerOptions.getOptions();
+        ResolvedJavaMethod rootMethod = rootForCallTarget(compilable);
+        // @formatter:off
+        StructuredGraph.Builder builder = new StructuredGraph.Builder(options, debug, allowAssumptions).
+                        name(name).
+                        method(rootMethod).
+                        speculationLog(log).
+                        compilationId(compilationId).
+                        trackNodeSourcePosition(configForParsing.trackNodeSourcePosition()).
+                        cancellable(cancellable);
+        // @formatter:on
+        builder = customizeStructuredGraphBuilder(builder);
+        final StructuredGraph graph = builder.build();
 
-                CoreProviders baseContext = providers;
-                HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
+        try (DebugContext.Scope s = debug.scope("CreateGraph", graph);
+                        Indent indent = debug.logAndIndent("createGraph %s", graph);) {
 
-                fastPartialEvaluation(compilable, inliningPlan, graph, baseContext, tierContext);
+            PhaseContext baseContext = new PhaseContext(providers);
+            HighTierContext tierContext = new HighTierContext(providers, new PhaseSuite<HighTierContext>(), OptimisticOptimizations.NONE);
 
-                if (cancellable != null && cancellable.isCancelled()) {
-                    return null;
-                }
+            fastPartialEvaluation(compilable, inliningPlan, graph, baseContext, tierContext);
 
-                new VerifyFrameDoesNotEscapePhase().apply(graph, false);
-                postPartialEvaluation(graph);
-
-            } catch (Throwable e) {
-                throw debug.handle(e);
+            if (cancellable != null && cancellable.isCancelled()) {
+                return null;
             }
 
-            return graph;
+            new VerifyFrameDoesNotEscapePhase().apply(graph, false);
+            postPartialEvaluation(graph);
+
+        } catch (Throwable e) {
+            throw debug.handle(e);
         }
+
+        return graph;
     }
 
     /**
@@ -451,12 +445,10 @@ public abstract class PartialEvaluator {
             plugins.appendInlineInvokePlugin(new InlineDuringParsingPlugin());
         }
 
-        DeoptimizeOnExceptionPhase postParsingPhase = new DeoptimizeOnExceptionPhase(
-                        method -> TruffleCompilerRuntime.getRuntime().getInlineKind(method, true) == InlineKind.DO_NOT_INLINE_WITH_SPECULATIVE_EXCEPTION);
-
         Providers compilationUnitProviders = providers.copyWith(new TruffleConstantFieldProvider(providers.getConstantFieldProvider(), providers.getMetaAccess()));
-        return new CachingPEGraphDecoder(architecture, graph, compilationUnitProviders, newConfig, TruffleCompilerImpl.Optimizations, AllowAssumptions.ifNonNull(graph.getAssumptions()),
-                        loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList, callInlined, sourceLanguagePositionProvider, postParsingPhase);
+        return new CachingPEGraphDecoder(architecture, graph, compilationUnitProviders, newConfig, TruffleCompilerImpl.Optimizations,
+                        AllowAssumptions.ifNonNull(graph.getAssumptions()),
+                        loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin, nodePluginList, callInlined, sourceLanguagePositionProvider);
     }
 
     protected void doGraphPE(CompilableTruffleAST compilable, StructuredGraph graph, HighTierContext tierContext, TruffleInliningPlan inliningDecision) {
@@ -468,8 +460,7 @@ public abstract class PartialEvaluator {
         InlineInvokePlugin inlineInvokePlugin = new PEInlineInvokePlugin(inliningDecision);
 
         HistogramInlineInvokePlugin histogramPlugin = null;
-        Boolean printTruffleExpansionHistogram = TruffleCompilerOptions.getValue(PrintTruffleExpansionHistogram);
-        if (printTruffleExpansionHistogram) {
+        if (TruffleCompilerOptions.getValue(PrintTruffleExpansionHistogram)) {
             histogramPlugin = new HistogramInlineInvokePlugin(graph);
             inlineInvokePlugins = new InlineInvokePlugin[]{replacements, inlineInvokePlugin, histogramPlugin};
         } else {
@@ -481,7 +472,7 @@ public abstract class PartialEvaluator {
                         sourceLanguagePosition);
         decoder.decode(graph.method(), graph.isSubstitution(), graph.trackNodeSourcePosition());
 
-        if (printTruffleExpansionHistogram) {
+        if (TruffleCompilerOptions.getValue(PrintTruffleExpansionHistogram)) {
             histogramPlugin.print(compilable);
         }
     }
@@ -515,7 +506,7 @@ public abstract class PartialEvaluator {
     }
 
     @SuppressWarnings({"try", "unused"})
-    private void fastPartialEvaluation(CompilableTruffleAST compilable, TruffleInliningPlan inliningDecision, StructuredGraph graph, CoreProviders baseContext, HighTierContext tierContext) {
+    private void fastPartialEvaluation(CompilableTruffleAST compilable, TruffleInliningPlan inliningDecision, StructuredGraph graph, PhaseContext baseContext, HighTierContext tierContext) {
         DebugContext debug = graph.getDebug();
         doGraphPE(compilable, graph, tierContext, inliningDecision);
         debug.dump(DebugContext.BASIC_LEVEL, graph, "After Partial Evaluation");
@@ -607,41 +598,16 @@ public abstract class PartialEvaluator {
         return decision;
     }
 
-    public static final class PerformanceInformationHandler implements Closeable {
+    public static final class PerformanceInformationHandler {
 
-        private static final ThreadLocal<PerformanceInformationHandler> instance = new ThreadLocal<>();
-        private boolean warningSeen;
-
-        private PerformanceInformationHandler() {
-        }
-
-        private void setWarnings(boolean hasWarnings) {
-            warningSeen = hasWarnings;
-        }
-
-        private boolean hasWarnings() {
-            return warningSeen;
-        }
-
-        @Override
-        public void close() {
-            assert instance.get() != null : "No PerformanceInformationHandler installed";
-            instance.remove();
-        }
-
-        static PerformanceInformationHandler install() {
-            assert instance.get() == null : "PerformanceInformationHandler already installed";
-            PerformanceInformationHandler handler = new PerformanceInformationHandler();
-            instance.set(handler);
-            return handler;
-        }
+        private static boolean warningSeen = false;
 
         public static boolean isEnabled() {
             return TruffleCompilerOptions.getValue(TraceTrufflePerformanceWarnings) || TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal);
         }
 
         public static void logPerformanceWarning(String callTargetName, List<? extends Node> locations, String details, Map<String, Object> properties) {
-            instance.get().setWarnings(true);
+            warningSeen = true;
             logPerformanceWarningImpl(callTargetName, "perf warn", details, properties);
             logPerformanceStackTrace(locations);
         }
@@ -741,7 +707,8 @@ public abstract class PartialEvaluator {
                 }
             }
 
-            if (instance.get().hasWarnings() && TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal)) {
+            if (warningSeen && TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal)) {
+                warningSeen = false;
                 throw new AssertionError("Performance warning detected and is fatal.");
             }
         }
@@ -773,19 +740,12 @@ public abstract class PartialEvaluator {
             case DO_NOT_INLINE_NO_EXCEPTION:
                 return InlineInfo.DO_NOT_INLINE_NO_EXCEPTION;
             case DO_NOT_INLINE_WITH_EXCEPTION:
-            case DO_NOT_INLINE_WITH_SPECULATIVE_EXCEPTION:
                 return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
             case INLINE:
                 return InlineInfo.createStandardInlineInfo(method);
             default:
                 throw new IllegalArgumentException(String.valueOf(inlineKind));
         }
-    }
-
-    private static final SpeculationReasonGroup TRUFFLE_BOUNDARY_EXCEPTION_SPECULATIONS = new SpeculationReasonGroup("TruffleBoundaryWithoutException", ResolvedJavaMethod.class);
-
-    public static SpeculationReason createTruffleBoundaryExceptionSpeculation(ResolvedJavaMethod targetMethod) {
-        return TRUFFLE_BOUNDARY_EXCEPTION_SPECULATIONS.createSpeculationReason(targetMethod);
     }
 
     private static final class SourceLanguagePositionImpl implements SourceLanguagePosition {
