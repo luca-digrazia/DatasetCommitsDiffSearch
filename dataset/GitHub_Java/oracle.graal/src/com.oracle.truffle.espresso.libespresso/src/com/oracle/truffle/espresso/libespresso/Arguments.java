@@ -52,7 +52,7 @@ public final class Arguments {
     }
 
     private static class ModulePropertyCounter {
-        ModulePropertyCounter(Context.Builder builder) {
+        public ModulePropertyCounter(Context.Builder builder) {
             this.builder = builder;
         }
 
@@ -196,7 +196,9 @@ public final class Arguments {
             }
         }
 
-        if (bootClasspathPrepend != null) {
+        if (bootClasspathPrepend != null)
+
+        {
             builder.option("java.BootClasspathPrepend", bootClasspathPrepend);
         }
         if (bootClasspathAppend != null) {
@@ -215,7 +217,6 @@ public final class Arguments {
         }
 
         builder.option("java.Classpath", classpath);
-        argumentProcessingDone();
         return JNIErrors.JNI_OK();
     }
 
@@ -244,9 +245,6 @@ public final class Arguments {
     }
 
     private static String parsePolyglotOption(Context.Builder builder, String arg, boolean experimentalOptions) {
-        if (arg.length() <= 2 || !arg.startsWith("--")) {
-            return String.format("Unrecognized option: %s%n", arg);
-        }
         int eqIdx = arg.indexOf('=');
         String key;
         String value;
@@ -328,13 +326,6 @@ public final class Arguments {
             tempEngine = Engine.newBuilder().useSystemProperties(false).build();
         }
         return tempEngine;
-    }
-
-    private static void argumentProcessingDone() {
-        if (tempEngine != null) {
-            tempEngine.close();
-            tempEngine = null;
-        }
     }
 
     private static String appendPath(String paths, String toAppend) {
