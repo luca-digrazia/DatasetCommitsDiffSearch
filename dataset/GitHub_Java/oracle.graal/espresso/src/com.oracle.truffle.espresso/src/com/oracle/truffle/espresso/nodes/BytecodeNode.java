@@ -360,7 +360,7 @@ public final class BytecodeNode extends EspressoMethodNode {
     private static final DebugCounter QUICKENED_INVOKES = DebugCounter.create("Quickened invokes (excluding INDY)");
     private static final DebugCounter[] BYTECODE_HISTOGRAM;
 
-    private static final int REPORT_LOOP_STRIDE = 1 << 8;
+    private static final int REPORT_LOOP_STRIDE = 1 << 6;
 
     static {
         BYTECODE_HISTOGRAM = new DebugCounter[0xFF];
@@ -1633,9 +1633,9 @@ public final class BytecodeNode extends EspressoMethodNode {
         int nextStatementIndex = 0;
         if (targetBCI <= curBCI) {
             checkStopping();
-            if (++loopCount[0] >= REPORT_LOOP_STRIDE) {
+            if ((++loopCount[0] & (REPORT_LOOP_STRIDE - 1)) == 0) {
                 LoopNode.reportLoopCount(this, REPORT_LOOP_STRIDE);
-                loopCount[0] = 0;
+                loopCount[0] -= REPORT_LOOP_STRIDE;
             }
         }
         if (instrument != null) {
