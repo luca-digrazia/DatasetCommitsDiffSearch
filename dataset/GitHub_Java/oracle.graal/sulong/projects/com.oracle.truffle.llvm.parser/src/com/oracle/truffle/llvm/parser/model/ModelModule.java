@@ -46,7 +46,6 @@ import com.oracle.truffle.llvm.parser.model.target.TargetInformation;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceSymbol;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStaticMemberType;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import org.graalvm.polyglot.io.ByteSequence;
 
 public final class ModelModule {
 
@@ -67,7 +66,6 @@ public final class ModelModule {
     private final HashMap<FunctionDefinition, LazyFunctionParser> lazyFunctionParsers = new HashMap<>();
     private TargetDataLayout targetDataLayout = defaultLayout;
     private DebugInfoFunctionProcessor functionProcessor = null;
-    private ByteSequence bitcode;
 
     public ModelModule() {
     }
@@ -163,13 +161,5 @@ public final class ModelModule {
 
     public List<String> getLibraryPaths() {
         return Collections.unmodifiableList(paths);
-    }
-
-    public ByteSequence getBitcode() {
-        return bitcode;
-    }
-
-    public void setBitcode(ByteSequence bitcode) {
-        this.bitcode = bitcode;
     }
 }
