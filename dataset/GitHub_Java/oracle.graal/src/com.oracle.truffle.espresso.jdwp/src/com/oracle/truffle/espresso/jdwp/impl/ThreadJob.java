@@ -24,7 +24,7 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import java.util.concurrent.Callable;
 
-public final class ThreadJob {
+public class ThreadJob {
 
     private final Object jobLock = new Object();
     private final Object thread;
