@@ -82,7 +82,7 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 if (!NativeImage.graalvmConfig.isEmpty()) {
                     message += " " + NativeImage.graalvmConfig;
                 }
-                message += " (Java Version " + System.getProperty("java.runtime.version") + ")";
+                message += " (Java Version " + System.getProperty("java.version") + ")";
                 nativeImage.showMessage(message);
                 System.exit(0);
                 return true;
@@ -158,10 +158,17 @@ class DefaultOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             }
             useDebugAttach = true;
             String debugAttachArg = args.poll();
-            String addressSuffix = debugAttachArg.substring(debugAttach.length());
-            String address = addressSuffix.isEmpty() ? "8000" : addressSuffix.substring(1);
+            String portSuffix = debugAttachArg.substring(debugAttach.length());
+            int debugPort = 8000;
+            if (!portSuffix.isEmpty()) {
+                try {
+                    debugPort = Integer.parseInt(portSuffix.substring(1));
+                } catch (NumberFormatException e) {
+                    NativeImage.showError("Invalid " + debugAttach + " option: " + debugAttachArg);
+                }
+            }
             /* Using agentlib to allow interoperability with other agents */
-            nativeImage.addImageBuilderJavaArgs("-agentlib:jdwp=transport=dt_socket,server=y,address=" + address + ",suspend=y");
+            nativeImage.addImageBuilderJavaArgs("-agentlib:jdwp=transport=dt_socket,server=y,address=" + debugPort + ",suspend=y");
             /* Disable watchdog mechanism */
             nativeImage.addPlainImageBuilderArg(nativeImage.oHDeadlockWatchdogInterval + "0");
             return true;
