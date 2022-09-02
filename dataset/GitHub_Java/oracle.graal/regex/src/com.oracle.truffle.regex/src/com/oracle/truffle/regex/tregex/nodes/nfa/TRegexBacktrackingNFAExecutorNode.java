@@ -412,10 +412,8 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
                 long bs = 0;
                 long bit = 1;
                 final int iStart = successors.length - (iBS << 6) - 1;
-                final int iEnd = Math.max(-1, iStart - (1 << 6));
                 CompilerDirectives.isPartialEvaluationConstant(iStart);
-                CompilerDirectives.isPartialEvaluationConstant(iEnd);
-                for (int i = iStart; i > iEnd; i--) {
+                for (int i = iStart; i >= 0; i--) {
                     PureNFATransition transition = successors[i];
                     CompilerDirectives.isPartialEvaluationConstant(transition);
                     if (transitionMatches(locals, compactString, transition, index, atEnd, c)) {
@@ -448,10 +446,8 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
                 CompilerDirectives.isPartialEvaluationConstant(iBS);
                 long bs = transitionBitSet[iBS];
                 final int iStart = successors.length - (iBS << 6) - 1;
-                final int iEnd = Math.max(-1, iStart - (1 << 6));
                 CompilerDirectives.isPartialEvaluationConstant(iStart);
-                CompilerDirectives.isPartialEvaluationConstant(iEnd);
-                for (int i = iStart; i > iEnd; i--) {
+                for (int i = iStart; i >= 0; i--) {
                     PureNFATransition transition = successors[i];
                     CompilerDirectives.isPartialEvaluationConstant(transition);
                     PureNFAState target = transition.getTarget(isForward());
