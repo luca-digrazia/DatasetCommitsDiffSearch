@@ -29,38 +29,45 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.multithreading;
 
-import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
-import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64Error;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMBuiltin;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public final class LLVMPThreadKeyIntrinsics {
 
     @NodeChild(type = LLVMExpressionNode.class, value = "key")
     @NodeChild(type = LLVMExpressionNode.class, value = "destructor")
-    @ImportStatic({CommonNodeFactory.class, LLVMInteropType.ValueKind.class})
     public abstract static class LLVMPThreadKeyCreate extends LLVMBuiltin {
 
-        @Specialization
-        protected int doIntrinsic(LLVMPointer key, LLVMPointer destructor,
-                        @Cached("createStoreNode(I32)") LLVMStoreNode store,
-                        @CachedContext(LLVMLanguage.class) LLVMContext context) {
-            // add new key-value to key-storage, which is a
-            // hashmap(key-value->hashmap(thread-id->specific-value))
-            final int keyId = context.getpThreadContext().createPThreadKey(destructor);
-            store.executeWithTarget(key, keyId);
+        @Child LLVMStoreNode store = null;
 
+        @Specialization
+        protected int doIntrinsic(LLVMPointer key, LLVMPointer destructor, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+            if (store == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                store = ctx.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.I32);
+            }
+
+            synchronized (ctx.keyLockObj) {
+                store.executeWithTarget(key, ctx.curKeyVal + 1);
+                // add new key-value to key-storage, which is a
+                // hashmap(key-value->hashmap(thread-id->specific-value))
+                UtilAccessCollectionWithBoundary.put(ctx.keyStorage, ctx.curKeyVal + 1, new ConcurrentHashMap<>());
+                UtilAccessCollectionWithBoundary.put(ctx.destructorStorage, ctx.curKeyVal + 1, destructor);
+                ctx.curKeyVal++;
+            }
             return 0;
         }
     }
@@ -69,8 +76,9 @@ public final class LLVMPThreadKeyIntrinsics {
     public abstract static class LLVMPThreadKeyDelete extends LLVMBuiltin {
 
         @Specialization
-        protected int doIntrinsic(int key, @CachedContext(LLVMLanguage.class) LLVMContext context) {
-            context.getpThreadContext().deletePThreadKey(key);
+        protected int doIntrinsic(int key, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+            UtilAccessCollectionWithBoundary.remove(ctx.keyStorage, key);
+            UtilAccessCollectionWithBoundary.remove(ctx.destructorStorage, key);
             return 0;
         }
     }
@@ -79,9 +87,17 @@ public final class LLVMPThreadKeyIntrinsics {
     public abstract static class LLVMPThreadGetSpecific extends LLVMBuiltin {
 
         @Specialization
-        protected LLVMPointer doIntrinsic(int key, @CachedContext(LLVMLanguage.class) LLVMContext context) {
-            final LLVMPointer value = context.getpThreadContext().getSpecific(key);
-            return value != null ? value : LLVMNativePointer.createNull();
+        protected LLVMPointer doIntrinsic(int key, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+            synchronized (ctx.keyStorage) {
+                if (UtilAccessCollectionWithBoundary.containsKey(ctx.keyStorage, key)) {
+                    final ConcurrentMap<Long, LLVMPointer> value = UtilAccessCollectionWithBoundary.get(ctx.keyStorage, key);
+                    final long threadId = Thread.currentThread().getId();
+                    if (UtilAccessCollectionWithBoundary.containsKey(value, threadId)) {
+                        return UtilAccessCollectionWithBoundary.get(value, threadId);
+                    }
+                }
+            }
+            return LLVMNativePointer.createNull();
         }
     }
 
@@ -91,12 +107,12 @@ public final class LLVMPThreadKeyIntrinsics {
 
         // [EINVAL] if key is not valid
         @Specialization
-        protected int doIntrinsic(int key, LLVMPointer value, @CachedContext(LLVMLanguage.class) LLVMContext context) {
-            if (!context.getpThreadContext().setSpecific(key, value)) {
-                return LLVMAMD64Error.EINVAL;
-            } else {
-                return 0;
+        protected int doIntrinsic(int key, LLVMPointer value, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+            if (!UtilAccessCollectionWithBoundary.containsKey(ctx.keyStorage, key)) {
+                return ctx.pthreadConstants.getConstant(UtilCConstants.CConstant.EINVAL);
             }
+            UtilAccessCollectionWithBoundary.put(UtilAccessCollectionWithBoundary.get(ctx.keyStorage, key), Thread.currentThread().getId(), value);
+            return 0;
         }
     }
 }

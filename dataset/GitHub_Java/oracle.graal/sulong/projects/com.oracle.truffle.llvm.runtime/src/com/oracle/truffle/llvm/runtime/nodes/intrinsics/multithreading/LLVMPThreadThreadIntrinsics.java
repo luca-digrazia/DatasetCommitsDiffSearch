@@ -38,11 +38,8 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
-import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMAMD64Error;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMBuiltin;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
-import com.oracle.truffle.llvm.runtime.pthread.LLVMThreadException;
-import com.oracle.truffle.llvm.runtime.pthread.PThreadExitException;
 
 public final class LLVMPThreadThreadIntrinsics {
 
@@ -52,20 +49,17 @@ public final class LLVMPThreadThreadIntrinsics {
     @NodeChild(type = LLVMExpressionNode.class, value = "arg")
     public abstract static class LLVMPThreadCreate extends LLVMBuiltin {
 
-        @Child private LLVMStoreNode store = null;
+        @Child LLVMStoreNode store = null;
 
         @Specialization
-        protected int doIntrinsic(LLVMPointer thread, @SuppressWarnings("unused") LLVMPointer attr, LLVMPointer startRoutine, LLVMPointer arg, @CachedContext(LLVMLanguage.class) LLVMContext context) {
+        protected int doIntrinsic(LLVMPointer thread, @SuppressWarnings("unused") LLVMPointer attr, LLVMPointer startRoutine, LLVMPointer arg, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
             if (store == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                store = context.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.I64);
+                store = ctx.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.I64);
             }
 
-            LLVMPThreadStart.LLVMPThreadRunnable init = new LLVMPThreadStart.LLVMPThreadRunnable(startRoutine, arg, context, true);
-            final Thread t = context.getpThreadContext().createThread(init);
-            if (t == null) {
-                return LLVMAMD64Error.EAGAIN;
-            }
+            UtilFunctionCall.FunctionCallRunnable init = new UtilFunctionCall.FunctionCallRunnable(startRoutine, arg, ctx, true);
+            Thread t = ctx.createThread(init);
             store.executeWithTarget(thread, t.getId());
             t.start();
             return 0;
@@ -76,33 +70,33 @@ public final class LLVMPThreadThreadIntrinsics {
     public abstract static class LLVMPThreadExit extends LLVMBuiltin {
 
         @Specialization
-        protected int doIntrinsic(Object returnValue, @CachedContext(LLVMLanguage.class) LLVMContext context) {
-            context.getpThreadContext().setThreadReturnValue(Thread.currentThread().getId(), returnValue);
+        protected int doIntrinsic(Object returnValue, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+            ctx.setThreadReturnValue(Thread.currentThread().getId(), returnValue);
             throw new PThreadExitException();
         }
     }
 
-    @NodeChild(type = LLVMExpressionNode.class, value = "threadId")
+    @NodeChild(type = LLVMExpressionNode.class, value = "th")
     @NodeChild(type = LLVMExpressionNode.class, value = "threadReturn")
     public abstract static class LLVMPThreadJoin extends LLVMBuiltin {
 
-        @Child private LLVMStoreNode storeNode;
+        @Child LLVMStoreNode storeNode;
 
         @Specialization
-        protected int doIntrinsic(long threadId, LLVMPointer threadReturn, @CachedContext(LLVMLanguage.class) LLVMContext context) {
+        protected int doIntrinsic(long th, LLVMPointer threadReturn, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
             if (storeNode == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                storeNode = context.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.POINTER);
+                storeNode = ctx.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.POINTER);
             }
 
             try {
-                Thread thread = context.getpThreadContext().getThread(threadId);
+                Thread thread = ctx.getThread(th);
                 if (thread == null) {
                     return 0;
                 }
 
                 thread.join();
-                Object retVal = context.getpThreadContext().getThreadReturnValue(threadId);
+                Object retVal = ctx.getThreadReturnValue(th);
                 if (!threadReturn.isNull()) {
                     storeNode.executeWithTarget(threadReturn, retVal);
                 }
@@ -120,32 +114,32 @@ public final class LLVMPThreadThreadIntrinsics {
     public abstract static class LLVMPThreadOnce extends LLVMBuiltin {
 
         @Specialization
-        protected int doIntrinsic(LLVMPointer onceControl, LLVMPointer initRoutine, @CachedContext(LLVMLanguage.class) LLVMContext context) {
+        protected int doIntrinsic(LLVMPointer onceControl, LLVMPointer initRoutine, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
             // check if onceControl and initRoutine are invalid
             if (onceControl.isNull() || initRoutine.isNull()) {
-                return LLVMAMD64Error.EINVAL;
+                return new UtilCConstants(ctx).getConstant(UtilCConstants.CConstant.EINVAL);
             }
 
             // check if pthread_once was called before
-            if (!context.getpThreadContext().shouldExecuteOnce(onceControl)) {
+            if (!ctx.shouldExecuteOnce(onceControl)) {
                 return 0;
             }
 
             // execute the init routine
-            LLVMPThreadStart.LLVMPThreadRunnable init = new LLVMPThreadStart.LLVMPThreadRunnable(initRoutine, null, context, false);
+            UtilFunctionCall.FunctionCallRunnable init = new UtilFunctionCall.FunctionCallRunnable(initRoutine, null, ctx, false);
             init.run();
 
             return 0;
         }
     }
 
-    @NodeChild(type = LLVMExpressionNode.class, value = "thread1")
-    @NodeChild(type = LLVMExpressionNode.class, value = "thread2")
+    @NodeChild(type = LLVMExpressionNode.class, value = "t1")
+    @NodeChild(type = LLVMExpressionNode.class, value = "t2")
     public abstract static class LLVMPThreadEqual extends LLVMBuiltin {
 
         @Specialization
-        protected int doIntrinsic(long thread1, long thread2) {
-            return thread1 == thread2 ? 1 : 0;
+        protected int doIntrinsic(long t1, long t2) {
+            return t1 == t2 ? 1 : 0;
         }
     }
 

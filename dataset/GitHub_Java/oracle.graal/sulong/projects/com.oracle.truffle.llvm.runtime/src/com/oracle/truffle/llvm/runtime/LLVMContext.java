@@ -96,6 +96,9 @@ public final class LLVMContext {
     private final ConcurrentMap<Long, Object> threadReturnValueStorage;
     private final ConcurrentMap<Long, Thread> threadStorage;
 
+    // list with all created threads for the case that a thread id doest not stay runtime unique
+    private final ArrayList<Thread> createdThreads;
+
     private final ArrayList<LLVMPointer> onceStorage;
 
     public int curKeyVal;
@@ -234,6 +237,7 @@ public final class LLVMContext {
         // pthread storages
         this.threadReturnValueStorage = new ConcurrentHashMap<>();
         this.threadStorage = new ConcurrentHashMap<>();
+        this.createdThreads = new ArrayList<>();
         this.onceStorage = new ArrayList<>();
         this.curKeyVal = 0;
         this.keyLockObj = new Object();
@@ -425,7 +429,18 @@ public final class LLVMContext {
 
     void dispose(LLVMMemory memory) {
         // join all created pthread - threads
-        joinAllThreads();
+        synchronized (createdThreads) {
+            synchronized (threadStorage) {
+                for (Thread createdThread : createdThreads) {
+                    try {
+                        createdThread.join();
+                    } catch (InterruptedException e) {
+                        // ignored
+                    }
+                }
+                createdThreads.clear();
+            }
+        }
 
         printNativeCallStatistic();
 
@@ -450,18 +465,6 @@ public final class LLVMContext {
 
         if (tracer != null) {
             tracer.dispose();
-        }
-    }
-
-    private void joinAllThreads() {
-        synchronized (threadStorage) {
-            for (Thread createdThread : threadStorage.values()) {
-                try {
-                    createdThread.join();
-                } catch (InterruptedException e) {
-                    // ignored
-                }
-            }
         }
     }
 
@@ -810,10 +813,13 @@ public final class LLVMContext {
 
     @TruffleBoundary
     public synchronized Thread createThread(Runnable runnable) {
-        synchronized (threadStorage) {
-            final Thread thread = env.createThread(runnable);
-            threadStorage.put(thread.getId(), thread);
-            return thread;
+        synchronized (createdThreads) {
+            synchronized (threadStorage) {
+                final Thread thread = env.createThread(runnable);
+                createdThreads.add(thread);
+                threadStorage.put(thread.getId(), thread);
+                return thread;
+            }
         }
     }
 
