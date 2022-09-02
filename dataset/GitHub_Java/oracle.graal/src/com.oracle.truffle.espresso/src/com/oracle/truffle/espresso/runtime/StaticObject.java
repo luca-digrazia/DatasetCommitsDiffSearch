@@ -108,8 +108,10 @@ public final class StaticObject implements TruffleObject {
     @ExportMessage
     public static boolean isNull(StaticObject object) {
         assert object != null;
-        // klass can only be null for Espresso null (NULL) and interop nulls
-        return object.getKlass() == null;
+        if (object.isEspressoObject()) {
+            return object == StaticObject.NULL;
+        }
+        return InteropLibrary.getUncached().isNull(object.rawInteropObject());
     }
 
     @ExportMessage
@@ -962,7 +964,6 @@ public final class StaticObject implements TruffleObject {
 
     // Constructor for object copy.
     private StaticObject(ObjectKlass klass, Object[] fields, byte[] primitiveFields) {
-        assert klass != null;
         this.klass = klass;
         this.fields = fields;
         this.primitiveFields = primitiveFields;
@@ -970,7 +971,6 @@ public final class StaticObject implements TruffleObject {
 
     // Constructor for regular objects.
     private StaticObject(ObjectKlass klass) {
-        assert klass != null;
         assert klass != klass.getMeta().java_lang_Class;
         this.klass = klass;
         LinkedKlass lk = klass.getLinkedKlass();
@@ -1012,7 +1012,6 @@ public final class StaticObject implements TruffleObject {
 
     // Constructor for static fields storage.
     private StaticObject(ObjectKlass klass, @SuppressWarnings("unused") Void unused) {
-        assert klass != null;
         this.klass = klass;
         LinkedKlass lk = klass.getLinkedKlass();
         this.fields = lk.getStaticObjectFieldsCount() > 0 ? new Object[lk.getStaticObjectFieldsCount()] : null;
@@ -1041,7 +1040,7 @@ public final class StaticObject implements TruffleObject {
         this.primitiveFields = null;
     }
 
-    private StaticObject(Klass klass, Object interopObject, @SuppressWarnings("unused") Void unused) {
+    private StaticObject(Klass klass, Object interopObject) {
         this.klass = klass;
         assert interopObject != null;
         this.primitiveFields = INTEROP_MARKER;
@@ -1070,11 +1069,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     public static StaticObject createInterop(Klass klass, Object interopObject) {
-        assert interopObject != null;
-        if (InteropLibrary.getUncached().isNull(interopObject)) {
-            return new StaticObject(null, interopObject, null);
+        if (interopObject == null) {
+            return NULL;
         }
-        return new StaticObject(klass, interopObject, null);
+        return new StaticObject(klass, interopObject);
     }
 
     public Klass getKlass() {
