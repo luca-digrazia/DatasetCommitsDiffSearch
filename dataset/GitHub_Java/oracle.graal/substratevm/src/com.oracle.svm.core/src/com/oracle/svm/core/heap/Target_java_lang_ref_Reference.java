@@ -132,21 +132,19 @@ public final class Target_java_lang_ref_Reference<T> {
         ReferenceInternals.clear(SubstrateUtil.cast(this, Reference.class));
     }
 
-    @Substitute
+    @Delete
     @TargetElement(onlyWith = JDK16OrLater.class)
-    private void clear0() {
-        clear();
-    }
-
-    @KeepOriginal
-    @TargetElement(onlyWith = JDK16OrLater.class)
-    public native boolean refersTo(T obj);
+    private native void clear0();
 
     @Substitute
     @TargetElement(onlyWith = JDK16OrLater.class)
-    boolean refersTo0(Object obj) {
+    public boolean refersTo(T obj) {
         return ReferenceInternals.refersTo(SubstrateUtil.cast(this, Reference.class), obj);
     }
+
+    @Delete
+    @TargetElement(onlyWith = JDK16OrLater.class)
+    native boolean refersTo0(Object o);
 
     @KeepOriginal
     native boolean enqueue();
