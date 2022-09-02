@@ -102,9 +102,10 @@ public final class HeapVerifier {
             }
             HeapImpl heap = HeapImpl.getHeapImpl();
             if (heap.isInImageHeap(obj) != heap.isInImageHeapSlow(obj)) {
-                Log witness = getWitnessLog();
-                witness.string("[HeapVerifier.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  obj: ").object(obj);
-                witness.string("  mismatch between isInImageHeap() and isInImageHeapSlow()").string("]").newline();
+                try (Log witness = getWitnessLog()) {
+                    witness.string("[HeapVerifier.verifyObjectAt(objRef: ").hex(ptr).string(")").string("  obj: ").object(obj);
+                    witness.string("  mismatch between isInImageHeap() and isInImageHeapSlow()").string("]").newline();
+                }
                 return false;
             }
             trace.newline();
@@ -252,15 +253,17 @@ public final class HeapVerifier {
             Word currentPointer = Word.objectToUntrackedPointer(currentObject);
             if (!HeapImpl.getHeapImpl().isInImageHeap(currentObject)) {
                 verifyResult = false;
-                Log witness = getWitnessLog();
-                witness.string("[ImageHeapObjectVerifier:").string("  [ regionStart: ").hex(regionStart).string("  .. regionEnd: ").hex(regionEnd).string(" ]");
-                witness.string("  current: ").hex(currentPointer).string("  object is not considered to be in image heap").string("]").newline();
+                try (Log witness = getWitnessLog()) {
+                    witness.string("[ImageHeapObjectVerifier:").string("  [ regionStart: ").hex(regionStart).string("  .. regionEnd: ").hex(regionEnd).string(" ]");
+                    witness.string("  current: ").hex(currentPointer).string("  object is not considered to be in image heap").string("]").newline();
+                }
             }
             if (!verifyObjectAt(currentPointer)) {
                 verifyResult = false;
-                Log witness = getWitnessLog();
-                witness.string("[ImageHeapObjectVerifier:").string("  [ regionStart: ").hex(regionStart).string("  .. regionEnd: ").hex(regionEnd).string(" ]");
-                witness.string("  current: ").hex(currentPointer).string("  object does not verify").string("]").newline();
+                try (Log witness = getWitnessLog()) {
+                    witness.string("[ImageHeapObjectVerifier:").string("  [ regionStart: ").hex(regionStart).string("  .. regionEnd: ").hex(regionEnd).string(" ]");
+                    witness.string("  current: ").hex(currentPointer).string("  object does not verify").string("]").newline();
+                }
             }
             return true;
         }
@@ -294,10 +297,11 @@ public final class HeapVerifier {
 
         boolean result = InteriorObjRefWalker.walkObject(obj, noReferencesOutsideHeapVisitor);
         if (!result) {
-            Log witness = getWitnessLog();
-            witness.string("[HeapVerifier.noReferencesOutsideHeap:").string("  cause: ").string(getCurrentCause());
-            witness.string("  obj: ").string(obj.getClass().getName()).string("@").hex(objPointer);
-            witness.string("  header: ").hex(header).string("]").newline();
+            try (Log witness = getWitnessLog()) {
+                witness.string("[HeapVerifier.noReferencesOutsideHeap:").string("  cause: ").string(getCurrentCause());
+                witness.string("  obj: ").string(obj.getClass().getName()).string("@").hex(objPointer);
+                witness.string("  header: ").hex(header).string("]").newline();
+            }
         }
 
         trace.string("  returns: ").bool(result).string("]").newline();
@@ -307,7 +311,6 @@ public final class HeapVerifier {
     /** An ObjectReferenceVisitor to check for references outside of the heap. */
     private static class NoReferencesOutsideHeapVisitor implements ObjectReferenceVisitor {
         @Override
-        @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate while verifying the heap.")
         public boolean visitObjectReference(Pointer objRef, boolean compressed) {
             HeapVerifier verifier = HeapImpl.getHeapImpl().getHeapVerifier();
             Pointer objPointer = ReferenceAccess.singleton().readObjectAsUntrackedPointer(objRef, compressed);
@@ -315,28 +318,31 @@ public final class HeapVerifier {
                 return true;
             }
             if (!compressed && (objPointer.equal(HeapPolicy.getProducedHeapChunkZapWord()) || objPointer.equal(HeapPolicy.getConsumedHeapChunkZapWord()))) {
-                Log witness = verifier.getWitnessLog();
-                witness.string("[HeapVerifier.NoReferencesOutsideHeapVisitor:").string("  cause: ").string(verifier.getCurrentCause());
-                witness.string("  contains zapped field Pointer: ").hex(objPointer).string("  at: ").hex(objRef).string("]").newline();
+                try (Log witness = verifier.getWitnessLog()) {
+                    witness.string("[HeapVerifier.NoReferencesOutsideHeapVisitor:").string("  cause: ").string(verifier.getCurrentCause());
+                    witness.string("  contains zapped field Pointer: ").hex(objPointer).string("  at: ").hex(objRef).string("]").newline();
+                }
                 return false;
             }
             if (!HeapVerifier.slowlyFindPointer(objPointer)) {
-                Log witness = verifier.getWitnessLog();
-                witness.string("[HeapVerifier.NoReferencesOutsideHeapVisitor:").string("  cause: ").string(verifier.getCurrentCause());
-                witness.string("  at: ").hex(objRef).string("  contains fieldPointer: ").hex(objPointer).string("  that is not a reference to the heap").newline();
-                witness.string("    Foolishly trying to look at the object pointed to by the fieldPointer:");
-                UnsignedWord fieldHeader = ObjectHeaderImpl.readHeaderFromPointerCarefully(objPointer);
-                witness.string("  fieldHeader: ").hex(fieldHeader);
-                Object fieldObject = objPointer.toObject();
-                witness.string("  fieldObject: ").object(fieldObject).string("]").newline();
+                try (Log witness = verifier.getWitnessLog()) {
+                    witness.string("[HeapVerifier.NoReferencesOutsideHeapVisitor:").string("  cause: ").string(verifier.getCurrentCause());
+                    witness.string("  at: ").hex(objRef).string("  contains fieldPointer: ").hex(objPointer).string("  that is not a reference to the heap").newline();
+                    witness.string("    Foolishly trying to look at the object pointed to by the fieldPointer:");
+                    UnsignedWord fieldHeader = ObjectHeaderImpl.readHeaderFromPointerCarefully(objPointer);
+                    witness.string("  fieldHeader: ").hex(fieldHeader);
+                    Object fieldObject = objPointer.toObject();
+                    witness.string("  fieldObject: ").object(fieldObject).string("]").newline();
+                }
                 return false;
             }
             /* It is probably safe to look at the referenced object. */
             Word readWord = objPointer.readWord(0);
             if (readWord.equal(HeapPolicy.getProducedHeapChunkZapWord()) || readWord.equal(HeapPolicy.getConsumedHeapChunkZapWord())) {
-                Log witness = verifier.getWitnessLog();
-                witness.string("[HeapVerifier.NoReferencesOutsideHeapVisitor:").string("  cause: ").string(verifier.getCurrentCause());
-                witness.string("  contains fieldPointer: ").hex(objPointer).string("  to zapped memory: ").hex(readWord).string("  at: ").hex(objRef).string("]").newline();
+                try (Log witness = verifier.getWitnessLog()) {
+                    witness.string("[HeapVerifier.NoReferencesOutsideHeapVisitor:").string("  cause: ").string(verifier.getCurrentCause());
+                    witness.string("  contains fieldPointer: ").hex(objPointer).string("  to zapped memory: ").hex(readWord).string("  at: ").hex(objRef).string("]").newline();
+                }
                 return false;
             }
             return true;
@@ -357,7 +363,9 @@ public final class HeapVerifier {
 
         boolean result = InteriorObjRefWalker.walkObject(obj, noReferencesToForwardedObjectsVisitor);
         if (!result) {
-            getWitnessLog().string("[HeapVerifier.noReferencesToForwardedObjectsVerifier:").string("  cause: ").string(getCurrentCause()).string("  obj: ").object(obj).string("]").newline();
+            try (Log witness = getWitnessLog()) {
+                witness.string("[HeapVerifier.noReferencesToForwardedObjectsVerifier:").string("  cause: ").string(getCurrentCause()).string("  obj: ").object(obj).string("]").newline();
+            }
         }
 
         trace.string("]").newline();
@@ -366,7 +374,6 @@ public final class HeapVerifier {
 
     private static class NoReferencesToForwardedObjectsVisitor implements ObjectReferenceVisitor {
         @Override
-        @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate while verifying the heap.")
         public boolean visitObjectReference(Pointer objRef, boolean compressed) {
             HeapImpl heap = HeapImpl.getHeapImpl();
             HeapVerifier verifier = heap.getHeapVerifier();
@@ -375,9 +382,10 @@ public final class HeapVerifier {
                 return true;
             }
             if (ObjectHeaderImpl.isPointerToForwardedObjectCarefully(objPointer)) {
-                Log witness = verifier.getWitnessLog();
-                witness.string("[HeapVerifier.noReferencesToForwardedObjectsVerifier:").string("  cause: ").string(verifier.getCurrentCause());
-                witness.string("  contains fieldPointer: ").hex(objPointer).string("  to forwarded object at: ").hex(objRef).string("]").newline();
+                try (Log witness = verifier.getWitnessLog()) {
+                    witness.string("[HeapVerifier.noReferencesToForwardedObjectsVerifier:").string("  cause: ").string(verifier.getCurrentCause());
+                    witness.string("  contains fieldPointer: ").hex(objPointer).string("  to forwarded object at: ").hex(objRef).string("]").newline();
+                }
                 return false;
             }
             return true;
