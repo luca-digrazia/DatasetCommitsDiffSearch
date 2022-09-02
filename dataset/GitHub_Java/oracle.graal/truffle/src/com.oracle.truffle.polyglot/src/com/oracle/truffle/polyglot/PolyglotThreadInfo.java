@@ -86,22 +86,16 @@ final class PolyglotThreadInfo {
         return getThread() == Thread.currentThread();
     }
 
-    void enter(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext, boolean notify) {
+    void enter(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext) {
         assert Thread.currentThread() == getThread();
         enteredCount++;
 
+        EngineAccessor.INSTRUMENT.notifyEnter(engine.instrumentationHandler, profiledContext.creatorTruffleContext);
         if (!engine.customHostClassLoader.isValid()) {
             setContextClassLoader();
         }
         if (engine.specializationStatistics != null) {
             engine.specializationStatistics.enter();
-        }
-
-        if (notify) {
-            /*
-             * Notify might be false if the context was closed already.
-             */
-            EngineAccessor.INSTRUMENT.notifyEnter(engine.instrumentationHandler, profiledContext.creatorTruffleContext);
         }
     }
 
@@ -112,18 +106,14 @@ final class PolyglotThreadInfo {
         return false;
     }
 
-    void leave(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext, boolean notify) {
+    void leave(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext) {
         assert Thread.currentThread() == getThread();
-        if (notify) {
-            /*
-             * Notify might be false if the context was closed already.
-             */
-            EngineAccessor.INSTRUMENT.notifyLeave(engine.instrumentationHandler, profiledContext.creatorTruffleContext);
-        }
+        EngineAccessor.INSTRUMENT.notifyLeave(engine.instrumentationHandler, profiledContext.creatorTruffleContext);
         enteredCount--;
         if (!engine.customHostClassLoader.isValid()) {
             restoreContextClassLoader();
         }
+
         if (engine.specializationStatistics != null) {
             leaveStatistics(engine.specializationStatistics);
         }

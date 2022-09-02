@@ -301,6 +301,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
          * No entered context. Try to do something reasonable.
          */
         assert !(hostValue instanceof Value);
+        PolyglotContextImpl valueContext = null;
         Object guestValue = null;
         if (hostValue == null) {
             return hostNull;
@@ -309,10 +310,9 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         } else if (HostWrapper.isInstance(hostValue)) {
             HostWrapper hostWrapper = HostWrapper.asInstance(hostValue);
             // host wrappers can nicely reuse the associated context
-            PolyglotLanguageContext languageContext = hostWrapper.getLanguageContext();
-            assert languageContext != null : "HostWrappers must be guaranteed to have non-null language context.";
             guestValue = hostWrapper.getGuestObject();
-            return languageContext.asValue(guestValue);
+            valueContext = hostWrapper.getContext();
+            return valueContext.asValue(guestValue);
         } else {
             /*
              * We currently cannot support doing interop without a context so we create our own
