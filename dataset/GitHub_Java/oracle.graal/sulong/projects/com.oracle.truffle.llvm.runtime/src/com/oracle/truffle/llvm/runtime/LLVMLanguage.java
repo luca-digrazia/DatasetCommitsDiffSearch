@@ -76,7 +76,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
      * should be passed directly using binary sources instead.
      */
     public static final String LLVM_BITCODE_BASE64_MIME_TYPE = "application/x-llvm-ir-bitcode-base64";
-    public static final String LLVM_PRINT_TOOLCHAIN_PATH_MIME_TYPE = "application/x-llvm-ir-bitcode-base64";
 
     static final String LLVM_ELF_SHARED_MIME_TYPE = "application/x-sharedlib";
     static final String LLVM_ELF_EXEC_MIME_TYPE = "application/x-executable";
@@ -88,6 +87,7 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     public static final String ID = "llvm";
     static final String NAME = "LLVM";
 
+    private NodeFactory nodeFactory;
     @CompilationFinal private List<ContextExtension> contextExtensions;
 
     public abstract static class Loader implements LLVMCapability {
@@ -165,12 +165,19 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
             activeConfiguration = Configurations.createConfiguration(this, env.getOptions());
         }
 
-        Toolchain toolchain = new ToolchainImpl(activeConfiguration.getCapability(ToolchainConfig.class), this);
-        env.registerService(toolchain);
+        env.registerService(new ToolchainImpl(activeConfiguration.getCapability(ToolchainConfig.class), this));
         this.contextExtensions = activeConfiguration.createContextExtensions(env);
 
-        LLVMContext context = new LLVMContext(this, env, toolchain);
+        LLVMContext context = new LLVMContext(this, env, getLanguageHome());
         return context;
+    }
+
+    public NodeFactory getNodeFactory() {
+        return nodeFactory;
+    }
+
+    public void setNodeFactory(NodeFactory nodeFactory) {
+        this.nodeFactory = nodeFactory;
     }
 
     @Override

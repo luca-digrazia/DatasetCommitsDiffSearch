@@ -213,4 +213,8 @@ public interface NodeFactory extends InteropNodeFactory {
     LLVMExpressionNode createStackSave();
 
     LLVMExpressionNode createStackRestore(LLVMExpressionNode stackPointer);
+
+    ForeignToLLVM createForeignToLLVM(LLVMInteropType.Value type);
+
+    ForeignToLLVM createForeignToLLVM(ForeignToLLVMType type);
 }
