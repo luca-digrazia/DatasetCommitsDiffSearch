@@ -34,8 +34,7 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.nodes.Node;
 
 final class AgentExecutionNode extends ExecutionEventNode {
-    @Node.Child private InteropLibrary enterDispatch;
-    @Node.Child private InteropLibrary exitDispatch;
+    @Node.Child private InteropLibrary dispatch = InteropLibrary.getFactory().createDispatched(3);
     private final TruffleInstrument.Env env;
     private final Object enter;
     private final Object exit;
@@ -44,13 +43,7 @@ final class AgentExecutionNode extends ExecutionEventNode {
     AgentExecutionNode(TruffleInstrument.Env env, Object enter, Object exit, EventContextObject ctx) {
         this.env = env;
         this.enter = enter;
-        if (enter != null) {
-            this.enterDispatch = InteropLibrary.getFactory().createDispatched(3);
-        }
         this.exit = exit;
-        if (exit != null) {
-            this.exitDispatch = InteropLibrary.getFactory().createDispatched(3);
-        }
         this.ctx = ctx;
     }
 
@@ -58,7 +51,7 @@ final class AgentExecutionNode extends ExecutionEventNode {
     protected void onEnter(VirtualFrame frame) {
         if (enter != null) {
             try {
-                enterDispatch.execute(enter, ctx, new VariablesObject(env, this, frame));
+                dispatch.execute(enter, ctx, new VariablesObject(env, this, frame));
             } catch (InteropException ex) {
                 throw AgentException.raise(ex);
             }
@@ -69,7 +62,7 @@ final class AgentExecutionNode extends ExecutionEventNode {
     protected void onReturnValue(VirtualFrame frame, Object result) {
         if (exit != null) {
             try {
-                exitDispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
+                dispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
             } catch (InteropException ex) {
                 throw AgentException.raise(ex);
             }
@@ -80,7 +73,7 @@ final class AgentExecutionNode extends ExecutionEventNode {
     protected void onReturnExceptional(VirtualFrame frame, Throwable exception) {
         if (exit != null) {
             try {
-                enterDispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
+                dispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
             } catch (InteropException ex) {
                 throw AgentException.raise(ex);
             }

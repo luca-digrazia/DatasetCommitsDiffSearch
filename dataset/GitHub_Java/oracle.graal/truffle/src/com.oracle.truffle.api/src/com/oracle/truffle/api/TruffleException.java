@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -67,9 +67,7 @@ import com.oracle.truffle.api.source.SourceSection;
  *
  * @since 0.27
  * @see TruffleStackTrace TruffleStackTrace to access the stack trace of an exception.
- * @deprecated Use {@code com.oracle.truffle.api.exception.AbstractTruffleException}.
  */
-@Deprecated
 public interface TruffleException {
 
     /**
@@ -135,8 +133,7 @@ public interface TruffleException {
 
     /**
      * Returns <code>true</code> if this exception indicates that guest language application was
-     * cancelled during its execution. If {@code isCancelled} returns {@code true} languages should
-     * not catch this exception, they must just rethrow it.
+     * cancelled during its execution.
      *
      * @since 0.27
      */
