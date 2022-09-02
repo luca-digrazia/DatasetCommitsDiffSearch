@@ -26,16 +26,23 @@ package org.graalvm.libgraal.jni;
 
 import jdk.vm.ci.services.Services;
 import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.serviceprovider.IsolateUtil;
 import org.graalvm.nativebridge.jni.NativeBridgeSupport;
 
-public class LibGraalNativeBridgeSupport implements NativeBridgeSupport {
+import java.util.concurrent.atomic.AtomicInteger;
+
+public final class LibGraalNativeBridgeSupport implements NativeBridgeSupport {
 
     private static final String JNI_LIBGRAAL_TRACE_LEVEL_PROPERTY_NAME = "JNI_LIBGRAAL_TRACE_LEVEL";
+    private static final int UNINITIALIZED_TRACE_LEVEL = Integer.MIN_VALUE;
 
     private final ThreadLocal<Boolean> inTrace = ThreadLocal.withInitial(() -> false);
 
-    private Integer traceLevel;
+    private final AtomicInteger traceLevel = new AtomicInteger(UNINITIALIZED_TRACE_LEVEL);
+
+    @Override
+    public String getFeatureName() {
+        return "LIBGRAAL";
+    }
 
     @Override
     public boolean isTracingEnabled(int level) {
@@ -43,52 +50,39 @@ public class LibGraalNativeBridgeSupport implements NativeBridgeSupport {
     }
 
     @Override
-    public void trace(int level, String format, Object... args) {
-        if (traceLevel() >= level) {
-            // Prevents nested tracing of org.graalvm.nativebridge.jni.JNI calls originated from
-            // this method.
-            // The TruffleCompilerImpl redirects the TTY using a TTY.Filter to the
-            // TruffleCompilerRuntime#log(). In libgraal the HSTruffleCompilerRuntime#log() uses a
-            // FromLibGraalCalls#callVoid() to do the org.graalvm.nativebridge.jni.JNI call to the
-            // GraalTruffleRuntime#log(). The
-            // FromLibGraalCalls#callVoid() also traces the org.graalvm.nativebridge.jni.JNI call by
-            // calling trace(). The nested
-            // trace call should be ignored.
-            if (!inTrace.get()) {
-                inTrace.set(true);
-                try {
-                    JNILibGraalScope<?> scope = JNILibGraalScope.scopeOrNull();
-                    String indent = scope == null ? "" : new String(new char[2 + (scope.depth() * 2)]).replace('\0', ' ');
-                    String prefix = "[" + IsolateUtil.getIsolateID() + ":" + Thread.currentThread().getName() + "]";
-                    TTY.printf(prefix + indent + format + "%n", args);
-                } finally {
-                    inTrace.remove();
-                }
+    public void trace(String message) {
+        // Prevents nested tracing of JNI calls originated from this method.
+        // The TruffleCompilerImpl redirects the TTY using a TTY.Filter to the
+        // TruffleCompilerRuntime#log(). In libgraal the HSTruffleCompilerRuntime#log() uses a
+        // FromLibGraalCalls#callVoid() to do the JNI call to the GraalTruffleRuntime#log().
+        // The FromLibGraalCalls#callVoid() also traces the JNI call by calling trace().
+        // The nested trace call should be ignored.
+        if (!inTrace.get()) {
+            inTrace.set(true);
+            try {
+                TTY.println(message);
+            } finally {
+                inTrace.remove();
             }
-        }
-    }
-
-    @Override
-    public void trace(int level, Throwable throwable) {
-        if (traceLevel() >= level) {
-            throwable.printStackTrace(TTY.out);
         }
     }
 
     private int traceLevel() {
-        if (traceLevel == null) {
+        int res = traceLevel.get();
+        if (res == UNINITIALIZED_TRACE_LEVEL) {
             String var = Services.getSavedProperties().get(JNI_LIBGRAAL_TRACE_LEVEL_PROPERTY_NAME);
             if (var != null) {
                 try {
-                    traceLevel = Integer.parseInt(var);
+                    res = Integer.parseInt(var);
                 } catch (NumberFormatException e) {
                     TTY.printf("Invalid value for %s: %s%n", JNI_LIBGRAAL_TRACE_LEVEL_PROPERTY_NAME, e);
-                    traceLevel = 0;
+                    res = 0;
                 }
             } else {
-                traceLevel = 0;
+                res = 0;
             }
+            traceLevel.set(res);
         }
-        return traceLevel;
+        return res;
     }
 }

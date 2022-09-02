@@ -25,6 +25,8 @@
 package org.graalvm.libgraal.jni;
 
 import org.graalvm.nativebridge.jni.JNI;
+import org.graalvm.nativebridge.jni.JNI.JNIEnv;
+import org.graalvm.nativebridge.jni.JNIMethodScope;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
@@ -34,9 +36,19 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.EnumSet;
+import java.util.Objects;
 import java.util.Set;
 
-public class LibGraalUtil {
+public final class LibGraalUtil {
+
+    private LibGraalUtil() {
+    }
+
+    public static JNIMethodScope openScope(Class<?> entryPointClass, Enum<?> id, JNIEnv env) {
+        Objects.requireNonNull(id, "Id must be non null.");
+        return new JNIMethodScope(entryPointClass.getSimpleName() + "::" + id, env);
+    }
+
     /*----------------- CHECKING ------------------*/
 
     /**
@@ -59,7 +71,7 @@ public class LibGraalUtil {
                     check(ep != null, "Method annotated by %s must also be annotated by %s: %s", annotationClass, CEntryPoint.class, libGraalMethod);
                     String name = ep.name();
                     String prefix = "Java_" + toLibGraalCallsClass.getName().replace('.', '_') + '_';
-                    check(name.startsWith(prefix), "Method must be a org.graalvm.nativebridge.jni.JNI entry point for a method in %s: %s", toLibGraalCallsClass, libGraalMethod);
+                    check(name.startsWith(prefix), "Method must be a JNI entry point for a method in %s: %s", toLibGraalCallsClass, libGraalMethod);
                     name = name.substring(prefix.length());
                     Method hsMethod = findHSMethod(toLibGraalCallsClass, name, annotationClass);
                     Class<?>[] libGraalParameters = libGraalMethod.getParameterTypes();

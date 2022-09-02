@@ -98,16 +98,18 @@ import org.graalvm.compiler.truffle.compiler.substitutions.GraphBuilderInvocatio
 import org.graalvm.compiler.truffle.compiler.substitutions.GraphDecoderInvocationPluginProvider;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.libgraal.LibGraal;
-import org.graalvm.libgraal.jni.LibGraalNativeBridgeSupport;
-import org.graalvm.nativebridge.jni.JNI;
 import org.graalvm.nativebridge.jni.JNIExceptionWrapper;
 import org.graalvm.nativebridge.jni.JNIMethodScope;
+import org.graalvm.libgraal.jni.LibGraalNativeBridgeSupport;
+import org.graalvm.nativebridge.jni.JNI;
 import org.graalvm.nativebridge.jni.JNIUtil;
 import org.graalvm.nativebridge.jni.NativeBridgeSupport;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.VMRuntime;
+import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
 import org.graalvm.word.Pointer;
@@ -118,7 +120,6 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.RuntimeAssertionsSupport;
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
@@ -134,6 +135,7 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.option.XOptions;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.UserError.UserException;
 import com.oracle.svm.core.util.VMError;
@@ -582,7 +584,7 @@ final class Target_jdk_vm_ci_hotspot_SharedLibraryJVMCIReflection {
 
     @Substitute
     static Object convertUnknownValue(Object object) {
-        return object;
+        return KnownIntrinsics.convertUnknownValue(object, Object.class);
     }
 
     // Annotations are currently unsupported in libgraal. These substitutions will turn their use
@@ -777,7 +779,7 @@ final class Target_org_graalvm_compiler_truffle_common_TruffleCompilerRuntimeIns
 final class Target_org_graalvm_compiler_core_GraalServiceThread {
     @Substitute()
     void beforeRun() {
-        GraalServiceThread thread = SubstrateUtil.cast(this, GraalServiceThread.class);
+        GraalServiceThread thread = KnownIntrinsics.convertUnknownValue(this, GraalServiceThread.class);
         if (!LibGraal.attachCurrentThread(thread.isDaemon(), null)) {
             throw new InternalError("Couldn't attach to HotSpot runtime");
         }
@@ -798,7 +800,13 @@ final class Target_org_graalvm_compiler_core_GraalCompiler {
         if (LibGraalOptions.CrashAtIsFatal.getValue()) {
             LogHandler handler = ImageSingletons.lookup(LogHandler.class);
             if (handler instanceof FunctionPointerLogHandler) {
-                VMError.shouldNotReachHere(crashMessage);
+                FunctionPointerLogHandler fpHandler = (FunctionPointerLogHandler) handler;
+                if (fpHandler.getFatalErrorFunctionPointer().isNonNull()) {
+                    try (CCharPointerHolder holder = CTypeConversion.toCString(crashMessage)) {
+                        handler.log(holder.get(), WordFactory.unsigned(crashMessage.getBytes().length));
+                    }
+                    handler.fatalError();
+                }
             }
             // If changing this message, update the test for it in mx_vm_gate.py
             System.out.println("CrashAtIsFatal: no fatalError function pointer installed");
