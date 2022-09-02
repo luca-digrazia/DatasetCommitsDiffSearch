@@ -160,8 +160,7 @@ public class CAnnotationProcessor {
         if (Platform.includedIn(Platform.LINUX.class)) {
             options.addAll(LibCBase.singleton().getAdditionalQueryCodeCompilerOptions());
         }
-        boolean forceEnable = !Boolean.getBoolean("remove me before merge");
-        compilerInvoker.compileAndParseError(SubstrateUtil.assertionsEnabled() || forceEnable, options, queryFile, binary, this::reportCompilerError, nativeLibs.debug);
+        compilerInvoker.compileAndParseError(SubstrateUtil.assertionsEnabled() || true, options, queryFile, binary, this::reportCompilerError, nativeLibs.debug);
         return binary;
     }
 
