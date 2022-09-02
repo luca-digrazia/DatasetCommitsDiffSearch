@@ -559,7 +559,7 @@ public class GraphDecoder {
         }
     }
 
-    public static final boolean DUMP_DURING_FIXED_NODE_PROCESSING = false;
+    public static final boolean DUMP_DURING_FIXED_NODE_PROCESSING = true;
 
     protected LoopScope processNextNode(MethodScope methodScope, LoopScope loopScope) {
         int nodeOrderId = loopScope.nodesToProcess.nextSetBit(0);
