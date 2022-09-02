@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,32 +29,24 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
-public abstract class DebugExprSizeofNode extends LLVMExpressionNode {
+public class DebugExprSizeofNode extends LLVMExpressionNode {
 
-    private final long typeSize;
+    private final int typeSize;
 
-    public static DebugExprSizeofNode create(DebugExprType type) throws TypeOverflowException {
-        DataLayout datalayout = LLVMLanguage.getContext().getLibsulongDataLayout();
-        return DebugExprSizeofNodeGen.create(type.getLLVMRuntimeType().getSize(datalayout));
+    public DebugExprSizeofNode(DebugExprType type) {
+        DataLayout datalayout = getDataLayout();
+        this.typeSize = type.getLLVMRuntimeType().getSize(datalayout);
     }
 
-    DebugExprSizeofNode(long typeSize) {
-        this.typeSize = typeSize;
-    }
-
-    @Specialization
-    public long getSize() {
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
         if (typeSize < 0) {
-            CompilerDirectives.transferToInterpreter();
             throw DebugExprException.create(this, "Error while finding type size");
         }
         return typeSize;
