@@ -48,11 +48,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.RootNode;
+import org.graalvm.wasm.WasmType;
 import org.graalvm.wasm.WasmCodeEntry;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.WasmType;
 import org.graalvm.wasm.WasmVoidResult;
 import org.graalvm.wasm.exception.Failure;
 import org.graalvm.wasm.exception.WasmException;
@@ -166,16 +166,16 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
             byte type = body.codeEntry().localType(i);
             switch (type) {
                 case WasmType.I32_TYPE:
-                    pushInt(stacklocals, i, (int) arg);
+                    stacklocals[i] = (int) arg;
                     break;
                 case WasmType.I64_TYPE:
-                    push(stacklocals, i, (long) arg);
+                    stacklocals[i] = (long) arg;
                     break;
                 case WasmType.F32_TYPE:
-                    pushFloat(stacklocals, i, (float) arg);
+                    stacklocals[i] = Float.floatToRawIntBits((float) arg);
                     break;
                 case WasmType.F64_TYPE:
-                    pushDouble(stacklocals, i, (double) arg);
+                    stacklocals[i] = Double.doubleToRawLongBits((double) arg);
                     break;
             }
         }

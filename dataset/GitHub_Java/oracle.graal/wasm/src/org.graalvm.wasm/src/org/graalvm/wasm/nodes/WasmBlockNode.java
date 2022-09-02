@@ -56,6 +56,7 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
+import org.graalvm.wasm.Assert;
 import org.graalvm.wasm.BinaryStreamParser;
 import org.graalvm.wasm.SymbolTable;
 import org.graalvm.wasm.WasmCodeEntry;
@@ -69,10 +70,8 @@ import org.graalvm.wasm.WasmType;
 import org.graalvm.wasm.exception.Failure;
 import org.graalvm.wasm.exception.WasmException;
 import org.graalvm.wasm.memory.WasmMemory;
+import org.graalvm.wasm.memory.WasmMemoryException;
 
-import static org.graalvm.wasm.BinaryStreamParser.length;
-import static org.graalvm.wasm.BinaryStreamParser.value;
-import static org.graalvm.wasm.WasmUtil.addExactUnsigned;
 import static org.graalvm.wasm.constants.Instructions.BLOCK;
 import static org.graalvm.wasm.constants.Instructions.BR;
 import static org.graalvm.wasm.constants.Instructions.BR_IF;
@@ -268,36 +267,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private ContextReference<WasmContext> rawContextReference;
     @Children private Node[] children;
 
-    private static final float MIN_FLOAT_TRUNCATABLE_TO_INT = Integer.MIN_VALUE;
-    private static final float MAX_FLOAT_TRUNCATABLE_TO_INT = 2147483520f;
-    private static final float MIN_FLOAT_TRUNCATABLE_TO_U_INT = -0.99999994f;
-    private static final float MAX_FLOAT_TRUNCATABLE_TO_U_INT = 4294967040f;
-
-    private static final double MIN_DOUBLE_TRUNCATABLE_TO_INT = Integer.MIN_VALUE;
-    private static final double MAX_DOUBLE_TRUNCATABLE_TO_INT = 2147483647.9999998;
-    private static final double MIN_DOUBLE_TRUNCATABLE_TO_U_INT = -0.9999999999999999;
-    private static final double MAX_DOUBLE_TRUNCATABLE_TO_U_INT = 4294967295.9999995;
-
-    private static final float MIN_FLOAT_TRUNCATABLE_TO_LONG = Long.MIN_VALUE;
-    private static final float MAX_FLOAT_TRUNCATABLE_TO_LONG = 9223371487098961900.0f;
-    private static final float MIN_FLOAT_TRUNCATABLE_TO_U_LONG = MIN_FLOAT_TRUNCATABLE_TO_U_INT;
-    private static final float MAX_FLOAT_TRUNCATABLE_TO_U_LONG = 18446742974197924000.0f;
-
-    private static final double MIN_DOUBLE_TRUNCATABLE_TO_LONG = Long.MIN_VALUE;
-    private static final double MAX_DOUBLE_TRUNCATABLE_TO_LONG = 9223372036854774800.0;
-    private static final double MIN_DOUBLE_TRUNCATABLE_TO_U_LONG = MIN_DOUBLE_TRUNCATABLE_TO_U_INT;
-    private static final double MAX_DOUBLE_TRUNCATABLE_TO_U_LONG = 18446744073709550000.0;
-
-    private static final long FLOAT_MANTISSA_WIDTH = 23;
-    private static final long FLOAT_MANTISSA_MASK = 0b00000000_01111111_11111111_11111111;
-    private static final long FLOAT_EXPONENT_MASK = 0b01111111_10000000_00000000_00000000;
-    private static final long FLOAT_EXPONENT_BIAS = 127;
-
-    private static final long DOUBLE_MANTISSA_WIDTH = 52;
-    private static final long DOUBLE_MANTISSA_MASK = 0b00000000_00001111_11111111_11111111_11111111_11111111_11111111_11111111L;
-    private static final long DOUBLE_EXPONENT_MASK = 0b01111111_11110000_00000000_00000000_00000000_00000000_00000000_00000000L;
-    private static final long DOUBLE_EXPONENT_BIAS = 1023;
-
     public WasmBlockNode(WasmInstance wasmInstance, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialIntConstantOffset,
                     int initialBranchTableOffset, int initialProfileOffset) {
         super(wasmInstance, codeEntry, -1);
@@ -371,7 +340,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     @BytecodeInterpreterSwitch
     @BytecodeInterpreterSwitchBoundary
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
-    @SuppressWarnings("UnusedAssignment")
     public int execute(WasmContext context, VirtualFrame frame, long[] stacklocals) {
         final WasmCodeEntry codeEntry = codeEntry();
         final int numLocals = codeEntry.numLocals();
@@ -399,7 +367,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 CompilerAsserts.partialEvaluationConstant(offset);
                 switch (opcode) {
                     case UNREACHABLE:
-                        throw WasmException.create(Failure.UNREACHABLE, this);
+                        throw WasmException.create(Failure.UNSPECIFIED_TRAP, this, "unreachable");
                     case NOP:
                         break;
                     case BLOCK: {
@@ -474,8 +442,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case BR: {
                         // region Load LEB128 Unsigned32 -> unwindCounter
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int unwindCounter = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int unwindCounter = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
 
@@ -499,8 +467,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         stackPointer--;
                         // region Load LEB128 Unsigned32 -> unwindCounter
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int unwindCounter = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int unwindCounter = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
                         // region Load int continuationStackPointer
@@ -566,8 +534,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case CALL: {
                         // region Load LEB128 Unsigned32 -> functionIndex
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int functionIndex = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int functionIndex = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
 
@@ -624,13 +592,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         final Object[] elements = table.elements();
                         final int elementIndex = popInt(stacklocals, stackPointer);
                         if (elementIndex < 0 || elementIndex >= elements.length) {
-                            throw WasmException.format(Failure.UNDEFINED_ELEMENT, this, "Element index '%d' out of table bounds.", elementIndex);
+                            throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Element index '%d' out of table bounds.", elementIndex);
                         }
                         // Currently, table elements may only be functions.
                         // We can add a check here when this changes in the future.
                         final Object element = elements[elementIndex];
                         if (element == null) {
-                            throw WasmException.format(Failure.UNINITIALIZED_ELEMENT, this, "Table element at index %d is uninitialized.", elementIndex);
+                            throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Table element at index %d is uninitialized.", elementIndex);
                         }
                         final WasmFunction function;
                         final CallTarget target;
@@ -645,21 +613,23 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         // Extract the function type index.
                         // region Load LEB128 Unsigned32 -> expectedFunctionTypeIndex
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int expectedFunctionTypeIndex = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int expectedFunctionTypeIndex = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
-
                         int expectedTypeEquivalenceClass = symtab.equivalenceClass(expectedFunctionTypeIndex);
-
                         // Consume the ZERO_TABLE constant at the end of the CALL_INDIRECT
                         // instruction.
+                        // TODO: Add validation that this is really zero.
                         offset += 1;
 
                         // Validate that the function type matches the expected type.
                         if (function != null && expectedTypeEquivalenceClass != function.typeEquivalenceClass()) {
-                            throw WasmException.format(Failure.INDIRECT_CALL_TYPE__MISMATCH, this,
-                                            "Actual (type %d of function %s) and expected (type %d in module %s) types differ in the indirect call.",
+                            // TODO: This check may be too rigorous, as the WebAssembly
+                            // specification seems to allow multiple definitions
+                            // of the same type.
+                            // We should refine the check.
+                            throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Actual (type %d of function %s) and expected (type %d in module %s) types differ in the indirect call.",
                                             function.typeIndex(), function.name(), expectedFunctionTypeIndex, instance().name());
                         }
 
@@ -726,8 +696,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case LOCAL_GET: {
                         // region Load LEB128 Unsigned32 -> index
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int index = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int index = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
                         local_get(stacklocals, stackPointer, index);
@@ -737,8 +707,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case LOCAL_SET: {
                         // region Load LEB128 Unsigned32 -> index
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int index = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int index = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
                         stackPointer--;
@@ -748,8 +718,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case LOCAL_TEE: {
                         // region Load LEB128 Unsigned32 -> index
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int index = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int index = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
                         local_tee(stacklocals, stackPointer - 1, index);
@@ -758,8 +728,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case GLOBAL_GET: {
                         // region Load LEB128 Unsigned32 -> index
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int index = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int index = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
                         global_get(context, stacklocals, stackPointer, index);
@@ -769,8 +739,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case GLOBAL_SET: {
                         // region Load LEB128 Unsigned32 -> index
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int index = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int index = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
                         stackPointer--;
@@ -784,18 +754,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
                         // region Load LEB128 Unsigned32 -> memOffset
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int memOffset = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int memOffset = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
 
                         int baseAddress = popInt(stacklocals, stackPointer - 1);
-                        int address;
-                        try {
-                            address = addExactUnsigned(memOffset, baseAddress);
-                        } catch (ArithmeticException e) {
-                            throw WasmException.create(Failure.OUT_OF_BOUNDS_MEMORY_ACCESS, this);
-                        }
+                        int address = baseAddress + memOffset;
 
                         int value = memory.load_i32(this, address);
                         pushInt(stacklocals, stackPointer - 1, value);
@@ -820,8 +785,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
                         // region Load LEB128 Unsigned32 -> memOffset
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int memOffset = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int memOffset = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
 
@@ -843,8 +808,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
                         // region Load LEB128 Unsigned32 -> memOffset
                         long valueLength = unsignedIntConstantAndLength(data, offset);
-                        int memOffset = value(valueLength);
-                        int offsetDelta = length(valueLength);
+                        int memOffset = (int) loBits(valueLength);
+                        int offsetDelta = hiBits(valueLength);
                         offset += offsetDelta;
                         // endregion
 
@@ -856,7 +821,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case MEMORY_SIZE: {
                         // Skip the 0x00 constant.
                         offset++;
-                        int pageSize = memory.size();
+                        int pageSize = memory.pageSize();
                         pushInt(stacklocals, stackPointer, pageSize);
                         stackPointer++;
                         break;
@@ -866,7 +831,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         offset++;
                         stackPointer--;
                         int extraSize = popInt(stacklocals, stackPointer);
-                        int pageSize = memory.size();
+                        int pageSize = memory.pageSize();
                         if (memory.grow(extraSize)) {
                             pushInt(stacklocals, stackPointer, pageSize);
                             stackPointer++;
@@ -879,10 +844,10 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case I32_CONST: {
                         // region Load LEB128 Signed32 -> value
                         long valueAndLength = signedIntConstantAndLength(data, offset);
-                        int offsetDelta = length(valueAndLength);
+                        int offsetDelta = hiBits(valueAndLength);
                         offset += offsetDelta;
                         // endregion
-                        pushInt(stacklocals, stackPointer, value(valueAndLength));
+                        push(stacklocals, stackPointer, loBits(valueAndLength));
                         stackPointer++;
                         break;
                     }
@@ -1372,7 +1337,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         // for these instructions.
                         break;
                     default:
-                        throw CompilerDirectives.shouldNotReachHere();
+                        throw createUnknownOpcodeError(opcode, "Unknown opcode: 0x%02X", Failure.UNSPECIFIED_MALFORMED);
                 }
             }
         } catch (ArithmeticException e) {
@@ -1408,148 +1373,176 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         return callNode.execute(target, args);
     }
 
-    private void load(WasmMemory memory, long[] stack, int stackPointer, int opcode, int memOffset) {
-        final int baseAddress = popInt(stack, stackPointer);
-        final int address;
-        try {
-            address = addExactUnsigned(memOffset, baseAddress);
-        } catch (ArithmeticException e) {
-            throw WasmException.create(Failure.OUT_OF_BOUNDS_MEMORY_ACCESS, this);
-        }
+    private static long loBits(long bits) {
+        return bits & 0xffff_ffffL;
+    }
 
-        switch (opcode) {
-            case I32_LOAD: {
-                final int value = memory.load_i32(this, address);
-                pushInt(stack, stackPointer, value);
-                break;
+    private static int hiBits(long bits) {
+        return (int) ((bits >>> 32) & 0xffff_ffffL);
+    }
+
+    @BytecodeInterpreterSwitchBoundary
+    private static RuntimeException createUnknownOpcodeError(int opcode, String s, Failure failure) {
+        return Assert.fail(Assert.format(s, opcode), failure);
+    }
+
+    private void load(WasmMemory memory, long[] stack, int stackPointer, int opcode, int memOffset) {
+        int baseAddress = popInt(stack, stackPointer);
+        int address = baseAddress + memOffset;
+
+        try {
+            switch (opcode) {
+                case I32_LOAD: {
+                    int value = memory.load_i32(this, address);
+                    pushInt(stack, stackPointer, value);
+                    break;
+                }
+                case I64_LOAD: {
+                    long value = memory.load_i64(this, address);
+                    push(stack, stackPointer, value);
+                    break;
+                }
+                case F32_LOAD: {
+                    float value = memory.load_f32(this, address);
+                    pushFloat(stack, stackPointer, value);
+                    break;
+                }
+                case F64_LOAD: {
+                    double value = memory.load_f64(this, address);
+                    pushDouble(stack, stackPointer, value);
+                    break;
+                }
+                case I32_LOAD8_S: {
+                    int value = memory.load_i32_8s(this, address);
+                    pushInt(stack, stackPointer, value);
+                    break;
+                }
+                case I32_LOAD8_U: {
+                    int value = memory.load_i32_8u(this, address);
+                    pushInt(stack, stackPointer, value);
+                    break;
+                }
+                case I32_LOAD16_S: {
+                    int value = memory.load_i32_16s(this, address);
+                    pushInt(stack, stackPointer, value);
+                    break;
+                }
+                case I32_LOAD16_U: {
+                    int value = memory.load_i32_16u(this, address);
+                    pushInt(stack, stackPointer, value);
+                    break;
+                }
+                case I64_LOAD8_S: {
+                    long value = memory.load_i64_8s(this, address);
+                    push(stack, stackPointer, value);
+                    break;
+                }
+                case I64_LOAD8_U: {
+                    long value = memory.load_i64_8u(this, address);
+                    push(stack, stackPointer, value);
+                    break;
+                }
+                case I64_LOAD16_S: {
+                    long value = memory.load_i64_16s(this, address);
+                    push(stack, stackPointer, value);
+                    break;
+                }
+                case I64_LOAD16_U: {
+                    long value = memory.load_i64_16u(this, address);
+                    push(stack, stackPointer, value);
+                    break;
+                }
+                case I64_LOAD32_S: {
+                    long value = memory.load_i64_32s(this, address);
+                    push(stack, stackPointer, value);
+                    break;
+                }
+                case I64_LOAD32_U: {
+                    long value = memory.load_i64_32u(this, address);
+                    push(stack, stackPointer, value);
+                    break;
+                }
+                default: {
+                    throw formatException("Unknown load opcode: %d", opcode);
+                }
             }
-            case I64_LOAD: {
-                final long value = memory.load_i64(this, address);
-                push(stack, stackPointer, value);
-                break;
-            }
-            case F32_LOAD: {
-                final float value = memory.load_f32(this, address);
-                pushFloat(stack, stackPointer, value);
-                break;
-            }
-            case F64_LOAD: {
-                final double value = memory.load_f64(this, address);
-                pushDouble(stack, stackPointer, value);
-                break;
-            }
-            case I32_LOAD8_S: {
-                final int value = memory.load_i32_8s(this, address);
-                pushInt(stack, stackPointer, value);
-                break;
-            }
-            case I32_LOAD8_U: {
-                final int value = memory.load_i32_8u(this, address);
-                pushInt(stack, stackPointer, value);
-                break;
-            }
-            case I32_LOAD16_S: {
-                final int value = memory.load_i32_16s(this, address);
-                pushInt(stack, stackPointer, value);
-                break;
-            }
-            case I32_LOAD16_U: {
-                final int value = memory.load_i32_16u(this, address);
-                pushInt(stack, stackPointer, value);
-                break;
-            }
-            case I64_LOAD8_S: {
-                final long value = memory.load_i64_8s(this, address);
-                push(stack, stackPointer, value);
-                break;
-            }
-            case I64_LOAD8_U: {
-                final long value = memory.load_i64_8u(this, address);
-                push(stack, stackPointer, value);
-                break;
-            }
-            case I64_LOAD16_S: {
-                final long value = memory.load_i64_16s(this, address);
-                push(stack, stackPointer, value);
-                break;
-            }
-            case I64_LOAD16_U: {
-                final long value = memory.load_i64_16u(this, address);
-                push(stack, stackPointer, value);
-                break;
-            }
-            case I64_LOAD32_S: {
-                final long value = memory.load_i64_32s(this, address);
-                push(stack, stackPointer, value);
-                break;
-            }
-            case I64_LOAD32_U: {
-                final long value = memory.load_i64_32u(this, address);
-                push(stack, stackPointer, value);
-                break;
-            }
-            default:
-                throw CompilerDirectives.shouldNotReachHere();
+        } catch (WasmMemoryException e) {
+            throw WasmException.create(Failure.UNSPECIFIED_TRAP, this, "memory address out-of-bounds");
         }
     }
 
     private void store(WasmMemory memory, long[] stack, int stackPointer, int opcode, int memOffset) {
-        final int baseAddress = popInt(stack, stackPointer - 2);
-        int address;
         try {
-            address = addExactUnsigned(memOffset, baseAddress);
-        } catch (ArithmeticException e) {
-            throw WasmException.create(Failure.OUT_OF_BOUNDS_MEMORY_ACCESS, this);
-        }
-
-        switch (opcode) {
-            case I32_STORE: {
-                final int value = popInt(stack, stackPointer - 1);
-                memory.store_i32(this, address, value);
-                break;
+            switch (opcode) {
+                case I32_STORE: {
+                    int value = popInt(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_i32(this, address, value);
+                    break;
+                }
+                case I64_STORE: {
+                    long value = pop(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_i64(this, address, value);
+                    break;
+                }
+                case F32_STORE: {
+                    float value = popAsFloat(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_f32(this, address, value);
+                    break;
+                }
+                case F64_STORE: {
+                    double value = popAsDouble(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_f64(this, address, value);
+                    break;
+                }
+                case I32_STORE_8: {
+                    int value = popInt(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_i32_8(this, address, (byte) value);
+                    break;
+                }
+                case I32_STORE_16: {
+                    int value = popInt(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_i32_16(this, address, (short) value);
+                    break;
+                }
+                case I64_STORE_8: {
+                    long value = pop(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_i64_8(this, address, (byte) value);
+                    break;
+                }
+                case I64_STORE_16: {
+                    long value = pop(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_i64_16(this, address, (short) value);
+                    break;
+                }
+                case I64_STORE_32: {
+                    long value = pop(stack, stackPointer - 1);
+                    int baseAddress = popInt(stack, stackPointer - 2);
+                    int address = baseAddress + memOffset;
+                    memory.store_i64_32(this, address, (int) value);
+                    break;
+                }
+                default: {
+                    throw formatException("Unknown store opcode: %d", opcode);
+                }
             }
-            case I64_STORE: {
-                final long value = pop(stack, stackPointer - 1);
-                memory.store_i64(this, address, value);
-                break;
-            }
-            case F32_STORE: {
-                final float value = popAsFloat(stack, stackPointer - 1);
-                memory.store_f32(this, address, value);
-                break;
-            }
-            case F64_STORE: {
-                final double value = popAsDouble(stack, stackPointer - 1);
-                memory.store_f64(this, address, value);
-                break;
-            }
-            case I32_STORE_8: {
-                final int value = popInt(stack, stackPointer - 1);
-                memory.store_i32_8(this, address, (byte) value);
-                break;
-            }
-            case I32_STORE_16: {
-                final int value = popInt(stack, stackPointer - 1);
-                memory.store_i32_16(this, address, (short) value);
-                break;
-            }
-            case I64_STORE_8: {
-                final long value = pop(stack, stackPointer - 1);
-                memory.store_i64_8(this, address, (byte) value);
-                break;
-            }
-            case I64_STORE_16: {
-                final long value = pop(stack, stackPointer - 1);
-                memory.store_i64_16(this, address, (short) value);
-                break;
-            }
-            case I64_STORE_32: {
-                final int value = popInt(stack, stackPointer - 1);
-                memory.store_i64_32(this, address, value);
-                break;
-            }
-            default:
-                throw CompilerDirectives.shouldNotReachHere();
+        } catch (WasmMemoryException e) {
+            throw WasmException.create(Failure.UNSPECIFIED_TRAP, this, "memory address out-of-bounds");
         }
     }
 
@@ -1777,7 +1770,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 f64_promote_f32(stack, stackPointer);
                 break;
             default:
-                throw CompilerDirectives.shouldNotReachHere();
+                createUnknownOpcodeError(opcode, "Unexpected opcode: 0x%02X", Failure.UNSPECIFIED_INTERNAL);
         }
     }
 
@@ -2023,7 +2016,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 f64_copysign(stack, stackPointer);
                 break;
             default:
-                throw CompilerDirectives.shouldNotReachHere();
+                createUnknownOpcodeError(opcode, "Unexpected opcode: 0x%02X", Failure.UNSPECIFIED_INTERNAL);
         }
     }
 
@@ -2659,47 +2652,24 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         pushInt(stack, stackPointer - 1, result);
     }
 
-    private void i32_trunc_f32_s(long[] stack, int stackPointer) {
-        final float x = popAsFloat(stack, stackPointer - 1);
-        if (Float.isNaN(x)) {
-            throw WasmException.create(Failure.INVALID_CONVERSION_TO_INT);
-        } else if (x < MIN_FLOAT_TRUNCATABLE_TO_INT || x > MAX_FLOAT_TRUNCATABLE_TO_INT) {
-            throw WasmException.create(Failure.INT_OVERFLOW);
-        }
-        final int result = (int) x;
-        pushInt(stack, stackPointer - 1, result);
+    private void i32_trunc_f32_u(long[] stack, int stackPointer) {
+        // TODO(mbovel): fix the i32_trunc_f32_u case.
+        i32_trunc_f32_s(stack, stackPointer);
     }
 
-    private void i32_trunc_f32_u(long[] stack, int stackPointer) {
-        final float x = popAsFloat(stack, stackPointer - 1);
-        if (Float.isNaN(x)) {
-            throw WasmException.create(Failure.INVALID_CONVERSION_TO_INT);
-        } else if (x < MIN_FLOAT_TRUNCATABLE_TO_U_INT || x > MAX_FLOAT_TRUNCATABLE_TO_U_INT) {
-            throw WasmException.create(Failure.INT_OVERFLOW);
-        }
-        final int result = (int)(long) x;
+    private void i32_trunc_f32_s(long[] stack, int stackPointer) {
+        float x = popAsFloat(stack, stackPointer - 1);
+        int result = (int) x;
         pushInt(stack, stackPointer - 1, result);
     }
 
     private void i32_trunc_f64_s(long[] stack, int stackPointer) {
-        final double x = popAsDouble(stack, stackPointer - 1);
-        if (Double.isNaN(x)) {
-            throw WasmException.create(Failure.INVALID_CONVERSION_TO_INT);
-        } else if (x < MIN_DOUBLE_TRUNCATABLE_TO_INT || x > MAX_DOUBLE_TRUNCATABLE_TO_INT) {
-            throw WasmException.create(Failure.INT_OVERFLOW);
-        }
-        final int result = (int) x;
-        pushInt(stack, stackPointer - 1, result);
+        i32_trunc_f64_u(stack, stackPointer);
     }
 
     private void i32_trunc_f64_u(long[] stack, int stackPointer) {
-        final double x = popAsDouble(stack, stackPointer - 1);
-        if (Double.isNaN(x)) {
-            throw WasmException.create(Failure.INVALID_CONVERSION_TO_INT);
-        } else if (x < MIN_DOUBLE_TRUNCATABLE_TO_U_INT || x > MAX_DOUBLE_TRUNCATABLE_TO_U_INT) {
-            throw WasmException.create(Failure.INT_OVERFLOW);
-        }
-        final int result = (int)(long) x;
+        double x = popAsDouble(stack, stackPointer - 1);
+        int result = (int) x;
         pushInt(stack, stackPointer - 1, result);
     }
 
@@ -2716,66 +2686,23 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     private void i64_trunc_f32_s(long[] stack, int stackPointer) {
-        final float x = popAsFloat(stack, stackPointer - 1);
-        if (Float.isNaN(x)) {
-            throw WasmException.create(Failure.INVALID_CONVERSION_TO_INT);
-        } else if (x < MIN_FLOAT_TRUNCATABLE_TO_LONG || x > MAX_FLOAT_TRUNCATABLE_TO_LONG) {
-            throw WasmException.create(Failure.INT_OVERFLOW);
-        }
-        final long result = (long) x;
+        float x = popAsFloat(stack, stackPointer - 1);
+        long result = (long) x;
         push(stack, stackPointer - 1, result);
     }
 
     private void i64_trunc_f32_u(long[] stack, int stackPointer) {
-        final float x = popAsFloat(stack, stackPointer - 1);
-        if (Float.isNaN(x)) {
-            throw WasmException.create(Failure.INVALID_CONVERSION_TO_INT);
-        } else if (x < MIN_FLOAT_TRUNCATABLE_TO_U_LONG || x > MAX_FLOAT_TRUNCATABLE_TO_U_LONG) {
-            throw WasmException.create(Failure.INT_OVERFLOW);
-        }
-        final long xBits = Float.floatToRawIntBits(x);
-        final long shift = ((xBits & FLOAT_EXPONENT_MASK) >> FLOAT_MANTISSA_WIDTH) - FLOAT_EXPONENT_BIAS - FLOAT_MANTISSA_WIDTH;
-        final long base = (1 << FLOAT_MANTISSA_WIDTH) | (xBits & FLOAT_MANTISSA_MASK);
-        final long result;
-        if(shift > 0) {
-            result = base << shift;
-        } else if(shift >= -FLOAT_MANTISSA_WIDTH) {
-            result = base >> -shift;
-        } else {
-            result = 0;
-        }
-        push(stack, stackPointer - 1, result);
+        // TODO(mbovel): fix this case.
+        i64_trunc_f32_s(stack, stackPointer);
     }
 
     private void i64_trunc_f64_s(long[] stack, int stackPointer) {
-        final double x = popAsDouble(stack, stackPointer - 1);
-        if (Double.isNaN(x)) {
-            throw WasmException.create(Failure.INVALID_CONVERSION_TO_INT);
-        } else if (x < MIN_DOUBLE_TRUNCATABLE_TO_LONG || x > MAX_DOUBLE_TRUNCATABLE_TO_LONG) {
-            throw WasmException.create(Failure.INT_OVERFLOW);
-        }
-        final long result = (long) x;
-        push(stack, stackPointer - 1, result);
+        i64_trunc_f64_u(stack, stackPointer);
     }
 
     private void i64_trunc_f64_u(long[] stack, int stackPointer) {
-        final double x = popAsDouble(stack, stackPointer - 1);
-        if (Double.isNaN(x)) {
-            throw WasmException.create(Failure.INVALID_CONVERSION_TO_INT);
-        } else if (x < MIN_DOUBLE_TRUNCATABLE_TO_U_LONG || x > MAX_DOUBLE_TRUNCATABLE_TO_U_LONG) {
-            throw WasmException.create(Failure.INT_OVERFLOW);
-        }
-        final long xBits = Double.doubleToRawLongBits(x);
-        final long shift = ((xBits & DOUBLE_EXPONENT_MASK) >> DOUBLE_MANTISSA_WIDTH) - DOUBLE_EXPONENT_BIAS - DOUBLE_MANTISSA_WIDTH;
-        final long base = (1L << DOUBLE_MANTISSA_WIDTH) | (xBits & DOUBLE_MANTISSA_MASK);
-        final long result;
-        if(shift > 0) {
-            result = base << shift;
-        } else if(shift >= -DOUBLE_MANTISSA_WIDTH) {
-            result = base >> -shift;
-        } else {
-            result = 0;
-        }
+        double x = popAsDouble(stack, stackPointer - 1);
+        long result = (long) x;
         push(stack, stackPointer - 1, result);
     }
 
@@ -2910,7 +2837,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     private static long signedLongConstant(byte[] data, int offset) {
-        return BinaryStreamParser.peekSignedInt64(data, offset, false);
+        return BinaryStreamParser.peekSignedInt64(data, offset);
     }
 
     private static int offsetDelta(byte[] data, int offset) {
