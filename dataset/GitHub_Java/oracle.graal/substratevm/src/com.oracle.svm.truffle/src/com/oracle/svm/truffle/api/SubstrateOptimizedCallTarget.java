@@ -66,9 +66,39 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
     }
 
     @Override
+    public void invalidateCode() {
+        /*
+         * FIXME: this method is called from OptimizedCallTarget.invalidate(), which is supposed to
+         * invalidate ANY code representing this call target.
+         *
+         * Therefore, this method should do that instead of invalidating just the most recent code.
+         *
+         * Can this be done by using an assumption for each call target that all its code has a
+         * dependency on?
+         */
+        MembarNode.memoryBarrier(0); // prevent installedCode read from floating across safepoint
+        installedCode.invalidate();
+    }
+
+    @Override
     public boolean isValid() {
-        // Only the most recently installed code can be valid, which entails being an entry point.
         return installedCode.isValid();
+    }
+
+    @Override
+    public boolean isAlive() {
+        /*
+         * FIXME: this method is called from OptimizedCallTarget.invalidate(), which is supposed to
+         * invalidate ANY code representing this call target.
+         *
+         * Therefore, this method should return if there is ANY live code representing this call
+         * target, not just the most recent code.
+         *
+         * Can this be done by using an assumption for each call target that all its code has a
+         * dependency on?
+         */
+        MembarNode.memoryBarrier(0); // prevent installedCode read from floating across safepoint
+        return installedCode.isAlive();
     }
 
     @Override
@@ -116,8 +146,8 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
         if (code == installedCode) {
             return;
         }
-        installedCode.invalidateWithoutDeoptimization();
-        installedCode = code;
+        invalidateCode();
+        this.installedCode = code;
     }
 
     /** Creates the instance for initializing {@link #installedCode} so it is never {@code null}. */
