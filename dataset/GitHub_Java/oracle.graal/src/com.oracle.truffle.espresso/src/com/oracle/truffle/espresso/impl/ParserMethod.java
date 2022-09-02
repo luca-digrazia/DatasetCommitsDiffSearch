@@ -23,63 +23,55 @@
 package com.oracle.truffle.espresso.impl;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.espresso.classfile.Attributes;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.runtime.Attribute;
 
-/**
- * Immutable raw representation of methods in Espresso, this is the output of the parser.
- */
+// Unresolved unlinked.
 public final class ParserMethod {
 
     public static final ParserMethod[] EMPTY_ARRAY = new ParserMethod[0];
 
     private final int flags;
-    private final Symbol<Name> name;
-    private final Symbol<Signature> signature;
+    private final int nameIndex;
+    private final int signatureIndex;
 
     public int getFlags() {
         return flags;
     }
 
-    @CompilationFinal(dimensions = 1) //
-    private final Attribute[] attributes;
+    private final Attributes attributes;
 
     // Shared quickening recipes.
     // Stores BC + arguments in compact form.
     @CompilationFinal(dimensions = 1) //
     private long[] recipes;
 
-    public static ParserMethod create(int flags, Symbol<Name> name, Symbol<Signature> signature, Attribute[] attributes) {
-        return new ParserMethod(flags, name, signature, attributes);
+    public static ParserMethod create(int flags, int nameIndex, int signatureIndex, Attribute[] attributes) {
+        return new ParserMethod(flags, nameIndex, signatureIndex, attributes);
     }
 
-    public Symbol<Name> getName() {
-        return name;
+    public int getNameIndex() {
+        return nameIndex;
     }
 
-    public Symbol<Signature> getSignature() {
-        return signature;
+    public int getSignatureIndex() {
+        return signatureIndex;
     }
 
     public Attribute getAttribute(Symbol<Name> name) {
-        for (Attribute attribute : attributes) {
-            if (name.equals(attribute.getName())) {
-                return attribute;
-            }
-        }
-        return null;
+        return attributes.get(name);
     }
 
     public long[] getRecipes() {
         return recipes;
     }
 
-    ParserMethod(int flags, Symbol<Name> name, Symbol<Signature> signature, Attribute[] attributes) {
+    public ParserMethod(int flags, int nameIndex, int signatureIndex, Attribute[] attributes) {
         this.flags = flags;
-        this.name = name;
-        this.signature = signature;
-        this.attributes = attributes;
+        this.nameIndex = nameIndex;
+        this.signatureIndex = signatureIndex;
+        this.attributes = new Attributes(attributes);
     }
 }
