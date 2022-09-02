@@ -47,12 +47,10 @@ import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.core.CompilationWrapper.ExceptionAction;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.GraalOptions;
-import org.graalvm.compiler.core.common.jfr.JFRProvider;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.debug.DebugContext.Description;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.DebugOptions;
@@ -146,8 +144,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private final DiagnosticsOutputDirectory outputDirectory;
     private final Map<ExceptionAction, Integer> compilationProblemsPerAction;
 
-    private final JFRProvider jfrProvider;
-
     /**
      * @param nameQualifier a qualifier to be added to this runtime's {@linkplain #getName() name}
      * @param compilerConfigurationFactory factory for the compiler configuration
@@ -236,8 +232,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
         runtimeStartTime = System.nanoTime();
         bootstrapJVMCI = config.getFlag("BootstrapJVMCI", Boolean.class);
-
-        this.jfrProvider = GraalServices.loadSingle(JFRProvider.class, false);
     }
 
     /**
@@ -324,11 +318,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     }
 
     @Override
-    public JFRProvider getJfrProvider() {
-        return jfrProvider;
-    }
-
-    @Override
     public GraalHotSpotVMConfig getVMConfig() {
         return config;
     }
@@ -354,7 +343,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
             }
         }
         Description description = new Description(compilable, compilationId.toString(CompilationIdentifier.Verbosity.ID));
-        return new Builder(compilationOptions, factories).globalMetrics(metricValues).description(description).logStream(logStream).build();
+        return DebugContext.create(compilationOptions, description, metricValues, logStream, factories);
     }
 
     @Override
