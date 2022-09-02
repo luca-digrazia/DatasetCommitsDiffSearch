@@ -27,7 +27,6 @@ package com.oracle.svm.core.jdk9.posix;
 import java.io.IOException;
 
 import org.graalvm.compiler.serviceprovider.GraalServices;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -46,7 +45,7 @@ class JavaLangSubstitutionsJDK9OrLaterFeature implements Feature {
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        return !JavaVersionUtil.Java8OrEarlier;
+        return !GraalServices.Java8OrEarlier;
     }
 
     @Override
@@ -63,6 +62,7 @@ final class Target_java_lang_ProcessImpl {
 
     @SuppressWarnings({"static-method"})
     @Substitute
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private int forkAndExec(
                     int mode,
                     byte[] helperpath,
@@ -77,6 +77,7 @@ final class Target_java_lang_ProcessImpl {
     }
 
     @Substitute //
+    @TargetElement(onlyWith = JDK9OrLater.class)
     private static /* native */ void init() {
         throw VMError.unsupportedFeature("JDK9OrLater: Target_java_lang_ProcessImpl.init");
     }

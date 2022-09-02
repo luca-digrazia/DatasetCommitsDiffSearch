@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.core.posix;
 
+import static com.oracle.svm.core.posix.headers.Time.gettimeofday;
+
 import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,38 +39,29 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
+import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.LibCHelper;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.InjectAccessors;
-import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
+import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.Signal;
-import com.oracle.svm.core.posix.headers.Time;
 import com.oracle.svm.core.posix.headers.Time.timeval;
 import com.oracle.svm.core.posix.headers.Time.timezone;
+import com.oracle.svm.core.posix.headers.Unistd;
+import com.oracle.svm.core.posix.headers.Wait;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.PointerUtils;
-import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.RuntimeClassInitialization;
-
-@Platforms({Platform.LINUX_JNI.class, Platform.DARWIN_JNI.class})
-@AutomaticFeature
-class PosixJavaLangSubstituteFeature implements Feature {
-
-    @Override
-    public void duringSetup(DuringSetupAccess access) {
-        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.lang.UNIXProcess"));
-    }
-}
 
 @TargetClass(className = "java.lang.ProcessEnvironment")
 @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
@@ -191,12 +184,12 @@ final class Target_java_lang_ProcessEnvironment_Value {
 }
 
 @TargetClass(className = "java.lang.UNIXProcess", onlyWith = JDK8OrEarlier.class)
-@Platforms({Platform.LINUX_AND_JNI.class, Platform.DARWIN_AND_JNI.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_lang_UNIXProcess {
 
     // The reaper thread pool and thread groups (currently) confuse the analysis, so we launch
     // reaper threads individually (with the only difference being that threads are not recycled)
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class}) @Delete static Executor processReaperExecutor;
+    @Delete static Executor processReaperExecutor;
 
     @Alias int pid;
     @Alias OutputStream stdin;
@@ -213,7 +206,6 @@ final class Target_java_lang_UNIXProcess {
      */
 
     @Substitute
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
     @SuppressWarnings({"unused", "static-method"})
     int forkAndExec(int mode, byte[] helperpath,
                     byte[] file,
@@ -227,7 +219,6 @@ final class Target_java_lang_UNIXProcess {
     }
 
     @Substitute
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
     void initStreams(int[] fds) {
         Object in = Target_java_lang_ProcessBuilder_NullOutputStream.INSTANCE;
         if (fds[0] != -1) {
@@ -277,14 +268,28 @@ final class Target_java_lang_UNIXProcess {
     }
 
     @Substitute
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
     @SuppressWarnings({"static-method"})
     int waitForProcessExit(int ppid) {
-        return PosixUtils.waitForProcessExit(ppid);
+        CIntPointer statusptr = StackValue.get(CIntPointer.class);
+        while (Wait.waitpid(ppid, statusptr, 0) < 0) {
+            if (Errno.errno() == Errno.ECHILD()) {
+                return 0;
+            } else if (Errno.errno() != Errno.EINTR()) {
+                return -1;
+            }
+        }
+
+        int status = statusptr.read();
+        if (Wait.WIFEXITED(status)) {
+            return Wait.WEXITSTATUS(status);
+        } else if (Wait.WIFSIGNALED(status)) {
+            // Exited because of signal: return 0x80 + signal number like shells do
+            return 0x80 + Wait.WTERMSIG(status);
+        }
+        return status;
     }
 
     @Substitute
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
     static void destroyProcess(int ppid, boolean force) {
         int sig = force ? Signal.SignalEnum.SIGKILL.getCValue() : Signal.SignalEnum.SIGTERM.getCValue();
         Signal.kill(ppid, sig);
@@ -326,7 +331,7 @@ final class Target_java_lang_ProcessBuilder_NullOutputStream {
 }
 
 @TargetClass(java.lang.System.class)
-@Platforms({Platform.LINUX.class, Platform.LINUX_JNI.class, Platform.DARWIN.class, Platform.DARWIN_JNI.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_lang_System {
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
@@ -337,7 +342,7 @@ final class Target_java_lang_System {
     public static long currentTimeMillis() {
         timeval timeval = StackValue.get(timeval.class);
         timezone timezone = WordFactory.nullPointer();
-        Time.gettimeofday(timeval, timezone);
+        gettimeofday(timeval, timezone);
         return timeval.tv_sec() * 1_000L + timeval.tv_usec() / 1_000L;
     }
 }
@@ -352,21 +357,26 @@ final class Target_java_lang_Shutdown {
     }
 }
 
+@TargetClass(java.lang.Runtime.class)
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+@SuppressWarnings({"static-method"})
+final class Target_java_lang_Runtime {
+
+    @Substitute
+    private int availableProcessors() {
+        if (SubstrateOptions.MultiThreaded.getValue()) {
+            return (int) Unistd.sysconf(Unistd._SC_NPROCESSORS_ONLN());
+        } else {
+            return 1;
+        }
+    }
+}
+
 /** Dummy class to have a class with the file's name. */
-@Platforms({Platform.LINUX_AND_JNI.class, Platform.DARWIN_AND_JNI.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 public final class PosixJavaLangSubstitutions {
 
     /** Private constructor: No instances. */
     private PosixJavaLangSubstitutions() {
-    }
-
-    @Platforms({Platform.LINUX_JNI.class, Platform.DARWIN_JNI.class})
-    public static boolean initIDs() {
-        // The JDK uses posix_spawn on the Mac to launch executables.
-        // This requires a separate process "jspawnhelper" which we
-        // don't want to have to rely on. Force the use of FORK on
-        // Linux and Mac.
-        System.setProperty("jdk.lang.Process.launchMechanism", "FORK");
-        return true;
     }
 }
