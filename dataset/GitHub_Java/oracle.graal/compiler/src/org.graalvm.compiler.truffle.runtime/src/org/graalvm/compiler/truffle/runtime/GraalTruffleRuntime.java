@@ -793,6 +793,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
+    // TODO: Used only in tests. Should be removed and task should be reflectively looked up or use
+    // org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime.finishCompilation
     public void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException {
         CancellableCompileTask task = optimizedCallTarget.getCompilationTask();
         if (task != null && !task.isCancelled()) {
@@ -808,6 +810,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     public int getCompilationQueueSize() {
         return getCompileQueue().getQueueSize();
+    }
+
+    public boolean isCompiling(OptimizedCallTarget optimizedCallTarget) {
+        return optimizedCallTarget.isCompiling();
     }
 
     /**

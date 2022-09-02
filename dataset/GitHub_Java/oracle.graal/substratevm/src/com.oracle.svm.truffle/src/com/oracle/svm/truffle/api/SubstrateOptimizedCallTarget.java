@@ -148,9 +148,9 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
     }
 
     @Override
-    public boolean cancelCompilation(CharSequence reason) {
+    public boolean cancelCompilation(Object source, CharSequence reason) {
         if (SubstateTruffleOptions.isMultiThreaded()) {
-            return super.cancelCompilation(reason);
+            return super.cancelCompilation(source, reason);
         }
         return false;
     }
