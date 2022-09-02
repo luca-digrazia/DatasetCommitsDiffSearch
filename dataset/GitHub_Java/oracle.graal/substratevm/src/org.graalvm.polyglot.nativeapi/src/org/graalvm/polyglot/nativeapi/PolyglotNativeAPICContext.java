@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,10 +24,14 @@
  */
 package org.graalvm.polyglot.nativeapi;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.c.CContext.Directives;
+
+import com.oracle.svm.core.c.function.GraalIsolateHeader;
 
 public class PolyglotNativeAPICContext implements Directives {
 
@@ -37,5 +43,24 @@ public class PolyglotNativeAPICContext implements Directives {
     @Override
     public List<String> getOptions() {
         return Collections.singletonList("-I" + System.getProperty("org.graalvm.polyglot.nativeapi.libraryPath"));
+    }
+
+    @Override
+    public List<String> getHeaderSnippet() {
+        List<String> lines = new ArrayList<>();
+
+        /* Fallback for missing bool-type header in old cl.exe. */
+        if (Platform.includedIn(Platform.WINDOWS.class)) {
+            lines.add("#ifndef bool");
+            lines.add("#define bool char");
+            lines.add("#define false ((bool)0)");
+            lines.add("#define true  ((bool)1)");
+            lines.add("#endif");
+            lines.add("");
+        }
+
+        lines.addAll(GraalIsolateHeader.getGraalIsolatePreamble());
+
+        return lines;
     }
 }
