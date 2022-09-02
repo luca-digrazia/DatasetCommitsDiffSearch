@@ -222,7 +222,7 @@ public final class CEntryPointNativeFunctions {
         }
         if (count > 0) {
             jarray = Arrays.copyOf(jarray, count);
-            VMThreads.singleton().detachThreads(jarray);
+            VMThreads.detachThreads(jarray);
         }
         return containsCurrent;
     }

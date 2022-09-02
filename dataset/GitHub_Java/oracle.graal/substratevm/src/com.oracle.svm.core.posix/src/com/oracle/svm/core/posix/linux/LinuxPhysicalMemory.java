@@ -26,11 +26,10 @@ package com.oracle.svm.core.posix.linux;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
@@ -51,8 +50,6 @@ class LinuxPhysicalMemory extends PhysicalMemory {
 
         /** A sentinel unset value. */
         static final long UNSET_SENTINEL = Long.MIN_VALUE;
-        /** Prevent recursive invocation of size() from initializeSize() */
-        static AtomicBoolean initializeSize = new AtomicBoolean();
 
         /** The cached size of physical memory, or an unset value. */
         long cachedSize = UNSET_SENTINEL;
@@ -65,12 +62,11 @@ class LinuxPhysicalMemory extends PhysicalMemory {
                 return getSize();
             }
             /* If I can not allocate, return MAX_VALUE. */
-            if (Heap.getHeap().isAllocationDisallowed() || !JavaThreads.currentJavaThreadInitialized() || !initializeSize.compareAndSet(false, true)) {
+            if (Heap.getHeap().isAllocationDisallowed() || !JavaThreads.currentJavaThreadInitialized()) {
                 return UnsignedUtils.MAX_VALUE;
             }
             /* Compute and cache the physical memory size. Races are idempotent. */
             initializeSize();
-            initializeSize.set(false);
             return getSize();
         }
 

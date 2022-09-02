@@ -91,17 +91,6 @@ public final class CEntryPointActions {
     public static native int enterIsolate(Isolate isolate);
 
     /**
-     * May only be used during the prologue of a segfault handler. If the thread is already
-     * attached, it enters the existing context of that thread. If the thread is unattached, it
-     * creates a context that is sufficient for executing the segfault handler. After executing the
-     * segfault handler, execution must not resume normally.
-     *
-     * @param isolate isolate in which a context for the current thread exists.
-     * @return 0 on success, otherwise non-zero.
-     */
-    public static native int enterAttachThreadFromCrashHandler(Isolate isolate);
-
-    /**
      * In the prologue, stop execution and return to the entry point method's caller with the given
      * return value. The passed word is cast to the entry point method's return type, which must be
      * a {@link WordBase} type.

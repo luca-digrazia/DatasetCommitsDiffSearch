@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -119,8 +119,7 @@ abstract class HostFieldDesc {
             try {
                 reflectSet(field, receiver, value);
             } catch (IllegalArgumentException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
+                throw UnsupportedTypeException.create(HostInteropReflect.EMPTY);
             } catch (IllegalAccessException e) {
                 CompilerDirectives.transferToInterpreter();
                 if (Modifier.isFinal(field.getModifiers())) {
@@ -179,8 +178,7 @@ abstract class HostFieldDesc {
             try {
                 invokeSetHandle(setHandle, receiver, value);
             } catch (Exception e) {
-                CompilerDirectives.transferToInterpreter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
+                throw UnsupportedTypeException.create(new Object[]{value});
             } catch (Throwable e) {
                 throw HostInteropReflect.rethrow(e);
             }

@@ -159,6 +159,7 @@ public class SubstrateUtil {
         return args;
     }
 
+    // TODO: Should this call the libc strlen function?
     /**
      * Returns the length of a C {@code char*} string.
      */
@@ -169,24 +170,6 @@ public class SubstrateUtil {
             n = n.add(1);
         }
         return n;
-    }
-
-    /**
-     * Returns a pointer to the matched character or NULL if the character is not found.
-     */
-    @Uninterruptible(reason = "Called from uninterruptible code.")
-    public static CCharPointer strchr(CCharPointer str, int c) {
-        int index = 0;
-        while (true) {
-            byte b = str.read(index);
-            if (b == c) {
-                return str.addressOf(index);
-            }
-            if (b == 0) {
-                return WordFactory.zero();
-            }
-            index += 1;
-        }
     }
 
     /**
