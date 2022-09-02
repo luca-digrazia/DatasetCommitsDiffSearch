@@ -128,7 +128,6 @@ public final class LLVMContext {
     private final ArrayList<LLVMLocalScope> localScopes;
 
     private final DynamicLinkChain dynamicLinkChain;
-    private final DynamicLinkChain dynamicLinkChainForScopes;
     private final List<RootCallTarget> destructorFunctions;
     private final LLVMFunctionPointerRegistry functionPointerRegistry;
     private final LLVMInteropType.InteropTypeRegistry interopTypeRegistry;
@@ -202,7 +201,6 @@ public final class LLVMContext {
         this.globalScope = new LLVMScope();
         this.localScopes = new ArrayList<>();
         this.dynamicLinkChain = new DynamicLinkChain();
-        this.dynamicLinkChainForScopes = new DynamicLinkChain();
 
         this.mainArguments = getMainArguments(env);
 
@@ -833,16 +831,6 @@ public final class LLVMContext {
     @TruffleBoundary
     public void registerScope(LLVMScope scope) {
         dynamicLinkChain.addScope(scope);
-    }
-
-    @TruffleBoundary
-    public boolean isScopeLoadedForScopes(LLVMScope scope) {
-        return dynamicLinkChainForScopes.containsScope(scope);
-    }
-
-    @TruffleBoundary
-    public void registerScopeForScopes(LLVMScope scope) {
-        dynamicLinkChainForScopes.addScope(scope);
     }
 
     public synchronized void registerThread(LLVMThread thread) {
