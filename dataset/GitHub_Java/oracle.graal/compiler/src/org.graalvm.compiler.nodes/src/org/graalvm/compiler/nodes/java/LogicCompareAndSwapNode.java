@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -64,11 +64,12 @@ public final class LogicCompareAndSwapNode extends AbstractCompareAndSwapNode {
         assert getNewValue().stamp(NodeView.DEFAULT).isCompatible(getExpectedValue().stamp(NodeView.DEFAULT));
         assert !this.canDeoptimize();
         LIRGeneratorTool tool = gen.getLIRGeneratorTool();
+
         LIRKind resultKind = tool.getLIRKind(stamp(NodeView.DEFAULT));
         Value trueResult = tool.emitConstant(resultKind, JavaConstant.TRUE);
         Value falseResult = tool.emitConstant(resultKind, JavaConstant.FALSE);
-        Value result = tool.emitLogicCompareAndSwap(tool.getLIRKind(getAccessStamp(NodeView.DEFAULT)), gen.operand(getAddress()),
-                        gen.operand(getExpectedValue()), gen.operand(getNewValue()), trueResult, falseResult, false);
+        Value result = tool.emitLogicCompareAndSwap(tool.getLIRKind(getAccessStamp()), gen.operand(getAddress()), gen.operand(getExpectedValue()), gen.operand(getNewValue()), trueResult, falseResult);
+
         gen.setResult(this, result);
     }
 }

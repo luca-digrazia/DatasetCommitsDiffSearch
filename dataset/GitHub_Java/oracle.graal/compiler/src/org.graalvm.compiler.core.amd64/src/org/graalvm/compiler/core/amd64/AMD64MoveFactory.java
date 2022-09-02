@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,16 +25,19 @@
 
 package org.graalvm.compiler.core.amd64;
 
+import static jdk.vm.ci.code.ValueUtil.isRegister;
 import static org.graalvm.compiler.lir.LIRValueUtil.asConstant;
 import static org.graalvm.compiler.lir.LIRValueUtil.isConstantValue;
 import static org.graalvm.compiler.lir.LIRValueUtil.isStackSlotValue;
-import static jdk.vm.ci.code.ValueUtil.isRegister;
 
+import org.graalvm.compiler.asm.amd64.AMD64Assembler;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.type.DataPointerConstant;
 import org.graalvm.compiler.debug.GraalError;
+import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.amd64.AMD64AddressValue;
 import org.graalvm.compiler.lir.amd64.AMD64LIRInstruction;
+import org.graalvm.compiler.lir.amd64.AMD64Move;
 import org.graalvm.compiler.lir.amd64.AMD64Move.AMD64StackMove;
 import org.graalvm.compiler.lir.amd64.AMD64Move.LeaDataOp;
 import org.graalvm.compiler.lir.amd64.AMD64Move.LeaOp;
@@ -45,6 +50,7 @@ import jdk.vm.ci.code.Register;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.PrimitiveConstant;
 import jdk.vm.ci.meta.Value;
 
 public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
@@ -60,6 +66,9 @@ public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
             switch (c.getJavaKind()) {
                 case Long:
                     return NumUtil.isInt(c.asLong());
+                case Float:
+                case Double:
+                    return false;
                 case Object:
                     return c.isNull();
                 default:
@@ -70,9 +79,26 @@ public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
     }
 
     @Override
+    public boolean mayEmbedConstantLoad(Constant constant) {
+        // Only consider not inlineable constants here.
+        return constant instanceof PrimitiveConstant && ((PrimitiveConstant) constant).getJavaKind().isNumericFloat();
+    }
+
+    @Override
+    public boolean allowConstantToStackMove(Constant constant) {
+        if (constant instanceof DataPointerConstant) {
+            return false;
+        }
+        if (constant instanceof JavaConstant && !AMD64Move.canMoveConst2Stack(((JavaConstant) constant))) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
     public AMD64LIRInstruction createMove(AllocatableValue dst, Value src) {
         if (src instanceof AMD64AddressValue) {
-            return new LeaOp(dst, (AMD64AddressValue) src);
+            return new LeaOp(dst, (AMD64AddressValue) src, AMD64Assembler.OperandSize.QWORD);
         } else if (isConstantValue(src)) {
             return createLoad(dst, asConstant(src));
         } else if (isRegister(src) || isStackSlotValue(dst)) {
@@ -95,6 +121,15 @@ public abstract class AMD64MoveFactory extends AMD64MoveFactoryBase {
             return new LeaDataOp(dst, (DataPointerConstant) src);
         } else {
             throw GraalError.shouldNotReachHere(String.format("unsupported constant: %s", src));
+        }
+    }
+
+    @Override
+    public LIRInstruction createStackLoad(AllocatableValue result, Constant input) {
+        if (input instanceof JavaConstant) {
+            return new MoveFromConstOp(result, (JavaConstant) input);
+        } else {
+            throw GraalError.shouldNotReachHere(String.format("unsupported constant for stack load: %s", input));
         }
     }
 }
