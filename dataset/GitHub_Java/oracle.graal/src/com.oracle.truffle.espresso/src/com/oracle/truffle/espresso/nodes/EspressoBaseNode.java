@@ -35,7 +35,6 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 @GenerateWrapper
@@ -64,11 +63,13 @@ public abstract class EspressoBaseNode extends Node implements ContextAccess, In
 
     public Object execute(VirtualFrame frame) {
         if (method.isSynchronized()) {
-            StaticObject monitor = method.isStatic()
+            Object monitor = method.isStatic()
                             ? /* class */ method.getDeclaringKlass().mirror()
-                            : /* receiver */ (StaticObject) frame.getArguments()[0];
+                            : /* receiver */ frame.getArguments()[0];
             // No owner checks in SVM. Manual monitor accesses is a safeguard against unbalanced
             // monitor accesses until Espresso has its own monitor handling.
+            //
+            // synchronized (monitor) {
             InterpreterToVM.monitorEnter(monitor);
             Object result;
             try {
