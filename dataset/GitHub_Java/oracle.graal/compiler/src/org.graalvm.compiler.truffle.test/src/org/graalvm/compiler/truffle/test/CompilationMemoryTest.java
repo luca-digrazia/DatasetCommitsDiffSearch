@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,15 +31,29 @@ import com.oracle.truffle.api.test.GCUtils;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-public class CompilationMemoryTest extends TestWithPolyglotOptions {
+public class CompilationMemoryTest {
+
+    private TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope optionScope;
 
     @Before
     public void setUp() {
-        setupContext("engine.CompileImmediately", "true", "engine.BackgroundCompilation", "false");
+        optionScope = TruffleRuntimeOptions.overrideOptions(
+                        SharedTruffleRuntimeOptions.TruffleCompileImmediately, true,
+                        SharedTruffleRuntimeOptions.TruffleBackgroundCompilation, false);
+    }
+
+    @After
+    public void tearDown() {
+        if (optionScope != null) {
+            optionScope.close();
+        }
     }
 
     @Test
