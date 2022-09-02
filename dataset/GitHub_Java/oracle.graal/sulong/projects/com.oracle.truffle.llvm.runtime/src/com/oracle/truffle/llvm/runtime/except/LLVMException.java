@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.llvm.runtime.except;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -41,16 +42,19 @@ public abstract class LLVMException extends RuntimeException implements TruffleE
 
     private final Node location;
 
+    @CompilerDirectives.TruffleBoundary
     protected LLVMException(Node location, String message, Throwable cause) {
         super(message, cause);
         this.location = location;
     }
 
+    @CompilerDirectives.TruffleBoundary
     protected LLVMException(Node location, String message) {
         super(message);
         this.location = location;
     }
 
+    @CompilerDirectives.TruffleBoundary
     protected LLVMException(Node location) {
         this.location = location;
     }
@@ -62,7 +66,8 @@ public abstract class LLVMException extends RuntimeException implements TruffleE
 
     @SuppressWarnings("sync-override")
     @Override
+    @CompilerDirectives.TruffleBoundary
     public final Throwable fillInStackTrace() {
-        return this;
+        return super.fillInStackTrace();
     }
 }
