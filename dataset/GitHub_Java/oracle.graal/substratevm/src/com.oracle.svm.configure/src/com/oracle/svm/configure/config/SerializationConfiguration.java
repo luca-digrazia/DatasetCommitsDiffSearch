@@ -39,40 +39,37 @@ import com.oracle.svm.configure.json.JsonWriter;
 
 public class SerializationConfiguration implements JsonPrintable {
 
-    private final ConcurrentHashMap<String, Set<String>> serializations = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Set<Long>> serializations = new ConcurrentHashMap<>();
 
-    public void addAll(String serializationTargetClass, Collection<String> checksums) {
+    public void addAll(String serializationTargetClass, Collection<Long> checksums) {
         serializations.computeIfAbsent(serializationTargetClass, key -> new LinkedHashSet<>()).addAll(checksums);
     }
 
-    public void add(String serializationTargetClass, String checksum) {
+    public void add(String serializationTargetClass, Long checksum) {
         addAll(serializationTargetClass, Collections.singleton(checksum));
     }
 
-    public boolean contains(String serializationTargetClass, String checksum) {
-        Set<String> checksums = serializations.get(serializationTargetClass);
-        return checksums != null && checksums.contains(checksum);
+    public boolean contains(String serializationTargetClass, Long checksum) {
+        return serializations.contains(serializationTargetClass) && serializations.get(serializationTargetClass).contains(checksum);
     }
 
     @Override
     public void printJson(JsonWriter writer) throws IOException {
         writer.append('[').indent();
         String prefix = "";
-        for (Map.Entry<String, Set<String>> entry : serializations.entrySet()) {
+        for (Map.Entry<String, Set<Long>> entry : serializations.entrySet()) {
             writer.append(prefix);
             writer.newline().append('{').newline();
             String className = entry.getKey();
             writer.quote("name").append(":").quote(className);
-            Set<String> checksums = entry.getValue();
+            Set<Long> checksums = entry.getValue();
             if (!checksums.isEmpty()) {
                 writer.append(",").newline();
                 writer.quote("checksum").append(':');
                 if (checksums.size() == 1) {
-                    writer.quote(checksums.iterator().next());
+                    writer.append(checksums.iterator().next().toString());
                 } else {
-                    writer.append(checksums.stream()
-                                    .map(JsonWriter::quoteString)
-                                    .collect(Collectors.joining(", ", "[", "]")));
+                    writer.append(checksums.stream().map(String::valueOf).collect(Collectors.joining(", ", "[", "]")));
                 }
                 writer.newline();
             }
