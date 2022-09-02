@@ -252,7 +252,7 @@ public class BinaryReader extends BinaryStreamReader {
         int expressionSize = codeEntrySize - (offset - startOffset);
         byte returnTypeId = wasmModule.symbolTable().function(funcIndex).returnType();
         ExecutionState state = new ExecutionState();
-        WasmBlockNode block = new WasmBlockNode(codeEntry, offset, expressionSize, returnTypeId, state.stackSize(), 0);
+        WasmBlockNode block = new WasmBlockNode(codeEntry, offset, expressionSize, returnTypeId, state.stackSize());
         WasmRootNode rootNode = new WasmRootNode(wasmLanguage, codeEntry, block);
 
         // Push a frame slot to the frame descriptor for every local.
@@ -262,7 +262,6 @@ public class BinaryReader extends BinaryStreamReader {
         readBlock(block, state, returnTypeId);
 
         // Initialize the Truffle-related components required for execution.
-        codeEntry.setByteConstants(state.byteConstants());
         initTruffleForCodeEntry(codeEntry, numLocals, rootNode, state, funcIndex);
 
         // TODO: For structured code, we need to set the expressionSize later.
@@ -285,7 +284,7 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void initTruffleForCodeEntry(WasmCodeEntry codeEntry, int numLocals, WasmRootNode rootNode, ExecutionState state, int funcIndex) {
-        codeEntry.initStackSlots(rootNode.getFrameDescriptor(), state. maxStackSize());
+        codeEntry.initStackSlots(rootNode.getFrameDescriptor(), state.maxStackSize);
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         wasmModule.symbolTable().function(funcIndex).setCallTarget(callTarget);
     }
@@ -299,6 +298,7 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void readBlock(WasmBlockNode currentBlock, ExecutionState state, byte returnTypeId) {
+        ByteList constantLengthTable = new ByteList();
         ArrayList<WasmNode> nestedControlTable = new ArrayList<>();
         int opcode;
         int startStackSize = state.stackSize();
@@ -311,7 +311,7 @@ public class BinaryReader extends BinaryStreamReader {
                 case BLOCK: {
                     byte blockTypeId = readBlockType();
                     int startOffset = offset();
-                    WasmBlockNode blockNode = new WasmBlockNode(currentBlock.codeEntry(), offset(), -1, blockTypeId, state.stackSize(), state.constantOffset());
+                    WasmBlockNode blockNode = new WasmBlockNode(currentBlock.codeEntry(), offset(), -1, blockTypeId, state.stackSize());
                     readBlock(blockNode, state, blockTypeId);
                     blockNode.setByteLength(offset() - startOffset);
                     nestedControlTable.add(blockNode);
@@ -331,7 +331,7 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 case LOCAL_GET: {
                     int localIndex = readLocalIndex(bytesConsumed);
-                    state.useByteConstant(bytesConsumed[0]);
+                    constantLengthTable.add(bytesConsumed[0]);
                     // TODO: Assert localIndex exists.
                     currentBlock.codeEntry().localSlot(localIndex);
                     state.push();
@@ -339,7 +339,7 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case LOCAL_SET: {
                     int localIndex = readLocalIndex(bytesConsumed);
-                    state.useByteConstant(bytesConsumed[0]);
+                    constantLengthTable.add(bytesConsumed[0]);
                     // TODO: Assert localIndex exists
                     currentBlock.codeEntry().localSlot(localIndex);
                     // Assert there is a value on the top of the stack.
@@ -349,7 +349,7 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case LOCAL_TEE: {
                     int localIndex = readLocalIndex(bytesConsumed);
-                    state.useByteConstant(bytesConsumed[0]);
+                    constantLengthTable.add(bytesConsumed[0]);
                     // TODO: Assert localIndex exists
                     currentBlock.codeEntry().localSlot(localIndex);
                     // Assert there is a value on the top of the stack.
@@ -359,12 +359,12 @@ public class BinaryReader extends BinaryStreamReader {
                 }
                 case I32_CONST:
                     readSignedInt32(bytesConsumed);
-                    state.useByteConstant(bytesConsumed[0]);
+                    constantLengthTable.add(bytesConsumed[0]);
                     state.push();
                     break;
                 case I64_CONST:
                     readSignedInt64(bytesConsumed);
-                    state.useByteConstant(bytesConsumed[0]);
+                    constantLengthTable.add(bytesConsumed[0]);
                     state.push();
                     break;
                 case F32_CONST:
@@ -462,6 +462,7 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
             }
         } while (opcode != END && opcode != ELSE);
+        currentBlock.constantLengthTable = constantLengthTable.toArray();
         currentBlock.nestedControlTable = nestedControlTable.toArray(new WasmNode[nestedControlTable.size()]);
         checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
     }
@@ -475,7 +476,7 @@ public class BinaryReader extends BinaryStreamReader {
 
         // Read true branch.
         int startOffset = offset();
-        WasmBlockNode trueBranchBlock = new WasmBlockNode(codeEntry, offset(), -1, blockTypeId, state.stackSize(), state.constantOffset());
+        WasmBlockNode trueBranchBlock = new WasmBlockNode(codeEntry, offset(), -1, blockTypeId, state.stackSize());
         readBlock(trueBranchBlock, state, blockTypeId);
         trueBranchBlock.setByteLength(offset() - startOffset);
 
@@ -491,7 +492,7 @@ public class BinaryReader extends BinaryStreamReader {
             }
 
             int startFalseOffset = offset();
-            WasmBlockNode falseBranchBlock = new WasmBlockNode(codeEntry, offset(), -1, blockTypeId, state.stackSize(), state.constantOffset());
+            WasmBlockNode falseBranchBlock = new WasmBlockNode(codeEntry, offset(), -1, blockTypeId, state.stackSize());
             readBlock(falseBranchBlock, state, blockTypeId);
             falseBranchBlock.setByteLength(offset() - startFalseOffset);
             falseBranch = falseBranchBlock;
