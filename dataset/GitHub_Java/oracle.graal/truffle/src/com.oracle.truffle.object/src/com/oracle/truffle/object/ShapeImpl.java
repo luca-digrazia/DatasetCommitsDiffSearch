@@ -58,6 +58,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.DynamicObjectFactory;
@@ -1249,10 +1250,7 @@ public abstract class ShapeImpl extends Shape {
     static final DebugCounter shapeCacheExpunged = DebugCounter.create("Shape cache expunged");
 
     /** @since 0.17 or earlier */
-    @SuppressWarnings("deprecation")
-    public com.oracle.truffle.api.interop.ForeignAccess getForeignAccessFactory(DynamicObject object) {
+    public ForeignAccess getForeignAccessFactory(DynamicObject object) {
         return getObjectType().getForeignAccessFactory(object);
-
     }
-
 }

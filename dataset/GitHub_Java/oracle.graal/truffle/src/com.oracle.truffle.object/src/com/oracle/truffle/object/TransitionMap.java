@@ -46,7 +46,6 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.MapCursor;
@@ -130,22 +129,6 @@ final class TransitionMap<K, V> implements Map<K, V> {
                 }
             }
         }
-    }
-
-    public <R> R iterateEntries(BiFunction<? super K, ? super V, R> consumer) {
-        synchronized (queue) {
-            MapCursor<K, StrongKeyWeakValueEntry<K, V>> cursor = map.getEntries();
-            while (cursor.advance()) {
-                V value = cursor.getValue().get();
-                if (value != null) {
-                    R result = consumer.apply(cursor.getKey(), value);
-                    if (result != null) {
-                        return result;
-                    }
-                }
-            }
-        }
-        return null;
     }
 
     @Override
