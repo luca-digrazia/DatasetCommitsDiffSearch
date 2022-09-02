@@ -47,8 +47,6 @@ import static org.junit.Assert.assertTrue;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.regex.RegexLanguage;
 import org.junit.Test;
 
 import com.oracle.truffle.regex.RegexOptions;
@@ -58,8 +56,8 @@ import com.oracle.truffle.regex.tregex.parser.flavors.RubyFlavor;
 public class RegexOptionsTest {
 
     private static RegexOptions parse(String options) {
-        RegexOptions.Builder builder = RegexOptions.builder(Source.newBuilder(RegexLanguage.ID, options, "test").build(), options);
-        builder.parseOptions();
+        RegexOptions.Builder builder = RegexOptions.builder();
+        builder.parseOptions(options);
         return builder.build();
     }
 

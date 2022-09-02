@@ -1351,11 +1351,6 @@ final class JDWP {
                     return new CommandResult(reply);
                 }
 
-                if (!method.hasVariableTable()) {
-                    reply.errorCode(ErrorCodes.ABSENT_INFORMATION);
-                    return new CommandResult(reply);
-                }
-
                 KlassRef[] params = method.getParameters();
                 int argCnt = 0; // the number of words in the frame used by the arguments
                 for (KlassRef klass : params) {
@@ -1452,11 +1447,6 @@ final class JDWP {
                 long methodId = input.readLong();
                 MethodRef method = verifyMethodRef(methodId, reply, context);
                 if (method == null) {
-                    return new CommandResult(reply);
-                }
-
-                if (!method.hasVariableTable()) {
-                    reply.errorCode(ErrorCodes.ABSENT_INFORMATION);
                     return new CommandResult(reply);
                 }
 
