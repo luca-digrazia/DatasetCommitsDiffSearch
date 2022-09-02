@@ -1643,39 +1643,26 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         } catch (Throwable t) {
             throw PolyglotImpl.guestToHostException(this, t);
         }
-        boolean hasContextBindings;
         try {
             if (!replayEvents) { // is new context
                 synchronized (context) {
                     context.initializeContextLocals();
                 }
             }
-            hasContextBindings = EngineAccessor.INSTRUMENT.hasContextBindings(this);
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(context.getHostContext(), t, false);
-        }
-        if (replayEvents && hasContextBindings) {
-            // replace events for preinitialized contexts
-            // events must be replayed without engine lock.
-            final PolyglotContextImpl prev;
-            try {
-                prev = enter(context);
-            } catch (Throwable t) {
-                throw PolyglotImpl.guestToHostException(context.getHostContext(), t, false);
-            }
-            try {
-                context.replayInstrumentationEvents();
-            } catch (Throwable t) {
-                throw PolyglotImpl.guestToHostException(context.getHostContext(), t, true);
-            } finally {
+            if (replayEvents && EngineAccessor.INSTRUMENT.hasContextBindings(this)) {
+                // replace events for preinitialized contexts
+                // events must be replayed without engine lock.
+                final PolyglotContextImpl prev = enter(context);
                 try {
+                    context.replayInstrumentationEvents();
+                } finally {
                     leave(prev, context);
-                } catch (Throwable t) {
-                    throw PolyglotImpl.guestToHostException(context.getHostContext(), t, false);
                 }
             }
+            return context.creatorApi;
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(context.getHostContext(), t);
         }
-        return context.creatorApi;
     }
 
     private PolyglotContextImpl loadPreinitializedContext(PolyglotContextConfig config, HostAccess hostAccess) {
