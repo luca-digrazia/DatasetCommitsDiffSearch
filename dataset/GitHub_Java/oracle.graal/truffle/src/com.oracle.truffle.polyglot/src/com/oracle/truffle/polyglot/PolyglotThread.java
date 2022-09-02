@@ -49,7 +49,7 @@ final class PolyglotThread extends Thread {
 
     private final PolyglotLanguageContext languageContext;
 
-    PolyglotContextImpl context;
+    Object context;
 
     final CallTarget callTarget;
 
@@ -128,7 +128,8 @@ final class PolyglotThread extends Thread {
         protected Object executeImpl(PolyglotLanguageContext languageContext, Object receiver, Object[] args) {
             PolyglotThread thread = (PolyglotThread) receiver;
             PolyglotThreadRunnable run = (PolyglotThreadRunnable) args[HostToGuestRootNode.ARGUMENT_OFFSET];
-            PolyglotContextImpl prev;
+
+            Object prev;
             try {
                 prev = languageContext.enterThread(thread);
             } catch (PolyglotEngineException polyglotException) {

@@ -72,7 +72,6 @@ abstract class HostToGuestRootNode extends RootNode {
         super(languageContext != null ? languageContext.getLanguageInstance().spi : null);
         this.engine = (PolyglotEngineImpl) EngineAccessor.NODES.getPolyglotEngine(this);
         assert this.engine != null : "all host to guest root nodes need to be initialized when entered";
-        assert needsEnter() || !needsExceptionWrapping() : "HostToGuestRootNode which does not require enter cannot have exception wrapping.";
     }
 
     protected abstract Class<?> getReceiverType();
@@ -89,13 +88,11 @@ abstract class HostToGuestRootNode extends RootNode {
     public final Object execute(VirtualFrame frame) {
         Object[] args = frame.getArguments();
         PolyglotLanguageContext languageContext = profileContext(args[0]);
-        PolyglotContextImpl context;
-        PolyglotContextImpl prev;
-        boolean needsEnter;
         try {
             assert languageContext != null;
-            context = languageContext.context;
-            needsEnter = needsEnter() && languageContext != null && engine.needsEnter(context);
+            PolyglotContextImpl context = languageContext.context;
+            boolean needsEnter = needsEnter() && languageContext != null && engine.needsEnter(context);
+            Object prev;
             if (needsEnter) {
                 if (!seenEnter) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -109,37 +106,26 @@ abstract class HostToGuestRootNode extends RootNode {
                 }
                 prev = null;
             }
-        } catch (Throwable e) {
-            throw handleException(languageContext, e, false, RuntimeException.class);
-        }
-        try {
-            Object[] arguments = frame.getArguments();
-            Object receiver = getReceiverType().cast(arguments[1]);
-            Object result;
-            result = executeImpl(languageContext, receiver, arguments);
-            assert !(result instanceof TruffleObject);
-            return result;
-        } catch (Throwable e) {
-            throw handleException(languageContext, e, needsEnter(), RuntimeException.class);
-        } finally {
-            if (needsEnter) {
-                try {
+            try {
+                Object[] arguments = frame.getArguments();
+                Object receiver = getReceiverType().cast(arguments[1]);
+                Object result;
+                result = executeImpl(languageContext, receiver, arguments);
+                assert !(result instanceof TruffleObject);
+                return result;
+            } finally {
+                if (needsEnter) {
                     engine.leave(prev, context);
-                } catch (Throwable e) {
-                    throw handleException(languageContext, e, false, RuntimeException.class);
                 }
             }
+        } catch (Throwable e) {
+            if (needsExceptionWrapping()) {
+                error.enter();
+                throw PolyglotImpl.guestToHostException((languageContext), e);
+            }
+            // no wrapping, just throw
+            throw e;
         }
-    }
-
-    @SuppressWarnings({"unchecked", "unused"})
-    private <E extends Throwable> E handleException(PolyglotLanguageContext languageContext, Throwable e, boolean entered, Class<E> exceptionType) throws E {
-        if (needsExceptionWrapping()) {
-            error.enter();
-            throw PolyglotImpl.guestToHostException(languageContext, e, entered);
-        }
-        // no wrapping, just throw
-        throw (E) e;
     }
 
     private PolyglotLanguageContext profileContext(Object languageContext) {
