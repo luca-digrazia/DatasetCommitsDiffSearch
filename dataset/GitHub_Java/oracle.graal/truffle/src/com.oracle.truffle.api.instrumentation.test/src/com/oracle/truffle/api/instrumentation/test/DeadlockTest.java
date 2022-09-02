@@ -200,8 +200,7 @@ public class DeadlockTest {
         @Override
         protected CallTarget parse(ParsingRequest request) throws Exception {
             final Source code = request.getSource();
-            final CharSequence codeCharacters = code.getCharacters();
-            if (CODE_LATCH.equals(codeCharacters)) {
+            if (CODE_LATCH.equals(code.getCharacters())) {
                 ((InstrumentationThread) Thread.currentThread()).setExecutionLatch(executionLatch);
                 return Truffle.getRuntime().createCallTarget(new RootNode(this) {
                     @Override
@@ -221,7 +220,7 @@ public class DeadlockTest {
 
                         @Override
                         public Object execute(VirtualFrame f) {
-                            return statement.execute(f, codeCharacters);
+                            return statement.execute(f, code.getCharacters());
                         }
 
                         @Override
@@ -303,14 +302,13 @@ public class DeadlockTest {
             public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
                 if (statementCall == null && source != null) {
                     language.materializationLatch.countDown();
-                    final CharSequence sourceCharacters = source.getCharacters();
                     RootNode codeExecRoot = new RootNode(language) {
 
                         @Node.Child private StatementNode statement = new StatementNode(language, null);
 
                         @Override
                         public Object execute(VirtualFrame frame) {
-                            return statement.execute(frame, sourceCharacters);
+                            return statement.execute(frame, source.getCharacters());
                         }
 
                         @Override

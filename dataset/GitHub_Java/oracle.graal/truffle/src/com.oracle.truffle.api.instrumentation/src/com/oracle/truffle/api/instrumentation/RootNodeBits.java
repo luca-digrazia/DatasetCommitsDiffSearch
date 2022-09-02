@@ -62,10 +62,6 @@ final class RootNodeBits {
         return bits > 0 && (bits & NOT_EXECUTED) == 0;
     }
 
-    static boolean wasNotExecuted(int bits) {
-        return (bits & NOT_EXECUTED) > 0;
-    }
-
     /**
      * Returns true if source the source sections of the root node are all contained within the
      * bounds of the root source section.
@@ -94,7 +90,7 @@ final class RootNodeBits {
     }
 
     static int setHasDifferentSource(int bits) {
-        return bits & ~SAME_SOURCE;
+        return bits & ~NO_SOURCE_SECTION;
     }
 
     static int setHasSourceSection(int bits) {

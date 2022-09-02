@@ -1361,15 +1361,15 @@ final class InstrumentationHandler {
             this.performOnlyOnExecutedAST = performOnlyOnExecutedAST;
 
             if (collectNewSources) {
-                List<Source> newSourcesList = threadLocalNewSources.get();
-                if (newSourcesList == null) {
-                    newSourcesList = new ArrayList<>(5);
-                    threadLocalNewSources.set(newSourcesList);
+                List<Source> newSources = threadLocalNewSources.get();
+                if (newSources == null) {
+                    newSources = new ArrayList<>(5);
+                    threadLocalNewSources.set(newSources);
                     notifyBindings = true;
                 } else {
                     notifyBindings = false;
                 }
-                this.newSources = newSourcesList;
+                this.newSources = newSources;
             } else {
                 this.newSources = null;
                 this.notifyBindings = false;
