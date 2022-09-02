@@ -65,7 +65,7 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
     /**
      * Flag to indicate that this loop must not be detected as a counted loop.
      */
-    protected boolean disableCounted;
+    protected final boolean disableCounted;
     /**
      * Flag indicating that this loop can never overflow based on some property not visible in the
      * loop control computations.
@@ -89,7 +89,7 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
 
     public static final SpeculationReasonGroup LOOP_OVERFLOW_DEOPT = new SpeculationReasonGroup("LoopOverflowDeopt", ResolvedJavaMethod.class, int.class);
 
-    public LoopBeginNode() {
+    public LoopBeginNode(int bci, StructuredGraph graph) {
         super(TYPE);
         loopFrequency = 1;
         loopOrigFrequency = 1;
@@ -98,9 +98,6 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
         this.canEndsSafepoint = true;
         loopType = LoopType.SIMPLE_LOOP;
         unrollFactor = 1;
-    }
-
-    public void checkDisableCountedBySpeculation(int bci, StructuredGraph graph) {
         SpeculationLog speculationLog = graph.getSpeculationLog();
         boolean disableCountedBasedOnSpeculation = false;
         if (speculationLog != null) {

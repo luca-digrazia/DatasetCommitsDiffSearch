@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,7 +24,14 @@
  */
 package org.graalvm.compiler.loop;
 
-import jdk.vm.ci.code.BytecodeFrame;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.Queue;
+
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.EconomicSet;
+import org.graalvm.collections.Equivalence;
+import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
@@ -44,6 +53,7 @@ import org.graalvm.compiler.nodes.FullInfopointNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -52,11 +62,9 @@ import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.BinaryArithmeticNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
-import org.graalvm.compiler.nodes.calc.IntegerBelowNode;
-import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
-import org.graalvm.compiler.nodes.calc.IntegerLessThanNode;
 import org.graalvm.compiler.nodes.calc.LeftShiftNode;
 import org.graalvm.compiler.nodes.calc.MulNode;
+import org.graalvm.compiler.nodes.calc.NarrowNode;
 import org.graalvm.compiler.nodes.calc.NegateNode;
 import org.graalvm.compiler.nodes.calc.SignExtendNode;
 import org.graalvm.compiler.nodes.calc.SubNode;
@@ -66,13 +74,6 @@ import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.debug.ControlFlowAnchored;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.util.EconomicMap;
-import org.graalvm.util.EconomicSet;
-import org.graalvm.util.Equivalence;
-
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.Queue;
 
 public class LoopEx {
     private final Loop<Block> loop;
@@ -81,6 +82,8 @@ public class LoopEx {
     private CountedLoopInfo counted;
     private LoopsData data;
     private EconomicMap<Node, InductionVariable> ivs;
+    private boolean countedLoopChecked;
+    private int size = -1;
 
     LoopEx(Loop<Block> loop, LoopsData data) {
         this.loop = loop;
@@ -139,10 +142,12 @@ public class LoopEx {
     }
 
     public boolean isCounted() {
+        assert countedLoopChecked;
         return counted != null;
     }
 
     public CountedLoopInfo counted() {
+        assert countedLoopChecked;
         return counted;
     }
 
@@ -154,12 +159,23 @@ public class LoopEx {
     }
 
     public int size() {
-        return whole().nodes().count();
+        if (size == -1) {
+            size = whole().nodes().count();
+        }
+        return size;
+    }
+
+    public void resetCounted() {
+        assert countedLoopChecked;
+        assert counted != null;
+        ivs = null;
+        counted = null;
+        countedLoopChecked = false;
     }
 
     @Override
     public String toString() {
-        return (isCounted() ? "CountedLoop [" + counted() + "] " : "Loop ") + "(depth=" + loop().getDepth() + ") " + loopBegin();
+        return (countedLoopChecked && isCounted() ? "CountedLoop [" + counted() + "] " : "Loop ") + "(depth=" + loop().getDepth() + ") " + loopBegin();
     }
 
     private class InvariantPredicate implements NodePredicate {
@@ -173,8 +189,14 @@ public class LoopEx {
         @Override
         public boolean apply(Node n) {
             if (loopBegin().graph().isNew(mark, n)) {
-                // Newly created nodes are unknown.
-                return false;
+                // Newly created nodes are unknown. It is invariant if all of its inputs are
+                // invariants.
+                for (Node input : n.inputs()) {
+                    if (!apply(input)) {
+                        return false;
+                    }
+                }
+                return true;
             }
             return isOutsideLoop(n);
         }
@@ -184,30 +206,52 @@ public class LoopEx {
         int count = 0;
         StructuredGraph graph = loopBegin().graph();
         InvariantPredicate invariant = new InvariantPredicate();
+        NodeBitMap newLoopNodes = graph.createNodeBitMap();
         for (BinaryArithmeticNode<?> binary : whole().nodes().filter(BinaryArithmeticNode.class)) {
             if (!binary.isAssociative()) {
                 continue;
             }
-            ValueNode result = BinaryArithmeticNode.reassociate(binary, invariant, binary.getX(), binary.getY());
+            ValueNode result = BinaryArithmeticNode.reassociateMatchedValues(binary, invariant, binary.getX(), binary.getY(), NodeView.DEFAULT);
+            if (result == binary) {
+                result = BinaryArithmeticNode.reassociateUnmatchedValues(binary, invariant, NodeView.DEFAULT);
+            }
             if (result != binary) {
                 if (!result.isAlive()) {
                     assert !result.isDeleted();
                     result = graph.addOrUniqueWithInputs(result);
+                    // Save all new added loop variants.
+                    newLoopNodes.markAndGrow(result);
+                    for (Node input : result.inputs()) {
+                        if (whole().nodes().isNew(input) && !invariant.apply(input)) {
+                            newLoopNodes.markAndGrow(input);
+                        }
+                    }
                 }
                 DebugContext debug = graph.getDebug();
                 if (debug.isLogEnabled()) {
-                    debug.log("%s : Reassociated %s into %s", graph.method().format("%H::%n"), binary, result);
+                    debug.log("%s : Re-associated %s into %s", graph.method().format("%H::%n"), binary, result);
                 }
                 binary.replaceAtUsages(result);
                 GraphUtil.killWithUnusedFloatingInputs(binary);
                 count++;
             }
         }
+        if (newLoopNodes.isNotEmpty()) {
+            whole().nodes().union(newLoopNodes);
+        }
         return count != 0;
     }
 
+    @SuppressWarnings("fallthrough")
     public boolean detectCounted() {
+        if (countedLoopChecked) {
+            return isCounted();
+        }
+        countedLoopChecked = true;
         LoopBeginNode loopBegin = loopBegin();
+        if (loopBegin.countedLoopDisabled()) {
+            return false;
+        }
         FixedNode next = loopBegin.next();
         while (next instanceof FixedGuardNode || next instanceof ValueAnchorNode || next instanceof FullInfopointNode) {
             next = ((FixedWithNextNode) next).next();
@@ -215,34 +259,31 @@ public class LoopEx {
         if (next instanceof IfNode) {
             IfNode ifNode = (IfNode) next;
             boolean negated = false;
-            if (!loopBegin.isLoopExit(ifNode.falseSuccessor())) {
-                if (!loopBegin.isLoopExit(ifNode.trueSuccessor())) {
+            if (!isCfgLoopExit(ifNode.falseSuccessor())) {
+                if (!isCfgLoopExit(ifNode.trueSuccessor())) {
                     return false;
                 }
                 negated = true;
             }
             LogicNode ifTest = ifNode.condition();
-            if (!(ifTest instanceof IntegerLessThanNode) && !(ifTest instanceof IntegerEqualsNode)) {
-                if (ifTest instanceof IntegerBelowNode) {
-                    ifTest.getDebug().log("Ignored potential Counted loop at %s with |<|", loopBegin);
-                }
+            if (!(ifTest instanceof CompareNode)) {
                 return false;
             }
-            CompareNode lessThan = (CompareNode) ifTest;
+            CompareNode compare = (CompareNode) ifTest;
             Condition condition = null;
             InductionVariable iv = null;
             ValueNode limit = null;
-            if (isOutsideLoop(lessThan.getX())) {
-                iv = getInductionVariables().get(lessThan.getY());
+            if (isOutsideLoop(compare.getX())) {
+                iv = getInductionVariables().get(compare.getY());
                 if (iv != null) {
-                    condition = lessThan.condition().mirror();
-                    limit = lessThan.getX();
+                    condition = compare.condition().asCondition().mirror();
+                    limit = compare.getX();
                 }
-            } else if (isOutsideLoop(lessThan.getY())) {
-                iv = getInductionVariables().get(lessThan.getX());
+            } else if (isOutsideLoop(compare.getY())) {
+                iv = getInductionVariables().get(compare.getX());
                 if (iv != null) {
-                    condition = lessThan.condition();
-                    limit = lessThan.getY();
+                    condition = compare.condition().asCondition();
+                    limit = compare.getY();
                 }
             }
             if (condition == null) {
@@ -252,21 +293,34 @@ public class LoopEx {
                 condition = condition.negate();
             }
             boolean oneOff = false;
+            boolean unsigned = false;
             switch (condition) {
                 case EQ:
-                    return false;
-                case NE: {
-                    if (!iv.isConstantStride() || Math.abs(iv.constantStride()) != 1) {
+                    if (iv.initNode() == limit) {
+                        // allow "single iteration" case
+                        oneOff = true;
+                    } else {
                         return false;
                     }
-                    IntegerStamp initStamp = (IntegerStamp) iv.initNode().stamp();
-                    IntegerStamp limitStamp = (IntegerStamp) limit.stamp();
+                    break;
+                case NE: {
+                    IntegerStamp initStamp = (IntegerStamp) iv.initNode().stamp(NodeView.DEFAULT);
+                    IntegerStamp limitStamp = (IntegerStamp) limit.stamp(NodeView.DEFAULT);
+                    IntegerStamp counterStamp = (IntegerStamp) iv.valueNode().stamp(NodeView.DEFAULT);
                     if (iv.direction() == Direction.Up) {
-                        if (initStamp.upperBound() > limitStamp.lowerBound()) {
+                        if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == counterStamp.upperBound()) {
+                            // signed: i < MAX_INT
+                        } else if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == counterStamp.unsignedUpperBound()) {
+                            unsigned = true;
+                        } else if (!iv.isConstantStride() || Math.abs(iv.constantStride()) != 1 || initStamp.upperBound() > limitStamp.lowerBound()) {
                             return false;
                         }
                     } else if (iv.direction() == Direction.Down) {
-                        if (initStamp.lowerBound() < limitStamp.upperBound()) {
+                        if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == counterStamp.lowerBound()) {
+                            // signed: MIN_INT > i
+                        } else if (limitStamp.asConstant() != null && limitStamp.asConstant().asLong() == counterStamp.unsignedLowerBound()) {
+                            unsigned = true;
+                        } else if (!iv.isConstantStride() || Math.abs(iv.constantStride()) != 1 || initStamp.lowerBound() < limitStamp.upperBound()) {
                             return false;
                         }
                     } else {
@@ -274,35 +328,48 @@ public class LoopEx {
                     }
                     break;
                 }
+                case BE:
+                    unsigned = true; // fall through
                 case LE:
                     oneOff = true;
                     if (iv.direction() != Direction.Up) {
                         return false;
                     }
                     break;
+                case BT:
+                    unsigned = true; // fall through
                 case LT:
                     if (iv.direction() != Direction.Up) {
                         return false;
                     }
                     break;
+                case AE:
+                    unsigned = true; // fall through
                 case GE:
                     oneOff = true;
                     if (iv.direction() != Direction.Down) {
                         return false;
                     }
                     break;
+                case AT:
+                    unsigned = true; // fall through
                 case GT:
                     if (iv.direction() != Direction.Down) {
                         return false;
                     }
                     break;
                 default:
-                    throw GraalError.shouldNotReachHere();
+                    throw GraalError.shouldNotReachHere(condition.toString());
             }
-            counted = new CountedLoopInfo(this, iv, ifNode, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor());
+            counted = new CountedLoopInfo(this, iv, ifNode, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor(), unsigned);
             return true;
         }
         return false;
+    }
+
+    private boolean isCfgLoopExit(AbstractBeginNode begin) {
+        Block block = data.getCFG().blockFor(begin);
+        return loop.getDepth() > block.getLoopDepth() || loop.isNaturalExit(block);
     }
 
     public LoopsData loopsData() {
@@ -317,7 +384,7 @@ public class LoopEx {
         work.add(cfg.blockFor(branch));
         while (!work.isEmpty()) {
             Block b = work.remove();
-            if (loop().getExits().contains(b)) {
+            if (loop().isLoopExit(b)) {
                 assert !exits.contains(b.getBeginNode());
                 exits.add(b.getBeginNode());
             } else if (blocks.add(b.getBeginNode())) {
@@ -330,7 +397,7 @@ public class LoopEx {
                 }
             }
         }
-        LoopFragment.computeNodes(branchNodes, branch.graph(), blocks, exits);
+        LoopFragment.computeNodes(branchNodes, branch.graph(), this, blocks, exits);
     }
 
     public EconomicMap<Node, InductionVariable> getInductionVariables() {
@@ -373,7 +440,7 @@ public class LoopEx {
                 if (loop.isOutsideLoop(op)) {
                     continue;
                 }
-                if (op.usages().count() == 1 && op.usages().first() == baseIvNode) {
+                if (op.hasExactlyOneUsage() && op.usages().first() == baseIvNode) {
                     /*
                      * This is just the base induction variable increment with no other uses so
                      * don't bother reporting it.
@@ -392,12 +459,16 @@ public class LoopEx {
                 } else {
                     boolean isValidConvert = op instanceof PiNode || op instanceof SignExtendNode;
                     if (!isValidConvert && op instanceof ZeroExtendNode) {
-                        IntegerStamp inputStamp = (IntegerStamp) ((ZeroExtendNode) op).getValue().stamp();
-                        isValidConvert = inputStamp.isPositive();
+                        ZeroExtendNode zeroExtendNode = (ZeroExtendNode) op;
+                        isValidConvert = zeroExtendNode.isInputAlwaysPositive() || ((IntegerStamp) zeroExtendNode.stamp(NodeView.DEFAULT)).isPositive();
+                    }
+                    if (!isValidConvert && op instanceof NarrowNode) {
+                        NarrowNode narrow = (NarrowNode) op;
+                        isValidConvert = NumUtil.isSignedNbit(narrow.getResultBits(), ((IntegerStamp) narrow.getValue().stamp(NodeView.DEFAULT)).upMask());
                     }
 
                     if (isValidConvert) {
-                        iv = new DerivedConvertedInductionVariable(loop, baseIv, op.stamp(), op);
+                        iv = new DerivedConvertedInductionVariable(loop, baseIv, op.stamp(NodeView.DEFAULT), op);
                     }
                 }
 
@@ -411,7 +482,7 @@ public class LoopEx {
     }
 
     private static ValueNode addSub(LoopEx loop, ValueNode op, ValueNode base) {
-        if (op.stamp() instanceof IntegerStamp && (op instanceof AddNode || op instanceof SubNode)) {
+        if (op.stamp(NodeView.DEFAULT) instanceof IntegerStamp && (op instanceof AddNode || op instanceof SubNode)) {
             BinaryArithmeticNode<?> aritOp = (BinaryArithmeticNode<?>) op;
             if (aritOp.getX() == base && loop.isOutsideLoop(aritOp.getY())) {
                 return aritOp.getY();
@@ -434,7 +505,7 @@ public class LoopEx {
         if (op instanceof LeftShiftNode) {
             LeftShiftNode shift = (LeftShiftNode) op;
             if (shift.getX() == base && shift.getY().isConstant()) {
-                return ConstantNode.forIntegerStamp(base.stamp(), 1 << shift.getY().asJavaConstant().asInt(), base.graph());
+                return ConstantNode.forIntegerStamp(base.stamp(NodeView.DEFAULT), 1 << shift.getY().asJavaConstant().asInt(), base.graph());
             }
         }
         return null;
@@ -461,7 +532,7 @@ public class LoopEx {
             }
             if (node instanceof FrameState) {
                 FrameState frameState = (FrameState) node;
-                if (frameState.bci == BytecodeFrame.AFTER_EXCEPTION_BCI || frameState.bci == BytecodeFrame.UNWIND_BCI) {
+                if (frameState.isExceptionHandlingBCI()) {
                     return false;
                 }
             }
