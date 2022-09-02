@@ -27,6 +27,7 @@ package org.graalvm.tools.lsp.server.request;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
@@ -41,7 +42,8 @@ import org.graalvm.tools.lsp.server.utils.SourceUtils;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogate;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogateMap;
 
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Scope;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
@@ -55,7 +57,6 @@ import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.NodeLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -66,6 +67,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 
+@SuppressWarnings("deprecation")
 public final class HoverRequestHandler extends AbstractRequestHandler {
 
     static final InteropLibrary INTEROP = InteropLibrary.getFactory().getUncached();
@@ -155,7 +157,7 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
                 logger.fine("Trying coverage-based eval...");
                 evalResult = executableNode.execute(coverageData.getFrame());
             } catch (Exception e) {
-                if (!(INTEROP.isException(e) || (e instanceof ControlFlowException))) {
+                if (!((e instanceof TruffleException) || (e instanceof ControlFlowException))) {
                     e.printStackTrace(err);
                 }
                 return Hover.create(Collections.emptyList());
@@ -175,7 +177,6 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
         return getFutureResultOrHandleExceptions(future);
     }
 
-    @SuppressWarnings("deprecation")
     private Hover trySignature(SourceSection hoverSection, LanguageInfo langInfo, TruffleObject evalResult) {
         String formattedSignature = completionHandler.getFormattedSignature(evalResult, langInfo);
         if (formattedSignature != null) {
@@ -199,19 +200,33 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
         return null;
     }
 
-    private Hover tryFrameScope(MaterializedFrame frame, CoverageEventNode node, String textAtHoverPosition, LanguageInfo langInfo, SourceSection hoverSection) {
-        Node instrumentedNode = node.getInstrumentedNode();
-        NodeLibrary nodeLibrary = NodeLibrary.getUncached(instrumentedNode);
-        if (nodeLibrary.hasScope(instrumentedNode, frame)) {
+    private Hover tryFrameScope(MaterializedFrame frame, Node node, String textAtHoverPosition, LanguageInfo langInfo, SourceSection hoverSection) {
+        final Iterator<Scope> scopes = env.findLocalScopes(node, frame).iterator();
+        if (scopes.hasNext()) {
+            final Scope scope = scopes.next();
             try {
-                Object scope = nodeLibrary.getScope(instrumentedNode, frame, true);
-                Object keys = INTEROP.getMembers(scope);
-                long size = INTEROP.getArraySize(keys);
-                for (long i = 0; i < size; i++) {
-                    String key = INTEROP.asString(INTEROP.readArrayElement(keys, i));
-                    if (key.equals(textAtHoverPosition)) {
-                        Object var = INTEROP.readMember(scope, key);
-                        return Hover.create(createDefaultHoverInfos(textAtHoverPosition, var, langInfo)).setRange(SourceUtils.sourceSectionToRange(hoverSection));
+                final Object argsObject = scope.getArguments();
+                if (argsObject instanceof TruffleObject) {
+                    Object keys = INTEROP.getMembers(argsObject);
+                    long size = INTEROP.getArraySize(keys);
+                    for (long i = 0; i < size; i++) {
+                        String key = INTEROP.asString(INTEROP.readArrayElement(keys, i));
+                        if (key.equals(textAtHoverPosition)) {
+                            Object argument = INTEROP.readMember(argsObject, key);
+                            return Hover.create(createDefaultHoverInfos(textAtHoverPosition, argument, langInfo)).setRange(SourceUtils.sourceSectionToRange(hoverSection));
+                        }
+                    }
+                }
+                final Object varsObject = scope.getVariables();
+                if (varsObject instanceof TruffleObject) {
+                    Object keys = INTEROP.getMembers(varsObject);
+                    long size = INTEROP.getArraySize(keys);
+                    for (long i = 0; i < size; i++) {
+                        String key = INTEROP.asString(INTEROP.readArrayElement(keys, i));
+                        if (key.equals(textAtHoverPosition)) {
+                            Object var = INTEROP.readMember(varsObject, key);
+                            return Hover.create(createDefaultHoverInfos(textAtHoverPosition, var, langInfo)).setRange(SourceUtils.sourceSectionToRange(hoverSection));
+                        }
                     }
                 }
             } catch (UnsupportedMessageException | UnknownIdentifierException | InvalidArrayIndexException e) {
@@ -220,11 +235,10 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
         return null;
     }
 
-    @SuppressWarnings("deprecation")
     private List<Object> createDefaultHoverInfos(String textAtHoverPosition, Object evalResultObject, LanguageInfo langInfo) {
         List<Object> contents = new ArrayList<>();
         contents.add(org.graalvm.tools.lsp.server.types.MarkedString.create(langInfo.getId(), textAtHoverPosition));
-        String result = evalResultObject != null ? toString(evalResultObject, langInfo) : "";
+        String result = evalResultObject != null ? env.toString(langInfo, evalResultObject) : "";
         if (!textAtHoverPosition.equals(result)) {
             String resultObjectString = evalResultObject instanceof String ? "\"" + result + "\"" : result;
             contents.add(resultObjectString);
@@ -244,14 +258,5 @@ public final class HoverRequestHandler extends AbstractRequestHandler {
             }
         }
         return contents;
-    }
-
-    private String toString(Object evalResultObject, LanguageInfo langInfo) {
-        Object view = env.getLanguageView(langInfo, evalResultObject);
-        try {
-            return INTEROP.asString(INTEROP.toDisplayString(view, true));
-        } catch (UnsupportedMessageException e) {
-            throw CompilerDirectives.shouldNotReachHere(e);
-        }
     }
 }
