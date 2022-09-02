@@ -61,7 +61,6 @@ public abstract class LLVMAccessGlobalVariableStorageNode extends LLVMExpression
     }
 
     @Specialization
-<<<<<<< HEAD
     Object doAccess(
                     @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @Cached ReadDynamicObjectHelper helper) {
@@ -137,9 +136,10 @@ public abstract class LLVMAccessGlobalVariableStorageNode extends LLVMExpression
         protected Object readIndirect(DynamicObject dynamicObject, LLVMGlobal descriptor) {
             return dynamicObject.get(descriptor);
         }
-=======
-    public Object accessGlobal() {
-        return context.getGlobalStorage(descriptor);
->>>>>>> LLVMAccessGlobalVariableStorageNode is a now an abstract class and now takes a context to access the global storage.
     }
+
+    /*@Specialization
+    public Object accessGlobal(@CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+        return ctx.getGlobal(descriptor);
+    }*/
 }
