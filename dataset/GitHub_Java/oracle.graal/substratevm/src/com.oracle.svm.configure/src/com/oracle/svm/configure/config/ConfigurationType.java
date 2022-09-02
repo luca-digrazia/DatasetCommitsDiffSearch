@@ -37,7 +37,7 @@ import com.oracle.svm.configure.json.JsonWriter;
 public class ConfigurationType implements JsonPrintable {
     private final String qualifiedJavaName;
 
-    private Map<String, ConfigurationMemberKind> fields;
+    private Map<String, FieldInfo> fields;
     private Map<ConfigurationMethod, ConfigurationMemberKind> methods;
 
     private boolean allDeclaredClasses;
@@ -51,6 +51,7 @@ public class ConfigurationType implements JsonPrintable {
 
     public ConfigurationType(String qualifiedJavaName) {
         assert qualifiedJavaName.indexOf('/') == -1 : "Requires qualified Java name, not internal representation";
+        assert !qualifiedJavaName.startsWith("[") : "Requires Java source array syntax, for example java.lang.String[]";
         this.qualifiedJavaName = qualifiedJavaName;
     }
 
@@ -58,15 +59,24 @@ public class ConfigurationType implements JsonPrintable {
         return qualifiedJavaName;
     }
 
-    public void addField(String name, ConfigurationMemberKind memberKind) {
-        if ((memberKind.includes(ConfigurationMemberKind.DECLARED) && haveAllDeclaredFields()) || (memberKind.includes(ConfigurationMemberKind.PUBLIC) && haveAllPublicFields())) {
-            fields = maybeRemove(fields, map -> map.remove(name));
-            return;
+    public void addField(String name, ConfigurationMemberKind memberKind, boolean finalButWritable) {
+        if (!finalButWritable) {
+            if ((memberKind.includes(ConfigurationMemberKind.DECLARED) && haveAllDeclaredFields()) || (memberKind.includes(ConfigurationMemberKind.PUBLIC) && haveAllPublicFields())) {
+                fields = maybeRemove(fields, map -> {
+                    FieldInfo fieldInfo = map.get(name);
+                    if (fieldInfo != null && !fieldInfo.isFinalButWritable()) {
+                        map.remove(name);
+                    }
+                });
+                return;
+            }
         }
         if (fields == null) {
             fields = new HashMap<>();
         }
-        fields.compute(name, (k, v) -> memberKind.intersect(v));
+        fields.compute(name, (k, v) -> (v != null)
+                        ? FieldInfo.get(v.getKind().intersect(memberKind), v.isFinalButWritable() || finalButWritable)
+                        : FieldInfo.get(memberKind, finalButWritable));
     }
 
     public void addMethodsWithName(String name, ConfigurationMemberKind memberKind) {
@@ -94,24 +104,6 @@ public class ConfigurationType implements JsonPrintable {
             methods.compute(method, (k, v) -> memberKind.intersect(v));
         }
         assert methods.containsKey(method);
-    }
-
-    public boolean hasIndividualMethod(String name, String internalSignature) {
-        if (methods != null && name != null && internalSignature != null) {
-            for (ConfigurationMethod method : methods.keySet()) {
-                if (method.matches(name, internalSignature)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    public boolean hasIndividualField(String name) {
-        if (fields != null) {
-            return fields.containsKey(name);
-        }
-        return false;
     }
 
     public boolean haveAllDeclaredClasses() {
@@ -198,7 +190,7 @@ public class ConfigurationType implements JsonPrintable {
         optionallyPrintJsonBoolean(writer, haveAllPublicClasses(), "allPublicClasses");
         if (fields != null) {
             writer.append(',').newline().quote("fields").append(':');
-            JsonPrinter.printCollection(writer, fields.keySet(), Comparator.naturalOrder(), (String s, JsonWriter w) -> w.append('{').quote("name").append(':').quote(s).append('}'));
+            JsonPrinter.printCollection(writer, fields.entrySet(), Map.Entry.comparingByKey(), ConfigurationType::printField);
         }
         if (methods != null) {
             writer.append(',').newline().quote("methods").append(':');
@@ -211,6 +203,14 @@ public class ConfigurationType implements JsonPrintable {
         writer.append('}');
     }
 
+    private static void printField(Map.Entry<String, FieldInfo> entry, JsonWriter w) throws IOException {
+        w.append('{').quote("name").append(':').quote(entry.getKey());
+        if (entry.getValue().isFinalButWritable()) {
+            w.append(", ").quote("allowWrite").append(':').append("true");
+        }
+        w.append('}');
+    }
+
     private static void optionallyPrintJsonBoolean(JsonWriter writer, boolean predicate, String attribute) throws IOException {
         if (predicate) {
             writer.append(',').newline().quote(attribute).append(":true");
@@ -218,15 +218,15 @@ public class ConfigurationType implements JsonPrintable {
     }
 
     private void removeFields(ConfigurationMemberKind memberKind) {
-        fields = maybeRemove(fields, map -> map.values().removeIf(memberKind::includes));
+        fields = maybeRemove(fields, map -> map.values().removeIf(v -> memberKind.includes(v.getKind())));
     }
 
     private void removeMethods(ConfigurationMemberKind memberKind, boolean constructors) {
         methods = maybeRemove(methods, map -> map.entrySet().removeIf(entry -> entry.getKey().isConstructor() == constructors && memberKind.includes(entry.getValue())));
     }
 
-    private static <T> Map<T, ConfigurationMemberKind> maybeRemove(Map<T, ConfigurationMemberKind> fromMap, Consumer<Map<T, ConfigurationMemberKind>> action) {
-        Map<T, ConfigurationMemberKind> map = fromMap;
+    private static <T, S> Map<T, S> maybeRemove(Map<T, S> fromMap, Consumer<Map<T, S>> action) {
+        Map<T, S> map = fromMap;
         if (map != null) {
             action.accept(map);
             if (map.isEmpty()) {
