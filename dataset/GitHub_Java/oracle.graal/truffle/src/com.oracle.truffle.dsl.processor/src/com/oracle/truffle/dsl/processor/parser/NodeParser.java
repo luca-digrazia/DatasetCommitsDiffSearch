@@ -2551,18 +2551,16 @@ public final class NodeParser extends AbstractParser<NodeData> {
         for (String guardExpression : guardDefinitions) {
             GuardExpression guard = parseGuard(resolver, specialization, guardExpression);
 
-            if (guard.getExpression() != null) {
-                Set<CacheExpression> caches = specialization.getBoundCaches(guard.getExpression(), false);
-                for (CacheExpression cache : caches) {
-                    if (handledCaches.contains(cache)) {
-                        continue;
-                    }
-                    if (cache.isGuardForNull()) {
-                        guards.add(createWeakReferenceGuard(resolver, specialization, cache));
-                    }
+            Set<CacheExpression> caches = specialization.getBoundCaches(guard.getExpression(), false);
+            for (CacheExpression cache : caches) {
+                if (handledCaches.contains(cache)) {
+                    continue;
                 }
-                handledCaches.addAll(caches);
+                if (cache.isGuardForNull()) {
+                    guards.add(createWeakReferenceGuard(resolver, specialization, cache));
+                }
             }
+            handledCaches.addAll(caches);
 
             guards.add(guard);
         }
