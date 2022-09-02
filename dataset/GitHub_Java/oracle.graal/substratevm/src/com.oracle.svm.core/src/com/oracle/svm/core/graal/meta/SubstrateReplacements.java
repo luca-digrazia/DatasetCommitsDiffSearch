@@ -282,9 +282,6 @@ public class SubstrateReplacements extends ReplacementsImpl {
         snippetNodeClasses = encoder.getNodeClasses();
 
         snippetInvocationPlugins = makeInvocationPlugins(getGraphBuilderPlugins(), builder, Function.identity());
-
-        /* Original graphs are no longer necessary, release memory. */
-        builder.graphs.clear();
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)

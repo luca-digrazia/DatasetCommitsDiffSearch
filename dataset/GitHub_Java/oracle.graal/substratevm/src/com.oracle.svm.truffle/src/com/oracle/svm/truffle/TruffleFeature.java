@@ -30,10 +30,8 @@ import static org.graalvm.compiler.java.BytecodeParserOptions.InlineDuringParsin
 import static org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
@@ -104,12 +102,6 @@ import java.util.function.ToLongFunction;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
-import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
-import com.oracle.graal.pointsto.phases.SubstrateIntrinsicGraphBuilder;
-import com.oracle.svm.hosted.c.GraalAccess;
-import com.oracle.truffle.api.staticobject.StaticShape;
-import jdk.vm.ci.common.JVMCIError;
-import org.graalvm.collections.Pair;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
@@ -126,7 +118,6 @@ import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.nodes.asserts.NeverPartOfCompilationNode;
 import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
@@ -199,7 +190,6 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import sun.misc.Unsafe;
 
 public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeature {
 
@@ -210,11 +200,8 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         @Option(help = "Enforce that the Truffle runtime provides the only implementation of Frame")//
         public static final HostedOptionKey<Boolean> TruffleCheckFrameImplementation = new HostedOptionKey<>(true);
 
-        @Option(help = "Fail if a method known as not suitable for partial evaluation is reachable for runtime compilation", deprecated = true)//
-        public static final HostedOptionKey<Boolean> TruffleCheckBlackListedMethods = new HostedOptionKey<>(true);
-
         @Option(help = "Fail if a method known as not suitable for partial evaluation is reachable for runtime compilation")//
-        public static final HostedOptionKey<Boolean> TruffleCheckBlockListMethods = new HostedOptionKey<>(true);
+        public static final HostedOptionKey<Boolean> TruffleCheckBlackListedMethods = new HostedOptionKey<>(true);
 
         @Option(help = "Inline trivial methods in Truffle graphs during native image generation")//
         public static final HostedOptionKey<Boolean> TruffleInlineDuringParsing = new HostedOptionKey<>(true);
@@ -257,18 +244,18 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
     private ClassLoader imageClassLoader;
     // Checkstyle: resume
 
-    private final Set<ResolvedJavaMethod> blocklistMethods;
-    private final Set<GraalFeature.CallTreeNode> blocklistViolations;
+    private final Set<ResolvedJavaMethod> blacklistMethods;
+    private final Set<GraalFeature.CallTreeNode> blacklistViolations;
     private final Set<ResolvedJavaMethod> warnMethods;
     private final Set<GraalFeature.CallTreeNode> warnViolations;
     private final Set<GraalFeature.CallTreeNode> neverPartOfCompilationViolations;
 
     public TruffleFeature() {
-        blocklistMethods = new HashSet<>();
-        blocklistViolations = new TreeSet<>(TruffleFeature::blocklistViolationComparator);
+        blacklistMethods = new HashSet<>();
+        blacklistViolations = new TreeSet<>(TruffleFeature::blacklistViolationComparator);
         warnMethods = new HashSet<>();
-        warnViolations = new TreeSet<>(TruffleFeature::blocklistViolationComparator);
-        neverPartOfCompilationViolations = new TreeSet<>(TruffleFeature::blocklistViolationComparator);
+        warnViolations = new TreeSet<>(TruffleFeature::blacklistViolationComparator);
+        neverPartOfCompilationViolations = new TreeSet<>(TruffleFeature::blacklistViolationComparator);
     }
 
     @Override
@@ -383,8 +370,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
 
     @Override
     public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, Plugins plugins, ParsingReason reason) {
-        StaticObjectSupport.registerInvocationPlugins(providers, snippetReflection, plugins, reason);
-
         /*
          * We need to constant-fold Profile.isProfilingEnabled already during static analysis, so
          * that we get exact types for fields that store profiles.
@@ -521,7 +506,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
                 graalFeature.prepareMethodForRuntimeCompilation(method, config);
             }
 
-            initializeMethodBlocklist(config.getMetaAccess());
+            initializeMethodBlacklist(config.getMetaAccess());
 
             /*
              * Stack frames that are visited by Truffle-level stack walking must have full frame
@@ -629,8 +614,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
 
     @Override
     public void duringAnalysis(DuringAnalysisAccess access) {
-        StaticObjectSupport.duringAnalysis(access);
-
         if (firstAnalysisRun) {
             firstAnalysisRun = false;
             Object keep = invokeStaticMethod("com.oracle.truffle.polyglot.PolyglotContextImpl", "resetSingleContextState", Collections.singleton(boolean.class), false);
@@ -722,13 +705,13 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             return false;
         } else if (implementationMethod.getAnnotation(TruffleCallBoundary.class) != null) {
             return false;
-        } else if (calleeNode != null && implementationMethods.size() > 4 && isBlocklisted(calleeNode.getTargetMethod())) {
-            blocklistViolations.add(new GraalFeature.CallTreeNode(calleeNode.getTargetMethod(), calleeNode.getTargetMethod(), calleeNode.getParent(), calleeNode.getLevel(),
+        } else if (calleeNode != null && implementationMethods.size() > 4 && isBlacklisted(calleeNode.getTargetMethod())) {
+            blacklistViolations.add(new GraalFeature.CallTreeNode(calleeNode.getTargetMethod(), calleeNode.getTargetMethod(), calleeNode.getParent(), calleeNode.getLevel(),
                             calleeNode.getSourceReference()));
             return false;
-        } else if (isBlocklisted(implementationMethod)) {
+        } else if (isBlacklisted(implementationMethod)) {
             if (calleeNode != null) {
-                blocklistViolations.add(calleeNode);
+                blacklistViolations.add(calleeNode);
             }
             return false;
 
@@ -741,7 +724,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         return true;
     }
 
-    private boolean isBlocklisted(ResolvedJavaMethod method) {
+    private boolean isBlacklisted(ResolvedJavaMethod method) {
         if (!((AnalysisMethod) method).allowRuntimeCompilation()) {
             return true;
         }
@@ -754,7 +737,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
              */
             return true;
         }
-        return blocklistMethods.contains(method);
+        return blacklistMethods.contains(method);
     }
 
     @SuppressWarnings("deprecation")
@@ -766,90 +749,90 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         return truffleBoundary != null && truffleBoundary.transferToInterpreterOnException();
     }
 
-    private void initializeMethodBlocklist(MetaAccessProvider metaAccess) {
-        blocklistMethod(metaAccess, Object.class, "clone");
-        blocklistMethod(metaAccess, Object.class, "equals", Object.class);
-        blocklistMethod(metaAccess, Object.class, "hashCode");
-        blocklistMethod(metaAccess, Object.class, "toString");
-        blocklistMethod(metaAccess, String.class, "valueOf", Object.class);
-        blocklistMethod(metaAccess, String.class, "getBytes");
-        blocklistMethod(metaAccess, Throwable.class, "initCause", Throwable.class);
-        blocklistMethod(metaAccess, Throwable.class, "addSuppressed", Throwable.class);
-        blocklistMethod(metaAccess, System.class, "getProperty", String.class);
+    private void initializeMethodBlacklist(MetaAccessProvider metaAccess) {
+        blacklistMethod(metaAccess, Object.class, "clone");
+        blacklistMethod(metaAccess, Object.class, "equals", Object.class);
+        blacklistMethod(metaAccess, Object.class, "hashCode");
+        blacklistMethod(metaAccess, Object.class, "toString");
+        blacklistMethod(metaAccess, String.class, "valueOf", Object.class);
+        blacklistMethod(metaAccess, String.class, "getBytes");
+        blacklistMethod(metaAccess, Throwable.class, "initCause", Throwable.class);
+        blacklistMethod(metaAccess, Throwable.class, "addSuppressed", Throwable.class);
+        blacklistMethod(metaAccess, System.class, "getProperty", String.class);
 
-        blocklistAllMethods(metaAccess, AssertionError.class);
-        blocklistAllMethods(metaAccess, BigInteger.class);
-        blocklistAllMethods(metaAccess, BigDecimal.class);
-        blocklistAllMethods(metaAccess, Comparable.class);
-        blocklistAllMethods(metaAccess, Comparator.class);
-        blocklistAllMethods(metaAccess, Collection.class);
-        blocklistAllMethods(metaAccess, List.class);
-        blocklistAllMethods(metaAccess, Set.class);
-        blocklistAllMethods(metaAccess, Map.class);
-        blocklistAllMethods(metaAccess, Map.Entry.class);
-        blocklistAllMethods(metaAccess, TreeMap.class);
-        blocklistAllMethods(metaAccess, HashMap.class);
-        blocklistAllMethods(metaAccess, ConcurrentHashMap.class);
-        blocklistAllMethods(metaAccess, WeakHashMap.class);
-        blocklistAllMethods(metaAccess, IdentityHashMap.class);
-        blocklistAllMethods(metaAccess, Iterable.class);
-        blocklistAllMethods(metaAccess, Iterator.class);
-        blocklistAllMethods(metaAccess, ListIterator.class);
-        blocklistAllMethods(metaAccess, ReentrantLock.class);
+        blacklistAllMethods(metaAccess, AssertionError.class);
+        blacklistAllMethods(metaAccess, BigInteger.class);
+        blacklistAllMethods(metaAccess, BigDecimal.class);
+        blacklistAllMethods(metaAccess, Comparable.class);
+        blacklistAllMethods(metaAccess, Comparator.class);
+        blacklistAllMethods(metaAccess, Collection.class);
+        blacklistAllMethods(metaAccess, List.class);
+        blacklistAllMethods(metaAccess, Set.class);
+        blacklistAllMethods(metaAccess, Map.class);
+        blacklistAllMethods(metaAccess, Map.Entry.class);
+        blacklistAllMethods(metaAccess, TreeMap.class);
+        blacklistAllMethods(metaAccess, HashMap.class);
+        blacklistAllMethods(metaAccess, ConcurrentHashMap.class);
+        blacklistAllMethods(metaAccess, WeakHashMap.class);
+        blacklistAllMethods(metaAccess, IdentityHashMap.class);
+        blacklistAllMethods(metaAccess, Iterable.class);
+        blacklistAllMethods(metaAccess, Iterator.class);
+        blacklistAllMethods(metaAccess, ListIterator.class);
+        blacklistAllMethods(metaAccess, ReentrantLock.class);
 
-        allowlistMethod(metaAccess, BigInteger.class, "signum");
-        allowlistMethod(metaAccess, ReentrantLock.class, "isLocked");
-        allowlistMethod(metaAccess, ReentrantLock.class, "isHeldByCurrentThread");
+        whitelistMethod(metaAccess, BigInteger.class, "signum");
+        whitelistMethod(metaAccess, ReentrantLock.class, "isLocked");
+        whitelistMethod(metaAccess, ReentrantLock.class, "isHeldByCurrentThread");
 
         /* Methods with synchronization are currently not supported as deoptimization targets. */
-        blocklistAllMethods(metaAccess, StringBuffer.class);
-        blocklistAllMethods(metaAccess, Vector.class);
-        blocklistAllMethods(metaAccess, Hashtable.class);
+        blacklistAllMethods(metaAccess, StringBuffer.class);
+        blacklistAllMethods(metaAccess, Vector.class);
+        blacklistAllMethods(metaAccess, Hashtable.class);
 
-        /* Block list generic functional interfaces. */
-        blocklistAllMethods(metaAccess, BiConsumer.class);
-        blocklistAllMethods(metaAccess, BiFunction.class);
-        blocklistAllMethods(metaAccess, BinaryOperator.class);
-        blocklistAllMethods(metaAccess, BiPredicate.class);
-        blocklistAllMethods(metaAccess, BooleanSupplier.class);
-        blocklistAllMethods(metaAccess, Consumer.class);
-        blocklistAllMethods(metaAccess, DoubleBinaryOperator.class);
-        blocklistAllMethods(metaAccess, DoubleConsumer.class);
-        blocklistAllMethods(metaAccess, DoubleFunction.class);
-        blocklistAllMethods(metaAccess, DoublePredicate.class);
-        blocklistAllMethods(metaAccess, DoubleSupplier.class);
-        blocklistAllMethods(metaAccess, DoubleToIntFunction.class);
-        blocklistAllMethods(metaAccess, DoubleToLongFunction.class);
-        blocklistAllMethods(metaAccess, DoubleUnaryOperator.class);
-        blocklistAllMethods(metaAccess, Function.class);
-        blocklistAllMethods(metaAccess, IntBinaryOperator.class);
-        blocklistAllMethods(metaAccess, IntConsumer.class);
-        blocklistAllMethods(metaAccess, IntFunction.class);
-        blocklistAllMethods(metaAccess, IntPredicate.class);
-        blocklistAllMethods(metaAccess, IntSupplier.class);
-        blocklistAllMethods(metaAccess, IntToDoubleFunction.class);
-        blocklistAllMethods(metaAccess, IntToLongFunction.class);
-        blocklistAllMethods(metaAccess, IntUnaryOperator.class);
-        blocklistAllMethods(metaAccess, LongBinaryOperator.class);
-        blocklistAllMethods(metaAccess, LongConsumer.class);
-        blocklistAllMethods(metaAccess, LongFunction.class);
-        blocklistAllMethods(metaAccess, LongPredicate.class);
-        blocklistAllMethods(metaAccess, LongSupplier.class);
-        blocklistAllMethods(metaAccess, LongToDoubleFunction.class);
-        blocklistAllMethods(metaAccess, LongToIntFunction.class);
-        blocklistAllMethods(metaAccess, LongUnaryOperator.class);
-        blocklistAllMethods(metaAccess, ObjDoubleConsumer.class);
-        blocklistAllMethods(metaAccess, ObjIntConsumer.class);
-        blocklistAllMethods(metaAccess, ObjLongConsumer.class);
-        blocklistAllMethods(metaAccess, Predicate.class);
-        blocklistAllMethods(metaAccess, Supplier.class);
-        blocklistAllMethods(metaAccess, ToDoubleBiFunction.class);
-        blocklistAllMethods(metaAccess, ToDoubleFunction.class);
-        blocklistAllMethods(metaAccess, ToIntBiFunction.class);
-        blocklistAllMethods(metaAccess, ToIntFunction.class);
-        blocklistAllMethods(metaAccess, ToLongBiFunction.class);
-        blocklistAllMethods(metaAccess, ToLongFunction.class);
-        blocklistAllMethods(metaAccess, UnaryOperator.class);
+        /* Black list generic functional interfaces. */
+        blacklistAllMethods(metaAccess, BiConsumer.class);
+        blacklistAllMethods(metaAccess, BiFunction.class);
+        blacklistAllMethods(metaAccess, BinaryOperator.class);
+        blacklistAllMethods(metaAccess, BiPredicate.class);
+        blacklistAllMethods(metaAccess, BooleanSupplier.class);
+        blacklistAllMethods(metaAccess, Consumer.class);
+        blacklistAllMethods(metaAccess, DoubleBinaryOperator.class);
+        blacklistAllMethods(metaAccess, DoubleConsumer.class);
+        blacklistAllMethods(metaAccess, DoubleFunction.class);
+        blacklistAllMethods(metaAccess, DoublePredicate.class);
+        blacklistAllMethods(metaAccess, DoubleSupplier.class);
+        blacklistAllMethods(metaAccess, DoubleToIntFunction.class);
+        blacklistAllMethods(metaAccess, DoubleToLongFunction.class);
+        blacklistAllMethods(metaAccess, DoubleUnaryOperator.class);
+        blacklistAllMethods(metaAccess, Function.class);
+        blacklistAllMethods(metaAccess, IntBinaryOperator.class);
+        blacklistAllMethods(metaAccess, IntConsumer.class);
+        blacklistAllMethods(metaAccess, IntFunction.class);
+        blacklistAllMethods(metaAccess, IntPredicate.class);
+        blacklistAllMethods(metaAccess, IntSupplier.class);
+        blacklistAllMethods(metaAccess, IntToDoubleFunction.class);
+        blacklistAllMethods(metaAccess, IntToLongFunction.class);
+        blacklistAllMethods(metaAccess, IntUnaryOperator.class);
+        blacklistAllMethods(metaAccess, LongBinaryOperator.class);
+        blacklistAllMethods(metaAccess, LongConsumer.class);
+        blacklistAllMethods(metaAccess, LongFunction.class);
+        blacklistAllMethods(metaAccess, LongPredicate.class);
+        blacklistAllMethods(metaAccess, LongSupplier.class);
+        blacklistAllMethods(metaAccess, LongToDoubleFunction.class);
+        blacklistAllMethods(metaAccess, LongToIntFunction.class);
+        blacklistAllMethods(metaAccess, LongUnaryOperator.class);
+        blacklistAllMethods(metaAccess, ObjDoubleConsumer.class);
+        blacklistAllMethods(metaAccess, ObjIntConsumer.class);
+        blacklistAllMethods(metaAccess, ObjLongConsumer.class);
+        blacklistAllMethods(metaAccess, Predicate.class);
+        blacklistAllMethods(metaAccess, Supplier.class);
+        blacklistAllMethods(metaAccess, ToDoubleBiFunction.class);
+        blacklistAllMethods(metaAccess, ToDoubleFunction.class);
+        blacklistAllMethods(metaAccess, ToIntBiFunction.class);
+        blacklistAllMethods(metaAccess, ToIntFunction.class);
+        blacklistAllMethods(metaAccess, ToLongBiFunction.class);
+        blacklistAllMethods(metaAccess, ToLongFunction.class);
+        blacklistAllMethods(metaAccess, UnaryOperator.class);
 
         /*
          * Core Substrate VM classes that very certainly should not be reachable for runtime
@@ -860,29 +843,29 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         warnAllMethods(metaAccess, Heap.getHeap().getClass());
     }
 
-    private void blocklistAllMethods(MetaAccessProvider metaAccess, Class<?> clazz) {
+    private void blacklistAllMethods(MetaAccessProvider metaAccess, Class<?> clazz) {
         for (Executable m : clazz.getDeclaredMethods()) {
-            blocklistMethods.add(metaAccess.lookupJavaMethod(m));
+            blacklistMethods.add(metaAccess.lookupJavaMethod(m));
         }
         for (Executable m : clazz.getDeclaredConstructors()) {
-            blocklistMethods.add(metaAccess.lookupJavaMethod(m));
+            blacklistMethods.add(metaAccess.lookupJavaMethod(m));
         }
     }
 
-    private void blocklistMethod(MetaAccessProvider metaAccess, Class<?> clazz, String name, Class<?>... parameterTypes) {
+    private void blacklistMethod(MetaAccessProvider metaAccess, Class<?> clazz, String name, Class<?>... parameterTypes) {
         try {
-            blocklistMethods.add(metaAccess.lookupJavaMethod(clazz.getDeclaredMethod(name, parameterTypes)));
+            blacklistMethods.add(metaAccess.lookupJavaMethod(clazz.getDeclaredMethod(name, parameterTypes)));
         } catch (NoSuchMethodException ex) {
             throw VMError.shouldNotReachHere(ex);
         }
     }
 
     /**
-     * Removes a previously blocklisted method from the blocklist.
+     * Removes a previously blacklisted method from the blacklist.
      */
-    private void allowlistMethod(MetaAccessProvider metaAccess, Class<?> clazz, String name, Class<?>... parameterTypes) {
+    private void whitelistMethod(MetaAccessProvider metaAccess, Class<?> clazz, String name, Class<?>... parameterTypes) {
         try {
-            if (!blocklistMethods.remove(metaAccess.lookupJavaMethod(clazz.getDeclaredMethod(name, parameterTypes)))) {
+            if (!blacklistMethods.remove(metaAccess.lookupJavaMethod(clazz.getDeclaredMethod(name, parameterTypes)))) {
                 throw VMError.shouldNotReachHere();
             }
         } catch (NoSuchMethodException ex) {
@@ -908,7 +891,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         }
     }
 
-    private static int blocklistViolationComparator(GraalFeature.CallTreeNode n1, GraalFeature.CallTreeNode n2) {
+    private static int blacklistViolationComparator(GraalFeature.CallTreeNode n1, GraalFeature.CallTreeNode n2) {
         int result = n1.getTargetMethod().getQualifiedName().compareTo(n2.getTargetMethod().getQualifiedName());
         if (result == 0) {
             result = n1.getSourceReference().compareTo(n2.getSourceReference());
@@ -918,26 +901,24 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
 
     @Override
     public void beforeCompilation(BeforeCompilationAccess config) {
-        StaticObjectSupport.beforeCompilation(config);
-
         BeforeCompilationAccessImpl access = (BeforeCompilationAccessImpl) config;
 
-        boolean failBlockListViolations = Options.TruffleCheckBlockListMethods.getValue() || Options.TruffleCheckBlackListedMethods.getValue();
-        boolean printBlockListViolations = GraalFeature.Options.PrintRuntimeCompileMethods.getValue() || failBlockListViolations;
-        if (printBlockListViolations && blocklistViolations.size() > 0) {
+        boolean failBlackListViolations = Options.TruffleCheckBlackListedMethods.getValue();
+        boolean printBlackListViolations = GraalFeature.Options.PrintRuntimeCompileMethods.getValue() || failBlackListViolations;
+        if (printBlackListViolations && blacklistViolations.size() > 0) {
             System.out.println();
-            System.out.println("=== Found " + blocklistViolations.size() + " compilation blocklist violations ===");
+            System.out.println("=== Found " + blacklistViolations.size() + " compilation blacklist violations ===");
             System.out.println();
-            for (GraalFeature.CallTreeNode node : blocklistViolations) {
-                System.out.println("Blocklisted method");
+            for (GraalFeature.CallTreeNode node : blacklistViolations) {
+                System.out.println("Blacklisted method");
                 System.out.println(node.getImplementationMethod().format("  %H.%n(%p)"));
                 System.out.println("called from");
                 for (GraalFeature.CallTreeNode cur = node; cur != null; cur = cur.getParent()) {
                     System.out.println("  " + cur.getSourceReference());
                 }
             }
-            if (failBlockListViolations) {
-                throw VMError.shouldNotReachHere("Blocklisted methods are reachable for runtime compilation");
+            if (failBlackListViolations) {
+                throw VMError.shouldNotReachHere("Blacklisted methods are reachable for runtime compilation");
             }
         }
 
@@ -1012,110 +993,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
                 implementations.add(subType);
             }
             collectImplementations(subType, implementations);
-        }
-    }
-
-    private static final class StaticObjectSupport {
-        private static final String GENERATOR_CLASS_NAME = "com.oracle.truffle.api.staticobject.ArrayBasedShapeGenerator";
-        private static final String GENERATOR_CLASS_LOADER_CLASS_NAME = "com.oracle.truffle.api.staticobject.GeneratorClassLoader";
-        private static ClassLoader generatorClassLoader;
-        private static final HashSet<Pair<Class<?>, Class<?>>> interceptedArgs = new HashSet<>();
-
-        static void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, Plugins plugins, ParsingReason reason) {
-            if (reason == ParsingReason.PointsToAnalysis) {
-                InvocationPlugins.Registration r = new InvocationPlugins.Registration(plugins.getInvocationPlugins(), StaticShape.Builder.class);
-                r.register3("build", InvocationPlugin.Receiver.class, Class.class, Class.class, new InvocationPlugin() {
-                    @Override
-                    public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg1, ValueNode arg2) {
-                        if (!(receiver instanceof SubstrateIntrinsicGraphBuilder)) {
-                            Class<?> superClass = getArgumentClass(b, targetMethod, 1, arg1);
-                            Class<?> factoryInterface = getArgumentClass(b, targetMethod, 2, arg2);
-                            interceptedArgs.add(Pair.create(superClass, factoryInterface));
-                        }
-                        return false;
-                    }
-                });
-            }
-        }
-
-        static void duringAnalysis(DuringAnalysisAccess access) {
-            for (Pair<Class<?>, Class<?>> args : interceptedArgs) {
-                generate(args.getLeft(), args.getRight(), access);
-                access.requireAnalysisIteration();
-            }
-            interceptedArgs.clear();
-        }
-
-        static void beforeCompilation(BeforeCompilationAccess config) {
-            // Recompute the offset of the byte and object arrays stored in the cached ShapeGenerator
-            Unsafe unsafe = GraalUnsafeAccess.getUnsafe();
-            Class<?> shapeGeneratorClass = loadClass(GENERATOR_CLASS_NAME);
-            long baoFieldOffset = getJvmFieldOffset(unsafe, shapeGeneratorClass, "byteArrayOffset");
-            long oaoFieldOffset = getJvmFieldOffset(unsafe, shapeGeneratorClass, "objectArrayOffset");
-            long shapeFieldOffset = getJvmFieldOffset(unsafe, shapeGeneratorClass, "shapeOffset");
-            ConcurrentHashMap<?, ?> generatorCache = ReflectionUtil.readStaticField(shapeGeneratorClass, "generatorCache");
-            for (Map.Entry<?, ?> entry : generatorCache.entrySet()) {
-                Object shapeGenerator = entry.getValue();
-                Class<?> generatedStorageClass = ReflectionUtil.readField(shapeGeneratorClass, "generatedStorageClass", shapeGenerator);
-                unsafe.putInt(shapeGenerator, baoFieldOffset, getNativeImageFieldOffset(config, generatedStorageClass, "primitive"));
-                unsafe.putInt(shapeGenerator, oaoFieldOffset, getNativeImageFieldOffset(config, generatedStorageClass, "object"));
-                unsafe.putInt(shapeGenerator, shapeFieldOffset, getNativeImageFieldOffset(config, generatedStorageClass, "shape"));
-            }
-        }
-
-        private static Class<?> getArgumentClass(GraphBuilderContext b, ResolvedJavaMethod targetMethod, int parameterIndex, ValueNode arg) {
-            SubstrateGraphBuilderPlugins.checkParameterUsage(arg.isConstant(), b, targetMethod, parameterIndex, "parameter is not a compile time constant");
-            return OriginalClassProvider.getJavaClass(GraalAccess.getOriginalSnippetReflection(), b.getConstantReflection().asJavaType(arg.asJavaConstant()));
-        }
-
-        private static Class<?> generate(Class<?> storageSuperClass, Class<?> factoryInterface, BeforeAnalysisAccess access) {
-            Class<?> shapeGeneratorClass = loadClass(GENERATOR_CLASS_NAME);
-            ClassLoader generatorCL = getGeneratorClassLoader(factoryInterface);
-            Method generatorMethod = ReflectionUtil.lookupMethod(shapeGeneratorClass, "getShapeGenerator", generatorCL.getClass(), Class.class, Class.class);
-            Object generator;
-            try {
-                generator = generatorMethod.invoke(null, generatorCL, storageSuperClass, factoryInterface);
-            } catch (IllegalAccessException | InvocationTargetException | ClassCastException e) {
-                throw JVMCIError.shouldNotReachHere(e);
-            }
-            Class<?> storageClass = ReflectionUtil.readField(shapeGeneratorClass, "generatedStorageClass", generator);
-            Class<?> factoryClass = ReflectionUtil.readField(shapeGeneratorClass, "generatedFactoryClass", generator);
-            for (Constructor<?> c : factoryClass.getDeclaredConstructors()) {
-                RuntimeReflection.register(c);
-            }
-            for (String fieldName : new String[]{"primitive", "object", "shape"}) {
-                access.registerAsUnsafeAccessed(ReflectionUtil.lookupField(storageClass, fieldName));
-            }
-            return storageClass;
-        }
-
-        private static synchronized ClassLoader getGeneratorClassLoader(Class<?> factoryInterface) {
-            if (generatorClassLoader == null) {
-                Class<?> classLoaderClass = loadClass(GENERATOR_CLASS_LOADER_CLASS_NAME);
-                Constructor<?> constructor = ReflectionUtil.lookupConstructor(classLoaderClass, Class.class);
-                try {
-                    generatorClassLoader = ClassLoader.class.cast(constructor.newInstance(factoryInterface));
-                } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                    throw JVMCIError.shouldNotReachHere(e);
-                }
-            }
-            return generatorClassLoader;
-        }
-
-        private static Class<?> loadClass(String name) {
-            try {
-                return Class.forName(name);
-            } catch (ClassNotFoundException e) {
-                throw JVMCIError.shouldNotReachHere(e);
-            }
-        }
-
-        private static long getJvmFieldOffset(Unsafe unsafe, Class<?> declaringClass, String fieldName) {
-            return unsafe.objectFieldOffset(ReflectionUtil.lookupField(declaringClass, fieldName));
-        }
-
-        private static int getNativeImageFieldOffset(BeforeCompilationAccess config, Class<?> declaringClass, String fieldName) {
-            return Math.toIntExact(config.objectFieldOffset(ReflectionUtil.lookupField(declaringClass, fieldName)));
         }
     }
 }
