@@ -48,11 +48,11 @@ public class VMEventListeners {
     }
 
     /**
-     * Register a VM event vmEventListener.
-     * @param vmEventListener
+     * Registeres a VM event listener.
+     * @param listener
      */
-    public void registerListener(VMEventListener vmEventListener) {
-        this.listener = vmEventListener;
+    public void registerListener(VMEventListener listener) {
+        this.listener = listener;
     }
 
     /**

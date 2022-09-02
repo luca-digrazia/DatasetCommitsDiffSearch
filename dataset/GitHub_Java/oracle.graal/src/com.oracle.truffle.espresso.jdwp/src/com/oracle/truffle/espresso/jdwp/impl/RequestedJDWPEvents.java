@@ -127,7 +127,7 @@ public class RequestedJDWPEvents {
         switch (modKind) {
             case 1:
                 int count = input.readInt();
-                filter.addEventCount(count);
+                filter.addEventLimit(count);
                 break;
             case 2:
                 System.err.println("unhandled modKind 2");
@@ -160,15 +160,9 @@ public class RequestedJDWPEvents {
                 String slashName = klass.getTypeAsString();
                 MethodRef method = (MethodRef) ids.fromId((int) methodId);
                 int line = method.BCItoLineNumber((int) bci);
+                callback.createLineBreakpointCommand(slashName, line, suspendPolicy, info);
                 eventListener.addBreakpointRequest(filter.getRequestId(), info);
-
-                return new Callable<Void>() {
-                    @Override
-                    public Void call() throws Exception {
-                        callback.createLineBreakpointCommand(slashName, line, suspendPolicy, info);
-                        return null;
-                    }
-                };
+                break;
             case 8:
                 refTypeId = input.readLong();
                 klass = null;
@@ -179,15 +173,10 @@ public class RequestedJDWPEvents {
                 boolean caught = input.readBoolean();
                 boolean unCaught = input.readBoolean();
 
-                ExceptionBreakpointInfo exceptionBreakpointInfo = new ExceptionBreakpointInfo(filter, klass, caught, unCaught);
+                ExceptionBreakpointInfo exceptionBreakpointInfo = new ExceptionBreakpointInfo(filter.getRequestId(), klass, caught, unCaught);
+                callback.createExceptionBreakpoint(exceptionBreakpointInfo);
                 eventListener.addBreakpointRequest(filter.getRequestId(), exceptionBreakpointInfo);
-                return new Callable<Void>() {
-                    @Override
-                    public Void call() throws Exception {
-                        callback.createExceptionBreakpoint(exceptionBreakpointInfo);
-                        return null;
-                    }
-                };
+                break;
             case 9:
                 System.err.println("unhandled modKind 9");
                 break;
@@ -248,15 +237,16 @@ public class RequestedJDWPEvents {
                         break;
                     case THREAD_START:
                         eventListener.addThreadStartedRequestId(packet.id);
+
                         break;
                     case THREAD_DEATH:
                         eventListener.addThreadDiedRequestId(packet.id);
+
                         break;
                     case CLASS_UNLOAD:
                         eventListener.addClassUnloadRequestId(packet.id);
+
                         break;
-                    case EXCEPTION:
-                        eventListener.removeBreakpointRequest(requestFilter.getRequestId());
                     default:
                         System.out.println("unhandled event clear kind " + eventKind);
                         break;

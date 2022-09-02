@@ -22,7 +22,9 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-final class DebuggerCommand {
+import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
+
+class DebuggerCommand {
 
     enum Kind {
         STEP_INTO,

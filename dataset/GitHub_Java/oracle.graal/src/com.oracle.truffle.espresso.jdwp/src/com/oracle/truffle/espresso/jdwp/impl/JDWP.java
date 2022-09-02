@@ -100,9 +100,9 @@ class JDWP {
             static JDWPResult createReply(Packet packet, JDWPDebuggerController controller) {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                return new JDWPResult(reply, Collections.singletonList(new Callable<Void>() {
+                return new JDWPResult(reply, Collections.singletonList(new Callable() {
                     @Override
-                    public Void call() throws Exception {
+                    public Object call() throws Exception {
                         controller.disposeDebugger();
                         return null;
                     }
@@ -1573,12 +1573,8 @@ class JDWP {
         }
         switch (tag) {
             case BOOLEAN:
-                if (value.getClass() == Long.class) {
-                    long unboxed = (long) value;
-                    reply.writeBoolean(unboxed > 0 ? true : false);
-                } else {
-                    reply.writeBoolean((boolean) value);
-                }
+                boolean theValue = (boolean) value;
+                reply.writeBoolean(theValue);
                 break;
             case TagConstants.BYTE:
                 if (value.getClass() == Long.class) {

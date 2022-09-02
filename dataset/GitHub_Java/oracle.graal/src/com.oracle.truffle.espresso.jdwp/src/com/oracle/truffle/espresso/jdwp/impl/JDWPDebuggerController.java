@@ -133,10 +133,6 @@ public class JDWPDebuggerController {
         try {
             Breakpoint bp = Breakpoint.newBuilder(location.getSource()).lineIs(location.getLineNumber()).build();
             bp.setEnabled(true);
-            int ignoreCount = command.getBreakpointInfo().getFilter().getIgnoreCount();
-            if (ignoreCount > 0) {
-                bp.setIgnoreCount(ignoreCount);
-            }
             mapBrekpoint(bp, command.getBreakpointInfo());
             debuggerSession.install(bp);
             //System.out.println("Breakpoint submitted at " + bp.getLocationDescription());
@@ -149,10 +145,6 @@ public class JDWPDebuggerController {
     public void submitExceptionBreakpoint(DebuggerCommand command) {
         Breakpoint bp = Breakpoint.newExceptionBuilder(command.getBreakpointInfo().isCaught(), command.getBreakpointInfo().isUnCaught()).build();
         bp.setEnabled(true);
-        int ignoreCount = command.getBreakpointInfo().getFilter().getIgnoreCount();
-        if (ignoreCount > 0) {
-            bp.setIgnoreCount(ignoreCount);
-        }
         mapBrekpoint(bp, command.getBreakpointInfo());
         debuggerSession.install(bp);
     }
@@ -322,9 +314,7 @@ public class JDWPDebuggerController {
                     Throwable exception = getRawException(event.getException());
                     Object guestException = getContext().getGuestException(exception);
 
-                    // TODO(Gregersen) - rewrite this when /browse/GR-19337 is done
-                    // Currently, the Truffle Debug API doesn't filter on type, so we end up here having to check
-                    // also, the ignore count set on the breakpoint will not work properly due to this.
+                    // TODO(Gregersen) - rewrite this when we have improved filtering in Debug API
                     if (klass == null) {
                         // OK, suspend on all exception types
                         hit = true;
@@ -336,7 +326,6 @@ public class JDWPDebuggerController {
                             ThreadSuspension.suspendThread(currentThread);
                             VMEventListeners.getDefault().exceptionThrown(info, currentThread, guestException, callFrames[0]);
                         } else {
-                            // no match, so don't suspend here
                             suspendedInfos.put(currentThread, null);
                             return;
                         }
