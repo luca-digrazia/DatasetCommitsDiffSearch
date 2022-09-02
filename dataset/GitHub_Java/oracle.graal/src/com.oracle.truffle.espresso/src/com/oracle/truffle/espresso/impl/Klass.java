@@ -701,9 +701,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         if (this.isArray() && other.isArray()) {
             return ((ArrayKlass) this).arrayTypeChecks((ArrayKlass) other);
         }
-        if (!this.isArray() && this.isFinalFlagSet()) {
-            return this == other;
-        }
         if (isInterface()) {
             return checkInterfaceSubclassing(other);
         }
