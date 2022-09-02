@@ -78,8 +78,6 @@ public @interface APIOption {
      **/
     Class<? extends Function<Object, Object>>[] valueTransformer() default DefaultTransformer.class;
 
-    String deprecated() default "";
-
     /**
      * APIOptionKind can be used to customize how an {@link APIOption} gets rewritten to its
      * {@link Option} counterpart.
