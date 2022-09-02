@@ -173,11 +173,6 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
     public static final CGlobalData<Pointer> baseIsolate = initializeBaseIsolate();
 
     @Fold
-    static boolean hasBaseIsolate() {
-        return CompilerBackend.getValue().equals("llvm");
-    }
-
-    @Fold
     static CGlobalData<Pointer> initializeBaseIsolate() {
         return CompilerBackend.getValue().equals("llvm") ? CGlobalDataFactory.createWord() : null;
     }
@@ -213,7 +208,7 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
             setHeapBase(Isolates.getHeapBase(isolate.read()));
         }
 
-        if (hasBaseIsolate()) {
+        if (CompilerBackend.getValue().equals("llvm")) {
             Pointer value = baseIsolate.get().compareAndSwapWord(0, WordFactory.zero(), isolate.read(), LocationIdentity.ANY_LOCATION);
             if (!value.isNull()) {
                 baseIsolate.get().writeWord(0, WordFactory.signed(-1));

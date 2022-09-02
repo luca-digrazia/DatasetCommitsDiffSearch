@@ -294,41 +294,20 @@ final class Target_java_lang_Thread {
     @Substitute
     @SuppressWarnings({"static-method"})
     private void stop0(Object o) {
-        throw VMError.unsupportedFeature("The deprecated method Thread.stop is not supported");
+        VMError.unimplemented();
     }
 
     @Substitute
     @SuppressWarnings({"static-method"})
     private void suspend0() {
-        throw VMError.unsupportedFeature("The deprecated method Thread.suspend is not supported");
+        VMError.unimplemented();
     }
 
     @Substitute
     @SuppressWarnings({"static-method"})
     private void resume0() {
-        throw VMError.unsupportedFeature("The deprecated method Thread.resume is not supported");
+        VMError.unimplemented();
     }
-
-    @Substitute
-    @SuppressWarnings({"static-method"})
-    private int countStackFrames() {
-        throw VMError.unsupportedFeature("The deprecated method Thread.countStackFrames is not supported");
-    }
-
-    /*
-     * We are defensive and also handle private native methods by marking them as deleted. If they
-     * are reachable, the user is certainly doing something wrong. But we do not want to fail with a
-     * linking error.
-     */
-
-    @Delete
-    private static native void registerNatives();
-
-    @Delete
-    private static native StackTraceElement[][] dumpThreads(Thread[] threads);
-
-    @Delete
-    private static native Thread[] getThreads();
 
     @Substitute
     private boolean isAlive() {

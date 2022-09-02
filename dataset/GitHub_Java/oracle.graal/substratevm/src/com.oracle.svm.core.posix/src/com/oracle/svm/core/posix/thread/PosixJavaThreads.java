@@ -39,6 +39,7 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
@@ -54,10 +55,10 @@ import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
 import com.oracle.svm.core.c.function.CEntryPointSetup.LeaveDetachThreadEpilogue;
+import com.oracle.svm.core.headers.Errno;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.os.IsDefined;
 import com.oracle.svm.core.posix.PosixUtils;
-import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.Pthread;
 import com.oracle.svm.core.posix.headers.Pthread.pthread_attr_t;
@@ -204,6 +205,7 @@ public final class PosixJavaThreads extends JavaThreads {
 }
 
 @TargetClass(Thread.class)
+@Platforms({InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
 final class Target_java_lang_Thread {
     @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
     boolean hasPthreadIdentifier;
@@ -220,13 +222,6 @@ class PosixParkEvent extends ParkEvent {
     /** A condition variable: from the operating system. */
     private final Pthread.pthread_cond_t cond;
 
-    /**
-     * The ticket: false implies unavailable, true implies available. No need to be volatile,
-     * because it is read and written only when the mutex is held, or before a reference to this
-     * ParkEvent is handed out.
-     */
-    protected boolean event;
-
     PosixParkEvent() {
         /* Create a mutex. */
         mutex = LibC.malloc(SizeOf.unsigned(Pthread.pthread_mutex_t.class));
@@ -239,11 +234,6 @@ class PosixParkEvent extends ParkEvent {
         cond = LibC.malloc(SizeOf.unsigned(Pthread.pthread_cond_t.class));
         VMError.guarantee(cond.isNonNull(), "condition variable allocation");
         PosixUtils.checkStatusIs0(PthreadConditionUtils.initCondition(cond), "condition variable initialization");
-    }
-
-    @Override
-    protected void reset() {
-        event = false;
     }
 
     @Override
@@ -297,21 +287,32 @@ class PosixParkEvent extends ParkEvent {
         Time.timespec deadlineTimespec = StackValue.get(Time.timespec.class);
         PthreadConditionUtils.delayNanosToDeadlineTimespec(delayNanos, deadlineTimespec);
 
+        WaitResult result = WaitResult.UNPARKED;
+        /* Lock the mutex in preparation for waiting. */
         PosixUtils.checkStatusIs0(Pthread.pthread_mutex_lock(mutex), "park(long): mutex lock");
         try {
             if (resetEventBeforeWait) {
                 event = false;
             }
             while (!event) {
+                /* Before blocking, check if this thread has been interrupted. */
                 if (Thread.interrupted()) {
-                    return WaitResult.INTERRUPTED;
+                    result = WaitResult.INTERRUPTED;
+                    return result;
                 }
-                int status = Pthread.pthread_cond_timedwait(cond, mutex, deadlineTimespec);
+                final int status = Pthread.pthread_cond_timedwait(cond, mutex, deadlineTimespec);
                 if (status == Errno.ETIMEDOUT()) {
-                    return WaitResult.TIMED_OUT;
-                } else if (status == Errno.EINTR()) { // (?) POSIX says this shouldn't happen
-                    return WaitResult.INTERRUPTED;
-                } else if (status != 0) {
+                    /* If I was awakened because I ran out of time, do not wait for the ticket. */
+                    result = WaitResult.TIMED_OUT;
+                    break;
+                }
+                if (status == Errno.EINTR()) {
+                    /* If I was awakened because I was interrupted, do not wait for the ticket. */
+                    result = WaitResult.INTERRUPTED;
+                    break;
+                }
+                if (status != 0) {
+                    /* Detailed error message. */
                     Log.log().newline()
                                     .string("[PosixParkEvent.condTimedWait(delayNanos: ").signed(delayNanos).string("): Should not reach here.")
                                     .string("  mutex: ").hex(mutex)
@@ -323,13 +324,18 @@ class PosixParkEvent extends ParkEvent {
                     PosixUtils.checkStatusIs0(status, "park(long): condition variable timed wait");
                 }
             }
-            assert event : "Must only reach here with an available ticket";
-            event = false;
-            return WaitResult.UNPARKED;
+
+            if (event) {
+                /* If the ticket is available, then someone unparked me. */
+                event = false;
+                result = WaitResult.UNPARKED;
+            }
         } finally {
             /* Unlock the mutex. */
             PosixUtils.checkStatusIs0(Pthread.pthread_mutex_unlock(mutex), "park(long): mutex unlock");
         }
+
+        return result;
     }
 
     @Override
@@ -356,6 +362,7 @@ class PosixParkEventFactory implements ParkEventFactory {
 }
 
 @AutomaticFeature
+@Platforms({InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
 class PosixThreadsFeature implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {

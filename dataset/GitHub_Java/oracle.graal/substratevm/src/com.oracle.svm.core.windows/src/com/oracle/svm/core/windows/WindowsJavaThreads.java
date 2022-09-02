@@ -55,7 +55,6 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.thread.ParkEvent;
 import com.oracle.svm.core.thread.ParkEvent.ParkEventFactory;
-import com.oracle.svm.core.util.TimeUtils;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.core.windows.headers.Process;
 import com.oracle.svm.core.windows.headers.SynchAPI;
@@ -151,68 +150,119 @@ public final class WindowsJavaThreads extends JavaThreads {
 @Platforms(Platform.WINDOWS.class)
 class WindowsParkEvent extends ParkEvent {
 
-    /**
-     * An opaque handle for an event object from the operating system. Event objects have explicit
-     * set and reset operations. They can be waited on until they become set or a timeout occurs,
-     * spurious wakeups cannot occur.
-     */
+    /** opaque Event Object Handle from the operating system. */
     private final WinBase.HANDLE eventHandle;
 
     WindowsParkEvent() {
-        /* Create an auto-reset event. */
+        /* Create an Event */
         eventHandle = SynchAPI.CreateEventA(WordFactory.nullPointer(), 0, 0, WordFactory.nullPointer());
         VMError.guarantee(eventHandle.rawValue() != 0, "CreateEventA failed");
     }
 
     @Override
-    protected void reset() {
-        SynchAPI.ResetEvent(eventHandle);
-    }
-
-    @Override
     protected WaitResult condWait() {
-        if (resetEventBeforeWait) {
-            reset();
+        WaitResult result = WaitResult.UNPARKED;
+        try {
+            if (resetEventBeforeWait) {
+                event = false;
+            }
+            /*
+             * Wait while the ticket is not available. Note that the ticket might already be
+             * available before we enter the loop the first time, in which case we do not want to
+             * wait at all.
+             */
+            while (!event) {
+                /* Before blocking, check if this thread has been interrupted. */
+                if (Thread.interrupted()) {
+                    result = WaitResult.INTERRUPTED;
+                    SynchAPI.ResetEvent(eventHandle);
+                    return result;
+                }
+
+                int status = SynchAPI.WaitForSingleObject(eventHandle, SynchAPI.INFINITE());
+
+                /*
+                 * If the status isn't WAIT_OBJECT_0, then something went wrong.
+                 */
+                if (status != SynchAPI.WAIT_OBJECT_0()) {
+                    Log.log().newline().string("WindowsParkEvent.condWait failed, status returned:  ").hex(status);
+                    Log.log().newline().string("GetLastError returned:  ").hex(WinBase.GetLastError()).newline();
+                    result = WaitResult.INTERRUPTED;
+                    break;
+                }
+            }
+
+            if (event) {
+                /* If the ticket is available, then someone unparked me. */
+                event = false;
+                result = WaitResult.UNPARKED;
+            }
+        } finally {
+            SynchAPI.ResetEvent(eventHandle);
         }
-        if (Thread.interrupted()) {
-            return WaitResult.INTERRUPTED;
-        }
-        int status = SynchAPI.WaitForSingleObject(eventHandle, SynchAPI.INFINITE());
-        if (status != SynchAPI.WAIT_OBJECT_0()) {
-            Log.log().newline().string("WindowsParkEvent.condWait failed, status returned:  ").hex(status);
-            Log.log().newline().string("GetLastError returned:  ").hex(WinBase.GetLastError()).newline();
-            throw VMError.shouldNotReachHere("WaitForSingleObject failed");
-        }
-        return WaitResult.UNPARKED;
+        return result;
     }
 
     @Override
     protected WaitResult condTimedWait(long delayNanos) {
-        final int maxTimeout = 0x10_000_000;
-        long delayMillis = Math.max(0, TimeUtils.roundNanosToMillis(delayNanos));
-        if (resetEventBeforeWait) {
-            reset();
-        }
-        do { // at least once to consume possible interrupt/unpark
-            if (Thread.interrupted()) {
-                return WaitResult.INTERRUPTED;
+        int dwMilliseconds = (int) (delayNanos / 1000000);
+        WaitResult result = WaitResult.UNPARKED;
+        try {
+            if (resetEventBeforeWait) {
+                event = false;
             }
-            int timeout = (delayMillis < maxTimeout) ? (int) delayMillis : maxTimeout;
-            int status = SynchAPI.WaitForSingleObject(eventHandle, timeout);
-            if (status == SynchAPI.WAIT_OBJECT_0()) {
-                return WaitResult.UNPARKED;
-            } else if (status != SynchAPI.WAIT_TIMEOUT()) {
+            /*
+             * Wait while the ticket is not available. Note that the ticket might already be
+             * available before we enter the loop the first time, in which case we do not want to
+             * wait at all.
+             */
+            while (!event) {
+                /* Before blocking, check if this thread has been interrupted. */
+                if (Thread.interrupted()) {
+                    result = WaitResult.INTERRUPTED;
+                    SynchAPI.ResetEvent(eventHandle);
+                    return result;
+                }
+
+                int status = SynchAPI.WaitForSingleObject(eventHandle, dwMilliseconds);
+
+                /*
+                 * If the status is WAIT_OBJECT_0, then we're done.
+                 */
+                if (status == SynchAPI.WAIT_OBJECT_0()) {
+                    break;
+                }
+
+                if (status == SynchAPI.WAIT_TIMEOUT()) {
+                    /* If I was awakened because I ran out of time, do not wait for the ticket. */
+                    result = WaitResult.TIMED_OUT;
+                    break;
+                }
+
+                /* If we got WAIT_ABANDONED or WAIT_FAILED, log it and say we were interrupted */
                 Log.log().newline().string("WindowsParkEvent.condTimedWait failed, status returned:  ").hex(status);
                 Log.log().newline().string("GetLastError returned:  ").hex(WinBase.GetLastError()).newline();
-                throw VMError.shouldNotReachHere("WaitForSingleObject failed");
+                result = WaitResult.INTERRUPTED;
+                break;
+
             }
-            delayMillis -= timeout;
-        } while (delayMillis > 0);
-        return WaitResult.TIMED_OUT;
+
+            if (event) {
+                /* If the ticket is available, then someone unparked me. */
+                event = false;
+                result = WaitResult.UNPARKED;
+            }
+        } finally {
+            SynchAPI.ResetEvent(eventHandle);
+        }
+
+        return result;
     }
 
     @Override
     protected void unpark() {
+        /* Re-establish the ticket. */
+        event = true;
         SynchAPI.SetEvent(eventHandle);
     }
 }
