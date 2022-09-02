@@ -40,10 +40,19 @@
  */
 package com.oracle.truffle.dsl.processor;
 
+import com.oracle.truffle.dsl.processor.generator.GeneratorUtils;
+import com.oracle.truffle.dsl.processor.java.ElementUtils;
+import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationMirror;
+import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
+import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
+import com.oracle.truffle.dsl.processor.java.transform.FixWarningsVisitor;
+import com.oracle.truffle.dsl.processor.java.transform.GenerateOverrideVisitor;
+import com.oracle.truffle.dsl.processor.model.Template;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -56,7 +65,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Predicate;
-
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.FilerException;
 import javax.annotation.processing.ProcessingEnvironment;
@@ -72,23 +80,13 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.FileObject;
 import javax.tools.StandardLocation;
-
-import com.oracle.truffle.dsl.processor.generator.GeneratorUtils;
-import com.oracle.truffle.dsl.processor.java.ElementUtils;
-import com.oracle.truffle.dsl.processor.java.compiler.CompilerFactory;
-import com.oracle.truffle.dsl.processor.java.compiler.JDTCompiler;
-import com.oracle.truffle.dsl.processor.java.model.CodeAnnotationMirror;
-import com.oracle.truffle.dsl.processor.java.model.CodeExecutableElement;
-import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
-import com.oracle.truffle.dsl.processor.java.transform.FixWarningsVisitor;
-import com.oracle.truffle.dsl.processor.java.transform.GenerateOverrideVisitor;
-import com.oracle.truffle.dsl.processor.model.Template;
 
 abstract class AbstractRegistrationProcessor extends AbstractProcessor {
 
@@ -103,7 +101,7 @@ abstract class AbstractRegistrationProcessor extends AbstractProcessor {
     @SuppressWarnings({"deprecation", "unchecked"})
     @Override
     public final boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        ProcessorContext.enter(processingEnv);
+        ProcessorContext.setThreadLocalInstance(new ProcessorContext(processingEnv, null));
         try {
             if (roundEnv.processingOver()) {
                 generateServicesRegistration(registrations);
@@ -113,41 +111,40 @@ abstract class AbstractRegistrationProcessor extends AbstractProcessor {
                 return true;
             }
             String[] supportedAnnotations = this.getClass().getAnnotation(SupportedAnnotationTypes.class).value();
-            TypeElement supportedAnnotation = processingEnv.getElementUtils().getTypeElement(supportedAnnotations[0]);
-            if (supportedAnnotation == null) {
-                throw new IllegalStateException("Cannot resolve " + supportedAnnotations[0]);
+            Class<? extends Annotation> registrationAnnotationClass;
+            try {
+                TypeElement supportedAnnotation = processingEnv.getElementUtils().getTypeElement(supportedAnnotations[0]);
+                if (supportedAnnotation == null) {
+                    throw new IllegalStateException("Cannot resolve " + supportedAnnotations[0]);
+                }
+                registrationAnnotationClass = (Class<? extends Annotation>) Class.forName(processingEnv.getElementUtils().getBinaryName(supportedAnnotation).toString());
+            } catch (ClassNotFoundException cnf) {
+                throw new IllegalStateException(cnf);
             }
-            Set<? extends Element> annotatedElements = roundEnv.getElementsAnnotatedWith(supportedAnnotation);
-            if (!annotatedElements.isEmpty()) {
-                ProcessorContext context = ProcessorContext.getInstance();
-                String providerServiceBinName = processingEnv.getElementUtils().getBinaryName(context.getTypeElement(getProviderClass())).toString();
-                for (Element e : annotatedElements) {
-                    AnnotationMirror mirror = ElementUtils.findAnnotationMirror(e, supportedAnnotation.asType());
-                    if (mirror != null && e.getKind() == ElementKind.CLASS) {
-                        if (validateRegistration(e, mirror)) {
-                            TypeElement annotatedElement = (TypeElement) e;
-                            if (requiresLegacyRegistration(annotatedElement)) {
-                                legacyRegistrations.add(annotatedElement);
-                            } else {
-                                String providerImplBinName = generateProvider(annotatedElement);
-                                registrations.put(providerImplBinName, annotatedElement);
-                                if (shouldGenerateProviderFiles(annotatedElement)) {
-                                    generateProviderFile(providerImplBinName, providerServiceBinName, annotatedElement);
-                                }
-                            }
+            TypeMirror registration = ProcessorContext.getInstance().getType(registrationAnnotationClass);
+            for (Element e : roundEnv.getElementsAnnotatedWith(registrationAnnotationClass)) {
+                AnnotationMirror mirror = ElementUtils.findAnnotationMirror(e.getAnnotationMirrors(), registration);
+                Annotation annotation = e.getAnnotation(registrationAnnotationClass);
+                if (annotation != null && e.getKind() == ElementKind.CLASS) {
+                    if (validateRegistration(e, mirror, annotation)) {
+                        TypeElement annotatedElement = (TypeElement) e;
+                        if (requiresLegacyRegistration(annotatedElement)) {
+                            legacyRegistrations.add(annotatedElement);
+                        } else {
+                            registrations.put(generateProvider(annotatedElement), annotatedElement);
                         }
                     }
                 }
             }
             return true;
         } finally {
-            ProcessorContext.leave();
+            ProcessorContext.setThreadLocalInstance(null);
         }
     }
 
-    abstract boolean validateRegistration(Element annotatedElement, AnnotationMirror registrationMirror);
+    abstract boolean validateRegistration(Element annotatedElement, AnnotationMirror registrationMirror, Annotation registration);
 
-    abstract DeclaredType getProviderClass();
+    abstract Class<?> getProviderClass();
 
     abstract Iterable<AnnotationMirror> getProviderAnnotations(TypeElement annotatedElement);
 
@@ -249,35 +246,6 @@ abstract class AbstractRegistrationProcessor extends AbstractProcessor {
         return nameBuilder.toString();
     }
 
-    private void generateProviderFile(String providerClassName, String serviceClassName, Element... originatingElements) {
-        assert originatingElements.length > 0;
-        String filename = "META-INF/truffle-registrations/" + providerClassName;
-        try {
-            FileObject file = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", filename, originatingElements);
-            PrintWriter writer = new PrintWriter(new OutputStreamWriter(file.openOutputStream(), "UTF-8"));
-            writer.println(serviceClassName);
-            writer.close();
-        } catch (IOException e) {
-            processingEnv.getMessager().printMessage(isBug367599(e) ? Kind.NOTE : Kind.ERROR, e.getMessage(), originatingElements[0]);
-        }
-    }
-
-    /**
-     * Determines if a given exception is (most likely) caused by
-     * <a href="https://bugs.eclipse.org/bugs/show_bug.cgi?id=367599">Bug 367599</a>.
-     */
-    private static boolean isBug367599(Throwable t) {
-        if (t instanceof FilerException) {
-            for (StackTraceElement ste : t.getStackTrace()) {
-                if (ste.toString().contains("org.eclipse.jdt.internal.apt.pluggable.core.filer.IdeFilerImpl.create")) {
-                    // See: https://bugs.eclipse.org/bugs/show_bug.cgi?id=367599
-                    return true;
-                }
-            }
-        }
-        return t.getCause() != null && isBug367599(t.getCause());
-    }
-
     private void generateServicesRegistration(Map<String, ? extends TypeElement> providerFqns) {
         ProcessorContext context = ProcessorContext.getInstance();
         ProcessingEnvironment env = context.getEnvironment();
@@ -331,10 +299,6 @@ abstract class AbstractRegistrationProcessor extends AbstractProcessor {
                 processingEnv.getMessager().printMessage(Kind.ERROR, e.getMessage(), annotatedElements.get(0));
             }
         }
-    }
-
-    private static boolean shouldGenerateProviderFiles(Element currentElement) {
-        return CompilerFactory.getCompiler(currentElement) instanceof JDTCompiler;
     }
 
     @SuppressWarnings("serial")
