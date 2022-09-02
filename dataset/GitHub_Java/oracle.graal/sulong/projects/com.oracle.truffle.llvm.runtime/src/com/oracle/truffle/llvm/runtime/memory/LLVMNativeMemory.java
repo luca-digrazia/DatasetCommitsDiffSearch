@@ -30,53 +30,36 @@
 package com.oracle.truffle.llvm.runtime.memory;
 
 import java.lang.reflect.Field;
-import java.util.ArrayDeque;
-import java.util.Arrays;
 import java.util.function.IntBinaryOperator;
 import java.util.function.LongBinaryOperator;
-
-import org.graalvm.collections.EconomicMap;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 import sun.misc.Unsafe;
 
 public final class LLVMNativeMemory extends LLVMMemory {
-    private static final int HANDLE_OBJECT_SIZE_BITS = 30;
-    private static final long HANDLE_OBJECT_SIZE = 1L << HANDLE_OBJECT_SIZE_BITS; // 0.5 GB
-    private static final int HANDLE_OBJECT_ADDRESS_BITS = Integer.SIZE; // use int cast as mask
-    private static final long HANDLE_HEADER_MASK = -1L << (HANDLE_OBJECT_SIZE_BITS + HANDLE_OBJECT_ADDRESS_BITS);
-    private static final long HANDLE_OFFSET_MASK = HANDLE_OBJECT_SIZE - 1;
+    /* must be a power of 2 */
+    private static final long DEREF_HANDLE_OBJECT_SIZE = 1L << 20;
 
-    private static final long HANDLE_SPACE_START = 0x8000000000000000L;
-    private static final long HANDLE_SPACE_END = 0xC000000000000000L;
-    private static final long DEREF_HANDLE_SPACE_START = HANDLE_SPACE_END;
-    private static final long DEREF_HANDLE_SPACE_END = 0x0000000000000000L;
-
-    static {
-        assert (DEREF_HANDLE_SPACE_START & HANDLE_HEADER_MASK) != (DEREF_HANDLE_SPACE_END & HANDLE_HEADER_MASK);
-        assert (HANDLE_SPACE_START & HANDLE_HEADER_MASK) != (HANDLE_SPACE_END & HANDLE_HEADER_MASK);
-        assert (DEREF_HANDLE_SPACE_START & HANDLE_HEADER_MASK) != 0;
-        assert (HANDLE_SPACE_START & HANDLE_HEADER_MASK) != 0;
-
-        // (using temporary variable to avoid warnings)
-        long tmp = HANDLE_HEADER_MASK;
-        // for efficient checks for deref handles in compiled code
-        assert DEREF_HANDLE_SPACE_START == tmp;
-        tmp = HANDLE_SPACE_START;
-        // for efficient checks for any handle in compiled code
-        assert (DEREF_HANDLE_SPACE_START & tmp) == HANDLE_SPACE_START;
-    }
+    private static final long DEREF_HANDLE_SPACE_START = 0x8000000000000000L;
+    public static final long DEREF_HANDLE_SPACE_END = 0xC000000000000000L;
+    private static final long HANDLE_SPACE_START = DEREF_HANDLE_SPACE_END;
+    private static final long HANDLE_SPACE_END = 0xD000000000000000L;
 
     private static final Unsafe unsafe = getUnsafe();
+
+    private final HandleContainer derefHandleContainer = new DerefHandleContainer(DEREF_HANDLE_SPACE_START, DEREF_HANDLE_SPACE_END, DEREF_HANDLE_OBJECT_SIZE);
+    private final HandleContainer handleContainer = new CommonHandleContainer(HANDLE_SPACE_START, HANDLE_SPACE_END, Long.BYTES);
+
+    private final Assumption noDerefHandleAssumption = Truffle.getRuntime().createAssumption("no deref handle assumption");
 
     private static Unsafe getUnsafe() {
         CompilerAsserts.neverPartOfCompilation();
@@ -136,13 +119,20 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     @Override
     public void free(long address) {
-        try {
-            unsafe.freeMemory(address);
-        } catch (Throwable e) {
-            // this avoids unnecessary exception edges in the compiled code
-            CompilerDirectives.transferToInterpreter();
-            throw e;
+        if (!noDerefHandleAssumption.isValid() && derefHandleContainer.accept(address)) {
+            derefHandleContainer.free(address);
+        } else if (handleContainer.accept(address)) {
+            handleContainer.free(address);
+        } else {
+            try {
+                unsafe.freeMemory(address);
+            } catch (Throwable e) {
+                // this avoids unnecessary exception edges in the compiled code
+                CompilerDirectives.transferToInterpreter();
+                throw e;
+            }
         }
+
     }
 
     @Override
@@ -168,6 +158,15 @@ public final class LLVMNativeMemory extends LLVMMemory {
             CompilerDirectives.transferToInterpreter();
             throw e;
         }
+    }
+
+    @Override
+    public long allocateHandle(boolean autoDeref) {
+        if (autoDeref) {
+            noDerefHandleAssumption.invalidate();
+            return derefHandleContainer.allocate();
+        }
+        return handleContainer.allocate();
     }
 
     @Override
@@ -529,164 +528,141 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     /**
-     * A fast bit-check if the provided address is within the handle space.
+     * A fast check if the provided address is within the handle space.
      */
-    public static boolean isHandleMemory(long address) {
-        return (address & HANDLE_SPACE_START) != 0;
-    }
-
-    /**
-     * A fast bit-check if the provided address is within the normal handle space.
-     */
-    public static boolean isCommonHandleMemory(long address) {
-        return ((address & HANDLE_HEADER_MASK) == HANDLE_SPACE_START);
-    }
-
-    /**
-     * A fast bit-check if the provided address is within the auto-deref handle space.
-     */
-    public static boolean isDerefHandleMemory(long address) {
-        return ((address & HANDLE_HEADER_MASK) == DEREF_HANDLE_SPACE_START);
-    }
-
     @Override
-    public HandleContainer createHandleContainer(boolean deref, Assumption noHandleAssumption) {
-        return deref ? new DerefHandleContainer(noHandleAssumption) : new CommonHandleContainer(noHandleAssumption);
+    public boolean isHandleMemory(long addr) {
+        return addr < HANDLE_SPACE_END;
     }
 
-    private abstract static class AbstractHandleContainer extends HandleContainer {
+    /**
+     * A fast check if the provided address is within the auto-deref handle space.
+     */
+    @Override
+    public boolean isDerefHandleMemory(long addr) {
+        return !noDerefHandleAssumption.isValid() && derefHandleContainer.accept(addr);
+    }
 
-        private final Assumption noHandleAssumption;
-        private final ArrayDeque<Long> freeList = new ArrayDeque<>();
-        private final EconomicMap<Object, Handle> handleFromManaged = EconomicMap.create();
-        private Handle[] handleFromPointer = new Handle[1024];
-        private long top = getStart(); // address of the next handle
+    public static long getDerefHandleObjectMask() {
+        return DEREF_HANDLE_OBJECT_SIZE - 1;
+    }
 
-        AbstractHandleContainer(Assumption noHandleAssumption) {
-            this.noHandleAssumption = noHandleAssumption;
+    private abstract static class HandleContainer {
+        protected final long rangeStart;
+        protected final long rangeEnd;
+        protected final long objectSize;
+
+        private long top;
+        private FreeListNode freeList;
+
+        private final Object freeListLock = new Object();
+        private final Object topLock = new Object();
+
+        HandleContainer(long startAddr, long endAddr, long objectSize) {
+            this.rangeStart = startAddr;
+            this.rangeEnd = endAddr;
+            this.top = startAddr;
+
+            assert isPowerOfTwo(objectSize);
+            this.objectSize = objectSize;
         }
 
-        protected abstract long getStart();
+        protected static final class FreeListNode {
+            protected FreeListNode(long address, FreeListNode next) {
+                this.address = address;
+                this.next = next;
+            }
 
-        protected abstract long getEnd();
-
-        private int indexFromPointer(long address) {
-            return (int) (((address - getStart()) >> HANDLE_OBJECT_SIZE_BITS));
+            private final long address;
+            private final FreeListNode next;
         }
 
-        @Override
-        @TruffleBoundary
-        public synchronized LLVMNativePointer allocate(Object value) {
-            Handle handle = handleFromManaged.get(value);
-            if (handle == null) {
-                Long free = freeList.pollFirst();
-                long address;
-                if (free != null) {
-                    address = free;
-                } else {
-                    noHandleAssumption.invalidate();
-                    if (top >= getEnd()) {
-                        throw new OutOfMemoryError("handle space exhausted");
+        abstract boolean accept(long address);
+
+        long allocate() {
+
+            // preferably consume from free list
+            synchronized (freeListLock) {
+                if (freeList != null) {
+                    FreeListNode n = freeList;
+                    freeList = n.next;
+                    return n.address;
+                }
+            }
+
+            synchronized (topLock) {
+                long addr = top;
+                assert top >= rangeStart;
+                top += objectSize;
+                if (!accept(top)) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new OutOfMemoryError();
+                }
+                return addr;
+            }
+        }
+
+        boolean isAllocated(long address) {
+            synchronized (topLock) {
+                if (!(address >= rangeStart && address < top)) {
+                    return false;
+                }
+            }
+
+            synchronized (freeListLock) {
+                for (FreeListNode cur = freeList; cur != null; cur = cur.next) {
+                    if (cur.address == address) {
+                        return false;
                     }
-                    address = top;
-                    top += HANDLE_OBJECT_SIZE;
                 }
-                handle = new Handle(LLVMNativePointer.create(address), value);
-                int index = indexFromPointer(address);
-                if (handleFromPointer.length <= index) {
-                    handleFromPointer = Arrays.copyOf(handleFromPointer, handleFromPointer.length * 2);
-                }
-                handleFromPointer[index] = handle;
-                handleFromManaged.put(value, handle);
             }
-            handle.refcnt++;
-            return handle.pointer;
+            return true;
         }
 
-        @Override
         @TruffleBoundary
-        public synchronized void free(long address) {
-            if ((address & HANDLE_OFFSET_MASK) != 0) {
-                throw new UnsupportedOperationException("Cannot resolve invalid native handle: " + address);
+        void free(long address) {
+            if (!isAllocated(address)) {
+                throw new IllegalStateException("double-free of " + Long.toHexString(address));
             }
-            if ((address & HANDLE_HEADER_MASK) != getStart()) {
-                throw new UnsupportedOperationException("Cannot resolve invalid native handle: " + address);
-            }
-            int index = indexFromPointer(address);
-            if (index < 0 || index >= handleFromPointer.length) {
-                throw new UnsupportedOperationException("Cannot resolve native handle: " + address);
-            }
-            Handle handle = handleFromPointer[index];
-            if (handle == null) {
-                throw new UnsupportedOperationException("Cannot resolve native handle (double-free?): " + address);
-            }
-            if (--handle.refcnt == 0) {
-                handleFromPointer[index] = null;
-                handleFromManaged.removeKey(handle.managed);
-                freeList.addLast(address);
+            synchronized (freeListLock) {
+                // We need to mask because we allow creating handles with an offset.
+                freeList = new FreeListNode(address & ~getObjectMask(), freeList);
             }
         }
 
-        @Override
-        public boolean isHandle(long address) {
-            if ((address & HANDLE_HEADER_MASK) != getStart()) {
-                return false;
-            }
-            int index = indexFromPointer(address);
-            Handle[] array = handleFromPointer;
-            return index >= 0 && index < array.length && array[index] != null;
+        private long getObjectMask() {
+            return objectSize - 1;
         }
 
-        @Override
-        public LLVMManagedPointer getValue(long address) {
-            return LLVMManagedPointer.create(handleFromPointer[indexFromPointer(address)].managed, address & HANDLE_OFFSET_MASK);
+        static boolean isPowerOfTwo(long x) {
+            return x > 0 && (x & (x - 1)) == 0;
         }
     }
 
-    private static final class Handle {
+    private static final class DerefHandleContainer extends HandleContainer {
 
-        private int refcnt;
-        private final LLVMNativePointer pointer;
-        private final Object managed;
-
-        private Handle(LLVMNativePointer pointer, Object managed) {
-            this.refcnt = 0;
-            this.pointer = pointer;
-            this.managed = managed;
+        DerefHandleContainer(long startAddr, long endAddr, long objectSize) {
+            super(startAddr, endAddr, objectSize);
         }
+
+        @Override
+        boolean accept(long address) {
+            return address < rangeEnd;
+        }
+
     }
 
-    private static final class CommonHandleContainer extends AbstractHandleContainer {
+    private static final class CommonHandleContainer extends HandleContainer {
 
-        CommonHandleContainer(Assumption noHandleAssumption) {
-            super(noHandleAssumption);
+        CommonHandleContainer(long startAddr, long endAddr, long objectSize) {
+            super(startAddr, endAddr, objectSize);
         }
 
         @Override
-        protected long getStart() {
-            return HANDLE_SPACE_START;
+        boolean accept(long address) {
+            return rangeStart <= address && address < rangeEnd;
         }
 
-        @Override
-        protected long getEnd() {
-            return HANDLE_SPACE_END;
-        }
     }
 
-    private static final class DerefHandleContainer extends AbstractHandleContainer {
-
-        DerefHandleContainer(Assumption noHandleAssumption) {
-            super(noHandleAssumption);
-        }
-
-        @Override
-        protected long getStart() {
-            return DEREF_HANDLE_SPACE_START;
-        }
-
-        @Override
-        protected long getEnd() {
-            return DEREF_HANDLE_SPACE_END;
-        }
-    }
 }
