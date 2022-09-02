@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.MissingResourceException;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -165,12 +164,6 @@ public final class ComponentRegistry implements ComponentCollection {
      */
     private static final Pattern JAVA_VERSION_PATTERN = Pattern.compile("((?:1\\.)?[0-9]+)([._].*)?"); // NOI18N
 
-    private String overrideEdition;
-
-    public void setOverrideEdition(String overrideEdition) {
-        this.overrideEdition = overrideEdition;
-    }
-
     public Map<String, String> getGraalCapabilities() {
         if (graalAttributes != null) {
             return graalAttributes;
@@ -202,9 +195,6 @@ public final class ComponentRegistry implements ComponentCollection {
                         m.get(CommonConstants.CAP_OS_ARCH));
         if (v != null) {
             m.put(CommonConstants.CAP_OS_NAME, v);
-        }
-        if (overrideEdition != null) {
-            graalAttributes.put(CommonConstants.CAP_EDITION, overrideEdition);
         }
         return graalAttributes;
     }
@@ -545,34 +535,4 @@ public final class ComponentRegistry implements ComponentCollection {
     public String getJavaVersion() {
         return getGraalCapabilities().get(CommonConstants.CAP_JAVA_VERSION);
     }
-
-    public ManagementStorage getManagementStorage() {
-        return storage;
-    }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 97 * hash + Objects.hashCode(this.storage);
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final ComponentRegistry other = (ComponentRegistry) obj;
-        if (!Objects.equals(this.storage, other.storage)) {
-            return false;
-        }
-        return true;
-    }
-
 }

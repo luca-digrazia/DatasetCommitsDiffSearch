@@ -78,7 +78,7 @@ public class CommonConstants {
 
     public static final String SYSPROP_JAVA_VERSION = "java.specification.version"; // NOI18N
 
-    public static final String ENV_VARIABLE_PREFIX = "GRAALVM_"; // NOI18N
+    public static final String ENV_VARIABLE_PREFIX = "GRAAVLM_"; // NOI18N
 
     /**
      * Env variable that controls catalog URL.
@@ -143,9 +143,4 @@ public class CommonConstants {
 
     public static final String OS_MACOS_DARWIN = "darwin"; // NOI18N
     public static final String OS_TOKEN_MACOS = "macos"; // NOI18N
-
-    /**
-     * Return code which will cause the wrapper to retry operations on locked files.
-     */
-    public static final int WINDOWS_RETCODE_DELAYED_OPERATION = 11;
 }
