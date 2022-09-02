@@ -163,7 +163,7 @@ public class DwarfDebugInfo extends DebugInfoBase {
     private DwarfARangesSectionImpl dwarfARangesSection;
     private DwarfLineSectionImpl dwarfLineSection;
     private DwarfFrameSectionImpl dwarfFameSection;
-    public final ELFMachine elfMachine;
+    private ELFMachine elfMachine;
 
     public DwarfDebugInfo(ELFMachine elfMachine, ByteOrder byteOrder) {
         super(byteOrder);
@@ -202,5 +202,9 @@ public class DwarfDebugInfo extends DebugInfoBase {
 
     public DwarfLineSectionImpl getLineSectionImpl() {
         return dwarfLineSection;
+    }
+
+    public ELFMachine getELFMachine() {
+        return elfMachine;
     }
 }

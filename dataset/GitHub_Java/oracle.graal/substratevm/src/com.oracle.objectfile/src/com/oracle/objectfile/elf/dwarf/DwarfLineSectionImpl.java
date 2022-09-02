@@ -502,7 +502,6 @@ public class DwarfLineSectionImpl extends DwarfSectionImpl {
                     assert opcode != DW_LNS_undefined;
                     pos = writeSpecialOpcode(context, opcode, buffer, pos);
                     pos = writeCopyOp(context, buffer, pos);
-                    address += addressDelta;
                 }
             }
             /*

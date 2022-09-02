@@ -70,5 +70,9 @@ public abstract class LLVMNativeLibrary extends Library {
         throw UnsupportedMessageException.create();
     }
 
+    public boolean isInternalObject(Object receiver) {
+        return true;
+    }
+
     public abstract LLVMNativePointer toNativePointer(Object receiver);
 }
