@@ -374,13 +374,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         return currentBCI;
     }
 
-    @Override
-    public SourceSection getEncapsulatingSourceSection() {
-        SourceSection section = getSourceSectionAtBCI(currentBCI);
-        return section != null ? section : getSourceSection();
-    }
-
-    private SourceSection getSourceSectionAtBCI(int bci) {
+    public SourceSection getSourceSectionAtBCI(int bci) {
         Source s = getSource();
         if (s == null) {
             return null;
