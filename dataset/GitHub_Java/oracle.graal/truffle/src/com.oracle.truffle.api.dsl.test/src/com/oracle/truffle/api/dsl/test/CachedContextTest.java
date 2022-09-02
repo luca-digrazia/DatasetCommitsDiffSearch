@@ -41,8 +41,8 @@
 package com.oracle.truffle.api.dsl.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertNotSame;
 
 import java.util.function.Supplier;
 
@@ -52,19 +52,13 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextPolicy;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.GenerateUncached;
-import com.oracle.truffle.api.dsl.Introspectable;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.test.CachedContextTestFactory.Valid1NodeGen;
 import com.oracle.truffle.api.dsl.test.CachedContextTestFactory.Valid2NodeGen;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.library.GenerateLibrary;
-import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 
@@ -95,7 +89,6 @@ public class CachedContextTest extends AbstractPolyglotTest {
     }
 
     @GenerateUncached
-    @Introspectable
     abstract static class Valid1Node extends Node {
 
         abstract Object execute(Object argument);
@@ -103,7 +96,7 @@ public class CachedContextTest extends AbstractPolyglotTest {
         @Specialization
         static String s0(int value,
                         @CachedContext(CachedContextTestLanguage.class) Env context,
-                        @CachedContext(CachedContextTestLanguage.class) ContextReference<Env> contextSupplier) {
+                        @CachedContext(CachedContextTestLanguage.class) Supplier<Env> contextSupplier) {
             assertSame(CachedContextTestLanguage.getCurrentContext(), context);
             assertSame(CachedContextTestLanguage.getCurrentContext(), contextSupplier.get());
             return "s0";
@@ -112,7 +105,7 @@ public class CachedContextTest extends AbstractPolyglotTest {
         @Specialization
         static String s1(double value,
                         @CachedContext(CachedContextTestLanguage.class) Env context,
-                        @CachedContext(CachedContextTestLanguage.class) ContextReference<Env> contextSupplier) {
+                        @CachedContext(CachedContextTestLanguage.class) Supplier<Env> contextSupplier) {
             assertSame(CachedContextTestLanguage.getCurrentContext(), context);
             assertSame(CachedContextTestLanguage.getCurrentContext(), contextSupplier.get());
             return "s1";
@@ -256,7 +249,7 @@ public class CachedContextTest extends AbstractPolyglotTest {
 
         @Specialization
         static String s0(Object value,
-                        @ExpectError("Invalid @CachedContext specification. The parameter type must match the context type 'Env' or 'ContextReference<Env>'.") //
+                        @ExpectError("Invalid @CachedContext specification. The parameter type must match the context type 'Env' or 'Supplier<Env>'.") //
                         @CachedContext(CachedContextTestLanguage.class) Object context) {
             throw new AssertionError();
         }
@@ -268,8 +261,8 @@ public class CachedContextTest extends AbstractPolyglotTest {
 
         @Specialization
         static String s0(Object value,
-                        @ExpectError("Invalid @CachedContext specification. The parameter type must match the context type 'Env' or 'ContextReference<Env>'.")//
-                        @CachedContext(CachedContextTestLanguage.class) ContextReference<Object> context) {
+                        @ExpectError("Invalid @CachedContext specification. The parameter type must match the context type 'Env' or 'Supplier<Env>'.")//
+                        @CachedContext(CachedContextTestLanguage.class) Supplier<Object> context) {
             throw new AssertionError();
         }
     }
@@ -280,32 +273,9 @@ public class CachedContextTest extends AbstractPolyglotTest {
 
         @Specialization
         static String s0(Object value,
-                        @ExpectError("Invalid @CachedContext specification. The parameter type must match the context type 'Env' or 'ContextReference<Env>'.") //
-                        @CachedContext(CachedContextTestLanguage.class) ContextReference<?> context) {
+                        @ExpectError("Invalid @CachedContext specification. The parameter type must match the context type 'Env' or 'Supplier<Env>'.") //
+                        @CachedContext(CachedContextTestLanguage.class) Supplier<?> context) {
             throw new AssertionError();
-        }
-    }
-
-    @GenerateLibrary
-    public abstract static class CachedContextTestLibrary extends Library {
-
-        public abstract Object m0(Object receiver);
-
-        public abstract Object m1(Object receiver);
-    }
-
-    @ExportLibrary(CachedContextTestLibrary.class)
-    @SuppressWarnings("static-method")
-    static class CachedContextLibraryReceiver {
-
-        @ExportMessage
-        final Object m0(@CachedContext(CachedContextTestLanguage.class) Env env) {
-            return "m0";
-        }
-
-        @ExportMessage
-        final Object m1(@CachedContext(CachedContextTestLanguage.class) ContextReference<Env> env) {
-            return "m1";
         }
     }
 

@@ -317,9 +317,6 @@ public class FlatNodeGenFactory {
     }
 
     private static String createSpecializationLocalName(SpecializationData s) {
-        if (s == null) {
-            return null;
-        }
         return "s" + s.getIndex() + "_";
     }
 
@@ -480,7 +477,7 @@ public class FlatNodeGenFactory {
             if (hasGenericTypeMatch) {
                 for (ListIterator<ExecutableTypeData> iterator = genericExecutableTypes.listIterator(); iterator.hasNext();) {
                     ExecutableTypeData executableTypeData = iterator.next();
-                    if (!isAssignable(genericReturnType, executableTypeData.getReturnType())) {
+                    if (!typeEquals(genericReturnType, executableTypeData.getReturnType())) {
                         iterator.remove();
                         specializedExecutableTypes.add(executableTypeData);
                     }
@@ -867,16 +864,16 @@ public class FlatNodeGenFactory {
 
     private List<CacheExpression> computeUniqueSupplierCaches() {
         List<CacheExpression> cacheExpressions = new ArrayList<>();
-        Set<String> computedContextSuppliers = new HashSet<>();
-        Set<String> computedLanguageSuppliers = new HashSet<>();
         for (NodeData sharedNode : this.sharingNodes) {
             List<SpecializationData> specializations = calculateReachableSpecializations(sharedNode);
+            Set<String> computedContextSuppliers = new HashSet<>();
+            Set<String> computedLanguageSuppliers = new HashSet<>();
             for (SpecializationData specialization : specializations) {
                 for (CacheExpression cache : specialization.getCaches()) {
                     if (!cache.isCachedContext() && !cache.isCachedLanguage()) {
                         continue;
                     }
-                    TypeMirror languageType = cache.getLanguageType();
+                    TypeMirror languageType = cache.getSupplierType();
                     String qualifiedLanguageTypeName = ElementUtils.getQualifiedName(languageType);
                     if (cache.isCachedLanguage()) {
                         if (computedLanguageSuppliers.contains(qualifiedLanguageTypeName)) {
@@ -1459,6 +1456,7 @@ public class FlatNodeGenFactory {
         if (!needsRewrites()) {
             return null;
         }
+
         String frame = null;
         if (needsFrameToExecute(reachableSpecializations)) {
             frame = FRAME_VALUE;
@@ -3988,18 +3986,7 @@ public class FlatNodeGenFactory {
             return null;
         }
         CodeTree tree;
-        if (cache.isMergedLibrary()) {
-            if (frameState.getMode().isUncached()) {
-                CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
-                builder.staticReference(createLibraryConstant(libraryConstants, cache.getParameter().getType()));
-                builder.startCall(".getUncached");
-                builder.tree(writeExpression(frameState, specialization, cache.getDefaultExpression()));
-                builder.end();
-                tree = builder.build();
-            } else {
-                tree = CodeTreeBuilder.singleString("this." + cache.getMergedLibraryIdentifier());
-            }
-        } else if (cache.isCachedContext() || cache.isCachedLanguage()) {
+        if (cache.isCachedContext() || cache.isCachedLanguage()) {
             String fieldName = createSupplierName(cache);
             CodeTreeBuilder builder = CodeTreeBuilder.createBuilder();
 
