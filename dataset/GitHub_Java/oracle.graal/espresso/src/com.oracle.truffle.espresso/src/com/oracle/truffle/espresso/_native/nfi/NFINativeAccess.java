@@ -47,6 +47,7 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso._native.Buffer;
 import com.oracle.truffle.espresso._native.NativeAccess;
+import com.oracle.truffle.espresso._native.NativeAccessProvider;
 import com.oracle.truffle.espresso._native.NativeSignature;
 import com.oracle.truffle.espresso._native.NativeType;
 import com.oracle.truffle.espresso._native.Pointer;
@@ -328,11 +329,6 @@ class NFINativeAccess implements NativeAccess {
     }
 
     @Override
-    public void prepareThread() {
-        // nop
-    }
-
-    @Override
     public @Buffer TruffleObject allocateMemory(long size) {
         long address = 0L;
         try {
@@ -373,7 +369,7 @@ class NFINativeAccess implements NativeAccess {
         UNSAFE.freeMemory(address);
     }
 
-    public static final class Provider implements NativeAccess.Provider {
+    public final class Provider implements NativeAccessProvider {
         @Override
         public String id() {
             return "nfi-native";
