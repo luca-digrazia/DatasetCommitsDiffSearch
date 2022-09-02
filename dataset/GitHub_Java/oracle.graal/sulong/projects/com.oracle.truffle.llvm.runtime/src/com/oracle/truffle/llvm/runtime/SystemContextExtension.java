@@ -36,7 +36,6 @@ import java.nio.file.Path;
 public abstract class SystemContextExtension implements ContextExtension {
 
     public abstract Path getSulongLibrariesPath();
-
     public abstract String[] getSulongDefaultLibraries();
 
     public abstract LLVMSyscallOperationNode createSyscallNode(long index);
