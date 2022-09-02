@@ -271,7 +271,6 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeDisassembler;
@@ -2484,8 +2483,7 @@ public class BytecodeParser implements GraphBuilderContext {
                         : (calleeIntrinsicContext != null ? new IntrinsicScope(this, targetMethod, args)
                                         : new InliningScope(this, targetMethod, args))) {
             BytecodeParser parser = graphBuilderInstance.createBytecodeParser(graph, this, targetMethod, INVOCATION_ENTRY_BCI, calleeIntrinsicContext);
-            boolean targetIsSubstitution = targetMethod.isAnnotationPresent(MethodSubstitution.class);
-            FrameStateBuilder startFrameState = new FrameStateBuilder(parser, parser.code, graph, graphBuilderConfig.retainLocalVariables() && !targetIsSubstitution);
+            FrameStateBuilder startFrameState = new FrameStateBuilder(parser, parser.code, graph, graphBuilderConfig.retainLocalVariables());
             if (!targetMethod.isStatic()) {
                 args[0] = nullCheckedValue(args[0]);
             }

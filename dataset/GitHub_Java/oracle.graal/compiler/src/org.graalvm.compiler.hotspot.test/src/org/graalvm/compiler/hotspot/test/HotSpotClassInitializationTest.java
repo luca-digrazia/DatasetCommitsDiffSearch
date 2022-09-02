@@ -27,15 +27,15 @@ package org.graalvm.compiler.hotspot.test;
 import static org.junit.Assert.assertNotEquals;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
-import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.hotspot.nodes.KlassBeingInitializedCheckNode;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
-import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.junit.Assert;
+import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 
 import jdk.vm.ci.code.InstalledCode;
@@ -43,13 +43,13 @@ import jdk.vm.ci.code.InvalidInstalledCodeException;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-public class HotSpotClassInitializationTest extends GraalCompilerTest {
+public class HotSpotClassInitializationTest extends HotSpotGraalCompilerTest {
 
     static HotSpotClassInitializationTest instance;
 
     static class InvokeStatic {
         static {
-            test(InvokeStatic.class, "m", InvokeNode.class);
+            instance.test(InvokeStatic.class, "m");
         }
 
         static boolean m() {
@@ -70,7 +70,7 @@ public class HotSpotClassInitializationTest extends GraalCompilerTest {
             static int N = 5000;
 
             static {
-                test(GetStatic.class, "m", LoadFieldNode.class);
+                instance.test(GetStatic.class, "m", LoadFieldNode.class);
             }
         }
 
@@ -90,7 +90,7 @@ public class HotSpotClassInitializationTest extends GraalCompilerTest {
 
     static class NewInstance {
         static {
-            test(NewInstance.class, "m", NewInstanceNode.class, InvokeNode.class);
+            instance.test(NewInstance.class, "m", NewInstanceNode.class);
         }
 
         @SuppressWarnings("unused")
@@ -102,10 +102,16 @@ public class HotSpotClassInitializationTest extends GraalCompilerTest {
         static double field;
     }
 
+    @Before
+    public void checkAssumptions() {
+        // cannot be BeforeClass because we need a runtime and BeforeClass must be static
+        Assume.assumeTrue("init_thread field must be visible", runtime().getVMConfig().instanceKlassInitThreadOffset != -1);
+    }
+
     @SafeVarargs
-    private static void test(Class<?> testClass, String methodName, Class<? extends Node>... nodeTypes) {
-        ResolvedJavaMethod method = instance.getResolvedJavaMethod(testClass, methodName);
-        StructuredGraph graph = instance.parseProfiled(method, StructuredGraph.AllowAssumptions.NO);
+    final void test(Class<?> testClass, String methodName, Class<? extends Node>... nodeTypes) {
+        ResolvedJavaMethod method = getResolvedJavaMethod(testClass, methodName);
+        StructuredGraph graph = parseProfiled(method, StructuredGraph.AllowAssumptions.NO);
         for (DeoptimizeNode d : graph.getNodes().filter(DeoptimizeNode.class)) {
             assertNotEquals("No unresolved deopts expected", d.getReason(), DeoptimizationReason.Unresolved);
         }
@@ -135,7 +141,7 @@ public class HotSpotClassInitializationTest extends GraalCompilerTest {
     }
 
     @Test
-    public void testInvokeStatic3() {
+    public void testGetStatic() {
         GraalDirectives.inCompiledCode();
         instance = this;
         GetStatic.field = 0;
