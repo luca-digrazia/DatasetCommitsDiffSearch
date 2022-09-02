@@ -558,17 +558,6 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     public void registerAsReachable() {
         if (!isReachable) {
-            if (superClass != null) {
-                /*
-                 * The super class must be registered as reachable before this class because other
-                 * threads may query the fields which also collects the super class fields. Field
-                 * lookup guarantees that the type has already been marked as reachable.
-                 */
-                superClass.registerAsReachable();
-            }
-            for (AnalysisType iface : interfaces) {
-                iface.registerAsReachable();
-            }
             /* Races are not a problem because every thread is going to do the same steps. */
             isReachable = true;
             universe.hostVM.checkForbidden(this, UsageKind.Reachable);
@@ -588,6 +577,12 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
                 if (dimension >= 2) {
                     universe.objectType().getArrayClass(dimension - 1).registerAsReachable();
                 }
+            }
+            if (superClass != null) {
+                superClass.registerAsReachable();
+            }
+            for (AnalysisType iface : interfaces) {
+                iface.registerAsReachable();
             }
 
             /* Schedule the registration task. */
@@ -706,9 +701,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     }
 
     public boolean isInstantiated() {
-        boolean instantiated = isInHeap || isAllocated;
-        assert !instantiated || isReachable;
-        return instantiated;
+        return isInHeap || isAllocated;
     }
 
     /**
