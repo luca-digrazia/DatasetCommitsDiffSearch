@@ -40,11 +40,16 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.io.TruffleProcessBuilder;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -66,12 +71,13 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
     public void testProcessCreationDenied() throws Exception {
         Path javaExecutable = getJavaExecutable();
         Assume.assumeNotNull(javaExecutable);
-        setupEnv(Context.newBuilder().build());
+        setupEnv(Context.newBuilder().allowIO(true).build());
         try {
             languageEnv.newProcessBuilder(javaExecutable.toString()).start();
             Assert.fail("SecurityException expected.");
         } catch (SecurityException se) {
             // Expected
+            verifySecurityException(se);
         }
     }
 
@@ -79,10 +85,10 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
     public void testProcessCreationAllowed() throws Exception {
         Path javaExecutable = getJavaExecutable();
         Assume.assumeNotNull(javaExecutable);
-        setupEnv(Context.newBuilder().allowCreateProcess(true).build());
+        setupEnv(Context.newBuilder().allowIO(true).allowCreateProcess(true).build());
         Process p = languageEnv.newProcessBuilder(javaExecutable.toString()).start();
         if (!p.waitFor(5, TimeUnit.SECONDS)) {
-            p.destroy();
+            p.destroyForcibly().waitFor();
         }
     }
 
@@ -93,26 +99,68 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
         setupEnv(Context.newBuilder().allowAllAccess(true).build());
         Process p = languageEnv.newProcessBuilder(javaExecutable.toString()).start();
         if (!p.waitFor(5, TimeUnit.SECONDS)) {
+            p.destroyForcibly().waitFor();
+        }
+    }
+
+    @Test
+    public void testRedirectToStream() throws Exception {
+        Path javaExecutable = getJavaExecutable();
+        Assume.assumeNotNull(javaExecutable);
+        Path cp = getLocation();
+        Assume.assumeNotNull(cp);
+        setupEnv(Context.newBuilder().allowAllAccess(true).build());
+        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+        TruffleProcessBuilder builder = languageEnv.newProcessBuilder(javaExecutable.toString(), "-cp", cp.toString(), Main.class.getName());
+        Process p = builder.redirectOutput(builder.createRedirectToStream(stdout)).redirectError(builder.createRedirectToStream(stderr)).start();
+        if (!p.waitFor(30, TimeUnit.SECONDS)) {
             p.destroy();
+            Assert.fail("Process did not finish in expected time.");
+        }
+        Assert.assertEquals(0, p.exitValue());
+        Assert.assertEquals(Main.expectedStdOut(), new String(stdout.toByteArray(), StandardCharsets.UTF_8));
+        Assert.assertEquals(Main.expectedStdErr(), new String(stderr.toByteArray(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void testUnfinishedSubProcess() throws Exception {
+        Path javaExecutable = getJavaExecutable();
+        Assume.assumeNotNull(javaExecutable);
+        Path cp = getLocation();
+        Assume.assumeNotNull(cp);
+        setupEnv(Context.newBuilder().allowAllAccess(true).build());
+        Process p = languageEnv.newProcessBuilder(javaExecutable.toString(), "-cp", cp.toString(), Main2.class.getName()).start();
+        Context ctx = context;
+        context = null;
+        ctx.leave();
+        try {
+            ctx.close();
+            Assert.fail("Expected IllegalArgumentException");
+        } catch (IllegalStateException e) {
+            // Expected exception
+        } finally {
+            p.destroyForcibly();
         }
     }
 
     @Test
     public void testCustomHandlerProcessCreationDenied() throws Exception {
         MockProcessHandler testHandler = new MockProcessHandler();
-        setupEnv(Context.newBuilder().processHandler(testHandler).build());
+        setupEnv(Context.newBuilder().allowIO(true).processHandler(testHandler).build());
         try {
             languageEnv.newProcessBuilder("process").start();
             Assert.fail("SecurityException expected.");
         } catch (SecurityException se) {
             // Expected
+            verifySecurityException(se);
         }
     }
 
     @Test
     public void testCustomHandlerProcessCreationAllowed() throws Exception {
         MockProcessHandler testHandler = new MockProcessHandler();
-        setupEnv(Context.newBuilder().allowCreateProcess(true).processHandler(testHandler).build());
+        setupEnv(Context.newBuilder().allowIO(true).allowCreateProcess(true).processHandler(testHandler).build());
         languageEnv.newProcessBuilder("process").start();
         ProcessHandler.ProcessCommand command = testHandler.getAndCleanLastCommand();
         Assert.assertNotNull(command);
@@ -123,7 +171,7 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
     @Test
     public void testCommands() throws Exception {
         MockProcessHandler testHandler = new MockProcessHandler();
-        setupEnv(Context.newBuilder().allowCreateProcess(true).processHandler(testHandler).build());
+        setupEnv(Context.newBuilder().allowIO(true).allowCreateProcess(true).processHandler(testHandler).build());
         languageEnv.newProcessBuilder("process", "param1", "param2").start();
         ProcessHandler.ProcessCommand command = testHandler.getAndCleanLastCommand();
         Assert.assertNotNull(command);
@@ -145,7 +193,7 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
         MockProcessHandler testHandler = new MockProcessHandler();
         setupEnv(Context.newBuilder().allowCreateProcess(true).allowIO(true).processHandler(testHandler).build());
         String workdirPath = Paths.get("/workdir").toString();
-        TruffleFile workDir = languageEnv.getTruffleFile(workdirPath);
+        TruffleFile workDir = languageEnv.getPublicTruffleFile(workdirPath);
         languageEnv.newProcessBuilder("process").directory(workDir).start();
         ProcessHandler.ProcessCommand command = testHandler.getAndCleanLastCommand();
         Assert.assertNotNull(command);
@@ -160,35 +208,65 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
     @Test
     public void testEnvironment() throws Exception {
         Assert.assertEquals(Collections.emptyMap(), envFromContext(EnvironmentAccess.NONE));
+        Map<String, String> expected = pairsAsMap("k1", "v1", "k2", "v2");
+        Assert.assertEquals(expected, envFromContext(EnvironmentAccess.NONE, "k1", "v1", "k2", "v2"));
         Assert.assertEquals(System.getenv(), envFromContext(EnvironmentAccess.INHERIT));
-        Map<String, String> expected = pairsAsMap("k3", "v3", "k4", "v4");
+        expected = new HashMap<>(System.getenv());
+        expected.putAll(pairsAsMap("k1", "v1", "k2", "v2"));
+        Assert.assertEquals(expected, envFromContext(EnvironmentAccess.INHERIT, "k1", "v1", "k2", "v2"));
+
+        expected = pairsAsMap("k3", "v3", "k4", "v4");
         Assert.assertEquals(expected, envExtendedByProcessBuilder(EnvironmentAccess.NONE));
+        expected = pairsAsMap("k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4");
+        Assert.assertEquals(expected, envExtendedByProcessBuilder(EnvironmentAccess.NONE, "k1", "v1", "k2", "v2"));
         expected = new HashMap<>(System.getenv());
         expected.putAll(pairsAsMap("k3", "v3", "k4", "v4"));
         Assert.assertEquals(expected, envExtendedByProcessBuilder(EnvironmentAccess.INHERIT));
+        expected = new HashMap<>(System.getenv());
+        expected.putAll(pairsAsMap("k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4"));
+        Assert.assertEquals(expected, envExtendedByProcessBuilder(EnvironmentAccess.INHERIT, "k1", "v1", "k2", "v2"));
+
         String newValue = "override";
-        Assert.assertEquals(Collections.emptyMap(), envOverridenByProcessBuilder(EnvironmentAccess.NONE, newValue));
+        Assert.assertEquals(Collections.emptyMap(), envOverridenByProcessBuilder(EnvironmentAccess.NONE, null, newValue));
+        expected = pairsAsMap("k1", "v1", "k2", newValue);
+        Assert.assertEquals(expected, envOverridenByProcessBuilder(EnvironmentAccess.NONE, "k2", newValue, "k1", "v1", "k2", "v2"));
         expected = new HashMap<>();
         for (Map.Entry<String, String> e : System.getenv().entrySet()) {
             expected.put(e.getKey(), newValue);
         }
-        Assert.assertEquals(expected, envOverridenByProcessBuilder(EnvironmentAccess.INHERIT, newValue));
+        Assert.assertEquals(expected, envOverridenByProcessBuilder(EnvironmentAccess.INHERIT, null, newValue));
         expected = pairsAsMap("k3", "v3", "k4", "v4");
         Assert.assertEquals(expected, envCleanedByProcessBuilder(EnvironmentAccess.NONE));
+        Assert.assertEquals(expected, envCleanedByProcessBuilder(EnvironmentAccess.NONE, "k1", "v1", "k2", "v2"));
         Assert.assertEquals(expected, envCleanedByProcessBuilder(EnvironmentAccess.INHERIT));
+        Assert.assertEquals(expected, envCleanedByProcessBuilder(EnvironmentAccess.INHERIT, "k1", "v1", "k2", "v2"));
     }
 
-    private Map<String, String> envFromContext(EnvironmentAccess envAccess) throws IOException {
+    private Map<String, String> envFromContext(EnvironmentAccess envAccess, String... envKeyValuePairs) throws IOException {
+        if ((envKeyValuePairs.length & 1) == 1) {
+            throw new IllegalArgumentException("The envKeyValuePairs length must be even");
+        }
         MockProcessHandler testHandler = new MockProcessHandler();
-        setupEnv(Context.newBuilder().allowCreateProcess(true).processHandler(testHandler).allowEnvironmentAccess(envAccess).build());
+        Context.Builder builder = Context.newBuilder().allowIO(true).allowCreateProcess(true).processHandler(testHandler).allowEnvironmentAccess(envAccess);
+        for (int i = 0; i < envKeyValuePairs.length; i += 2) {
+            builder.environment(envKeyValuePairs[i], envKeyValuePairs[i + 1]);
+        }
+        setupEnv(builder.build());
         languageEnv.newProcessBuilder("process").start();
         ProcessHandler.ProcessCommand command = testHandler.getAndCleanLastCommand();
         return command.getEnvironment();
     }
 
-    private Map<String, String> envExtendedByProcessBuilder(EnvironmentAccess envAccess) throws IOException {
+    private Map<String, String> envExtendedByProcessBuilder(EnvironmentAccess envAccess, String... envKeyValuePairs) throws IOException {
+        if ((envKeyValuePairs.length & 1) == 1) {
+            throw new IllegalArgumentException("The envKeyValuePairs length must be even");
+        }
         MockProcessHandler testHandler = new MockProcessHandler();
-        setupEnv(Context.newBuilder().allowCreateProcess(true).processHandler(testHandler).allowEnvironmentAccess(envAccess).build());
+        Context.Builder contextBuilder = Context.newBuilder().allowIO(true).allowCreateProcess(true).processHandler(testHandler).allowEnvironmentAccess(envAccess);
+        for (int i = 0; i < envKeyValuePairs.length; i += 2) {
+            contextBuilder.environment(envKeyValuePairs[i], envKeyValuePairs[i + 1]);
+        }
+        setupEnv(contextBuilder.build());
         TruffleProcessBuilder builder = languageEnv.newProcessBuilder("process");
         builder.environment(pairsAsMap("k3", "v3", "k4", "v4"));
         builder.start();
@@ -196,23 +274,41 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
         return command.getEnvironment();
     }
 
-    private Map<String, String> envOverridenByProcessBuilder(EnvironmentAccess envAccess, String value) throws IOException {
-        MockProcessHandler testHandler = new MockProcessHandler();
-        setupEnv(Context.newBuilder().allowCreateProcess(true).processHandler(testHandler).allowEnvironmentAccess(envAccess).build());
-        TruffleProcessBuilder builder = languageEnv.newProcessBuilder("process");
-        Map<String, String> newEnv = new HashMap<>();
-        for (String key : languageEnv.getEnvironment().keySet()) {
-            newEnv.put(key, value);
+    private Map<String, String> envOverridenByProcessBuilder(EnvironmentAccess envAccess, String toOverride, String value, String... envKeyValuePairs) throws IOException {
+        if ((envKeyValuePairs.length & 1) == 1) {
+            throw new IllegalArgumentException("The envKeyValuePairs length must be even");
         }
-        builder.environment(newEnv);
+        MockProcessHandler testHandler = new MockProcessHandler();
+        Context.Builder contextBuilder = Context.newBuilder().allowIO(true).allowCreateProcess(true).processHandler(testHandler).allowEnvironmentAccess(envAccess);
+        for (int i = 0; i < envKeyValuePairs.length; i += 2) {
+            contextBuilder.environment(envKeyValuePairs[i], envKeyValuePairs[i + 1]);
+        }
+        setupEnv(contextBuilder.build());
+        TruffleProcessBuilder builder = languageEnv.newProcessBuilder("process");
+        if (toOverride != null) {
+            builder.environment(toOverride, value);
+        } else {
+            Map<String, String> newEnv = new HashMap<>();
+            for (String key : languageEnv.getEnvironment().keySet()) {
+                newEnv.put(key, value);
+            }
+            builder.environment(newEnv);
+        }
         builder.start();
         ProcessHandler.ProcessCommand command = testHandler.getAndCleanLastCommand();
         return command.getEnvironment();
     }
 
-    private Map<String, String> envCleanedByProcessBuilder(EnvironmentAccess envAccess) throws IOException {
+    private Map<String, String> envCleanedByProcessBuilder(EnvironmentAccess envAccess, String... envKeyValuePairs) throws IOException {
+        if ((envKeyValuePairs.length & 1) == 1) {
+            throw new IllegalArgumentException("The envKeyValuePairs length must be even");
+        }
         MockProcessHandler testHandler = new MockProcessHandler();
-        setupEnv(Context.newBuilder().allowCreateProcess(true).processHandler(testHandler).allowEnvironmentAccess(envAccess).build());
+        Context.Builder contextBuilder = Context.newBuilder().allowIO(true).allowCreateProcess(true).processHandler(testHandler).allowEnvironmentAccess(envAccess);
+        for (int i = 0; i < envKeyValuePairs.length; i += 2) {
+            contextBuilder.environment(envKeyValuePairs[i], envKeyValuePairs[i + 1]);
+        }
+        setupEnv(contextBuilder.build());
         TruffleProcessBuilder builder = languageEnv.newProcessBuilder("process");
         builder.clearEnvironment(true);
         builder.environment(pairsAsMap("k3", "v3", "k4", "v4"));
@@ -224,7 +320,7 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
     @Test
     public void testRedirects() throws Exception {
         MockProcessHandler testHandler = new MockProcessHandler();
-        setupEnv(Context.newBuilder().allowCreateProcess(true).processHandler(testHandler).build());
+        setupEnv(Context.newBuilder().allowIO(true).allowCreateProcess(true).processHandler(testHandler).build());
         languageEnv.newProcessBuilder("process").start();
         ProcessHandler.ProcessCommand command = testHandler.getAndCleanLastCommand();
         Assert.assertNotNull(command);
@@ -274,6 +370,10 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
         Assert.assertEquals(ProcessHandler.Redirect.INHERIT, command.getErrorRedirect());
     }
 
+    private static void verifySecurityException(SecurityException se) {
+        Assert.assertTrue(se instanceof TruffleException);
+    }
+
     private static Path getJavaExecutable() {
         String value = System.getProperty("java.home");
         if (value == null) {
@@ -282,6 +382,11 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
         Path bin = Paths.get(value).resolve("bin");
         Path java = bin.resolve(isWindows() ? "java.exe" : "java");
         return Files.exists(java) ? java.toAbsolutePath() : null;
+    }
+
+    private static Path getLocation() throws URISyntaxException {
+        URL location = ProcessBuilderTest.class.getProtectionDomain().getCodeSource().getLocation();
+        return Paths.get(location.toURI());
     }
 
     private static boolean isWindows() {
@@ -368,6 +473,46 @@ public class ProcessBuilderTest extends AbstractPolyglotTest {
                 @Override
                 public void write(int b) throws IOException {
                     throw new IOException("Closed stream");
+                }
+            }
+        }
+    }
+
+    public static final class Main {
+        private static final String STDOUT = "stdout";
+        private static final String STDERR = "stderr";
+
+        public static void main(String[] args) throws IOException {
+            System.out.write(expectedStdOut().getBytes(StandardCharsets.UTF_8));
+            System.out.flush();
+            System.err.write(expectedStdErr().getBytes(StandardCharsets.UTF_8));
+            System.err.flush();
+        }
+
+        static String expectedStdOut() {
+            return repeat(STDOUT, 10_000);
+        }
+
+        static String expectedStdErr() {
+            return repeat(STDERR, 10_000);
+        }
+
+        private static String repeat(String pattern, int count) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < count; i++) {
+                sb.append(pattern);
+            }
+            return sb.toString();
+        }
+    }
+
+    public static final class Main2 {
+        public static void main(String[] args) {
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(1_000);
+                } catch (InterruptedException ie) {
+                    break;
                 }
             }
         }
