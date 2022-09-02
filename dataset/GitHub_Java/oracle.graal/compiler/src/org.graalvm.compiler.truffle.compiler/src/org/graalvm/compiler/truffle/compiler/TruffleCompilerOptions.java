@@ -346,11 +346,10 @@ public final class TruffleCompilerOptions {
     static void checkDeprecation() {
         EconomicMap<OptionKey<?>, org.graalvm.options.OptionKey<?>> deprecatedToReplacement = EconomicMap.create(Equivalence.IDENTITY);
         OptionValues options = getOptions();
-        MapCursor<org.graalvm.options.OptionKey<?>, Pair<? extends OptionKey<?>, Function<Object, ?>>> cursor = Lazy.POLYGLOT_TO_COMPILER.getEntries();
+        MapCursor<org.graalvm.options.OptionKey<?>, OptionKey<?>> cursor = Lazy.POLYGLOT_TO_COMPILER.getEntries();
         while (cursor.advance()) {
-            OptionKey<?> deprecatedKey = cursor.getValue().getLeft();
-            if (deprecatedKey.hasBeenSet(options)) {
-                deprecatedToReplacement.put(deprecatedKey, cursor.getKey());
+            if (cursor.getValue().hasBeenSet(options)) {
+                deprecatedToReplacement.put(cursor.getValue(), cursor.getKey());
             }
         }
         if (!deprecatedToReplacement.isEmpty()) {
@@ -412,7 +411,7 @@ public final class TruffleCompilerOptions {
             result.put(InliningExpansionCounterPressure, identity(TruffleInliningExpansionCounterPressure));
             result.put(InliningInliningCounterPressure, identity(TruffleInliningInliningCounterPressure));
             result.put(CompilationExceptionsAreFatal, identity(SharedTruffleCompilerOptions.TruffleCompilationExceptionsAreFatal));
-            result.put(PerformanceWarningsAreFatal, booleanToPerformanceWarningKind(SharedTruffleCompilerOptions.TrufflePerformanceWarningsAreFatal));
+            result.put(PerformanceWarningsAreFatal, booleanToPerformanceWarningKind(SharedTruffleCompilerOptions.TrufflePerformanceWarningsAreFatal);
             result.put(TraceInlining, identity(SharedTruffleCompilerOptions.TraceTruffleInlining));
             result.put(TraceStackTraceLimit, identity(SharedTruffleCompilerOptions.TraceTruffleStackTraceLimit));
             result.put(Inlining, identity(SharedTruffleCompilerOptions.TruffleFunctionInlining));

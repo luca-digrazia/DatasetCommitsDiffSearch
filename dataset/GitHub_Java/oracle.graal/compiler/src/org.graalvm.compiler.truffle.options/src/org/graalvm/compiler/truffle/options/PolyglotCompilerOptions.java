@@ -26,7 +26,6 @@ package org.graalvm.compiler.truffle.options;
 
 import java.util.function.Function;
 
-import org.graalvm.collections.EconomicMap;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
@@ -68,37 +67,11 @@ public final class PolyglotCompilerOptions {
                     });
 
     public enum PerformanceWarningKind {
-        INLINE("inlining"),
-        INSTANCE_OF("instanceof"),
-        UNREACHABLE_DIRECT_CALL("unreachable"),
-        CALL_TARGET_CHANGE("calltargetchange"),
-        NON_CONSTANT_LOCATION_STORE("store");
-
-        private static volatile EconomicMap<String, PerformanceWarningKind> kindByName;
-        private String name;
-
-        PerformanceWarningKind(String name) {
-            this.name = name;
-        }
-
-        public static PerformanceWarningKind forName(String name) {
-            if (kindByName == null) {
-                synchronized (PerformanceWarningKind.class) {
-                    if (kindByName == null) {
-                        EconomicMap<String, PerformanceWarningKind> m = EconomicMap.create();
-                        for (PerformanceWarningKind kind : PerformanceWarningKind.values()) {
-                            m.put(kind.name, kind);
-                        }
-                        kindByName = m;
-                    }
-                }
-            }
-            PerformanceWarningKind kind = kindByName.get(name);
-            if (kind == null) {
-                throw new IllegalArgumentException("Unknown PerformanceWarningKind name " + name);
-            }
-            return kind;
-        }
+        INLINE,
+        INSTANCEOF,
+        UNREACHABLEDIRECTCALL,
+        CALLTARGETCHANGE,
+        STORE
     }
 
     static final OptionType<Set<? extends PerformanceWarningKind>> PERFORMANCE_WARNING_TYPE = new OptionType<>("PerformanceWarningKind",
@@ -113,7 +86,7 @@ public final class PolyglotCompilerOptions {
                                 Set<PerformanceWarningKind> result = EnumSet.noneOf(PerformanceWarningKind.class);
                                 for (String name : value.split(",")) {
                                     try {
-                                        result.add(PerformanceWarningKind.forName(name));
+                                        result.add(Enum.valueOf(PerformanceWarningKind.class, name));
                                     } catch (IllegalArgumentException e) {
                                         throw new IllegalArgumentException("\"" + name + "\" is not a valid option. Valid values are " + EnumSet.allOf(PerformanceWarningKind.class));
                                     }

@@ -34,6 +34,7 @@ import org.graalvm.compiler.debug.LogStream;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
 import org.graalvm.compiler.truffle.runtime.DefaultInliningPolicy;
 import org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
@@ -69,51 +70,51 @@ public class PerformanceWarningTest extends TruffleCompilerImplTest {
 
     @Test
     public void testVirtualCall() {
-        testHelper(new RootNodeVirtualCall(), true, "perf warn", "execute");
+        testHelper(truffleCompiler, new RootNodeVirtualCall(), true, "perf warn", "execute");
     }
 
     @Test
     public void testDeepStack() {
-        testHelper(new RootNodeDeepStack(), true, "perf warn", "foo", "bar", "execute");
+        testHelper(truffleCompiler, new RootNodeDeepStack(), true, "perf warn", "foo", "bar", "execute");
     }
 
     @Test
     public void testInstanceOf() {
-        testHelper(new RootNodeInstanceOf(), false, "perf info", "foo", "bar", "execute");
+        testHelper(truffleCompiler, new RootNodeInstanceOf(), false, "perf info", "foo", "bar", "execute");
     }
 
     @Test
     public void testCombined() {
-        testHelper(new RootNodeCombined(), true, "perf info", "perf warn", "foo", "bar", "execute");
+        testHelper(truffleCompiler, new RootNodeCombined(), true, "perf info", "perf warn", "foo", "bar", "execute");
     }
 
     @Test
     public void testBoundaryCall() {
-        testHelper(new RootNodeBoundaryCall(), false, EMPTY_PERF_WARNINGS);
+        testHelper(truffleCompiler, new RootNodeBoundaryCall(), false, EMPTY_PERF_WARNINGS);
     }
 
     @Test
     public void testBoundaryVirtualCall() {
-        testHelper(new RootNodeBoundaryVirtualCall(), false, EMPTY_PERF_WARNINGS);
+        testHelper(truffleCompiler, new RootNodeBoundaryVirtualCall(), false, EMPTY_PERF_WARNINGS);
     }
 
     @Test
     public void testInterfaceCast() {
-        testHelper(new RootNodeInterfaceCast(), false, "perf info", Interface.class.getSimpleName(), "foo", "bar", "execute");
+        testHelper(truffleCompiler, new RootNodeInterfaceCast(), false, "perf info", Interface.class.getSimpleName(), "foo", "bar", "execute");
     }
 
     @Test
     public void testSingleImplementor() {
-        testHelper(new RootNodeInterfaceSingleImplementorCall(), false, EMPTY_PERF_WARNINGS);
+        testHelper(truffleCompiler, new RootNodeInterfaceSingleImplementorCall(), false, EMPTY_PERF_WARNINGS);
     }
 
     @Test
     public void testSlowClassCast() {
-        testHelper(new RootNodeDeepClass(), false, "perf info", L8.class.getSimpleName(), "foo", "execute");
+        testHelper(truffleCompiler, new RootNodeDeepClass(), false, "perf info", L8.class.getSimpleName(), "foo", "execute");
     }
 
     @SuppressWarnings("try")
-    private void testHelper(RootNode rootNode, boolean expectException, String... outputStrings) {
+    private static void testHelper(TruffleCompilerImpl compiler, RootNode rootNode, boolean expectException, String... outputStrings) {
 
         // Compile and capture output to TTY.
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
@@ -124,9 +125,9 @@ public class PerformanceWarningTest extends TruffleCompilerImplTest {
             DebugContext debug = DebugContext.create(TruffleCompilerOptions.getOptions(), DebugHandlersFactory.LOADER);
             try (DebugCloseable d = debug.disableIntercept(); DebugContext.Scope s = debug.scope("PerformanceWarningTest")) {
                 final OptimizedCallTarget compilable = target;
-                CompilationIdentifier compilationId = getTruffleCompiler(target).createCompilationIdentifier(compilable);
+                CompilationIdentifier compilationId = compiler.createCompilationIdentifier(compilable);
                 TruffleInliningPlan inliningPlan = new TruffleInlining(compilable, new DefaultInliningPolicy());
-                getTruffleCompiler(target).compileAST(compilable.getOptionValues(), debug, compilable, inliningPlan, compilationId, null, null);
+                compiler.compileAST(compilable.getOptionValues(), debug, compilable, inliningPlan, compilationId, null, null);
                 assertTrue(compilable.isValid());
             }
         } catch (AssertionError e) {

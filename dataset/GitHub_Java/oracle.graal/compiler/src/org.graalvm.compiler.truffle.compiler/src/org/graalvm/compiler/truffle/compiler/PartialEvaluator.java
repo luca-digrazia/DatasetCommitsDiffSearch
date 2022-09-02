@@ -862,7 +862,7 @@ public abstract class PartialEvaluator {
                     }
                 }
             }
-            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.INSTANCE_OF)) {
+            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.INSTANCEOF)) {
                 EconomicMap<ResolvedJavaType, ArrayList<ValueNode>> groupedByType = EconomicMap.create(Equivalence.DEFAULT);
                 for (InstanceOfNode instanceOf : graph.getNodes().filter(InstanceOfNode.class)) {
                     if (!instanceOf.type().isExact()) {
@@ -919,20 +919,20 @@ public abstract class PartialEvaluator {
         }
 
         static void reportDecisionIsNull(JavaConstant target, JavaConstant callNode) {
-            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.UNREACHABLE_DIRECT_CALL)) {
+            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.UNREACHABLEDIRECTCALL)) {
                 Map<String, Object> properties = new LinkedHashMap<>();
                 properties.put("callNode", callNode.toValueString());
-                logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.UNREACHABLE_DIRECT_CALL, target.toValueString(), null,
+                logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.UNREACHABLEDIRECTCALL, target.toValueString(), null,
                                 "A direct call within the Truffle AST is not reachable anymore. Call node could not be inlined.", properties);
             }
         }
 
         static void reportCallTargetChanged(JavaConstant target, JavaConstant callNode, TruffleInliningPlan.Decision decision) {
-            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.CALL_TARGET_CHANGE)) {
+            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.CALLTARGETCHANGE)) {
                 Map<String, Object> properties = new LinkedHashMap<>();
                 properties.put("originalTarget", decision.getTargetName());
                 properties.put("callNode", callNode.toValueString());
-                logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.CALL_TARGET_CHANGE, target.toValueString(), null,
+                logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.CALLTARGETCHANGE, target.toValueString(), null,
                                 "CallTarget changed during compilation. Call node could not be inlined.", properties);
             }
         }

@@ -267,16 +267,16 @@ public class Option {
         option("TruffleCompilationExceptionsAreFatal")
             .type("Boolean")
             .category("INTERNAL")
-            .def("PolyglotCompilerOptions.CompilationExceptionsAreFatal.getDefaultValue()")
+            .def("false")
             .help("Treat compilation exceptions as fatal exceptions that will exit the application")
-            .deprecatedBy("CompilationExceptionsAreFatal"), // COMPILER
+            .deprecatedBy("PerformanceWarningsAreFatal"), // COMPILER
 
         option("TrufflePerformanceWarningsAreFatal")
             .type("Boolean")
             .category("INTERNAL")
-            .def("false")
+            .def("PolyglotCompilerOptions.CompilationExceptionsAreFatal.getDefaultValue()")
             .help("Treat performance warnings as fatal occurrences that will exit the applications")
-            .deprecatedBy("PerformanceWarningsAreFatal"), // COMPILER
+            .deprecatedBy("CompilationExceptionsAreFatal"), // COMPILER
 
         option("TruffleCompilationExceptionsArePrinted")
             .type("Boolean")
