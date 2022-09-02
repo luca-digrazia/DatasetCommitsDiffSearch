@@ -52,15 +52,12 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.ExceptionSynthesizer;
 import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.NativeImageOptions;
-import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.meta.HostedMethod;
-import com.oracle.svm.hosted.phases.SubstrateClassInitializationPlugin;
 import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class ReflectionPlugins {
 
@@ -128,35 +125,33 @@ public class ReflectionPlugins {
     }
 
     public static void registerInvocationPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions,
-                    InvocationPlugins plugins, SVMHost hostVM, boolean analysis, boolean hosted) {
+                    InvocationPlugins plugins, boolean analysis, boolean hosted) {
         /*
          * Initialize the registry if we are during analysis. If hosted is false, i.e., we are
          * analyzing the static initializers, then we always intrinsify, so don't need a registry.
          */
         if (hosted && analysis) {
-            if (!ImageSingletons.contains(ReflectionPluginRegistry.class)) {
-                ImageSingletons.add(ReflectionPluginRegistry.class, new ReflectionPluginRegistry());
-            }
+            ImageSingletons.add(ReflectionPluginRegistry.class, new ReflectionPluginRegistry());
         }
 
-        registerClassPlugins(imageClassLoader, snippetReflection, annotationSubstitutions, plugins, hostVM, analysis, hosted);
+        registerClassPlugins(imageClassLoader, snippetReflection, annotationSubstitutions, plugins, analysis, hosted);
     }
 
     private static void registerClassPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions,
-                    InvocationPlugins plugins, SVMHost hostVM, boolean analysis, boolean hosted) {
+                    InvocationPlugins plugins, boolean analysis, boolean hosted) {
         Registration r = new Registration(plugins, Class.class);
 
         r.register1("forName", String.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode name) {
-                return processForName(b, hostVM, targetMethod, name, imageClassLoader, snippetReflection, analysis, hosted);
+                return processForName(b, targetMethod, name, imageClassLoader, snippetReflection, analysis, hosted);
             }
         });
 
         r.register3("forName", String.class, boolean.class, ClassLoader.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode name, ValueNode initialize, ValueNode classLoader) {
-                return processForName(b, hostVM, targetMethod, name, imageClassLoader, snippetReflection, analysis, hosted);
+                return processForName(b, targetMethod, name, imageClassLoader, snippetReflection, analysis, hosted);
             }
         });
 
@@ -203,7 +198,7 @@ public class ReflectionPlugins {
         });
     }
 
-    private static boolean processForName(GraphBuilderContext b, SVMHost host, ResolvedJavaMethod targetMethod, ValueNode name,
+    private static boolean processForName(GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode name,
                     ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, boolean analysis, boolean hosted) {
         if (name.isConstant()) {
             String className = snippetReflection.asObject(String.class, name.asJavaConstant());
@@ -219,12 +214,8 @@ public class ReflectionPlugins {
                 if (intrinsic == null) {
                     return false;
                 }
-                ResolvedJavaType type = b.getMetaAccess().lookupJavaType(clazz);
-                JavaConstant hub = b.getConstantReflection().asJavaClass(type);
+                JavaConstant hub = b.getConstantReflection().asJavaClass(b.getMetaAccess().lookupJavaType(clazz));
                 pushConstant(b, targetMethod, hub, className);
-                if (host.getClassInitializationSupport().shouldInitializeAtRuntime(clazz)) {
-                    SubstrateClassInitializationPlugin.emitEnsureClassInitialized(b, hub);
-                }
             }
             return true;
         }

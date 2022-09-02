@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.truffle.runtime.hotspot;
 
+import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.TraceTruffleStackTraceLimit;
 import static org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions.TraceTruffleTransferToInterpreter;
 
 import java.lang.reflect.Field;
@@ -44,7 +45,6 @@ import org.graalvm.compiler.truffle.runtime.BackgroundCompileQueue;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode;
-import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleCallBoundary;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 
@@ -433,8 +433,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
         }
 
         private static void logTransferToInterpreter(final AbstractHotSpotTruffleRuntime runtime) {
-            OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.getCurrentFrame().getCallTarget();
-            final int limit = callTarget.getOptionValue(PolyglotCompilerOptions.TraceStackTraceLimit);
+            final int limit = TruffleRuntimeOptions.getValue(TraceTruffleStackTraceLimit);
 
             runtime.log("[truffle] transferToInterpreter at");
             runtime.iterateFrames(new FrameInstanceVisitor<Object>() {
