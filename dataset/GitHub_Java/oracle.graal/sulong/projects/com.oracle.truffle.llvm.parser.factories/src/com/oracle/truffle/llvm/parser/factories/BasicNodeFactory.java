@@ -235,7 +235,6 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMToDebugVa
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64BitVACopyNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64BitVAEnd;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_64VAStartNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ComparisonNodeFactory.LLVMX86_CmpssNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory.LLVMX86_ConversionDoubleToIntNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory.LLVMX86_ConversionFloatToIntNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.x86.LLVMX86_ConversionNodeFactory.LLVMX86_MovmskpdNodeGen;
@@ -1168,10 +1167,6 @@ public class BasicNodeFactory implements NodeFactory {
     @Override
     public LLVMExpressionNode createUnsignedCast(LLVMExpressionNode fromNode, PrimitiveKind kind) {
         switch (kind) {
-            case I1:
-                // Since signed (fptosi) and unsigned (fptoui) casts to i1 behave the same, we
-                // return a SignedCastToI1 node here.
-                return LLVMSignedCastToI1NodeGen.create(fromNode);
             case I8:
                 return LLVMUnsignedCastToI8NodeGen.create(fromNode);
             case I16:
@@ -1685,12 +1680,12 @@ public class BasicNodeFactory implements NodeFactory {
 
     @Override
     public LLVMExpressionNode createFunctionBlockNode(FrameSlot exceptionValueSlot, List<? extends LLVMStatementNode> allFunctionNodes, UniquesRegionAllocator uniquesRegionAllocator,
-                    FrameSlot[][] beforeBlockNuller, FrameSlot[][] afterBlockNuller, LLVMStatementNode[] copyArgumentsToFrame, LLVMSourceLocation location, FrameDescriptor frameDescriptor) {
+                    FrameSlot[][] beforeBlockNuller, FrameSlot[][] afterBlockNuller, LLVMStatementNode[] copyArgumentsToFrame, LLVMSourceLocation location) {
         LLVMUniquesRegionAllocNode uniquesRegionAllocNode = LLVMUniquesRegionAllocNodeGen.create(uniquesRegionAllocator);
         LLVMDispatchBasicBlockNode body = new LLVMDispatchBasicBlockNode(exceptionValueSlot, allFunctionNodes.toArray(new LLVMBasicBlockNode[allFunctionNodes.size()]), beforeBlockNuller,
                         afterBlockNuller);
         body.getOrCreateSourceDescriptor().setSourceLocation(location);
-        final LLVMFunctionRootNode functionRoot = new LLVMFunctionRootNode(uniquesRegionAllocNode, copyArgumentsToFrame, body, frameDescriptor);
+        final LLVMFunctionRootNode functionRoot = new LLVMFunctionRootNode(uniquesRegionAllocNode, copyArgumentsToFrame, body);
         functionRoot.getOrCreateSourceDescriptor().setSourceLocation(location);
         return functionRoot;
     }
@@ -2074,8 +2069,6 @@ public class BasicNodeFactory implements NodeFactory {
                 return LLVMCMathsIntrinsicsFactory.LLVMRintNodeGen.create(args[1]);
             case "llvm.x86.sse.cvtss2si":
                 return LLVMX86_ConversionFloatToIntNodeGen.create(args[1]);
-            case "llvm.x86.sse.cmp.ss":
-                return LLVMX86_CmpssNodeGen.create(args[1], args[2], args[3]);
             case "llvm.x86.sse2.cvtsd2si":
                 return LLVMX86_ConversionDoubleToIntNodeGen.create(args[1]);
             case "llvm.x86.sse2.sqrt.pd":
