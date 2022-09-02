@@ -88,7 +88,7 @@ public final class LLVMLoopDispatchNode extends LLVMNode implements RepeatingNod
     @Override
     public Object executeRepeatingWithValue(VirtualFrame frame) {
 
-        CompilerAsserts.partialEvaluationConstant(bodyNodes.length);
+        CompilerAsserts.compilationConstant(bodyNodes.length);
         int basicBlockIndex = headerId;
         // do-while loop fails at PE
         outer: while (true) {
