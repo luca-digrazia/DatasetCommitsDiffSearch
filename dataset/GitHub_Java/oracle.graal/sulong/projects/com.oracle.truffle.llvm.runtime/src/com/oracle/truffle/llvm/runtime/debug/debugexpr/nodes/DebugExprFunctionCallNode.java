@@ -76,15 +76,15 @@ public abstract class DebugExprFunctionCallNode extends LLVMExpressionNode {
                         return t;
                     } catch (ClassCastException e) {
                     }
-                    throw DebugExprException.create(this, "no type found for function %s", functionName);
+                    throw DebugExprException.create(this, "no type found for function " + functionName);
                 } catch (UnsupportedMessageException e) {
-                    throw DebugExprException.create(this, "error while accessing function %s", functionName);
+                    throw DebugExprException.create(this, "error while accessing function " + functionName);
                 } catch (UnknownIdentifierException e) {
                     throw DebugExprException.symbolNotFound(this, functionName, null);
                 }
             }
         }
-        throw DebugExprException.create(this, "no type found for function %s", functionName);
+        throw DebugExprException.create(this, "no type found for function " + functionName);
     }
 
     @Specialization
@@ -103,15 +103,15 @@ public abstract class DebugExprFunctionCallNode extends LLVMExpressionNode {
                             }
                             return library.execute(member, argumentArr);
                         } catch (UnsupportedTypeException e) {
-                            throw DebugExprException.create(this, "actual and formal parameters of %s do not match", functionName);
+                            throw DebugExprException.create(this, "actual and formal parameters of " + functionName + " do not match");
                         } catch (ArityException e) {
-                            throw DebugExprException.create(this, "%s requires %d argument(s) but got %d", functionName, e.getExpectedArity(), e.getActualArity());
+                            throw DebugExprException.create(this, functionName + " requires " + e.getExpectedArity() + " argument(s) but got " + e.getActualArity());
                         }
                     } else {
-                        throw DebugExprException.create(this, "%s is not invocable", functionName);
+                        throw DebugExprException.create(this, functionName + " is not invocable");
                     }
                 } catch (UnsupportedMessageException e1) {
-                    throw DebugExprException.create(this, "Error while accessing function %s", functionName);
+                    throw DebugExprException.create(this, "Error while accessing function " + functionName);
                 } catch (UnknownIdentifierException e1) {
                     throw DebugExprException.symbolNotFound(this, e1.getUnknownIdentifier(), functionName);
                 }

@@ -69,7 +69,7 @@ public abstract class DebugExprPointerCastNode extends LLVMExpressionNode implem
             throw DebugExprException.create(this, "debugObject to dereference is null");
         }
         if (!typeNode.getLLVMSourceType().isPointer()) {
-            throw DebugExprException.create(this, "%s is no pointer", executedPointerNode);
+            throw DebugExprException.create(this, executedPointerNode + " is no pointer");
         }
         try {
             LLVMSourcePointerType llvmSourcePointerType = (LLVMSourcePointerType) typeNode.getLLVMSourceType();
@@ -83,7 +83,7 @@ public abstract class DebugExprPointerCastNode extends LLVMExpressionNode implem
             return llvmDebugObject;
 
         } catch (ClassCastException e) {
-            throw DebugExprException.create(this, "%s cannot be casted to pointer ", executedPointerNode);
+            throw DebugExprException.create(this, executedPointerNode + " cannot be casted to pointer ");
         }
     }
 
@@ -95,7 +95,7 @@ public abstract class DebugExprPointerCastNode extends LLVMExpressionNode implem
             Object member = ma.getMember();
             return getMember(member);
         }
-        throw DebugExprException.create(this, "member %s is not accessible", pointerNode);
+        throw DebugExprException.create(this, "member " + pointerNode + " is not accessible");
     }
 
 }
