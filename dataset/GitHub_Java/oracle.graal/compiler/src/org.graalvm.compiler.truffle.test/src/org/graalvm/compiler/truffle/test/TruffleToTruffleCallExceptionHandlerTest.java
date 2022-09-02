@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,70 +46,67 @@ public class TruffleToTruffleCallExceptionHandlerTest extends PartialEvaluationT
 
     private static final GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
 
-    private static final class Compilables {
+    private final OptimizedCallTarget calleeNoException = (OptimizedCallTarget) GraalTruffleRuntime.getRuntime().createCallTarget(new RootNode(null) {
+        @Override
+        public Object execute(VirtualFrame frame) {
+            return null;
+        }
 
-        final OptimizedCallTarget calleeNoException = (OptimizedCallTarget) GraalTruffleRuntime.getRuntime().createCallTarget(new RootNode(null) {
-            @Override
-            public Object execute(VirtualFrame frame) {
-                return null;
+        @Override
+        public String toString() {
+            return "CALLEE_NO_EXCEPTION";
+        }
+    });
+
+    private final OptimizedCallTarget callerNoException = (OptimizedCallTarget) runtime.createCallTarget(new RootNode(null) {
+
+        @Child protected DirectCallNode callNode = runtime.createDirectCallNode(calleeNoException);
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            callNode.call(new Object[0]);
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "CALLER_NO_EXCEPTION";
+        }
+    });
+
+    private final OptimizedCallTarget calleeWithException = (OptimizedCallTarget) runtime.createCallTarget(new RootNode(null) {
+        private boolean called;
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            if (!called) {
+                called = true;
+                throw new RuntimeException();
             }
+            return null;
+        }
 
-            @Override
-            public String toString() {
-                return "CALLEE_NO_EXCEPTION";
-            }
-        });
+        @Override
+        public String toString() {
+            return "CALLEE_EXCEPTION";
+        }
+    });
 
-        final OptimizedCallTarget callerNoException = (OptimizedCallTarget) runtime.createCallTarget(new RootNode(null) {
+    private final OptimizedCallTarget callerWithException = (OptimizedCallTarget) runtime.createCallTarget(new RootNode(null) {
 
-            @Child protected DirectCallNode callNode = runtime.createDirectCallNode(calleeNoException);
+        @Child protected DirectCallNode callNode = runtime.createDirectCallNode(calleeWithException);
 
-            @Override
-            public Object execute(VirtualFrame frame) {
-                callNode.call(new Object[0]);
-                return null;
-            }
+        @Override
+        public Object execute(VirtualFrame frame) {
+            callNode.call(new Object[0]);
+            return null;
+        }
 
-            @Override
-            public String toString() {
-                return "CALLER_NO_EXCEPTION";
-            }
-        });
-
-        final OptimizedCallTarget calleeWithException = (OptimizedCallTarget) runtime.createCallTarget(new RootNode(null) {
-            private boolean called;
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                if (!called) {
-                    called = true;
-                    throw new RuntimeException();
-                }
-                return null;
-            }
-
-            @Override
-            public String toString() {
-                return "CALLEE_EXCEPTION";
-            }
-        });
-
-        final OptimizedCallTarget callerWithException = (OptimizedCallTarget) runtime.createCallTarget(new RootNode(null) {
-
-            @Child protected DirectCallNode callNode = runtime.createDirectCallNode(calleeWithException);
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                callNode.call(new Object[0]);
-                return null;
-            }
-
-            @Override
-            public String toString() {
-                return "CALLER_EXCEPTION";
-            }
-        });
-    }
+        @Override
+        public String toString() {
+            return "CALLER_EXCEPTION";
+        }
+    });
 
     @Test
     @SuppressWarnings("try")
@@ -118,8 +115,7 @@ public class TruffleToTruffleCallExceptionHandlerTest extends PartialEvaluationT
          * We disable truffle AST inlining to not inline the callee
          */
         setupContext(Context.newBuilder().allowAllAccess(true).allowExperimentalOptions(true).option("engine.Inlining", Boolean.FALSE.toString()).build());
-        Compilables compilables = new Compilables();
-        StructuredGraph graph = partialEval(compilables.callerNoException, new Object[0], getTruffleCompiler(compilables.calleeNoException).createCompilationIdentifier(compilables.callerNoException));
+        StructuredGraph graph = partialEval(callerNoException, new Object[0], getTruffleCompiler(calleeNoException).createCompilationIdentifier(callerNoException));
         Assert.assertEquals(0, graph.getNodes().filter(UnwindNode.class).count());
     }
 
@@ -132,8 +128,7 @@ public class TruffleToTruffleCallExceptionHandlerTest extends PartialEvaluationT
          * partial evaluator will compile the exception handler edge
          */
         try {
-            Compilables compilables = new Compilables();
-            compilables.calleeWithException.callDirect(null, new Object());
+            calleeWithException.callDirect(null, new Object());
             Assert.fail();
         } catch (Throwable t) {
             Assert.assertTrue(t instanceof RuntimeException);
@@ -143,9 +138,7 @@ public class TruffleToTruffleCallExceptionHandlerTest extends PartialEvaluationT
          * We disable truffle AST inlining to not inline the callee
          */
         setupContext(Context.newBuilder().allowAllAccess(true).allowExperimentalOptions(true).option("engine.Inlining", Boolean.FALSE.toString()).build());
-        Compilables compilables = new Compilables();
-        StructuredGraph graph = partialEval(compilables.callerWithException, new Object[0],
-                        getTruffleCompiler(compilables.calleeWithException).createCompilationIdentifier(compilables.callerWithException));
+        StructuredGraph graph = partialEval(callerWithException, new Object[0], getTruffleCompiler(calleeWithException).createCompilationIdentifier(callerWithException));
         Assert.assertEquals(1, graph.getNodes().filter(UnwindNode.class).count());
     }
 
