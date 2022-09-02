@@ -907,7 +907,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                 // CompilerDirectives.transferToInterpreter();
                 CompilerAsserts.partialEvaluationConstant(curBCI);
                 ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
-                ExceptionHandler handler = null;
+                ExceptionHandler resolved = null;
                 for (ExceptionHandler handler1 : handlers) {
                     if (curBCI >= handler1.getStartBCI() && curBCI < handler1.getEndBCI()) {
                         Klass catchType = null;
@@ -918,11 +918,12 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                         }
                         if (catchType == null || InterpreterToVM.instanceOf(e.getException(), catchType)) {
                             // the first found exception handler is our exception handler
-                            handler = handler1;
+                            resolved = handler1;
                             break;
                         }
                     }
                 }
+                ExceptionHandler handler = resolved;
                 if (handler != null) {
                     top = 0;
                     putObject(frame, 0, e.getException());
@@ -949,11 +950,12 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                 }
             } catch (VirtualMachineError e) {
                 // TODO(peterssen): Host should not throw invalid VME (not in the boot classpath).
+                CompilerDirectives.transferToInterpreter();
                 Meta meta = EspressoLanguage.getCurrentContext().getMeta();
                 StaticObject ex = meta.initEx(e.getClass());
                 CompilerAsserts.partialEvaluationConstant(curBCI);
                 ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
-                ExceptionHandler handler = null;
+                ExceptionHandler resolved = null;
                 for (ExceptionHandler handler1 : handlers) {
                     if (curBCI >= handler1.getStartBCI() && curBCI < handler1.getEndBCI()) {
                         Klass catchType = null;
@@ -964,11 +966,12 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                         }
                         if (catchType == null || InterpreterToVM.instanceOf(ex, catchType)) {
                             // the first found exception handler is our exception handler
-                            handler = handler1;
+                            resolved = handler1;
                             break;
                         }
                     }
                 }
+                ExceptionHandler handler = resolved;
                 if (handler != null) {
                     top = 0;
                     putObject(frame, 0, ex);
