@@ -29,25 +29,68 @@
  */
 package com.oracle.truffle.wasm.predefined.emscripten;
 
+import java.util.function.Consumer;
+
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.binary.ValueTypes;
-import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmContext;
-import com.oracle.truffle.wasm.binary.WasmModule;
+import com.oracle.truffle.wasm.WasmLanguage;
+import com.oracle.truffle.wasm.exception.WasmTrap;
+import com.oracle.truffle.wasm.memory.WasmMemory;
+import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
 
-public class WasiFdWrite extends ImportedFunctionNode {
-    public WasiFdWrite(WasmModule wasmModule, WasmCodeEntry codeEntry) {
-        super(wasmModule, codeEntry);
+import static com.oracle.truffle.wasm.WasmTracing.trace;
+
+public class WasiFdWrite extends WasmPredefinedRootNode {
+
+    public WasiFdWrite(WasmLanguage language, WasmMemory memory) {
+        super(language, null, memory);
     }
 
     @Override
-    public int execute(WasmContext context, VirtualFrame frame) {
+    public Object execute(VirtualFrame frame) {
+        Object[] args = frame.getArguments();
+        assert args.length == 4;
+        for (Object arg : args) {
+            trace("argument: %s", arg);
+        }
+
+        int stream = (int) args[0];
+        int iov = (int) args[1];
+        int iovcnt = (int) args[2];
+        int pnum = (int) args[3];
+
+        return fdWrite(stream, iov, iovcnt, pnum);
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private Object fdWrite(int stream, int iov, int iovcnt, int pnum) {
+        Consumer<Character> charPrinter;
+        switch (stream) {
+            case 1:
+                charPrinter = System.out::print;
+                break;
+            case 2:
+                charPrinter = System.err::print;
+                break;
+            default:
+                throw new WasmTrap(this, "WasiFdWrite: invalid file stream");
+        }
+
+        trace("WasiFdWrite EXECUTE");
+
+        int num = 0;
+        for (int i = 0; i < iovcnt; i++) {
+            int ptr = memory.load_i32(iov + (i * 8 + 0));
+            int len = memory.load_i32(iov + (i * 8 + 4));
+            for (int j = 0; j < len; j++) {
+                final char c = (char) memory.load_i32_8u(ptr + j);
+                charPrinter.accept(c);
+            }
+            num += len;
+            memory.store_i32(pnum, num);
+        }
+
         return 0;
-    }
-
-    @Override
-    public byte returnTypeId() {
-        return ValueTypes.I32_TYPE;
     }
 
     @Override

@@ -30,24 +30,35 @@
 package com.oracle.truffle.wasm.predefined.emscripten;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.binary.ValueTypes;
-import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmContext;
-import com.oracle.truffle.wasm.binary.WasmModule;
+import com.oracle.truffle.wasm.WasmCodeEntry;
+import com.oracle.truffle.wasm.WasmLanguage;
+import com.oracle.truffle.wasm.memory.WasmMemory;
+import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
 
-public class EmscriptenMemcpyBig extends ImportedFunctionNode {
-    public EmscriptenMemcpyBig(WasmModule wasmModule, WasmCodeEntry codeEntry) {
-        super(wasmModule, codeEntry);
+import static com.oracle.truffle.wasm.WasmTracing.trace;
+
+public class EmscriptenMemcpyBig extends WasmPredefinedRootNode {
+    public EmscriptenMemcpyBig(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
+        super(language, codeEntry, memory);
     }
 
     @Override
-    public int execute(WasmContext context, VirtualFrame frame) {
+    public Object execute(VirtualFrame frame) {
+        Object[] args = frame.getArguments();
+        assert args.length == 3;
+        for (Object arg : args) {
+            trace("argument: %s", arg);
+        }
+
+        int dest = (int) args[0];
+        int src = (int) args[1];
+        int num = (int) args[2];
+
+        trace("EmscriptenMemcpyBig EXECUTE");
+
+        memory.copy(src, dest, num);
+
         return 0;
-    }
-
-    @Override
-    public byte returnTypeId() {
-        return ValueTypes.I32_TYPE;
     }
 
     @Override

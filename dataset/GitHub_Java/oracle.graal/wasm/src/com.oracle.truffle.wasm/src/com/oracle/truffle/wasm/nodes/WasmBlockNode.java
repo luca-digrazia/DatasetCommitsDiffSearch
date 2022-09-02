@@ -269,11 +269,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         return rawContextReference;
     }
 
-    public final void initialize(WasmNode[] nestedControlTable, Node[] callNodeTable, int byteLength, int byteConstantLength,
-                    int intConstantLength, int longConstantLength, int branchTableLength) {
+    public void setNestedControlTable(WasmNode[] nestedControlTable) {
         this.nestedControlTable = nestedControlTable;
+    }
+
+    public void setCallNodeTable(Node[] callNodeTable) {
         this.callNodeTable = callNodeTable;
-        initialize(byteLength, byteConstantLength, intConstantLength, longConstantLength, branchTableLength);
     }
 
     @Override

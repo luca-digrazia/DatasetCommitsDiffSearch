@@ -30,11 +30,12 @@
 package com.oracle.truffle.wasm.predefined.emscripten;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmContext;
-import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
+import com.oracle.truffle.wasm.WasmCodeEntry;
+import com.oracle.truffle.wasm.WasmLanguage;
+import com.oracle.truffle.wasm.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
+
+import static com.oracle.truffle.wasm.WasmTracing.trace;
 
 public class EmscriptenGetHeapSize extends WasmPredefinedRootNode {
     public EmscriptenGetHeapSize(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
@@ -43,11 +44,10 @@ public class EmscriptenGetHeapSize extends WasmPredefinedRootNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        WasmContext context = contextReference().get();
+        trace("EmscriptenGetHeapSize EXECUTE");
 
-        logger.finest("EmscriptenGetHeapSize EXECUTE");
-
-        return memory.size();
+        final long byteSize = memory.byteSize();
+        return (int) byteSize;
     }
 
     @Override

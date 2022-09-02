@@ -30,11 +30,12 @@
 package com.oracle.truffle.wasm.predefined.emscripten;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmContext;
-import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
+import com.oracle.truffle.wasm.WasmCodeEntry;
+import com.oracle.truffle.wasm.WasmLanguage;
+import com.oracle.truffle.wasm.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
+
+import static com.oracle.truffle.wasm.WasmTracing.trace;
 
 public class SetErrNo extends WasmPredefinedRootNode {
     public SetErrNo(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
@@ -48,8 +49,6 @@ public class SetErrNo extends WasmPredefinedRootNode {
         for (Object arg : args) {
             trace("argument: %s", arg);
         }
-
-        WasmContext context = contextReference().get();
 
         int value = (int) args[0];
 
