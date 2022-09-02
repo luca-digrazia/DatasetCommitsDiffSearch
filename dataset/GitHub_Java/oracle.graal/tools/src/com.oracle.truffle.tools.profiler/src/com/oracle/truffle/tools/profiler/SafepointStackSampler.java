@@ -61,13 +61,11 @@ final class SafepointStackSampler {
     private final ConcurrentLinkedQueue<StackVisitor> stackVisitorCache = new ConcurrentLinkedQueue<>();
     private final AtomicReference<SampleAction> cachedAction = new AtomicReference<>();
     private final ThreadLocal<SyntheticFrame> syntheticFrameThreadLocal = ThreadLocal.withInitial(() -> null);
-    private final long period;
     private boolean overflowed;
 
-    SafepointStackSampler(int stackLimit, SourceSectionFilter sourceSectionFilter, long period) {
+    SafepointStackSampler(int stackLimit, SourceSectionFilter sourceSectionFilter) {
         this.stackLimit = stackLimit;
         this.sourceSectionFilter = sourceSectionFilter;
-        this.period = period;
     }
 
     private StackVisitor fetchStackVisitor() {
@@ -99,7 +97,7 @@ final class SafepointStackSampler {
         }
 
         try {
-            future.get(10 * period, TimeUnit.MILLISECONDS);
+            future.get(100L, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException e) {
             return null;
         } catch (TimeoutException e) {
