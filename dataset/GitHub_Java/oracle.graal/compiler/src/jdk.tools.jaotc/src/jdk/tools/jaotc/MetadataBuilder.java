@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -98,9 +98,7 @@ final class MetadataBuilder {
             byte[] scopeDesc = metaData.scopesDescBytes();
             byte[] relocationInfo = metaData.relocBytes();
             byte[] oopMapInfo = metaData.oopMaps();
-            // this may be null as the field does not exist before JDK 13
             byte[] implicitExceptionBytes = HotSpotGraalServices.getImplicitExceptionBytes(metaData);
-            byte[] exceptionBytes = metaData.exceptionBytes();
 
             // create a global symbol at this position for this method
             NativeOrderOutputStream metadataStream = new NativeOrderOutputStream();
@@ -145,11 +143,11 @@ final class MetadataBuilder {
                 NativeOrderOutputStream.PatchableInt scopeOffset = metadataStream.patchableInt();
                 NativeOrderOutputStream.PatchableInt relocationOffset = metadataStream.patchableInt();
                 NativeOrderOutputStream.PatchableInt exceptionOffset = metadataStream.patchableInt();
-                NativeOrderOutputStream.PatchableInt implictTableOffset = null;
-                if (implicitExceptionBytes != null) {
-                    implictTableOffset = metadataStream.patchableInt();
-                }
                 NativeOrderOutputStream.PatchableInt oopMapOffset = metadataStream.patchableInt();
+                NativeOrderOutputStream.PatchableInt implictTableOFfset = null;
+                if (implicitExceptionBytes != null) {
+                    implictTableOFfset = metadataStream.patchableInt();
+                }
                 metadataStream.align(8);
 
                 pcDescOffset.set(metadataStream.position());
@@ -162,10 +160,10 @@ final class MetadataBuilder {
                 metadataStream.put(relocationInfo).align(8);
 
                 exceptionOffset.set(metadataStream.position());
-                metadataStream.put(exceptionBytes).align(8);
+                metadataStream.put(metaData.exceptionBytes()).align(8);
 
                 if (implicitExceptionBytes != null) {
-                    implictTableOffset.set(metadataStream.position());
+                    implictTableOFfset.set(metadataStream.position());
                     metadataStream.put(implicitExceptionBytes).align(8);
                 }
 
