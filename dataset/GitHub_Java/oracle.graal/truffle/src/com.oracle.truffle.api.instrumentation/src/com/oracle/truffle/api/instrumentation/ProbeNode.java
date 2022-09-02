@@ -57,7 +57,6 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode.WrapperNode;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.EngineInstrumenter;
 import com.oracle.truffle.api.instrumentation.InstrumentationHandler.InstrumentClientInstrumenter;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -72,8 +71,8 @@ import com.oracle.truffle.api.source.SourceSection;
  * <p>
  * Represents an event sink for instrumentation events that is embedded in the AST using wrappers if
  * needed. Instances of this class are provided by
- * {@link InstrumentableNode#createWrapper(ProbeNode)} to notify the instrumentation API about
- * execution events.
+ * {@link InstrumentableFactory#createWrapper(Node, ProbeNode)} to notify the instrumentation API
+ * about execution events.
  * </p>
  *
  * It is strongly recommended to use {@link GenerateWrapper} to generate implementations of wrapper
@@ -188,6 +187,26 @@ public final class ProbeNode extends Node {
     }
 
     /**
+     * Should get invoked if the node did not complete successfully.
+     *
+     * @param exception the exception that occurred during the execution
+     * @param frame the current frame of the execution.
+     * @since 0.12
+     * @deprecated Use {@link #onReturnExceptionalOrUnwind(VirtualFrame, Throwable, boolean)}
+     *             instead and adjust the wrapper node implementation accordingly.
+     */
+    @Deprecated
+    public void onReturnExceptional(VirtualFrame frame, Throwable exception) {
+        if (exception instanceof ThreadDeath) {
+            throw (ThreadDeath) exception;
+        }
+        EventChainNode localChain = lazyUpdate(frame);
+        if (localChain != null) {
+            EventChainNode.onReturnExceptional(localChain, context, frame, exception);
+        }
+    }
+
+    /**
      * Creates a shallow copy of this node.
      *
      * @return the new copy
@@ -273,9 +292,10 @@ public final class ProbeNode extends Node {
         return context;
     }
 
-    WrapperNode findWrapper() throws AssertionError {
+    @SuppressWarnings("deprecation")
+    com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode findWrapper() throws AssertionError {
         Node parent = getParent();
-        if (!(parent instanceof WrapperNode)) {
+        if (!(parent instanceof com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode)) {
             CompilerDirectives.transferToInterpreter();
             if (parent == null) {
                 throw new AssertionError("Probe node disconnected from AST.");
@@ -283,7 +303,7 @@ public final class ProbeNode extends Node {
                 throw new AssertionError("ProbeNodes must have a parent Node that implements NodeWrapper.");
             }
         }
-        return (WrapperNode) parent;
+        return (com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) parent;
     }
 
     synchronized void invalidate() {
@@ -526,11 +546,12 @@ public final class ProbeNode extends Node {
         return visitor.index;
     }
 
+    @SuppressWarnings("deprecation")
     private EventChainNode findParentChain(VirtualFrame frame, EventBinding<?> binding) {
         Node node = getParent().getParent();
         while (node != null) {
-            if (node instanceof WrapperNode) {
-                ProbeNode probe = ((WrapperNode) node).getProbeNode();
+            if (node instanceof com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) {
+                ProbeNode probe = ((com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) node).getProbeNode();
                 EventChainNode c = probe.lazyUpdate(frame);
                 if (c != null) {
                     c = c.find(binding);
@@ -662,11 +683,12 @@ public final class ProbeNode extends Node {
             this.foundContexts = new EventContext[childrenCount];
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         protected boolean visitChild(Node child) {
             Node parent = child.getParent();
-            if (parent instanceof WrapperNode) {
-                ProbeNode probe = ((WrapperNode) parent).getProbeNode();
+            if (parent instanceof com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) {
+                ProbeNode probe = ((com.oracle.truffle.api.instrumentation.InstrumentableFactory.WrapperNode) parent).getProbeNode();
                 if (index < foundContexts.length) {
                     foundContexts[index] = probe.context;
                 } else {
@@ -729,7 +751,7 @@ public final class ProbeNode extends Node {
 
         public final boolean visit(Node node) {
             SourceSection sourceSection = node.getSourceSection();
-            if (InstrumentationHandler.isInstrumentableNode(node)) {
+            if (InstrumentationHandler.isInstrumentableNode(node, sourceSection)) {
                 if (binding.isChildInstrumentedFull(providedTags, rootNode, instrumentedNode, instrumentedNodeSourceSection, node, sourceSection)) {
                     if (!visitChild(node)) {
                         return false;
@@ -1133,7 +1155,7 @@ public final class ProbeNode extends Node {
 
         static final Object[] EMPTY_ARRAY = new Object[0];
         @CompilationFinal(dimensions = 1) private volatile FrameSlot[] inputSlots;
-        @CompilationFinal private volatile FrameDescriptor sourceFrameDescriptor;
+        private volatile FrameDescriptor sourceFrameDescriptor;
         final int inputBaseIndex;
         final int inputCount;
         @CompilationFinal(dimensions = 1) volatile EventContext[] inputContexts;
