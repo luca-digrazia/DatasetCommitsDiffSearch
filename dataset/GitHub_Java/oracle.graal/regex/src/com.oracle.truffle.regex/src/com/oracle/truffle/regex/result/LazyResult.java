@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,38 +25,44 @@
 package com.oracle.truffle.regex.result;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.regex.tregex.util.json.Json;
+import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
+import com.oracle.truffle.regex.tregex.util.json.JsonObject;
 
-public final class SingleResult extends RegexResult {
+public abstract class LazyResult extends RegexResult implements JsonConvertible {
 
-    private final int start;
+    private final Object input;
+    private final int fromIndex;
     private final int end;
 
-    public SingleResult(int start, int end) {
-        this.start = start;
+    public LazyResult(Object input, int fromIndex, int end) {
+        this.input = input;
+        this.fromIndex = fromIndex;
         this.end = end;
     }
 
-    public int getStart() {
-        return start;
+    public Object getInput() {
+        return input;
+    }
+
+    public int getFromIndex() {
+        return fromIndex;
     }
 
     public int getEnd() {
         return end;
     }
 
-    @Override
-    public int getStart(int groupNumber) {
-        return groupNumber == 0 ? start : -1;
-    }
-
-    @Override
-    public int getEnd(int groupNumber) {
-        return groupNumber == 0 ? end : -1;
-    }
+    /**
+     * Forces evaluation of this lazy regex result. For debugging purposes only.
+     */
+    public abstract void debugForceEvaluation();
 
     @TruffleBoundary
     @Override
-    public String toString() {
-        return "[" + start + ", " + end + "]";
+    public JsonObject toJson() {
+        return Json.obj(Json.prop("input", getInput().toString()),
+                        Json.prop("fromIndex", fromIndex),
+                        Json.prop("end", end));
     }
 }

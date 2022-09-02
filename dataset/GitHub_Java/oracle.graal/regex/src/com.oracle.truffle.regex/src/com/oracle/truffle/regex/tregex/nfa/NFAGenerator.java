@@ -1,57 +1,31 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.regex.tregex.nfa;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import com.oracle.truffle.regex.charset.CodePointSet;
+import com.oracle.truffle.regex.charset.CharSet;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
-import com.oracle.truffle.regex.tregex.automaton.StateSet;
 import com.oracle.truffle.regex.tregex.automaton.TransitionBuilder;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 import com.oracle.truffle.regex.tregex.parser.Counter;
@@ -64,6 +38,15 @@ import com.oracle.truffle.regex.tregex.parser.ast.RegexASTNode;
 import com.oracle.truffle.regex.tregex.parser.ast.Sequence;
 import com.oracle.truffle.regex.tregex.parser.ast.Term;
 import com.oracle.truffle.regex.util.CompilationFinalBitSet;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public final class NFAGenerator {
 
@@ -80,7 +63,7 @@ public final class NFAGenerator {
     private final NFAStateTransition anchoredReverseEntry;
     private final NFAStateTransition unAnchoredReverseEntry;
     private final Deque<NFAState> expansionQueue = new ArrayDeque<>();
-    private final Map<StateSet<? extends RegexASTNode>, NFAState> nfaStates = new HashMap<>();
+    private final Map<ASTNodeSet<? extends RegexASTNode>, NFAState> nfaStates = new HashMap<>();
     private final List<NFAState> hardPrefixStates = new ArrayList<>();
     private final ASTStepVisitor astStepVisitor;
     private final ASTTransitionCanonicalizer astTransitionCanonicalizer = new ASTTransitionCanonicalizer();
@@ -93,11 +76,11 @@ public final class NFAGenerator {
         this.astStepVisitor = new ASTStepVisitor(ast, compilationBuffer);
         this.transitionGBUpdateIndices = new CompilationFinalBitSet(ast.getNumberOfCaptureGroups() * 2);
         this.transitionGBClearIndices = new CompilationFinalBitSet(ast.getNumberOfCaptureGroups() * 2);
-        dummyInitialState = new NFAState((short) stateID.inc(), StateSet.create(ast, ast.getWrappedRoot()), CodePointSet.getEmpty(), Collections.emptySet(), false);
+        dummyInitialState = new NFAState((short) stateID.inc(), new ASTNodeSet<>(ast, ast.getWrappedRoot()), CharSet.getEmpty(), Collections.emptySet(), false);
         nfaStates.put(dummyInitialState.getStateSet(), dummyInitialState);
-        anchoredFinalState = createFinalState(StateSet.create(ast, ast.getReachableDollars()));
+        anchoredFinalState = createFinalState(new ASTNodeSet<>(ast, ast.getReachableDollars()));
         anchoredFinalState.setForwardAnchoredFinalState(true);
-        finalState = createFinalState(StateSet.create(ast, ast.getRoot().getSubTreeParent().getMatchFound()));
+        finalState = createFinalState(new ASTNodeSet<>(ast, ast.getRoot().getSubTreeParent().getMatchFound()));
         finalState.setForwardUnAnchoredFinalState(true);
         assert transitionGBUpdateIndices.isEmpty() && transitionGBClearIndices.isEmpty();
         anchoredReverseEntry = createTransition(anchoredFinalState, dummyInitialState);
@@ -106,7 +89,7 @@ public final class NFAGenerator {
         initialStates = new NFAState[nEntries];
         unAnchoredEntries = new NFAStateTransition[nEntries];
         for (int i = 0; i <= ast.getWrappedPrefixLength(); i++) {
-            NFAState initialState = createFinalState(StateSet.create(ast, ast.getNFAUnAnchoredInitialState(i)));
+            NFAState initialState = createFinalState(new ASTNodeSet<>(ast, ast.getNFAUnAnchoredInitialState(i)));
             initialState.setReverseUnAnchoredFinalState(true);
             initialStates[i] = initialState;
             unAnchoredEntries[i] = createTransition(dummyInitialState, initialState);
@@ -118,7 +101,7 @@ public final class NFAGenerator {
             anchoredInitialStates = new NFAState[nEntries];
             anchoredEntries = new NFAStateTransition[nEntries];
             for (int i = 0; i <= ast.getWrappedPrefixLength(); i++) {
-                NFAState anchoredInitialState = createFinalState(StateSet.create(ast, ast.getNFAAnchoredInitialState(i)));
+                NFAState anchoredInitialState = createFinalState(new ASTNodeSet<>(ast, ast.getNFAAnchoredInitialState(i)));
                 anchoredInitialState.setReverseAnchoredFinalState(true);
                 anchoredInitialStates[i] = anchoredInitialState;
                 anchoredEntries[i] = createTransition(dummyInitialState, anchoredInitialState);
@@ -195,8 +178,8 @@ public final class NFAGenerator {
 
     private NFAStateTransition[] createNFATransitions(NFAState sourceState, ASTStep nextStep) {
         transitionsBuffer.clear();
-        StateSet<CharacterClass> stateSetCC;
-        StateSet<LookBehindAssertion> finishedLookBehinds;
+        ASTNodeSet<CharacterClass> stateSetCC;
+        ASTNodeSet<LookBehindAssertion> finishedLookBehinds;
         for (ASTSuccessor successor : nextStep.getSuccessors()) {
             for (TransitionBuilder<ASTTransitionSet> mergeBuilder : successor.getMergedStates(astTransitionCanonicalizer)) {
                 stateSetCC = null;
@@ -208,8 +191,8 @@ public final class NFAGenerator {
                     Term target = astTransition.getTarget();
                     if (target instanceof CharacterClass) {
                         if (stateSetCC == null) {
-                            stateSetCC = StateSet.create(ast);
-                            finishedLookBehinds = StateSet.create(ast);
+                            stateSetCC = new ASTNodeSet<>(ast);
+                            finishedLookBehinds = new ASTNodeSet<>(ast);
                         }
                         stateSetCC.add((CharacterClass) target);
                         if (target.isInLookBehindAssertion() && target == ((Sequence) target.getParent()).getLastTerm()) {
@@ -242,8 +225,8 @@ public final class NFAGenerator {
         return transitionsBuffer.toArray(new NFAStateTransition[transitionsBuffer.size()]);
     }
 
-    private NFAState createFinalState(StateSet<? extends RegexASTNode> stateSet) {
-        NFAState state = new NFAState((short) stateID.inc(), stateSet, CodePointSet.getFull(), Collections.emptySet(), false);
+    private NFAState createFinalState(ASTNodeSet<? extends RegexASTNode> stateSet) {
+        NFAState state = new NFAState((short) stateID.inc(), stateSet, CharSet.getFull(), Collections.emptySet(), false);
         assert !nfaStates.containsKey(state.getStateSet());
         nfaStates.put(state.getStateSet(), state);
         return state;
@@ -253,9 +236,9 @@ public final class NFAGenerator {
         return new NFAStateTransition((short) transitionID.inc(), source, target, ast.createGroupBoundaries(transitionGBUpdateIndices, transitionGBClearIndices));
     }
 
-    private NFAState registerMatcherState(StateSet<CharacterClass> stateSetCC,
-                    CodePointSet matcherBuilder,
-                    StateSet<LookBehindAssertion> finishedLookBehinds,
+    private NFAState registerMatcherState(ASTNodeSet<CharacterClass> stateSetCC,
+                    CharSet matcherBuilder,
+                    ASTNodeSet<LookBehindAssertion> finishedLookBehinds,
                     boolean containsPrefixStates) {
         if (nfaStates.containsKey(stateSetCC)) {
             return nfaStates.get(stateSetCC);

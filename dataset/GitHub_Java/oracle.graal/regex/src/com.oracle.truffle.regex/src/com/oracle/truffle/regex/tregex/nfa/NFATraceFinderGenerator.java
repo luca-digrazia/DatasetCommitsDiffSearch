@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.regex.tregex.nfa;
 
@@ -50,7 +34,6 @@ import com.oracle.truffle.regex.result.PreCalculatedResultFactory;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
 import com.oracle.truffle.regex.tregex.parser.Counter;
 import com.oracle.truffle.regex.tregex.parser.ast.GroupBoundaries;
-import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
 
 /**
  * Used for pre-calculating and finding the result of tree-like regular expressions. A regular
@@ -189,11 +172,11 @@ public final class NFATraceFinderGenerator {
         }
 
         public boolean hasNextTransition() {
-            return i < transition.getTarget().getSuccessors().length;
+            return i < transition.getTarget().getNext().length;
         }
 
         public NFAStateTransition getNextTransition() {
-            return transition.getTarget().getSuccessors()[i++];
+            return transition.getTarget().getNext()[i++];
         }
     }
 
@@ -201,10 +184,10 @@ public final class NFATraceFinderGenerator {
         NFAState dummyInitialState = copy(originalNFA.getDummyInitialState());
         NFAStateTransition newAnchoredEntry = copyEntry(dummyInitialState, originalNFA.getReverseAnchoredEntry());
         NFAStateTransition newUnAnchoredEntry = copyEntry(dummyInitialState, originalNFA.getReverseUnAnchoredEntry());
-        dummyInitialState.setPredecessors(new NFAStateTransition[]{newAnchoredEntry, newUnAnchoredEntry});
+        dummyInitialState.setPrev(new NFAStateTransition[]{newAnchoredEntry, newUnAnchoredEntry});
         ArrayList<PathElement> graphPath = new ArrayList<>();
         for (NFAStateTransition entry : new NFAStateTransition[]{originalNFA.getAnchoredEntry()[0], originalNFA.getUnAnchoredEntry()[0]}) {
-            for (NFAStateTransition t : entry.getTarget().getSuccessors()) {
+            for (NFAStateTransition t : entry.getTarget().getNext()) {
                 // All paths start from the original initial states, which will be duplicated and
                 // become leaf nodes in the tree.
                 PathElement curElement = new PathElement(t);
@@ -230,28 +213,27 @@ public final class NFATraceFinderGenerator {
                         NFAState lastCopied = copy(entry.getTarget(), resultID);
                         PreCalculatedResultFactory result = resultFactory();
                         // create a copy of the graph path
-                        int iResult = 0;
-                        for (int i = 0; i < graphPath.size(); i++) {
+                        int i = 0;
+                        for (; i < graphPath.size(); i++) {
                             final NFAStateTransition pathTransition = graphPath.get(i).getTransition();
                             NFAState copy = copy(pathTransition.getTarget(), resultID);
-                            createTransition(lastCopied, copy, pathTransition, result, iResult);
-                            iResult += getEncodedSize(copy);
+                            createTransition(lastCopied, copy, pathTransition, result, i);
                             lastCopied = copy;
                         }
                         // link the copied path to the existing tree
-                        createTransition(lastCopied, duplicate, curElement.getTransition(), result, iResult);
+                        createTransition(lastCopied, duplicate, curElement.getTransition(), result, i);
                         // traverse the existing tree to the root to complete the pre-calculated
                         // result.
                         NFAState treeNode = duplicate;
-                        while (!treeNode.isFinalState()) {
-                            iResult += getEncodedSize(treeNode);
-                            assert treeNode.getSuccessors().length == 1;
+                        while (!treeNode.isForwardFinalState()) {
+                            i++;
+                            assert treeNode.getNext().length == 1;
                             treeNode.addPossibleResult(resultID);
-                            treeNode.getSuccessors()[0].getGroupBoundaries().applyToResultFactory(result, iResult);
-                            treeNode = treeNode.getSuccessors()[0].getTarget();
+                            treeNode.getNext()[0].getGroupBoundaries().applyToResultFactory(result, i);
+                            treeNode = treeNode.getNext()[0].getTarget();
                         }
                         treeNode.addPossibleResult(resultID);
-                        result.setLength(iResult);
+                        result.setLength(i);
                         PreCalculatedResultFactory existingResult = resultDeDuplicationMap.get(result);
                         if (existingResult == null) {
                             resultDeDuplicationMap.put(result, result);
@@ -281,7 +263,7 @@ public final class NFATraceFinderGenerator {
             preCalculatedResults = resultList.toArray(new PreCalculatedResultFactory[0]);
         }
         for (NFAState s : states) {
-            s.linkPredecessors();
+            s.linkPrev();
         }
         return new NFA(originalNFA.getAst(), dummyInitialState, null, null, newAnchoredEntry, newUnAnchoredEntry, states, stateID, transitionID, preCalculatedResults);
     }
@@ -289,7 +271,7 @@ public final class NFATraceFinderGenerator {
     private void createTransition(NFAState source, NFAState target, NFAStateTransition originalTransition,
                     PreCalculatedResultFactory preCalcResult, int preCalcResultIndex) {
         originalTransition.getGroupBoundaries().applyToResultFactory(preCalcResult, preCalcResultIndex);
-        source.setSuccessors(new NFAStateTransition[]{new NFAStateTransition((short) transitionID.inc(), source, target, originalTransition.getGroupBoundaries())}, true);
+        source.setNext(new NFAStateTransition[]{new NFAStateTransition((short) transitionID.inc(), source, target, originalTransition.getGroupBoundaries())}, true);
     }
 
     private PreCalculatedResultFactory resultFactory() {
@@ -319,11 +301,5 @@ public final class NFATraceFinderGenerator {
         duplicatedStatesMap[original.getId()].add(copy);
         states.add(copy);
         assert states.get(copy.getId()) == copy;
-    }
-
-    private int getEncodedSize(NFAState s) {
-        Encoding encoding = originalNFA.getAst().getEncoding();
-        assert encoding.isFixedCodePointWidth(s.getCharSet());
-        return encoding.getEncodedSize(s.getCharSet().getMin());
     }
 }

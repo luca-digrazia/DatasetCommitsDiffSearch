@@ -549,14 +549,11 @@ public final class CharSet implements ImmutableSortedListOfRanges, Comparable<Ch
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
         if (obj instanceof CharSet) {
             return Arrays.equals(ranges, ((CharSet) obj).ranges);
         }
         if (obj instanceof SortedListOfRanges) {
-            return equalsListOfRanges((SortedListOfRanges) obj);
+            return equals((SortedListOfRanges) obj);
         }
         return false;
     }

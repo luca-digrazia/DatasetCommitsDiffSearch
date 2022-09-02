@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.regex.tregex.nfa;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.result.PreCalculatedResultFactory;
 import com.oracle.truffle.regex.tregex.automaton.StateIndex;
@@ -44,13 +43,13 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
 
     private final RegexAST ast;
     private final NFAState dummyInitialState;
-    @CompilationFinal(dimensions = 1) private final NFAStateTransition[] anchoredEntry;
-    @CompilationFinal(dimensions = 1) private final NFAStateTransition[] unAnchoredEntry;
+    private final NFAStateTransition[] anchoredEntry;
+    private final NFAStateTransition[] unAnchoredEntry;
     private final NFAStateTransition reverseAnchoredEntry;
     private final NFAStateTransition reverseUnAnchoredEntry;
-    @CompilationFinal(dimensions = 1) private final NFAState[] states;
-    @CompilationFinal(dimensions = 1) private final NFAStateTransition[] transitions;
-    @CompilationFinal(dimensions = 1) private final PreCalculatedResultFactory[] preCalculatedResults;
+    private final NFAState[] states;
+    private final NFAStateTransition[] transitions;
+    private final PreCalculatedResultFactory[] preCalculatedResults;
     private final NFAStateTransition initialLoopBack;
 
     public NFA(RegexAST ast,
@@ -206,10 +205,6 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
     @Override
     public NFAState getState(int id) {
         return states[id];
-    }
-
-    public int getNumberOfTransitions() {
-        return transitions.length;
     }
 
     public boolean isDead() {

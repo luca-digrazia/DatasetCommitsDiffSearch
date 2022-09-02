@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,7 @@
 
 package com.oracle.truffle.regex.tregex.matchers;
 
-import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Specialization;
 
 public abstract class ProfilingCharMatcher extends CharMatcher {
@@ -42,23 +42,33 @@ public abstract class ProfilingCharMatcher extends CharMatcher {
         return ProfilingCharMatcherNodeGen.create(byteMatcher, charMatcher);
     }
 
-    @Specialization(guards = "isByte(c, compactString)")
+    @Specialization(guards = "compactString")
+    boolean matchCompactString(char c, boolean compactString) {
+        return byteMatcher.execute(c, compactString);
+    }
+
+    @Specialization(guards = {"!compactString", "isByte(c)"})
     boolean matchByte(char c, boolean compactString) {
         return byteMatcher.execute(c, compactString);
     }
 
-    @Specialization(replaces = "matchByte")
+    @Specialization(guards = "!compactString", replaces = "matchByte")
     boolean matchChar(char c, boolean compactString) {
         return charMatcher.execute(c, compactString);
     }
 
-    static boolean isByte(char c, boolean compactString) {
-        CompilerAsserts.partialEvaluationConstant(compactString);
-        return compactString || c < 256;
+    static boolean isByte(char c) {
+        return c < 256;
     }
 
     @Override
     public int estimatedCost() {
         return charMatcher.estimatedCost();
+    }
+
+    @TruffleBoundary
+    @Override
+    public String toString() {
+        return charMatcher.toString();
     }
 }

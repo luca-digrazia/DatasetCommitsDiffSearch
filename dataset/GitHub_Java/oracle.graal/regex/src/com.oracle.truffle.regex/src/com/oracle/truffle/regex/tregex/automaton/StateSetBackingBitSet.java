@@ -30,10 +30,9 @@ import java.util.PrimitiveIterator;
 
 public class StateSetBackingBitSet implements StateSetBackingSet {
 
-    private final CompilationFinalBitSet bitSet;
+    private CompilationFinalBitSet bitSet;
 
-    public StateSetBackingBitSet(int stateIndexSize) {
-        bitSet = new CompilationFinalBitSet(stateIndexSize);
+    public StateSetBackingBitSet() {
     }
 
     private StateSetBackingBitSet(StateSetBackingBitSet copy) {
@@ -43,6 +42,17 @@ public class StateSetBackingBitSet implements StateSetBackingSet {
     @Override
     public StateSetBackingSet copy() {
         return new StateSetBackingBitSet(this);
+    }
+
+    @Override
+    public void create(int stateIndexSize) {
+        assert bitSet == null;
+        bitSet = new CompilationFinalBitSet(stateIndexSize);
+    }
+
+    @Override
+    public boolean isActive() {
+        return bitSet != null;
     }
 
     @Override

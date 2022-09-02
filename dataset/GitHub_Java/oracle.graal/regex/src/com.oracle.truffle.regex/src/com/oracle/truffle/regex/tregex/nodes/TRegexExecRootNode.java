@@ -76,7 +76,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         this.tRegexCompiler = tRegexCompiler;
         this.regressionTestMode = regressionTestMode;
         this.nfaNode = new NFARegexSearchNode(createEntryNode(backTrackingExecutor));
-        this.runnerNode = nfaNode;
+        this.runnerNode = insert(nfaNode);
         if (this.regressionTestMode) {
             switchToLazyDFA();
         }
@@ -112,9 +112,6 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
     }
 
     private boolean nfaProducesSameResult(Object input, int fromIndex, RegexResult result) {
-        if (lazyDFANode == LAZY_DFA_BAILED_OUT) {
-            return true;
-        }
         assert !(runnerNode instanceof NFARegexSearchNode);
         RegexResult btResult = nfaNode.run(input, fromIndex, inputLength(input));
         if (resultsEqual(result, btResult, ((TRegexNFAExecutorNode) nfaNode.entryNode.getExecutor()).getNumberOfCaptureGroups())) {
@@ -264,10 +261,10 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
                         TRegexExecutorEntryNode backwardNode,
                         TRegexExecutorEntryNode captureGroupNode,
                         TRegexExecRootNode rootNode) {
-            this.forwardEntryNode = forwardNode;
+            this.forwardEntryNode = insert(forwardNode);
             this.flags = flags;
             this.preCalculatedResults = preCalculatedResults;
-            this.backwardEntryNode = backwardNode;
+            this.backwardEntryNode = insert(backwardNode);
             if (backwardNode == null) {
                 assert singlePreCalcResult() || forwardNode == null;
                 backwardCallTarget = null;
@@ -361,7 +358,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         @Child private TRegexExecutorEntryNode entryNode;
 
         EagerCaptureGroupRegexSearchNode(TRegexExecutorEntryNode entryNode) {
-            this.entryNode = entryNode;
+            this.entryNode = insert(entryNode);
         }
 
         @Override
@@ -379,7 +376,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         @Child private TRegexExecutorEntryNode entryNode;
 
         NFARegexSearchNode(TRegexExecutorEntryNode entryNode) {
-            this.entryNode = entryNode;
+            this.entryNode = insert(entryNode);
         }
 
         @Override
