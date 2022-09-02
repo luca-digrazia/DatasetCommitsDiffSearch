@@ -30,6 +30,7 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.compiler.nodes.TruffleAssumption;
@@ -40,37 +41,33 @@ import java.util.Deque;
 import java.util.HashMap;
 
 import static org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
-import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumGraalNodeCount;
+import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumInlineNodeCount;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceInlining;
 
-class PEInliningPlanInvokePlugin extends PEInlineInvokePlugin {
+final class PEInliningPlanInvokePlugin implements InlineInvokePlugin {
 
-    private PartialEvaluator partialEvaluator;
+    private final PartialEvaluator partialEvaluator;
     private final Deque<TruffleInliningPlan> inlining;
-    private final int nodeLimit;
     private final StructuredGraph graph;
     private final int inliningNodeLimit;
     private final OptionValues options;
+    private final CompilableTruffleAST compilable;
     private boolean graphTooBigReported;
 
-    PEInliningPlanInvokePlugin(PartialEvaluator partialEvaluator, OptionValues options, TruffleInliningPlan inlining, StructuredGraph graph) {
+    PEInliningPlanInvokePlugin(PartialEvaluator partialEvaluator, OptionValues options, CompilableTruffleAST compilable, TruffleInliningPlan inlining, StructuredGraph graph) {
         this.partialEvaluator = partialEvaluator;
         this.options = options;
+        this.compilable = compilable;
         this.inlining = new ArrayDeque<>();
         this.inlining.push(inlining);
         this.graph = graph;
-        this.nodeLimit = getPolyglotOptionValue(options, MaximumGraalNodeCount);
-        this.inliningNodeLimit = getPolyglotOptionValue(options, MaximumInlineNodeCount);
+        this.inliningNodeLimit = options.get(MaximumInlineNodeCount);
     }
 
     @Override
     public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
-        if (graph.getNodeCount() > nodeLimit) {
-            throw builder.bailout("Graph too big to safely compile. Node count: " + graph.getNodeCount() + ". Limit: " + nodeLimit);
-        }
-        InlineInfo inlineInfo = asInlineInfo(original);
+        InlineInfo inlineInfo = PartialEvaluator.asInlineInfo(original);
         if (!inlineInfo.allowsInlining()) {
             return inlineInfo;
         }
@@ -100,23 +97,25 @@ class PEInliningPlanInvokePlugin extends PEInlineInvokePlugin {
     static TruffleInliningPlan.Decision getDecision(TruffleInliningPlan inlining, JavaConstant callNode) {
         TruffleInliningPlan.Decision decision = inlining.findDecision(callNode);
         if (decision == null) {
-            JavaConstant target = TruffleCompilerRuntime.getRuntime().getCallTargetForCallNode(callNode);
-            PerformanceInformationHandler.reportDecisionIsNull(target, callNode);
+            TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
+            JavaConstant target = rt.getCallTargetForCallNode(callNode);
+            PerformanceInformationHandler.reportDecisionIsNull(rt.asCompilableTruffleAST(target), callNode);
         } else if (!decision.isTargetStable()) {
-            JavaConstant target = TruffleCompilerRuntime.getRuntime().getCallTargetForCallNode(callNode);
-            PerformanceInformationHandler.reportCallTargetChanged(target, callNode, decision);
+            TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
+            JavaConstant target = rt.getCallTargetForCallNode(callNode);
+            PerformanceInformationHandler.reportCallTargetChanged(rt.asCompilableTruffleAST(target), callNode, decision);
             return null;
         }
         return decision;
     }
 
     private void logGraphTooBig() {
-        if (!graphTooBigReported && getPolyglotOptionValue(options, TraceInlining)) {
+        if (!graphTooBigReported && options.get(TraceInlining)) {
             graphTooBigReported = true;
             final HashMap<String, Object> properties = new HashMap<>();
             properties.put("graph node count", graph.getNodeCount());
             properties.put("graph node limit", inliningNodeLimit);
-            TruffleCompilerRuntime.getRuntime().logEvent(0, "Truffle inlining caused graal node count to be too big during partial evaluation.", "", properties);
+            TruffleCompilerRuntime.getRuntime().logEvent(compilable, 0, "Truffle inlining caused graal node count to be too big during partial evaluation.", properties);
         }
     }
 

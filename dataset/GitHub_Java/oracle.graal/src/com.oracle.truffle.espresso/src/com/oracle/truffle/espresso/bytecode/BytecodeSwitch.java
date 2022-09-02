@@ -39,7 +39,6 @@ abstract class BytecodeSwitch {
      * @return the index of the instruction denoted by the {@code i}'th switch target
      */
     public int targetAt(BytecodeStream stream, int bci, int i) {
-        assert stream.opcode(bci) == getSwitchBytecode();
         return bci + offsetAt(stream, bci, i);
     }
 
@@ -49,7 +48,6 @@ abstract class BytecodeSwitch {
      * @return the index of the instruction for the default switch target
      */
     public int defaultTarget(BytecodeStream stream, int bci) {
-        assert stream.opcode(bci) == getSwitchBytecode();
         return bci + defaultOffset(stream, bci);
     }
 
@@ -59,7 +57,6 @@ abstract class BytecodeSwitch {
      * @return the offset to the default switch target
      */
     public int defaultOffset(BytecodeStream stream, int bci) {
-        assert stream.opcode(bci) == getSwitchBytecode();
         return stream.readInt(getAlignedBci(bci));
     }
 
@@ -67,6 +64,7 @@ abstract class BytecodeSwitch {
      * Gets the key at {@code i}'th switch target index.
      *
      *
+     * @param stream
      * @param i the switch target index
      * @return the key at {@code i}'th switch target index
      */
@@ -75,6 +73,8 @@ abstract class BytecodeSwitch {
     /**
      * Gets the offset from the start of the switch instruction for the {@code i}'th switch target.
      *
+     *
+     * @param stream
      * @param i the switch target index
      * @return the offset to the {@code i}'th switch target
      */
@@ -93,12 +93,4 @@ abstract class BytecodeSwitch {
      * @return the total size in bytes of the switch instruction
      */
     public abstract int size(BytecodeStream stream, int bci);
-
-    /**
-     * Gets the bytecode accepted by this switch helper.
-     * Either {@code LOOKUPSWITCH} or {@code TABLESWITCH}.
-     *
-     * @return bytecode accepted by this switch helper
-     */
-    protected abstract int getSwitchBytecode();
 }
