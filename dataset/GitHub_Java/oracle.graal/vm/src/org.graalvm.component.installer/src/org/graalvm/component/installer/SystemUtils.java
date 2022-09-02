@@ -49,8 +49,6 @@ public class SystemUtils {
      */
     public static final String DELIMITER = "/"; // NOI18N
 
-    private static final String DOT = "."; // NOI18N
-
     private static final String DOTDOT = ".."; // NOI18N
 
     private static final String SPLIT_DELIMITER = Pattern.quote(DELIMITER);
@@ -95,9 +93,6 @@ public class SystemUtils {
     public static Path fileName(String s) {
         if ((s.indexOf(DELIMITER_CHAR) >= 0) ||
                         ((DELIMITER_CHAR != File.separatorChar) && (s.indexOf(File.separatorChar) >= 0))) {
-            throw new IllegalArgumentException(s);
-        }
-        if (DOT.equals(s) || DOTDOT.equals(s)) {
             throw new IllegalArgumentException(s);
         }
         return Paths.get(s);
@@ -224,18 +219,8 @@ public class SystemUtils {
         }
     }
 
-    private static final Pattern OLD_VERSION_PATTERN = Pattern.compile("([0-9]+\\.[0-9]+(\\.[0-9]+)?(\\.[0-9]+)?)(-([a-z]+)([0-9]+)?)?");
+    private static final Pattern OLD_VERSION_PATTERN = Pattern.compile("([0-9]+\\.[0-9]+\\.[0-9]+)(-([a-z]+)([0-9]+))?");
 
-    /**
-     * Will transform some widely used formats to RPM-style. Currently it transforms:
-     * <ul>
-     * <li>1.0.1-dev[.x] => 1.0.1.0-0.dev[.x]
-     * <li>1.0.0 => 1.0.0.0
-     * </ul>
-     * 
-     * @param v
-     * @return normalized version
-     */
     public static String normalizeOldVersions(String v) {
         if (v == null) {
             return null;
@@ -245,29 +230,18 @@ public class SystemUtils {
             return v;
         }
         String numbers = m.group(1);
-        String rel = m.group(5);
-        String relNo = m.group(6);
-
-        if (numbers.startsWith("0.")) {
-            return v;
-        }
+        String rel = m.group(3);
+        String relNo = m.group(4);
 
         if (rel == null) {
-            if (m.group(3) == null) {
-                return numbers + ".0";
-            } else {
-                return numbers;
-            }
+            return numbers + ".0";
         } else {
-            if (m.group(3) == null) {
-                numbers = numbers + ".0";
-            }
-            return numbers + "-0." + rel + (relNo == null ? "" : "." + relNo);
+            return numbers + "-0." + rel + "." + relNo;
         }
     }
 
     public static Path getGraalVMJDKRoot(ComponentRegistry reg) {
-        if ("macos".equals(reg.getGraalCapabilities().get(CommonConstants.CAP_OS_NAME))) {
+        if ("macos".equals(reg.getGraalCapabilities().get(CommonConstants.CAP_OS_ARCH))) {
             return Paths.get("Contents", "Home");
         } else {
             return Paths.get("");

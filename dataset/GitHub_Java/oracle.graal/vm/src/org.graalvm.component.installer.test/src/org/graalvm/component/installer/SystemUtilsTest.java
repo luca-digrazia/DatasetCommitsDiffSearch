@@ -26,8 +26,6 @@ package org.graalvm.component.installer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import org.junit.Rule;
@@ -48,7 +46,7 @@ public class SystemUtilsTest {
         for (Path p : resolved) {
             assertFalse(p.toString().isEmpty());
         }
-        assertEquals("jre/lib/svm/macros/graalpython-launcher/native-image.properties", SystemUtils.toCommonPath(resolved));
+        assertEquals("jre/lib/svm/macros/graalpython-launcher/native-image.properties", resolved.toString());
     }
 
     @Test
@@ -57,51 +55,4 @@ public class SystemUtilsTest {
         exception.expect(IllegalArgumentException.class);
         SystemUtils.fromCommonRelative(base, "jre/lib//../../../error"); // NOI18N
     }
-
-    @Test
-    public void testNoURLParameters() throws Exception {
-        Map<String, String> params = new HashMap<>();
-        String base = SystemUtils.parseURLParameters("http://acme.org/bu?", params);
-        assertEquals("http://acme.org/bu", base);
-        assertEquals(0, params.size());
-    }
-
-    @Test
-    public void testURLParameterNoEqual() throws Exception {
-        Map<String, String> params = new HashMap<>();
-        String base = SystemUtils.parseURLParameters("http://acme.org/bu?a", params);
-        assertEquals("http://acme.org/bu", base);
-        assertEquals(1, params.size());
-        assertEquals("", params.get("a"));
-    }
-
-    @Test
-    public void testURLMoreParametersNoEqual() throws Exception {
-        Map<String, String> params = new HashMap<>();
-        String base = SystemUtils.parseURLParameters("http://acme.org/bu?a&b", params);
-        assertEquals("http://acme.org/bu", base);
-        assertEquals(2, params.size());
-        assertEquals("", params.get("a"));
-        assertEquals("", params.get("b"));
-    }
-
-    @Test
-    public void testURLParameterOnlyEqual() throws Exception {
-        Map<String, String> params = new HashMap<>();
-        String base = SystemUtils.parseURLParameters("http://acme.org/bu?a=", params);
-        assertEquals("http://acme.org/bu", base);
-        assertEquals(1, params.size());
-        assertEquals("", params.get("a"));
-    }
-
-    @Test
-    public void testURLMoreParametersOnlyEqual() throws Exception {
-        Map<String, String> params = new HashMap<>();
-        String base = SystemUtils.parseURLParameters("http://acme.org/bu?a=&b=", params);
-        assertEquals("http://acme.org/bu", base);
-        assertEquals(2, params.size());
-        assertEquals("", params.get("a"));
-        assertEquals("", params.get("b"));
-    }
-
 }
