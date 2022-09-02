@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import com.oracle.truffle.api.CallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
 import org.junit.Assert;
@@ -288,7 +289,7 @@ public class NodeSplittingStrategyTest extends AbstractSplittingStrategyTest {
         Assert.assertTrue("new call node to \"needs split\" target is not split", directCallNode.isCallTargetCloned());
     }
 
-    class ExposesReportPolymorphicSpecializeNode extends Node {
+    static class ExposesReportPolymorphicSpecializeNode extends Node {
         void report() {
             reportPolymorphicSpecialize();
         }
@@ -300,7 +301,7 @@ public class NodeSplittingStrategyTest extends AbstractSplittingStrategyTest {
         node.report();
     }
 
-    class ExposesReportPolymorphicSpecializeRootNode extends RootNode {
+    static class ExposesReportPolymorphicSpecializeRootNode extends RootNode {
 
         @Child ExposesReportPolymorphicSpecializeNode node = new ExposesReportPolymorphicSpecializeNode();
 
@@ -324,5 +325,193 @@ public class NodeSplittingStrategyTest extends AbstractSplittingStrategyTest {
         final RootCallTarget callTarget = runtime.createCallTarget(rootNode);
         callTarget.call(noArguments);
         rootNode.report();
+    }
+
+    static class CallableOnlyOnceRootNode extends ExposesReportPolymorphicSpecializeRootNode {
+        boolean called;
+        boolean active;
+
+        @Override
+        public Object execute(VirtualFrame frame) {
+            if (active && called) {
+                throw new AssertionError("This is illegal state. Seems a split happened but the original was called.");
+            }
+            called = true;
+            return super.execute(frame);
+        }
+
+        @Override
+        public boolean isCloningAllowed() {
+            return true;
+        }
+    }
+
+    @Test
+    public void testSplitsCalledAfterSplit() {
+        final CallableOnlyOnceRootNode rootNode = new CallableOnlyOnceRootNode();
+        final RootCallTarget reportsPolymorphism = runtime.createCallTarget(rootNode);
+        reportsPolymorphism.call(noArguments);
+        final RootCallTarget callsInner1 = runtime.createCallTarget(new CallsInnerNode(reportsPolymorphism));
+        final RootCallTarget callsInner2 = runtime.createCallTarget(new CallsInnerNode(reportsPolymorphism));
+        // make sure the runtime has seen these calls
+        callsInner1.call(noArguments);
+        callsInner2.call(noArguments);
+        rootNode.active = true;
+        rootNode.report();
+        callsInner1.call(noArguments);
+        callsInner2.call(noArguments);
+    }
+
+    @NodeChild
+    @ReportPolymorphism.Exclude
+    abstract static class Megamorpic extends SplittingTestNode {
+
+        @Specialization(limit = "2", guards = "val == cachedVal")
+        protected static Object doCached(int val, @Cached("val") int cachedVal) {
+            return val + cachedVal;
+        }
+
+        @ReportPolymorphism.Megamorphic
+        @Specialization(replaces = "doCached")
+        protected static Object doIndirect(int val) {
+            return val + val;
+        }
+    }
+
+    @Test
+    public void testMegamorpic() {
+        OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.createCallTarget(
+                        new SplittingTestRootNode(NodeSplittingStrategyTestFactory.MegamorpicNodeGen.create(new ReturnsFirstArgumentNode())));
+        int[] args = {1, 2, 3, 4, 5};
+        testMegamorphicHelper(callTarget, args);
+    }
+
+    private static void testMegamorphicHelper(CallTarget callTarget, int[] args) {
+        final DirectCallNode callNode1 = runtime.createDirectCallNode(callTarget);
+        final DirectCallNode callNode2 = runtime.createDirectCallNode(callTarget);
+        // Goes monomorphic
+        callNode1.call(args[0]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertFalse(callNode2.isCallTargetCloned());
+        // Goes polymorphic
+        callNode2.call(args[1]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertFalse(callNode2.isCallTargetCloned());
+        // Goes megamoprihic
+        callNode1.call(args[2]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertFalse(callNode2.isCallTargetCloned());
+        // Gets split
+        callNode2.call(args[3]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertTrue(callNode2.isCallTargetCloned());
+        // Gets split
+        callNode1.call(args[4]);
+        Assert.assertTrue(callNode1.isCallTargetCloned());
+    }
+
+    @NodeChild
+    @ReportPolymorphism.Exclude
+    abstract static class TwoMegamorpicSpec extends SplittingTestNode {
+
+        @Specialization(limit = "2", guards = "val == cachedVal")
+        protected static Object doCached(int val, @Cached("val") int cachedVal) {
+            return val + cachedVal;
+        }
+
+        @ReportPolymorphism.Megamorphic
+        @Specialization(replaces = "doCached", guards = "val == 3")
+        protected static Object doSpecific(int val) {
+            return val + val;
+        }
+
+        @ReportPolymorphism.Megamorphic
+        @Specialization(replaces = "doCached")
+        protected static Object doIndirect(int val) {
+            return val + val;
+        }
+    }
+
+    @Test
+    public void testTwoMegamorpicSpec1() {
+        OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.createCallTarget(
+                        new SplittingTestRootNode(NodeSplittingStrategyTestFactory.TwoMegamorpicSpecNodeGen.create(new ReturnsFirstArgumentNode())));
+        // activates the first spec 2 times than the second (megamorphic)
+        int[] args = {1, 2, 3, 4, 5};
+        testMegamorphicHelper(callTarget, args);
+    }
+
+    @Test
+    public void testTwoMegamorpicSpec2() {
+        OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.createCallTarget(
+                        new SplittingTestRootNode(NodeSplittingStrategyTestFactory.TwoMegamorpicSpecNodeGen.create(new ReturnsFirstArgumentNode())));
+        // activates the first spec 2 times than the last (megamorphic)
+        int[] args = {1, 2, 4, 5, 6};
+        testMegamorphicHelper(callTarget, args);
+    }
+
+    @NodeChild
+    abstract static class PolymorphicAndMegamorpic extends SplittingTestNode {
+
+        @Specialization(limit = "2", guards = {"val == cachedVal", "val != 0"})
+        protected static Object doCached(int val, @Cached("val") int cachedVal) {
+            return val + cachedVal;
+        }
+
+        @ReportPolymorphism.Megamorphic
+        @Specialization(replaces = "doCached")
+        protected static Object doIndirect(int val) {
+            return val + val;
+        }
+    }
+
+    @Test
+    public void testPolymorphicInPolyAndMegamorpic() {
+        OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.createCallTarget(
+                        new SplittingTestRootNode(NodeSplittingStrategyTestFactory.PolymorphicAndMegamorpicNodeGen.create(new ReturnsFirstArgumentNode())));
+        // activates the first spec 2 times than the last (megamorphic)
+        int[] args = {1, 2, 3, 4};
+        final DirectCallNode callNode1 = runtime.createDirectCallNode(callTarget);
+        final DirectCallNode callNode2 = runtime.createDirectCallNode(callTarget);
+        // Goes monomorphic
+        callNode1.call(args[0]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertFalse(callNode2.isCallTargetCloned());
+        // Goes polymorphic
+        callNode2.call(args[1]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertFalse(callNode2.isCallTargetCloned());
+        // Gets split
+        callNode2.call(args[2]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertTrue(callNode2.isCallTargetCloned());
+        // Gets split
+        callNode1.call(args[3]);
+        Assert.assertTrue(callNode1.isCallTargetCloned());
+    }
+
+    @Test
+    public void testMegamorphicInPolyAndMegamorpic() {
+        OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.createCallTarget(
+                        new SplittingTestRootNode(NodeSplittingStrategyTestFactory.PolymorphicAndMegamorpicNodeGen.create(new ReturnsFirstArgumentNode())));
+        // activates the first spec 2 times than the last (megamorphic)
+        int[] args = {1, 0, 3, 4};
+        final DirectCallNode callNode1 = runtime.createDirectCallNode(callTarget);
+        final DirectCallNode callNode2 = runtime.createDirectCallNode(callTarget);
+        // Goes monomorphic
+        callNode1.call(args[0]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertFalse(callNode2.isCallTargetCloned());
+        // Goes megamorphic
+        callNode2.call(args[1]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertFalse(callNode2.isCallTargetCloned());
+        // Gets split
+        callNode2.call(args[2]);
+        Assert.assertFalse(callNode1.isCallTargetCloned());
+        Assert.assertTrue(callNode2.isCallTargetCloned());
+        // Gets split
+        callNode1.call(args[3]);
+        Assert.assertTrue(callNode1.isCallTargetCloned());
     }
 }
