@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,22 +24,21 @@
  */
 package com.oracle.svm.core.jdk;
 
-import java.util.function.Function;
+import java.util.HashMap;
+import java.util.Map;
 
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-
+import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.RecomputeFieldValue;
+import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.TargetClass;
 
-@Platforms(Platform.HOSTED_ONLY.class)
-public class Package_jdk_nio implements Function<TargetClass, String> {
-    @Override
-    public String apply(TargetClass annotation) {
-        if (JavaVersionUtil.Java8OrEarlier) {
-            return "com.sun.nio." + annotation.className();
-        } else {
-            return "jdk.nio." + annotation.className();
-        }
-    }
+@TargetClass(classNameProvider = Package_jdk_nio.class, className = "zipfs.ZipFileSystemProvider")
+final class Target_jdk_nio_zipfs_ZipFileSystemProvider {
+
+    /*
+     * This field references zip files that have been opened. Resetting it to an empty map ensures
+     * that zip files used during image generation do not leak into the image heap.
+     */
+    @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClass = HashMap.class) //
+    private Map<?, ?> filesystems;
 }
