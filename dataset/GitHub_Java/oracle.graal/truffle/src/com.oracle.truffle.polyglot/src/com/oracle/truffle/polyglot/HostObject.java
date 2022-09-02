@@ -769,7 +769,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Byte.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -835,7 +834,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Short.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -901,7 +899,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Integer.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -967,7 +964,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Long.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -1033,7 +1029,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Float.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -1099,7 +1094,6 @@ final class HostObject implements TruffleObject {
             error.enter();
             throw InvalidBufferOffsetException.create(index, Double.BYTES);
         } catch (ReadOnlyBufferException e) {
-            error.enter();
             throw UnsupportedMessageException.create();
         }
     }
@@ -1711,14 +1705,12 @@ final class HostObject implements TruffleObject {
                         @Shared("isIterator") @Cached IsIteratorNode isIterator,
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest,
                         @Exclusive @Cached BranchProfile stopIteration) throws StopIterationException {
-            Object next;
             try {
-                next = nextImpl((Iterator<?>) receiver.obj);
+                return toGuest.execute(receiver.languageContext, nextImpl((Iterator<?>) receiver.obj));
             } catch (NoSuchElementException e) {
                 stopIteration.enter();
                 throw StopIterationException.create();
             }
-            return toGuest.execute(receiver.languageContext, next);
         }
 
         @TruffleBoundary

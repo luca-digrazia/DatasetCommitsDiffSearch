@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,7 +44,6 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import org.graalvm.polyglot.Context;
 
-import java.util.ConcurrentModificationException;
 import java.util.NoSuchElementException;
 
 /**
@@ -100,7 +99,7 @@ final class PolyglotEngineException extends RuntimeException {
     final RuntimeException e;
     final boolean closingContext;
 
-    PolyglotEngineException(RuntimeException e) {
+    private PolyglotEngineException(RuntimeException e) {
         this(e, false);
     }
 
@@ -164,9 +163,5 @@ final class PolyglotEngineException extends RuntimeException {
 
     static PolyglotEngineException noSuchElement(String message) {
         return new PolyglotEngineException(new NoSuchElementException(message));
-    }
-
-    static PolyglotEngineException concurrentModificationException(String message) {
-        return new PolyglotEngineException((new ConcurrentModificationException(message)));
     }
 }
