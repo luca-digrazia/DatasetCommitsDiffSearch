@@ -25,6 +25,8 @@ package com.oracle.truffle.espresso.meta;
 import static com.oracle.truffle.espresso.EspressoOptions.SpecCompliancyMode.HOTSPOT;
 import static com.oracle.truffle.espresso.descriptors.Symbol.Name.platformClassLoader;
 
+import java.util.function.Function;
+
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -664,8 +666,8 @@ public final class Meta implements ContextAccess {
         java_lang_reflect_Proxy = knownKlass(Type.java_lang_reflect_Proxy);
 
         // java.beans package only available if java.desktop module is present on JDK9+
-        java_beans_ThreadGroupContext = loadKlassOrNull(Type.java_beans_ThreadGroupContext, StaticObject.NULL);
-        java_beans_Introspector = loadKlassOrNull(Type.java_beans_Introspector, StaticObject.NULL);
+        java_beans_ThreadGroupContext = loadKlassWithBootClassLoader(Type.java_beans_ThreadGroupContext);
+        java_beans_Introspector = loadKlassWithBootClassLoader(Type.java_beans_Introspector);
 
         java_beans_ThreadGroupContext_init = java_beans_ThreadGroupContext != null ? java_beans_ThreadGroupContext.requireDeclaredMethod(Name._init_, Signature._void) : null;
         java_beans_ThreadGroupContext_removeBeanInfo = java_beans_ThreadGroupContext != null ? java_beans_ThreadGroupContext.requireDeclaredMethod(Name.removeBeanInfo, Signature._void_Class) : null;
@@ -712,14 +714,14 @@ public final class Meta implements ContextAccess {
     /**
      * Espresso's Polyglot API (polyglot.jar) is injected on the boot CP, must be loaded after
      * modules initialization.
-     *
+     * 
      * The classes in module java.management become known after modules initialization.
      */
     public void postSystemInit() {
         // java.management
-        java_lang_management_MemoryUsage = loadKlassOrNull(Type.java_lang_management_MemoryUsage, StaticObject.NULL);
+        java_lang_management_MemoryUsage = loadKlassWithBootClassLoader(Type.java_lang_management_MemoryUsage);
 
-        java_lang_management_ThreadInfo = loadKlassOrNull(Type.java_lang_management_ThreadInfo, StaticObject.NULL);
+        java_lang_management_ThreadInfo = loadKlassWithBootClassLoader(Type.java_lang_management_ThreadInfo);
 
         sun_management_ManagementFactory = loadKlassWithBootClassLoaderDiffVersion(Type.sun_management_ManagementFactory, Type.sun_management_ManagementFactoryHelper);
         if (sun_management_ManagementFactory != null) {
@@ -776,9 +778,9 @@ public final class Meta implements ContextAccess {
 
     private ObjectKlass loadKlassWithBootClassLoaderDiffVersion(Symbol<Type> t1, Symbol<Type> t2) {
         if (getJavaVersion().java8OrEarlier()) {
-            return loadKlassOrNull(t1, StaticObject.NULL);
+            return loadKlassWithBootClassLoader(t1);
         } else if (getJavaVersion().java9OrLater()) {
-            return loadKlassOrNull(t2, StaticObject.NULL);
+            return loadKlassWithBootClassLoader(t2);
         } else {
             throw EspressoError.shouldNotReachHere();
         }
@@ -1305,10 +1307,10 @@ public final class Meta implements ContextAccess {
             // polyglot.jar is either on boot class path (JDK 8)
             // or defined by a platform module (JDK 11+)
             if (getJavaVersion().java8OrEarlier()) {
-                EspressoError.guarantee(loadKlassOrNull(Type.com_oracle_truffle_espresso_polyglot_Polyglot, StaticObject.NULL) != null,
+                EspressoError.guarantee(loadKlassWithBootClassLoader(Type.com_oracle_truffle_espresso_polyglot_Polyglot) != null,
                                 "polyglot.jar (Polyglot API) is not accessible");
             } else {
-                EspressoError.guarantee(loadKlassOrNull(Type.com_oracle_truffle_espresso_polyglot_Polyglot, getPlatformClassLoader()) != null,
+                EspressoError.guarantee(loadKlassWithPlatformClassLoader(Type.com_oracle_truffle_espresso_polyglot_Polyglot) != null,
                                 "polyglot.jar (Polyglot API) is not accessible");
             }
 
@@ -1532,20 +1534,20 @@ public final class Meta implements ContextAccess {
     // endregion Guest exception handling (throw)
 
     private ObjectKlass knownKlass(Symbol<Type> type) {
-        return knownKlass(type, StaticObject.NULL);
+        return knownKlass(type, this::loadKlassWithBootClassLoader);
     }
 
     private ObjectKlass knownPlatformKlass(Symbol<Type> type) {
         // known platform classes are loaded by the platform loader on JDK 11 and
         // by the boot classloader on JDK 8
-        return knownKlass(type, getJavaVersion().java8OrEarlier() ? StaticObject.NULL : getPlatformClassLoader());
+        return knownKlass(type, getJavaVersion().java8OrEarlier() ? this::loadKlassWithBootClassLoader : this::loadKlassWithPlatformClassLoader);
     }
 
-    private ObjectKlass knownKlass(Symbol<Type> type, StaticObject classLoader) {
+    private ObjectKlass knownKlass(Symbol<Type> type, Function<Symbol<Type>, ObjectKlass> f) {
         CompilerAsserts.neverPartOfCompilation();
         assert !Types.isArray(type);
         assert !Types.isPrimitive(type);
-        ObjectKlass k = loadKlassOrNull(type, classLoader);
+        ObjectKlass k = f.apply(type);
         if (k == null) {
             throw EspressoError.shouldNotReachHere("Failed loading known class: ", type, ", discovered java version: ", getJavaVersion());
         }
@@ -1590,8 +1592,14 @@ public final class Meta implements ContextAccess {
     }
 
     @TruffleBoundary
-    private ObjectKlass loadKlassOrNull(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
-        return (ObjectKlass) loadKlassOrNull(type, classLoader, StaticObject.NULL);
+    private ObjectKlass loadKlassWithBootClassLoader(Symbol<Type> type) {
+        return (ObjectKlass) getRegistries().loadKlass(type, StaticObject.NULL, StaticObject.NULL);
+    }
+
+    @TruffleBoundary
+    private ObjectKlass loadKlassWithPlatformClassLoader(Symbol<Type> type) {
+        assert getJavaVersion().java9OrLater();
+        return (ObjectKlass) getRegistries().loadKlass(type, getPlatformClassLoader(), StaticObject.NULL);
     }
 
     private StaticObject getPlatformClassLoader() {
