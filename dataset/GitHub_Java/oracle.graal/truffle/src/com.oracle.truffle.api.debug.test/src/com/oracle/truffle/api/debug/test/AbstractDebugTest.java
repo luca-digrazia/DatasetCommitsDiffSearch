@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,9 +41,6 @@
 package com.oracle.truffle.api.debug.test;
 
 import static com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage.FILENAME_EXTENSION;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -52,10 +49,6 @@ import java.io.Writer;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -71,12 +64,10 @@ import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
 import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
 import com.oracle.truffle.tck.DebuggerTester;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
 
 /**
  * Framework for testing the Truffle {@linkplain Debugger Debugging API}.
@@ -131,15 +122,11 @@ public abstract class AbstractDebugTest {
         tester.startEval(source);
     }
 
-    protected final void startExecute(Function<Context, Value> script) {
-        tester.startExecute(script);
-    }
-
     protected final void pushContext() {
         if (tester != null) {
             sessionStack.push(tester);
         }
-        tester = new DebuggerTester(Context.newBuilder().allowCreateThread(true).allowPolyglotAccess(PolyglotAccess.ALL).allowIO(true));
+        tester = new DebuggerTester(Context.newBuilder().allowCreateThread(true).allowPolyglotAccess(PolyglotAccess.ALL));
     }
 
     protected final void popContext() {
@@ -147,47 +134,6 @@ public abstract class AbstractDebugTest {
         if (!sessionStack.isEmpty()) {
             tester = sessionStack.pop();
         }
-    }
-
-    protected final Value getFunctionValue(Source source, String functionName) {
-        AtomicReference<Value> functionValue = new AtomicReference<>();
-        tester.startExecute((Context c) -> {
-            Value v = c.eval(source);
-            functionValue.set(c.getBindings(InstrumentationTestLanguage.ID).getMember(functionName));
-            return v;
-        });
-        expectDone();
-        Value v = functionValue.get();
-        assertNotNull(v);
-        return v;
-    }
-
-    protected final void checkDebugValueOf(Object object, Consumer<DebugValue> checker) {
-        checkDebugValueOf(object, (event, value) -> checker.accept(value));
-    }
-
-    protected final void checkDebugValueOf(Object object, BiConsumer<SuspendedEvent, DebugValue> checker) {
-        final Source source = testSource("DEFINE(function, ROOT(\n" +
-                        "  ARGUMENT(a), \n" +
-                        "  STATEMENT()\n" +
-                        "))\n");
-        Value functionValue = getFunctionValue(source, "function");
-
-        AtomicBoolean suspended = new AtomicBoolean(false);
-        try (DebuggerSession session = startSession()) {
-            session.suspendNextExecution();
-            startExecute(c -> functionValue.execute(object));
-            expectSuspended((SuspendedEvent event) -> {
-                assertFalse(suspended.get());
-                DebugValue a = event.getTopStackFrame().getScope().getDeclaredValue("a");
-                assertNotNull(a);
-                checker.accept(event, a);
-                event.prepareContinue();
-                suspended.set(true);
-            });
-        }
-        expectDone();
-        assertTrue(suspended.get());
     }
 
     @SuppressWarnings("static-method")
@@ -230,7 +176,7 @@ public abstract class AbstractDebugTest {
         if (expectedReturnValue == null) {
             Assert.assertNull(returnValue);
         } else {
-            Assert.assertEquals(expectedReturnValue, returnValue.toDisplayString());
+            Assert.assertEquals(expectedReturnValue, returnValue.as(String.class));
         }
         return suspendedEvent;
     }
@@ -246,7 +192,7 @@ public abstract class AbstractDebugTest {
             String expectedValue = expectedFrame[i + 1];
             DebugValue value = values.get(expectedIdentifier);
             Assert.assertNotNull("Identifier " + expectedIdentifier + " not found.", value);
-            Assert.assertEquals(expectedValue, value.toDisplayString());
+            Assert.assertEquals(expectedValue, value.as(String.class));
         }
     }
 
