@@ -2071,15 +2071,9 @@ class LoopDetector implements Runnable {
                 }
             }
         }
-        List<ValueNode> newValues = new ArrayList<>(oldState.values().size());
-        /* The framestate may contain a value multiple times */
-        EconomicMap<ValueNode, ValueNode> old2NewValues = EconomicMap.create();
-        for (ValueNode v : oldState.values) {
-            if (v != null && old2NewValues.containsKey(v)) {
-                newValues.add(old2NewValues.get(v));
-                continue;
-            }
 
+        List<ValueNode> newValues = new ArrayList<>(oldState.values().size());
+        for (ValueNode v : oldState.values()) {
             ValueNode value = v;
             ValueNode realValue = ProxyPlaceholder.unwrap(value);
 
@@ -2100,9 +2094,6 @@ class LoopDetector implements Runnable {
                  * but the properly proxied one
                  */
                 newValues.add(v);
-                if (v != null) {
-                    old2NewValues.put(v, v);
-                }
             } else {
                 /*
                  * The node is not in the FrameState of the LoopBegin, i.e., it is a value computed
@@ -2115,7 +2106,6 @@ class LoopDetector implements Runnable {
                 ValueProxyNode proxy = ProxyNode.forValue(proxyPlaceholder.value, loopExit);
                 proxyPlaceholder.setValue(proxy);
                 newValues.add(proxy);
-                old2NewValues.put(v, proxy);
             }
         }
 
