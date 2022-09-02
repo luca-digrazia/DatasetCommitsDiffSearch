@@ -48,8 +48,6 @@ public class WasmContext {
     private Env env;
     private WasmLanguage language;
     private WasmMemory memory;
-    private Globals globals;
-    private Linker linker;
     private Map<String, WasmModule> modules;
 
     public static WasmContext getCurrent() {
@@ -60,9 +58,7 @@ public class WasmContext {
         this.env = env;
         this.language = language;
         this.memory = new UnsafeWasmMemory(DEFAULT_MEMORY_SIZE);
-        this.globals = new Globals();
         this.modules = new HashMap<>();
-        this.linker = new Linker(language);
         initializePredefinedModules(env);
     }
 
@@ -78,25 +74,16 @@ public class WasmContext {
         return memory;
     }
 
-    public Linker linker() {
-        return linker;
-    }
-
     public Iterable<Scope> getTopScopes() {
         // Go through all WasmModules parsed with this context, and create a Scope for each of them.
         ArrayList<Scope> scopes = new ArrayList<>();
         for (Map.Entry<String, WasmModule> entry : modules.entrySet()) {
             Scope scope = Scope.newBuilder(entry.getKey(), entry.getValue()).build();
-            System.out.println(entry.getKey());
             scopes.add(scope);
         }
         return scopes;
     }
 
-    /**
-     * Returns the map with all the modules that have been fully parsed, initialized and linked
-     * against other such modules.
-     */
     public Map<String, WasmModule> modules() {
         return modules;
     }
@@ -115,12 +102,9 @@ public class WasmContext {
             final String[] parts = moduleSpec.split(":");
             final String name = parts[0];
             final String key = parts[1];
-            final WasmModule module = PredefinedModule.createPredefined(language, this, name, key);
+            final WasmModule module = PredefinedModule.createPredefined(language, name, key);
             modules.put(name, module);
         }
     }
 
-    public Globals globals() {
-        return globals;
-    }
 }
