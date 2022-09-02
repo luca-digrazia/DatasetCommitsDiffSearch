@@ -110,9 +110,7 @@ public abstract class WasmMemory implements TruffleObject {
 
     public abstract void store_i64_32(long address, int value);
 
-    public abstract WasmMemory duplicate();
-
-    public long[] view(long address, int length) {
+    long[] view(long address, int length) {
         long[] chunk = new long[length / 8];
         for (long p = address; p < address + length; p += 8) {
             chunk[(int) (p - address) / 8] = load_i64(p);
@@ -120,7 +118,7 @@ public abstract class WasmMemory implements TruffleObject {
         return chunk;
     }
 
-    public String viewByte(long address) {
+    String viewByte(long address) {
         final int value = load_i32_8u(address);
         String result = Integer.toHexString(value);
         if (result.length() == 1) {
@@ -129,7 +127,7 @@ public abstract class WasmMemory implements TruffleObject {
         return result;
     }
 
-    public String hexView(long address, int length) {
+    String hexView(long address, int length) {
         long[] chunk = view(address, length);
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < chunk.length; i++) {
