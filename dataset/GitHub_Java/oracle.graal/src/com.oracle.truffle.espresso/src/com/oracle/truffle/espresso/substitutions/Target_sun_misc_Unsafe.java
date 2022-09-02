@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,8 +45,6 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread.State;
 
 import sun.misc.Unsafe;
 
@@ -1025,11 +1023,7 @@ public final class Target_sun_misc_Unsafe {
      */
     @Substitution(hasReceiver = true)
     public static void park(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, boolean isAbsolute, long time) {
-        EspressoContext context = self.getKlass().getContext();
-        StaticObject thread = context.getCurrentThread();
-        Target_java_lang_Thread.fromRunnable(thread, context.getMeta(), time > 0 ? State.TIMED_WAITING : State.WAITING);
         U.park(isAbsolute, time);
-        Target_java_lang_Thread.toRunnable(thread, context.getMeta(), State.RUNNABLE);
     }
 
     /**
