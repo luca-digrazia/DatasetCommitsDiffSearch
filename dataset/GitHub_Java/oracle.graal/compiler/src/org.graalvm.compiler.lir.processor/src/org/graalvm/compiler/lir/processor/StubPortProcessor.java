@@ -48,6 +48,11 @@ import javax.tools.Diagnostic;
 
 import org.graalvm.compiler.processor.AbstractProcessor;
 
+/**
+ * Processor for the {@code org.graalvm.compiler.lir.StubPort} annotation. It verifies whether the
+ * digest of the latest source code from the OpenJDK repository matches the one specified in the
+ * {@code StubPort}.
+ */
 public class StubPortProcessor extends AbstractProcessor {
 
     static final String JDK_LATEST = "https://raw.githubusercontent.com/openjdk/jdk/master/";
@@ -96,8 +101,7 @@ public class StubPortProcessor extends AbstractProcessor {
                         URLConnection connection = new URL(url).openConnection(proxy);
                         try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
                             // Note that in.lines() discards the line separator and the digest will
-                            // be
-                            // different from hashing the whole file.
+                            // be different from hashing the whole file.
                             in.lines().skip(lineStart).limit(lineEnd - lineStart).map(String::getBytes).forEach(md::update);
                         }
                         String digest = String.format("%040x", new BigInteger(1, md.digest()));
