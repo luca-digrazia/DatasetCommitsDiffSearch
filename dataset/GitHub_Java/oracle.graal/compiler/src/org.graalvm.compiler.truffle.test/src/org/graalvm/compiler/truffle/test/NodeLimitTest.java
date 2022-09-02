@@ -51,11 +51,9 @@ public class NodeLimitTest extends PartialEvaluationTest {
     @Before
     public void before() {
         setupContext();
-        Assume.assumeFalse(dummyTarget().getOptionValue(PolyglotCompilerOptions.CompileImmediately));
-    }
-
-    private static OptimizedCallTarget dummyTarget() {
-        return (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));
+        OptimizedCallTarget callTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(42));
+        Assume.assumeFalse(callTarget.getOptionValue(PolyglotCompilerOptions.CompileImmediately));
+        Assume.assumeFalse(callTarget.getOptionValue(PolyglotCompilerOptions.LanguageAgnosticInlining));
     }
 
     @Test
@@ -71,7 +69,6 @@ public class NodeLimitTest extends PartialEvaluationTest {
     @Test
     @SuppressWarnings("try")
     public void testWithTruffleInlining() {
-        Assume.assumeFalse(dummyTarget().getOptionValue(PolyglotCompilerOptions.LanguageAgnosticInlining));
         setupContext(Context.newBuilder().allowAllAccess(true).allowExperimentalOptions(true).option("engine.MaximumInlineNodeCount", "10").build());
         RootNode rootNode = createRootNodeWithCall(new RootNode(null) {
             @Override
