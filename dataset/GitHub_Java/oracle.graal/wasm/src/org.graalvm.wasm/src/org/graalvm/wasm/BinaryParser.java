@@ -54,6 +54,7 @@ import org.graalvm.wasm.constants.ImportIdentifier;
 import org.graalvm.wasm.constants.Instructions;
 import org.graalvm.wasm.constants.LimitsPrefix;
 import org.graalvm.wasm.constants.Section;
+import org.graalvm.wasm.constants.TargetOffset;
 import org.graalvm.wasm.exception.WasmLinkerException;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.nodes.WasmBlockNode;
@@ -325,7 +326,7 @@ public class BinaryParser extends BinaryStreamParser {
         if (state.branchTables().length > 0) {
             rootNode.codeEntry().setBranchTables(state.branchTables());
         }
-        rootNode.codeEntry().setProfileCount(state.profileCount());
+        rootNode.codeEntry().setConditionsCount(state.profileCount());
         rootNode.codeEntry().initStackSlots(rootNode.getFrameDescriptor(), state.maxStackSize());
     }
 
@@ -1262,6 +1263,7 @@ public class BinaryParser extends BinaryStreamParser {
 
     private int readTargetOffset(ExecutionState state) {
         int value = readUnsignedInt32(state);
+        TargetOffset.ensureCacheSize(value);
         return value;
     }
 
