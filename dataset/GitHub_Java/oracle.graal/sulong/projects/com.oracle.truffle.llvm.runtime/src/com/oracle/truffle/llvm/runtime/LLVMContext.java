@@ -29,6 +29,22 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+import org.graalvm.collections.EconomicMap;
+
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
@@ -42,7 +58,6 @@ import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.api.Toolchain;
-import com.oracle.truffle.llvm.runtime.IDGenerater.BitcodeID;
 import com.oracle.truffle.llvm.runtime.LLVMArgumentBuffer.LLVMArgumentArray;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
@@ -60,22 +75,8 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.pthread.LLVMPThreadContext;
-import org.graalvm.collections.EconomicMap;
+import com.oracle.truffle.llvm.runtime.IDGenerater.BitcodeID;
 import org.graalvm.collections.MapCursor;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 public final class LLVMContext {
 
@@ -677,12 +678,10 @@ public final class LLVMContext {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 MapCursor<BitcodeID, Source> entry = sourceCache.getEntries();
                 String sourceString = "";
-                boolean next = true;
-                while (next) {
+                while (entry.advance()) {
                     BitcodeID sourceID = entry.getKey();
-                    String sourcePath = entry.getValue().getPath();
-                    sourceString = sourceString + " ***ID***: " + sourceID.getId() + " ~~~matches the source~~~: " + sourcePath + "\n";
-                    next = entry.advance();
+                    Source sourceSource = entry.getValue();
+                    sourceString = sourceSource + "id: " + sourceID.getId() + " matches the source: " + sourceSource.toString() + "\n";
                 }
                 throw new IllegalStateException("id: " + id + ", index: " + index + ", id length: " + symbolDynamicStorage.length +
                                 ", symbol name: " + symbol.getName() + ", symbol kind: " + symbol.getKind() +
