@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -203,15 +203,17 @@ public class AMD64VectorMove {
         }
     }
 
-    public abstract static class VectorMemOp extends AMD64VectorInstruction {
+    public abstract static class VectorMemOp extends AMD64LIRInstruction {
 
+        protected final AVXSize size;
         protected final VexMoveOp op;
 
         @Use({COMPOSITE}) protected AMD64AddressValue address;
         @State protected LIRFrameState state;
 
         protected VectorMemOp(LIRInstructionClass<? extends VectorMemOp> c, AVXSize size, VexMoveOp op, AMD64AddressValue address, LIRFrameState state) {
-            super(c, size);
+            super(c);
+            this.size = size;
             this.op = op;
             this.address = address;
             this.state = state;
