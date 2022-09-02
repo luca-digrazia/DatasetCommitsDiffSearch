@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -35,12 +37,15 @@ import org.graalvm.compiler.nodes.AbstractDeoptimizeNode;
 import org.graalvm.compiler.nodes.AbstractEndNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.BeginNode;
+import org.graalvm.compiler.nodes.CompressionNode;
 import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.DeoptimizingFixedWithNextNode;
 import org.graalvm.compiler.nodes.DynamicDeoptimizeNode;
+import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
+import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
@@ -49,12 +54,18 @@ import org.graalvm.compiler.nodes.extended.NullCheckNode;
 import org.graalvm.compiler.nodes.memory.FixedAccessNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
+import org.graalvm.compiler.options.Option;
+import org.graalvm.compiler.options.OptionKey;
+import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.tiers.LowTierContext;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.SpeculationLog;
+import jdk.vm.ci.meta.SpeculationLog.Speculation;
 
 public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
 
@@ -63,21 +74,30 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
     private static final CounterKey counterTrappingNullCheckUnreached = DebugContext.counter("TrappingNullCheckUnreached");
     private static final CounterKey counterTrappingNullCheckDynamicDeoptimize = DebugContext.counter("TrappingNullCheckDynamicDeoptimize");
 
+    public static class Options {
+
+        // @formatter:off
+        @Option(help = "Use traps for null checks instead of explicit null-checks", type = OptionType.Expert)
+        public static final OptionKey<Boolean> UseTrappingNullChecks = new OptionKey<>(true);
+        // @formatter:on
+    }
+
     @Override
     protected void run(StructuredGraph graph, LowTierContext context) {
-        if (context.getTarget().implicitNullCheckLimit <= 0) {
+        if (!Options.UseTrappingNullChecks.getValue(graph.getOptions()) || context.getTarget().implicitNullCheckLimit <= 0) {
             return;
         }
         assert graph.getGuardsStage().areFrameStatesAtDeopts();
 
+        MetaAccessProvider metaAccessProvider = context.getMetaAccess();
         long implicitNullCheckLimit = context.getTarget().implicitNullCheckLimit;
         for (DeoptimizeNode deopt : graph.getNodes(DeoptimizeNode.TYPE)) {
-            tryUseTrappingNullCheck(deopt, deopt.predecessor(), deopt.reason(), deopt.getSpeculation(), implicitNullCheckLimit);
+            tryUseTrappingNullCheck(deopt, deopt.predecessor(), deopt.getReason(), deopt.getSpeculation(), implicitNullCheckLimit,
+                            deopt.getActionAndReason(metaAccessProvider).asJavaConstant(), deopt.getSpeculation(metaAccessProvider).asJavaConstant());
         }
         for (DynamicDeoptimizeNode deopt : graph.getNodes(DynamicDeoptimizeNode.TYPE)) {
-            tryUseTrappingNullCheck(context.getMetaAccess(), deopt, implicitNullCheckLimit);
+            tryUseTrappingNullCheck(metaAccessProvider, deopt, implicitNullCheckLimit);
         }
-
     }
 
     private static void tryUseTrappingNullCheck(MetaAccessProvider metaAccessProvider, DynamicDeoptimizeNode deopt, long implicitNullCheckLimit) {
@@ -100,6 +120,7 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
                 reasons = reasonPhi.values().snapshot();
                 expectedPhis++;
             } else if (!reason.isConstant()) {
+                merge.getDebug().log("Non constant reason %s", merge);
                 return;
             }
 
@@ -120,38 +141,68 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
             }
 
             int index = 0;
-            for (AbstractEndNode end : merge.cfgPredecessors().snapshot()) {
+            List<EndNode> predecessors = merge.cfgPredecessors().snapshot();
+            for (AbstractEndNode end : predecessors) {
+                Node endPredecesssor = end.predecessor();
                 ValueNode thisReason = reasons != null ? reasons.get(index) : reason;
-                ValueNode thisSpeculation = speculations != null ? speculations.get(index++) : speculation;
-                if (!thisReason.isConstant() || !thisSpeculation.isConstant() || !thisSpeculation.asConstant().equals(JavaConstant.NULL_POINTER)) {
+                ValueNode thisSpeculation = speculations != null ? speculations.get(index) : speculation;
+                if (!merge.isAlive()) {
+                    // When evacuating a merge the last successor simplfies the merge away so it
+                    // must be handled specially.
+                    assert predecessors.get(predecessors.size() - 1) == end : "must be last end";
+                    endPredecesssor = deopt.predecessor();
+                    thisSpeculation = deopt.getSpeculation();
+                    thisReason = deopt.getActionAndReason();
+                }
+
+                index++;
+                if (!thisReason.isConstant() || !thisSpeculation.isConstant()) {
+                    end.getDebug().log("Non constant deopt %s", end);
                     continue;
                 }
                 DeoptimizationReason deoptimizationReason = metaAccessProvider.decodeDeoptReason(thisReason.asJavaConstant());
-                tryUseTrappingNullCheck(deopt, end.predecessor(), deoptimizationReason, null, implicitNullCheckLimit);
+                Speculation speculationConstant = metaAccessProvider.decodeSpeculation(thisSpeculation.asJavaConstant(), deopt.graph().getSpeculationLog());
+                tryUseTrappingNullCheck(deopt, endPredecesssor, deoptimizationReason, speculationConstant, implicitNullCheckLimit,
+                                thisReason.asJavaConstant(), thisSpeculation.asJavaConstant());
             }
         }
     }
 
-    private static void tryUseTrappingNullCheck(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, JavaConstant speculation, long implicitNullCheckLimit) {
-        if (deoptimizationReason != DeoptimizationReason.NullCheckException && deoptimizationReason != DeoptimizationReason.UnreachedCode) {
+    private static void tryUseTrappingNullCheck(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason,
+                    Speculation speculation, long implicitNullCheckLimit, JavaConstant deoptReasonAndAction, JavaConstant deoptSpeculation) {
+        assert predecessor != null;
+        if (!GraalServices.supportArbitraryImplicitException() && deoptimizationReason != DeoptimizationReason.NullCheckException && deoptimizationReason != DeoptimizationReason.UnreachedCode &&
+                        deoptimizationReason != DeoptimizationReason.TypeCheckedInliningViolated) {
+            deopt.getDebug().log(DebugContext.INFO_LEVEL, "Not a null check or unreached %s", predecessor);
             return;
         }
-        if (speculation != null && !speculation.equals(JavaConstant.NULL_POINTER)) {
+        assert speculation != null;
+        if (!GraalServices.supportArbitraryImplicitException() && !speculation.equals(SpeculationLog.NO_SPECULATION)) {
+            deopt.getDebug().log(DebugContext.INFO_LEVEL, "Has a speculation %s", predecessor);
             return;
         }
-        if (predecessor instanceof AbstractMergeNode) {
-            AbstractMergeNode merge = (AbstractMergeNode) predecessor;
+
+        // Skip over loop exit nodes.
+        Node pred = predecessor;
+        while (pred instanceof LoopExitNode) {
+            pred = pred.predecessor();
+        }
+        if (pred instanceof AbstractMergeNode) {
+            AbstractMergeNode merge = (AbstractMergeNode) pred;
             if (merge.phis().isEmpty()) {
                 for (AbstractEndNode end : merge.cfgPredecessors().snapshot()) {
-                    checkPredecessor(deopt, end.predecessor(), deoptimizationReason, implicitNullCheckLimit);
+                    checkPredecessor(deopt, end.predecessor(), deoptimizationReason, implicitNullCheckLimit, deoptReasonAndAction, deoptSpeculation);
                 }
             }
-        } else if (predecessor instanceof AbstractBeginNode) {
-            checkPredecessor(deopt, predecessor, deoptimizationReason, implicitNullCheckLimit);
+        } else if (pred instanceof AbstractBeginNode) {
+            checkPredecessor(deopt, pred, deoptimizationReason, implicitNullCheckLimit, deoptReasonAndAction, deoptSpeculation);
+        } else {
+            deopt.getDebug().log(DebugContext.INFO_LEVEL, "Not a Begin or Merge %s", pred);
         }
     }
 
-    private static void checkPredecessor(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, long implicitNullCheckLimit) {
+    private static void checkPredecessor(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, long implicitNullCheckLimit,
+                    JavaConstant deoptReasonAndAction, JavaConstant deoptSpeculation) {
         Node current = predecessor;
         AbstractBeginNode branch = null;
         while (current instanceof AbstractBeginNode) {
@@ -169,13 +220,15 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
             }
             LogicNode condition = ifNode.condition();
             if (condition instanceof IsNullNode) {
-                replaceWithTrappingNullCheck(deopt, ifNode, condition, deoptimizationReason, implicitNullCheckLimit);
+                replaceWithTrappingNullCheck(deopt, ifNode, condition, deoptimizationReason, implicitNullCheckLimit, deoptReasonAndAction, deoptSpeculation);
             }
         }
     }
 
-    private static void replaceWithTrappingNullCheck(AbstractDeoptimizeNode deopt, IfNode ifNode, LogicNode condition, DeoptimizationReason deoptimizationReason, long implicitNullCheckLimit) {
+    private static void replaceWithTrappingNullCheck(AbstractDeoptimizeNode deopt, IfNode ifNode, LogicNode condition, DeoptimizationReason deoptimizationReason,
+                    long implicitNullCheckLimit, JavaConstant deoptReasonAndAction, JavaConstant deoptSpeculation) {
         DebugContext debug = deopt.getDebug();
+        StructuredGraph graph = deopt.graph();
         counterTrappingNullCheck.increment(debug);
         if (deopt instanceof DynamicDeoptimizeNode) {
             counterTrappingNullCheckDynamicDeoptimize.increment(debug);
@@ -190,20 +243,30 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
         DeoptimizingFixedWithNextNode trappingNullCheck = null;
         FixedNode nextNonTrapping = nonTrappingContinuation.next();
         ValueNode value = isNullNode.getValue();
-        if (OptImplicitNullChecks.getValue(ifNode.graph().getOptions()) && implicitNullCheckLimit > 0) {
+        if (OptImplicitNullChecks.getValue(graph.getOptions()) && implicitNullCheckLimit > 0) {
             if (nextNonTrapping instanceof FixedAccessNode) {
                 FixedAccessNode fixedAccessNode = (FixedAccessNode) nextNonTrapping;
                 if (fixedAccessNode.canNullCheck()) {
                     AddressNode address = fixedAccessNode.getAddress();
                     ValueNode base = address.getBase();
                     ValueNode index = address.getIndex();
+                    // allow for architectures which cannot fold an
+                    // intervening uncompress out of the address chain
+                    if (base != null && base instanceof CompressionNode) {
+                        base = ((CompressionNode) base).getValue();
+                    }
+                    if (index != null && index instanceof CompressionNode) {
+                        index = ((CompressionNode) index).getValue();
+                    }
                     if (((base == value && index == null) || (base == null && index == value)) && address.getMaxConstantDisplacement() < implicitNullCheckLimit) {
                         // Opportunity for implicit null check as part of an existing read found!
                         fixedAccessNode.setStateBefore(deopt.stateBefore());
                         fixedAccessNode.setNullCheck(true);
-                        deopt.graph().removeSplit(ifNode, nonTrappingContinuation);
+                        fixedAccessNode.setImplicitDeoptimization(deoptReasonAndAction, deoptSpeculation);
+                        graph.removeSplit(ifNode, nonTrappingContinuation);
                         trappingNullCheck = fixedAccessNode;
                         counterTrappingNullCheckExistingRead.increment(debug);
+                        debug.log("Added implicit null check to %s", fixedAccessNode);
                     }
                 }
             }
@@ -211,8 +274,9 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
 
         if (trappingNullCheck == null) {
             // Need to add a null check node.
-            trappingNullCheck = deopt.graph().add(new NullCheckNode(value));
-            deopt.graph().replaceSplit(ifNode, trappingNullCheck, nonTrappingContinuation);
+            trappingNullCheck = graph.add(NullCheckNode.create(value, deoptReasonAndAction, deoptSpeculation));
+            graph.replaceSplit(ifNode, trappingNullCheck, nonTrappingContinuation);
+            debug.log("Inserted NullCheckNode %s", trappingNullCheck);
         }
 
         trappingNullCheck.setStateBefore(deopt.stateBefore());
@@ -222,7 +286,7 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
          * BeginNode as a guard input, so replace guard users of the Begin with the NullCheck and
          * then remove the Begin from the graph.
          */
-        nonTrappingContinuation.replaceAtUsages(InputType.Guard, trappingNullCheck);
+        nonTrappingContinuation.replaceAtUsages(trappingNullCheck, InputType.Guard);
 
         if (nonTrappingContinuation instanceof BeginNode) {
             GraphUtil.unlinkFixedNode(nonTrappingContinuation);
@@ -231,5 +295,10 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
 
         GraphUtil.killCFG(trappingContinuation);
         GraphUtil.tryKillUnused(isNullNode);
+    }
+
+    @Override
+    public float codeSizeIncrease() {
+        return 2.0f;
     }
 }

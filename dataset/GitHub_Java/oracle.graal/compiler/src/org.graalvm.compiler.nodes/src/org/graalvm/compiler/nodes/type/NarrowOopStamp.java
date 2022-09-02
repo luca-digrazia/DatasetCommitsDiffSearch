@@ -39,8 +39,8 @@ public abstract class NarrowOopStamp extends AbstractObjectStamp {
 
     private final CompressEncoding encoding;
 
-    protected NarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, boolean alwaysArray, CompressEncoding encoding) {
-        super(type, exactType, nonNull, alwaysNull, alwaysArray);
+    protected NarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, CompressEncoding encoding) {
+        super(type, exactType, nonNull, alwaysNull);
         this.encoding = encoding;
     }
 
@@ -52,10 +52,10 @@ public abstract class NarrowOopStamp extends AbstractObjectStamp {
     }
 
     @Override
-    protected abstract AbstractObjectStamp copyWith(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, boolean alwaysArray);
+    protected abstract AbstractObjectStamp copyWith(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull);
 
     public Stamp uncompressed() {
-        return new ObjectStamp(type(), isExactType(), nonNull(), alwaysNull(), isAlwaysArray());
+        return new ObjectStamp(type(), isExactType(), nonNull(), alwaysNull());
     }
 
     public CompressEncoding getEncoding() {
