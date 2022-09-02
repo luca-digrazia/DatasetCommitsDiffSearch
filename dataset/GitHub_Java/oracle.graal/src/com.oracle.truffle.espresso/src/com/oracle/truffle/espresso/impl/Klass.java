@@ -183,9 +183,13 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     @ExportMessage
-    final boolean isMemberInvocable(String member,
-                    @Exclusive @Cached LookupDeclaredMethod lookupMethod) {
-        return lookupMethod.isInvocable(this, member, true, true);
+    final boolean isMemberInvocable(String member) {
+        for (Method m : getDeclaredMethods()) {
+            if (m.isPublic() && m.isStatic() && member.equals(m.getName().toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @ExportMessage
@@ -197,7 +201,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         Method method = lookupMethod.execute(this, member, true, true, arguments.length);
         if (method != null) {
             assert method.isStatic() && method.isPublic();
-            assert member.startsWith(method.getNameAsString());
+            assert member.equals(method.getName().toString()) || member.equals(method.getName() + ":" + method.getRawSignature());
             assert method.getParameterCount() == arguments.length;
 
             return invoke.execute(method, null, arguments);
@@ -439,8 +443,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     static final DebugCounter KLASS_LOOKUP_DECLARED_METHOD_COUNT = DebugCounter.create("Klass.lookupDeclaredMethod call count");
     static final DebugCounter KLASS_LOOKUP_DECLARED_FIELD_COUNT = DebugCounter.create("Klass.lookupDeclaredField call count");
 
-    protected Symbol<Name> name;
-    protected Symbol<Type> type;
+    private final Symbol<Name> name;
+    private final Symbol<Type> type;
     private final EspressoContext context;
     private final ObjectKlass superKlass;
 
@@ -913,7 +917,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return null;
     }
 
-    public final Symbol<Type> getType() {
+    public Symbol<Type> getType() {
         return type;
     }
 
