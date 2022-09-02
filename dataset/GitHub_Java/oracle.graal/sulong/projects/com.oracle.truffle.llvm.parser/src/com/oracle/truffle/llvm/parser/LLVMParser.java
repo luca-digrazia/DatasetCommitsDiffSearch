@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -38,7 +38,6 @@ import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.CastConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
-import com.oracle.truffle.llvm.parser.model.target.TargetTriple;
 import com.oracle.truffle.llvm.runtime.LLVMAlias;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.Function;
@@ -72,7 +71,7 @@ public final class LLVMParser {
         defineFunctions(module, definedFunctions, externalFunctions, targetDataLayout);
         defineAliases(module.getAliases());
 
-        return new LLVMParserResult(runtime, definedFunctions, externalFunctions, definedGlobals, externalGlobals, targetDataLayout, module.getTargetInformation(TargetTriple.class));
+        return new LLVMParserResult(runtime, definedFunctions, externalFunctions, definedGlobals, externalGlobals, targetDataLayout);
     }
 
     private void defineGlobals(List<GlobalVariable> globals, List<GlobalVariable> definedGlobals, List<GlobalVariable> externalGlobals) {

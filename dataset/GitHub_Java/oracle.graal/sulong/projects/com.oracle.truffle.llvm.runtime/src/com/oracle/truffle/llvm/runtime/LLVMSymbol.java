@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.llvm.runtime.IDGenerater.BitcodeID;
 import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 
@@ -40,7 +39,7 @@ public abstract class LLVMSymbol {
     public static final LLVMSymbol[] EMPTY = new LLVMSymbol[0];
 
     private final String name;
-    private final BitcodeID bitcodeID;
+    private final int moduleId;
     private final int symbolIndex;
     private final boolean exported;
     private final boolean externalWeak;
@@ -48,9 +47,12 @@ public abstract class LLVMSymbol {
     // Index for non-parsed symbols, such as alias, and function symbol for inline assembly.
     public static final int INVALID_INDEX = -1;
 
-    public LLVMSymbol(String name, BitcodeID bitcodeID, int symbolIndex, boolean exported, boolean externalWeak) {
+    // ID for non-parsed symbols, such as alias, function symbol for inline assembly.
+    public static final int INVALID_ID = -1;
+
+    public LLVMSymbol(String name, int bitcodeID, int symbolIndex, boolean exported, boolean externalWeak) {
         this.name = name;
-        this.bitcodeID = bitcodeID;
+        this.moduleId = bitcodeID;
         this.symbolIndex = symbolIndex;
         this.exported = exported;
         this.externalWeak = externalWeak;
@@ -90,20 +92,20 @@ public abstract class LLVMSymbol {
     /**
      * Get the unique module ID for the symbol. The ID is assigned during parsing. The module ID is
      * unqiue per bitcode file. Symbols that are not created from parsing or that are alias have the
-     * value of null.
+     * value of -1.
      *
      * @param illegalOK if symbols created not from bitcode files can be retrieved.
      */
-    public final BitcodeID getBitcodeID(boolean illegalOK) {
-        if (bitcodeID != null || illegalOK) {
-            return bitcodeID;
+    public final int getBitcodeID(boolean illegalOK) {
+        if (moduleId >= 0 || illegalOK) {
+            return moduleId;
         }
         CompilerDirectives.transferToInterpreter();
-        throw new LLVMIllegalSymbolIndexException("Invalid function ID: " + bitcodeID.toString());
+        throw new LLVMIllegalSymbolIndexException("Invalid function ID: " + moduleId);
     }
 
     public final boolean hasValidIndexAndID() {
-        return symbolIndex >= 0 && bitcodeID != null;
+        return symbolIndex >= 0 && moduleId >= 0;
     }
 
     public abstract boolean isGlobalVariable();

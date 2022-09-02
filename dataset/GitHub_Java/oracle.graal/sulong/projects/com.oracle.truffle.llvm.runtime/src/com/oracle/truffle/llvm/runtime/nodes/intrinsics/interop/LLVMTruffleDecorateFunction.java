@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -46,7 +46,6 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ConditionProfile;
-import com.oracle.truffle.llvm.runtime.IDGenerater;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode;
@@ -216,7 +215,7 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
 
     private static Object registerRoot(String path, FunctionType newFunctionType, DecoratedRoot decoratedRoot) {
         LLVMIRFunction function = new LLVMIRFunction(LLVMLanguage.createCallTarget(decoratedRoot), null);
-        LLVMFunction functionDetail = LLVMFunction.create("<wrapper>", function, newFunctionType, IDGenerater.INVALID_ID, LLVMSymbol.INVALID_INDEX, false, path, false);
+        LLVMFunction functionDetail = LLVMFunction.create("<wrapper>", function, newFunctionType, LLVMSymbol.INVALID_INDEX, LLVMSymbol.INVALID_INDEX, false, path, false);
         LLVMFunctionDescriptor wrappedFunction = new LLVMFunctionDescriptor(functionDetail, new LLVMFunctionCode(functionDetail));
         return LLVMManagedPointer.create(wrappedFunction);
     }
