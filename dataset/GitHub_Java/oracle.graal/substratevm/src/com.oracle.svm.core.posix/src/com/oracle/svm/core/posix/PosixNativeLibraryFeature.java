@@ -49,7 +49,7 @@ class PosixNativeLibraryFeature implements Feature {
     }
 }
 
-class PosixNativeLibrarySupport extends PlatformNativeLibrarySupport {
+class PosixNativeLibrarySupport implements PlatformNativeLibrarySupport {
 
     static void initialize() {
         ImageSingletons.add(PlatformNativeLibrarySupport.class, new PosixNativeLibrarySupport());
