@@ -46,6 +46,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
 
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleRuntimeAccess;
+
 /**
  * JDK 8 implementation of {@code TruffleJDKServices}.
  */
@@ -69,11 +72,10 @@ public class TruffleJDKServices {
     /**
      * Gets the ordered list of loaders for {@link TruffleRuntimeAccess} providers.
      */
-    public static <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
-        // public static List<Iterable<TruffleRuntimeAccess>> getTruffleRuntimeLoaders() {
-        Iterable<Service> jvmciProviders = getJVMCIProviders(serviceClass);
+    public static List<Iterable<TruffleRuntimeAccess>> getTruffleRuntimeLoaders() {
+        Iterable<TruffleRuntimeAccess> jvmciProviders = getJVMCIProviders();
         if (Boolean.getBoolean("truffle.TrustAllTruffleRuntimeProviders")) {
-            ServiceLoader<Service> standardProviders = ServiceLoader.load(serviceClass);
+            ServiceLoader<TruffleRuntimeAccess> standardProviders = ServiceLoader.load(TruffleRuntimeAccess.class);
             return Arrays.asList(jvmciProviders, standardProviders);
         } else {
             return Collections.singletonList(jvmciProviders);
@@ -81,10 +83,10 @@ public class TruffleJDKServices {
     }
 
     /**
-     * Gets the providers of {@code Service} available on the JVMCI class path.
+     * Gets the {@link TruffleRuntimeAccess} providers available on the JVMCI class path.
      */
-    private static <Service> Iterable<Service> getJVMCIProviders(Class<Service> serviceClass) {
-        ClassLoader cl = TruffleJDKServices.class.getClassLoader();
+    private static Iterable<TruffleRuntimeAccess> getJVMCIProviders() {
+        ClassLoader cl = Truffle.class.getClassLoader();
         ClassLoader scl = ClassLoader.getSystemClassLoader();
         while (cl != null) {
             if (cl == scl) {
@@ -100,35 +102,26 @@ public class TruffleJDKServices {
             cl = cl.getParent();
         }
 
-        Class<?> jvmciServicesClass;
+        Class<?> servicesClass;
         try {
             // Access JVMCI via reflection to avoid a hard
             // dependency on JVMCI from Truffle.
-            jvmciServicesClass = Class.forName("jdk.vm.ci.services.Services");
+            servicesClass = Class.forName("jdk.vm.ci.services.Services");
         } catch (ClassNotFoundException e) {
             // JVMCI is unavailable so the default TruffleRuntime will be used
             return null;
         }
 
-        return reflectiveServiceLoaderLoad(jvmciServicesClass, serviceClass);
+        return reflectiveServiceLoaderLoad(servicesClass);
     }
 
     @SuppressWarnings("unchecked")
-    private static <Service> Iterable<Service> reflectiveServiceLoaderLoad(Class<?> servicesClass, Class<Service> serviceClass) {
+    private static Iterable<TruffleRuntimeAccess> reflectiveServiceLoaderLoad(Class<?> servicesClass) {
         try {
             Method m = servicesClass.getDeclaredMethod("load", Class.class);
-            return (Iterable<Service>) m.invoke(null, serviceClass);
+            return (Iterable<TruffleRuntimeAccess>) m.invoke(null, TruffleRuntimeAccess.class);
         } catch (Throwable e) {
             throw (InternalError) new InternalError().initCause(e);
         }
-    }
-
-    public static Object getUnnamedModule(@SuppressWarnings("unused") ClassLoader classLoader) {
-        return null;
-    }
-
-    public static boolean verifyModuleVisibility(Object currentModule, @SuppressWarnings("unused") Class<?> memberClass) {
-        assert currentModule == null;
-        return true;
     }
 }

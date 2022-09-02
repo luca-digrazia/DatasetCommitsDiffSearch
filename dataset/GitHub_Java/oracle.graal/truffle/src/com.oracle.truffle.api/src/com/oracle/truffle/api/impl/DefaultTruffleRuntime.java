@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -120,7 +120,7 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
     @Override
     public RootCallTarget createCallTarget(RootNode rootNode) {
         DefaultCallTarget target = new DefaultCallTarget(rootNode);
-        DefaultRuntimeAccessor.INSTRUMENT.onLoad(target.getRootNode());
+        getTvmci().onLoad(target);
         return target;
     }
 
@@ -202,23 +202,27 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
         stackTraces.set(topFrame);
     }
 
-    DefaultFrameInstance pushFrame(VirtualFrame frame, CallTarget target) {
-        DefaultFrameInstance callerFrame = getThreadLocalStackTrace();
-        setThreadLocalStackTrace(new DefaultFrameInstance(frame, target, null, callerFrame));
-        return callerFrame;
+    void pushFrame(VirtualFrame frame, CallTarget target) {
+        setThreadLocalStackTrace(new DefaultFrameInstance(frame, target, null, getThreadLocalStackTrace()));
     }
 
-    DefaultFrameInstance pushFrame(VirtualFrame frame, CallTarget target, Node parentCallNode) {
-        DefaultFrameInstance callerFrame = getThreadLocalStackTrace();
+    void pushFrame(VirtualFrame frame, CallTarget target, Node parentCallNode) {
+        DefaultFrameInstance currentFrame = getThreadLocalStackTrace();
         // we need to ensure that frame instances are immutable so we need to recreate the parent
         // frame
-        DefaultFrameInstance callerFrameWithCallNode = callerFrame != null ? callerFrame.withCallNode(parentCallNode) : callerFrame;
-        setThreadLocalStackTrace(new DefaultFrameInstance(frame, target, null, callerFrameWithCallNode));
-        return callerFrame;
+        if (currentFrame != null) {
+            currentFrame = new DefaultFrameInstance(currentFrame.frame, currentFrame.target, parentCallNode, currentFrame.callerFrame);
+        }
+        setThreadLocalStackTrace(new DefaultFrameInstance(frame, target, null, currentFrame));
     }
 
-    void popFrame(DefaultFrameInstance callerFrame) {
-        setThreadLocalStackTrace(callerFrame);
+    void popFrame() {
+        DefaultFrameInstance callerFrame = getThreadLocalStackTrace().callerFrame;
+        if (callerFrame != null) {
+            setThreadLocalStackTrace(new DefaultFrameInstance(callerFrame.frame, callerFrame.target, null, callerFrame.callerFrame));
+        } else {
+            setThreadLocalStackTrace(null);
+        }
     }
 
     @Override
@@ -297,7 +301,7 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
         return false;
     }
 
-    static final class DefaultFrameInstance implements FrameInstance {
+    private static class DefaultFrameInstance implements FrameInstance {
 
         private final CallTarget target;
         private final VirtualFrame frame;
@@ -312,7 +316,7 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
         }
 
         @SuppressWarnings("deprecation")
-        public Frame getFrame(FrameAccess access) {
+        public final Frame getFrame(FrameAccess access) {
             Frame localFrame = this.frame;
             switch (access) {
                 case READ_ONLY:
@@ -326,20 +330,16 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
             throw new AssertionError();
         }
 
-        public boolean isVirtualFrame() {
+        public final boolean isVirtualFrame() {
             return false;
         }
 
-        public CallTarget getCallTarget() {
+        public final CallTarget getCallTarget() {
             return target;
         }
 
         public Node getCallNode() {
             return callNode;
-        }
-
-        DefaultFrameInstance withCallNode(Node otherCallNode) {
-            return new DefaultFrameInstance(frame, target, otherCallNode, callerFrame);
         }
 
     }
