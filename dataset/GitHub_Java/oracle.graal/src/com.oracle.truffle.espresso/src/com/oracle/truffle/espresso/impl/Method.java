@@ -634,11 +634,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     void setVTableIndex(int i) {
-        setVTableIndex(i, false);
-    }
-
-    void setVTableIndex(int i, boolean isRedefinition) {
-        assert (vtableIndex == -1 || vtableIndex == i || isRedefinition);
+        assert (vtableIndex == -1 || vtableIndex == i);
         assert itableIndex == -1;
         CompilerAsserts.neverPartOfCompilation();
         this.vtableIndex = i;

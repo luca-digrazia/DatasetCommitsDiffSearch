@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.core.thread;
 
-import static com.oracle.svm.core.snippets.SnippetRuntime.NO_KILLED_LOCATIONS;
-
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.graalvm.compiler.api.replacements.Fold;
@@ -130,15 +128,11 @@ import com.oracle.svm.core.util.VMError;
  * @see SafepointCheckNode
  */
 public final class Safepoint {
-    // For the safepoint-related foreign calls, we can assume that they don't kill any locations as
-    // they only write to locations that are accessed using volatile semantics (because any kind of
-    // race condition can happen anyway).
-    public static final SubstrateForeignCallDescriptor ENTER_SLOW_PATH_SAFEPOINT_CHECK = SnippetRuntime.findForeignCall(Safepoint.class, "enterSlowPathSafepointCheck", true,
-                    NO_KILLED_LOCATIONS);
+
+    public static final SubstrateForeignCallDescriptor ENTER_SLOW_PATH_SAFEPOINT_CHECK = SnippetRuntime.findForeignCall(Safepoint.class, "enterSlowPathSafepointCheck", true);
     private static final SubstrateForeignCallDescriptor ENTER_SLOW_PATH_TRANSITION_FROM_NATIVE_TO_NEW_STATUS = SnippetRuntime.findForeignCall(Safepoint.class,
-                    "enterSlowPathTransitionFromNativeToNewStatus", true, NO_KILLED_LOCATIONS);
-    private static final SubstrateForeignCallDescriptor ENTER_SLOW_PATH_TRANSITION_FROM_VM_TO_JAVA = SnippetRuntime.findForeignCall(Safepoint.class, "enterSlowPathTransitionFromVMToJava", true,
-                    NO_KILLED_LOCATIONS);
+                    "enterSlowPathTransitionFromNativeToNewStatus", true);
+    private static final SubstrateForeignCallDescriptor ENTER_SLOW_PATH_TRANSITION_FROM_VM_TO_JAVA = SnippetRuntime.findForeignCall(Safepoint.class, "enterSlowPathTransitionFromVMToJava", true);
 
     /** All foreign calls defined in this class. */
     public static final SubstrateForeignCallDescriptor[] FOREIGN_CALLS = new SubstrateForeignCallDescriptor[]{
