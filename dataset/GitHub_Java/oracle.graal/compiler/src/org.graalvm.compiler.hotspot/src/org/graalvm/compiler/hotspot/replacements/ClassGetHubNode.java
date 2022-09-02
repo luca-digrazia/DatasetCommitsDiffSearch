@@ -95,9 +95,7 @@ public final class ClassGetHubNode extends FloatingNode implements Lowerable, Ca
             if (clazz.isConstant() && !clazz.isNullConstant()) {
                 if (metaAccess != null) {
                     ResolvedJavaType exactType = constantReflection.asJavaType(clazz.asJavaConstant());
-                    if (exactType == null) {
-                        return null;
-                    } else if (exactType.isPrimitive()) {
+                    if (exactType.isPrimitive()) {
                         return ConstantNode.forConstant(stamp, JavaConstant.NULL_POINTER, metaAccess);
                     } else {
                         return ConstantNode.forConstant(stamp, constantReflection.asObjectHub(exactType), metaAccess);
