@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,9 +24,10 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleInvalidationReprofileCount;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleMinInvokeThreshold;
-import static org.graalvm.compiler.truffle.TruffleCompilerOptions.TruffleOSRCompilationThreshold;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.LastTierCompilationThreshold;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MinInvokeThreshold;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.OSRCompilationThreshold;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ReplaceReprofileCount;
 import static org.junit.Assert.assertSame;
 
 import java.util.concurrent.ExecutionException;
@@ -32,11 +35,11 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
-import org.graalvm.compiler.truffle.GraalTruffleRuntime;
-import org.graalvm.compiler.truffle.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.OptimizedOSRLoopNode;
-import org.graalvm.compiler.truffle.TruffleCompilerOptions;
+import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
+import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -58,6 +61,7 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
@@ -68,25 +72,33 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
 
     private static final GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
 
-    private static final int OSR_THRESHOLD = TruffleCompilerOptions.getValue(TruffleOSRCompilationThreshold);
-    private static final int OSR_INVALIDATION_REPROFILE = TruffleCompilerOptions.getValue(TruffleInvalidationReprofileCount);
+    @DataPoint public static final OSRLoopFactory CONFIGURED = (threshold, repeating, readFrameSlots, writtenFrameSlots) -> {
+        return OptimizedOSRLoopNode.createOSRLoop(repeating, threshold, readFrameSlots, writtenFrameSlots);
+    };
 
-    @DataPoint public static final OSRLoopFactory CONFIGURED = (repeating, readFrameSlots,
-                    writtenFrameSlots) -> OptimizedOSRLoopNode.createOSRLoop(repeating, OSR_THRESHOLD,
-                                    OSR_INVALIDATION_REPROFILE, readFrameSlots, writtenFrameSlots);
-
-    @DataPoint public static final OSRLoopFactory DEFAULT = (repeating, readFrameSlots,
+    @DataPoint public static final OSRLoopFactory DEFAULT = (threshold, repeating, readFrameSlots,
                     writtenFrameSlots) -> (OptimizedOSRLoopNode) OptimizedOSRLoopNode.create(repeating);
+
+    private int osrThreshold;
 
     @BeforeClass
     public static void doBefore() {
         // ensure that all classes are properly loaded
-        TestRootNode rootNode = new TestRootNode(DEFAULT, new TestRepeatingNode());
+        int defaultThreshold = OSRCompilationThreshold.getDefaultValue();
+        TestRootNode rootNode = new TestRootNode(defaultThreshold, DEFAULT, new TestRepeatingNode());
         CallTarget target = runtime.createCallTarget(rootNode);
         target.call(1);
-        rootNode = new TestRootNode(CONFIGURED, new TestRepeatingNode());
+        rootNode = new TestRootNode(defaultThreshold, CONFIGURED, new TestRepeatingNode());
         target = runtime.createCallTarget(rootNode);
         target.call(1);
+    }
+
+    @Before
+    @Override
+    public void before() {
+        setupContext("engine.MultiTier", "false");
+        OptimizedCallTarget target = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
+        osrThreshold = target.getOptionValue(OSRCompilationThreshold);
     }
 
     /*
@@ -94,13 +106,30 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testOSRSingleInvocation(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
         CallTarget target = runtime.createCallTarget(rootNode);
-        target.call(OSR_THRESHOLD + 1);
+        target.call(osrThreshold + 1);
         assertCompiled(rootNode.getOSRTarget());
         target.call(2);
         assertCompiled(rootNode.getOSRTarget());
         Assert.assertTrue(rootNode.wasRepeatingCalledCompiled());
+    }
+
+    @SuppressWarnings("try")
+    @Theory
+    public void testOSRAndRewriteDoesNotSuppressTargetCompilation(OSRLoopFactory factory) {
+        setupContext("engine.CompilationThreshold", "3");
+        TestRootNodeWithReplacement rootNode = new TestRootNodeWithReplacement(osrThreshold, factory, new TestRepeatingNode());
+        OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
+        target.call(osrThreshold + 1);
+        assertCompiled(rootNode.getOSRTarget());
+        assertNotCompiled(target);
+        target.nodeReplaced(rootNode.toReplace, new TestRepeatingNode(), "test");
+        for (int i = 0; i < target.getOptionValue(LastTierCompilationThreshold) + target.getOptionValue(ReplaceReprofileCount) - 1; i++) {
+            target.call(2);
+        }
+        assertCompiled(rootNode.getOSRTarget());
+        assertCompiled(target);
     }
 
     /*
@@ -126,9 +155,9 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
             }
         }
 
-        TestRootNode rootNode = new TestRootNode(factory, new TransferToInterpreterTestRepeatingNode());
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TransferToInterpreterTestRepeatingNode());
         CallTarget target = runtime.createCallTarget(rootNode);
-        target.call(OSR_THRESHOLD + 1);
+        target.call(osrThreshold + 1);
         try {
             // Invalidation is asynchronous.
             Thread.sleep(100);
@@ -143,8 +172,8 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testNonOSR(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
-        runtime.createCallTarget(rootNode).call(OSR_THRESHOLD);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
+        runtime.createCallTarget(rootNode).call(osrThreshold);
         assertNotCompiled(rootNode.getOSRTarget());
     }
 
@@ -155,7 +184,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     @Ignore("Needs mayor revision - GR-2515")
     public void testOSRFrameSlotChangeDuringOSR() {
         OSRLoopFactory factory = CONFIGURED;
-        TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode() {
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode() {
 
             @Override
             public boolean executeRepeating(VirtualFrame frame) {
@@ -182,14 +211,14 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
 
         };
 
-        executeNoCallTarget(rootNode, OSR_THRESHOLD + 1);
+        executeNoCallTarget(rootNode, osrThreshold + 1);
         assertCompiled(rootNode.getOSRTarget());
         executeNoCallTarget(rootNode, 1);
         assertNotCompiled(rootNode.getOSRTarget()); // now deoptimized
-        executeNoCallTarget(rootNode, OSR_THRESHOLD + 1);
+        executeNoCallTarget(rootNode, osrThreshold + 1);
         assertCompiled(rootNode.getOSRTarget());
         executeNoCallTarget(rootNode, 1); // maybe deoptimizing
-        executeNoCallTarget(rootNode, OSR_THRESHOLD + 1);
+        executeNoCallTarget(rootNode, osrThreshold + 1);
         assertCompiled(rootNode.getOSRTarget());
         executeNoCallTarget(rootNode, 1); // not deoptimizing
         assertCompiled(rootNode.getOSRTarget());
@@ -202,7 +231,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testNoInvalidationWithoutFirstExecution(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
         RootCallTarget target = runtime.createCallTarget(rootNode);
         rootNode.forceOSR();
         assertCompiled(rootNode.getOSRTarget());
@@ -217,8 +246,8 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testExecutionWithoutCallTarget(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
-        executeNoCallTarget(rootNode, OSR_THRESHOLD + 1);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
+        executeNoCallTarget(rootNode, osrThreshold + 1);
         assertCompiled(rootNode.getOSRTarget());
     }
 
@@ -227,21 +256,21 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testExternalInvalidations(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
-        executeNoCallTarget(rootNode, OSR_THRESHOLD + 1);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
+        executeNoCallTarget(rootNode, osrThreshold + 1);
         assertCompiled(rootNode.getOSRTarget());
 
         for (int i = 0; i < 10; i++) {
-            rootNode.getOSRTarget().invalidate();
+            rootNode.getOSRTarget().invalidate("test");
             Assert.assertNotNull(rootNode.getOSRTarget());
             assertNotCompiled(rootNode.getOSRTarget());
             Assert.assertNotNull(rootNode.getOSRTarget()); // no eager cleanup for thread safety
 
-            executeNoCallTarget(rootNode, OSR_THRESHOLD - 1);
+            executeNoCallTarget(rootNode, osrThreshold - 1);
             assertNotCompiled(rootNode.getOSRTarget());
             Assert.assertNull(rootNode.getOSRTarget()); // cleaned up after further call
 
-            executeNoCallTarget(rootNode, OSR_THRESHOLD + 1);
+            executeNoCallTarget(rootNode, osrThreshold + 1);
             assertCompiled(rootNode.getOSRTarget());
         }
     }
@@ -253,9 +282,10 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     @Theory
     public void testInternalInvalidations(OSRLoopFactory factory) {
         TestRepeatingNode repeating = new TestRepeatingNode();
-        TestRootNode rootNode = new TestRootNode(factory, repeating);
-        CallTarget target = runtime.createCallTarget(rootNode);
-        target.call(OSR_THRESHOLD + 1);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, repeating);
+        OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
+        target.call(osrThreshold + 1);
+        target.resetCompilationProfile();
         assertCompiled(rootNode.getOSRTarget());
 
         repeating.invalidationCounter = 5;
@@ -271,16 +301,16 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     @Theory
     public void testOuterInvalidationTriggersOSR(OSRLoopFactory factory) {
         TestRepeatingNode repeating = new TestRepeatingNode();
-        TestRootNode rootNode = new TestRootNode(factory, repeating);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, repeating);
         OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
 
         // compile inner
-        target.call(OSR_THRESHOLD + 1);
+        target.call(osrThreshold + 1);
         OptimizedCallTarget osrTarget = rootNode.getOSRTarget();
         assertCompiled(osrTarget);
 
         int i;
-        for (i = 0; i < TruffleCompilerOptions.getValue(TruffleMinInvokeThreshold) - 2; i++) {
+        for (i = 0; i < target.getOptionValue(MinInvokeThreshold) - 2; i++) {
             target.call(0);
             assertNotCompiled(target);
             assertCompiled(rootNode.getOSRTarget());
@@ -291,24 +321,23 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         assertCompiled(rootNode.getOSRTarget());
         assertSame(rootNode.getOSRTarget(), osrTarget);
 
-        target.invalidate();
+        target.invalidate("test");
         assertNotCompiled(target);
         assertCompiled(rootNode.getOSRTarget());
         assertSame(rootNode.getOSRTarget(), osrTarget);
 
         // after invalidating the outer method the osr target should still be valid and used
+        target.resetCompilationProfile();
         target.call(15);
-        // even though target is compiled it is invoked in interpreter
-        target.invalidate();
+
         assertCompiled(rootNode.getOSRTarget());
         assertSame(rootNode.getOSRTarget(), osrTarget);
-        // assertNotCompiled(target);
+        assertNotCompiled(target);
 
-        // now externally invalidate the osr target and see if we compile again
-        rootNode.getOSRTarget().invalidate();
-        target.call(OSR_THRESHOLD + 1);
+        // now externally invalidate the osr target and see if we compile the osr target again
+        rootNode.getOSRTarget().invalidate("test");
+        target.call(osrThreshold + 1);
         assertCompiled(rootNode.getOSRTarget());
-
     }
 
     /*
@@ -317,14 +346,14 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testNoOSRAfterMinInvocationThreshold(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
-        RootCallTarget target = runtime.createCallTarget(rootNode);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
+        OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
         int i;
-        for (i = 0; i < TruffleCompilerOptions.getValue(TruffleMinInvokeThreshold); i++) {
+        for (i = 0; i < target.getOptionValue(MinInvokeThreshold); i++) {
             target.call(0);
             assertNotCompiled(rootNode.getOSRTarget());
         }
-        target.call(OSR_THRESHOLD);
+        target.call(osrThreshold);
         assertNotCompiled(rootNode.getOSRTarget());
     }
 
@@ -333,15 +362,15 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testOSRMinInvocationThresholdPropagateLoopCounts(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
         OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
-        int osrThreshold = OSR_THRESHOLD;
-        int truffleMinInvokes = TruffleCompilerOptions.getValue(TruffleMinInvokeThreshold);
+        int thresholdForOsr = this.osrThreshold;
+        int truffleMinInvokes = target.getOptionValue(MinInvokeThreshold);
 
         int i;
-        int invokesleft = osrThreshold;
+        int invokesleft = thresholdForOsr;
         for (i = 0; i < truffleMinInvokes - 1; i++) {
-            int invokes = osrThreshold / truffleMinInvokes;
+            int invokes = thresholdForOsr / truffleMinInvokes;
             invokesleft -= invokes;
             target.call(invokes);
             assertNotCompiled(rootNode.getOSRTarget());
@@ -361,15 +390,15 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testThreadSafety(OSRLoopFactory factory) {
-        int threshold = OSR_THRESHOLD;
+        int threshold = osrThreshold;
         IntStream.generate(() -> 10).limit(10).parallel().forEach(i -> {
-            TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
+            TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
             IntStream.generate(() -> threshold).limit(10).parallel().forEach(k -> executeNoCallTarget(rootNode, threshold + 1));
             waitForCompiled(rootNode.getOSRTarget());
         });
 
         IntStream.generate(() -> 10).limit(10).parallel().forEach(i -> {
-            TestRootNode rootNode = new TestRootNode(factory, new TestRepeatingNode());
+            TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestRepeatingNode());
             IntStream.generate(() -> threshold).limit(10).parallel().forEach(k -> executeNoCallTarget(rootNode, threshold));
             waitForCompiled(rootNode.getOSRTarget());
         });
@@ -380,12 +409,16 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testTwoLoopsSilblings(OSRLoopFactory factory) {
-        TwoSilblingLoopNodesTest rootNode = new TwoSilblingLoopNodesTest(factory, new TestRepeatingNode(), new TestRepeatingNode());
+        TwoSilblingLoopNodesTest rootNode = new TwoSilblingLoopNodesTest(osrThreshold, factory, new TestRepeatingNode(), new TestRepeatingNode());
         CallTarget target = runtime.createCallTarget(rootNode);
-        target.call(OSR_THRESHOLD + 1, 1);
+        target.call(osrThreshold + 1, 1);
+        waitForCompiled(rootNode.getOSRTarget());
+        waitForCompiled(rootNode.getOSRTarget2());
         assertCompiled(rootNode.getOSRTarget());
         assertNotCompiled(rootNode.getOSRTarget2());
-        target.call(1, OSR_THRESHOLD + 1);
+        target.call(1, osrThreshold + 1);
+        waitForCompiled(rootNode.getOSRTarget());
+        waitForCompiled(rootNode.getOSRTarget2());
         assertCompiled(rootNode.getOSRTarget());
         assertCompiled(rootNode.getOSRTarget2());
         Assert.assertTrue(rootNode.getOSRTarget() != rootNode.getOSRTarget2());
@@ -394,9 +427,9 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     private static class TwoSilblingLoopNodesTest extends TestRootNode {
         @Child OptimizedOSRLoopNode loopNode2;
 
-        protected TwoSilblingLoopNodesTest(OSRLoopFactory factory, TestRepeatingNode repeating1, TestRepeatingNode repeating2) {
-            super(factory, repeating1);
-            loopNode2 = factory.createOSRLoop(repeating2, null, null);
+        protected TwoSilblingLoopNodesTest(int treshold, OSRLoopFactory factory, TestRepeatingNode repeating1, TestRepeatingNode repeating2) {
+            super(treshold, factory, repeating1);
+            loopNode2 = factory.createOSRLoop(treshold, repeating2, null, null);
             repeating2.param1 = param2;
         }
 
@@ -417,28 +450,28 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testTwoLoopsParentChild1(OSRLoopFactory factory) {
-        ChildLoopRepeatingNode childLoop = new ChildLoopRepeatingNode(factory, new TestRepeatingNode(), loop -> {
+        ChildLoopRepeatingNode childLoop = new ChildLoopRepeatingNode(osrThreshold, factory, new TestRepeatingNode(), loop -> {
             assertNotCompiled(loop.getOSRTarget());
             return null;
         });
-        TestRootNode rootNode = new TestRootNode(factory, childLoop);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, childLoop);
         CallTarget target = runtime.createCallTarget(rootNode);
 
-        target.call(1, OSR_THRESHOLD);
+        target.call(1, osrThreshold);
         assertCompiled(rootNode.getOSRTarget());
         assertNotCompiled(childLoop.getOSRTarget());
     }
 
     @Theory
     public void testTwoLoopsParentChild2(OSRLoopFactory factory) {
-        ChildLoopRepeatingNode childLoop = new ChildLoopRepeatingNode(factory, new TestRepeatingNode(), loop -> {
+        ChildLoopRepeatingNode childLoop = new ChildLoopRepeatingNode(osrThreshold, factory, new TestRepeatingNode(), loop -> {
             assertCompiled(loop.getOSRTarget());
             return null;
         });
-        TestRootNode rootNode = new TestRootNode(factory, childLoop);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, childLoop);
         CallTarget target = runtime.createCallTarget(rootNode);
 
-        target.call(1, OSR_THRESHOLD + 1);
+        target.call(1, osrThreshold + 1);
         assertCompiled(rootNode.getOSRTarget());
         assertCompiled(childLoop.getOSRTarget());
     }
@@ -449,8 +482,8 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
 
         private final Function<ChildLoopRepeatingNode, Void> onBackedge;
 
-        protected ChildLoopRepeatingNode(OSRLoopFactory factory, TestRepeatingNode child, Function<ChildLoopRepeatingNode, Void> onBackedge) {
-            this.loopNode2 = factory.createOSRLoop(child, null, null);
+        protected ChildLoopRepeatingNode(int treshold, OSRLoopFactory factory, TestRepeatingNode child, Function<ChildLoopRepeatingNode, Void> onBackedge) {
+            this.loopNode2 = factory.createOSRLoop(treshold, child, null, null);
             this.onBackedge = onBackedge;
 
         }
@@ -481,33 +514,33 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testCustomLoopContributingToOSR1(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new CustomInnerLoopRepeatingNode());
-        runtime.createCallTarget(rootNode).call(10, OSR_THRESHOLD / 10 - 1); // triggers
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new CustomInnerLoopRepeatingNode());
+        runtime.createCallTarget(rootNode).call(10, osrThreshold / 10 - 1); // triggers
         assertNotCompiled(rootNode.getOSRTarget());
-        runtime.createCallTarget(rootNode).call(10, OSR_THRESHOLD / 10); // triggers
+        runtime.createCallTarget(rootNode).call(10, osrThreshold / 10); // triggers
         assertCompiled(rootNode.getOSRTarget());
     }
 
     @Theory
     public void testCustomLoopContributingToOSR2(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new CustomInnerLoopRepeatingNode());
-        runtime.createCallTarget(rootNode).call(1, OSR_THRESHOLD - 1);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new CustomInnerLoopRepeatingNode());
+        runtime.createCallTarget(rootNode).call(1, osrThreshold - 1);
         assertNotCompiled(rootNode.getOSRTarget());
-        runtime.createCallTarget(rootNode).call(1, OSR_THRESHOLD);
+        runtime.createCallTarget(rootNode).call(1, osrThreshold);
         assertCompiled(rootNode.getOSRTarget());
     }
 
     @Theory
     public void testCustomLoopContributingToOSR3(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new CustomInnerLoopRepeatingNode());
-        runtime.createCallTarget(rootNode).call(2, OSR_THRESHOLD / 2);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new CustomInnerLoopRepeatingNode());
+        runtime.createCallTarget(rootNode).call(2, osrThreshold / 2);
         assertCompiled(rootNode.getOSRTarget());
     }
 
     @Theory
     public void testCustomLoopContributingToOSR4(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new CustomInnerLoopRepeatingNode());
-        runtime.createCallTarget(rootNode).call(2, OSR_THRESHOLD / 2 - 1);
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new CustomInnerLoopRepeatingNode());
+        runtime.createCallTarget(rootNode).call(2, osrThreshold / 2 - 1);
         assertNotCompiled(rootNode.getOSRTarget());
     }
 
@@ -539,13 +572,26 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
      */
     @Theory
     public void testStackTraceDoesNotShowOSR(OSRLoopFactory factory) {
-        TestRootNode rootNode = new TestRootNode(factory, new TestOSRStackTrace());
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, new TestOSRStackTrace());
         CallTarget target = runtime.createCallTarget(rootNode);
         target.call(1);
         rootNode.forceOSR();
         assertCompiled(rootNode.getOSRTarget());
         target.call(1);
         assertCompiled(rootNode.getOSRTarget());
+    }
+
+    /**
+     * Test that graal stack frame instances have call nodes associated even when there are OSR
+     * frames on the stack.
+     */
+    @Theory
+    public void testStackFrameNodes(OSRLoopFactory factory) {
+        TestOSRStackTraceFromAbove testOSRStackTrace = new TestOSRStackTraceFromAbove();
+        TestRootNode rootNode = new TestRootNode(osrThreshold, factory, testOSRStackTrace);
+        OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
+        rootNode.forceOSR();
+        target.call(1);
     }
 
     private static class TestOSRStackTrace extends TestRepeatingNode {
@@ -560,17 +606,47 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         }
 
         @TruffleBoundary
-        private void checkStackTrace() {
+        protected void checkStackTrace() {
             final OptimizedOSRLoopNode loop = (OptimizedOSRLoopNode) getParent();
             final OptimizedCallTarget compiledLoop = loop.getCompiledOSRLoop();
 
             Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Void>() {
+
+                private boolean first = true;
+
                 @Override
                 public Void visitFrame(FrameInstance frameInstance) {
                     Assert.assertNotSame(compiledLoop, frameInstance.getCallTarget());
+                    if (first) {
+                        first = false;
+                    } else {
+                        Assert.assertNotNull(frameInstance.getCallNode());
+                    }
                     return null;
                 }
             });
+        }
+
+    }
+
+    private static class TestOSRStackTraceFromAbove extends TestOSRStackTrace {
+
+        @Child DirectCallNode callNode;
+
+        @Override
+        @TruffleBoundary
+        protected void checkStackTrace() {
+            // Check the stack from an additional frame created on top
+            RootNode root = new RootNode(null) {
+                @Override
+                public Object execute(VirtualFrame frame) {
+                    TestOSRStackTraceFromAbove.super.checkStackTrace();
+                    return null;
+                }
+            };
+            callNode = runtime.createDirectCallNode(runtime.createCallTarget(root));
+            adoptChildren();
+            callNode.call(new Object[]{});
         }
 
     }
@@ -582,7 +658,7 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
     }
 
     private interface OSRLoopFactory {
-        OptimizedOSRLoopNode createOSRLoop(RepeatingNode repeating, FrameSlot[] readFrameSlots, FrameSlot[] writtenframeSlots);
+        OptimizedOSRLoopNode createOSRLoop(int threshold, RepeatingNode repeating, FrameSlot[] readFrameSlots, FrameSlot[] writtenframeSlots);
     }
 
     private static void waitForCompiled(OptimizedCallTarget target) {
@@ -595,6 +671,15 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         }
     }
 
+    private static class TestRootNodeWithReplacement extends TestRootNode {
+        @Child OptimizedOSRLoopNode toReplace;
+
+        TestRootNodeWithReplacement(int threshold, OSRLoopFactory factory, TestRepeatingNode repeating) {
+            super(threshold, factory, repeating);
+            toReplace = factory.createOSRLoop(threshold, repeating, new FrameSlot[]{param1, param2}, new FrameSlot[]{param1, param2});
+        }
+    }
+
     private static class TestRootNode extends RootNode {
 
         @Child OptimizedOSRLoopNode loopNode;
@@ -602,11 +687,11 @@ public class OptimizedOSRLoopNodeTest extends TestWithSynchronousCompiling {
         final FrameSlot param1;
         final FrameSlot param2;
 
-        protected TestRootNode(OSRLoopFactory factory, TestRepeatingNode repeating) {
+        protected TestRootNode(int threshold, OSRLoopFactory factory, TestRepeatingNode repeating) {
             super(null, new FrameDescriptor());
             param1 = getFrameDescriptor().addFrameSlot("param1", FrameSlotKind.Int);
             param2 = getFrameDescriptor().addFrameSlot("param2", FrameSlotKind.Int);
-            loopNode = factory.createOSRLoop(repeating, new FrameSlot[]{param1, param2}, new FrameSlot[]{param1, param2});
+            loopNode = factory.createOSRLoop(threshold, repeating, new FrameSlot[]{param1, param2}, new FrameSlot[]{param1, param2});
             repeating.param1 = param1;
             repeating.param2 = param2;
         }

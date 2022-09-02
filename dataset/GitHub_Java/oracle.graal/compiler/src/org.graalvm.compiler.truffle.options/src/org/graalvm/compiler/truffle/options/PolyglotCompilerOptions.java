@@ -260,10 +260,6 @@ public final class PolyglotCompilerOptions {
                     category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> SingleTierCompilationThreshold = new OptionKey<>(1000);
 
-    @Option(help = "Deprecated: use FirstTierCompilationThreshold and LastTierCompilationThreshold, or SingleTierCompilationThreshold if multi-tier compilation is disabled.",
-            category = OptionCategory.EXPERT, deprecated = true)
-    public static final OptionKey<Integer> CompilationThreshold = new OptionKey<>(1000);
-
     @Option(help = "Minimum number of calls before a call target is compiled", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> MinInvokeThreshold = new OptionKey<>(3);
 
@@ -290,11 +286,11 @@ public final class PolyglotCompilerOptions {
     @Option(help = "Explicitly pick a first tier inlining policy by name (None, TrivialOnly). If empty (default) the lowest priority policy (TrivialOnly) is chosen.", category = OptionCategory.INTERNAL)
     public static final OptionKey<String> FirstTierInliningPolicy = new OptionKey<>("");
 
-    @Option(help = "Minimum number of invocations or loop iterations needed to compile a guest language root in first tier.",
+    @Option(help = "Minimum number of invocations or loop iterations needed to compile a guest language root in first tier mode.",
             category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> FirstTierCompilationThreshold = new OptionKey<>(400);
 
-    @Option(help = "Minimum number of invocations or loop iterations needed to compile a guest language root in last tier.",
+    @Option(help = "Minimum number of invocations or loop iterations needed to compile a guest language root in last tier mode.",
             category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> LastTierCompilationThreshold = new OptionKey<>(10000);
 
@@ -506,14 +502,8 @@ public final class PolyglotCompilerOptions {
     @Option(help = "Use the priority of compilation jobs in the compilation queue.", category = OptionCategory.INTERNAL)
     public static final OptionKey<Boolean> PriorityQueue = new OptionKey<>(true);
 
-    @Option(help = "Use a traversing compilation queue.", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Boolean> TraversingCompilationQueue = new OptionKey<>(false);
-
-    @Option(help = "Traversing queue uses rate as priority for both tier.", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Boolean> TraversingQueueBothTiersRate= new OptionKey<>(false);
-
-    @Option(help = "Traversing queue gives first tier compilations priority.", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Boolean> TraversingQueueFirstTierPriority = new OptionKey<>(true);
+    @Option(help = "Use a configurable compilation queue.", category = OptionCategory.INTERNAL)
+    public static final OptionKey<Boolean> ConfigurableCompilationQueue = new OptionKey<>(false);
 
     // Language agnostic inlining
 
