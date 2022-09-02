@@ -102,7 +102,7 @@ public final class CompilerAsserts {
      * initial partial evaluation phase.
      *
      * @param value the value that must be constant during partial evaluation.
-     * @since 19.2
+     * @since ...
      */
     public static <T> void partialEvaluationConstant(int value) {
     }
