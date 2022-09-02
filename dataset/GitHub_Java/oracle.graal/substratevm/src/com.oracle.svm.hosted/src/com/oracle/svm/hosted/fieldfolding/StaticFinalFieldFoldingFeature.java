@@ -70,7 +70,6 @@ import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
-import com.oracle.svm.core.ParsingReason;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.classinitialization.EnsureClassInitializedNode;
 import com.oracle.svm.core.graal.GraalFeature;
@@ -169,7 +168,7 @@ final class StaticFinalFieldFoldingFeature implements GraalFeature {
     }
 
     @Override
-    public void registerGraphBuilderPlugins(Providers providers, Plugins plugins, ParsingReason reason) {
+    public void registerGraphBuilderPlugins(Providers providers, Plugins plugins, boolean analysis, boolean hosted) {
         plugins.appendNodePlugin(new StaticFinalFieldFoldingNodePlugin(this));
     }
 
