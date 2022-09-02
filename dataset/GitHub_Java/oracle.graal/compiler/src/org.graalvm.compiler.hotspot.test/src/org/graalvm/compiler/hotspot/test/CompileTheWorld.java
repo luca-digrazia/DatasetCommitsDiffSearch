@@ -30,12 +30,9 @@ import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationBailoutA
 import static org.graalvm.compiler.core.GraalCompilerOptions.CompilationFailureAction;
 import static org.graalvm.compiler.core.test.ReflectionOptionDescriptors.extractEntries;
 import static org.graalvm.compiler.debug.MemUseTrackerKey.getCurrentThreadAllocatedBytes;
-import static org.graalvm.compiler.hotspot.HotSpotJVMCIServices.registerNativeMethods;
 import static org.graalvm.compiler.hotspot.test.CompileTheWorld.Options.DESCRIPTORS;
 import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.Java8OrEarlier;
-import static sun.misc.Unsafe.ARRAY_BYTE_BASE_OFFSET;
 
-import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -76,11 +73,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.UnmodifiableMapCursor;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.bytecode.Bytecodes;
 import org.graalvm.compiler.core.CompilerThreadFactory;
-import org.graalvm.compiler.core.phases.HighTier;
 import org.graalvm.compiler.core.test.ReflectionOptionDescriptors;
 import org.graalvm.compiler.debug.DebugOptions;
 import org.graalvm.compiler.debug.GraalError;
@@ -90,16 +85,11 @@ import org.graalvm.compiler.hotspot.CompilationTask;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalCompiler;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-import org.graalvm.compiler.hotspot.HotSpotJVMCIServices;
-import org.graalvm.compiler.hotspot.test.CompileTheWorld.LibgraalParams.StackTraceBuffer;
 import org.graalvm.compiler.options.OptionDescriptors;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.libgraal.LibGraal;
-import org.graalvm.libgraal.OptionsEncoder;
 
 import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
 import jdk.vm.ci.hotspot.HotSpotCompilationRequest;
@@ -111,7 +101,6 @@ import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.runtime.JVMCICompiler;
-import sun.misc.Unsafe;
 
 /**
  * This class implements compile-the-world functionality with JVMCI.
@@ -137,19 +126,17 @@ public final class CompileTheWorld {
      *            Ignored if null.
      */
     public static EconomicMap<OptionKey<?>, Object> parseOptions(String options) {
-        EconomicMap<OptionKey<?>, Object> values = OptionValues.newOptionMap();
         if (options != null) {
             EconomicMap<String, String> optionSettings = EconomicMap.create();
             for (String optionSetting : options.split("\\s+|#")) {
                 OptionsParser.parseOptionSettingTo(optionSetting, optionSettings);
             }
+            EconomicMap<OptionKey<?>, Object> values = OptionValues.newOptionMap();
             ServiceLoader<OptionDescriptors> loader = ServiceLoader.load(OptionDescriptors.class, OptionDescriptors.class.getClassLoader());
             OptionsParser.parseOptions(optionSettings, values, loader);
+            return values;
         }
-        if (!values.containsKey(HighTier.Options.Inline)) {
-            values.put(HighTier.Options.Inline, false);
-        }
-        return values;
+        return EconomicMap.create();
     }
 
     private final HotSpotJVMCIRuntime jvmciRuntime;
@@ -207,121 +194,6 @@ public final class CompileTheWorld {
      * Option values used during compilation.
      */
     private final OptionValues compilerOptions;
-
-    /**
-     * Manages native memory buffers for passing arguments into libgraal and receiving return
-     * values. The native memory buffers are freed when this object is {@linkplain #close() closed}.
-     */
-    static class LibgraalParams implements AutoCloseable {
-
-        static {
-            registerNativeMethods(HotSpotJVMCIRuntime.runtime(), CompileTheWorld.class);
-        }
-
-        /**
-         * Native memory containing {@linkplain OptionsEncoder encoded} {@link OptionValues}.
-         */
-        static class OptionsBuffer {
-            private long address;
-            final int size;
-            final int hash;
-
-            OptionsBuffer(OptionValues options) {
-                Map<String, Object> map = new HashMap<>();
-                UnmodifiableMapCursor<OptionKey<?>, Object> cursor = options.getMap().getEntries();
-                while (cursor.advance()) {
-                    final OptionKey<?> key = cursor.getKey();
-                    Object value = cursor.getValue();
-                    map.put(key.getName(), value);
-                }
-
-                byte[] encoded = OptionsEncoder.encode(map);
-                size = encoded.length;
-                hash = Arrays.hashCode(encoded);
-                address = UNSAFE.allocateMemory(encoded.length);
-                UNSAFE.copyMemory(encoded, ARRAY_BYTE_BASE_OFFSET, null, address, size);
-            }
-
-            long getAddress() {
-                if (address == 0) {
-                    throw new IllegalStateException();
-                }
-                return address;
-            }
-
-            void free() {
-                if (address != 0) {
-                    UNSAFE.freeMemory(address);
-                    address = 0;
-                }
-            }
-        }
-
-        /**
-         * Manages native memory for receiving a {@linkplain Throwable#printStackTrace() stack
-         * trace} from libgraal serialized via {@link ByteArrayOutputStream} to a byte array.
-         */
-        static class StackTraceBuffer {
-            final int size;
-            private long address;
-
-            StackTraceBuffer(int size) {
-                this.size = size;
-                address = UNSAFE.allocateMemory(size);
-            }
-
-            void free() {
-                if (address != 0L) {
-                    UNSAFE.freeMemory(address);
-                    address = 0L;
-                }
-            }
-
-            long getAddress() {
-                if (address == 0) {
-                    throw new IllegalStateException();
-                }
-                return address;
-            }
-        }
-
-        final OptionsBuffer options;
-
-        private final List<StackTraceBuffer> stackTraceBuffers = new ArrayList<>();
-
-        /**
-         * Gets a stack trace buffer for the current thread.
-         */
-        StackTraceBuffer getStackTraceBuffer() {
-            return stackTraceBuffer.get();
-        }
-
-        private final ThreadLocal<StackTraceBuffer> stackTraceBuffer = new ThreadLocal<StackTraceBuffer>() {
-            @Override
-            protected StackTraceBuffer initialValue() {
-                StackTraceBuffer buffer = new StackTraceBuffer(10_000);
-                synchronized (stackTraceBuffers) {
-                    stackTraceBuffers.add(buffer);
-                }
-                return buffer;
-            }
-        };
-
-        LibgraalParams(OptionValues options) {
-            this.options = new OptionsBuffer(options);
-        }
-
-        @Override
-        public void close() {
-            options.free();
-            synchronized (stackTraceBuffers) {
-                for (StackTraceBuffer buffer : stackTraceBuffers) {
-                    buffer.free();
-                }
-                stackTraceBuffers.clear();
-            }
-        }
-    }
 
     /**
      * Creates a compile-the-world instance.
@@ -384,38 +256,28 @@ public final class CompileTheWorld {
      * Compiles all methods in all classes in {@link #inputClassPath}. If {@link #inputClassPath}
      * equals {@link #SUN_BOOT_CLASS_PATH} the boot classes are used.
      */
-    @SuppressWarnings("try")
     public void compile() throws Throwable {
-        try (LibgraalParams libgraal = LibGraal.isAvailable() ? new LibgraalParams(compilerOptions) : null) {
-            if (SUN_BOOT_CLASS_PATH.equals(inputClassPath)) {
-                String bcpEntry = null;
-                if (Java8OrEarlier) {
-                    final String[] entries = System.getProperty(SUN_BOOT_CLASS_PATH).split(File.pathSeparator);
-                    for (int i = 0; i < entries.length && bcpEntry == null; i++) {
-                        String entry = entries[i];
-                        File entryFile = new File(entry);
-                        if (entryFile.getName().endsWith("rt.jar") && entryFile.isFile()) {
-                            bcpEntry = entry;
-                        }
+        if (SUN_BOOT_CLASS_PATH.equals(inputClassPath)) {
+            String bcpEntry = null;
+            if (Java8OrEarlier) {
+                final String[] entries = System.getProperty(SUN_BOOT_CLASS_PATH).split(File.pathSeparator);
+                for (int i = 0; i < entries.length && bcpEntry == null; i++) {
+                    String entry = entries[i];
+                    File entryFile = new File(entry);
+                    if (entryFile.getName().endsWith("rt.jar") && entryFile.isFile()) {
+                        bcpEntry = entry;
                     }
-                    if (bcpEntry == null) {
-                        throw new GraalError("Could not find rt.jar on boot class path %s", System.getProperty(SUN_BOOT_CLASS_PATH));
-                    }
-                } else {
-                    bcpEntry = JRT_CLASS_PATH_ENTRY;
                 }
-                compile(bcpEntry, libgraal);
+                if (bcpEntry == null) {
+                    throw new GraalError("Could not find rt.jar on boot class path %s", System.getProperty(SUN_BOOT_CLASS_PATH));
+                }
             } else {
-                compile(inputClassPath, libgraal);
+                bcpEntry = JRT_CLASS_PATH_ENTRY;
             }
+            compile(bcpEntry);
+        } else {
+            compile(inputClassPath);
         }
-    }
-
-    private AutoCloseable enterCompilation() {
-        if (!LibGraal.isAvailable()) {
-            return null;
-        }
-        return new LibgraalParams(compilerOptions);
     }
 
     public void println() {
@@ -649,25 +511,23 @@ public final class CompileTheWorld {
      * @throws IOException
      */
     @SuppressWarnings("try")
-    private void compile(String classPath, LibgraalParams libgraal) throws IOException {
+    private void compile(String classPath) throws IOException {
         final String[] entries = classPath.split(File.pathSeparator);
         long start = System.currentTimeMillis();
         Map<Thread, StackTraceElement[]> initialThreads = Thread.getAllStackTraces();
 
-        if (libgraal == null) {
-            try {
-                // compile dummy method to get compiler initialized outside of the
-                // config debug override.
-                HotSpotResolvedJavaMethod dummyMethod = (HotSpotResolvedJavaMethod) JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess().lookupJavaMethod(
-                                CompileTheWorld.class.getDeclaredMethod("dummy"));
-                int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
-                boolean useProfilingInfo = false;
-                boolean installAsDefault = false;
-                CompilationTask task = new CompilationTask(jvmciRuntime, compiler, new HotSpotCompilationRequest(dummyMethod, entryBCI, 0L), useProfilingInfo, installAsDefault, compilerOptions);
-                task.runCompilation();
-            } catch (NoSuchMethodException | SecurityException e1) {
-                printStackTrace(e1);
-            }
+        try {
+            // compile dummy method to get compiler initialized outside of the
+            // config debug override.
+            HotSpotResolvedJavaMethod dummyMethod = (HotSpotResolvedJavaMethod) JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess().lookupJavaMethod(
+                            CompileTheWorld.class.getDeclaredMethod("dummy"));
+            int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
+            boolean useProfilingInfo = false;
+            boolean installAsDefault = false;
+            CompilationTask task = new CompilationTask(jvmciRuntime, compiler, new HotSpotCompilationRequest(dummyMethod, entryBCI, 0L), useProfilingInfo, installAsDefault, compilerOptions);
+            task.runCompilation();
+        } catch (NoSuchMethodException | SecurityException e1) {
+            printStackTrace(e1);
         }
 
         /*
@@ -762,28 +622,27 @@ public final class CompileTheWorld {
 
                     // Are we compiling this class?
                     if (classFileCounter >= startAt) {
+                        println("CompileTheWorld (%d) : %s", classFileCounter, className);
 
-                        long start0 = System.currentTimeMillis();
                         // Compile each constructor/method in the class.
                         for (Constructor<?> constructor : javaClass.getDeclaredConstructors()) {
                             HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaMethod(constructor);
                             if (canBeCompiled(javaMethod, constructor.getModifiers())) {
-                                compileMethod(javaMethod, libgraal);
+                                compileMethod(javaMethod);
                             }
                         }
                         for (Method method : javaClass.getDeclaredMethods()) {
                             HotSpotResolvedJavaMethod javaMethod = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaMethod(method);
                             if (canBeCompiled(javaMethod, method.getModifiers())) {
-                                compileMethod(javaMethod, libgraal);
+                                compileMethod(javaMethod);
                             }
                         }
 
                         // Also compile the class initializer if it exists
                         HotSpotResolvedJavaMethod clinit = (HotSpotResolvedJavaMethod) metaAccess.lookupJavaType(javaClass).getClassInitializer();
                         if (clinit != null && canBeCompiled(clinit, clinit.getModifiers())) {
-                            compileMethod(clinit, libgraal);
+                            compileMethod(clinit);
                         }
-                        println("CompileTheWorld (%d) : %s (%d ms)", classFileCounter, className, System.currentTimeMillis() - start0);
                     }
                 } catch (Throwable t) {
                     if (isClassIncluded(className)) {
@@ -865,7 +724,7 @@ public final class CompileTheWorld {
     }
 
     @SuppressWarnings("try")
-    private void compileMethod(HotSpotResolvedJavaMethod method, LibgraalParams libgraal) throws InterruptedException, ExecutionException {
+    private void compileMethod(HotSpotResolvedJavaMethod method) throws InterruptedException, ExecutionException {
         if (methodFilters != null && !MethodFilter.matches(methodFilters, method)) {
             return;
         }
@@ -876,7 +735,7 @@ public final class CompileTheWorld {
             @Override
             public void run() {
                 waitToRun();
-                compileMethod(method, classFileCounter, libgraal);
+                compileMethod(method, classFileCounter);
             }
         });
         if (threadPool.getCorePoolSize() == 1) {
@@ -884,22 +743,10 @@ public final class CompileTheWorld {
         }
     }
 
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
-
-    static native long compileMethodInLibgraal(long isolateThread,
-                    long methodHandle,
-                    boolean useProfilingInfo,
-                    boolean installAsDefault,
-                    long optionsAddress,
-                    int optionsSize,
-                    int optionsHash,
-                    long encodedThrowableBufferAddress,
-                    int encodedThrowableBufferSize);
-
     /**
      * Compiles a method and gathers some statistics.
      */
-    private void compileMethod(HotSpotResolvedJavaMethod method, int counter, LibgraalParams libgraal) {
+    private void compileMethod(HotSpotResolvedJavaMethod method, int counter) {
         try {
             long start = System.currentTimeMillis();
             long allocatedAtStart = getCurrentThreadAllocatedBytes();
@@ -907,47 +754,16 @@ public final class CompileTheWorld {
             boolean useProfilingInfo = false;
             boolean installAsDefault = false;
             HotSpotInstalledCode installedCode;
-            if (libgraal != null) {
-                HotSpotJVMCIRuntime runtime = HotSpotJVMCIRuntime.runtime();
-                long methodHandle = HotSpotJVMCIServices.translate(runtime, method);
-                long isolateThread = LibGraal.getIsolateThread();
-
-                StackTraceBuffer stackTraceBuffer = libgraal.getStackTraceBuffer();
-
-                long stackTraceBufferAddress = stackTraceBuffer.getAddress();
-                long installedCodeHandle = compileMethodInLibgraal(isolateThread,
-                                methodHandle,
-                                useProfilingInfo,
-                                installAsDefault,
-                                libgraal.options.getAddress(),
-                                libgraal.options.size,
-                                libgraal.options.hash,
-                                stackTraceBufferAddress,
-                                stackTraceBuffer.size);
-
-                installedCode = HotSpotJVMCIServices.unhand(runtime, HotSpotInstalledCode.class, installedCodeHandle);
-                if (installedCode == null) {
-                    int length = UNSAFE.getInt(stackTraceBufferAddress);
-                    byte[] data = new byte[length];
-                    UNSAFE.copyMemory(null, stackTraceBufferAddress + Integer.BYTES, data, ARRAY_BYTE_BASE_OFFSET, length);
-                    String stackTrace = new String(data).trim();
-                    println("CompileTheWorld (%d) : Error compiling method: %s", counter, method.format("%H.%n(%p):%r"));
-                    println(stackTrace);
-                }
-
-            } else {
-                int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
-                HotSpotCompilationRequest request = new HotSpotCompilationRequest(method, entryBCI, 0L);
-                CompilationTask task = new CompilationTask(jvmciRuntime, compiler, request, useProfilingInfo, installAsDefault, compilerOptions);
-                task.runCompilation();
-                installedCode = task.getInstalledCode();
-            }
+            int entryBCI = JVMCICompiler.INVOCATION_ENTRY_BCI;
+            HotSpotCompilationRequest request = new HotSpotCompilationRequest(method, entryBCI, 0L);
+            CompilationTask task = new CompilationTask(jvmciRuntime, compiler, request, useProfilingInfo, installAsDefault, compilerOptions);
+            task.runCompilation();
 
             // Invalidate the generated code so the code cache doesn't fill up
+            installedCode = task.getInstalledCode();
             if (installedCode != null) {
                 installedCode.invalidate();
             }
-
             memoryUsed.getAndAdd(getCurrentThreadAllocatedBytes() - allocatedAtStart);
             compileTime.getAndAdd(System.currentTimeMillis() - start);
             compiledMethodsCounter.incrementAndGet();
@@ -989,12 +805,13 @@ public final class CompileTheWorld {
     }
 
     static class Options {
+        // @formatter:off
         public static final OptionKey<Boolean> Help = new OptionKey<>(false);
         public static final OptionKey<String> Classpath = new OptionKey<>(CompileTheWorld.SUN_BOOT_CLASS_PATH);
         public static final OptionKey<Boolean> Verbose = new OptionKey<>(true);
         /**
-         * Ignore Graal classes by default to avoid problems associated with compiling snippets and
-         * method substitutions.
+         * Ignore Graal classes by default to avoid problems associated with compiling
+         * snippets and method substitutions.
          */
         public static final OptionKey<String> LimitModules = new OptionKey<>("~jdk.internal.vm.compiler");
         public static final OptionKey<Integer> Iterations = new OptionKey<>(1);
@@ -1006,7 +823,6 @@ public final class CompileTheWorld {
         public static final OptionKey<Boolean> MultiThreaded = new OptionKey<>(false);
         public static final OptionKey<Integer> Threads = new OptionKey<>(0);
 
-        // @formatter:off
         static final ReflectionOptionDescriptors DESCRIPTORS = new ReflectionOptionDescriptors(Options.class,
                            "Help", "List options and their help messages and then exit.",
                       "Classpath", "Class path denoting methods to compile. Default is to compile boot classes.",
@@ -1018,10 +834,9 @@ public final class CompileTheWorld {
             "ExcludeMethodFilter", "Exclude methods matching this filter from compilation.",
                         "StartAt", "First class to consider for compilation.",
                          "StopAt", "Last class to consider for compilation.",
-                         "Config", "Option values to use during compile the world compilations. For example, " +
-                                   "to disable partial escape analysis and print compilations specify " +
-                                   "'PartialEscapeAnalysis=false PrintCompilation=true'. " +
-                                   "Unless explicitly enabled with 'Inline=true' here, inlining is disabled.",
+                         "Config", "Option value overrides to use during compile the world. For example, " +
+                                   "to disable inlining and partial escape analysis specify 'PartialEscapeAnalysis=false Inline=false'. " +
+                                   "The format for each option is the same as on the command line just without the '-Dgraal.' prefix.",
                   "MultiThreaded", "Run using multiple threads for compilation.",
                         "Threads", "Number of threads to use for multithreaded execution. Defaults to Runtime.getRuntime().availableProcessors().");
         // @formatter:on
