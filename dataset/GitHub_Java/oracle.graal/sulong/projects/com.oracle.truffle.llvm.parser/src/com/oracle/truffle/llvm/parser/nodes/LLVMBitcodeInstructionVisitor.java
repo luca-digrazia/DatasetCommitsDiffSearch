@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -1232,7 +1232,7 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
                 }
             }
 
-            return nodeFactory.createVarArgCompoundValue(size, alignment, type, child);
+            return nodeFactory.createVarArgCompoundValue(size, alignment, child);
         } catch (TypeOverflowException e) {
             return Type.handleOverflowExpression(e);
         }
@@ -1242,7 +1242,7 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         try {
             final long size = type.getSize(dataLayout);
             int alignment = type.getAlignment(dataLayout);
-            return nodeFactory.createVarArgCompoundValue(size, alignment, type, child);
+            return nodeFactory.createVarArgCompoundValue(size, alignment, child);
         } catch (TypeOverflowException e) {
             return Type.handleOverflowExpression(e);
         }
@@ -1264,6 +1264,8 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
     private static boolean isArrayByValue(Type type, @SuppressWarnings("unused") LLVMExpressionNode exprNode) {
         return type instanceof ArrayType;
+        // return ((exprNode instanceof LLVMStructLoadNode) || (exprNode instanceof
+        // LLVMArrayLiteralNode) && (type instanceof ArrayType));
     }
 
     private void assignSourceLocation(LLVMInstrumentableNode node, Instruction sourceInstruction) {
