@@ -27,7 +27,6 @@ package org.graalvm.component.installer.persist;
 import org.graalvm.component.installer.MetadataException;
 import org.graalvm.component.installer.DependencyException;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.Predicate;
 import org.graalvm.component.installer.BundleConstants;
@@ -94,18 +93,18 @@ public class HeaderParser {
     public boolean getBoolean(Boolean defValue) {
         if (pos >= header.length()) {
             if (defValue == null) {
-                throw metaEx("ERROR_HeaderMissing", headerName); // NOI18N
+                throw metaEx("ERROR_HeaderMissing", headerName);
             }
             return defValue;
         } else {
-            String s = header.substring(pos).trim().toLowerCase(Locale.ENGLISH);
+            String s = header.substring(pos).trim().toLowerCase();
             switch (s) {
-                case "true": // NOI18N
+                case "true":
                     return true;
-                case "false": // NOI18N
+                case "false":
                     return false;
             }
-            throw metaEx("ERROR_HeaderInvalid", headerName, s); // NOI18N
+            throw metaEx("ERROR_HeaderInvalid", headerName, s);
         }
     }
 
