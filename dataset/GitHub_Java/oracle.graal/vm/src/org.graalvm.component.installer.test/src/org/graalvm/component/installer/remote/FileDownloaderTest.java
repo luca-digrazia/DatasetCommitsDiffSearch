@@ -33,6 +33,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.persist.NetworkTestBase;
 import org.graalvm.component.installer.persist.test.Handler;
 import org.junit.Assert;
@@ -41,13 +42,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import sun.net.ConnectionResetException;
 
 public class FileDownloaderTest extends NetworkTestBase {
-    @Rule public ExpectedException exception = ExpectedException.none();
 
     class FA extends FeedbackAdapter {
 
@@ -65,8 +63,11 @@ public class FileDownloaderTest extends NetworkTestBase {
     }
 
     @Before
+    @Override
     public void setUp() throws Exception {
+        super.setUp();
         delegateFeedback(new FA());
+        Handler.clear();
     }
 
     @Test
@@ -100,8 +101,8 @@ public class FileDownloaderTest extends NetworkTestBase {
         dn.setShaDigest(new byte[0]);
         dn.download();
 
-        byte[] check = RemotePropertiesStorage.toHashBytes(null, "b649fe3b9309d1b3ae4d2dbae70eebd4d2978af32cd1ce7d262ebf7e0f0f53fa", this);
-        assertArrayEquals(check, dn.getDigest());
+        byte[] check = SystemUtils.toHashBytes("b649fe3b9309d1b3ae4d2dbae70eebd4d2978af32cd1ce7d262ebf7e0f0f53fa");
+        assertArrayEquals(check, dn.getReceivedDigest());
     }
 
     class Check extends FA {
@@ -226,20 +227,19 @@ public class FileDownloaderTest extends NetworkTestBase {
         delegateFeedback(check);
         FileDownloader dn = new FileDownloader("test",
                         u, this);
+        ProxyConnectionFactory pcf = new ProxyConnectionFactory(this, u);
+        dn.setConnectionFactory(pcf);
+
         verbose = true;
         dn.setVerbose(true);
         dn.setDisplayProgress(true);
 
-        dn.envHttpProxy = "http://localhost:11111";
-        dn.envHttpsProxy = "http://localhost:11111";
+        pcf.envHttpProxy = "http://localhost:11111";
+        pcf.envHttpsProxy = "http://localhost:11111";
 
-        synchronized (proxyConnect) {
-            proxyConnect.nextChunk = 130 * 1024;
-            proxyConnect.readException = new FileNotFoundException();
-        }
-
-        exception.expect(FileNotFoundException.class);
         dn.download();
+        URLConnection c = clu.openConnection();
+        assertEquals(c.getContentLengthLong(), dn.getLocalFile().length());
     }
 
     /**
@@ -275,8 +275,11 @@ public class FileDownloaderTest extends NetworkTestBase {
         dn.setVerbose(true);
         dn.setDisplayProgress(true);
 
-        dn.envHttpProxy = "http://localhost:11111";
-        dn.envHttpsProxy = "http://localhost:11111";
+        ProxyConnectionFactory pcf = new ProxyConnectionFactory(this, u);
+        dn.setConnectionFactory(pcf);
+
+        pcf.envHttpProxy = "http://localhost:11111";
+        pcf.envHttpsProxy = "http://localhost:11111";
 
         synchronized (directConnect) {
             directConnect.nextChunk = 130 * 1024;
@@ -337,8 +340,11 @@ public class FileDownloaderTest extends NetworkTestBase {
         dn.setVerbose(true);
         dn.setDisplayProgress(true);
 
-        dn.envHttpProxy = "http://localhost:11111";
-        dn.envHttpsProxy = "http://localhost:11111";
+        ProxyConnectionFactory pcf = new ProxyConnectionFactory(this, u);
+        dn.setConnectionFactory(pcf);
+
+        pcf.envHttpProxy = "http://localhost:11111";
+        pcf.envHttpsProxy = "http://localhost:11111";
 
         dn.download();
     }
@@ -361,6 +367,12 @@ public class FileDownloaderTest extends NetworkTestBase {
         dn.setDisplayProgress(true);
         synchronized (conn) {
             conn.nextChunk = 130 * 1024;
+
+            ProxyConnectionFactory pcf = new ProxyConnectionFactory(this, u);
+            dn.setConnectionFactory(pcf);
+
+            pcf.envHttpProxy = null;
+            pcf.envHttpsProxy = null;
         }
 
         AtomicReference<Throwable> exc = new AtomicReference<>();
