@@ -96,7 +96,6 @@ import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import java.util.HashMap;
 import java.util.ServiceLoader;
-import org.graalvm.nativeimage.ImageInfo;
 
 final class EngineAccessor extends Accessor {
 
@@ -110,9 +109,6 @@ final class EngineAccessor extends Accessor {
     static final InteropSupport INTEROP = ACCESSOR.interopSupport();
 
     private static List<AbstractClassLoaderSupplier> locatorLoaders() {
-        if (ImageInfo.inImageRuntimeCode()) {
-            return Collections.emptyList();
-        }
         List<ClassLoader> loaders = TruffleLocator.loaders();
         if (loaders == null) {
             return null;
