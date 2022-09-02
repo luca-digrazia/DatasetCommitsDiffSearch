@@ -32,7 +32,6 @@ package com.oracle.truffle.wasm.binary;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -42,8 +41,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 
 @NodeInfo(language = "wasm", description = "The root node of all WebAssembly functions")
 public class WasmRootNode extends RootNode implements WasmNodeInterface {
-    private static final TruffleLogger logger = TruffleLogger.getLogger("wasm");
-
     @CompilationFinal private WasmCodeEntry codeEntry;
     @CompilationFinal private ContextReference<WasmContext> rawContextReference;
     @Child private WasmNode body;
@@ -81,8 +78,6 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
          */
         initializeLocals(frame);
 
-        logger.finest(() -> this + " EXECUTE");
-
         body.execute(contextReference().get(), frame);
 
         long returnValue = pop(frame, 0);
@@ -115,30 +110,18 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
             FrameSlot slot = codeEntry.localSlot(i);
             FrameSlotKind kind = frame.getFrameDescriptor().getFrameSlotKind(slot);
             switch (kind) {
-                case Int: {
-                    int argument = (int) args[i];
-                    logger.finest(() -> String.format("argument: 0x%08X (%d) [i32]", argument, argument));
-                    frame.setInt(slot, argument);
+                case Int:
+                    frame.setInt(slot, (int) args[i]);
                     break;
-                }
-                case Long: {
-                    long argument = (long) args[i];
-                    logger.finest(() -> String.format("argument: 0x%016X (%d) [i64]", argument, argument));
-                    frame.setLong(slot, argument);
+                case Long:
+                    frame.setLong(slot, (long) args[i]);
                     break;
-                }
-                case Float: {
-                    float argument = (float) args[i];
-                    logger.finest(() -> String.format("argument: %f [f32]", argument));
-                    frame.setFloat(slot, argument);
+                case Float:
+                    frame.setFloat(slot, (float) args[i]);
                     break;
-                }
-                case Double: {
-                    double argument = (double) args[i];
-                    logger.finest(() -> String.format("argument: %f [f64]", argument));
-                    frame.setDouble(slot, argument);
+                case Double:
+                    frame.setDouble(slot, (double) args[i]);
                     break;
-                }
             }
         }
     }
