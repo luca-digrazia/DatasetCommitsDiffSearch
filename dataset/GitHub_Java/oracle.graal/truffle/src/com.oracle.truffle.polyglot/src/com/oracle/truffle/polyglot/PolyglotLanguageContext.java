@@ -351,13 +351,12 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 throw new AssertionError("The language did not complete all polyglot threads but should have: " + lazy.activePolyglotThreads);
             }
             for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
-                assert threadInfo != PolyglotThreadInfo.NULL;
-                final Thread thread = threadInfo.getThread();
-                if (thread == null || threadInfo.isPolyglotThread(context)) {
+                assert threadInfo.getThread() != null;
+                if (threadInfo.isPolyglotThread(context)) {
                     // polyglot threads need to be cleaned up by the language
                     continue;
                 }
-                LANGUAGE.disposeThread(localEnv, thread);
+                LANGUAGE.disposeThread(localEnv, threadInfo.getThread());
             }
             LANGUAGE.dispose(localEnv);
             return true;
@@ -527,11 +526,10 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                         }
 
                         for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
-                            final Thread thread = threadInfo.getThread();
-                            if (thread == Thread.currentThread()) {
+                            if (threadInfo.getThread() == Thread.currentThread()) {
                                 continue;
                             }
-                            LANGUAGE.initializeThread(env, thread);
+                            LANGUAGE.initializeThread(env, threadInfo.getThread());
                         }
 
                         wasInitialized = true;
