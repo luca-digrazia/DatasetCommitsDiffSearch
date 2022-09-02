@@ -655,7 +655,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     public void decode(ResolvedJavaMethod method, boolean isSubstitution, boolean trackNodeSourcePosition) {
         try (DebugContext.Scope scope = debug.scope("PEGraphDecode", graph)) {
             EncodedGraph encodedGraph = lookupEncodedGraph(method, null, null, isSubstitution, trackNodeSourcePosition);
-            recordGraphElements(encodedGraph);
+            recordInlinedMethods(encodedGraph);
             PEMethodScope methodScope = new PEMethodScope(graph, null, null, encodedGraph, method, null, 0, loopExplosionPlugin, null);
             decode(createInitialLoopScope(methodScope, null));
             cleanupGraph(methodScope);
@@ -674,29 +674,12 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    private void recordGraphElements(EncodedGraph encodedGraph) {
+    private void recordInlinedMethods(EncodedGraph encodedGraph) {
         List<ResolvedJavaMethod> inlinedMethods = encodedGraph.getInlinedMethods();
         if (inlinedMethods != null) {
             for (ResolvedJavaMethod other : inlinedMethods) {
                 graph.recordMethod(other);
             }
-        }
-        Assumptions assumptions = graph.getAssumptions();
-        Assumptions inlinedAssumptions = encodedGraph.getAssumptions();
-        if (assumptions != null) {
-            if (inlinedAssumptions != null) {
-                assumptions.record(inlinedAssumptions);
-            }
-        } else {
-            assert inlinedAssumptions == null : String.format("cannot inline graph (%s) which makes assumptions into a graph (%s) that doesn't", encodedGraph, graph);
-        }
-        if (encodedGraph.getFields() != null) {
-            for (ResolvedJavaField field : encodedGraph.getFields()) {
-                graph.recordField(field);
-            }
-        }
-        if (encodedGraph.hasUnsafeAccess()) {
-            graph.markUnsafeAccess();
         }
     }
 
@@ -1002,8 +985,28 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             inlineLoopScope.createdNodes[firstArgumentNodeId + i] = arguments[i];
         }
 
+        // Copy assumptions from inlinee to caller
+        Assumptions assumptions = graph.getAssumptions();
+        Assumptions inlinedAssumptions = graphToInline.getAssumptions();
+        if (assumptions != null) {
+            if (inlinedAssumptions != null) {
+                assumptions.record(inlinedAssumptions);
+            }
+        } else {
+            assert inlinedAssumptions == null : String.format("cannot inline graph (%s) which makes assumptions into a graph (%s) that doesn't", inlineMethod, graph);
+        }
+
         // Copy inlined methods from inlinee to caller
-        recordGraphElements(graphToInline);
+        recordInlinedMethods(graphToInline);
+
+        if (graphToInline.getFields() != null) {
+            for (ResolvedJavaField field : graphToInline.getFields()) {
+                graph.recordField(field);
+            }
+        }
+        if (graphToInline.hasUnsafeAccess()) {
+            graph.markUnsafeAccess();
+        }
 
         /*
          * Do the actual inlining by returning the initial loop scope for the inlined method scope.

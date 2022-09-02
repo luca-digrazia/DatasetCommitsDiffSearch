@@ -24,18 +24,20 @@
  */
 package org.graalvm.compiler.truffle.compiler;
 
-import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
 
-class ParsingInlineInvokePlugin extends PEInlineInvokePlugin {
+import jdk.vm.ci.meta.JavaConstant;
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-    private PartialEvaluator partialEvaluator;
+final class ParsingInlineInvokePlugin implements InlineInvokePlugin {
+
+    private final PartialEvaluator partialEvaluator;
     private final ReplacementsImpl replacements;
     private final InvocationPlugins invocationPlugins;
     private final LoopExplosionPlugin loopExplosionPlugin;
@@ -63,22 +65,24 @@ class ParsingInlineInvokePlugin extends PEInlineInvokePlugin {
     public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
         if (invocationPlugins.lookupInvocation(original) != null || replacements.hasSubstitution(original, builder.bci())) {
             /*
-             * During partial evaluation, the invocation plugin or the substitution might
-             * trigger, so we want the call to remain (we have better type information and more
-             * constant values during partial evaluation). But there is no guarantee for that,
-             * so we also need to preserve exception handler information for the call.
+             * During partial evaluation, the invocation plugin or the substitution might trigger,
+             * so we want the call to remain (we have better type information and more constant
+             * values during partial evaluation). But there is no guarantee for that, so we also
+             * need to preserve exception handler information for the call.
              */
             return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
         } else if (loopExplosionPlugin.loopExplosionKind(original) != LoopExplosionPlugin.LoopExplosionKind.NONE) {
             return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
         }
 
-        InlineInfo inlineInfo = asInlineInfo(original);
+        InlineInfo inlineInfo = PartialEvaluator.asInlineInfo(original);
         if (!inlineInfo.allowsInlining()) {
             return inlineInfo;
         }
-        if (original.equals(partialEvaluator.callIndirectMethod) || original.equals(partialEvaluator.inlinedPERoot) || original.equals(partialEvaluator.callDirectMethod)) {
-            return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
+        for (ResolvedJavaMethod neverInlineMethod : partialEvaluator.getNeverInlineMethods()) {
+            if (original.equals(neverInlineMethod)) {
+                return InlineInfo.DO_NOT_INLINE_WITH_EXCEPTION;
+            }
         }
         if (hasMethodHandleArgument(arguments)) {
             /*

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.replacements.test;
 
-import static org.graalvm.compiler.java.BytecodeParserOptions.InlineDuringParsing;
 import static org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createStandardInlineInfo;
 
 import org.graalvm.collections.EconomicMap;
@@ -32,8 +31,6 @@ import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
-import org.graalvm.compiler.nodes.EncodedGraph;
-import org.graalvm.compiler.nodes.InvokeNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.ValueNode;
@@ -48,12 +45,9 @@ import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.replacements.CachingPEGraphDecoder;
 import org.graalvm.word.LocationIdentity;
-import org.junit.Assert;
 import org.junit.Test;
 
 import jdk.vm.ci.meta.JavaKind;
@@ -133,60 +127,18 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
         }
     }
 
-    public interface LLVMPointer {
-        LLVMPointer increment(long offset);
-    }
-
-    static class LLVMPointerImpl implements LLVMPointer {
-        @Override
-        public LLVMPointerImpl increment(long offset) {
-            return this;
-        }
-
-        static void init() {
-        }
-    }
-
-    static LLVMPointer doIncrement(LLVMPointer ptr) {
-        return ptr.increment(0);
-    }
-
-    static void testSingleImplementorDevirtualize(LLVMPointer ptr) {
-        doIncrement(ptr);
-    }
-
-    @Test
-    public void testSingleImplementor() {
-        EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache = EconomicMap.create();
-        OptionValues initialOptions = getInitialOptions();
-        EconomicMap<OptionKey<?>, Object> options = EconomicMap.create(getInitialOptions().getMap());
-        // Disable InlineDuringParsing so that all inlining is done by the decoder
-        options.put(InlineDuringParsing, false);
-        // Parse and cache doIncrement before the single implementor is loaded
-        test("doIncrement", graphCache, initialOptions);
-        // Force loading of the single implementor
-        LLVMPointerImpl.init();
-        StructuredGraph graph = test("testSingleImplementorDevirtualize", graphCache, initialOptions);
-        Assert.assertEquals(0, graph.getNodes().filter(InvokeNode.class).count());
-    }
-
     @Test
     @SuppressWarnings("try")
     public void test() {
-        test("doTest", EconomicMap.create(), getInitialOptions());
-    }
-
-    @SuppressWarnings("try")
-    private StructuredGraph test(String methodName, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache, OptionValues initialOptions) {
-        ResolvedJavaMethod testMethod = getResolvedJavaMethod(methodName);
+        ResolvedJavaMethod testMethod = getResolvedJavaMethod(PEGraphDecoderTest.class, "doTest", Object.class);
         StructuredGraph targetGraph = null;
         DebugContext debug = getDebugContext();
         try (DebugContext.Scope scope = debug.scope("GraphPETest", testMethod)) {
             GraphBuilderConfiguration graphBuilderConfig = GraphBuilderConfiguration.getDefault(getDefaultGraphBuilderPlugins()).withEagerResolving(true).withUnresolvedIsError(true);
             registerPlugins(graphBuilderConfig.getPlugins().getInvocationPlugins());
-            targetGraph = new StructuredGraph.Builder(initialOptions, debug, AllowAssumptions.YES).method(testMethod).build();
+            targetGraph = new StructuredGraph.Builder(getInitialOptions(), debug, AllowAssumptions.YES).method(testMethod).build();
             CachingPEGraphDecoder decoder = new CachingPEGraphDecoder(getTarget().arch, targetGraph, getProviders(), graphBuilderConfig, OptimisticOptimizations.NONE, AllowAssumptions.YES,
-                            null, null, new InlineInvokePlugin[]{new InlineAll()}, null, null, null, null, null, graphCache);
+                            null, null, new InlineInvokePlugin[]{new InlineAll()}, null, null, null, null, null, EconomicMap.create());
 
             decoder.decode(testMethod, false, false);
             debug.dump(DebugContext.BASIC_LEVEL, targetGraph, "Target Graph");
@@ -195,12 +147,12 @@ public class PEGraphDecoderTest extends GraalCompilerTest {
             CoreProviders context = getProviders();
             createCanonicalizerPhase().apply(targetGraph, context);
             targetGraph.verify();
-            return targetGraph;
+
         } catch (Throwable ex) {
             if (targetGraph != null) {
                 debug.dump(DebugContext.BASIC_LEVEL, targetGraph, ex.toString());
             }
-            throw debug.handle(ex);
+            debug.handle(ex);
         }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -385,7 +385,7 @@ public abstract class PartialEvaluator {
             if (methodCallTargetNode.invoke().useForInlining()) {
                 StructuredGraph inlineGraph = providers.getReplacements().getSubstitution(methodCallTargetNode.targetMethod(), methodCallTargetNode.invoke().bci(),
                                 request.graph.trackNodeSourcePosition(),
-                                methodCallTargetNode.asNode().getNodeSourcePosition(), request.graph.allowAssumptions(), request.debug.getOptions());
+                                methodCallTargetNode.asNode().getNodeSourcePosition(), request.debug.getOptions());
                 if (inlineGraph != null) {
                     InliningUtil.inline(methodCallTargetNode.invoke(), inlineGraph, true, methodCallTargetNode.targetMethod());
                 }
