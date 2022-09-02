@@ -303,13 +303,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     @SuppressWarnings("hiding")
     public void initialize(Node[] children, int byteLength, int byteConstantLength,
-                    int intConstantLength, int longConstantLength, int branchTableLength, int profileCount) {
+                    int intConstantLength, int longConstantLength, int branchTableLength, int brIfProfilesLength) {
         initialize(byteLength);
         this.byteConstantLength = byteConstantLength;
         this.intConstantLength = intConstantLength;
         this.longConstantLength = longConstantLength;
         this.branchTableLength = branchTableLength;
-        this.profileCount = profileCount;
+        this.profileCount = brIfProfilesLength;
         this.children = children;
     }
 
