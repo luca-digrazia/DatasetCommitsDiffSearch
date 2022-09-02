@@ -188,49 +188,42 @@ public class Inflation extends BigBang {
             /*
              * Support for Java enumerations.
              */
-            if (type.isEnum() && hub.shouldInitEnumConstants()) {
-                if (getHostVM().getClassInitializationSupport().shouldInitializeAtRuntime(type)) {
-                    hub.initEnumConstantsAtRuntime(type.getJavaClass());
-                } else {
-                    /*
-                     * We want to retrieve the enum constant array that is maintained as a private
-                     * static field in the enumeration class. We do not want a copy because that
-                     * would mean we have the array twice in the native image: as the static field,
-                     * and in the enumConstant field of DynamicHub. The only way to get the original
-                     * value is via a reflective field access, and we even have to guess the field
-                     * name.
-                     */
-                    AnalysisField found = null;
-                    for (AnalysisField f : type.getStaticFields()) {
-                        if (f.getName().endsWith("$VALUES")) {
-                            if (found != null) {
-                                /*
-                                 * Enumeration has more than one static field with enumeration
-                                 * values. Bailout and use Class.getEnumConstants() to get the value
-                                 * instead.
-                                 */
-                                found = null;
-                                break;
-                            }
-                            found = f;
+            if (type.getSuperclass() != null && type.getSuperclass().equals(metaAccess.lookupJavaType(Enum.class)) && hub.getEnumConstantsShared() == null) {
+                /*
+                 * We want to retrieve the enum constant array that is maintained as a private
+                 * static field in the enumeration class. We do not want a copy because that would
+                 * mean we have the array twice in the native image: as the static field, and in the
+                 * enumConstant field of DynamicHub. The only way to get the original value is via a
+                 * reflective field access, and we even have to guess the field name.
+                 */
+                AnalysisField found = null;
+                for (AnalysisField f : type.getStaticFields()) {
+                    if (f.getName().endsWith("$VALUES")) {
+                        if (found != null) {
+                            /*
+                             * Enumeration has more than one static field with enumeration values.
+                             * Bailout and use Class.getEnumConstants() to get the value instead.
+                             */
+                            found = null;
+                            break;
                         }
+                        found = f;
                     }
-                    Enum<?>[] enumConstants;
-                    if (found == null) {
-                        /*
-                         * We could not find a unique $VALUES field, so we use the value returned by
-                         * Class.getEnumConstants(). This is not ideal since
-                         * Class.getEnumConstants() returns a copy of the array, so we will have two
-                         * arrays with the same content in the image heap, but it is better than
-                         * failing image generation.
-                         */
-                        enumConstants = (Enum<?>[]) type.getJavaClass().getEnumConstants();
-                    } else {
-                        enumConstants = (Enum[]) SubstrateObjectConstant.asObject(getConstantReflectionProvider().readFieldValue(found, null));
-                        assert enumConstants != null;
-                    }
-                    hub.initEnumConstants(enumConstants);
                 }
+                Enum<?>[] enumConstants;
+                if (found == null) {
+                    /*
+                     * We could not find a unique $VALUES field, so we use the value returned by
+                     * Class.getEnumConstants(). This is not ideal since Class.getEnumConstants()
+                     * returns a copy of the array, so we will have two arrays with the same content
+                     * in the image heap, but it is better than failing image generation.
+                     */
+                    enumConstants = (Enum<?>[]) type.getJavaClass().getEnumConstants();
+                } else {
+                    enumConstants = (Enum[]) SubstrateObjectConstant.asObject(getConstantReflectionProvider().readFieldValue(found, null));
+                    assert enumConstants != null;
+                }
+                hub.setEnumConstants(enumConstants);
             }
         }
     }
@@ -427,7 +420,7 @@ public class Inflation extends BigBang {
              * interfaces. We want to avoid duplicate arrays with the same content in the native
              * image heap.
              */
-            hub.setInterfacesEncoding(interfacesEncodings.computeIfAbsent(new InterfacesEncodingKey(aInterfaces), InterfacesEncodingKey::createHubs));
+            hub.setInterfacesEncoding(interfacesEncodings.computeIfAbsent(new InterfacesEncodingKey(aInterfaces), k -> k.createHubs()));
         }
     }
 
@@ -466,7 +459,7 @@ public class Inflation extends BigBang {
              * Use the annotation types, instead of the declared type, in the UnknownObjectField
              * annotated fields initialization.
              */
-            handleUnknownObjectField(field, aAnnotationTypes.toArray(new AnalysisType[0]));
+            handleUnknownObjectField(field, aAnnotationTypes.toArray(new AnalysisType[aAnnotationTypes.size()]));
 
         } else if (unknownPrimitiveField != null) {
             assert !Modifier.isFinal(field.getModifiers()) : "@UnknownPrimitiveField annotated field " + field.format("%H.%n") + " cannot be final";
@@ -580,7 +573,7 @@ public class Inflation extends BigBang {
             } else if (usedAnnotations.size() == 1) {
                 newEncoding = usedAnnotations.get(0);
             } else {
-                newEncoding = usedAnnotations.toArray(new Annotation[0]);
+                newEncoding = usedAnnotations.toArray(new Annotation[usedAnnotations.size()]);
             }
         }
 
@@ -639,16 +632,16 @@ public class Inflation extends BigBang {
      * like so: {@code str1(.*)|str2(.*)|str3(.*)}.
      */
     private static Pattern buildPrefixMatchPattern(String[] targetPrefixes) {
-        StringBuilder patternStr = new StringBuilder();
+        String patternStr = "";
         for (int i = 0; i < targetPrefixes.length; i++) {
             String prefix = targetPrefixes[i];
-            patternStr.append(prefix);
-            patternStr.append("(.*)");
+            patternStr += prefix;
+            patternStr += "(.*)";
             if (i < targetPrefixes.length - 1) {
-                patternStr.append("|");
+                patternStr += "|";
             }
         }
-        return Pattern.compile(patternStr.toString());
+        return Pattern.compile(patternStr);
     }
 
     @Override

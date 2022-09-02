@@ -517,8 +517,7 @@ public class AnnotationSubstitutionProcessor extends SubstitutionProcessor {
             ResolvedJavaField field = metaAccess.lookupJavaField(f);
             ResolvedJavaField alias = fieldValueRecomputation(annotatedClass, field, field, f);
             if (!alias.equals(field)) {
-                ResolvedJavaField originalField = findOriginalField(f, originalClass, true);
-                register(fieldSubstitutions, field, originalField, alias);
+                register(fieldSubstitutions, field, null, alias);
             } else {
                 handleAnnotatedFieldInSubstitutionClass(f, originalClass);
             }

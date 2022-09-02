@@ -42,8 +42,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
-import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
+import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.RuntimeReflection;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -69,8 +69,9 @@ import com.oracle.svm.hosted.analysis.Inflation;
  * analysis.
  *
  * Each used service implementation class is added for reflection (using
- * {@link org.graalvm.nativeimage.hosted.RuntimeReflection#register(Class[])}) and for reflective
- * instantiation (using {@link RuntimeReflection#registerForReflectiveInstantiation(Class[])}).
+ * {@link org.graalvm.nativeimage.RuntimeReflection#register(Class[])}) and for reflective
+ * instantiation (using
+ * {@link org.graalvm.nativeimage.RuntimeReflection#registerForReflectiveInstantiation(Class[])}).
  *
  * For each service interface, a single service loader file is added as a resource to the image. The
  * single file combines all the individual files that can come from different .jar files.
@@ -155,14 +156,14 @@ public class ServiceLoaderFeature implements Feature {
         try {
             resourceURLs = access.getImageClassLoader().getClassLoader().getResources(serviceResourceLocation);
         } catch (IOException ex) {
-            throw UserError.abort(ex, "Error loading service implementation resources for service `" + serviceClassName + "`");
+            throw UserError.abort("Error loading service implementation resources for service `" + serviceClassName + "`", ex);
         }
         while (resourceURLs.hasMoreElements()) {
             URL resourceURL = resourceURLs.nextElement();
             try {
                 implementationClassNames.addAll(parseServiceResource(resourceURL));
             } catch (IOException ex) {
-                throw UserError.abort(ex, "Error loading service implementations for service `" + serviceClassName + "` from URL `" + resourceURL + "`");
+                throw UserError.abort("Error loading service implementations for service `" + serviceClassName + "` from URL `" + resourceURL + "`", ex);
             }
         }
 
@@ -182,7 +183,7 @@ public class ServiceLoaderFeature implements Feature {
         for (String implementationClassName : implementationClassNames) {
             if (implementationClassName.startsWith("org.graalvm.compiler") && implementationClassName.contains("hotspot")) {
                 /*
-                 * Workaround for compiler services. The classpath always contains the
+                 * Workaround for Graal compiler services. The classpath always contains the
                  * HotSpot-specific classes of Graal. This is caused by the current distribution
                  * .jar files and class loader hierarchies of Graal. We filter out HotSpot-specific
                  * service implementations using the naming convention: they have "hotspot" in the

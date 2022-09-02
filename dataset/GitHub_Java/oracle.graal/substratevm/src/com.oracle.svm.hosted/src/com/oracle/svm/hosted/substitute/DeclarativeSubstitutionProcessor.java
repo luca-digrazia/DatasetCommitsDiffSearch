@@ -49,6 +49,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import com.oracle.svm.hosted.ClassInitializationSupport;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
@@ -65,15 +66,13 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.configure.ConfigurationFiles;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.core.util.json.JSONParser;
-import com.oracle.svm.core.util.json.JSONParserException;
 import com.oracle.svm.hosted.ImageClassLoader;
-import com.oracle.svm.hosted.classinitialization.ClassInitializationSupport;
+import com.oracle.svm.hosted.json.JSONParser;
+import com.oracle.svm.hosted.json.JSONParserException;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 
@@ -84,6 +83,8 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProcessor {
 
     public static class Options {
+        @Option(help = "Comma-separated list of file names with declarative substitutions", type = OptionType.User)//
+        public static final HostedOptionKey<String[]> SubstitutionFiles = new HostedOptionKey<>(null);
 
         @Option(help = "Comma-separated list of resource file names with declarative substitutions", type = OptionType.User)//
         public static final HostedOptionKey<String[]> SubstitutionResources = new HostedOptionKey<>(null);
@@ -100,7 +101,7 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
         methodDescriptors = new HashMap<>();
         fieldDescriptors = new HashMap<>();
 
-        for (String substitutionFileName : OptionUtils.flatten(",", ConfigurationFiles.Options.SubstitutionFiles.getValue())) {
+        for (String substitutionFileName : OptionUtils.flatten(",", Options.SubstitutionFiles.getValue())) {
             try {
                 loadFile(new FileReader(substitutionFileName));
             } catch (FileNotFoundException ex) {
@@ -123,7 +124,7 @@ public class DeclarativeSubstitutionProcessor extends AnnotationSubstitutionProc
     }
 
     private void loadFile(Reader reader) throws IOException {
-        Set<Class<?>> annotatedClasses = new HashSet<>(imageClassLoader.findAnnotatedClasses(TargetClass.class, false));
+        Set<Class<?>> annotatedClasses = new HashSet<>(imageClassLoader.findAnnotatedClasses(TargetClass.class));
 
         JSONParser parser = new JSONParser(reader);
         @SuppressWarnings("unchecked")
@@ -322,10 +323,6 @@ class DeleteImpl extends AnnotationImpl implements Delete {
 
 @SuppressWarnings("all")
 class SubstituteImpl extends AnnotationImpl implements Substitute {
-    @Override
-    public boolean polymorphicSignature() {
-        return false;
-    }
 }
 
 @SuppressWarnings("all")

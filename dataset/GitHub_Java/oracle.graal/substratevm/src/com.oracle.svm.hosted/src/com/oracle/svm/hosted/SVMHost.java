@@ -133,7 +133,8 @@ public final class SVMHost implements HostVM {
 
     @Override
     public Instance createGraphBuilderPhase(HostedProviders providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts, IntrinsicContext initialIntrinsicContext) {
-        return new AnalysisGraphBuilderPhase(providers, graphBuilderConfig, optimisticOpts, initialIntrinsicContext, providers.getWordTypes());
+        return new AnalysisGraphBuilderPhase(providers.getMetaAccess(), providers.getStampProvider(), providers.getConstantReflection(), providers.getConstantFieldProvider(), graphBuilderConfig,
+                        optimisticOpts, initialIntrinsicContext, providers.getWordTypes());
     }
 
     @Override
