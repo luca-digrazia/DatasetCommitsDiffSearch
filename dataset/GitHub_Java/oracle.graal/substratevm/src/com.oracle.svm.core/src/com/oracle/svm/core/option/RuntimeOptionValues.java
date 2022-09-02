@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,6 +26,7 @@ package com.oracle.svm.core.option;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,18 +36,20 @@ import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.options.ModifiableOptionValues;
+import org.graalvm.compiler.options.NestedBooleanOptionKey;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.RuntimeOptions.OptionClass;
 import org.graalvm.nativeimage.impl.RuntimeOptionsSupport;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionType;
 
 import com.oracle.svm.core.annotate.AnnotateOriginal;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.annotate.MustNotAllocate;
+import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.util.VMError;
 
@@ -73,8 +78,12 @@ public class RuntimeOptionValues extends ModifiableOptionValues {
 }
 
 class RuntimeOptionsSupportImpl implements RuntimeOptionsSupport {
+
     @Override
     public void set(String optionName, Object value) {
+        if (setXOption(optionName)) {
+            return;
+        }
         if (!RuntimeOptionValues.singleton().getAllOptionNames().contains(optionName)) {
             throw new RuntimeException("Unknown option: " + optionName);
         }
@@ -82,10 +91,10 @@ class RuntimeOptionsSupportImpl implements RuntimeOptionsSupport {
         if (descriptor.isPresent()) {
             OptionDescriptor desc = descriptor.get();
             Class<?> valueType = value.getClass();
-            if (desc.getType().isAssignableFrom(valueType)) {
+            if (desc.getOptionValueType().isAssignableFrom(valueType)) {
                 RuntimeOptionValues.singleton().update(desc.getOptionKey(), value);
             } else {
-                throw new RuntimeException("Invalid type of option '" + optionName + "': required " + desc.getType().getSimpleName() + ", provided " + valueType);
+                throw new RuntimeException("Invalid type of option '" + optionName + "': required " + desc.getOptionValueType().getSimpleName() + ", provided " + valueType);
             }
         }
     }
@@ -104,23 +113,38 @@ class RuntimeOptionsSupportImpl implements RuntimeOptionsSupport {
     }
 
     @Override
-    public OptionDescriptors getOptions() {
+    public OptionDescriptors getOptions(EnumSet<OptionClass> classes) {
         Collection<OptionDescriptor> descriptors = RuntimeOptionParser.singleton().getDescriptors();
         List<org.graalvm.options.OptionDescriptor> graalvmDescriptors = new ArrayList<>(descriptors.size());
         for (OptionDescriptor descriptor : descriptors) {
-            org.graalvm.options.OptionDescriptor.Builder builder = org.graalvm.options.OptionDescriptor.newBuilder(asGraalVMOptionKey(descriptor), descriptor.getName());
-            builder.help(descriptor.getHelp());
-            graalvmDescriptors.add(builder.build());
+            if (classes.contains(getOptionClass(descriptor))) {
+                org.graalvm.options.OptionDescriptor.Builder builder = org.graalvm.options.OptionDescriptor.newBuilder(asGraalVMOptionKey(descriptor), descriptor.getName());
+                String helpMsg = descriptor.getHelp();
+                int helpLen = helpMsg.length();
+                if (helpLen > 0 && helpMsg.charAt(helpLen - 1) != '.') {
+                    helpMsg += '.';
+                }
+                builder.help(helpMsg);
+                builder.deprecated(descriptor.isDeprecated());
+                graalvmDescriptors.add(builder.build());
+            }
         }
         return OptionDescriptors.create(graalvmDescriptors);
     }
 
+    private static OptionClass getOptionClass(OptionDescriptor descriptor) {
+        if (descriptor.getOptionKey() instanceof RuntimeOptionKey) {
+            return OptionClass.VM;
+        }
+        return OptionClass.Compiler;
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static <T> org.graalvm.options.OptionKey<T> asGraalVMOptionKey(OptionDescriptor descriptor) {
-        Class<T> clazz = (Class<T>) descriptor.getType();
+        Class<T> clazz = (Class<T>) descriptor.getOptionValueType();
         OptionType<T> type;
         if (clazz.isEnum()) {
-            type = (OptionType<T>) ENUM_TYPE_CACHE.computeIfAbsent(clazz, c -> new OptionType<>(c.getSimpleName(), null, s -> (T) Enum.valueOf((Class<? extends Enum>) c, s)));
+            type = (OptionType<T>) ENUM_TYPE_CACHE.computeIfAbsent(clazz, c -> new OptionType<>(c.getSimpleName(), s -> (T) Enum.valueOf((Class<? extends Enum>) c, s)));
         } else if (clazz == Long.class) {
             type = (OptionType<T>) LONG_OPTION_TYPE;
         } else {
@@ -130,11 +154,15 @@ class RuntimeOptionsSupportImpl implements RuntimeOptionsSupport {
             }
         }
         OptionKey<T> optionKey = (OptionKey<T>) descriptor.getOptionKey();
-        return new org.graalvm.options.OptionKey<>(optionKey.getDefaultValue(), type);
+        while (optionKey instanceof NestedBooleanOptionKey) {
+            optionKey = (OptionKey<T>) ((NestedBooleanOptionKey) optionKey).getMasterOption();
+        }
+        T defaultValue = optionKey.getDefaultValue();
+        return new org.graalvm.options.OptionKey<>(defaultValue, type);
     }
 
     private static final Map<Class<?>, OptionType<?>> ENUM_TYPE_CACHE = new HashMap<>();
-    private static final OptionType<Long> LONG_OPTION_TYPE = new OptionType<>("long", 0L, RuntimeOptionsSupportImpl::parseLong);
+    private static final OptionType<Long> LONG_OPTION_TYPE = new OptionType<>("long", RuntimeOptionsSupportImpl::parseLong);
 
     private static long parseLong(String v) {
         String valueString = v.toLowerCase();
@@ -156,6 +184,27 @@ class RuntimeOptionsSupportImpl implements RuntimeOptionsSupport {
 
         return Long.parseLong(valueString) * scale;
     }
+
+    /*
+     * Parse from an `-X` option, from a name and a value (e.g., from "mx2g"). Returns true if
+     * successful, false otherwise. Throws an exception if the option was recognized, but the value
+     * was not a number.
+     */
+    private static boolean setXOption(String keyAndValue) {
+        /* A hack to parse `-X` options from a String value. */
+        for (XOptions.XFlag xFlag : XOptions.singleton().getXFlags()) {
+            if (keyAndValue.startsWith(xFlag.getName())) {
+                final String valueString = keyAndValue.substring(xFlag.getName().length());
+                try {
+                    XOptions.singleton().parseFromValueString(xFlag, valueString);
+                    return true;
+                } catch (NumberFormatException nfe) {
+                    throw new RuntimeException("Invalid option '" + xFlag.getPrefixAndName() + valueString + "' does not specify a valid number.");
+                }
+            }
+        }
+        return false;
+    }
 }
 
 /**
@@ -174,6 +223,6 @@ class OptionAccessFeature implements Feature {
 final class Target_org_graalvm_compiler_options_OptionKey {
 
     @AnnotateOriginal
-    @MustNotAllocate(list = MustNotAllocate.WHITELIST, reason = "Static analysis imprecision makes all hashCode implementations reachable from this method")
+    @RestrictHeapAccess(access = RestrictHeapAccess.Access.UNRESTRICTED, overridesCallers = true, reason = "Static analysis imprecision makes all hashCode implementations reachable from this method")
     native Object getValue(OptionValues values);
 }

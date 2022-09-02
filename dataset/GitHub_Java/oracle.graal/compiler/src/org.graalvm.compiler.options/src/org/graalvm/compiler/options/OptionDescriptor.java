@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -32,51 +34,97 @@ import java.util.List;
  */
 public final class OptionDescriptor {
 
-    protected final String name;
-    protected final OptionType optionType;
-    protected final Class<?> type;
-    protected final String help;
-    protected final List<String> extraHelp;
-    protected final OptionKey<?> optionKey;
-    protected final Class<?> declaringClass;
-    protected final String fieldName;
+    private final String name;
+    private final OptionType optionType;
+    private final Class<?> optionValueType;
+    private final String help;
+    private final List<String> extraHelp;
+    private final OptionKey<?> optionKey;
+    private final Class<?> declaringClass;
+    private final String fieldName;
+    private final boolean deprecated;
 
     private static final String[] NO_EXTRA_HELP = {};
 
-    public static OptionDescriptor create(String name, OptionType optionType, Class<?> type, String help, Class<?> declaringClass, String fieldName, OptionKey<?> option) {
-        return create(name, optionType, type, help, NO_EXTRA_HELP, declaringClass, fieldName, option);
+    public static OptionDescriptor create(String name,
+                    OptionType optionType,
+                    Class<?> optionValueType,
+                    String help,
+                    Class<?> declaringClass,
+                    String fieldName,
+                    OptionKey<?> option) {
+        return create(name, optionType, optionValueType, help, NO_EXTRA_HELP, declaringClass, fieldName, option, false);
     }
 
-    public static OptionDescriptor create(String name, OptionType optionType, Class<?> type, String help, String[] extraHelp, Class<?> declaringClass, String fieldName, OptionKey<?> option) {
+    public static OptionDescriptor create(String name,
+                    OptionType optionType,
+                    Class<?> optionValueType,
+                    String help,
+                    Class<?> declaringClass,
+                    String fieldName,
+                    OptionKey<?> option,
+                    boolean deprecated) {
+        return create(name, optionType, optionValueType, help, NO_EXTRA_HELP, declaringClass, fieldName, option, deprecated);
+    }
+
+    public static OptionDescriptor create(String name,
+                    OptionType optionType,
+                    Class<?> optionValueType,
+                    String help,
+                    String[] extraHelp,
+                    Class<?> declaringClass,
+                    String fieldName,
+                    OptionKey<?> option) {
+        return create(name, optionType, optionValueType, help, extraHelp, declaringClass, fieldName, option, false);
+    }
+
+    public static OptionDescriptor create(String name,
+                    OptionType optionType,
+                    Class<?> optionValueType,
+                    String help,
+                    String[] extraHelp,
+                    Class<?> declaringClass,
+                    String fieldName,
+                    OptionKey<?> option,
+                    boolean deprecated) {
         assert option != null : declaringClass + "." + fieldName;
         OptionDescriptor result = option.getDescriptor();
         if (result == null) {
             List<String> extraHelpList = extraHelp == null || extraHelp.length == 0 ? Collections.emptyList() : Collections.unmodifiableList(Arrays.asList(extraHelp));
-            result = new OptionDescriptor(name, optionType, type, help, extraHelpList, declaringClass, fieldName, option);
+            result = new OptionDescriptor(name, optionType, optionValueType, help, extraHelpList, declaringClass, fieldName, option, deprecated);
             option.setDescriptor(result);
         }
-        assert result.name.equals(name) && result.type == type && result.declaringClass == declaringClass && result.fieldName.equals(fieldName) && result.optionKey == option;
+        assert result.name.equals(name) && result.optionValueType == optionValueType && result.declaringClass == declaringClass && result.fieldName.equals(fieldName) && result.optionKey == option;
         return result;
     }
 
-    private OptionDescriptor(String name, OptionType optionType, Class<?> type, String help, List<String> extraHelp, Class<?> declaringClass, String fieldName, OptionKey<?> optionKey) {
+    private OptionDescriptor(String name,
+                    OptionType optionType,
+                    Class<?> optionValueType,
+                    String help,
+                    List<String> extraHelp,
+                    Class<?> declaringClass,
+                    String fieldName,
+                    OptionKey<?> optionKey,
+                    boolean deprecated) {
         this.name = name;
         this.optionType = optionType;
-        this.type = type;
+        this.optionValueType = optionValueType;
         this.help = help;
         this.extraHelp = extraHelp;
         this.optionKey = optionKey;
         this.declaringClass = declaringClass;
         this.fieldName = fieldName;
-        assert !type.isPrimitive() : "must used boxed type instead of " + type;
+        this.deprecated = deprecated;
+        assert !optionValueType.isPrimitive() : "must used boxed optionValueType instead of " + optionValueType;
     }
 
     /**
      * Gets the type of values stored in the option. This will be the boxed type for a primitive
      * option.
      */
-    public Class<?> getType() {
-        return type;
+    public Class<?> getOptionValueType() {
+        return optionValueType;
     }
 
     /**
@@ -132,5 +180,12 @@ public final class OptionDescriptor {
      */
     public String getLocation() {
         return getDeclaringClass().getName() + "." + getFieldName();
+    }
+
+    /**
+     * Returns {@code true} if the option is deprecated.
+     */
+    public boolean isDeprecated() {
+        return deprecated;
     }
 }

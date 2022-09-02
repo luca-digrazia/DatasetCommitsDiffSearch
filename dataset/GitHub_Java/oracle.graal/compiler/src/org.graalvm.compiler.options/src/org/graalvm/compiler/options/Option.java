@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -38,15 +40,20 @@ import java.lang.annotation.Target;
 public @interface Option {
 
     /**
-     * Gets a help message for the option. New lines can be embedded in the message with
-     * {@code "%n"}.
-     *
-     * If this value starts with {@code "file:"<path>}, then the help message is located in a file
-     * located by resolving {@code <path>} against the location of the class file for the top level
-     * class in which the option is declared. A help message located in a file is not subject to any
-     * formatting or line wrapping by {@link OptionValues#printHelp} apart from indentation.
+     * Gets a help message for the option.
+     * <p>
+     * The first element of the array is the short help message. This part of the help message is
+     * subject to line wrapping when printed.
+     * <p>
+     * The remaining elements contain a more detailed expansion of the help message and will be
+     * printed as is in a left-aligned block (i.e. leading spaces will be preserved).
+     * <p>
+     * If there is only one element and it starts with {@code "file:"<path>}, then the help message
+     * is located in a file located by resolving {@code <path>} against the location of the package
+     * in which the option is declared. The first line in the file is the short help message as
+     * described above. The remaining lines are the help message expansion.
      */
-    String help();
+    String[] help();
 
     /**
      * The name of the option. By default, the name of the annotated field should be used.
@@ -57,4 +64,14 @@ public @interface Option {
      * Specifies the type of the option.
      */
     OptionType type() default OptionType.Debug;
+
+    /**
+     * Specifies the stability of the option.
+     */
+    OptionStability stability() default OptionStability.EXPERIMENTAL;
+
+    /**
+     * Deprecated option.
+     */
+    boolean deprecated() default false;
 }

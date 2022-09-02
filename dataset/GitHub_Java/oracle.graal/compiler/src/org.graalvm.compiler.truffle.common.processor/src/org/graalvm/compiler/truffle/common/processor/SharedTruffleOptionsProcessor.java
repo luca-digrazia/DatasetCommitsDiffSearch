@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -95,9 +95,11 @@ public class SharedTruffleOptionsProcessor extends AbstractProcessor {
                 out.println("package " + pkg + ";");
                 out.println("");
                 out.println("import " + optionKeyClassName + ";");
+                out.println("import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;");
                 if (isRuntime) {
                     out.println("import com.oracle.truffle.api.Option;");
                     out.println("import org.graalvm.options.OptionCategory;");
+                    out.println("import org.graalvm.options.OptionType;");
                 }
                 out.println("");
                 out.println("/**");
@@ -107,20 +109,20 @@ public class SharedTruffleOptionsProcessor extends AbstractProcessor {
                 out.println(" * and re-build. For Eclipse, this means restarting the IDE given");
                 out.println(" * that an annotation processor is not reloaded when the jar");
                 out.println(" * containing the annotation processor is updated.");
+                out.println(" *");
+                out.println(" * GENERATED CONTENT - DO NOT EDIT");
+                out.println(" * GeneratedBy: " + getClass().getName());
+                out.println(" * SpecifiedBy: " + Option.class.getName());
                 out.println(" */");
-                out.println("// GENERATED CONTENT - DO NOT EDIT");
-                out.println("// GeneratedBy: " + getClass().getName());
-                out.println("// SpecifiedBy: " + Option.class.getName());
                 out.println("public abstract class " + className + " {");
 
                 for (Option option : Option.options) {
-                    String defaultValue = option.defaultValue;
+                    String defaultValue;
+
                     if (isRuntime) {
-                        if (option.javadocExtra != null) {
+                        if (option.deprecationMessage != null) {
                             out.printf("    /**\n");
-                            for (String line : option.javadocExtra) {
-                                out.printf("     * %s\n", line);
-                            }
+                            out.printf("     * %s\n", option.deprecationMessage);
                             out.printf("     */\n");
                         }
                         String help;
@@ -136,11 +138,10 @@ public class SharedTruffleOptionsProcessor extends AbstractProcessor {
                         } else {
                             help = option.help[0];
                         }
-                        if ("null".equals(defaultValue)) {
-                            defaultValue = "null, org.graalvm.options.OptionType.defaultType(" + option.type + ".class)";
-                        }
+                        defaultValue = option.defaultValue + ", OptionType.defaultType(" + option.type + ".class)";
                         out.printf("    @Option(help = \"%s\", category = OptionCategory.%s)\n", help, option.category);
                     } else {
+                        defaultValue = option.defaultValue;
                         String optionType;
                         if (option.category.equals("INTERNAL")) {
                             optionType = "Debug";
@@ -159,19 +160,17 @@ public class SharedTruffleOptionsProcessor extends AbstractProcessor {
                         }
                         out.printf("     * OptionType: %s\n", optionType);
 
-                        if (option.javadocExtra != null) {
+                        if (option.deprecationMessage != null) {
                             out.printf("     *\n");
-                            for (String line : option.javadocExtra) {
-                                out.printf("     * %s\n", line);
-                            }
+                            out.printf("     * %s\n", option.deprecationMessage);
                         }
                         out.printf("     */\n");
 
                         String help = option.help[0];
                         List<String> extraHelp = option.help.length > 1 ? Arrays.asList(option.help).subList(1, option.help.length) : new ArrayList<>();
-                        info.options.add(new OptionInfo(option.name, optionType, help, extraHelp, option.type, pkg + '.' + className, option.name));
+                        info.options.add(new OptionInfo(option.name, optionType, help, extraHelp, option.type, pkg + '.' + className, option.name, true));
                     }
-                    out.printf("    public static final OptionKey<%s> %s = new OptionKey<>(%s);\n", option.type, option.name, defaultValue);
+                    out.printf("    static final OptionKey<%s> %s = new OptionKey<>(%s);\n", option.type, option.name, defaultValue);
                     out.println();
                 }
                 out.println("}");
