@@ -334,7 +334,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
      */
     @ExplodeLoop
     private int runState(TRegexBacktrackingNFAExecutorLocals locals, boolean compactString, PureNFAState curState) {
-        CompilerAsserts.partialEvaluationConstant(curState);
+        CompilerDirectives.isPartialEvaluationConstant(curState);
         if (curState.isFinalState(isForward())) {
             locals.setResult();
             locals.pushResult();
@@ -362,8 +362,8 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
             }
         }
         PureNFATransition[] successors = curState.getSuccessors(isForward());
-        CompilerAsserts.partialEvaluationConstant(successors);
-        CompilerAsserts.partialEvaluationConstant(successors.length);
+        CompilerDirectives.isPartialEvaluationConstant(successors);
+        CompilerDirectives.isPartialEvaluationConstant(successors.length);
         boolean atEnd = inputAtEnd(locals);
         int c = atEnd ? 0 : inputReadAndDecode(locals);
         final int index = locals.getIndex();
@@ -374,7 +374,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
              */
             for (int i = 0; i < successors.length; i++) {
                 PureNFATransition transition = successors[i];
-                CompilerAsserts.partialEvaluationConstant(transition);
+                CompilerDirectives.isPartialEvaluationConstant(transition);
                 if (transitionMatches(locals, compactString, transition, index, atEnd, c)) {
                     updateState(locals, transition, index);
                     locals.restoreIndex();
@@ -397,10 +397,10 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
              * accordingly. The highest-priority match becomes this state's successor.
              */
             long[] transitionBitSet = locals.getTransitionBitSet();
-            CompilerAsserts.partialEvaluationConstant(transitionBitSet);
+            CompilerDirectives.isPartialEvaluationConstant(transitionBitSet);
             CompilerDirectives.ensureVirtualized(transitionBitSet);
             final int bitSetWords = ((successors.length - 1) >> 6) + 1;
-            CompilerAsserts.partialEvaluationConstant(bitSetWords);
+            CompilerDirectives.isPartialEvaluationConstant(bitSetWords);
             int lastMatch = 0;
             int lastFinal = 0;
             // Fill the bit set.
@@ -408,16 +408,16 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
             // priority one.
             int nMatched = -1;
             for (int iBS = 0; iBS < bitSetWords; iBS++) {
-                CompilerAsserts.partialEvaluationConstant(iBS);
+                CompilerDirectives.isPartialEvaluationConstant(iBS);
                 long bs = 0;
                 long bit = 1;
                 final int iStart = successors.length - (iBS << 6) - 1;
                 final int iEnd = Math.max(-1, iStart - (1 << 6));
-                CompilerAsserts.partialEvaluationConstant(iStart);
-                CompilerAsserts.partialEvaluationConstant(iEnd);
+                CompilerDirectives.isPartialEvaluationConstant(iStart);
+                CompilerDirectives.isPartialEvaluationConstant(iEnd);
                 for (int i = iStart; i > iEnd; i--) {
                     PureNFATransition transition = successors[i];
-                    CompilerAsserts.partialEvaluationConstant(transition);
+                    CompilerDirectives.isPartialEvaluationConstant(transition);
                     if (transitionMatches(locals, compactString, transition, index, atEnd, c)) {
                         bs |= bit;
                         lastMatch = i;
@@ -445,17 +445,17 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
             }
             // Update the new stack frames.
             for (int iBS = 0; iBS < bitSetWords; iBS++) {
-                CompilerAsserts.partialEvaluationConstant(iBS);
+                CompilerDirectives.isPartialEvaluationConstant(iBS);
                 long bs = transitionBitSet[iBS];
                 final int iStart = successors.length - (iBS << 6) - 1;
                 final int iEnd = Math.max(-1, iStart - (1 << 6));
-                CompilerAsserts.partialEvaluationConstant(iStart);
-                CompilerAsserts.partialEvaluationConstant(iEnd);
+                CompilerDirectives.isPartialEvaluationConstant(iStart);
+                CompilerDirectives.isPartialEvaluationConstant(iEnd);
                 for (int i = iStart; i > iEnd; i--) {
                     PureNFATransition transition = successors[i];
-                    CompilerAsserts.partialEvaluationConstant(transition);
+                    CompilerDirectives.isPartialEvaluationConstant(transition);
                     PureNFAState target = transition.getTarget(isForward());
-                    CompilerAsserts.partialEvaluationConstant(target);
+                    CompilerDirectives.isPartialEvaluationConstant(target);
                     if ((bs & 1) != 0) {
                         if (target.isFinalState(isForward())) {
                             if (i == lastFinal) {
@@ -523,7 +523,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         // call to updateState.
         TRegexBacktrackingNFAExecutorLocals localsForMatching = transitionMatchesStepByStep ? locals.createSubNFALocals() : locals;
         PureNFAState target = transition.getTarget(isForward());
-        CompilerAsserts.partialEvaluationConstant(target);
+        CompilerDirectives.isPartialEvaluationConstant(target);
         if (transition.hasCaretGuard() && index != 0) {
             return false;
         }
@@ -533,9 +533,9 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         int nGuards = transition.getQuantifierGuards().length;
         for (int i = isForward() ? 0 : nGuards - 1; isForward() ? i < nGuards : i >= 0; i = inputIncRaw(i)) {
             QuantifierGuard guard = transition.getQuantifierGuards()[i];
-            CompilerAsserts.partialEvaluationConstant(guard);
+            CompilerDirectives.isPartialEvaluationConstant(guard);
             Quantifier q = guard.getQuantifier();
-            CompilerAsserts.partialEvaluationConstant(q);
+            CompilerDirectives.isPartialEvaluationConstant(q);
             switch (isForward() ? guard.getKind() : guard.getKindReverse()) {
                 case enter:
                 case loopInc:
@@ -646,14 +646,14 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
 
     @ExplodeLoop
     protected void updateState(TRegexBacktrackingNFAExecutorLocals locals, PureNFATransition transition, int index) {
-        CompilerAsserts.partialEvaluationConstant(transition);
+        CompilerDirectives.isPartialEvaluationConstant(transition);
         locals.apply(transition, index);
         int nGuards = transition.getQuantifierGuards().length;
         for (int i = isForward() ? 0 : nGuards - 1; isForward() ? i < nGuards : i >= 0; i += (isForward() ? 1 : -1)) {
             QuantifierGuard guard = transition.getQuantifierGuards()[i];
-            CompilerAsserts.partialEvaluationConstant(guard);
+            CompilerDirectives.isPartialEvaluationConstant(guard);
             Quantifier q = guard.getQuantifier();
-            CompilerAsserts.partialEvaluationConstant(q);
+            CompilerDirectives.isPartialEvaluationConstant(q);
             switch (isForward() ? guard.getKind() : guard.getKindReverse()) {
                 case enter:
                 case loop:
@@ -683,7 +683,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
     }
 
     private int getNewIndex(TRegexBacktrackingNFAExecutorLocals locals, PureNFAState target, int index) {
-        CompilerAsserts.partialEvaluationConstant(target.getKind());
+        CompilerDirectives.isPartialEvaluationConstant(target.getKind());
         switch (target.getKind()) {
             case PureNFAState.KIND_INITIAL_OR_FINAL_STATE:
                 return index;
