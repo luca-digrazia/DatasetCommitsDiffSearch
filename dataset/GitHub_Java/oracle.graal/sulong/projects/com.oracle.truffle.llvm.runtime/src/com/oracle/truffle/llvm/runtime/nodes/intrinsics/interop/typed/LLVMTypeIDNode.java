@@ -54,17 +54,16 @@ public abstract class LLVMTypeIDNode extends LLVMExpressionNode {
     @CompilationFinal private LLVMInteropType cachedType;
 
     protected final LLVMInteropType getType(ContextReference<LLVMContext> ctxRef, LLVMPointer pointer) {
-        LLVMContext context = ctxRef.get();
         if (cachedType == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             LLVMGlobal global = ctxRef.get().findGlobal(pointer);
             if (global == null) {
                 return null;
             }
-            cachedType = global.getInteropType(context);
+            cachedType = global.getInteropType();
         } else {
             // the type this resolved to needs to stay the same
-            assert context.findGlobal(pointer).getInteropType(context) == cachedType;
+            assert ctxRef.get().findGlobal(pointer).getInteropType() == cachedType;
         }
         return cachedType;
     }
