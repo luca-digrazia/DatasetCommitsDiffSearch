@@ -171,7 +171,7 @@ public final class DefaultHomeFinder extends HomeFinder {
                 }
                 home = Paths.get(graalvmHomeValue);
             } else {
-                home = getGraalVmHomeNative();
+                home = getGraalVmHome();
                 if (isVerbose()) {
                     System.err.println("Found GraalVM home: " + home);
                 }
@@ -342,11 +342,11 @@ public final class DefaultHomeFinder extends HomeFinder {
         return res;
     }
 
-    private Path getGraalVmHomeNative() {
+    private Path getGraalVmHome() {
         assert ImageInfo.inImageCode();
         Path executable = getCurrentExecutablePath();
         if (executable != null) {
-            Path result = getGraalVmHomeFromRelativeLauncherPath(executable);
+            Path result = getGraalVmHome(executable);
             if (result == null) {
                 result = getGraalVmHomeFallBack(executable);
             }
@@ -359,7 +359,7 @@ public final class DefaultHomeFinder extends HomeFinder {
         }
         Path objectFile = getCurrentObjectFilePath();
         if (objectFile != null) {
-            Path result = getGraalVmHomeFromRelativeLauncherPath(objectFile);
+            Path result = getGraalVmHome(objectFile);
             if (result == null) {
                 result = getGraalVmHomeLibPolyglotFallBack(objectFile);
             }
@@ -373,7 +373,7 @@ public final class DefaultHomeFinder extends HomeFinder {
         return null;
     }
 
-    private static Path getGraalVmHomeFromRelativeLauncherPath(Path executableOrObjFile) {
+    private static Path getGraalVmHome(Path executableOrObjFile) {
         if (GRAAL_HOME_RELATIVE_PATH != null) {
             Path result = trimAbsolutePath(executableOrObjFile, GRAAL_HOME_RELATIVE_PATH);
             if (result != null) {
