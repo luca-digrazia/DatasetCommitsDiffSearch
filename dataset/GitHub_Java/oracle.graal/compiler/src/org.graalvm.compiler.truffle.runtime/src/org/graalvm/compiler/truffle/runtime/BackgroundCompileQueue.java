@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.FutureTask;
@@ -168,15 +167,7 @@ public class BackgroundCompileQueue {
     public int getQueueSize() {
         final ExecutorService threadPool = compilationExecutorService;
         if (threadPool instanceof ThreadPoolExecutor) {
-            BlockingQueue<Runnable> queue = ((ThreadPoolExecutor) threadPool).getQueue();
-            int count = 0;
-            for (Runnable runnable : queue) {
-                RequestFutureTask<?> task = (RequestFutureTask<?>) runnable;
-                if (!task.isCancelled() && !task.request.task.isCancelled()) {
-                    count++;
-                }
-            }
-            return count;
+            return ((ThreadPoolExecutor) threadPool).getQueue().size();
         } else {
             return 0;
         }
