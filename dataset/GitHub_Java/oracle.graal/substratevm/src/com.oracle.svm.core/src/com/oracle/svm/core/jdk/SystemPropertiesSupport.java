@@ -34,8 +34,6 @@ import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
-import com.oracle.svm.core.VM;
-
 /**
  * This class maintains the system properties at run time.
  *
@@ -56,6 +54,8 @@ public abstract class SystemPropertiesSupport {
                      * in other classes, so changing them would be tricky.
                      */
                     "line.separator", "path.separator", "file.separator",
+                    /* We do not support cross-compilation for now. */
+                    "os.arch", "os.name",
                     /* For our convenience for now. */
                     "file.encoding", "sun.jnu.encoding",
                     "java.class.version",
@@ -90,6 +90,7 @@ public abstract class SystemPropertiesSupport {
 
         initializeProperty("java.vm.name", "Substrate VM");
         initializeProperty("java.vm.vendor", "Oracle Corporation");
+        initializeProperty("java.vm.version", "Substrate VM " + System.getProperty("java.vm.version"));
         initializeProperty("java.vendor", "Oracle Corporation");
         initializeProperty("java.vendor.url", "https://www.graalvm.org/");
 
@@ -98,20 +99,15 @@ public abstract class SystemPropertiesSupport {
         initializeProperty("java.ext.dirs", "");
         initializeProperty("java.library.path", "");
 
-        String targetName = System.getProperty("svm.targetName");
-        String targetArch = System.getProperty("svm.targetArch");
-        initializeProperty("os.name", targetName != null ? targetName : System.getProperty("os.name"));
-        initializeProperty("os.arch", targetArch != null ? targetArch : System.getProperty("os.arch"));
-
         initializeProperty(ImageInfo.PROPERTY_IMAGE_CODE_KEY, ImageInfo.PROPERTY_IMAGE_CODE_VALUE_RUNTIME);
 
         lazyRuntimeValues = new HashMap<>();
-        lazyRuntimeValues.put("user.name", this::userName);
-        lazyRuntimeValues.put("user.home", this::userHome);
-        lazyRuntimeValues.put("user.dir", this::userDir);
+        lazyRuntimeValues.put("user.name", this::userNameValue);
+        lazyRuntimeValues.put("user.home", this::userHomeValue);
+        lazyRuntimeValues.put("user.dir", this::userDirValue);
         lazyRuntimeValues.put("java.io.tmpdir", this::tmpdirValue);
         lazyRuntimeValues.put("os.version", this::osVersionValue);
-        lazyRuntimeValues.put("java.vm.version", VM::getVersion);
+
     }
 
     private void ensureFullyInitialized() {
@@ -194,33 +190,6 @@ public abstract class SystemPropertiesSupport {
                 // Checkstyle: resume
             }
         }
-    }
-
-    private String cachedUserName;
-
-    public String userName() {
-        if (cachedUserName == null) {
-            cachedUserName = userNameValue();
-        }
-        return cachedUserName;
-    }
-
-    private String cachedUserHome;
-
-    public String userHome() {
-        if (cachedUserHome == null) {
-            cachedUserHome = userHomeValue();
-        }
-        return cachedUserHome;
-    }
-
-    private String cachedUserDir;
-
-    public String userDir() {
-        if (cachedUserDir == null) {
-            cachedUserDir = userDirValue();
-        }
-        return cachedUserDir;
     }
 
     // Platform-specific subclasses compute the actual system property values lazily at run time.
