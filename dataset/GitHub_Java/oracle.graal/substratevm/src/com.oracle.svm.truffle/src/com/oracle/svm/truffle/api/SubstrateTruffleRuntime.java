@@ -320,6 +320,15 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
+    public boolean isCompiling(OptimizedCallTarget optimizedCallTarget) {
+        if (SubstateTruffleOptions.isMultiThreaded()) {
+            return super.isCompiling(optimizedCallTarget);
+        }
+
+        return false;
+    }
+
+    @Override
     protected StackIntrospection getStackIntrospection() {
         return SubstrateStackIntrospection.SINGLETON;
     }
