@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.jfr;
 
+import java.io.IOException;
+
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -33,7 +35,7 @@ public class JfrFrameTypeSerializer implements JfrRepository {
     }
 
     @Override
-    public int write(JfrChunkWriter writer) {
+    public int write(JfrChunkWriter writer) throws IOException {
         writer.writeCompressedLong(JfrTypes.FrameType.getId());
 
         JfrFrameType[] values = JfrFrameType.values();

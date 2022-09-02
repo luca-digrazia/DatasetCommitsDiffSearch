@@ -24,64 +24,38 @@
  */
 package com.oracle.svm.jfr;
 
+import static com.oracle.svm.jfr.PredefinedJFCSubstitition.DEFAULT_JFC;
+import static com.oracle.svm.jfr.PredefinedJFCSubstitition.PROFILE_JFC;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import com.oracle.svm.core.hub.DynamicHub;
+import com.oracle.svm.core.hub.DynamicHubSupport;
+import com.oracle.svm.core.meta.SharedType;
+import com.oracle.svm.jfr.traceid.JfrTraceId;
+import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
+import com.oracle.svm.jfr.traceid.JfrTraceIdMap;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.hub.DynamicHub;
-import com.oracle.svm.core.hub.DynamicHubSupport;
+import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.jdk.RuntimeSupport;
-import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.thread.ThreadListenerFeature;
 import com.oracle.svm.core.thread.ThreadListenerSupport;
 import com.oracle.svm.hosted.FeatureImpl;
-import com.oracle.svm.jfr.traceid.JfrTraceId;
-import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
-import com.oracle.svm.jfr.traceid.JfrTraceIdMap;
 import com.oracle.svm.util.ModuleSupport;
-import com.oracle.svm.jfr.events.ClassLoadingStatistics;
 
 import jdk.jfr.Event;
 import jdk.jfr.internal.JVM;
 import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.jfr.internal.EventWriter;
 
 /**
- * Provides basic JFR support. As this support is both platform-dependent and JDK-specific, the
- * current support is limited to JDK 11 on Linux/MacOS.
- * 
- * There are two different kinds of JFR events:
- * <ul>
- * <li>Java-level events where there is a Java class such as {@link ClassLoadingStatistics} that
- * defines the event. Those events are typically triggered by the Java application and a Java
- * {@link EventWriter} object is used when writing the event to a buffer.</li>
- * <li>Native events are triggered by the JVM itself and are defined in the JFR metadata.xml file.
- * For writing such an event to a buffer, we call into {@link JfrNativeEventWriter} and pass a
- * {@link JfrNativeEventWriterData} struct that is typically allocated on the stack.</li>
- * </ul>
- * 
- * JFR tries to minimize the runtime overhead, so it heavily relies on a hierarchy of buffers when
- * persisting events:
- * <ul>
- * <li>Initially, nearly all events are written to a thread-local buffer, see
- * {@link JfrThreadLocal}.</li>
- * <li>When the thread-local buffer is full, then the data is copied to a set of global buffers, see
- * {@link JfrGlobalMemory}.</li>
- * <li>The global buffers are regularly persisted to a file, see {@link JfrRecorderThread}. The data
- * may be persisted in multiple, independent chunks.</li>
- * <li>When the active chunk exceeds a certain threshold, then it is necessary to start a new chunk
- * (and maybe a new file), see {@link JfrChunkWriter}. Before doing that, some metadata and all
- * thread-local/global data that is currently in flight must be flushed to the old file. This
- * operation needs a safepoint and also changes the JFR epoch, see {@link JfrTraceIdEpoch}.</li>
- * </ul>
+ * Provides basic JFR support.
  *
  * A lot of the JFR infrastructure is {@link Uninterruptible} and uses native memory instead of the
  * Java heap. This is necessary as JFR events may, for example, also be used in the following
@@ -92,7 +66,6 @@ import jdk.jfr.internal.EventWriter;
  * consistent state).</li>
  * </ul>
  */
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 @AutomaticFeature
 public class JfrFeature implements Feature {
     @Override
@@ -114,11 +87,9 @@ public class JfrFeature implements Feature {
 
         ImageSingletons.add(SubstrateJVM.class, new SubstrateJVM());
         ImageSingletons.add(JfrManager.class, new JfrManager());
-        ImageSingletons.add(JfrSerializerSupport.class, new JfrSerializerSupport());
         ImageSingletons.add(JfrTraceIdMap.class, new JfrTraceIdMap());
         ImageSingletons.add(JfrTraceIdEpoch.class, new JfrTraceIdEpoch());
 
-        JfrSerializerSupport.get().register(new JfrFrameTypeSerializer());
         ThreadListenerSupport.get().register(SubstrateJVM.getThreadLocal());
     }
 
@@ -131,6 +102,11 @@ public class JfrFeature implements Feature {
             RuntimeClassInitialization.initializeAtBuildTime(eventSubClass.getName());
         }
         config.registerSubstitutionProcessor(new JfrEventSubstitution(metaAccess));
+
+        // Register for runtime access.
+        ClassLoader cl = PredefinedJFCSubstitition.class.getClassLoader();
+        Resources.registerResource(DEFAULT_JFC, cl.getResourceAsStream(DEFAULT_JFC));
+        Resources.registerResource(PROFILE_JFC, cl.getResourceAsStream(PROFILE_JFC));
     }
 
     @Override
@@ -143,8 +119,8 @@ public class JfrFeature implements Feature {
 
     @Override
     public void beforeCompilation(BeforeCompilationAccess a) {
-        // Reserve slot 0 for error-catcher.
-        int mapSize = ImageSingletons.lookup(DynamicHubSupport.class).getMaxTypeId() + 1;
+
+        int mapSize = ImageSingletons.lookup(DynamicHubSupport.class).getMaxTypeId() + 1; // Reserve slot 0 for error-catcher.
 
         // Create trace-ID map with fixed size.
         ImageSingletons.lookup(JfrTraceIdMap.class).initialize(mapSize);
@@ -157,5 +133,9 @@ public class JfrFeature implements Feature {
             // Off-set by one for error-catcher
             JfrTraceId.assign(clazz, hub.getTypeID() + 1);
         }
+
+        // TODO: get the method count
+        int methodCount = 0;
+        SubstrateJVM.getMethodRepository().initialize(methodCount);
     }
 }
