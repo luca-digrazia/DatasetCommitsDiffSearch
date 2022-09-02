@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,27 @@ import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.Meta;
 
 public class InteropUtils {
+    private static final int MANTISSA_PRECISION_FLOAT = 24;
+    private static final float FLOAT_MAX_SAFE_INTEGER = (1 << MANTISSA_PRECISION_FLOAT) - 1;
+    private static final int MANTISSA_PRECISION_DOUBLE = 53;
+    private static final double DOUBLE_MAX_SAFE_INTEGER = (1L << MANTISSA_PRECISION_DOUBLE) - 1;
+
+    public static boolean inSafeIntegerRange(float f) {
+        return f >= -FLOAT_MAX_SAFE_INTEGER && f <= FLOAT_MAX_SAFE_INTEGER;
+    }
+
+    public static boolean inSafeIntegerRange(double d) {
+        return d >= -DOUBLE_MAX_SAFE_INTEGER && d <= DOUBLE_MAX_SAFE_INTEGER;
+    }
+
+    public static boolean isNegativeZero(float f) {
+        return Float.floatToRawIntBits(f) == Float.floatToRawIntBits(-0f);
+    }
+
+    public static boolean isNegativeZero(double d) {
+        return Double.doubleToRawLongBits(d) == Double.doubleToRawLongBits(-0d);
+    }
+
     public static boolean isAtMostByte(Klass klass) {
         return klass == klass.getMeta().java_lang_Byte;
     }
@@ -48,10 +69,5 @@ public class InteropUtils {
     public static boolean isAtMostFloat(Klass klass) {
         Meta meta = klass.getMeta();
         return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Float;
-    }
-
-    public static boolean isAtMostDouble(Klass klass) {
-        Meta meta = klass.getMeta();
-        return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Float || klass == meta.java_lang_Double;
     }
 }
