@@ -107,7 +107,7 @@ final class GenScavengeAllocationSnippets extends SubstrateAllocationSnippets {
 
     @Override
     public void initializeObjectHeader(Word memory, Word objectHeader, Word prototypeMarkWord, boolean isArray) {
-        Heap.getHeap().getObjectHeader().initializeHeaderOfNewObject(memory, objectHeader);
+        Heap.getHeap().getObjectHeader().initializeHeaderOfNewObject(memory, objectHeader, isArray);
     }
 
     @Override
@@ -122,7 +122,7 @@ final class GenScavengeAllocationSnippets extends SubstrateAllocationSnippets {
 
     @Override
     public Word getTLABInfo() {
-        return ThreadLocalAllocation.getTlabAddress();
+        return (Word) ThreadLocalAllocation.regularTLAB.getAddress();
     }
 
     @Override
