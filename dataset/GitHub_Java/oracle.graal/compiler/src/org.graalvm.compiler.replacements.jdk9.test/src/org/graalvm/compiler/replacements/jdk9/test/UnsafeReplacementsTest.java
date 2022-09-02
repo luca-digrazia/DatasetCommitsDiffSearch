@@ -206,12 +206,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
         return unsafe.getAndAddByte(container, byteOffset, (byte) 2);
     }
 
-    public static int unsafeGetAndAddBytePlusOne() {
-        Container container = new Container();
-        int value = unsafe.getAndAddByte(container, byteOffset, (byte) 2);
-        return value + 1;
-    }
-
     public static int unsafeGetAndAddChar() {
         Container container = new Container();
         return unsafe.getAndAddChar(container, charOffset, (char) 250);
@@ -244,7 +238,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
             testGraph("unsafeGetAndAddLong");
         }
         test("unsafeGetAndAddByte");
-        test("unsafeGetAndAddBytePlusOne");
         test("unsafeGetAndAddChar");
         test("unsafeGetAndAddShort");
         test("unsafeGetAndAddInt");
@@ -259,12 +252,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
     public static byte unsafeGetAndSetByte() {
         Container container = new Container();
         return unsafe.getAndSetByte(container, byteOffset, (byte) 129);
-    }
-
-    public static int unsafeGetAndSetBytePlusOne() {
-        Container container = new Container();
-        int value = unsafe.getAndSetByte(container, byteOffset, (byte) 129);
-        return value + 1;
     }
 
     public static char unsafeGetAndSetChar() {
@@ -301,7 +288,6 @@ public class UnsafeReplacementsTest extends MethodSubstitutionTest {
         }
         test("unsafeGetAndSetBoolean");
         test("unsafeGetAndSetByte");
-        test("unsafeGetAndSetBytePlusOne");
         test("unsafeGetAndSetChar");
         test("unsafeGetAndSetShort");
         test("unsafeGetAndSetInt");
