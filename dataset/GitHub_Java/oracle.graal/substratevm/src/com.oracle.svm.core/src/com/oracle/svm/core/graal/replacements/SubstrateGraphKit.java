@@ -43,7 +43,6 @@ import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.IndirectCallTargetNode;
 import org.graalvm.compiler.nodes.InvokeNode;
-import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.ReturnNode;
@@ -169,7 +168,7 @@ public class SubstrateGraphKit extends GraphKit {
         return createInvokeWithExceptionAndUnwind(findMethod(declaringClass, name, invokeKind == InvokeKind.Static), invokeKind, frameState, bci(), args);
     }
 
-    public InvokeWithExceptionNode createJavaCallWithException(InvokeKind kind, ResolvedJavaMethod targetMethod, ValueNode... arguments) {
+    public ValueNode createJavaCallWithException(InvokeKind kind, ResolvedJavaMethod targetMethod, ValueNode... arguments) {
         return startInvokeWithException(targetMethod, kind, frameState, bci(), arguments);
     }
 

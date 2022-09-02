@@ -101,6 +101,7 @@ import com.oracle.graal.pointsto.infrastructure.UniverseMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
+import com.oracle.graal.pointsto.nodes.ConvertUnknownValueNode;
 import com.oracle.graal.pointsto.nodes.UnsafePartitionLoadNode;
 import com.oracle.graal.pointsto.nodes.UnsafePartitionStoreNode;
 import com.oracle.svm.core.FrameAccess;
@@ -127,6 +128,7 @@ import com.oracle.svm.core.graal.nodes.SubstrateNarrowOopStamp;
 import com.oracle.svm.core.graal.nodes.SubstrateReflectionGetCallerClassNode;
 import com.oracle.svm.core.graal.nodes.TestDeoptimizeNode;
 import com.oracle.svm.core.graal.stackvalue.StackValueNode;
+import com.oracle.svm.core.graal.stackvalue.StackValueNode.StackSlotIdentity;
 import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.heap.ReferenceAccessImpl;
 import com.oracle.svm.core.hub.DynamicHub;
@@ -147,6 +149,7 @@ import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.nodes.DeoptProxyNode;
 import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
 
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -855,6 +858,24 @@ public class SubstrateGraphBuilderPlugins {
             }
         });
 
+        r.register2("convertUnknownValue", Object.class, Class.class, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object, ValueNode typeNode) {
+                ResolvedJavaType type = typeValue(b.getConstantReflection(), b, targetMethod, typeNode, "type");
+                TypeReference typeRef = TypeReference.createTrustedWithoutAssumptions(type);
+                Stamp stamp = StampFactory.object(typeRef);
+
+                /* The type cast for Graal optimization phases. */
+                ValueNode piNode = PiNode.create(object, stamp);
+                /*
+                 * The special handling node for static analysis. This node removes itself during
+                 * compilation.
+                 */
+                b.addPush(JavaKind.Object, new ConvertUnknownValueNode(piNode, stamp));
+                return true;
+            }
+        });
+
         registerCastExact(r);
     }
 
@@ -893,7 +914,8 @@ public class SubstrateGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode sizeNode) {
                 long size = longValue(b, targetMethod, sizeNode, "size");
-                b.addPush(JavaKind.Object, StackValueNode.create(1, size, b));
+                StackSlotIdentity slotIdentity = new StackSlotIdentity(b.getGraph().method().asStackTraceElement(b.bci()).toString(), false);
+                b.addPush(JavaKind.Object, new StackValueNode(1, size, slotIdentity));
                 return true;
             }
         });
@@ -903,7 +925,8 @@ public class SubstrateGraphBuilderPlugins {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver unused, ValueNode classNode) {
                 Class<? extends PointerBase> clazz = constantObjectParameter(b, snippetReflection, targetMethod, 0, Class.class, classNode);
                 int size = SizeOf.get(clazz);
-                b.addPush(JavaKind.Object, StackValueNode.create(1, size, b));
+                StackSlotIdentity slotIdentity = new StackSlotIdentity(b.getGraph().method().asStackTraceElement(b.bci()).toString(), false);
+                b.addPush(JavaKind.Object, new StackValueNode(1, size, slotIdentity));
                 return true;
             }
         });
@@ -912,7 +935,8 @@ public class SubstrateGraphBuilderPlugins {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode numElementsNode, ValueNode elementSizeNode) {
                 long numElements = longValue(b, targetMethod, numElementsNode, "numElements");
                 long elementSize = longValue(b, targetMethod, elementSizeNode, "elementSize");
-                b.addPush(JavaKind.Object, StackValueNode.create(numElements, elementSize, b));
+                StackSlotIdentity slotIdentity = new StackSlotIdentity(b.getGraph().method().asStackTraceElement(b.bci()).toString(), false);
+                b.addPush(JavaKind.Object, new StackValueNode(numElements, elementSize, slotIdentity));
                 return true;
             }
         });
@@ -923,10 +947,22 @@ public class SubstrateGraphBuilderPlugins {
                 long numElements = longValue(b, targetMethod, numElementsNode, "numElements");
                 Class<? extends PointerBase> clazz = constantObjectParameter(b, snippetReflection, targetMethod, 0, Class.class, classNode);
                 int size = SizeOf.get(clazz);
-                b.addPush(JavaKind.Object, StackValueNode.create(numElements, size, b));
+                StackSlotIdentity slotIdentity = new StackSlotIdentity(b.getGraph().method().asStackTraceElement(b.bci()).toString(), false);
+                b.addPush(JavaKind.Object, new StackValueNode(numElements, size, slotIdentity));
                 return true;
             }
         });
+    }
+
+    private static ResolvedJavaType typeValue(ConstantReflectionProvider constantReflection, GraphBuilderContext b, ResolvedJavaMethod targetMethod, ValueNode typeNode, String name) {
+        if (!typeNode.isConstant()) {
+            throw b.bailout("parameter " + name + " is not a compile time constant for call to " + targetMethod.format("%H.%n(%p)") + " in " + b.getMethod().asStackTraceElement(b.bci()));
+        }
+        ResolvedJavaType type = constantReflection.asJavaType(typeNode.asConstant());
+        if (type == null) {
+            throw b.bailout("parameter " + name + " is null for call to " + targetMethod.format("%H.%n(%p)") + " in " + b.getMethod().asStackTraceElement(b.bci()));
+        }
+        return type;
     }
 
     private static void registerClassPlugins(InvocationPlugins plugins, SnippetReflectionProvider snippetReflection) {
