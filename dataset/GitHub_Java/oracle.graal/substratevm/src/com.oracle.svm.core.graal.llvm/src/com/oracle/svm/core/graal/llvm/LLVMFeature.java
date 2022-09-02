@@ -31,13 +31,12 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.type.StampFactory;
-import org.graalvm.compiler.core.llvm.LLVMUtils.TargetSpecific;
+import org.graalvm.compiler.core.llvm.LLVMUtils;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
@@ -51,10 +50,10 @@ import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CLibrary;
+import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.Pointer;
 
-import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
@@ -125,7 +124,7 @@ public class LLVMFeature implements Feature, GraalFeature {
 
         ImageSingletons.add(SnippetRuntime.ExceptionUnwind.class, new SnippetRuntime.ExceptionUnwind() {
             @Override
-            public void unwindException(Pointer callerSP) {
+            public void unwindException(Pointer callerSP, CodePointer callerIP) {
                 LLVMPersonalityFunction.raiseException();
             }
         });
@@ -201,9 +200,6 @@ public class LLVMFeature implements Feature, GraalFeature {
 @AutomaticFeature
 @Platforms(Platform.AMD64.class)
 class LLVMAMD64TargetSpecificFeature implements Feature {
-    private static final int AMD64_RSP_IDX = 7;
-    private static final int AMD64_RBP_IDX = 6;
-
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
         return CompilerBackend.getValue().equals("llvm");
@@ -211,7 +207,7 @@ class LLVMAMD64TargetSpecificFeature implements Feature {
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
-        ImageSingletons.add(TargetSpecific.class, new TargetSpecific() {
+        ImageSingletons.add(LLVMUtils.TargetSpecific.class, new LLVMUtils.TargetSpecific() {
             @Override
             public String getRegisterInlineAsm(String register) {
                 return "movq %" + register + ", $0";
@@ -219,46 +215,7 @@ class LLVMAMD64TargetSpecificFeature implements Feature {
 
             @Override
             public String getJumpInlineAsm() {
-                return "jmpq *$0";
-            }
-
-            @Override
-            public String getLLVMArchName() {
-                return "x86-64";
-            }
-
-            /*
-             * The return address is pushed to the stack just before each call, but is not part of
-             * the stack frame of the callee. It is therefore not accounted for in either call
-             * frame.
-             */
-            @Override
-            public int getCallFrameSeparation() {
-                return FrameAccess.returnAddressSize();
-            }
-
-            /*
-             * The frame pointer is stored as the first element on the stack, just below the return
-             * address.
-             */
-            @Override
-            public int getFramePointerOffset() {
-                return -FrameAccess.wordSize();
-            }
-
-            @Override
-            public int getStackPointerDwarfRegNum() {
-                return AMD64_RSP_IDX;
-            }
-
-            @Override
-            public int getFramePointerDwarfRegNum() {
-                return AMD64_RBP_IDX;
-            }
-
-            @Override
-            public List<String> getLLCAdditionalOptions() {
-                return Collections.singletonList("-no-x86-call-frame-opt");
+                return "jmpq *($0)";
             }
         });
     }

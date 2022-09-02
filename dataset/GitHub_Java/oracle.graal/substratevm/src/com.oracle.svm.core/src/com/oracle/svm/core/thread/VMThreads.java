@@ -141,7 +141,8 @@ public abstract class VMThreads {
     public abstract void failFatally(int code, CCharPointer message);
 
     /** The value of a {@code null} {@link IsolateThread}. */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.")
+    // TODO: This could be @Fold instead of just @Uninterruptible.
     public static IsolateThread nullThread() {
         return WordFactory.nullPointer();
     }
@@ -348,17 +349,17 @@ public abstract class VMThreads {
             return statusToString(statusTL.getVolatile(vmThread), isStatusIgnoreSafepoints(vmThread));
         }
 
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         public static int getStatusVolatile(IsolateThread vmThread) {
             return statusTL.getVolatile(vmThread);
         }
 
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         public static boolean isStatusCreated(IsolateThread vmThread) {
             return (statusTL.getVolatile(vmThread) == STATUS_CREATED);
         }
 
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         public static boolean isStatusNative(IsolateThread vmThread) {
             return (statusTL.getVolatile(vmThread) == STATUS_IN_NATIVE);
         }
@@ -372,7 +373,7 @@ public abstract class VMThreads {
             statusTL.setVolatile(vmThread, STATUS_IN_NATIVE);
         }
 
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         public static boolean isStatusSafepoint(IsolateThread vmThread) {
             return (statusTL.getVolatile(vmThread) == STATUS_IN_SAFEPOINT);
         }
@@ -382,25 +383,25 @@ public abstract class VMThreads {
             return statusTL.compareAndSet(vmThread, STATUS_IN_NATIVE, STATUS_IN_SAFEPOINT);
         }
 
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         public static boolean isStatusJava() {
             return (statusTL.getVolatile() == STATUS_IN_JAVA);
         }
 
         /** An <em>unguarded</em> transition to Java. */
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         public static void setStatusJavaUnguarded(IsolateThread vmThread) {
             statusTL.setVolatile(vmThread, STATUS_IN_JAVA);
         }
 
         /** A guarded transition from native to Java. */
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         @ForceFixedRegisterReads
         public static boolean compareAndSetNativeToJava() {
             return statusTL.compareAndSet(STATUS_IN_NATIVE, STATUS_IN_JAVA);
         }
 
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         public static boolean isStatusIgnoreSafepoints(IsolateThread vmThread) {
             return safepointsDisabledTL.getVolatile(vmThread) == 1;
         }
@@ -410,7 +411,7 @@ public abstract class VMThreads {
          * mechanism ignores me. It is not necessary to clear a pending safepoint request (i.e., to
          * reset the safepoint counter) because the safepoint slow path is going to do that in case.
          */
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        @Uninterruptible(reason = "Called from uninterruptible code.")
         public static void setStatusIgnoreSafepoints() {
             safepointsDisabledTL.setVolatile(1);
         }

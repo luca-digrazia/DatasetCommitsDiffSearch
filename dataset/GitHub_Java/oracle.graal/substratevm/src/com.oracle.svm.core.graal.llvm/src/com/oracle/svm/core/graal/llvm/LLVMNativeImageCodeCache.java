@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.core.graal.llvm;
 
-import static com.oracle.svm.core.graal.llvm.LLVMOptions.KeepLLVMBitcodeFiles;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 import static com.oracle.svm.hosted.image.NativeBootImage.RWDATA_CGLOBALS_PARTITION_OFFSET;
 import static org.graalvm.compiler.core.llvm.LLVMUtils.FALSE;
@@ -58,7 +57,6 @@ import org.bytedeco.javacpp.Pointer;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.llvm.LLVMUtils;
-import org.graalvm.compiler.core.llvm.LLVMUtils.TargetSpecific;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.Indent;
@@ -72,6 +70,7 @@ import com.oracle.graal.pointsto.util.Timer.StopTimer;
 import com.oracle.objectfile.ObjectFile;
 import com.oracle.objectfile.ObjectFile.Element;
 import com.oracle.objectfile.SectionName;
+import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.graal.code.CGlobalDataReference;
@@ -109,9 +108,6 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
 
         try {
             basePath = Files.createTempDirectory("native-image-llvm");
-            if (!KeepLLVMBitcodeFiles.getValue()) {
-                basePath.toFile().deleteOnExit();
-            }
             if (LLVMOptions.DumpLLVMStackMap.hasBeenSet()) {
                 stackMapDump = new FileWriter(LLVMOptions.DumpLLVMStackMap.getValue());
             } else {
@@ -259,7 +255,7 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
             CompilationResult compilation = compilations.get(method);
             long startPatchpointID = compilation.getInfopoints().stream().filter(ip -> ip.reason == InfopointReason.METHOD_START).findFirst()
                             .orElseThrow(() -> new GraalError("no method start infopoint: " + methodSymbolName)).pcOffset;
-            int totalFrameSize = NumUtil.safeToInt(info.getFunctionStackSize(startPatchpointID) + TargetSpecific.get().getCallFrameSeparation());
+            int totalFrameSize = NumUtil.safeToInt(info.getFunctionStackSize(startPatchpointID) + FrameAccess.returnAddressSize());
             compilation.setTotalFrameSize(totalFrameSize);
 
             StringBuilder patchpointsDump = null;
@@ -500,8 +496,11 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
             List<String> cmd = new ArrayList<>();
             cmd.add("llc");
             cmd.add("-relocation-model=pic");
-            cmd.add("-march=" + TargetSpecific.get().getLLVMArchName());
-            cmd.addAll(TargetSpecific.get().getLLCAdditionalOptions());
+
+            /* X86 call frame optimization causes variable sized stack frames */
+            if (targetPlatform instanceof Platform.AMD64) {
+                cmd.add("-no-x86-call-frame-opt");
+            }
             cmd.add("-O2");
             cmd.add("-filetype=obj");
             cmd.add("-o");
