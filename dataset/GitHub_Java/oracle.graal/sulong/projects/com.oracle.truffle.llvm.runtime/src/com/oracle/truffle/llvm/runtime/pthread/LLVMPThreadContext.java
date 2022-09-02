@@ -33,7 +33,9 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.multithreading.LLVMPThreadStart;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -71,11 +73,10 @@ public final class LLVMPThreadContext {
         this.pThreadKeyLock = new Object();
         this.pThreadKeyStorage = new ConcurrentHashMap<>();
         this.pThreadDestructorStorage = new ConcurrentHashMap<>();
-
-        this.pthreadCallTarget = language.cachedCallTargets.computeIfAbsent(LLVMPThreadStart.LLVMPThreadFunctionRootNode.class,
-                        c -> LLVMLanguage.createCallTarget(
-                                        new LLVMPThreadStart.LLVMPThreadFunctionRootNode(language, LLVMPThreadStart.LLVMPThreadFunctionRootNode.createFrameDescriptor(),
-                                                        language.getActiveConfiguration().createNodeFactory(language, dataLayout))));
+        NodeFactory nodeFactory = language.getActiveConfiguration().createNodeFactory(language, dataLayout);
+        FrameDescriptor descriptor = LLVMPThreadStart.LLVMPThreadFunctionRootNode.createFrameDescriptor();
+        this.pthreadCallTarget = Truffle.getRuntime().createCallTarget(
+                        new LLVMPThreadStart.LLVMPThreadFunctionRootNode(language, descriptor, nodeFactory));
         this.isCreateThreadAllowed = true;
     }
 

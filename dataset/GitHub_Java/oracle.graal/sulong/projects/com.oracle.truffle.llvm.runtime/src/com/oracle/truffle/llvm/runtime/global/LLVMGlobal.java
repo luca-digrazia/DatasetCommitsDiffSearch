@@ -51,22 +51,22 @@ public final class LLVMGlobal extends LLVMSymbol {
     @CompilationFinal private boolean interopTypeCached;
     @CompilationFinal private LLVMInteropType interopType;
 
-    public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id, boolean exported, boolean externalWeak) {
+    public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id, boolean exported) {
         if (index < 0) {
             throw new AssertionError("Invalid index for LLVM global: " + index);
         }
         if (id < 0) {
             throw new AssertionError("Invalid index for LLVM global: " + id);
         }
-        return new LLVMGlobal(name, type, sourceSymbol, readOnly, index, id, exported, externalWeak);
+        return new LLVMGlobal(name, type, sourceSymbol, readOnly, index, id, exported);
     }
 
     public static LLVMGlobal createUnavailable(String name) {
-        return new LLVMGlobal(name + " (unavailable)", PointerType.VOID, null, true, -1, -1, false, false);
+        return new LLVMGlobal(name + " (unavailable)", PointerType.VOID, null, true, -1, -1, false);
     }
 
-    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int globalIndex, int moduleId, boolean exported, boolean externalWeak) {
-        super(name, moduleId, globalIndex, exported, externalWeak);
+    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int globalIndex, int moduleId, boolean exported) {
+        super(name, moduleId, globalIndex, exported);
         this.name = name;
         this.type = type;
         this.sourceSymbol = sourceSymbol;
