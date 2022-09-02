@@ -307,7 +307,7 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             return getBooleanVolatile(obj);
         } else {
-            return UNSAFE.getBoolean(obj.getPrimitiveFieldStorage(), (long) getOffset());
+            return UNSAFE.getByte(obj.getPrimitiveFieldStorage(), (long) getOffset()) != 0;
         }
     }
 
@@ -435,14 +435,14 @@ public final class Field extends Member<Type> implements FieldRef {
         if (isVolatile()) {
             setBooleanVolatile(obj, value);
         } else {
-            UNSAFE.putBoolean(obj.getPrimitiveFieldStorage(), (long) getOffset(), value);
+            UNSAFE.putByte(obj.getPrimitiveFieldStorage(), (long) getOffset(), (byte) (value ? 1 : 0));
         }
     }
 
     @CompilerDirectives.TruffleBoundary(allowInlining = true)
     public void setBooleanVolatile(StaticObject obj, boolean value) {
         obj.checkNotForeign();
-        UNSAFE.putBooleanVolatile(obj.getPrimitiveFieldStorage(), getOffset(), value);
+        setByteVolatile(obj, (byte) (value ? 1 : 0));
     }
 
     public void setByte(StaticObject obj, byte value) {

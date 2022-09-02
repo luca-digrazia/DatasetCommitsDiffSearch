@@ -316,7 +316,7 @@ public final class Target_sun_misc_Unsafe {
     private static StaticObject doStaticObjectCompareExchange(StaticObject holder, Field f, StaticObject before, StaticObject after) {
         StaticObject result;
         do {
-            result = f.getObject(holder, true);
+            result = f.getObjectVolatile(holder);
             if (result != before) {
                 return result;
             }
@@ -351,7 +351,7 @@ public final class Target_sun_misc_Unsafe {
     private static int doStaticObjectCompareExchangeInt(StaticObject holder, Field f, int before, int after) {
         int result;
         do {
-            result = f.getInt(holder, true);
+            result = f.getIntVolatile(holder);
             if (result != before) {
                 return result;
             }
@@ -386,7 +386,7 @@ public final class Target_sun_misc_Unsafe {
     private static long doStaticObjectCompareExchangeLong(StaticObject holder, Field f, long before, long after) {
         long result;
         do {
-            result = f.getLong(holder, true);
+            result = f.getLongVolatile(holder);
             if (result != before) {
                 return result;
             }
@@ -653,7 +653,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getBoolean(holder, true);
+        return f.getBooleanVolatile(holder);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -664,7 +664,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getByte(holder, true);
+        return f.getByteVolatile(holder);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -675,7 +675,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getShort(holder, true);
+        return f.getShortVolatile(holder);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -686,7 +686,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getChar(holder, true);
+        return f.getCharVolatile(holder);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -697,7 +697,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getFloat(holder, true);
+        return f.getFloatVolatile(holder);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -708,7 +708,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getInt(holder, true);
+        return f.getIntVolatile(holder);
     }
 
     @Substitution(hasReceiver = true)
@@ -718,7 +718,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getLong(holder, true);
+        return f.getLongVolatile(holder);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -741,7 +741,7 @@ public final class Target_sun_misc_Unsafe {
         }
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        return f.getObject(holder, true);
+        return f.getObjectVolatile(holder);
     }
 
     // endregion get*Volatile(Object holder, long offset)
@@ -798,7 +798,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert !f.getKind().isSubWord();
-        f.setObject(holder, value, true);
+        f.setObjectVolatile(holder, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -813,7 +813,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        f.setInt(holder, value, true);
+        f.setIntVolatile(holder, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -828,7 +828,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().needsTwoSlots();
-        f.setLong(holder, value, true);
+        f.setLongVolatile(holder, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -844,7 +844,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        f.setBoolean(holder, value, true);
+        f.setBooleanVolatile(holder, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -859,7 +859,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        f.setChar(holder, value, true);
+        f.setCharVolatile(holder, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -874,7 +874,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        f.setShort(holder, value, true);
+        f.setShortVolatile(holder, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -889,7 +889,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        f.setFloat(holder, value, true);
+        f.setFloatVolatile(holder, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -904,7 +904,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().needsTwoSlots();
-        f.setDouble(holder, value, true);
+        f.setDoubleVolatile(holder, value);
     }
 
     @TruffleBoundary(allowInlining = true)
@@ -919,7 +919,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         assert f.getKind().isSubWord();
-        f.setByte(holder, value, true);
+        f.setByteVolatile(holder, value);
     }
 
     @Substitution(hasReceiver = true, nameProvider = SharedUnsafeAppend0.class)
@@ -1127,7 +1127,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         // TODO(peterssen): Volatile is stronger than needed.
-        f.setInt(holder, value, true);
+        f.setIntVolatile(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1141,7 +1141,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         // TODO(peterssen): Volatile is stronger than needed.
-        f.setLong(holder, value, true);
+        f.setLongVolatile(holder, value);
     }
 
     @Substitution(hasReceiver = true)
@@ -1156,7 +1156,7 @@ public final class Target_sun_misc_Unsafe {
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
         // TODO(peterssen): Volatile is stronger than needed.
-        f.setObject(holder, value, true);
+        f.setObjectVolatile(holder, value);
     }
 
     // endregion put*(Object holder, long offset, * value)
