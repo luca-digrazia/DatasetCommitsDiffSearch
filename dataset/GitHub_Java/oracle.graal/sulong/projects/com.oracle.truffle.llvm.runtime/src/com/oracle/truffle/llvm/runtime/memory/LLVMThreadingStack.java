@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,10 +32,7 @@ package com.oracle.truffle.llvm.runtime.memory;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.profiles.ConditionProfile;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 
 /**
  * Holds the (lazily allocated) stacks of all threads that are active in one particular LLVMContext.
@@ -45,7 +42,6 @@ public final class LLVMThreadingStack {
     private final Map<Thread, LLVMStack> threadMap;
     private final long stackSize;
     private final Thread mainThread;
-    @CompilationFinal private LLVMStack mainThreadStack;
 
     public LLVMThreadingStack(Thread mainTread, long stackSize) {
         this.mainThread = mainTread;
@@ -61,18 +57,6 @@ public final class LLVMThreadingStack {
         return s;
     }
 
-    public LLVMStack getStackProfiled(Thread thread, ConditionProfile profile) {
-        if (profile.profile(thread == mainThread)) {
-            assert mainThreadStack != null;
-            return mainThreadStack;
-        }
-        LLVMStack s = getCurrentStack();
-        if (s == null) {
-            s = createNewStack();
-        }
-        return s;
-    }
-
     @TruffleBoundary
     private LLVMStack getCurrentStack() {
         return threadMap.get(Thread.currentThread());
@@ -80,12 +64,8 @@ public final class LLVMThreadingStack {
 
     @TruffleBoundary
     private LLVMStack createNewStack() {
-        LLVMStack s = new LLVMStack(stackSize, LLVMLanguage.getContext());
-        Thread currentThread = Thread.currentThread();
-        if (currentThread == mainThread) {
-            mainThreadStack = s;
-        }
-        Object previous = threadMap.putIfAbsent(currentThread, s);
+        LLVMStack s = new LLVMStack(stackSize);
+        Object previous = threadMap.putIfAbsent(Thread.currentThread(), s);
         assert previous == null;
         return s;
     }
@@ -103,7 +83,6 @@ public final class LLVMThreadingStack {
 
     @TruffleBoundary
     public void freeMainStack(LLVMMemory memory) {
-        mainThreadStack = null;
         free(memory, mainThread);
     }
 
