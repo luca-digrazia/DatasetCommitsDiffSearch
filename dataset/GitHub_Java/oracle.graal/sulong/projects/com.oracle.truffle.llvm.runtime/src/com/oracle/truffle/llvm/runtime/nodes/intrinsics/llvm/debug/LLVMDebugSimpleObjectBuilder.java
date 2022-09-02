@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -47,20 +47,19 @@ public final class LLVMDebugSimpleObjectBuilder extends LLVMDebugObjectBuilder {
     private final LLVMDebugValue.Builder builder;
     private final Object value;
 
-    LLVMDebugSimpleObjectBuilder(LLVMDebugValue.Builder builder, Object value) {
-        assert value != null;
+    public LLVMDebugSimpleObjectBuilder(LLVMDebugValue.Builder builder, Object value) {
         this.builder = builder;
         this.value = value;
     }
 
     private LLVMDebugValue getProvider() {
-        return builder != null ? builder.build(value) : LLVMDebugValue.UNAVAILABLE;
+        return builder != null && value != null ? builder.build(value) : LLVMDebugValue.UNAVAILABLE;
     }
 
     @Override
     @TruffleBoundary
     public LLVMDebugObject getValue(LLVMSourceType type, LLVMSourceLocation declaration) {
         final LLVMDebugValue valueProvider = getProvider();
-        return LLVMDebugObject.instantiate(type, 0L, valueProvider, declaration);
+        return LLVMDebugObject.create(type, 0L, valueProvider, declaration);
     }
 }
