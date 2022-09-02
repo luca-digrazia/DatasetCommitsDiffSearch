@@ -43,15 +43,42 @@ public final class HeapOptions {
     @Option(help = "Print the time for each of the phases of each collection, if +VerboseGC.")//
     public static final RuntimeOptionKey<Boolean> PrintGCTimes = new RuntimeOptionKey<>(false);
 
+    @Option(help = "Trace each object promotion (generates significant amounts of output).")//
+    public static final HostedOptionKey<Boolean> TraceObjectPromotion = new HostedOptionKey<>(false);
+
+    @Option(help = "Failed verification of the heap (if enabled) causes termination.")//
+    public static final RuntimeOptionKey<Boolean> HeapVerificationFailureIsFatal = new RuntimeOptionKey<>(true);
+
+    @Option(help = "Verify the heap before each collection.")//
+    public static final HostedOptionKey<Boolean> VerifyHeapBeforeCollection = new HostedOptionKey<>(false);
+
+    @Option(help = "Verify the heap after each collection.")//
+    public static final HostedOptionKey<Boolean> VerifyHeapAfterCollection = new HostedOptionKey<>(false);
+
+    @Option(help = "Trace heap verification.")//
+    public static final HostedOptionKey<Boolean> TraceHeapVerification = new HostedOptionKey<>(false);
+
+    @Option(help = "Verify stacks before each collection.")//
+    public static final HostedOptionKey<Boolean> VerifyStackBeforeCollection = new HostedOptionKey<>(false);
+
+    @Option(help = "Verify stacks after each collection.")//
+    public static final HostedOptionKey<Boolean> VerifyStackAfterCollection = new HostedOptionKey<>(false);
+
+    @Option(help = "Trace stack verification.")//
+    public static final HostedOptionKey<Boolean> TraceStackVerification = new HostedOptionKey<>(false);
+
+    @Option(help = "Verify dirty cards before each collection.") //
+    public static final HostedOptionKey<Boolean> VerifyDirtyCardsBeforeCollection = new HostedOptionKey<>(false);
+
+    @Option(help = "Verify dirty cards after each collection.") //
+    public static final HostedOptionKey<Boolean> VerifyDirtyCardsAfterCollection = new HostedOptionKey<>(false);
+
     @Option(help = "Soft references: this number of milliseconds multiplied by the free heap memory in MByte is the time span " +
                     "for which a soft reference will keep its referent alive after its last access.", type = OptionType.Expert) //
     public static final HostedOptionKey<Integer> SoftRefLRUPolicyMSPerMB = new HostedOptionKey<>(1000);
 
     @Option(help = "Enables card marking for image heap objects, which arranges them in chunks. Automatically enabled when supported.", type = OptionType.Expert) //
     public static final HostedOptionKey<Boolean> ImageHeapCardMarking = new HostedOptionKey<>(null);
-
-    @Option(help = "Remembered sets are necessary for collecting the young and old generation independently.", type = OptionType.Expert) //
-    public static final HostedOptionKey<Boolean> UseRememberedSet = new HostedOptionKey<>(true);
 
     private HeapOptions() {
     }
