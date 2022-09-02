@@ -132,25 +132,6 @@ public class FeatureImpl {
         public DebugContext getDebugContext() {
             return debugContext;
         }
-
-        @Override
-        public List<Path> getApplicationClassPath() {
-            return imageClassLoader.applicationClassPath();
-        }
-
-        @Override
-        public List<Path> getApplicationModulePath() {
-            /*
-             * GR-16855: The image generator does not yet support a module path. This method will
-             * return the proper module path when module support gets implemented.
-             */
-            return imageClassLoader.applicationModulePath();
-        }
-
-        @Override
-        public ClassLoader getApplicationClassLoader() {
-            return imageClassLoader.getClassLoader();
-        }
     }
 
     public static class IsInConfigurationAccessImpl extends FeatureAccessImpl implements Feature.IsInConfigurationAccess {
