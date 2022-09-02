@@ -59,8 +59,8 @@ final class AgentExecutionNode extends ExecutionEventNode {
         if (enter != null) {
             try {
                 enterDispatch.execute(enter, ctx, new VariablesObject(env, this, frame));
-            } catch (InteropException | RuntimeException ex) {
-                throw ctx.rethrow(ex);
+            } catch (InteropException ex) {
+                throw AgentException.raise(ex);
             }
         }
     }
@@ -70,8 +70,8 @@ final class AgentExecutionNode extends ExecutionEventNode {
         if (exit != null) {
             try {
                 exitDispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
-            } catch (InteropException | RuntimeException ex) {
-                throw ctx.rethrow(ex);
+            } catch (InteropException ex) {
+                throw AgentException.raise(ex);
             }
         }
     }
@@ -80,9 +80,9 @@ final class AgentExecutionNode extends ExecutionEventNode {
     protected void onReturnExceptional(VirtualFrame frame, Throwable exception) {
         if (exit != null) {
             try {
-                exitDispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
-            } catch (InteropException | RuntimeException ex) {
-                throw ctx.rethrow(ex);
+                enterDispatch.execute(exit, ctx, new VariablesObject(env, this, frame));
+            } catch (InteropException ex) {
+                throw AgentException.raise(ex);
             }
         }
     }
