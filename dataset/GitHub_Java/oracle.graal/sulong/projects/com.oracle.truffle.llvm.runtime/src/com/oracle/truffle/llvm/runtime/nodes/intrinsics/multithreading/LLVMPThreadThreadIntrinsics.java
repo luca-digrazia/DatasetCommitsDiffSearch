@@ -59,8 +59,12 @@ public final class LLVMPThreadThreadIntrinsics {
             }
 
             UtilFunctionCall.FunctionCallRunnable init = new UtilFunctionCall.FunctionCallRunnable(startRoutine, arg, ctx, true);
-            Thread t = ctx.createThread(init);
+            Thread t = ctx.getEnv().createThread(init);
             store.executeWithTarget(thread, t.getId());
+            synchronized (ctx.createdThreads) {
+                UtilAccessCollectionWithBoundary.add(ctx.createdThreads, t);
+            }
+            UtilAccessCollectionWithBoundary.put(ctx.threadStorage, t.getId(), t);
             t.start();
             return 0;
         }
@@ -70,8 +74,8 @@ public final class LLVMPThreadThreadIntrinsics {
     public abstract static class LLVMPThreadExit extends LLVMBuiltin {
 
         @Specialization
-        protected int doIntrinsic(Object returnValue, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-            ctx.setThreadReturnValue(Thread.currentThread().getId(), returnValue);
+        protected int doIntrinsic(Object retval, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+            UtilAccessCollectionWithBoundary.put(ctx.retValStorage, Thread.currentThread().getId(), retval);
             throw new PThreadExitException();
         }
     }
@@ -88,22 +92,18 @@ public final class LLVMPThreadThreadIntrinsics {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 storeNode = ctx.getLanguage().getNodeFactory().createStoreNode(LLVMInteropType.ValueKind.POINTER);
             }
-
             try {
-                Thread thread = ctx.getThread(th);
+                Thread thread = UtilAccessCollectionWithBoundary.get(ctx.threadStorage, th);
                 if (thread == null) {
                     return 0;
                 }
-
                 thread.join();
-                Object retVal = ctx.getThreadReturnValue(th);
+                Object retVal = UtilAccessCollectionWithBoundary.get(ctx.retValStorage, th);
                 if (!threadReturn.isNull()) {
                     storeNode.executeWithTarget(threadReturn, retVal);
                 }
-
             } catch (InterruptedException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw new LLVMThreadException(this, "Failed to join thread", e);
+                e.printStackTrace();
             }
             return 0;
         }
@@ -115,20 +115,14 @@ public final class LLVMPThreadThreadIntrinsics {
 
         @Specialization
         protected int doIntrinsic(LLVMPointer onceControl, LLVMPointer initRoutine, @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-            // check if onceControl and initRoutine are invalid
-            if (onceControl.isNull() || initRoutine.isNull()) {
-                return new UtilCConstants(ctx).getConstant(UtilCConstants.CConstant.EINVAL);
+            synchronized (ctx.onceStorage) {
+                if (ctx.onceStorage.contains(onceControl)) {
+                    return 0;
+                }
+                ctx.onceStorage.add(onceControl);
             }
-
-            // check if pthread_once was called before
-            if (!ctx.shouldExecuteOnce(onceControl)) {
-                return 0;
-            }
-
-            // execute the init routine
             UtilFunctionCall.FunctionCallRunnable init = new UtilFunctionCall.FunctionCallRunnable(initRoutine, null, ctx, false);
             init.run();
-
             return 0;
         }
     }

@@ -29,30 +29,10 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.multithreading;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.nodes.ControlFlowException;
 
-import java.util.List;
-import java.util.concurrent.ConcurrentMap;
+public final class PThreadExitException extends ControlFlowException {
 
-final class UtilAccessCollectionWithBoundary {
+    private static final long serialVersionUID = -6400933896708251681L;
 
-    @TruffleBoundary
-    public static <T> void add(List<T> list, T object) {
-        list.add(object);
-    }
-
-    @TruffleBoundary
-    public static <K, V> void put(ConcurrentMap<K, V> c, K key, V value) {
-        c.put(key, value);
-    }
-
-    @TruffleBoundary
-    public static <K, V> V get(ConcurrentMap<K, V> c, K key) {
-        return c.get(key);
-    }
-
-    @TruffleBoundary
-    public static <K, V> void remove(ConcurrentMap<K, V> c, K key) {
-        c.remove(key);
-    }
 }
