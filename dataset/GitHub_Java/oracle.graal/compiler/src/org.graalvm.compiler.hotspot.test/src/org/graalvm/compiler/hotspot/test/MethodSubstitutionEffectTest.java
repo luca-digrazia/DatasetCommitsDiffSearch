@@ -34,8 +34,6 @@ import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
-import org.graalvm.compiler.debug.DebugCloseable;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.java.BytecodeParserOptions;
@@ -274,27 +272,18 @@ public class MethodSubstitutionEffectTest extends GraalCompilerTest {
         Substitutee.multiSplitEffectNoMerge(ValueFountain);
     }
 
-    private DebugContext getDebugContext(ResolvedJavaMethod method) {
+    StructuredGraph getGraph(String snippet) {
+        OptionValues options = new OptionValues(getInitialOptions(), DumpOnError, false);
         /*
          * We do not want to inline partial intrinsic exits in this test to test the state of the
          * self recursive call.
          */
-        OptionValues options = new OptionValues(getInitialOptions(), DumpOnError, false,
-                        BytecodeParserOptions.InlinePartialIntrinsicExitDuringParsing, false);
-        return getDebugContext(options, null, method);
-    }
-
-    StructuredGraph getGraph(ResolvedJavaMethod method, DebugContext debug) {
-        StructuredGraph g = parseEager(method, AllowAssumptions.NO, debug);
+        options = new OptionValues(getInitialOptions(), BytecodeParserOptions.InlinePartialIntrinsicExitDuringParsing, false);
+        StructuredGraph g = parseEager(getResolvedJavaMethod(snippet), AllowAssumptions.NO, options);
         Suites s = Graal.getRequiredCapability(RuntimeProvider.class).getHostBackend().getSuites().getDefaultSuites(getInitialOptions());
         s.getHighTier().apply(g, getDefaultHighTierContext());
         s.getMidTier().apply(g, getDefaultMidTierContext());
         return g;
-    }
-
-    StructuredGraph getGraph(String snippet) {
-        ResolvedJavaMethod method = getResolvedJavaMethod(snippet);
-        return getGraph(method, getDebugContext(method));
     }
 
     @Test
@@ -305,11 +294,8 @@ public class MethodSubstitutionEffectTest extends GraalCompilerTest {
     @Test
     @SuppressWarnings("try")
     public void test2() {
-        ResolvedJavaMethod method = getResolvedJavaMethod("snippet02");
-        try (AutoCloseable c = new TTY.Filter();
-                        DebugContext debug = getDebugContext(method);
-                        DebugCloseable s = debug.disableIntercept()) {
-            getGraph(method, debug);
+        try (AutoCloseable c = new TTY.Filter()) {
+            getGraph("snippet02");
             Assert.fail("Compilation should not reach this point, must throw an exception before");
         } catch (Throwable t) {
             if (t.getCause() instanceof GraalError && t.getMessage().contains("unexpected node between return StateSplit and last instruction")) {
@@ -322,11 +308,8 @@ public class MethodSubstitutionEffectTest extends GraalCompilerTest {
     @Test
     @SuppressWarnings("try")
     public void test3() {
-        ResolvedJavaMethod method = getResolvedJavaMethod("snippet03");
-        try (AutoCloseable c = new TTY.Filter();
-                        DebugContext debug = getDebugContext(method);
-                        DebugCloseable s = debug.disableIntercept()) {
-            getGraph(method, debug);
+        try (AutoCloseable c = new TTY.Filter()) {
+            getGraph("snippet03");
             Assert.fail("Compilation should not reach this point, must throw an exception before");
         } catch (Throwable t) {
             if (t.getCause() instanceof GraalError && t.getMessage().contains(" produced invalid framestate")) {
@@ -349,11 +332,8 @@ public class MethodSubstitutionEffectTest extends GraalCompilerTest {
     @Test
     @SuppressWarnings("try")
     public void test6() {
-        ResolvedJavaMethod method = getResolvedJavaMethod("snippet06");
-        try (AutoCloseable c = new TTY.Filter();
-                        DebugContext debug = getDebugContext(method);
-                        DebugCloseable s = debug.disableIntercept()) {
-            getGraph(method, debug);
+        try (AutoCloseable c = new TTY.Filter()) {
+            getGraph("snippet06");
             Assert.fail("Compilation should not reach this point, must throw an exception before");
         } catch (Throwable t) {
             if (t.getCause() instanceof GraalError && t.getMessage().contains(" produced invalid framestate")) {
@@ -391,14 +371,12 @@ public class MethodSubstitutionEffectTest extends GraalCompilerTest {
         intrinisicsErrors.add(getResolvedJavaMethod(Substitutee.class, "multiSplitEffectNoMergeInvalid"));
 
         for (ResolvedJavaMethod method : intrinisicsWithoutErrors) {
-            StructuredGraph graph = getProviders().getReplacements().getIntrinsicGraph(method, INVALID_COMPILATION_ID, getDebugContext(method), null);
+            StructuredGraph graph = getProviders().getReplacements().getIntrinsicGraph(method, INVALID_COMPILATION_ID, getDebugContext(), null);
             getCode(method, graph);
         }
         for (ResolvedJavaMethod method : intrinisicsErrors) {
-            try (AutoCloseable c = new TTY.Filter();
-                            DebugContext debug = getDebugContext(method);
-                            DebugCloseable s = debug.disableIntercept()) {
-                StructuredGraph graph = getProviders().getReplacements().getIntrinsicGraph(method, INVALID_COMPILATION_ID, debug, null);
+            try (AutoCloseable c = new TTY.Filter()) {
+                StructuredGraph graph = getProviders().getReplacements().getIntrinsicGraph(method, INVALID_COMPILATION_ID, getDebugContext(), null);
                 getCode(method, graph);
                 Assert.fail("Compilation should not reach this point, must throw an exception before");
             } catch (Throwable t) {
