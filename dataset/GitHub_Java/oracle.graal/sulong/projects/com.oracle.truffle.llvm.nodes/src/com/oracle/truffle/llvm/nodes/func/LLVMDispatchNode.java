@@ -62,7 +62,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
-import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 
 public abstract class LLVMDispatchNode extends LLVMNode {
@@ -323,10 +322,9 @@ public abstract class LLVMDispatchNode extends LLVMNode {
 
         @TruffleBoundary
         protected LLVMDataEscapeNode[] createLLVMDataEscapeNodes() {
-            Type[] argTypes = type.getArgumentTypes();
-            LLVMDataEscapeNode[] args = new LLVMDataEscapeNode[argTypes.length - LLVMCallNode.USER_ARGUMENT_OFFSET];
-            for (int i = 0; i < args.length; i++) {
-                args[i] = LLVMDataEscapeNode.create(argTypes[i + LLVMCallNode.USER_ARGUMENT_OFFSET]);
+            LLVMDataEscapeNode[] args = new LLVMDataEscapeNode[type.getArgumentTypes().length - LLVMCallNode.USER_ARGUMENT_OFFSET];
+            for (int i = 0; i < type.getArgumentTypes().length - LLVMCallNode.USER_ARGUMENT_OFFSET; i++) {
+                args[i] = LLVMDataEscapeNode.create();
             }
             return args;
         }
