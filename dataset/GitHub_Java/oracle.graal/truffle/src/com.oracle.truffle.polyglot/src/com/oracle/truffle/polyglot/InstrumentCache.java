@@ -61,6 +61,7 @@ import java.util.TreeSet;
 import java.util.function.Supplier;
 
 import com.oracle.truffle.api.TruffleOptions;
+import com.oracle.truffle.api.impl.TruffleJDKServices;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.polyglot.EngineAccessor.AbstractClassLoaderSupplier;
@@ -209,7 +210,7 @@ final class InstrumentCache {
                 // a Truffle instrument since the Truffle API module descriptor only
                 // exports the packages to modules known at build time (such as the
                 // Graal module).
-                EngineAccessor.JDKSERVICES.exportTo(loader, null);
+                TruffleJDKServices.exportTo(loader, null);
             }
         }
 

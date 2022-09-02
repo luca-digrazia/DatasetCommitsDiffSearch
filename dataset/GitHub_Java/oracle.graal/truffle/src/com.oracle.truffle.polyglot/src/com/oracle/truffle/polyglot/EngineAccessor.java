@@ -99,10 +99,6 @@ final class EngineAccessor extends Accessor {
     static final SourceSupport SOURCE = ACCESSOR.sourceSupport();
     static final InstrumentSupport INSTRUMENT = ACCESSOR.instrumentSupport();
     static final LanguageSupport LANGUAGE = ACCESSOR.languageSupport();
-    static final JDKSupport JDKSERVICES;
-    static {
-        JDKSERVICES = ACCESSOR.jdkSupport();
-    }
 
     private static List<AbstractClassLoaderSupplier> locatorLoaders() {
         if (TruffleOptions.AOT) {
@@ -155,11 +151,6 @@ final class EngineAccessor extends Accessor {
     @Override
     protected CallInlined getCallInlined() {
         return super.getCallInlined();
-    }
-
-    @Override
-    protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
-        super.reloadEngineOptions(runtimeData, optionValues);
     }
 
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -89,17 +89,10 @@ public class LanguageCacheTest {
             @Override
             public List<URL> apply(String binaryName) {
                 try {
-                    URL url;
                     if (Files.isRegularFile(location)) {
-                        url = new URL("jar:" + location.toUri().toString() + "!/" + binaryName);
+                        return Collections.singletonList(new URL("jar:" + location.toUri().toString() + "!/" + binaryName));
                     } else {
-                        url = new URL(location.toUri().toString() + binaryName);
-                    }
-                    try {
-                        url.openConnection().connect();
-                        return Collections.singletonList(url);
-                    } catch (IOException ioe) {
-                        return Collections.emptyList();
+                        return Collections.singletonList(new URL(location.toUri().toString() + binaryName));
                     }
                 } catch (MalformedURLException e) {
                     throw new RuntimeException(e);
@@ -165,6 +158,10 @@ public class LanguageCacheTest {
             return null;
         }
 
+        @Override
+        protected boolean isObjectOfLanguage(Object object) {
+            return false;
+        }
     }
 
     /**
