@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,15 +25,17 @@
 package org.graalvm.compiler.nodes.calc;
 
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_1;
+import static org.graalvm.compiler.nodes.calc.BinaryArithmeticNode.getArithmeticOpTable;
 
+import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.IntegerConvertOp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.IntegerConvertOp.Narrow;
-import org.graalvm.compiler.core.common.type.ArithmeticOpTable.IntegerConvertOp.SignExtend;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.PrimitiveStamp;
+import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.NodeView;
@@ -46,7 +48,7 @@ import jdk.vm.ci.code.CodeUtil;
  * The {@code NarrowNode} converts an integer to a narrower integer.
  */
 @NodeInfo(cycles = CYCLES_1)
-public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
+public final class NarrowNode extends IntegerConvertNode<Narrow, IntegerConvertOp.ZeroExtend> {
 
     public static final NodeClass<NarrowNode> TYPE = NodeClass.create(NarrowNode.class);
 
@@ -56,7 +58,7 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
     }
 
     public NarrowNode(ValueNode input, int inputBits, int resultBits) {
-        super(TYPE, ArithmeticOpTable::getNarrow, ArithmeticOpTable::getSignExtend, inputBits, resultBits, input);
+        super(TYPE, getArithmeticOpTable(input).getNarrow(), inputBits, resultBits, input);
     }
 
     public static ValueNode create(ValueNode input, int resultBits, NodeView view) {
@@ -74,8 +76,49 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
     }
 
     @Override
+    protected IntegerConvertOp<Narrow> getOp(ArithmeticOpTable table) {
+        return table.getNarrow();
+    }
+
+    @Override
+    protected IntegerConvertOp<IntegerConvertOp.ZeroExtend> getReverseOp(ArithmeticOpTable table) {
+        return table.getZeroExtend();
+    }
+
+    @Override
     public boolean isLossless() {
+        return checkLossless(this.getResultBits(), this.getValue());
+    }
+
+    public static boolean checkLossless(int bits, ValueNode value) {
+        Stamp valueStamp = value.stamp(NodeView.DEFAULT);
+        if (bits > 0 && valueStamp instanceof IntegerStamp) {
+            IntegerStamp integerStamp = (IntegerStamp) valueStamp;
+            long bitsRangeMin = CodeUtil.minValue(bits);
+            long bitsRangeMax = CodeUtil.maxValue(bits);
+            if (bitsRangeMin <= integerStamp.lowerBound() && integerStamp.upperBound() <= bitsRangeMax) {
+                // all signed values fit
+                return true;
+            } else if (integerStamp.isPositive()) {
+                long valueUpMask = integerStamp.upMask();
+                if ((valueUpMask & CodeUtil.mask(bits)) == valueUpMask) {
+                    // value is unsigned and fits
+                    return true;
+                }
+            }
+        }
         return false;
+    }
+
+    @Override
+    public boolean preservesOrder(CanonicalCondition cond) {
+        switch (cond) {
+            case LT:
+                // Must guarantee that also sign bit does not flip.
+                return checkLossless(this.getResultBits() - 1, this.getValue());
+            default:
+                return checkLossless(this.getResultBits(), this.getValue());
+        }
     }
 
     @Override
@@ -121,13 +164,15 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, SignExtend> {
             }
         } else if (forValue instanceof AndNode) {
             AndNode andNode = (AndNode) forValue;
-            IntegerStamp yStamp = (IntegerStamp) andNode.getY().stamp(view);
-            IntegerStamp xStamp = (IntegerStamp) andNode.getX().stamp(view);
-            long relevantMask = CodeUtil.mask(this.getResultBits());
-            if ((relevantMask & yStamp.downMask()) == relevantMask) {
-                return create(andNode.getX(), this.getResultBits(), view);
-            } else if ((relevantMask & xStamp.downMask()) == relevantMask) {
-                return create(andNode.getY(), this.getResultBits(), view);
+            Stamp xStamp = andNode.getX().stamp(view);
+            Stamp yStamp = andNode.getY().stamp(view);
+            if (xStamp instanceof IntegerStamp && yStamp instanceof IntegerStamp) {
+                long relevantMask = CodeUtil.mask(this.getResultBits());
+                if ((relevantMask & ((IntegerStamp) yStamp).downMask()) == relevantMask) {
+                    return create(andNode.getX(), this.getResultBits(), view);
+                } else if ((relevantMask & ((IntegerStamp) xStamp).downMask()) == relevantMask) {
+                    return create(andNode.getY(), this.getResultBits(), view);
+                }
             }
         }
 
