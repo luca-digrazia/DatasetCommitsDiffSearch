@@ -25,11 +25,12 @@
 package com.oracle.svm.core.posix.headers;
 
 import org.graalvm.nativeimage.PinnedObject;
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.constant.CConstant;
 import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
@@ -37,18 +38,18 @@ import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.c.type.WordPointer;
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.Platform.DARWIN;
-import org.graalvm.nativeimage.Platform.LINUX;
+import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 
 //Checkstyle: stop
 
 /**
- * Definitions manually translated from the C header file dlfcn.h.
+ * Definitions manually translated from the C header file zlib.h.
+ *
+ * We only include this class in the JNI implementation in order to add -lz to the link line.
  */
-@Platforms({DARWIN.class, LINUX.class})
+@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class, DeprecatedPlatform.LINUX_SUBSTITUTION.class})
 @CContext(PosixDirectives.class)
 @CLibrary("z")
 public class ZLib {

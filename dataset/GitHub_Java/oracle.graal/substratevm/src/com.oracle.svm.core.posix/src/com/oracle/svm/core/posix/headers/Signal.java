@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.core.posix.headers;
 
-import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.constant.CConstant;
@@ -52,15 +51,6 @@ public class Signal {
 
     @CFunction
     public static native int kill(int pid, int sig);
-
-    @CConstant
-    public static native int SIG_BLOCK();
-
-    @CConstant
-    public static native int SIG_UNBLOCK();
-
-    @CConstant
-    public static native int SIG_SETMASK();
 
     @CFunction
     public static native int sigprocmask(int how, sigset_tPointer set, sigset_tPointer oldset);
@@ -97,13 +87,13 @@ public class Signal {
         /* Fields unused */
     }
 
-    @Platforms(InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class)
+    @Platforms(InternalPlatform.LINUX_AND_JNI.class)
     @CPointerTo(nameOfCType = "long long int")
     public interface GregsPointer extends PointerBase {
         long read(int index);
     }
 
-    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION_AMD64.class, Platform.LINUX_AMD64.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION_AMD64.class, InternalPlatform.LINUX_JNI_AMD64.class})
     @CEnum
     @CContext(PosixDirectives.class)
     public enum GregEnum {
@@ -135,7 +125,7 @@ public class Signal {
         public native int getCValue();
     }
 
-    @Platforms({InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
+    @Platforms({InternalPlatform.LINUX_AND_JNI.class, InternalPlatform.DARWIN_AND_JNI.class})
     @CStruct
     public interface ucontext_t extends PointerBase {
         /*-
@@ -160,7 +150,7 @@ public class Signal {
             } mcontext_t;
          */
         @CFieldAddress("uc_mcontext.gregs")
-        @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION_AMD64.class, Platform.LINUX_AMD64.class})
+        @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION_AMD64.class, InternalPlatform.LINUX_JNI_AMD64.class})
         GregsPointer uc_mcontext_gregs();
 
         /*-
@@ -186,16 +176,16 @@ public class Signal {
         };
         */
         @CFieldAddress("uc_mcontext")
-        @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION_AARCH64.class, Platform.LINUX_AARCH64.class})
+        @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION_AArch64.class, InternalPlatform.LINUX_JNI_AArch64.class})
         mcontext_t uc_mcontext();
 
         @CField("uc_mcontext")
-        @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION_AMD64.class, Platform.DARWIN_AMD64.class})
+        @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION_AMD64.class, InternalPlatform.DARWIN_JNI_AMD64.class})
         MContext64 uc_mcontext64();
 
     }
 
-    @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION_AMD64.class, Platform.DARWIN_AMD64.class})
+    @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION_AMD64.class, InternalPlatform.DARWIN_JNI_AMD64.class})
     @CStruct(value = "__darwin_mcontext64", addStructKeyword = true)
     public interface MContext64 extends PointerBase {
 
@@ -255,7 +245,7 @@ public class Signal {
     }
 
     @CStruct
-    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION_AARCH64.class, Platform.LINUX_AARCH64.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION_AArch64.class, InternalPlatform.LINUX_JNI_AArch64.class})
     public interface mcontext_t extends PointerBase {
         @CField
         long fault_address();
@@ -280,7 +270,7 @@ public class Signal {
         void dispatch(int signum, siginfo_t siginfo, WordPointer opaque);
     }
 
-    @Platforms({InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
+    @Platforms({InternalPlatform.LINUX_AND_JNI.class, InternalPlatform.DARWIN_AND_JNI.class})
     @CConstant
     public static native int SA_SIGINFO();
 
@@ -359,7 +349,7 @@ public class Signal {
         public native int getCValue();
     }
 
-    @Platforms(InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class)
+    @Platforms(InternalPlatform.LINUX_AND_JNI.class)
     @CEnum
     @CContext(PosixDirectives.class)
     public enum LinuxSignalEnum {
@@ -370,7 +360,7 @@ public class Signal {
         public native int getCValue();
     }
 
-    @Platforms(InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class)
+    @Platforms(InternalPlatform.DARWIN_AND_JNI.class)
     @CEnum
     @CContext(PosixDirectives.class)
     public enum DarwinSignalEnum {

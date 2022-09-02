@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,23 +24,23 @@
  */
 package com.oracle.svm.core.posix;
 
+import static com.oracle.svm.core.headers.Errno.EACCES;
+import static com.oracle.svm.core.headers.Errno.EAGAIN;
+import static com.oracle.svm.core.headers.Errno.ECANCELED;
+import static com.oracle.svm.core.headers.Errno.EINTR;
+import static com.oracle.svm.core.headers.Errno.EINVAL;
+import static com.oracle.svm.core.headers.Errno.ENOENT;
+import static com.oracle.svm.core.headers.Errno.ENOMEM;
+import static com.oracle.svm.core.headers.Errno.ENOTCONN;
+import static com.oracle.svm.core.headers.Errno.ENOTSOCK;
+import static com.oracle.svm.core.headers.Errno.ENOTSUP;
+import static com.oracle.svm.core.headers.Errno.EOPNOTSUPP;
+import static com.oracle.svm.core.headers.Errno.ERANGE;
+import static com.oracle.svm.core.headers.Errno.ESRCH;
+import static com.oracle.svm.core.headers.Errno.errno;
 import static com.oracle.svm.core.posix.headers.Dirent.opendir;
 import static com.oracle.svm.core.posix.headers.Dirent.readdir_r;
 import static com.oracle.svm.core.posix.headers.Dlfcn.RTLD_DEFAULT;
-import static com.oracle.svm.core.posix.headers.Errno.EACCES;
-import static com.oracle.svm.core.posix.headers.Errno.EAGAIN;
-import static com.oracle.svm.core.posix.headers.Errno.ECANCELED;
-import static com.oracle.svm.core.posix.headers.Errno.EINTR;
-import static com.oracle.svm.core.posix.headers.Errno.EINVAL;
-import static com.oracle.svm.core.posix.headers.Errno.ENOENT;
-import static com.oracle.svm.core.posix.headers.Errno.ENOMEM;
-import static com.oracle.svm.core.posix.headers.Errno.ENOTCONN;
-import static com.oracle.svm.core.posix.headers.Errno.ENOTSOCK;
-import static com.oracle.svm.core.posix.headers.Errno.ENOTSUP;
-import static com.oracle.svm.core.posix.headers.Errno.EOPNOTSUPP;
-import static com.oracle.svm.core.posix.headers.Errno.ERANGE;
-import static com.oracle.svm.core.posix.headers.Errno.ESRCH;
-import static com.oracle.svm.core.posix.headers.Errno.errno;
 import static com.oracle.svm.core.posix.headers.Fcntl.F_GETFL;
 import static com.oracle.svm.core.posix.headers.Fcntl.F_RDLCK;
 import static com.oracle.svm.core.posix.headers.Fcntl.F_SETFL;
@@ -99,11 +101,6 @@ import static com.oracle.svm.core.posix.headers.Unistd.sysconf;
 import static com.oracle.svm.core.posix.headers.Unistd.unlink;
 import static com.oracle.svm.core.posix.headers.Unistd.write;
 import static com.oracle.svm.core.posix.headers.darwin.CoreFoundation.CFRelease;
-import static com.oracle.svm.core.posix.headers.darwin.CoreFoundation.CFStringAppendCharacters;
-import static com.oracle.svm.core.posix.headers.darwin.CoreFoundation.CFStringCreateMutable;
-import static com.oracle.svm.core.posix.headers.darwin.CoreFoundation.CFStringGetCharacters;
-import static com.oracle.svm.core.posix.headers.darwin.CoreFoundation.CFStringGetLength;
-import static com.oracle.svm.core.posix.headers.darwin.CoreFoundation.CFStringNormalize;
 import static com.oracle.svm.core.posix.headers.darwin.DarwinSendfile.sendfile;
 import static com.oracle.svm.core.posix.headers.linux.LinuxSendfile.sendfile;
 import static com.oracle.svm.core.posix.headers.linux.Mntent.getmntent_r;
@@ -113,21 +110,18 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.PortUnreachableException;
+import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.spi.FileSystemProvider;
+import java.util.function.Predicate;
 
-import org.graalvm.compiler.word.ObjectAccess;
-import org.graalvm.compiler.word.Word;
-import org.graalvm.nativeimage.PinnedObject;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platform.DARWIN;
-import org.graalvm.nativeimage.Platform.LINUX;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
-import org.graalvm.nativeimage.c.function.CEntryPoint;
-import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.struct.SizeOf;
@@ -138,7 +132,9 @@ import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.nativeimage.c.type.WordPointer;
-import org.graalvm.word.Pointer;
+import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.impl.DeprecatedPlatform;
+import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.SignedWord;
 import org.graalvm.word.UnsignedWord;
@@ -148,6 +144,7 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.Inject;
 import com.oracle.svm.core.annotate.InjectAccessors;
@@ -155,21 +152,18 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.c.function.CEntryPointOptions;
-import com.oracle.svm.core.c.function.CEntryPointOptions.NoEpilogue;
-import com.oracle.svm.core.c.function.CEntryPointOptions.NoPrologue;
-import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
-import com.oracle.svm.core.config.ConfigurationValues;
+import com.oracle.svm.core.headers.Errno;
+import com.oracle.svm.core.jdk.JDK11OrEarlier;
+import com.oracle.svm.core.jdk.JDK11OrLater;
+import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.os.IsDefined;
-import com.oracle.svm.core.posix.PosixOSInterface.Util_java_io_FileDescriptor;
+import com.oracle.svm.core.posix.darwin.DarwinCoreFoundationUtils;
 import com.oracle.svm.core.posix.headers.Dirent;
 import com.oracle.svm.core.posix.headers.Dirent.DIR;
 import com.oracle.svm.core.posix.headers.Dirent.dirent;
 import com.oracle.svm.core.posix.headers.Dirent.direntPointer;
 import com.oracle.svm.core.posix.headers.Dlfcn;
-import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Fcntl;
 import com.oracle.svm.core.posix.headers.Fcntl.flock;
 import com.oracle.svm.core.posix.headers.Grp.group;
@@ -181,8 +175,6 @@ import com.oracle.svm.core.posix.headers.Pthread;
 import com.oracle.svm.core.posix.headers.Pwd.passwd;
 import com.oracle.svm.core.posix.headers.Pwd.passwdPointer;
 import com.oracle.svm.core.posix.headers.Resource.rlimit;
-import com.oracle.svm.core.posix.headers.Signal;
-import com.oracle.svm.core.posix.headers.Signal.SignalDispatcher;
 import com.oracle.svm.core.posix.headers.Socket;
 import com.oracle.svm.core.posix.headers.Socket.sockaddr;
 import com.oracle.svm.core.posix.headers.Stat;
@@ -194,33 +186,33 @@ import com.oracle.svm.core.posix.headers.Time;
 import com.oracle.svm.core.posix.headers.Time.timeval;
 import com.oracle.svm.core.posix.headers.Uio.iovec;
 import com.oracle.svm.core.posix.headers.Unistd;
-import com.oracle.svm.core.posix.headers.darwin.CoreFoundation.CFMutableStringRef;
+import com.oracle.svm.core.posix.headers.darwin.CoreFoundation;
 import com.oracle.svm.core.posix.headers.linux.Mntent;
 import com.oracle.svm.core.posix.headers.linux.Mntent.mntent;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
 
-import jdk.vm.ci.meta.JavaKind;
-
+@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
 public final class PosixJavaNIOSubstitutions {
 
     // Checkstyle: stop
     @TargetClass(className = "sun.nio.ch.IOStatus")
-    static final class Target_sun_nio_ch_IOStatus {
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+    public static final class Target_sun_nio_ch_IOStatus {
         @Alias @TargetElement(name = "EOF")//
-        protected static int IOS_EOF;
+        public static int IOS_EOF;
         @Alias @TargetElement(name = "UNAVAILABLE")//
-        protected static int IOS_UNAVAILABLE;
+        public static int IOS_UNAVAILABLE;
         @Alias @TargetElement(name = "INTERRUPTED")//
-        protected static int IOS_INTERRUPTED;
+        public static int IOS_INTERRUPTED;
         @Alias @TargetElement(name = "UNSUPPORTED")//
-        protected static int IOS_UNSUPPORTED;
+        public static int IOS_UNSUPPORTED;
         @Alias @TargetElement(name = "THROWN")//
-        protected static int IOS_THROWN;
+        public static int IOS_THROWN;
         @Alias @TargetElement(name = "UNSUPPORTED_CASE")//
-        protected static int IOS_UNSUPPORTED_CASE;
+        public static int IOS_UNSUPPORTED_CASE;
     }
 
     @TargetClass(className = "sun.nio.ch.FileDispatcher")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_ch_FileDispatcher {
         @Alias @TargetElement(name = "NO_LOCK")//
         protected static int FD_NO_LOCK;
@@ -234,10 +226,6 @@ public final class PosixJavaNIOSubstitutions {
 
     // Checkstyle: resume
 
-    protected static IOException throwIOExceptionWithLastError(String defaultMsg) throws IOException {
-        throw new IOException(PosixOSInterface.lastErrorString(defaultMsg));
-    }
-
     protected static int handle(int rv, String msg) throws IOException {
         if (rv >= 0) {
             return rv;
@@ -245,7 +233,7 @@ public final class PosixJavaNIOSubstitutions {
         if (errno() == EINTR()) {
             return Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
         }
-        throw throwIOExceptionWithLastError(msg);
+        throw PosixUtils.newIOExceptionWithLastError(msg);
     }
 
     protected static long handle(long rv, String msg) throws IOException {
@@ -255,10 +243,10 @@ public final class PosixJavaNIOSubstitutions {
         if (errno() == EINTR()) {
             return Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
         }
-        throw throwIOExceptionWithLastError(msg);
+        throw PosixUtils.newIOExceptionWithLastError(msg);
     }
 
-    protected static int convertReturnVal(WordBase n, boolean reading) throws IOException {
+    public static int convertReturnVal(WordBase n, boolean reading) throws IOException {
         return convertReturnVal((int) n.rawValue(), reading);
     }
 
@@ -278,8 +266,7 @@ public final class PosixJavaNIOSubstitutions {
             return Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
         } else {
             String msg = reading ? "Read failed" : "Write failed";
-            throwIOExceptionWithLastError(msg);
-            return Target_sun_nio_ch_IOStatus.IOS_THROWN;
+            throw PosixUtils.newIOExceptionWithLastError(msg);
         }
     }
 
@@ -303,13 +290,12 @@ public final class PosixJavaNIOSubstitutions {
             return Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
         } else {
             String msg = reading ? "Read failed" : "Write failed";
-            throwIOExceptionWithLastError(msg);
-            return Target_sun_nio_ch_IOStatus.IOS_THROWN;
+            throw PosixUtils.newIOExceptionWithLastError(msg);
         }
     }
 
     protected static int fdval(FileDescriptor fdo) {
-        return Util_java_io_FileDescriptor.getFD(fdo);
+        return PosixUtils.getFD(fdo);
     }
 
     protected static <T extends PointerBase> T dlsym(PointerBase handle, String name) {
@@ -320,6 +306,7 @@ public final class PosixJavaNIOSubstitutions {
     }
 
     @TargetClass(className = "sun.nio.fs.Cancellable")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_fs_Cancellable {
         @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Manual)//
         private long pollingAddress;
@@ -328,7 +315,7 @@ public final class PosixJavaNIOSubstitutions {
     /** See the comments on {@link sun.nio.ch.NativeThread}. */
     /* Translated from: jdk/src/solaris/native/sun/nio/ch/NativeThread.c?v=Java_1.8.0_40_b10 */
     @TargetClass(className = "sun.nio.ch.NativeThread")
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_ch_NativeThread {
         /* { Do not re-format commented code: @formatter:off */
 
@@ -355,105 +342,45 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static void signal(long thread) throws IOException {
             if (SubstrateOptions.MultiThreaded.getValue()) {
-                Util_sun_nio_ch_NativeThread.ensureInitialized();
                 // 090     int ret;
                 int ret;
                 // 091 #ifdef __solaris__
                 // 092     ret = thr_kill((thread_t)thread, INTERRUPT_SIGNAL);
                 // 093 #else
                 // 094     ret = pthread_kill((pthread_t)thread, INTERRUPT_SIGNAL);
-                ret = Pthread.pthread_kill(WordFactory.pointer(thread), Util_sun_nio_ch_NativeThread.INTERRUPT_SIGNAL);
                 // 095 #endif
+                ret = PosixInterruptSignalUtils.interruptPThread(WordFactory.pointer(thread));
                 // 096     if (ret != 0)
                 if (ret != 0) {
-                    // 097         JNU_ThrowIOExceptionWithLastError(env, "Thread signal failed");
-                    throw new IOException("Thread signal failed");
+                // 097         JNU_ThrowIOExceptionWithLastError(env, "Thread signal failed");
+                    throw PosixUtils.newIOExceptionWithLastError("Thread signal failed");
                 }
             }
         }
 
-        /** See {@link Util_sun_nio_ch_NativeThread#ensureInitialized()}. */
         @Substitute
-        private static void init() {
-            throw new InternalError("init() is only called from static initializers, so not reachable in Substrate VM");
+        // 58  JNIEXPORT void JNICALL
+        // 59  Java_sun_nio_ch_NativeThread_init(JNIEnv *env, jclass cl)
+        // 60  {
+        private static /* native */ void init() throws IOException {
+            // 61      /* Install the null handler for INTERRUPT_SIGNAL.  This might overwrite the
+            // 62       * handler previously installed by java/net/linux_close.c, but that's okay
+            // 63       * since neither handler actually does anything.  We install our own
+            // 64       * handler here simply out of paranoia; ultimately the two mechanisms
+            // 65       * should somehow be unified, perhaps within the VM.
+            // 66       */
+            // 67
+            // 68      sigset_t ss;
+            // 69      struct sigaction sa, osa;
+            // 70      sa.sa_handler = nullHandler;
+            // 71      sa.sa_flags = 0;
+            // 72      sigemptyset(&sa.sa_mask);
+            // 73      if (sigaction(INTERRUPT_SIGNAL, &sa, &osa) < 0)
+            // 74          JNU_ThrowIOExceptionWithLastError(env, "sigaction");
+            PosixInterruptSignalUtils.ensureInitialized();
         }
 
         /* } Do not re-format commented code: @formatter:on */
-    }
-
-    static final class Util_sun_nio_ch_NativeThread {
-
-        /**
-         * The initialization of {@link sun.nio.ch.NativeThread} is in a static block that gets run
-         * during image building. I need to initialize the signal handler at run time. I am not
-         * worried about races, as they will all register the same signal handler.
-         */
-        static boolean initialized = false;
-
-        /* { Do not re-format commented code: @formatter:off */
-        // 035 #ifdef __linux__
-        // 036   #include <pthread.h>
-        // 037   #include <sys/signal.h>
-        // 038   /* Also defined in net/linux_close.c */
-        // 039   #define INTERRUPT_SIGNAL (__SIGRTMAX - 2)
-        // 040 #elif __solaris__
-        // 041   #include <thread.h>
-        // 042   #include <signal.h>
-        // 043   #define INTERRUPT_SIGNAL (SIGRTMAX - 2)
-        // 044 #elif _ALLBSD_SOURCE
-        // 045   #include <pthread.h>
-        // 046   #include <signal.h>
-        // 047   /* Also defined in net/bsd_close.c */
-        // 048   #define INTERRUPT_SIGNAL SIGIO
-        // 049 #else
-        // 050   #error "missing platform-specific definition here"
-        // 051 #endif
-        static final Signal.SignalEnum INTERRUPT_SIGNAL = Signal.SignalEnum.SIGIO;
-        /* } Do not re-format commented code: @formatter:on */
-
-        /* Translated from jdk/src/solaris/native/sun/nio/ch/NativeThread.c?v=Java_1.8.0_40_b10. */
-        // 053 static void
-        // 054 nullHandler(int sig)
-        // 055 {
-        // 056 }
-        @CEntryPoint
-        @CEntryPointOptions(prologue = NoPrologue.class, epilogue = NoEpilogue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-        @Uninterruptible(reason = "Can not check for safepoints because I am running on a borrowed thread.")
-        private static void nullHandler(@SuppressWarnings("unused") int signalNumber) {
-        }
-
-        /** The address of the null signal handler. */
-        private static final CEntryPointLiteral<SignalDispatcher> nullDispatcher = CEntryPointLiteral.create(Util_sun_nio_ch_NativeThread.class, "nullHandler", int.class);
-
-        static void ensureInitialized() throws IOException {
-            if (!initialized) {
-                /* { Do not re-format commented code: @formatter:off */
-                // 061     /* Install the null handler for INTERRUPT_SIGNAL.  This might overwrite the
-                // 062      * handler previously installed by java/net/linux_close.c, but that's okay
-                // 063      * since neither handler actually does anything.  We install our own
-                // 064      * handler here simply out of paranoia; ultimately the two mechanisms
-                // 065      * should somehow be unified, perhaps within the VM.
-                // 066      */
-                // 067
-                // 068     sigset_t ss;
-                // 069     struct sigaction sa, osa;
-                Signal.sigaction saPointer = StackValue.get(SizeOf.get(Signal.sigaction.class));
-                Signal.sigaction osaPointer = StackValue.get(SizeOf.get(Signal.sigaction.class));
-                // 070     sa.sa_handler = nullHandler;
-                saPointer.sa_handler(Util_sun_nio_ch_NativeThread.nullDispatcher.getFunctionPointer());
-                // 071     sa.sa_flags = 0;
-                saPointer.sa_flags(0);
-                // 072     sigemptyset(&sa.sa_mask);
-                Signal.sigemptyset(saPointer.sa_mask());
-                // 073     if (sigaction(INTERRUPT_SIGNAL, &sa, &osa) < 0)
-                if (Signal.sigaction(INTERRUPT_SIGNAL, saPointer, osaPointer) < 0) {
-                    // 074         JNU_ThrowIOExceptionWithLastError(env, "sigaction");
-                    throw new IOException("sigaction");
-                }
-                /* } Do not re-format commented code: @formatter:on */
-                initialized = true;
-            }
-        }
     }
 
     /*
@@ -461,7 +388,7 @@ public final class PosixJavaNIOSubstitutions {
      */
 
     @TargetClass(className = "sun.nio.ch.IOUtil")
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_ch_IOUtil {
 
         @Substitute
@@ -472,18 +399,18 @@ public final class PosixJavaNIOSubstitutions {
 
         @Substitute
         private static int fdVal(FileDescriptor fd) {
-            return Util_java_io_FileDescriptor.getFD(fd);
+            return PosixUtils.getFD(fd);
         }
 
         @Substitute
         private static void setfdVal(FileDescriptor fd, int value) {
-            Util_java_io_FileDescriptor.setFD(fd, value);
+            PosixUtils.setFD(fd, value);
         }
 
         @Substitute
         private static void configureBlocking(FileDescriptor fdo, boolean blocking) throws IOException {
             if (Util_sun_nio_ch_IOUtil.configureBlocking(fdval(fdo), blocking) < 0) {
-                throwIOExceptionWithLastError("Configure blocking failed");
+                throw PosixUtils.newIOExceptionWithLastError("Configure blocking failed");
             }
         }
 
@@ -493,18 +420,20 @@ public final class PosixJavaNIOSubstitutions {
          */
         @Substitute
         private static long makePipe(boolean blocking) throws IOException {
-            CIntPointer fd = StackValue.get(2, SizeOf.get(CIntPointer.class));
+            CIntPointer fd = StackValue.get(2, CIntPointer.class);
 
             if (pipe(fd) < 0) {
-                throwIOExceptionWithLastError("Pipe failed");
-                return 0;
+                throw PosixUtils.newIOExceptionWithLastError("Pipe failed");
             }
             if (blocking == false) {
                 if ((Util_sun_nio_ch_IOUtil.configureBlocking(fd.read(0), false) < 0) || (Util_sun_nio_ch_IOUtil.configureBlocking(fd.read(1), false) < 0)) {
-                    throwIOExceptionWithLastError("Configure blocking failed");
-                    close(fd.read(0));
-                    close(fd.read(1));
-                    return 0;
+                    try {
+                        /* Capture last error before closing files, which will clear errno. */
+                        throw PosixUtils.newIOExceptionWithLastError("Configure blocking failed");
+                    } finally {
+                        close(fd.read(0));
+                        close(fd.read(1));
+                    }
                 }
             }
             return ((long) fd.read(0) << 32) | fd.read(1);
@@ -513,20 +442,56 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static boolean drain(int fd) throws IOException {
             final int bufsize = 128;
-            CCharPointer buf = StackValue.get(bufsize, SizeOf.get(CCharPointer.class));
+            CCharPointer buf = StackValue.get(bufsize, CCharPointer.class);
             int tn = 0;
 
             for (;;) {
                 int n = (int) read(fd, buf, WordFactory.unsigned(bufsize)).rawValue();
                 tn += n;
                 if ((n < 0) && (errno() != EAGAIN())) {
-                    throwIOExceptionWithLastError("Drain");
+                    throw PosixUtils.newIOExceptionWithLastError("Drain");
                 }
                 if (n == bufsize) {
                     continue;
                 }
                 return tn > 0;
             }
+        }
+
+        /* open/src/java.base/unix/native/libnio/ch/IOUtil.c */
+        @Substitute
+        @TargetElement(onlyWith = JDK11OrLater.class)
+        // 131 JNIEXPORT jint JNICALL
+        // 132 Java_sun_nio_ch_IOUtil_drain1(JNIEnv *env, jclass cl, jint fd)
+        // 133 {
+        static int drain1(int fd) throws IOException {
+            // 134 int res;
+            int res;
+            // 135 char buf[1];
+            CCharPointer bufPointer = StackValue.get(1, CCharPointer.class);
+            // 136
+            // 137 res = read(fd, buf, 1);
+            res = (int) Unistd.read(fd, bufPointer, WordFactory.unsigned(1)).rawValue();
+            // 138 if (res < 0) {
+            if (res < 0) {
+                // 139 if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (Errno.errno() == Errno.EAGAIN() || Errno.errno() == Errno.EWOULDBLOCK()) {
+                    // 140 res = 0;
+                    res = 0;
+                    // 141 } else if (errno == EINTR) {
+                } else if (Errno.errno() == Errno.EINTR()) {
+                    // 142 return IOS_INTERRUPTED;
+                    return Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
+                    // 143 } else {
+                } else {
+                    // 144 JNU_ThrowIOExceptionWithLastError(env, "read");
+                    throw PosixUtils.newIOExceptionWithLastError("read");
+                    // 145 return IOS_THROWN;
+                    /* Unreachable! */
+                }
+            }
+            // 148 return res;
+            return res;
         }
 
         @Substitute
@@ -540,14 +505,14 @@ public final class PosixJavaNIOSubstitutions {
 
         @Substitute
         private static int fdLimit() throws IOException {
-            rlimit rlp = StackValue.get(SizeOf.get(rlimit.class));
+            rlimit rlp = StackValue.get(rlimit.class);
             if (getrlimit(RLIMIT_NOFILE(), rlp) < 0) {
-                throw throwIOExceptionWithLastError("getrlimit failed");
+                throw PosixUtils.newIOExceptionWithLastError("getrlimit failed");
             }
-            if (rlp.rlim_max() < 0 || rlp.rlim_max() > Integer.MAX_VALUE) {
+            if (rlp.rlim_max().belowThan(0) || rlp.rlim_max().aboveThan(Integer.MAX_VALUE)) {
                 return Integer.MAX_VALUE;
             } else {
-                return (int) rlp.rlim_max();
+                return (int) rlp.rlim_max().rawValue();
             }
         }
     }
@@ -563,10 +528,10 @@ public final class PosixJavaNIOSubstitutions {
 
     /** Translations of src/solaris/native/sun/nio/ch/Net.c?v=Java_1.8.0_40_b10. */
     @TargetClass(className = "sun.nio.ch.Net")
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_ch_Net {
 
-        /* Do not re-format commented-out code: @formatter:off */
+    /* Do not re-format commented-out code: @formatter:off */
         /* Allow methods with non-standard names: Checkstyle: stop */
 
         @Substitute
@@ -578,7 +543,7 @@ public final class PosixJavaNIOSubstitutions {
             // 337     SOCKADDR sa;
             sockaddr sa_Pointer = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
             // 338     int sa_len = SOCKADDR_LEN;
-            CIntPointer sa_len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer sa_len_Pointer = StackValue.get(CIntPointer.class);
             sa_len_Pointer.write(JavaNetNetUtilMD.SOCKADDR_LEN());
             // 339     int rv;
             int rv;
@@ -626,10 +591,10 @@ public final class PosixJavaNIOSubstitutions {
             // 396     SOCKADDR sa;
             sockaddr sa_Pointer = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
             // 397     socklen_t sa_len = SOCKADDR_LEN;
-            CIntPointer sa_len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer sa_len_Pointer = StackValue.get(CIntPointer.class);
             sa_len_Pointer.write(JavaNetNetUtilMD.SOCKADDR_LEN());
             // 398     int port;
-            CIntPointer port_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer port_Pointer = StackValue.get(CIntPointer.class);
             // 399     if (getsockname(fdval(env, fdo), (struct sockaddr *)&sa, &sa_len) < 0) {
             if (Socket.getsockname(PosixJavaNIOSubstitutions.fdval(fdo), sa_Pointer, sa_len_Pointer) < 0) {
                 /* TODO: Assuming #undef_ALLBSD_SOURCE */
@@ -672,7 +637,7 @@ public final class PosixJavaNIOSubstitutions {
             // 362 SOCKADDR sa;
             sockaddr sa_Pointer = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
             // 363 socklen_t sa_len = SOCKADDR_LEN;
-            CIntPointer sa_len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer sa_len_Pointer = StackValue.get(CIntPointer.class);
             sa_len_Pointer.write(JavaNetNetUtilMD.SOCKADDR_LEN());
             // 364 if (getsockname(fdval(env, fdo), (struct sockaddr *)&sa, &sa_len) < 0) {
             if (Socket.getsockname(PosixJavaNIOSubstitutions.fdval(fdo), sa_Pointer, sa_len_Pointer) < 0) {
@@ -714,7 +679,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         static int poll(FileDescriptor fdo, int events, long timeout) throws IOException {
             // 756     struct pollfd pfd;
-            Poll.pollfd pfd = StackValue.get(SizeOf.get(Poll.pollfd.class));
+            Poll.pollfd pfd = StackValue.get(Poll.pollfd.class);
             // 757     int rv;
             int rv;
             // 758     pfd.fd = fdval(env, fdo);
@@ -739,22 +704,12 @@ public final class PosixJavaNIOSubstitutions {
             }
         }
 
-        /*
-         * Java 8 update 60 added another parameter to socket0. On Posix system,
-         * that parameter is ignored, so we can easily support both variants.
-         */
-        @Substitute @TargetElement(optional = true)
-        static int socket0(boolean preferIPv6, boolean stream, boolean reuse, @SuppressWarnings("unused") boolean fastLoopback) throws IOException {
-            return socket0(preferIPv6, stream, reuse);
-        }
-
         // 232 JNIEXPORT int JNICALL
         // 233 Java_sun_nio_ch_Net_socket0(JNIEnv *env, jclass cl, jboolean preferIPv6,
         // 234                             jboolean stream, jboolean reuse)
         // 235 {
-        @SuppressWarnings("finally")
-        @Substitute @TargetElement(optional = true)
-        static int socket0(boolean preferIPv6, boolean stream, boolean reuse) throws IOException {
+        @Substitute
+        static int socket0(boolean preferIPv6, boolean stream, boolean reuse, @SuppressWarnings("unused") boolean fastLoopback) throws IOException {
             // 236     int fd;
             int fd;
             // 237     int type = (stream ? SOCK_STREAM : SOCK_DGRAM);
@@ -777,22 +732,20 @@ public final class PosixJavaNIOSubstitutions {
             // 251     if (domain == AF_INET6) {
             if (domain == Socket.AF_INET6()) {
                 // 252         int arg = 0;
-                CIntPointer arg_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+                CIntPointer arg_Pointer = StackValue.get(CIntPointer.class);
                 arg_Pointer.write(0);
                 // 253         if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&arg,
                 // 254                        sizeof(int)) < 0) {
                 if (Socket.setsockopt(fd, NetinetIn.IPPROTO_IPV6(), NetinetIn.IPV6_V6ONLY(), arg_Pointer, SizeOf.get(CIntPointer.class)) < 0) {
                     try {
-                        /* FIXME: Not implementing JNU_ThrowByNameWithLastError. */
                         // 255             JNU_ThrowByNameWithLastError(env,
                         // 256                                          JNU_JAVANETPKG "SocketException",
                         // 257                                          "Unable to set IPV6_V6ONLY");
-                        throw new java.net.SocketException("Unable to set IPV6_V6ONLY");
+                        throw new java.net.SocketException(PosixUtils.lastErrorString("Unable to set IPV6_V6ONLY"));
                     } finally {
                         // 258             close(fd);
                         Unistd.close(fd);
                         // 259             return -1;
-                        return -1;
                     }
                 }
             }
@@ -800,31 +753,29 @@ public final class PosixJavaNIOSubstitutions {
             // 264     if (reuse) {
             if (reuse) {
                 // 265         int arg = 1;
-                CIntPointer arg_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+                CIntPointer arg_Pointer = StackValue.get(CIntPointer.class);
                 arg_Pointer.write(1);
                 // 266         if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char*)&arg,
                 // 267                        sizeof(arg)) < 0) {
                 if (Socket.setsockopt(fd, Socket.SOL_SOCKET(), Socket.SO_REUSEADDR(), arg_Pointer, SizeOf.get(CIntPointer.class)) < 0) {
                     try {
-                        /* FIXME: Not implementing JNU_ThrowByNameWithLastError. */
                         // 268             JNU_ThrowByNameWithLastError(env,
                         // 269                                          JNU_JAVANETPKG "SocketException",
                         // 270                                          "Unable to set SO_REUSEADDR");
-                        throw new java.net.SocketException("Unable to set SO_REUSEADDR");
+                        throw new java.net.SocketException(PosixUtils.lastErrorString("Unable to set SO_REUSEADDR"));
                     } finally {
                         // 271             close(fd);
                         Unistd.close(fd);
                         // 272             return -1;
-                        return -1;
                     }
                 }
             }
             // 276 #if defined(__linux__)
-            if (Platform.includedIn(Platform.LINUX.class)) {
+            if (Platform.includedIn(DeprecatedPlatform.LINUX_SUBSTITUTION.class)) {
                 // 277     if (type == SOCK_DGRAM) {
                 if (type == Socket.SOCK_DGRAM()) {
                     // 278         int arg = 0;
-                    CIntPointer arg_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+                    CIntPointer arg_Pointer = StackValue.get(CIntPointer.class);
                     arg_Pointer.write(0);
                     // 279         int level = (domain == AF_INET6) ? IPPROTO_IPV6 : IPPROTO_IP;
                     int level = (domain == Socket.AF_INET6()) ? NetinetIn.IPPROTO_IPV6() : NetinetIn.IPPROTO_IP();
@@ -834,43 +785,39 @@ public final class PosixJavaNIOSubstitutions {
                                     (Errno.errno() != Errno.ENOPROTOOPT())) {
 
                         try {
-                            /* FIXME: Not implementing JNU_ThrowByNameWithLastError. */
                             // 282             JNU_ThrowByNameWithLastError(env,
                             // 283                                          JNU_JAVANETPKG "SocketException",
                             // 284                                          "Unable to set IP_MULTICAST_ALL");
-                            throw new java.net.SocketException("Unable to set IP_MULTICAST_ALL");
+                            throw new java.net.SocketException(PosixUtils.lastErrorString("Unable to set IP_MULTICAST_ALL"));
                         } finally {
                             // 285             close(fd);
                             Unistd.close(fd);
                             // 286             return -1;
-                            return -1;
                         }
                     }
                 }
             }
             // 289 #endif
             // 291 #if defined(__linux__) && defined(AF_INET6)
-            if (Platform.includedIn(Platform.LINUX.class)) {
+            if (Platform.includedIn(DeprecatedPlatform.LINUX_SUBSTITUTION.class)) {
                 // 292     /* By default, Linux uses the route default */
                 // 293     if (domain == AF_INET6 && type == SOCK_DGRAM) {
                 if ((domain == Socket.AF_INET6()) && (type == Socket.SOCK_DGRAM())) {
                     // 294         int arg = 1;
-                    CIntPointer arg_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+                    CIntPointer arg_Pointer = StackValue.get(CIntPointer.class);
                     arg_Pointer.write(1);
                     // 295         if (setsockopt(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &arg,
                     // 296                        sizeof(arg)) < 0) {
                     if (Socket.setsockopt(fd, NetinetIn.IPPROTO_IPV6(), NetinetIn.IPV6_MULTICAST_HOPS(), arg_Pointer, SizeOf.get(CIntPointer.class)) < 0) {
                         try {
-                            /* FIXME: Not implementing JNU_ThrowByNameWithLastError. */
                             // 297             JNU_ThrowByNameWithLastError(env,
                             // 298                                          JNU_JAVANETPKG "SocketException",
                             // 299                                          "Unable to set IPV6_MULTICAST_HOPS");
-                            throw new java.net.SocketException("Unable to set IPV6_MULTICAST_HOPS");
+                            throw new java.net.SocketException(PosixUtils.lastErrorString("Unable to set IPV6_MULTICAST_HOPS"));
                         } finally {
                             // 300             close(fd);
                             Unistd.close(fd);
                             // 301             return -1;
-                            return -1;
                         }
                     }
                 }
@@ -900,7 +847,7 @@ public final class PosixJavaNIOSubstitutions {
             // 269     SOCKADDR sa;
             Socket.sockaddr sa = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
             // 270     int sa_len = SOCKADDR_LEN;
-            CIntPointer sa_len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer sa_len_Pointer = StackValue.get(CIntPointer.class);
             sa_len_Pointer.write(JavaNetNetUtilMD.SOCKADDR_LEN());
             // 271     int rv = 0;
             int rv = 0;
@@ -912,7 +859,7 @@ public final class PosixJavaNIOSubstitutions {
             }
             // 276
             // 277     rv = NET_Bind(fdval(env, fdo), (struct sockaddr *)&sa, sa_len);
-            rv = JavaNetNetUtilMD.NET_Bind(Util_java_io_FileDescriptor.getFD(fd), sa, sa_len_Pointer.read());
+            rv = JavaNetNetUtilMD.NET_Bind(PosixUtils.getFD(fd), sa, sa_len_Pointer.read());
             // 278     if (rv != 0) {
             if (rv != 0) {
             // 279         handleSocketError(env, errno);
@@ -929,7 +876,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         static void listen(FileDescriptor fdo, int backlog) throws IOException {
             // 286     if (listen(fdval(env, fdo), backlog) < 0)
-            if (Target_os.listen(Util_java_io_FileDescriptor.getFD(fdo), backlog) < 0) {
+            if (Target_os.listen(PosixUtils.getFD(fdo), backlog) < 0) {
                 // 287         handleSocketError(env, errno);
                 Util_sun_nio_ch_Net.handleSocketError(Errno.errno());
             }
@@ -948,15 +895,15 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         static int getIntOption0(FileDescriptor fdo, boolean mayNeedConversion, int level, int opt) throws IOException {
             // 432     int result;
-            CIntPointer result_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer result_Pointer = StackValue.get(CIntPointer.class);
             // 433     struct linger linger;
-            Socket.linger linger = StackValue.get(SizeOf.get(Socket.linger.class));
+            Socket.linger linger = StackValue.get(Socket.linger.class);
             // 434     u_char carg;
-            CCharPointer carg_Pointer = StackValue.get(SizeOf.get(CCharPointer.class));
+            CCharPointer carg_Pointer = StackValue.get(CCharPointer.class);
             // 435     void *arg;
             VoidPointer arg;
             // 436     socklen_t arglen;
-            CIntPointer arglen_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer arglen_Pointer = StackValue.get(CIntPointer.class);
             // 437     int n;
             int n;
             // 438
@@ -998,7 +945,7 @@ public final class PosixJavaNIOSubstitutions {
                 // 461         JNU_ThrowByNameWithLastError(env,
                 // 462                                      JNU_JAVANETPKG "SocketException",
                 // 463                                      "sun.nio.ch.Net.getIntOption");
-                throw new SocketException("sun.nio.ch.Net.getIntOption");
+                throw new SocketException(PosixUtils.lastErrorString("sun.nio.ch.Net.getIntOption"));
                 // 464         return -1;
             }
             // 466
@@ -1040,13 +987,13 @@ public final class PosixJavaNIOSubstitutions {
                                   int            arg,
                                   boolean        isIPv6) throws IOException {
             /* Make a local copy of arg so I can get the address of it. */
-            CIntPointer local_arg = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer local_arg = StackValue.get(CIntPointer.class);
             local_arg.write(arg);
             //         484     int result;
             //         485     struct linger linger;
-            Socket.linger linger = StackValue.get(SizeOf.get(Socket.linger.class));
+            Socket.linger linger = StackValue.get(Socket.linger.class);
             //         486     u_char carg;
-            CCharPointer carg_Pointer = StackValue.get(SizeOf.get(CCharPointer.class));
+            CCharPointer carg_Pointer = StackValue.get(CCharPointer.class);
             //         487     void *parg;
             WordPointer parg;
             //         488     socklen_t arglen;
@@ -1107,7 +1054,7 @@ public final class PosixJavaNIOSubstitutions {
                     //         521         JNU_ThrowByNameWithLastError(env,
                     //         522                                      JNU_JAVANETPKG "SocketException",
                     //         523                                      "sun.nio.ch.Net.setIntOption");
-                    throw new SocketException("sun.nio.ch.Net.setIntOption");
+                    throw new SocketException(PosixUtils.lastErrorString("sun.nio.ch.Net.setIntOption"));
                 }
             } finally {
                 //         525 #ifdef __linux__
@@ -1146,7 +1093,9 @@ public final class PosixJavaNIOSubstitutions {
     }
 
     @TargetClass(className = "sun.nio.ch.ServerSocketChannelImpl")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_ch_ServerSocketChannelImpl {
+
         // jdk/src/share/classes/sun/nio/ch/ServerSocketChannelImpl.java?v=Java_1.8.0_40_b10
         // 415     // Accepts a new connection, setting the given file descriptor to refer to
         // 416     // the new socket and setting isaa[0] to the socket's remote address.
@@ -1162,23 +1111,39 @@ public final class PosixJavaNIOSubstitutions {
         //        069 Java_sun_nio_ch_ServerSocketChannelImpl_accept0(JNIEnv *env, jobject this,
         //        070                                                 jobject ssfdo, jobject newfdo,
         //        071                                                 jobjectArray isaa)
-        @SuppressWarnings({"static-method"})
+        @TargetElement(onlyWith = JDK11OrEarlier.class)
         @Substitute
+        @SuppressWarnings({"static-method"})
         int accept0(FileDescriptor ssfdo, FileDescriptor newfdo, InetSocketAddress[] isaa) throws IOException {
+            /* Ignore the receiver. */
+            return Util_sun_nio_ch_ServerSocketChannelImpl.accept0(ssfdo, newfdo, isaa);
+        }
+    }
+
+    static final class Util_sun_nio_ch_ServerSocketChannelImpl {
+
+        /** A {@code static} method that can be called from
+         * {@link Target_sun_nio_ch_ServerSocketChannelImpl#accept0(FileDescriptor, FileDescriptor, InetSocketAddress[])}
+         * and
+         * {@link Target_sun_nio_ch_UnixAsynchronousServerSocketChannelImpl#accept0(FileDescriptor, FileDescriptor, InetSocketAddress[])}
+         * because it does not need the {@code this} parameter that is the receiver of those calls.
+         */
+        // jdk/src/solaris/native/sun/nio/ch/ServerSocketChannelImpl.c?v=Java_1.8.0_40_b10
+        static int accept0(FileDescriptor ssfdo, FileDescriptor newfdo, InetSocketAddress[] isaa) throws IOException {
             //        073     jint ssfd = (*env)->GetIntField(env, ssfdo, fd_fdID);
             int ssfd = fdval(ssfdo);
             //        074     jint newfd;
             int newfd;
             //        075     struct sockaddr *sa;
-            Socket.sockaddrPointer sa_Pointer = StackValue.get(SizeOf.get(Socket.sockaddrPointer.class));
+            Socket.sockaddrPointer sa_Pointer = StackValue.get(Socket.sockaddrPointer.class);
             //        076     int alloc_len;
-            CIntPointer alloc_len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer alloc_len_Pointer = StackValue.get(CIntPointer.class);
             //        077     jobject remote_ia = 0;
             InetAddress remote_ia = null;
             //        078     jobject isa;
             InetSocketAddress isa;
             //        079     jint remote_port;
-            CIntPointer remote_port_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer remote_port_Pointer = StackValue.get(CIntPointer.class);
             //        080
             //        081     NET_AllocSockaddr(&sa, &alloc_len);
             JavaNetNetUtilMD.NET_AllocSockaddr(sa_Pointer, alloc_len_Pointer);
@@ -1191,7 +1156,7 @@ public final class PosixJavaNIOSubstitutions {
             //        088     for (;;) {
             for (;;) {
                 //        089         socklen_t sa_len = alloc_len;
-                CIntPointer sa_len_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+                CIntPointer sa_len_Pointer = StackValue.get(CIntPointer.class);
                 sa_len_Pointer.write(alloc_len_Pointer.read());
                 //        090         newfd = accept(ssfd, sa, &sa_len);
                 newfd = Socket.accept(ssfd, sa_Pointer.read(), sa_len_Pointer);
@@ -1224,11 +1189,11 @@ public final class PosixJavaNIOSubstitutions {
                 }
                 //        106         JNU_ThrowIOExceptionWithLastError(env, "Accept failed");
                 //        107         return IOS_THROWN;
-                throw new IOException("Accept failed");
+                throw PosixUtils.newIOExceptionWithLastError("Accept failed");
             }
             //        109
             //        110     (*env)->SetIntField(env, newfdo, fd_fdID, newfd);
-            PosixOSInterface.Util_java_io_FileDescriptor.setFD(newfdo, newfd);
+            PosixUtils.setFD(newfdo, newfd);
             //        111     remote_ia = NET_SockaddrToInetAddress(env, sa, (int *)&remote_port);
             remote_ia = JavaNetNetUtil.NET_SockaddrToInetAddress(sa_Pointer.read(), remote_port_Pointer);
             //        112     free((void *)sa);
@@ -1260,39 +1225,38 @@ public final class PosixJavaNIOSubstitutions {
                 // 819         case EPROTO:
             } else if (errorValue == Errno.EPROTO()) {
                 // 820             xn = JNU_JAVANETPKG "ProtocolException";
-                xn = new java.net.ProtocolException(exceptionString);
+                xn = new java.net.ProtocolException(PosixUtils.errorString(errorValue, exceptionString));
                 // 821             break;
                 // 822 #endif
                 // 823         case ECONNREFUSED:
             } else if (errorValue == Errno.ECONNREFUSED()) {
                 // 824             xn = JNU_JAVANETPKG "ConnectException";
-                xn = new java.net.ConnectException(exceptionString);
+                xn = new java.net.ConnectException(PosixUtils.errorString(errorValue, exceptionString));
                 // 825             break;
                 // 826         case ETIMEDOUT:
             } else if (errorValue == Errno.ETIMEDOUT()) {
                 // 827             xn = JNU_JAVANETPKG "ConnectException";
-                xn = new java.net.ConnectException(exceptionString);
+                xn = new java.net.ConnectException(PosixUtils.errorString(errorValue, exceptionString));
                 // 828             break;
                 // 829         case EHOSTUNREACH:
             } else if (errorValue == Errno.EHOSTUNREACH()) {
                 // 830             xn = JNU_JAVANETPKG "NoRouteToHostException";
-                xn = new java.net.NoRouteToHostException(exceptionString);
+                xn = new java.net.NoRouteToHostException(PosixUtils.errorString(errorValue, exceptionString));
                 // 831             break;
                 // 832         case EADDRINUSE:  /* Fall through */
                 // 833         case EADDRNOTAVAIL:
             } else if ((errorValue == Errno.EADDRINUSE()) || (errorValue == Errno.EADDRNOTAVAIL())) {
                 // 834             xn = JNU_JAVANETPKG "BindException";
-                xn = new java.net.BindException(exceptionString);
+                xn = new java.net.BindException(PosixUtils.errorString(errorValue, exceptionString));
                 // 835             break;
                 // 836         default:
             } else {
                 // 837             xn = JNU_JAVANETPKG "SocketException";
-                xn = new java.net.SocketException(exceptionString);
+                xn = new java.net.SocketException(PosixUtils.errorString(errorValue, exceptionString));
                 // 838             break;
             }
             // 840     errno = errorValue;
             Errno.set_errno(errorValue);
-            /* FIXME: Not implementing JNU_ThrowByNameWithLastError. */
             // 841     JNU_ThrowByNameWithLastError(env, xn, "NioSocketError");
             throw xn;
             // 842     return IOS_THROWN;
@@ -1305,7 +1269,7 @@ public final class PosixJavaNIOSubstitutions {
      * Call this to throw an internal UnixException when a system/library call fails.
      */
     private static Exception throwUnixException(int errnum) throws Exception {
-        throw KnownIntrinsics.unsafeCast(new Target_sun_nio_fs_UnixException(errnum), Exception.class);
+        throw SubstrateUtil.cast(new Target_sun_nio_fs_UnixException(errnum), Exception.class);
     }
 
     private static OutOfMemoryError throwOutOfMemoryError(String msg) {
@@ -1318,7 +1282,7 @@ public final class PosixJavaNIOSubstitutions {
 
     /** Translations of src/solaris/native/sun/nio/ch/FileDispatcherImpl.c?v=Java_1.8.0_40_b10. */
     @TargetClass(className = "sun.nio.ch.FileDispatcherImpl")
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_ch_FileDispatcherImpl {
 
         @Substitute
@@ -1376,6 +1340,48 @@ public final class PosixJavaNIOSubstitutions {
             return handle(result, "Force failed");
         }
 
+        /* Translated from src/java.base/unix/native/libnio/ch/FileDispatcherImpl.c */
+        /* { Do not re-format commented out C code: @formatter:off. */
+        // JNIEXPORT jint JNICALL
+        // Java_sun_nio_ch_FileDispatcherImpl_allocate0(JNIEnv *env, jobject this,
+        //                                              jobject fdo, jlong size) {
+        @Substitute @TargetElement(onlyWith = ContainsAllocate0.class /* Introduced in JDK 8u162. */)
+        private static int allocate0(FileDescriptor fd, long size) throws IOException {
+            // #if defined(__linux__)
+            if (IsDefined.__linux__()) {
+                //     /*
+                //      * On Linux, if the file size is being increased, then ftruncate64()
+                //      * will modify the metadata value of the size without actually allocating
+                //      * any blocks which can cause a SIGBUS error if the file is subsequently
+                //      * memory-mapped.
+                //      */
+                //     return handle(env,
+                //                   fallocate64(fdval(env, fdo), 0, 0, size),
+                //                   "Allocation failed");
+                return handle(Fcntl.fallocate(fdval(fd), 0, WordFactory.zero(), WordFactory.signed(size)),
+                                "Allocation failed");
+            } else {
+                //     return handle(env,
+                //                   ftruncate64(fdval(env, fdo), size),
+                //                   "Truncation failed");
+                return handle(Unistd.ftruncate(fdval(fd), size),
+                                "Truncation failed");
+            }
+        }
+        /* } Do not re-format commented out C code: @formatter:on. */
+
+        static class ContainsAllocate0 implements Predicate<Class<?>> {
+            @Override
+            public boolean test(Class<?> originalClass) {
+                try {
+                    originalClass.getDeclaredMethod("allocate0", FileDescriptor.class, long.class);
+                    return true;
+                } catch (NoSuchMethodException ex) {
+                    return false;
+                }
+            }
+        }
+
         @Substitute
         private static int truncate0(FileDescriptor fdo, long size) throws IOException {
             return handle(ftruncate(fdval(fdo), size), "Truncation failed");
@@ -1384,7 +1390,7 @@ public final class PosixJavaNIOSubstitutions {
 
         @Substitute
         private static long size0(FileDescriptor fdo) throws IOException {
-            Stat.stat fbuf = StackValue.get(SizeOf.get(Stat.stat.class));
+            Stat.stat fbuf = StackValue.get(Stat.stat.class);
 
             if (fstat(fdval(fdo), fbuf) < 0) {
                 return handle(-1, "Size failed");
@@ -1397,7 +1403,7 @@ public final class PosixJavaNIOSubstitutions {
             int fd = fdval(fdo);
             int lockResult = 0;
             int cmd = 0;
-            flock fl = StackValue.get(SizeOf.get(flock.class));
+            flock fl = StackValue.get(flock.class);
 
             fl.set_l_whence(SEEK_SET());
             if (size == Long.MAX_VALUE) {
@@ -1424,7 +1430,7 @@ public final class PosixJavaNIOSubstitutions {
                 if (errno() == EINTR()) {
                     return Target_sun_nio_ch_FileDispatcher.FD_INTERRUPTED;
                 }
-                throwIOExceptionWithLastError("Lock failed");
+                throw PosixUtils.newIOExceptionWithLastError("Lock failed");
             }
             return 0;
         }
@@ -1433,7 +1439,7 @@ public final class PosixJavaNIOSubstitutions {
         private static void release0(FileDescriptor fdo, long pos, long size) throws IOException {
             int fd = fdval(fdo);
             int lockResult = 0;
-            flock fl = StackValue.get(SizeOf.get(flock.class));
+            flock fl = StackValue.get(flock.class);
             int cmd = F_SETLK();
 
             fl.set_l_whence(SEEK_SET());
@@ -1446,7 +1452,7 @@ public final class PosixJavaNIOSubstitutions {
             fl.set_l_type(F_UNLCK());
             lockResult = fcntl(fd, cmd, fl);
             if (lockResult < 0) {
-                throw throwIOExceptionWithLastError("Release failed");
+                throw PosixUtils.newIOExceptionWithLastError("Release failed");
             }
         }
 
@@ -1465,7 +1471,7 @@ public final class PosixJavaNIOSubstitutions {
             int fd = fdval(fdo);
             if (Util_sun_nio_ch_FileDispatcherImpl.preCloseFD >= 0) {
                 if (dup2(Util_sun_nio_ch_FileDispatcherImpl.preCloseFD, fd) < 0) {
-                    throwIOExceptionWithLastError("dup2 failed");
+                    throw PosixUtils.newIOExceptionWithLastError("dup2 failed");
                 }
             }
         }
@@ -1479,6 +1485,19 @@ public final class PosixJavaNIOSubstitutions {
         private static void init() {
             throw new InternalError("init() is only called from static initializers, so not reachable in Substrate VM");
         }
+
+        @Substitute
+        private static long seek0(FileDescriptor fd, long offset) throws IOException {
+            int f = fdval(fd);
+            long result = 0;
+
+            if (offset < 0) {
+                result = lseek(f, WordFactory.zero(), SEEK_CUR()).rawValue();
+            } else {
+                result = lseek(f, WordFactory.signed(offset), SEEK_SET()).rawValue();
+            }
+            return handle(result, "lseek failed");
+        }
     }
 
     static final class Util_sun_nio_ch_FileDispatcherImpl {
@@ -1487,7 +1506,7 @@ public final class PosixJavaNIOSubstitutions {
             if (fd != -1) {
                 int result = close(fd);
                 if (result < 0) {
-                    throwIOExceptionWithLastError("Close failed");
+                    throw PosixUtils.newIOExceptionWithLastError("Close failed");
                 }
             }
         }
@@ -1498,7 +1517,7 @@ public final class PosixJavaNIOSubstitutions {
         static volatile boolean initialized;
 
         static void initialize() {
-            CIntPointer sp = StackValue.get(2, SizeOf.get(CIntPointer.class));
+            CIntPointer sp = StackValue.get(2, CIntPointer.class);
             if (Socket.socketpair(Socket.PF_UNIX(), Socket.SOCK_STREAM(), 0, sp) == 0) {
                 preCloseFD = sp.read(0);
                 close(sp.read(1));
@@ -1509,6 +1528,7 @@ public final class PosixJavaNIOSubstitutions {
     }
 
     @TargetClass(className = "sun.nio.fs.UnixException")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     @SuppressWarnings({"unused"})
     static final class Target_sun_nio_fs_UnixException {
         @Alias
@@ -1518,6 +1538,7 @@ public final class PosixJavaNIOSubstitutions {
 
     // Checkstyle: stop
     @TargetClass(className = "sun.nio.fs.UnixFileAttributes")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_fs_UnixFileAttributes {
         @Alias int st_mode;
         @Alias long st_ino;
@@ -1538,6 +1559,7 @@ public final class PosixJavaNIOSubstitutions {
     }
 
     @TargetClass(className = "sun.nio.fs.UnixFileStoreAttributes")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_fs_UnixFileStoreAttributes {
         @Alias long f_frsize;
         @Alias long f_blocks;
@@ -1546,6 +1568,7 @@ public final class PosixJavaNIOSubstitutions {
     }
 
     @TargetClass(className = "sun.nio.fs.UnixMountEntry")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_fs_UnixMountEntry {
         @Alias byte[] name;
         @Alias byte[] dir;
@@ -1563,69 +1586,6 @@ public final class PosixJavaNIOSubstitutions {
             result[i] = cstr.read(i);
         }
         return result;
-    }
-
-    @Platforms({LINUX.class, DARWIN.class})
-    @TargetClass(className = "java.nio.channels.spi.SelectorProvider")
-    static final class Target_java_nio_channels_spi_SelectorProvider {
-
-        /* Aliases to gain visibility. */
-
-        /* Do not re-format commented-out code: @formatter:off */
-        @Substitute
-        /* No reflection at runtime. */
-        /* No system properties at runtime. */
-        // 087     private static boolean loadProviderFromProperty() {
-        private static boolean loadProviderFromProperty() {
-            // 088         String cn = System.getProperty("java.nio.channels.spi.SelectorProvider");
-            // 089         if (cn == null)
-            // 090             return false;
-            /* TODO: The property appears to be unset, so this is easy. */
-            return false;
-            // 091         try {
-            // 092             Class<?> c = Class.forName(cn, true,
-            // 093                                        ClassLoader.getSystemClassLoader());
-            // 094             provider = (SelectorProvider)c.newInstance();
-            // 095             return true;
-            // 096         } catch (ClassNotFoundException x) {
-            // 097             throw new ServiceConfigurationError(null, x);
-            // 098         } catch (IllegalAccessException x) {
-            // 099             throw new ServiceConfigurationError(null, x);
-            // 100         } catch (InstantiationException x) {
-            // 101             throw new ServiceConfigurationError(null, x);
-            // 102         } catch (SecurityException x) {
-            // 103             throw new ServiceConfigurationError(null, x);
-            // 104         }
-        }
-        /* @formatter:on */
-
-        /* Do not re-format commented-out code: @formatter:off */
-        @Substitute
-        // 107     private static boolean loadProviderAsService() {
-        private static boolean loadProviderAsService() {
-            /* TODO: Assume there is no ServiceLoader<SelectorProvider>. */
-            return false;
-            // 108
-            // 109         ServiceLoader<SelectorProvider> sl =
-            // 110             ServiceLoader.load(SelectorProvider.class,
-            // 111                                ClassLoader.getSystemClassLoader());
-            // 112         Iterator<SelectorProvider> i = sl.iterator();
-            // 113         for (;;) {
-            // 114             try {
-            // 115                 if (!i.hasNext())
-            // 116                     return false;
-            // 117                 provider = i.next();
-            // 118                 return true;
-            // 119             } catch (ServiceConfigurationError sce) {
-            // 120                 if (sce.getCause() instanceof SecurityException) {
-            // 121                     // Ignore the security exception, try the next provider
-            // 122                     continue;
-            // 123                 }
-            // 124                 throw sce;
-            // 125             }
-            // 126         }
-        }
-        /* @formatter:on */
     }
 
     /*
@@ -1689,14 +1649,14 @@ public final class PosixJavaNIOSubstitutions {
     // Checkstyle: resume
 
     @TargetClass(className = "sun.nio.fs.UnixNativeDispatcher")
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_fs_UnixNativeDispatcher {
 
         @Substitute
         private static byte[] getcwd() throws Exception {
             byte[] result;
             int bufsize = PATH_MAX() + 1;
-            CCharPointer buf = StackValue.get(bufsize, SizeOf.get(CCharPointer.class));
+            CCharPointer buf = StackValue.get(bufsize, CCharPointer.class);
 
             /* EINTR not listed as a possible error */
             CCharPointer cwd = Unistd.getcwd(buf, WordFactory.unsigned(bufsize));
@@ -1898,7 +1858,7 @@ public final class PosixJavaNIOSubstitutions {
         private static byte[] readlink0(long pathAddress) throws Exception {
             byte[] result;
             int targetsize = PATH_MAX() + 1;
-            CCharPointer target = StackValue.get(targetsize, SizeOf.get(CCharPointer.class));
+            CCharPointer target = StackValue.get(targetsize, CCharPointer.class);
             CCharPointer path = WordFactory.pointer(pathAddress);
 
             /* EINTR not listed as a possible error */
@@ -1918,7 +1878,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static byte[] realpath0(long pathAddress) throws Exception {
             byte[] result;
-            CCharPointer resolved = StackValue.get(PATH_MAX() + 1, SizeOf.get(CCharPointer.class));
+            CCharPointer resolved = StackValue.get(PATH_MAX() + 1, CCharPointer.class);
             CCharPointer path = WordFactory.pointer(pathAddress);
 
             /* EINTR not listed as a possible error */
@@ -1944,7 +1904,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static void stat0(long pathAddress, Target_sun_nio_fs_UnixFileAttributes attrs) throws Exception {
             int err;
-            Stat.stat buf = StackValue.get(SizeOf.get(Stat.stat.class));
+            Stat.stat buf = StackValue.get(Stat.stat.class);
             CCharPointer path = WordFactory.pointer(pathAddress);
 
             do {
@@ -1959,9 +1919,40 @@ public final class PosixJavaNIOSubstitutions {
         }
 
         @Substitute
+        @TargetElement(onlyWith = JDK11OrLater.class)
+        private static int stat1(long pathAddress) {
+            int err;
+            Stat.stat buf = StackValue.get(Stat.stat.class);
+            CCharPointer path = WordFactory.pointer(pathAddress);
+
+            do {
+                err = Stat.stat(path, buf);
+            } while ((err == -1) && (errno() == EINTR()));
+
+            if (err == -1) {
+                return 0;
+            } else {
+                return buf.st_mode();
+            }
+        }
+
+        @Substitute
+        @TargetElement(onlyWith = JDK11OrLater.class)
+        private static boolean exists0(long pathAddress) {
+            int err;
+
+            CCharPointer path = WordFactory.pointer(pathAddress);
+            do {
+                err = Unistd.access(path, Unistd.F_OK());
+            } while ((err == -1) && (errno() == EINTR()));
+
+            return err == 0;
+        }
+
+        @Substitute
         private static void lstat0(long pathAddress, Target_sun_nio_fs_UnixFileAttributes attrs) throws Exception {
             int err;
-            Stat.stat buf = StackValue.get(SizeOf.get(Stat.stat.class));
+            Stat.stat buf = StackValue.get(Stat.stat.class);
             CCharPointer path = WordFactory.pointer(pathAddress);
 
             do {
@@ -1978,7 +1969,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static void fstat(int fd, Target_sun_nio_fs_UnixFileAttributes attrs) throws Exception {
             int err;
-            Stat.stat buf = StackValue.get(SizeOf.get(Stat.stat.class));
+            Stat.stat buf = StackValue.get(Stat.stat.class);
 
             do {
                 err = Stat.fstat(fd, buf);
@@ -1994,7 +1985,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static void fstatat0(int dfd, long pathAddress, int flag, Target_sun_nio_fs_UnixFileAttributes attrs) throws Exception {
             int err;
-            Stat.stat buf = StackValue.get(SizeOf.get(Stat.stat.class));
+            Stat.stat buf = StackValue.get(Stat.stat.class);
             CCharPointer path = WordFactory.pointer(pathAddress);
 
             if (Util_sun_nio_fs_UnixNativeDispatcher.my_fstatat64_func.isNull()) {
@@ -2082,7 +2073,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static void utimes0(long pathAddress, long accessTime, long modificationTime) throws Exception {
             int err;
-            Time.timeval times = StackValue.get(2, SizeOf.get(Time.timeval.class));
+            Time.timeval times = StackValue.get(2, Time.timeval.class);
             CCharPointer path = WordFactory.pointer(pathAddress);
 
             times.addressOf(0).set_tv_sec(accessTime / 1000000);
@@ -2102,7 +2093,7 @@ public final class PosixJavaNIOSubstitutions {
 
         @Substitute
         private static void futimes(int fd, long accessTime, long modificationTime) throws Exception {
-            Time.timeval times = StackValue.get(2, SizeOf.get(Time.timeval.class));
+            Time.timeval times = StackValue.get(2, Time.timeval.class);
             int err = 0;
 
             times.addressOf(0).set_tv_sec(accessTime / 1000000);
@@ -2173,7 +2164,7 @@ public final class PosixJavaNIOSubstitutions {
 
         @Substitute
         private static byte[] readdir(long value) throws Exception {
-            direntPointer result = StackValue.get(SizeOf.get(direntPointer.class));
+            direntPointer result = StackValue.get(direntPointer.class);
             dirent ptr = StackValue.get(SizeOf.get(dirent.class) + PATH_MAX() + 1);
 
             int res;
@@ -2250,12 +2241,13 @@ public final class PosixJavaNIOSubstitutions {
             if (pwbuf.isNull()) {
                 throw throwOutOfMemoryError("native heap");
             } else {
-                passwd pwent = StackValue.get(SizeOf.get(passwd.class));
-                passwdPointer p = StackValue.get(SizeOf.get(passwdPointer.class));
+                passwd pwent = StackValue.get(passwd.class);
+                passwdPointer p = StackValue.get(passwdPointer.class);
                 p.write(WordFactory.nullPointer());
                 int res = 0;
 
                 // errno = 0;
+                Errno.set_errno(0);
                 // #ifdef __solaris__
                 // RESTARTABLE_RETURN_PTR(getpwuid_r((uid_t)uid, &pwent, pwbuf, (Unsigned)buflen),
                 // p);
@@ -2291,8 +2283,8 @@ public final class PosixJavaNIOSubstitutions {
             }
 
             do {
-                group grent = StackValue.get(SizeOf.get(group.class));
-                groupPointer g = StackValue.get(SizeOf.get(groupPointer.class));
+                group grent = StackValue.get(group.class);
+                groupPointer g = StackValue.get(groupPointer.class);
                 g.write(WordFactory.nullPointer());
                 int res = 0;
 
@@ -2302,6 +2294,7 @@ public final class PosixJavaNIOSubstitutions {
                 }
 
                 // errno = 0;
+                Errno.set_errno(0);
                 // #ifdef __solaris__
                 // RESTARTABLE_RETURN_PTR(getgrgid_r((gid_t)gid, &grent, grbuf, (Unsigned)buflen),
                 // g);
@@ -2347,13 +2340,14 @@ public final class PosixJavaNIOSubstitutions {
             if (pwbuf.isNull()) {
                 throw throwOutOfMemoryError("native heap");
             } else {
-                passwd pwent = StackValue.get(SizeOf.get(passwd.class));
-                passwdPointer p = StackValue.get(SizeOf.get(passwdPointer.class));
+                passwd pwent = StackValue.get(passwd.class);
+                passwdPointer p = StackValue.get(passwdPointer.class);
                 p.write(WordFactory.nullPointer());
                 int res = 0;
                 CCharPointer name = WordFactory.pointer(nameAddress);
 
                 // errno = 0;
+                Errno.set_errno(0);
                 // #ifdef __solaris__
                 // RESTARTABLE_RETURN_PTR(getpwnam_r(name, &pwent, pwbuf, (Unsigned)buflen), p);
                 // #else
@@ -2389,8 +2383,8 @@ public final class PosixJavaNIOSubstitutions {
             }
 
             do {
-                group grent = StackValue.get(SizeOf.get(group.class));
-                groupPointer g = StackValue.get(SizeOf.get(groupPointer.class));
+                group grent = StackValue.get(group.class);
+                groupPointer g = StackValue.get(groupPointer.class);
                 g.write(WordFactory.nullPointer());
                 int res = 0;
                 CCharPointer grbuf;
@@ -2402,6 +2396,7 @@ public final class PosixJavaNIOSubstitutions {
                 }
 
                 // errno = 0;
+                Errno.set_errno(0);
                 // #ifdef __solaris__
                 // RESTARTABLE_RETURN_PTR(getgrnam_r(name, &grent, grbuf, (Unsigned)buflen), g);
                 // #else
@@ -2436,7 +2431,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static void statvfs0(long pathAddress, Target_sun_nio_fs_UnixFileStoreAttributes attrs) throws Exception {
             int err;
-            Statvfs.statvfs buf = StackValue.get(SizeOf.get(Statvfs.statvfs.class));
+            Statvfs.statvfs buf = StackValue.get(Statvfs.statvfs.class);
             CCharPointer path = WordFactory.pointer(pathAddress);
 
             do {
@@ -2500,7 +2495,7 @@ public final class PosixJavaNIOSubstitutions {
         }
     }
 
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Util_sun_nio_fs_UnixNativeDispatcher {
         /**
          * Size of password or group entry when not available via sysconf.
@@ -2601,7 +2596,7 @@ public final class PosixJavaNIOSubstitutions {
     // Checkstyle: resume
 
     @TargetClass(className = "sun.nio.fs.LinuxNativeDispatcher")
-    @Platforms(Platform.LINUX.class)
+    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
     static final class Target_sun_nio_fs_LinuxNativeDispatcher {
 
         @Substitute
@@ -2621,9 +2616,9 @@ public final class PosixJavaNIOSubstitutions {
 
         @Substitute
         private static int getmntent(long value, Target_sun_nio_fs_UnixMountEntry entry) {
-            mntent ent = StackValue.get(SizeOf.get(mntent.class));
+            mntent ent = StackValue.get(mntent.class);
             int buflen = 1024;
-            CCharPointer buf = StackValue.get(buflen, SizeOf.get(CCharPointer.class));
+            CCharPointer buf = StackValue.get(buflen, CCharPointer.class);
             FILE fp = WordFactory.pointer(value);
 
             mntent m = getmntent_r(fp, ent, buf, buflen);
@@ -2732,7 +2727,7 @@ public final class PosixJavaNIOSubstitutions {
 
     }
 
-    @Platforms(Platform.LINUX.class)
+    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
     static final class Util_sun_nio_fs_LinuxNativeDispatcher {
 
         // Checkstyle: stop
@@ -2760,33 +2755,16 @@ public final class PosixJavaNIOSubstitutions {
      */
 
     @TargetClass(className = "sun.nio.fs.MacOSXNativeDispatcher")
-    @Platforms(Platform.DARWIN.class)
+    @Platforms(DeprecatedPlatform.DARWIN_SUBSTITUTION.class)
     static final class Target_sun_nio_fs_MacOSXNativeDispatcher {
 
         @Substitute
         private static char[] normalizepath(char[] path, int form) {
-            char[] result;
-            CFMutableStringRef csref = CFStringCreateMutable(WordFactory.nullPointer(), WordFactory.zero());
-            if (csref.isNull()) {
-                throw throwOutOfMemoryError("native heap");
-            }
-
-            try (PinnedObject pathPin = PinnedObject.create(path)) {
-                PointerBase chars = pathPin.addressOfArrayElement(0);
-                int len = path.length;
-                CFStringAppendCharacters(csref, chars, WordFactory.signed(len));
-            }
-            CFStringNormalize(csref, WordFactory.signed(form));
-            SignedWord len = CFStringGetLength(csref);
-
-            result = new char[(int) len.rawValue()];
-            try (PinnedObject resultPin = PinnedObject.create(result)) {
-                PointerBase resultChars = resultPin.addressOfArrayElement(0);
-                CFStringGetCharacters(csref, len, resultChars);
-            }
-
+            CoreFoundation.CFMutableStringRef csref = DarwinCoreFoundationUtils.toCFStringRef(String.valueOf(path));
+            CoreFoundation.CFStringNormalize(csref, WordFactory.signed(form));
+            String res = DarwinCoreFoundationUtils.fromCFStringRef(csref);
             CFRelease(csref);
-            return result;
+            return res.toCharArray();
         }
     }
 
@@ -2795,7 +2773,7 @@ public final class PosixJavaNIOSubstitutions {
      */
 
     @TargetClass(className = "sun.nio.ch.FileChannelImpl")
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     @SuppressWarnings("static-method")
     static final class Target_sun_nio_ch_FileChannelImpl {
         @Alias @TargetElement(name = "fd") private FileDescriptor fdfield;
@@ -2853,19 +2831,6 @@ public final class PosixJavaNIOSubstitutions {
             return handle(munmap(a, WordFactory.unsigned(len)), "Unmap failed");
         }
 
-        @Substitute
-        private long position0(FileDescriptor fdo, long offset) throws IOException {
-            int fd = fdval(fdo);
-            long result = 0;
-
-            if (offset < 0) {
-                result = lseek(fd, WordFactory.zero(), SEEK_CUR()).rawValue();
-            } else {
-                result = lseek(fd, WordFactory.signed(offset), SEEK_SET()).rawValue();
-            }
-            return handle(result, "Position failed");
-        }
-
         // @Substitute
         // private static void close0(FileDescriptor fdo) throws IOException {
         // int fd = fdval(fdo);
@@ -2883,46 +2848,13 @@ public final class PosixJavaNIOSubstitutions {
          */
 
         @Substitute
-        @TargetElement(name = "transferTo0", optional = true)
-        @Platforms(Platform.LINUX.class)
+        @TargetElement(name = "transferTo0")
+        @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
         private long transferTo0Linux(FileDescriptor src, long position, long count, FileDescriptor dst) throws IOException {
-            /*
-             * We cannot call a non-static method here due to Substrate VM substitution
-             * restrictions.
-             */
-            return Util_sun_nio_ch_FileChannelImpl.transferTo0LinuxImpl(fdval(src), position, count, fdval(dst));
-        }
-
-        @Substitute
-        @TargetElement(name = "transferTo0", optional = true)
-        @Platforms(Platform.LINUX.class)
-        private long transferTo0Linux(int srcFD, long position, long count, int dstFD) throws IOException {
-            return Util_sun_nio_ch_FileChannelImpl.transferTo0LinuxImpl(srcFD, position, count, dstFD);
-        }
-
-        @Substitute
-        @TargetElement(name = "transferTo0", optional = true)
-        @Platforms(Platform.DARWIN.class)
-        private long transferTo0Darwin(FileDescriptor src, long position, long count, FileDescriptor dst) throws IOException {
-            return Util_sun_nio_ch_FileChannelImpl.transferTo0DarwinImpl(fdval(src), position, count, fdval(dst));
-        }
-
-        @Substitute
-        @TargetElement(name = "transferTo0", optional = true)
-        @Platforms(Platform.DARWIN.class)
-        private long transferTo0Darwin(int srcFD, long position, long count, int dstFD) throws IOException {
-            return Util_sun_nio_ch_FileChannelImpl.transferTo0DarwinImpl(srcFD, position, count, dstFD);
-        }
-    }
-
-    static final class Util_sun_nio_ch_FileChannelImpl {
-
-        @Platforms(Platform.LINUX.class)
-        static long transferTo0LinuxImpl(int srcFD, long position, long count, int dstFD) throws IOException {
-            CLongPointer offset = StackValue.get(SizeOf.get(CLongPointer.class));
+            CLongPointer offset = StackValue.get(CLongPointer.class);
             offset.write(position);
 
-            SignedWord n = sendfile(dstFD, srcFD, offset, WordFactory.unsigned(count));
+            SignedWord n = sendfile(fdval(dst), fdval(src), offset, WordFactory.unsigned(count));
             if (n.lessThan(0)) {
                 if (errno() == EAGAIN()) {
                     return Target_sun_nio_ch_IOStatus.IOS_UNAVAILABLE;
@@ -2933,20 +2865,21 @@ public final class PosixJavaNIOSubstitutions {
                 if (errno() == EINTR()) {
                     return Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
                 }
-                throw throwIOExceptionWithLastError("Transfer failed");
+                throw PosixUtils.newIOExceptionWithLastError("Transfer failed");
             }
             return n.rawValue();
         }
 
-        @Platforms(Platform.DARWIN.class)
-        static long transferTo0DarwinImpl(int srcFD, long position, long count, int dstFD) throws IOException {
-
-            CLongPointer numBytes = StackValue.get(SizeOf.get(CLongPointer.class));
+        @Substitute
+        @TargetElement(name = "transferTo0")
+        @Platforms(DeprecatedPlatform.DARWIN_SUBSTITUTION.class)
+        private long transferTo0Darwin(FileDescriptor src, long position, long count, FileDescriptor dst) throws IOException {
+            CLongPointer numBytes = StackValue.get(CLongPointer.class);
             int result;
 
             numBytes.write(count);
 
-            result = sendfile(srcFD, dstFD, position, numBytes, WordFactory.nullPointer(), 0);
+            result = sendfile(fdval(src), fdval(dst), position, numBytes, WordFactory.nullPointer(), 0);
 
             if (numBytes.read() > 0) {
                 return numBytes.rawValue();
@@ -2964,7 +2897,7 @@ public final class PosixJavaNIOSubstitutions {
                 if (errno() == EINTR()) {
                     return Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
                 }
-                throw throwIOExceptionWithLastError("Transfer failed");
+                throw PosixUtils.newIOExceptionWithLastError("Transfer failed");
             }
 
             return result;
@@ -2976,7 +2909,7 @@ public final class PosixJavaNIOSubstitutions {
      */
 
     @TargetClass(className = "sun.nio.ch.FileKey")
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_ch_FileKey {
         // Checkstyle: stop
         @Alias long st_dev;
@@ -2991,7 +2924,7 @@ public final class PosixJavaNIOSubstitutions {
 
         @Substitute
         private void init(FileDescriptor fdo) throws IOException {
-            Stat.stat fbuf = StackValue.get(SizeOf.get(Stat.stat.class));
+            Stat.stat fbuf = StackValue.get(Stat.stat.class);
             int res;
 
             do {
@@ -2999,7 +2932,7 @@ public final class PosixJavaNIOSubstitutions {
             } while ((res == -1) && (errno() == EINTR()));
 
             if (res < 0) {
-                throw throwIOExceptionWithLastError("fstat64 failed");
+                throw PosixUtils.newIOExceptionWithLastError("fstat64 failed");
             } else {
                 st_dev = fbuf.st_dev();
                 st_ino = fbuf.st_ino();
@@ -3012,7 +2945,7 @@ public final class PosixJavaNIOSubstitutions {
      */
 
     @TargetClass(className = "sun.nio.fs.UnixCopyFile")
-    @Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_fs_UnixCopyFile {
 
         /**
@@ -3021,7 +2954,7 @@ public final class PosixJavaNIOSubstitutions {
         @Substitute
         private static void transfer(int dst, int src, long cancelAddress) throws Exception {
             int bufsize = 8192;
-            CCharPointer buf = StackValue.get(bufsize, SizeOf.get(CCharPointer.class));
+            CCharPointer buf = StackValue.get(bufsize, CCharPointer.class);
             CIntPointer cancel = WordFactory.pointer(cancelAddress);
 
             for (;;) {
@@ -3060,72 +2993,12 @@ public final class PosixJavaNIOSubstitutions {
         }
     }
 
-    @TargetClass(className = "java.nio.Bits")
-    static final class Target_java_nio_Bits {
-
-        @Substitute
-        private static void copyFromShortArray(Object src, long srcPos, long dstAddr, long length) {
-            Pointer dstPointer = WordFactory.pointer(dstAddr);
-            SignedWord srcOffset = WordFactory.signed(ConfigurationValues.getObjectLayout().getArrayBaseOffset(JavaKind.Short) + srcPos);
-
-            for (SignedWord i = WordFactory.zero(); i.lessOrEqual(WordFactory.signed(length)); i = i.add(2)) {
-                dstPointer.writeShort(i, Short.reverseBytes(ObjectAccess.readShort(src, srcOffset.add(i))));
-            }
-        }
-
-        @Substitute
-        private static void copyToShortArray(long srcAddr, Object dst, long dstPos, long length) {
-            Pointer srcPointer = WordFactory.pointer(srcAddr);
-            SignedWord dstOffset = WordFactory.signed(ConfigurationValues.getObjectLayout().getArrayBaseOffset(JavaKind.Short) + dstPos);
-
-            for (SignedWord i = WordFactory.zero(); i.lessOrEqual(WordFactory.signed(length)); i = i.add(2)) {
-                ObjectAccess.writeShort(dst, dstOffset.add(i), Short.reverseBytes(srcPointer.readShort(i)));
-            }
-        }
-
-        @Substitute
-        private static void copyFromIntArray(Object src, long srcPos, long dstAddr, long length) {
-            Pointer dstPointer = WordFactory.pointer(dstAddr);
-            SignedWord srcOffset = WordFactory.signed(ConfigurationValues.getObjectLayout().getArrayBaseOffset(JavaKind.Int) + srcPos);
-
-            for (SignedWord i = WordFactory.zero(); i.lessOrEqual(WordFactory.signed(length)); i = i.add(4)) {
-                dstPointer.writeInt(i, Integer.reverseBytes(ObjectAccess.readInt(src, srcOffset.add(i))));
-            }
-        }
-
-        @Substitute
-        private static void copyToIntArray(long srcAddr, Object dst, long dstPos, long length) {
-            Pointer srcPointer = WordFactory.pointer(srcAddr);
-            SignedWord dstOffset = WordFactory.signed(ConfigurationValues.getObjectLayout().getArrayBaseOffset(JavaKind.Int) + dstPos);
-
-            for (SignedWord i = WordFactory.zero(); i.lessOrEqual(WordFactory.signed(length)); i = i.add(4)) {
-                ObjectAccess.writeInt(dst, dstOffset.add(i), Integer.reverseBytes(srcPointer.readInt(i)));
-            }
-        }
-
-        @Substitute
-        private static void copyFromLongArray(Object src, long srcPos, long dstAddr, long length) {
-            Pointer dstPointer = WordFactory.pointer(dstAddr);
-            SignedWord srcOffset = WordFactory.signed(ConfigurationValues.getObjectLayout().getArrayBaseOffset(JavaKind.Long) + srcPos);
-
-            for (SignedWord i = WordFactory.zero(); i.lessOrEqual(WordFactory.signed(length)); i = i.add(8)) {
-                dstPointer.writeLong(i, Long.reverseBytes(ObjectAccess.readLong(src, srcOffset.add(i))));
-            }
-        }
-
-        @Substitute
-        private static void copyToLongArray(long srcAddr, Object dst, long dstPos, long length) {
-            Pointer srcPointer = WordFactory.pointer(srcAddr);
-            SignedWord dstOffset = WordFactory.signed(ConfigurationValues.getObjectLayout().getArrayBaseOffset(JavaKind.Short) + dstPos);
-
-            for (SignedWord i = WordFactory.zero(); i.lessOrEqual(WordFactory.signed(length)); i = i.add(8)) {
-                ObjectAccess.writeLong(dst, dstOffset.add(i), Long.reverseBytes(srcPointer.readLong(i)));
-            }
-        }
-    }
-
     @TargetClass(className = "sun.nio.ch.SocketChannelImpl")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_ch_SocketChannelImpl {
+
+        @Substitute
+        @TargetElement(onlyWith = JDK8OrEarlier.class)
         // /jdk/src/share/classes/sun/nio/ch/SocketChannelImpl.java?v=Java_1.8.0_40_b10
         // 1027 private static native int checkConnect(FileDescriptor fd,
         // 1028 boolean block, boolean ready)
@@ -3137,20 +3010,19 @@ public final class PosixJavaNIOSubstitutions {
         // 050 jobject fdo, jboolean block,
         // 051 jboolean ready)
         // 052 {
-        @Substitute
         static int checkConnect(FileDescriptor fdo, boolean block, boolean ready) throws IOException {
             // 053 int error = 0;
-            CIntPointer error_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer error_Pointer = StackValue.get(CIntPointer.class);
             error_Pointer.write(0);
             // 054 socklen_t n = sizeof(int);
-            CIntPointer n_Pointer = StackValue.get(SizeOf.get(CIntPointer.class));
+            CIntPointer n_Pointer = StackValue.get(CIntPointer.class);
             n_Pointer.write(SizeOf.get(CIntPointer.class));
             // 055 jint fd = fdval(env, fdo);
             int fd = fdval(fdo);
             // 056 int result = 0;
             int result = 0;
             // 057 struct pollfd poller;
-            Poll.pollfd poller = StackValue.get(SizeOf.get(Poll.pollfd.class));
+            Poll.pollfd poller = StackValue.get(Poll.pollfd.class);
             // 058
             // 059 poller.revents = 1;
             poller.set_revents(1);
@@ -3167,7 +3039,7 @@ public final class PosixJavaNIOSubstitutions {
                 // 065 if (result < 0) {
                 if (result < 0) {
                     // 066 JNU_ThrowIOExceptionWithLastError(env, "Poll failed");
-                    throw new IOException("Poll failed");
+                    throw PosixUtils.newIOExceptionWithLastError("Poll failed");
                     // 067 return IOS_THROWN;
                     /* unreachable! */
                 }
@@ -3181,7 +3053,7 @@ public final class PosixJavaNIOSubstitutions {
             // 073 if (poller.revents) {
             if (CTypeConversion.toBoolean(poller.revents())) {
                 // 074 errno = 0;
-                error_Pointer.write(0);
+                Errno.set_errno(0);
                 // 075 result = getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &n);
                 result = Socket.getsockopt(fd, Socket.SOL_SOCKET(), Socket.SO_ERROR(), error_Pointer, n_Pointer);
                 // 076 if (result < 0) {
@@ -3203,13 +3075,156 @@ public final class PosixJavaNIOSubstitutions {
             // 085 return 0;
             return 0;
         }
+
+        /* { Do not format quoted code: @formatter:off */
+        @Substitute
+        @TargetElement(onlyWith = {JDK11OrLater.class, JDK11OrEarlier.class})
+        /* open/src/java.base/share/classes/sun/nio/ch/SocketChannelImpl.java */
+        // 1120    private static native int checkConnect(FileDescriptor fd, boolean block)
+        // 1121        throws IOException;
+        /* open/src/java.base/unix/native/libnio/ch/SocketChannelImpl.c */
+        // 48 JNIEXPORT jint JNICALL
+        // 49 Java_sun_nio_ch_SocketChannelImpl_checkConnect(JNIEnv *env, jobject this,
+        // 50                                                jobject fdo, jboolean block)
+        // 51 {
+        static int checkConnect(FileDescriptor fdo, boolean block) throws IOException {
+            // 52     int error = 0;
+            CIntPointer error_Pointer = StackValue.get(CIntPointer.class);
+            error_Pointer.write(0);
+            // 53     socklen_t n = sizeof(int);
+            CIntPointer n_Pointer = StackValue.get(CIntPointer.class);
+            n_Pointer.write(SizeOf.get(CIntPointer.class));
+            // 54     jint fd = fdval(env, fdo);
+            int fd = fdval(fdo);
+            // 55     int result = 0;
+            int result = 0;
+            // 56     struct pollfd poller;
+            Poll.pollfd poller = StackValue.get(Poll.pollfd.class);
+            // 57
+            // 58     poller.fd = fd;
+            poller.set_fd(fd);
+            // 59     poller.events = POLLOUT;
+            poller.set_events(Poll.POLLOUT());
+            // 60     poller.revents = 0;
+            poller.set_revents(0);
+            // 61     result = poll(&poller, 1, block ? -1 : 0);
+            result = Poll.poll(poller, 1, block ? -1 : 0);
+            // 62
+            // 63     if (result < 0) {
+            if (result < 0) {
+                // 64         if (errno == EINTR) {
+                if (Errno.errno() == Errno.EINTR()) {
+                    // 65             return IOS_INTERRUPTED;
+                    return Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
+                } else {
+                    // 67             JNU_ThrowIOExceptionWithLastError(env, "poll failed");
+                    throw PosixUtils.newIOExceptionWithLastError("poll failed");
+                    // 68             return IOS_THROWN;
+                    /* unreachable! */
+                }
+            }
+            // 71     if (!block && (result == 0))
+            if (!block && (result == 0)) {
+                // 72         return IOS_UNAVAILABLE;
+                return Target_sun_nio_ch_IOStatus.IOS_UNAVAILABLE;
+            }
+            // 73
+            // 74     if (result > 0) {
+            if (result > 0) {
+                // 75         errno = 0;
+                Errno.set_errno(0);
+                // 76         result = getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &n);
+                result = Socket.getsockopt(fd, Socket.SOL_SOCKET(), Socket.SO_ERROR(), error_Pointer, n_Pointer);
+                // 77         if (result < 0) {
+                if (result < 0) {
+                    // 78             return handleSocketError(env, errno);
+                    return Util_sun_nio_ch_Net.handleSocketError(Errno.errno());
+                    // 79         } else if (error) {
+                } else if (CTypeConversion.toBoolean(error_Pointer.read())) {
+                    // 80             return handleSocketError(env, error);
+                    return Util_sun_nio_ch_Net.handleSocketError(error_Pointer.read());
+                    // 81         } else if ((poller.revents & POLLHUP) != 0) {
+                } else if ((poller.revents() & Poll.POLLHUP()) != 0) {
+                    // 82             return handleSocketError(env, ENOTCONN);
+                    return Util_sun_nio_ch_Net.handleSocketError(Errno.ENOTCONN());
+                }
+                // 84         // connected
+                // 85         return 1;
+                return 1;
+            }
+            // 87     return 0;
+            return 0;
+        }
+        /* } Do not format quoted code: @formatter:on */
+    }
+
+    @TargetClass(className = "sun.nio.ch.UnixAsynchronousSocketChannelImpl")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+    static final class Target_sun_nio_ch_UnixAsynchronousSocketChannelImpl {
+
+        /* { Do not format quoted code: @formatter:off */
+
+        /* Translated from src/solaris/native/sun/nio/ch/UnixAsynchronousSocketChannelImpl.c?v=Java_1.8.0_40_b10 */
+        @Substitute
+        // 038 JNIEXPORT void JNICALL
+        // 039 Java_sun_nio_ch_UnixAsynchronousSocketChannelImpl_checkConnect(JNIEnv *env,
+        // 040     jobject this, int fd)
+        static void checkConnect(int fd) throws IOException {
+            // 042     int error = 0;
+            CIntPointer errorPointer = StackValue.get(CIntPointer.class);
+            errorPointer.write(0);
+            // 043     socklen_t arglen = sizeof(error);
+            CIntPointer arglenPointer = StackValue.get(CIntPointer.class);
+            arglenPointer.write(SizeOf.get(CIntPointer.class));
+            // 044     int result;
+            int result;
+            // 045
+            // 046     result = getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &arglen);
+            result = Socket.getsockopt(fd, Socket.SOL_SOCKET(), Socket.SO_ERROR(), errorPointer, arglenPointer);
+            // 047     if (result < 0) {
+            if (result < 0) {
+                // 048         JNU_ThrowIOExceptionWithLastError(env, "getsockopt");
+                throw PosixUtils.newIOExceptionWithLastError("getsockopt");
+            } else {
+                // 050         if (error)
+                if (CTypeConversion.toBoolean(errorPointer.read())) {
+                    // 051             handleSocketError(env, error);
+                    Util_sun_nio_ch_Net.handleSocketError(errorPointer.read());
+                }
+            }
+        }
+    }
+
+    @TargetClass(className = "sun.nio.ch.UnixAsynchronousServerSocketChannelImpl")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+    static final class Target_sun_nio_ch_UnixAsynchronousServerSocketChannelImpl {
+
+        /* { Do not format quoted code: @formatter:off */
+
+        /* Translated from src/solaris/native/sun/nio/ch/UnixAsynchronousServerSocketChannelImpl.c?v=Java_1.8.0_40_b10 */
+        @TargetElement(onlyWith = JDK11OrEarlier.class)
+        @Substitute
+        // 041 JNIEXPORT jint JNICALL
+        // 042 Java_sun_nio_ch_UnixAsynchronousServerSocketChannelImpl_accept0(JNIEnv* env,
+        // 043     jobject this, jobject ssfdo, jobject newfdo, jobjectArray isaa)
+        @SuppressWarnings({"static-method"})
+        int accept0(FileDescriptor ssfd, FileDescriptor newfd, InetSocketAddress[] isaa) throws IOException {
+            // 045     return Java_sun_nio_ch_ServerSocketChannelImpl_accept0(env, this,
+            // 046         ssfdo, newfdo, isaa);
+            /* Ignore the receiver. */
+            return Util_sun_nio_ch_ServerSocketChannelImpl.accept0(ssfd, newfd, isaa);
+        }
+
+        /* } Do not format quoted code: @formatter:on */
     }
 
     @TargetClass(className = "sun.nio.fs.UnixFileSystem")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_fs_UnixFileSystem {
     }
 
     @TargetClass(className = "sun.nio.fs.UnixFileSystemProvider")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_sun_nio_fs_UnixFileSystemProvider {
         @Alias
         native Target_sun_nio_fs_UnixFileSystem newFileSystem(String s);
@@ -3221,6 +3236,7 @@ public final class PosixJavaNIOSubstitutions {
     }
 
     @TargetClass(FileSystems.class)
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
     static final class Target_java_nio_file_FileSystems {
         @Substitute
         static FileSystem getDefault() {
@@ -3242,8 +3258,8 @@ public final class PosixJavaNIOSubstitutions {
      * Translated from:
      * jdk/src/solaris/native/sun/nio/fs/GnomeFileTypeDetector.c?v=Java_1.8.0_40_b10
      */
-    @Platforms({Platform.LINUX.class})
-    @TargetClass(className = "sun.nio.fs.GnomeFileTypeDetector")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+    @TargetClass(className = "sun.nio.fs.GnomeFileTypeDetector", onlyWith = JDK8OrEarlier.class)
     static final class Target_sun_nio_fs_GnomeFileTypeDetector {
 
         /* { Do not format quoted code: @formatter:off */
@@ -3336,12 +3352,12 @@ public final class PosixJavaNIOSubstitutions {
                             .string("[PosixJavaNIOSubstitutions.Target_sun_nio_fs_GnomeFileTypeDetector.probeUsingGio:")
                             .newline();
             // 133     char* path = (char*)jlong_to_ptr(pathAddress);
-            CCharPointer path = Word.pointer(pathAddress);
+            CCharPointer path = WordFactory.pointer(pathAddress);
             trace.string("  pathAddress: ").string(path);
             // 134     GFile* gfile;
-            Util_sun_nio_fs_GnomeFileTypeDetector.GFile gfile = Word.nullPointer();
+            Util_sun_nio_fs_GnomeFileTypeDetector.GFile gfile = WordFactory.nullPointer();
             // 135     GFileInfo* gfileinfo;
-            Util_sun_nio_fs_GnomeFileTypeDetector.GFileInfo gfileinfo = Word.nullPointer();
+            Util_sun_nio_fs_GnomeFileTypeDetector.GFileInfo gfileinfo = WordFactory.nullPointer();
             // 136     jbyteArray result = NULL;
             byte[] result = null;
             // 138     gfile = (*g_file_new_for_path)(path);
@@ -3362,7 +3378,7 @@ public final class PosixJavaNIOSubstitutions {
                 // 143         if (mime != NULL) {
                 if (mime.isNonNull()) {
                     // 144             jsize len = strlen(mime);
-                    int len = (int) LibC.strlen(mime).rawValue();
+                    int len = (int) SubstrateUtil.strlen(mime).rawValue();
                     // 145             result = (*env)->NewByteArray(env, len);
                     result = new byte[len];
                     // 146             if (result != NULL) {
@@ -3446,7 +3462,7 @@ public final class PosixJavaNIOSubstitutions {
                             .string("[PosixJavaNIOSubstitutions.Target_sun_nio_fs_GnomeFileTypeDetector.probeUsingGnomeVfs:")
                             .newline();
             // 190     char* path = (char*)jlong_to_ptr(pathAddress);
-            CCharPointer path = Word.pointer(pathAddress);
+            CCharPointer path = WordFactory.pointer(pathAddress);
             trace.string("  path: ").string(path).newline();
             // 191     const char* mime = (*gnome_vfs_mime_type_from_name)(path);
             CCharPointer mime = Util_sun_nio_fs_GnomeFileTypeDetector.gnome_vfs_mime_type_from_name.invoke(path);
@@ -3459,7 +3475,7 @@ public final class PosixJavaNIOSubstitutions {
                 // 196         jbyteArray result;
                 byte[] result;
                 // 197         jsize len = strlen(mime);
-                int len = (int) LibC.strlen(mime).rawValue();
+                int len = (int) SubstrateUtil.strlen(mime).rawValue();
                 // 198         result = (*env)->NewByteArray(env, len);
                 result = new byte[len];
                 // 199         if (result != NULL) {
@@ -3543,7 +3559,7 @@ public final class PosixJavaNIOSubstitutions {
         }
     }
 
-    @Platforms({Platform.LINUX.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
     static final class Util_sun_nio_fs_GnomeFileTypeDetector {
 
         /* { Do not format quoted code: @formatter:off */
@@ -3670,8 +3686,8 @@ public final class PosixJavaNIOSubstitutions {
      * Translated from:
      * jdk/src/solaris/native/sun/nio/fs/MagicFileTypeDetector.c?v=Java_1.8.0_40_b10
      */
-    @Platforms({Platform.LINUX.class})
-    @TargetClass(className = "sun.nio.fs.MagicFileTypeDetector")
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+    @TargetClass(className = "sun.nio.fs.MagicFileTypeDetector", onlyWith = JDK8OrEarlier.class)
     static final class Target_sun_nio_fs_MagicFileTypeDetector {
         /* { Do not format quoted code: @formatter:off */
 
@@ -3754,7 +3770,7 @@ public final class PosixJavaNIOSubstitutions {
                             .string("[PosixJavaNIOSubstitutions.Target_sun_nio_fs_MagicFileTypeDetector.probe0:")
                             .newline();
             // 087     char* path = (char*)jlong_to_ptr(pathAddress);
-            CCharPointer path = Word.pointer(pathAddress);
+            CCharPointer path = WordFactory.pointer(pathAddress);
             trace.string("  path: ").string(path).newline();
             // 088     magic_t* cookie;
             Util_sun_nio_fs_MagicFileTypeDetector.magic_t cookie = WordFactory.nullPointer();
@@ -3773,7 +3789,7 @@ public final class PosixJavaNIOSubstitutions {
                     // 096             if (type != NULL) {
                     if (type.isNonNull()) {
                         // 097                 jsize len = strlen(type);
-                        int len = (int) LibC.strlen(type).rawValue();
+                        int len = (int) SubstrateUtil.strlen(type).rawValue();
                         // 098                 result = (*env)->NewByteArray(env, len);
                         result = new byte[len];
                         // 099                 if (result != NULL) {
@@ -3828,7 +3844,7 @@ public final class PosixJavaNIOSubstitutions {
         }
     }
 
-    @Platforms({Platform.LINUX.class})
+    @Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
     static class Util_sun_nio_fs_MagicFileTypeDetector {
 
         /* { Do not format quoted code: @formatter:off */
@@ -3878,5 +3894,394 @@ public final class PosixJavaNIOSubstitutions {
 
         /* } Allow names with underscores: Checkstyle: resume. */
         /* } Do not format quoted code: @formatter:on */
+    }
+
+    /* { Allow names with non-standard names: Checkstyle: stop */
+    @SuppressWarnings({"unused", "static-method"})
+    @TargetClass(className = "sun.nio.ch.DatagramChannelImpl")
+    @Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class, DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+    static final class Target_sun_nio_ch_DatagramChannelImpl {
+
+        @Alias //
+        private InetAddress cachedSenderInetAddress;
+
+        @Alias //
+        private int cachedSenderPort;
+
+        @Alias //
+        private SocketAddress sender;
+
+        @Substitute
+        private static void initIDs() {
+            // no operation
+        }
+
+        /* Do not re-format commented out code: @formatter:off */
+        //    83  JNIEXPORT void JNICALL
+        //    84  Java_sun_nio_ch_DatagramChannelImpl_disconnect0(JNIEnv *env, jobject this,
+        //    85                                                  jobject fdo, jboolean isIPv6)
+        //    86  {
+        @Substitute
+        private static void disconnect0(FileDescriptor fdo, boolean isIPv6) throws IOException {
+            //    87      jint fd = fdval(env, fdo);
+            int fd = PosixUtils.getFD(fdo);
+            //    88      int rv;
+            int rv = 0;
+            //    89
+            //    90  #ifdef __solaris__
+            if (IsDefined.__solaris__()) {
+                //    91      rv = connect(fd, 0, 0);
+                rv = Socket.connect(fd, WordFactory.nullPointer(), 0);
+                //    92  #endif
+            }
+            //    93
+            //    94  #if defined(__linux__) || defined(_ALLBSD_SOURCE) || defined(_AIX)
+            if (IsDefined.__linux__() || IsDefined._ALLBSD_SOURCE() || IsDefined._AIX()) {
+                //    95      {
+                {
+                    //    96          int len;
+                    int len;
+                    //    97          SOCKADDR sa;
+                    Socket.sockaddr sa = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
+                    //    98
+                    //    99          memset(&sa, 0, sizeof(sa));
+                    LibC.memset(sa, WordFactory.signed(0), WordFactory.unsigned(JavaNetNetUtilMD.SOCKADDR_LEN()));
+                    //   100
+                    //   101  #ifdef AF_INET6
+                    if (IsDefined.socket_AF_INET6()) {
+                        //   102          if (isIPv6) {
+                        if (isIPv6) {
+                            //   103              struct sockaddr_in6 *him6 = (struct sockaddr_in6 *)&sa;
+                            NetinetIn.sockaddr_in6 him6 = (NetinetIn.sockaddr_in6) sa;
+                            //   104  #if defined(_ALLBSD_SOURCE)
+                            if (IsDefined._ALLBSD_SOURCE()) {
+                                //   105              him6->sin6_family = AF_INET6;
+                                him6.set_sin6_family(Socket.AF_INET6());
+                                //   106  #else
+                            } else {
+                                //   107              him6->sin6_family = AF_UNSPEC;
+                                him6.set_sin6_family(Socket.AF_UNSPEC());
+                                //   108  #endif
+                            }
+                            //   109              len = sizeof(struct sockaddr_in6);
+                            len = SizeOf.get(NetinetIn.sockaddr_in6.class);
+                            //   110          } else
+                        } else
+                        //   111  #endif
+                        // we cannot split an `if` statement with `ifdef` so duplicate the following lines instead
+                        //   112          {
+                        {
+                            //   113              struct sockaddr_in *him4 = (struct sockaddr_in*)&sa;
+                            NetinetIn.sockaddr_in him4 = (NetinetIn.sockaddr_in) sa;
+                            //   114  #if defined(_ALLBSD_SOURCE)
+                            if (IsDefined._ALLBSD_SOURCE()) {
+                                //   115              him4->sin_family = AF_INET;
+                                him4.set_sin_family(Socket.AF_INET());
+                                //   116  #else
+                            } else {
+                                //   117              him4->sin_family = AF_UNSPEC;
+                                him4.set_sin_family(Socket.AF_UNSPEC());
+                                //   118  #endif
+                            }
+                            //   119              len = sizeof(struct sockaddr_in);
+                            len = SizeOf.get(NetinetIn.sockaddr_in.class);
+                            //   120          }
+                        }
+                    } else
+                    // here is the duplicate...
+                    //   112          {
+                    {
+                        //   113              struct sockaddr_in *him4 = (struct sockaddr_in*)&sa;
+                        NetinetIn.sockaddr_in him4 = StackValue.get(NetinetIn.sockaddr_in.class);
+                        // from line 99
+                        LibC.memset(him4, WordFactory.signed(0), SizeOf.unsigned(NetinetIn.sockaddr_in.class));
+                        //   114  #if defined(_ALLBSD_SOURCE)
+                        if (IsDefined._ALLBSD_SOURCE()) {
+                            //   115              him4->sin_family = AF_INET;
+                            him4.set_sin_family(Socket.AF_INET());
+                            //   116  #else
+                        } else {
+                            //   117              him4->sin_family = AF_UNSPEC;
+                            him4.set_sin_family(Socket.AF_UNSPEC());
+                            //   118  #endif
+                        }
+                        //   119              len = sizeof(struct sockaddr_in);
+                        len = SizeOf.get(NetinetIn.sockaddr_in.class);
+                        //   120          }
+                    }
+                    //   121
+                    //   122          rv = connect(fd, (struct sockaddr *)&sa, len);
+                    rv = Socket.connect(fd, sa, len);
+                    //   123
+                    //   124  #if defined(_ALLBSD_SOURCE)
+                    if (IsDefined._ALLBSD_SOURCE()) {
+                        //   125          if (rv < 0 && errno == EADDRNOTAVAIL)
+                        if (rv < 0 && Errno.errno() == Errno.EADDRNOTAVAIL()) {
+                            //   126                  rv = errno = 0;
+                            Errno.set_errno(0);
+                            rv = 0;
+                            // original `if` statement has no {}
+                        }
+                        //   127  #endif
+                    }
+                    //   128  #if defined(_AIX)
+                    if (IsDefined._AIX()) {
+                        //   129          /* See W. Richard Stevens, "UNIX Network Programming, Volume 1", p. 254:
+                        //   130           * 'Setting the address family to AF_UNSPEC might return EAFNOSUPPORT
+                        //   131           * but that is acceptable.
+                        //   132           */
+                        //   133          if (rv < 0 && errno == EAFNOSUPPORT)
+                        if (rv < 0 && Errno.errno() == Errno.EAFNOSUPPORT()) {
+                            //   134              rv = errno = 0;
+                            Errno.set_errno(0);
+                            rv = 0;
+                            // original `if` statement has no {}
+                        }
+                        //   135  #endif
+                    }
+                    //   136      }
+                }
+                //   137  #endif
+            }
+            //   138
+            //   139      if (rv < 0)
+            if (rv < 0) {
+                //   140          handleSocketError(env, errno);
+                PosixJavaNIOSubstitutions.Util_sun_nio_ch_Net.handleSocketError(rv);
+            }
+            //   141
+            //   142  }
+        }
+        // @formatter:on
+
+        /* Do not re-format commented out code: @formatter:off */
+        //   144  JNIEXPORT jint JNICALL
+        //   145  Java_sun_nio_ch_DatagramChannelImpl_receive0(JNIEnv *env, jobject this,
+        //   146                                               jobject fdo, jlong address,
+        //   147                                               jint len, jboolean connected)
+        //   148  {
+        @Substitute
+        private int receive0(FileDescriptor fdo, long address, int lenIn, boolean connected) throws IOException {
+            int len = lenIn;
+            //   149      jint fd = fdval(env, fdo);
+            int fd = PosixUtils.getFD(fdo);
+            //   150      void *buf = (void *)jlong_to_ptr(address);
+            PointerBase buf = WordFactory.pointer(address);
+            //   151      SOCKADDR sa;
+            Socket.sockaddr sa = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
+            //   152      socklen_t sa_len = SOCKADDR_LEN;
+            CIntPointer sa_len = StackValue.get(CIntPointer.class);
+            sa_len.write(JavaNetNetUtilMD.SOCKADDR_LEN());
+            //   153      jboolean retry = JNI_FALSE;
+            boolean retry; // initializer is redundant
+            //   154      jint n = 0;
+            int n; // redundant initializer
+            //   155      jobject senderAddr;
+            InetAddress senderAddr;
+            //   156
+            //   157      if (len > MAX_PACKET_LEN) {
+            if (len > JavaNetNetUtil.MAX_PACKET_LEN()) {
+                //   158          len = MAX_PACKET_LEN;
+                len = JavaNetNetUtil.MAX_PACKET_LEN();
+                //   159      }
+            }
+            //   160
+            //   161      do {
+            do {
+                //   162          retry = JNI_FALSE;
+                retry = false;
+                //   163          n = recvfrom(fd, buf, len, 0, (struct sockaddr *)&sa, &sa_len);
+                n = (int) Socket.recvfrom(fd, buf, WordFactory.unsigned(len), 0, sa, sa_len).rawValue();
+                //   164          if (n < 0) {
+                if (n < 0) {
+                    //   165              if (errno == EWOULDBLOCK) {
+                    // We don't have any tricks to force these to be the same
+                    if (Errno.errno() == Errno.EWOULDBLOCK() || Errno.errno() == Errno.EAGAIN()) {
+                        //   166                  return IOS_UNAVAILABLE;
+                        return PosixJavaNIOSubstitutions.Target_sun_nio_ch_IOStatus.IOS_UNAVAILABLE;
+                        //   167              }
+                    }
+                    //   168              if (errno == EINTR) {
+                    if (Errno.errno() == Errno.EINTR()) {
+                        //   169                  return IOS_INTERRUPTED;
+                        return PosixJavaNIOSubstitutions.Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
+                        //   170              }
+                    }
+                    //   171              if (errno == ECONNREFUSED) {
+                    if (Errno.errno() == Errno.ECONNREFUSED()) {
+                        //   172                  if (connected == JNI_FALSE) {
+                        if (! connected) {
+                            //   173                      retry = JNI_TRUE;
+                            retry = true;
+                            //   174                  } else {
+                        } else {
+                            //   175                      JNU_ThrowByName(env, JNU_JAVANETPKG
+                            //   176                                      "PortUnreachableException", 0);
+                            throw new PortUnreachableException();
+                            //   177                      return IOS_THROWN;
+                            // not reached
+                            //   178                  }
+                        }
+                        //   179              } else {
+                    } else {
+                        //   180                  return handleSocketError(env, errno);
+                        return PosixJavaNIOSubstitutions.Util_sun_nio_ch_Net.handleSocketError(Errno.errno());
+                        //   181              }
+                    }
+                    //   182          }
+                }
+                //   183      } while (retry == JNI_TRUE);
+            } while (retry);
+            //   184
+            //   185      /*
+            //   186       * If the source address and port match the cached address
+            //   187       * and port in DatagramChannelImpl then we don't need to
+            //   188       * create InetAddress and InetSocketAddress objects.
+            //   189       */
+            //   190      senderAddr = (*env)->GetObjectField(env, this, dci_senderAddrID);
+            senderAddr = cachedSenderInetAddress;
+            //   191      if (senderAddr != NULL) {
+            if (senderAddr != null) {
+                //   192          if (!NET_SockaddrEqualsInetAddress(env, (struct sockaddr *)&sa,
+                //   193                                             senderAddr)) {
+                if (! JavaNetNetUtil.NET_SockaddrEqualsInetAddress(sa, senderAddr)) {
+                    //   194              senderAddr = NULL;
+                    senderAddr = null;
+                    //   195          } else {
+                } else {
+                    //   196              jint port = (*env)->GetIntField(env, this, dci_senderPortID);
+                    int port = cachedSenderPort;
+                    //   197              if (port != NET_GetPortFromSockaddr((struct sockaddr *)&sa)) {
+                    if (port != JavaNetNetUtilMD.NET_GetPortFromSockaddr(sa)) {
+                        //   198                  senderAddr = NULL;
+                        senderAddr = null;
+                        //   199              }
+                    }
+                    //   200          }
+                }
+                //   201      }
+            }
+            //   202      if (senderAddr == NULL) {
+            if (senderAddr == null) {
+                //   203          jobject isa = NULL;
+                InetSocketAddress isa = null;
+                //   204          int port = 0;
+                CIntPointer port = StackValue.get(CIntPointer.class);
+                port.write(0);
+                //   205          jobject ia = NET_SockaddrToInetAddress(env, (struct sockaddr *)&sa, &port);
+                final InetAddress ia = JavaNetNetUtil.NET_SockaddrToInetAddress(sa, port);
+                //   206          if (ia != NULL) {
+                if (ia != null) {
+                    //   207              isa = (*env)->NewObject(env, isa_class, isa_ctorID, ia, port);
+                    isa = new InetSocketAddress(ia, port.read());
+                    //   208          }
+                }
+                //   209          CHECK_NULL_RETURN(isa, IOS_THROWN);
+                if (isa == null) {
+                    // probably not really reachable
+                    return PosixJavaNIOSubstitutions.Target_sun_nio_ch_IOStatus.IOS_THROWN;
+                }
+                //   210
+                //   211          (*env)->SetObjectField(env, this, dci_senderAddrID, ia);
+                cachedSenderInetAddress = ia;
+                //   212          (*env)->SetIntField(env, this, dci_senderPortID,
+                //   213                              NET_GetPortFromSockaddr((struct sockaddr *)&sa));
+                cachedSenderPort = JavaNetNetUtilMD.NET_GetPortFromSockaddr(sa);
+                //   214          (*env)->SetObjectField(env, this, dci_senderID, isa);
+                sender = isa;
+                //   215      }
+            }
+            //   216      return n;
+            return n;
+            //   217  }
+        }
+        // @formatter:on
+
+        /* Do not re-format commented out code: @formatter:off */
+        //   219  JNIEXPORT jint JNICALL
+        //   220  Java_sun_nio_ch_DatagramChannelImpl_send0(JNIEnv *env, jobject this,
+        //   221                                            jboolean preferIPv6, jobject fdo, jlong address,
+        //   222                                            jint len, jobject destAddress, jint destPort)
+        //   223  {
+        @Substitute
+        private int send0(boolean preferIPv6, FileDescriptor fdo, long address, int lenIn, InetAddress destAddress, int destPort) throws IOException {
+            int len = lenIn;
+            //   224      jint fd = fdval(env, fdo);
+            int fd = PosixUtils.getFD(fdo);
+            //   225      void *buf = (void *)jlong_to_ptr(address);
+            PointerBase buf = WordFactory.pointer(address);
+            //   226      SOCKADDR sa;
+            Socket.sockaddr sa = StackValue.get(JavaNetNetUtilMD.SOCKADDR_LEN());
+            //   227      int sa_len = SOCKADDR_LEN;
+            CIntPointer sa_len = StackValue.get(CIntPointer.class);
+            sa_len.write(JavaNetNetUtilMD.SOCKADDR_LEN());
+            //   228      jint n = 0;
+            int n; // redundant initializer
+            //   229
+            //   230      if (len > MAX_PACKET_LEN) {
+            if (len > JavaNetNetUtil.MAX_PACKET_LEN()) {
+                //   231          len = MAX_PACKET_LEN;
+                len = JavaNetNetUtil.MAX_PACKET_LEN();
+                //   232      }
+            }
+            //   233
+            //   234      if (NET_InetAddressToSockaddr(env, destAddress, destPort,
+            //   235                                    (struct sockaddr *)&sa,
+            //   236                                    &sa_len, preferIPv6) != 0) {
+            if (JavaNetNetUtilMD.NET_InetAddressToSockaddr(destAddress, destPort, sa, sa_len, preferIPv6) != 0) {
+                //   237        return IOS_THROWN;
+                // probably not really reachable
+                return PosixJavaNIOSubstitutions.Target_sun_nio_ch_IOStatus.IOS_THROWN;
+                //   238      }
+            }
+            //   239
+            //   240      n = sendto(fd, buf, len, 0, (struct sockaddr *)&sa, sa_len);
+            n = (int) Socket.sendto(fd, buf, WordFactory.unsigned(len), 0, sa, sa_len.read()).rawValue();
+            //   241      if (n < 0) {
+            if (n < 0) {
+                //   242          if (errno == EAGAIN) {
+                // We don't have any tricks to force these to be the same
+                if (Errno.errno() == Errno.EWOULDBLOCK() || Errno.errno() == Errno.EAGAIN()) {
+                    //   243              return IOS_UNAVAILABLE;
+                    return PosixJavaNIOSubstitutions.Target_sun_nio_ch_IOStatus.IOS_UNAVAILABLE;
+                    //   244          }
+                }
+                //   245          if (errno == EINTR) {
+                if (Errno.errno() == Errno.EINTR()) {
+                    //   246              return IOS_INTERRUPTED;
+                    return PosixJavaNIOSubstitutions.Target_sun_nio_ch_IOStatus.IOS_INTERRUPTED;
+                    //   247          }
+                }
+                //   248          if (errno == ECONNREFUSED) {
+                if (Errno.errno() == Errno.ECONNREFUSED()) {
+                    //   249              JNU_ThrowByName(env, JNU_JAVANETPKG "PortUnreachableException", 0);
+                    throw new PortUnreachableException();
+                    //   250              return IOS_THROWN;
+                    // not reached
+                    //   251          }
+                }
+                //   252          return handleSocketError(env, errno);
+                return PosixJavaNIOSubstitutions.Util_sun_nio_ch_Net.handleSocketError(Errno.errno());
+                //   253      }
+            }
+            //   254      return n;
+            return n;
+            //   255  }
+        }
+        // @formatter:on
+    }
+    /* } Allow names with non-standard names: Checkstyle: resume */
+}
+
+/**
+ * Re-run the class initialization for {@code sun.nio.ch.NativeThread} so that it ensures that the
+ * interrupt signal handler is initialized at runtime.
+ */
+@AutomaticFeature
+final class SunNioChNativeThreadFeature implements Feature {
+
+    @Override
+    public void duringSetup(DuringSetupAccess access) {
+        ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(access.findClassByName("sun.nio.ch.NativeThread"), "required for substitutions");
     }
 }

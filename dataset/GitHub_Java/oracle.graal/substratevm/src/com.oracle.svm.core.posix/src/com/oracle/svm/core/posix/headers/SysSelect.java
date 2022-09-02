@@ -22,37 +22,51 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.posix.headers.linux;
+package com.oracle.svm.core.posix.headers;
 
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
+import org.graalvm.nativeimage.c.constant.CConstant;
 import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CMacroInfo;
+import org.graalvm.nativeimage.c.function.CFunction.Transition;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 
-import com.oracle.svm.core.posix.headers.PosixDirectives;
-
+@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class, DeprecatedPlatform.LINUX_SUBSTITUTION.class})
 @CContext(PosixDirectives.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
-public class LinuxSched {
-    // Checkstyle: stop
+public class SysSelect {
+    /* ( Allow names with underscores: Checkstyle: stop */
 
-    @CFunction
-    public static native int sched_getaffinity(int pid, int cpu_set_size, cpu_set_t set_ptr);
-
-    @CFunction
-    static native int __sched_cpucount(int cpu_set_size, cpu_set_t set_ptr);
-
-    @CMacroInfo("CPU_COUNT_S")
-    public static int CPU_COUNT_S(int cpu_set_size, cpu_set_t set_ptr) {
-        return __sched_cpucount(cpu_set_size, set_ptr);
-    }
-
+    /*
+     * An fd_set is an opaque set manipulated by macros. E.g., FD_ZERO, FD_SET, etc., that are
+     * accessed via C functions in
+     * graal/substratevm/src/com.oracle.svm.native.libchelper/src/macrosAsFunctions.c.
+     */
     @CStruct
-    public interface cpu_set_t extends PointerBase {
+    public interface fd_set extends PointerBase {
     }
 
-    // Checkstyle: resume
+    @CConstant
+    public static native int FD_SETSIZE();
+
+    @CConstant
+    public static native int NFDBITS();
+
+    @CFunction
+    public static native int select(int nfds, fd_set readfds, fd_set writefds,
+                    fd_set exceptfds, Time.timeval timeout);
+
+    /*
+     * Macros from <sys/select.h> made available a C functions via implementations in
+     * graal/substratevm/src/com.oracle.svm.native.libchelper/src/macrosAsFunctions.c
+     */
+
+    @CFunction(value = "sys_select_FD_SET", transition = Transition.NO_TRANSITION)
+    public static native void FD_SET(int fd, PointerBase fdset);
+
+    @CFunction(value = "sys_select_FD_ZERO", transition = Transition.NO_TRANSITION)
+    public static native void FD_ZERO(PointerBase fdset);
+
+    /* } Allow names with underscores: Checkstyle: resume */
 }

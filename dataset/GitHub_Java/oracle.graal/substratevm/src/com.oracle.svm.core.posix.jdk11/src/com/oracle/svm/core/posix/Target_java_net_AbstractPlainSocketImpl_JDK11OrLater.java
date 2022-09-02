@@ -22,37 +22,28 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.posix.headers.linux;
+package com.oracle.svm.core.posix;
+
+import com.oracle.svm.core.annotate.Substitute;
+import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.jdk.JDK11OrLater;
 
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.CContext;
-import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CMacroInfo;
-import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
-import org.graalvm.word.PointerBase;
 
-import com.oracle.svm.core.posix.headers.PosixDirectives;
+@TargetClass(className = "java.net.AbstractPlainSocketImpl", onlyWith = JDK11OrLater.class)
+@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+final class Target_java_net_AbstractPlainSocketImpl_JDK11OrLater {
+    // This class must not hide the "normal" Posix variant, and should be additive
 
-@CContext(PosixDirectives.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
-public class LinuxSched {
-    // Checkstyle: stop
-
-    @CFunction
-    public static native int sched_getaffinity(int pid, int cpu_set_size, cpu_set_t set_ptr);
-
-    @CFunction
-    static native int __sched_cpucount(int cpu_set_size, cpu_set_t set_ptr);
-
-    @CMacroInfo("CPU_COUNT_S")
-    public static int CPU_COUNT_S(int cpu_set_size, cpu_set_t set_ptr) {
-        return __sched_cpucount(cpu_set_size, set_ptr);
+    /* Do not re-format commented-out code: @formatter:off */
+    // ported from: ./src/java.base/unix/native/libnet/SocketImpl.c
+    //    32  JNIEXPORT jboolean JNICALL
+    //    33  Java_java_net_AbstractPlainSocketImpl_isReusePortAvailable0(JNIEnv* env, jclass c1)
+    @Substitute
+    static boolean isReusePortAvailable0() {
+        //    35      return (reuseport_available()) ? JNI_TRUE : JNI_FALSE;
+        return JavaNetNetUtil.reuseport_available();
     }
-
-    @CStruct
-    public interface cpu_set_t extends PointerBase {
-    }
-
-    // Checkstyle: resume
+    /* Do not re-format commented-out code: @formatter:on */
 }

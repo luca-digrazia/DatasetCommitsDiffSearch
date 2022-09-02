@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,56 +22,57 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.posix.headers.linux;
+package com.oracle.svm.core.posix.headers.darwin;
 
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
-import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.struct.CField;
+import org.graalvm.nativeimage.c.constant.CConstant;
+import org.graalvm.nativeimage.c.struct.CFieldAddress;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 
+import com.oracle.svm.core.posix.headers.NetinetIn;
 import com.oracle.svm.core.posix.headers.PosixDirectives;
-import com.oracle.svm.core.posix.headers.Stdio.FILE;
 
-//Checkstyle: stop
+/* { Do not format quoted code: @formatter:off */
+/* { Allow non-standard names: Checkstyle: stop */
 
-/**
- * Definitions manually translated from the C header file mntent.h.
- */
+@Platforms(DeprecatedPlatform.DARWIN_SUBSTITUTION.class)
 @CContext(PosixDirectives.class)
-@Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
-public class Mntent {
+public class DarwinNetinet6In6_var {
 
     @CStruct(addStructKeyword = true)
-    public interface mntent extends PointerBase {
-        @CField
-        CCharPointer mnt_fsname();
+    // struct in6_ifreq {
+    public interface in6_ifreq extends PointerBase {
 
-        @CField
-        CCharPointer mnt_dir();
+        //  char    ifr_name[IFNAMSIZ];
+        @CFieldAddress
+        CCharPointer ifr_name();
 
-        @CField
-        CCharPointer mnt_type();
+        //  union {
+        //      struct  sockaddr_in6 ifru_addr;
+        @CFieldAddress("ifr_ifru.ifru_addr")
+        NetinetIn.sockaddr_in6 ifru_addr();
 
-        @CField
-        CCharPointer mnt_opts();
-
-        @CField
-        int mnt_freq();
-
-        @CField
-        int mnt_passno();
+        //      struct  sockaddr_in6 ifru_dstaddr;
+        //      int ifru_flags;
+        //      int ifru_metric;
+        //      int ifru_intval;
+        //      caddr_t ifru_data;
+        //      struct in6_addrlifetime ifru_lifetime;
+        //      struct in6_ifstat ifru_stat;
+        //      struct icmp6_ifstat ifru_icmp6stat;
+        //      u_int32_t ifru_scope_id[SCOPE6_ID_MAX];
+        //  } ifr_ifru;
+        // };
     }
 
-    @CFunction
-    public static native FILE setmntent(CCharPointer file, CCharPointer mode);
-
-    @CFunction
-    public static native mntent getmntent_r(FILE stream, mntent result, CCharPointer buffer, int bufsize);
-
-    @CFunction
-    public static native int endmntent(FILE stream);
+    // #define SIOCGIFNETMASK_IN6  _IOWR('i', 37, struct in6_ifreq)
+    @CConstant
+    public static native long SIOCGIFNETMASK_IN6();
 }
+
+/* } Allow non-standard names: Checkstyle: resume */
+/* } Do not format quoted code: @formatter:on */

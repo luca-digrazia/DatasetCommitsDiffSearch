@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,37 +22,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.posix.headers.linux;
+package com.oracle.svm.core.posix.jdk11;
 
+import java.io.IOException;
+
+import com.oracle.svm.core.annotate.Substitute;
+import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.posix.PosixJavaNetClose;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.CContext;
-import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CMacroInfo;
-import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
-import org.graalvm.word.PointerBase;
 
-import com.oracle.svm.core.posix.headers.PosixDirectives;
+@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@TargetClass(className = "java.net.SocketCleanable")
+final class Target_java_net_SocketCleanable {
 
-@CContext(PosixDirectives.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
-public class LinuxSched {
-    // Checkstyle: stop
-
-    @CFunction
-    public static native int sched_getaffinity(int pid, int cpu_set_size, cpu_set_t set_ptr);
-
-    @CFunction
-    static native int __sched_cpucount(int cpu_set_size, cpu_set_t set_ptr);
-
-    @CMacroInfo("CPU_COUNT_S")
-    public static int CPU_COUNT_S(int cpu_set_size, cpu_set_t set_ptr) {
-        return __sched_cpucount(cpu_set_size, set_ptr);
+    @Substitute
+    private static void cleanupClose0(int fd) throws IOException {
+        ImageSingletons.lookup(PosixJavaNetClose.class).NET_SocketClose(fd);
     }
-
-    @CStruct
-    public interface cpu_set_t extends PointerBase {
-    }
-
-    // Checkstyle: resume
 }

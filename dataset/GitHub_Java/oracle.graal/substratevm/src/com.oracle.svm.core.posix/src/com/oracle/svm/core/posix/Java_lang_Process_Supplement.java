@@ -38,6 +38,7 @@ import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
+import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.SignedWord;
@@ -45,21 +46,22 @@ import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.LibCHelper;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.headers.Errno;
 import com.oracle.svm.core.heap.NoAllocationVerifier;
 import com.oracle.svm.core.posix.headers.Dirent;
-import com.oracle.svm.core.posix.headers.Errno;
+import com.oracle.svm.core.posix.headers.Dirent.DIR;
+import com.oracle.svm.core.posix.headers.Dirent.dirent;
+import com.oracle.svm.core.posix.headers.Dirent.direntPointer;
 import com.oracle.svm.core.posix.headers.Fcntl;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.Limits;
 import com.oracle.svm.core.posix.headers.Unistd;
 import com.oracle.svm.core.posix.headers.UnistdNoTransitions;
-import com.oracle.svm.core.posix.headers.Dirent.DIR;
-import com.oracle.svm.core.posix.headers.Dirent.dirent;
-import com.oracle.svm.core.posix.headers.Dirent.direntPointer;
 import com.oracle.svm.core.util.VMError;
 
-@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
+@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
 public final class Java_lang_Process_Supplement {
 
     static final ThreadFactory reaperFactory = new ThreadFactory() {
@@ -75,9 +77,9 @@ public final class Java_lang_Process_Supplement {
     };
 
     @SuppressWarnings("try")
-    static int doForkAndExec(CCharPointer file, CCharPointer dir, CCharPointerPointer argv, CCharPointerPointer envp, int[] stdioFds, int failFd) {
+    static int doForkAndExec(CCharPointer file, CCharPointer dir, CCharPointerPointer argv, CCharPointerPointer envp, int[] stdioFds, int failFd, boolean redirectErrorStream) {
         final int buflen = SizeOf.get(dirent.class) + Limits.PATH_MAX() + 1;
-        final boolean haveProcFs = Platform.includedIn(Platform.LINUX.class);
+        final boolean haveProcFs = Platform.includedIn(DeprecatedPlatform.LINUX_SUBSTITUTION.class);
         try (// Allocate any objects we need in the child after the fork() ahead of time here, since
              // only this thread will exist in the child and garbage collection is not possible.
                         PinnedObject bufferPin = PinnedObject.create(new byte[buflen]);
@@ -88,14 +90,14 @@ public final class Java_lang_Process_Supplement {
 
             CCharPointer procFdsPathPtr = (procFdsPath != null) ? procFdsPath.get() : WordFactory.nullPointer();
             return uninterruptibleForkAndExec(file, dir, argv, envp, stdioFds, failFd, bufferPin.addressOfArrayElement(0),
-                            buflen, procFdsPathPtr, searchPaths.get(), searchPathSeparator.get());
+                            buflen, procFdsPathPtr, searchPaths.get(), searchPathSeparator.get(), redirectErrorStream);
         }
     }
 
     @Uninterruptible(reason = "fragile state after fork()")
     private static int uninterruptibleForkAndExec(CCharPointer file, CCharPointer dir, CCharPointerPointer argv,
                     CCharPointerPointer envp, int[] stdioFds, int initialFailFd, PointerBase buffer, int buflen,
-                    CCharPointer procFdsPath, CCharPointer searchPaths, CCharPointer searchPathSeparator) {
+                    CCharPointer procFdsPath, CCharPointer searchPaths, CCharPointer searchPathSeparator, boolean redirectErrorStream) {
 
         int childPid;
         childPid = UnistdNoTransitions.fork();
@@ -116,8 +118,14 @@ public final class Java_lang_Process_Supplement {
             if (Java_lang_Process_Supplement.dup2(stdioFds[1], 1) < 0) {
                 return gotoFinally;
             }
-            if (Java_lang_Process_Supplement.dup2(stdioFds[2], 2) < 0) {
-                return gotoFinally;
+            if (redirectErrorStream) {
+                if (UnistdNoTransitions.close(stdioFds[2]) < 0 || Java_lang_Process_Supplement.dup2(1, 2) < 0) {
+                    return gotoFinally;
+                }
+            } else {
+                if (Java_lang_Process_Supplement.dup2(stdioFds[2], 2) < 0) {
+                    return gotoFinally;
+                }
             }
 
             if (Java_lang_Process_Supplement.dup2(failFd, 3) < 0) {
@@ -173,12 +181,12 @@ public final class Java_lang_Process_Supplement {
                 actualEnvp = LibCHelper.getEnviron();
             }
 
-            if (LibC.strchr(file, '/').isNonNull()) {
+            if (SubstrateUtil.strchr(file, '/').isNonNull()) {
                 UnistdNoTransitions.execve(argv.read(0), argv, actualEnvp);
             } else {
                 // Scan PATH for the file to execute. We cannot use execvpe()
                 // because it is a GNU extension that is not universally available.
-                final int fileStrlen = (int) LibC.strlen(file).rawValue();
+                final int fileStrlen = (int) SubstrateUtil.strlen(file).rawValue();
                 int stickyErrno = 0;
 
                 final CCharPointerPointer saveptr = StackValue.get(CCharPointerPointer.class);
@@ -186,7 +194,7 @@ public final class Java_lang_Process_Supplement {
                 CCharPointer searchDir = LibC.strtok_r(searchPaths, searchPathSeparator, saveptr);
                 while (searchDir.isNonNull()) {
                     CCharPointer bufptr = WordFactory.pointer(buffer.rawValue());
-                    int len0 = (int) LibC.strlen(searchDir).rawValue();
+                    int len0 = (int) SubstrateUtil.strlen(searchDir).rawValue();
                     if (len0 + fileStrlen + 2 > buflen) {
                         Errno.set_errno(Errno.ENAMETOOLONG());
                         continue;
@@ -250,9 +258,9 @@ public final class Java_lang_Process_Supplement {
             ptrblock.write(k, cstrblock.addressOf(i));
             k++;
 
-            do {
+            while (i < nbytes && cstrblock.read(i) != '\0') {
                 i++;
-            } while (i < nbytes && cstrblock.read(i) != '\0');
+            }
             i++;
         }
         assert i == nbytes && k == nptrs - 1;
@@ -364,7 +372,7 @@ public final class Java_lang_Process_Supplement {
 
             CCharPointer filep = filePin.addressOfArrayElement(0);
             CCharPointer dirp = (dir != null) ? dirPin.addressOfArrayElement(0) : WordFactory.nullPointer();
-            int childPid = Java_lang_Process_Supplement.doForkAndExec(filep, dirp, argv, envp, childStdioFds, childFailFd);
+            int childPid = Java_lang_Process_Supplement.doForkAndExec(filep, dirp, argv, envp, childStdioFds, childFailFd, redirectErrorStream);
             if (childPid < 0) {
                 throw new IOException("fork() failed");
             }
@@ -412,6 +420,15 @@ public final class Java_lang_Process_Supplement {
                 }
             }
             throw e;
+        }
+    }
+
+    public static int waitForProcessExit0(long pid, boolean reapvalue) {
+        if (reapvalue) {
+            return PosixUtils.waitForProcessExit(Math.toIntExact(pid));
+        } else {
+            /* The waitid libc call, currently ... */
+            throw VMError.unimplemented();
         }
     }
 }

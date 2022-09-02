@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,75 +26,54 @@ package com.oracle.svm.core.posix.headers;
 
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
-import org.graalvm.nativeimage.c.constant.CConstant;
-import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.struct.AllowNarrowingCast;
 import org.graalvm.nativeimage.c.struct.AllowWideningCast;
 import org.graalvm.nativeimage.c.struct.CField;
+import org.graalvm.nativeimage.c.struct.CFieldAddress;
 import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 
-//Allow methods with non-standard names: Checkstyle: stop
-
-/*
- * The definitions I need, manually translated from the C header file.
- */
-
-@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class, DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
 @CContext(PosixDirectives.class)
-public class Poll {
+public class NetIfDl {
+    /* { Do not format quoted code: @formatter:off */
+    /* { Allow non-standard names: Checkstyle: stop */
 
-    /* @formatter:off */
-    // struct pollfd
-    // {
-    //         int     fd;
-    //         short   events;
-    //         short   revents;
-    // };
-    /* @formatter:on */
+    //    /*
+    //     * Structure of a Link-Level sockaddr:
+    //     */
+    //    struct sockaddr_dl {
+    //        u_char  sdl_len;    /* Total length of sockaddr */
+    //        u_char  sdl_family; /* AF_LINK */
+    //        u_short sdl_index;  /* if != 0, system given index for interface */
+    //        u_char  sdl_type;   /* interface type */
+    //        u_char  sdl_nlen;   /* interface name length, no trailing 0 reqd. */
+    //        u_char  sdl_alen;   /* link level address length */
+    //        u_char  sdl_slen;   /* link layer selector length */
+    //        char    sdl_data[12];   /* minimum work area, can be larger;
+    //                       contains both if name and ll address */
+    //    #ifndef __APPLE__
+    //        /* For TokenRing */
+    //        u_short sdl_rcf;    /* source routing control */
+    //        u_short sdl_route[16];  /* source routing information */
+    //    #endif
+    //    };
     @CStruct(addStructKeyword = true)
-    public interface pollfd extends PointerBase {
-
-        @CField
-        int fd();
-
-        @CField
-        void set_fd(int value);
+    public interface sockaddr_dl extends PointerBase {
 
         @CField
         @AllowWideningCast
-        int events();
-
-        @CField
-        @AllowNarrowingCast
-        void set_events(int value);
+        int sdl_alen();
 
         @CField
         @AllowWideningCast
-        int revents();
+        int sdl_nlen();
 
-        @CField
-        @AllowNarrowingCast
-        void set_revents(int value);
+        @CFieldAddress
+        CCharPointer sdl_data();
     }
 
-    @CConstant
-    public static native int POLLIN();
-
-    @CConstant
-    public static native int POLLOUT();
-
-    @CConstant
-    public static native int POLLERR();
-
-    @CConstant
-    public static native int POLLHUP();
-
-    // @formatter:off
-    // typedef unsigned int nfds_t;
-    // int poll(struct pollfd *fds, nfds_t nfds, int timeout);
-    @CFunction
-    public static native int poll(pollfd fds, int nfds, int timeout);
-    // @formatter:on
+    /* } Allow non-standard names: Checkstyle: resume */
+    /* } Do not format quoted code: @formatter:on */
 }

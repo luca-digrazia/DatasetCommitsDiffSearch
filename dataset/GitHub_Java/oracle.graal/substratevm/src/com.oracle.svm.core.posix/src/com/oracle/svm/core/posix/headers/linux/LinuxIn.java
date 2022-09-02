@@ -24,35 +24,42 @@
  */
 package com.oracle.svm.core.posix.headers.linux;
 
+/* Allow underscores in names: Checkstyle: stop. */
+
+import com.oracle.svm.core.posix.headers.NetinetIn;
+import com.oracle.svm.core.posix.headers.PosixDirectives;
+
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
-import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CMacroInfo;
+import org.graalvm.nativeimage.c.struct.CField;
+import org.graalvm.nativeimage.c.struct.CFieldAddress;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 
-import com.oracle.svm.core.posix.headers.PosixDirectives;
-
 @CContext(PosixDirectives.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
-public class LinuxSched {
-    // Checkstyle: stop
+@Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+public class LinuxIn {
+    // @formatter:off
+    // struct ip_mreqn {
+    //        struct in_addr  imr_multiaddr;          /* IP multicast address of group */
+    //        struct in_addr  imr_address;            /* local IP address of interface */
+    //        int             imr_ifindex;            /* Interface index */
+    // };
+    // @formatter:on
+    @CStruct(addStructKeyword = true)
+    public interface ip_mreqn extends PointerBase {
 
-    @CFunction
-    public static native int sched_getaffinity(int pid, int cpu_set_size, cpu_set_t set_ptr);
+        @CFieldAddress
+        NetinetIn.in_addr imr_multiaddr();
 
-    @CFunction
-    static native int __sched_cpucount(int cpu_set_size, cpu_set_t set_ptr);
+        @CFieldAddress
+        NetinetIn.in_addr imr_address();
 
-    @CMacroInfo("CPU_COUNT_S")
-    public static int CPU_COUNT_S(int cpu_set_size, cpu_set_t set_ptr) {
-        return __sched_cpucount(cpu_set_size, set_ptr);
+        @CField
+        int imr_ifindex();
+
+        @CField
+        void set_imr_ifindex(int value);
     }
-
-    @CStruct
-    public interface cpu_set_t extends PointerBase {
-    }
-
-    // Checkstyle: resume
 }

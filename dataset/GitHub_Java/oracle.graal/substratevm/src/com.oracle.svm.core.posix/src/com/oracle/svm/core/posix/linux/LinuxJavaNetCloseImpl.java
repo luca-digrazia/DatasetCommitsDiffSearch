@@ -24,9 +24,9 @@
  */
 package com.oracle.svm.core.posix.linux;
 
-import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.type.CIntPointer;
@@ -34,7 +34,7 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.posix.PosixJavaNetClose;
-import com.oracle.svm.core.posix.headers.Errno;
+import com.oracle.svm.core.headers.Errno;
 import com.oracle.svm.core.posix.headers.Poll;
 import com.oracle.svm.core.posix.headers.Socket;
 import com.oracle.svm.core.posix.headers.Time;
@@ -50,7 +50,7 @@ import com.oracle.svm.core.posix.headers.Unistd;
  * operations. Where the implementations are identical between platforms, the shared code lives in
  * {@link PosixJavaNetClose}.
  */
-@Platforms({Platform.LINUX.class})
+@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
 public class LinuxJavaNetCloseImpl extends PosixJavaNetClose {
 
     protected LinuxJavaNetCloseImpl() {
@@ -91,7 +91,7 @@ public class LinuxJavaNetCloseImpl extends PosixJavaNetClose {
             /* Send a wakeup signal to all threads blocked on this file descriptor. */
             fdEntry.getThreadList().forEach((threadEntry) -> {
                 threadEntry.setIntr(true);
-                threadEntry.getThread().interrupt();
+                interruptThread(threadEntry.getPThread());
             });
         }
         return rv;
@@ -163,7 +163,7 @@ public class LinuxJavaNetCloseImpl extends PosixJavaNetClose {
         }
         // 343
         // 344      for(;;) {
-        for (;;) {
+        for (; /* return */;) {
             // 345          struct pollfd pfd;
             Poll.pollfd pfd = StackValue.get(Poll.pollfd.class);
             // 346          int rv;
@@ -222,7 +222,7 @@ public class LinuxJavaNetCloseImpl extends PosixJavaNetClose {
     /* } Allow names with underscores: Checkstyle: resume */
 }
 
-@Platforms({Platform.LINUX.class})
+@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
 @AutomaticFeature
 class LinuxJavaNetCloseFeature implements Feature {
     @Override

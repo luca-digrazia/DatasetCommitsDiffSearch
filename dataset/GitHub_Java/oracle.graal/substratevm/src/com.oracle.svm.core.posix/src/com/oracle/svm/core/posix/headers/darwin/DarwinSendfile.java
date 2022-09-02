@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,37 +22,45 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.posix.headers.linux;
+package com.oracle.svm.core.posix.headers.darwin;
 
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CMacroInfo;
+import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 
 import com.oracle.svm.core.posix.headers.PosixDirectives;
+import com.oracle.svm.core.posix.headers.Uio.iovec;
+
+//Checkstyle: stop
 
 @CContext(PosixDirectives.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
-public class LinuxSched {
-    // Checkstyle: stop
+@Platforms(DeprecatedPlatform.DARWIN_SUBSTITUTION.class)
+public class DarwinSendfile {
 
-    @CFunction
-    public static native int sched_getaffinity(int pid, int cpu_set_size, cpu_set_t set_ptr);
+    @CStruct(addStructKeyword = true)
+    public interface sf_hdtr extends PointerBase {
+        /* pointer to an array of header struct iovec's */
+        @CField
+        iovec headers();
 
-    @CFunction
-    static native int __sched_cpucount(int cpu_set_size, cpu_set_t set_ptr);
+        /* number of header iovec's */
+        @CField
+        int hdr_cnt();
 
-    @CMacroInfo("CPU_COUNT_S")
-    public static int CPU_COUNT_S(int cpu_set_size, cpu_set_t set_ptr) {
-        return __sched_cpucount(cpu_set_size, set_ptr);
+        /* pointer to an array of trailer struct iovec's */
+        @CField
+        iovec trailers();
+
+        /* number of trailer iovec's */
+        @CField
+        int trl_cnt();
     }
 
-    @CStruct
-    public interface cpu_set_t extends PointerBase {
-    }
-
-    // Checkstyle: resume
+    @CFunction
+    public static native int sendfile(int fd, int s, long offset, CLongPointer len, sf_hdtr hdtr, int flags);
 }

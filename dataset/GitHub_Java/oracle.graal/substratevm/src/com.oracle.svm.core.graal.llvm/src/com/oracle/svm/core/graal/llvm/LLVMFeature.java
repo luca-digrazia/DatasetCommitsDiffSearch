@@ -30,7 +30,6 @@ import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -83,8 +82,7 @@ import com.oracle.svm.hosted.meta.HostedMethod;
 
 @AutomaticFeature
 @CLibrary("m")
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class,
-                InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class})
+@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, InternalPlatform.LINUX_AND_JNI.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class, InternalPlatform.DARWIN_AND_JNI.class})
 public class LLVMFeature implements Feature, GraalFeature {
 
     private static HostedMethod personalityStub;
@@ -127,8 +125,8 @@ public class LLVMFeature implements Feature, GraalFeature {
 
         ImageSingletons.add(NativeImageCodeCacheFactory.class, new NativeImageCodeCacheFactory() {
             @Override
-            public NativeImageCodeCache newCodeCache(CompileQueue compileQueue, NativeImageHeap heap, Platform platform, Path tempDir) {
-                return new LLVMNativeImageCodeCache(compileQueue.getCompilations(), heap, platform, tempDir);
+            public NativeImageCodeCache newCodeCache(CompileQueue compileQueue, NativeImageHeap heap, Platform platform) {
+                return new LLVMNativeImageCodeCache(compileQueue.getCompilations(), heap, platform);
             }
         });
 
@@ -304,7 +302,7 @@ class LLVMAMD64TargetSpecificFeature implements Feature {
 }
 
 @AutomaticFeature
-@Platforms(Platform.AARCH64.class)
+@Platforms(Platform.AArch64.class)
 class LLVMAArch64TargetSpecificFeature implements Feature {
     private static final int AARCH64_FP_IDX = 29;
     private static final int AARCH64_SP_IDX = 31;

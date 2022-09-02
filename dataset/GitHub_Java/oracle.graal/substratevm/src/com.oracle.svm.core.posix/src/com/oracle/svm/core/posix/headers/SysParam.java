@@ -22,37 +22,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.core.posix.headers.linux;
+package com.oracle.svm.core.posix.headers;
 
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.function.CMacroInfo;
-import org.graalvm.nativeimage.c.struct.CStruct;
+import org.graalvm.nativeimage.c.function.CFunction.Transition;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
-import org.graalvm.word.PointerBase;
 
-import com.oracle.svm.core.posix.headers.PosixDirectives;
-
+@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class, DeprecatedPlatform.LINUX_SUBSTITUTION.class})
 @CContext(PosixDirectives.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
-public class LinuxSched {
-    // Checkstyle: stop
+public class SysParam {
 
-    @CFunction
-    public static native int sched_getaffinity(int pid, int cpu_set_size, cpu_set_t set_ptr);
+    /*
+     * Macros from <sys/param.h> made available a C functions via implementations in
+     * graal/substratevm/src/com.oracle.svm.native.libchelper/src/macrosAsFunctions.c
+     */
 
-    @CFunction
-    static native int __sched_cpucount(int cpu_set_size, cpu_set_t set_ptr);
-
-    @CMacroInfo("CPU_COUNT_S")
-    public static int CPU_COUNT_S(int cpu_set_size, cpu_set_t set_ptr) {
-        return __sched_cpucount(cpu_set_size, set_ptr);
-    }
-
-    @CStruct
-    public interface cpu_set_t extends PointerBase {
-    }
-
-    // Checkstyle: resume
+    @CFunction(value = "sys_param_howmany", transition = Transition.NO_TRANSITION)
+    public static native int howmany(int x, int y);
 }

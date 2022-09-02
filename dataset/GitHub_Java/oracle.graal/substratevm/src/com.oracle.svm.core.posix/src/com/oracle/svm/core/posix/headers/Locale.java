@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,52 +26,61 @@ package com.oracle.svm.core.posix.headers;
 
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
+import org.graalvm.nativeimage.c.constant.CConstant;
 import org.graalvm.nativeimage.c.function.CFunction;
-import org.graalvm.nativeimage.c.struct.CField;
-import org.graalvm.nativeimage.c.struct.CPointerTo;
-import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.impl.DeprecatedPlatform;
-import org.graalvm.word.PointerBase;
 
-// Allow methods with non-standard names: Checkstyle: stop
+//Checkstyle: stop
 
-/*
- * The definitions I need, manually translated from the C header file.
- */
-@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION.class, DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+/** Declarations of method from <locale.h>. */
 @CContext(PosixDirectives.class)
-public class Ifaddrs {
+public class Locale {
+    @CConstant
+    public static native int LC_ALL();
 
-    private Ifaddrs() {
-    }
+    @CConstant
+    public static native int LC_COLLATE();
 
-    @CStruct(addStructKeyword = true)
-    public interface ifaddrs extends PointerBase {
+    @CConstant
+    public static native int LC_CTYPE();
 
-        @CField
-        ifaddrs ifa_next();
+    @CConstant
+    public static native int LC_MONETARY();
 
-        @CField
-        CCharPointer ifa_name();
+    @CConstant
+    public static native int LC_NUMERIC();
 
-        @CField
-        int ifa_flags();
+    @CConstant
+    public static native int LC_TIME();
 
-        @CField
-        Socket.sockaddr ifa_addr();
-    }
+    @CConstant
+    public static native int LC_MESSAGES();
 
-    @CPointerTo(nameOfCType = "struct ifaddrs*")
-    public interface ifaddrsPointer extends PointerBase {
-        Ifaddrs.ifaddrs read();
-    }
+    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @CConstant
+    public static native int LC_PAPER();
+
+    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @CConstant
+    public static native int LC_NAME();
+
+    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @CConstant
+    public static native int LC_ADDRESS();
+
+    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @CConstant
+    public static native int LC_TELEPHONE();
+
+    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @CConstant
+    public static native int LC_MEASUREMENT();
+
+    @Platforms(DeprecatedPlatform.LINUX_SUBSTITUTION.class)
+    @CConstant
+    public static native int LC_IDENTIFICATION();
 
     @CFunction
-    public static native int getifaddrs(ifaddrsPointer ifap);
-
-    @CFunction
-    public static native void freeifaddrs(ifaddrs ifp);
+    public static native CCharPointer setlocale(int category, CCharPointer locale);
 }
-
-// Checkstyle: resume
