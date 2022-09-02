@@ -93,22 +93,24 @@ public class AArch64AddressNode extends AddressNode implements LIRLowerable {
 
     @Override
     public boolean verify() {
+        assert super.verify();
         switch (addressingMode) {
             case IMMEDIATE_SIGNED_UNSCALED:
             case IMMEDIATE_UNSIGNED_SCALED:
-                assertTrue(index == null, "Immediate address cannot use index register.");
+                assert index == null;
                 break;
             case BASE_REGISTER_ONLY:
-                assertTrue(displacement == 0 && index == null, "Base register only mode cannot have either a displacement or index register.");
+                assert displacement == 0 && index == null;
                 break;
             case REGISTER_OFFSET:
             case EXTENDED_REGISTER_OFFSET:
-                assertTrue(displacement == 0 && index != null, "Register based mode cannot have a displacement.");
+                assert displacement == 0 && index != null;
                 break;
             default:
-                fail("Pairwise and post/pre index addressing modes should not be present.");
+                /* Pairwise and post/pre index addressing modes should not be present. */
+                assert false;
         }
-        return super.verify();
+        return true;
     }
 
     @Override

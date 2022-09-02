@@ -26,7 +26,6 @@
 
 package org.graalvm.compiler.core.aarch64;
 
-import org.graalvm.compiler.asm.aarch64.AArch64Address;
 import org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.NumUtil;
@@ -72,9 +71,8 @@ public class AArch64AddressLoweringByUse extends AddressLoweringByUsePhase.Addre
     }
 
     private AddressNode doLower(Stamp stamp, ValueNode base, ValueNode index) {
+        AArch64AddressNode ret = new AArch64AddressNode(base, index);
         AArch64Kind aarch64Kind = (stamp == null ? null : getAArch64Kind(stamp));
-        int bitMemoryTransferSize = aarch64Kind == null ? AArch64Address.ANY_SIZE : aarch64Kind.getSizeInBytes() * Byte.SIZE;
-        AArch64AddressNode ret = new AArch64AddressNode(bitMemoryTransferSize, base, index);
 
         // improve the address as much as possible
         boolean changed;
@@ -232,16 +230,22 @@ public class AArch64AddressLoweringByUse extends AddressLoweringByUsePhase.Addre
         return (AArch64Kind) lirKind.getPlatformKind();
     }
 
-    private static AddressingMode immediateMode(AArch64Kind kind, long immediate) {
-        if (kind != null && NumUtil.isInt(immediate)) {
-            int bitMemoryTransferSize = kind.getSizeInBytes() * Byte.SIZE;
-            if (AArch64Address.isValidImmediateAddress(bitMemoryTransferSize, AddressingMode.IMMEDIATE_UNSIGNED_SCALED, NumUtil.safeToInt(immediate))) {
-                return AddressingMode.IMMEDIATE_UNSIGNED_SCALED;
+    private static AddressingMode immediateMode(AArch64Kind kind, long value) {
+        if (kind != null) {
+            int size = kind.getSizeInBytes();
+            // this next test should never really fail
+            if ((value & (size - 1)) == 0) {
+                long encodedValue = value / size;
+                // assert value % size == 0
+                // we can try for a 12 bit scaled offset
+                if (NumUtil.isUnsignedNbit(12, encodedValue)) {
+                    return AddressingMode.IMMEDIATE_UNSIGNED_SCALED;
+                }
             }
         }
 
         // we can try for a 9 bit unscaled offset
-        if (NumUtil.isSignedNbit(9, immediate)) {
+        if (NumUtil.isSignedNbit(9, value)) {
             return AddressingMode.IMMEDIATE_SIGNED_UNSCALED;
         }
 
