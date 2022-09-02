@@ -82,7 +82,6 @@ import com.oracle.svm.driver.MacroOption.EnabledOption;
 import com.oracle.svm.driver.MacroOption.MacroOptionKind;
 import com.oracle.svm.driver.MacroOption.Registry;
 import com.oracle.svm.graal.hosted.GraalFeature;
-import com.oracle.svm.hosted.FallbackFeature;
 import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.NativeImageGeneratorRunner;
 import com.oracle.svm.hosted.NativeImageOptions;
@@ -155,7 +154,6 @@ public class NativeImage {
     final String oHKind = oH(NativeImageOptions.Kind);
     final String oHCLibraryPath = oH(SubstrateOptions.CLibraryPath);
     final String oHOptimize = oH(SubstrateOptions.Optimize);
-    final String oHFallbackThreshold = oH(FallbackFeature.Options.FallbackThreshold);
 
     /* List arguments */
     final String oHSubstitutionFiles = oH(DeclarativeSubstitutionProcessor.Options.SubstitutionFiles);
@@ -656,15 +654,9 @@ public class NativeImage {
     }
 
     private void completeOptionArgs() {
-        LinkedHashSet<EnabledOption> enabledOptions = optionRegistry.getEnabledOptions();
-        /* Any use of MacroOptions opts-out of auto-fallback and activates --no-fallback */
-        if (!enabledOptions.isEmpty()) {
-            addPlainImageBuilderArg(oHFallbackThreshold + FallbackFeature.Options.NoFallback);
-        }
-
         /* Determine if truffle is needed- any MacroOption of kind Language counts */
         enabledLanguages = optionRegistry.getEnabledOptions(MacroOptionKind.Language);
-        for (EnabledOption enabledOption : enabledOptions) {
+        for (EnabledOption enabledOption : optionRegistry.getEnabledOptions()) {
             if (!MacroOptionKind.Language.equals(enabledOption.getOption().kind) && enabledOption.getProperty("LauncherClass") != null) {
                 /* Also identify non-Language MacroOptions as Language if LauncherClass is set */
                 enabledLanguages.add(enabledOption);
