@@ -37,7 +37,6 @@ import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 
 import jdk.vm.ci.meta.JavaConstant;
-import jdk.vm.ci.meta.JavaKind;
 
 @NodeInfo(cycles = CYCLES_0, size = SIZE_0)
 public class VirtualFrameFreeNode extends VirtualFrameAccessorNode implements Virtualizable {
@@ -63,10 +62,9 @@ public class VirtualFrameFreeNode extends VirtualFrameAccessorNode implements Vi
 
                 ValueNode objectEntry = tool.getEntry(objectStorageVirtual, frameSlotIndex);
                 ValueNode primitiveEntry = tool.getEntry(primitiveStorageVirtual, frameSlotIndex);
-                ValueNode nullConstant = ConstantNode.forConstant(JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph());
-                ValueNode zeroConstant = ConstantNode.defaultForKind(JavaKind.Long);
-                boolean success = tool.setVirtualEntry(objectStorageVirtual, frameSlotIndex, nullConstant, objectEntry.getStackKind(), -1) &&
-                                tool.setVirtualEntry(primitiveStorageVirtual, frameSlotIndex, zeroConstant, primitiveEntry.getStackKind(), -1);
+                ValueNode illegal = ConstantNode.forConstant(JavaConstant.forIllegal(), tool.getMetaAccess(), graph());
+                boolean success = tool.setVirtualEntry(objectStorageVirtual, frameSlotIndex, illegal, objectEntry.getStackKind(), -1) &&
+                                tool.setVirtualEntry(primitiveStorageVirtual, frameSlotIndex, illegal, primitiveEntry.getStackKind(), -1);
                 if (success) {
                     tool.delete();
                     return;

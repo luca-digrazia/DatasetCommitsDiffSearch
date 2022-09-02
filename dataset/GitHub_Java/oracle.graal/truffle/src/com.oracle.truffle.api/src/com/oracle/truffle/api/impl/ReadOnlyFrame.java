@@ -210,7 +210,7 @@ class ReadOnlyFrame implements Frame {
 
     @Override
     @TruffleBoundary
-    public void clear(FrameSlot slot) {
+    public void free(FrameSlot slot) {
         throw newReadonlyAssertionError();
     }
 }

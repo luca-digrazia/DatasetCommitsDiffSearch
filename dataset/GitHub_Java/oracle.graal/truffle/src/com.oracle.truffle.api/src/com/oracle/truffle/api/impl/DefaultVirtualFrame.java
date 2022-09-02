@@ -261,7 +261,7 @@ final class DefaultVirtualFrame implements VirtualFrame {
     }
 
     @Override
-    public void clear(FrameSlot slot) {
+    public void free(FrameSlot slot) {
         verifySet(slot, FrameSlotKind.Illegal);
         locals[getFrameSlotIndex(slot)] = null;
     }
