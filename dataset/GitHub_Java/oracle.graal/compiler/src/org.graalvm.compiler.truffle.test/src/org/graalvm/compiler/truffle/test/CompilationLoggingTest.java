@@ -34,7 +34,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
@@ -103,27 +102,9 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
                         Arrays.asList("opt done"));
     }
 
-    @Test
-    public void testExceptionFromPublish() {
-        testHelper(
-                        () -> RootNode.createConstantNode(true),
-                        Collections.singletonMap("engine.TraceCompilationDetails", "true"),
-                        Arrays.asList("opt start", "opt done"),
-                        Collections.singletonList("opt failed"),
-                        (lr) -> {
-                            if (lr.getMessage().startsWith("opt start")) {
-                                throw new RuntimeException();
-                            }
-                        });
-    }
-
     private void testHelper(Supplier<RootNode> rootProvider, Map<String, String> additionalOptions, List<String> expected, List<String> unexpected) {
-        testHelper(rootProvider, additionalOptions, expected, unexpected, null);
-    }
-
-    private void testHelper(Supplier<RootNode> rootProvider, Map<String, String> additionalOptions, List<String> expected, List<String> unexpected, Consumer<LogRecord> onPublishAction) {
         Assume.assumeFalse(hasTracingEnabled(rootProvider));
-        TestHandler.Builder builder = TestHandler.newBuilder().onPublish(onPublishAction);
+        TestHandler.Builder builder = TestHandler.newBuilder();
         for (String s : expected) {
             builder.expect(s);
         }
@@ -167,13 +148,11 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
         private final List<Pattern> unexpected;
         private final List<Pattern> failedUnexpected;
         private final List<LogEntry> allEvents;
-        private final Consumer<LogRecord> onPublishAction;
         private volatile State state;
 
-        private TestHandler(List<Pattern> expected, List<Pattern> unexpected, Consumer<LogRecord> onPublishAction) {
+        private TestHandler(List<Pattern> expected, List<Pattern> unexpected) {
             this.expected = expected;
             this.unexpected = unexpected;
-            this.onPublishAction = onPublishAction;
             this.failedUnexpected = new ArrayList<>();
             this.allEvents = new ArrayList<>();
             this.state = State.NEW;
@@ -192,23 +171,17 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
                 default:
                     throw new IllegalStateException("Unknown state " + state);
             }
-            try {
-                for (Iterator<Pattern> it = expected.iterator(); it.hasNext();) {
-                    Pattern p = it.next();
-                    if (p.matcher(lr.getMessage()).matches()) {
-                        it.remove();
-                        return;
-                    }
+            for (Iterator<Pattern> it = expected.iterator(); it.hasNext();) {
+                Pattern p = it.next();
+                if (p.matcher(lr.getMessage()).matches()) {
+                    it.remove();
+                    return;
                 }
-                for (Pattern p : unexpected) {
-                    if (p.matcher(lr.getMessage()).matches()) {
-                        failedUnexpected.add(p);
-                        return;
-                    }
-                }
-            } finally {
-                if (onPublishAction != null) {
-                    onPublishAction.accept(lr);
+            }
+            for (Pattern p : unexpected) {
+                if (p.matcher(lr.getMessage()).matches()) {
+                    failedUnexpected.add(p);
+                    return;
                 }
             }
         }
@@ -256,7 +229,6 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
         static final class Builder {
             private final List<Pattern> expected;
             private final List<Pattern> unexpected;
-            private Consumer<LogRecord> onPublishAction;
 
             private Builder() {
                 expected = new LinkedList<>();
@@ -281,13 +253,8 @@ public class CompilationLoggingTest extends TestWithPolyglotOptions {
                 return this;
             }
 
-            Builder onPublish(Consumer<LogRecord> action) {
-                onPublishAction = action;
-                return this;
-            }
-
             TestHandler build() {
-                return new TestHandler(expected, unexpected, onPublishAction);
+                return new TestHandler(expected, unexpected);
             }
 
             private static Pattern toPattern(String substring) {
