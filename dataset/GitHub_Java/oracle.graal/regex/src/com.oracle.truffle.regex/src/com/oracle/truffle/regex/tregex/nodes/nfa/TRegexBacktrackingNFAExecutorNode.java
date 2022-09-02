@@ -290,7 +290,6 @@ public class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode {
     private int runState(TRegexBacktrackingNFAExecutorLocals locals, boolean compactString, PureNFAState curState) {
         CompilerDirectives.isPartialEvaluationConstant(curState);
         if (curState.isFinalState(isForward())) {
-            locals.setResult();
             locals.pushResult();
             return IP_END;
         }
@@ -358,7 +357,6 @@ public class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode {
             // Fill the bit set.
             // We check the transitions in reverse order, so the last match will be the highest
             // priority one.
-            int nMatched = -1;
             for (int iBS = 0; iBS < bitSetWords; iBS++) {
                 CompilerDirectives.isPartialEvaluationConstant(iBS);
                 long bs = 0;
@@ -371,21 +369,13 @@ public class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode {
                     if (transitionMatches(locals, compactString, transition, index, atEnd, c)) {
                         bs |= bit;
                         lastMatch = i;
-                        /*
-                         * We can avoid pushing final states on the stack, since no more than one
-                         * will ever be popped. Therefore, we have a dedicated slot in our "locals"
-                         * object that represents the last pushed final state.
-                         */
-                        if (transition.getTarget(isForward()).isFinalState(isForward())) {
-                            locals.setResult();
-                            nMatched--;
-                        }
                     }
                     bit <<= 1;
                 }
                 transitionBitSet[iBS] = bs;
             }
             // Create the new stack frames.
+            int nMatched = -1;
             for (int iBS = 0; iBS < bitSetWords; iBS++) {
                 nMatched += Long.bitCount(transitionBitSet[iBS]);
             }
@@ -404,19 +394,18 @@ public class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode {
                     PureNFAState target = transition.getTarget(isForward());
                     CompilerDirectives.isPartialEvaluationConstant(target);
                     if ((bs & 1) != 0) {
-                        if (target.isFinalState(isForward())) {
-                            locals.pushResult(transition, index);
+                        if (target.isUnAnchoredFinalState(isForward())) {
+                            locals.pushResult(transition);
                             if (i == lastMatch) {
                                 return IP_END;
                             }
+                        }
+                        updateState(locals, transition, index);
+                        if (i == lastMatch) {
+                            return target.getId();
                         } else {
-                            updateState(locals, transition, index);
-                            if (i == lastMatch) {
-                                return target.getId();
-                            } else {
-                                locals.setPc(target.getId());
-                                locals.push();
-                            }
+                            locals.setPc(target.getId());
+                            locals.push();
                         }
                     }
                     bs >>>= 1;
@@ -501,8 +490,8 @@ public class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode {
         }
         switch (target.getKind()) {
             case PureNFAState.KIND_INITIAL_OR_FINAL_STATE:
-                assert !target.isInitialState(isForward());
-                return target.isAnchoredFinalState(isForward()) ? atEnd : true;
+                assert !target.isAnchoredInitialState(isForward()) : target.isUnAnchoredInitialState(isForward());
+                return target.isUnAnchoredInitialState(isForward()) ? !atEnd : (target.isAnchoredFinalState(isForward()) ? atEnd : true);
             case PureNFAState.KIND_CHARACTER_CLASS:
                 return !atEnd && matchers[target.getId()].execute(c, compactString);
             case PureNFAState.KIND_LOOK_AROUND:
@@ -538,7 +527,7 @@ public class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode {
     @ExplodeLoop
     protected void updateState(TRegexBacktrackingNFAExecutorLocals locals, PureNFATransition transition, int index) {
         CompilerDirectives.isPartialEvaluationConstant(transition);
-        locals.apply(transition, index);
+        locals.apply(transition);
         int nGuards = transition.getQuantifierGuards().length;
         for (int i = isForward() ? 0 : nGuards - 1; isForward() ? i < nGuards : i >= 0; i += (isForward() ? 1 : -1)) {
             QuantifierGuard guard = transition.getQuantifierGuards()[i];
