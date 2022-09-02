@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,26 +25,56 @@
 package org.graalvm.compiler.serviceprovider;
 
 import static java.lang.Thread.currentThread;
+import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
+import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicLong;
 
+import jdk.vm.ci.code.DebugInfo;
 import jdk.vm.ci.code.VirtualObject;
+import jdk.vm.ci.code.site.Infopoint;
+import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.meta.ConstantPool;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
 import jdk.vm.ci.runtime.JVMCI;
 import jdk.vm.ci.services.JVMCIPermission;
 import jdk.vm.ci.services.Services;
 
 /**
- * JDK 9+ version of {@link GraalServices}.
+ * LabsJDK 11 version of {@link GraalServices}.
  */
 public final class GraalServices {
+
+    private static final Map<Class<?>, List<?>> servicesCache = IS_BUILDING_NATIVE_IMAGE ? new HashMap<>() : null;
+
+    private static final Constructor<? extends SpeculationReason> encodedSpeculationReasonConstructor;
+
+    static {
+        Constructor<? extends SpeculationReason> constructor = null;
+        try {
+            @SuppressWarnings("unchecked")
+            Class<? extends SpeculationReason> theClass = (Class<? extends SpeculationReason>) Class.forName("jdk.vm.ci.meta.EncodedSpeculationReason");
+            constructor = theClass.getDeclaredConstructor(Integer.TYPE, String.class, Object[].class);
+        } catch (ClassNotFoundException e) {
+        } catch (NoSuchMethodException e) {
+            throw new InternalError("EncodedSpeculationReason exists but constructor is missing", e);
+        }
+        encodedSpeculationReasonConstructor = constructor;
+    }
 
     private GraalServices() {
     }
@@ -55,8 +85,61 @@ public final class GraalServices {
      * @throws SecurityException if on JDK8 and a security manager is present and it denies
      *             {@link JVMCIPermission}
      */
+    @SuppressWarnings("unchecked")
     public static <S> Iterable<S> load(Class<S> service) {
-        Iterable<S> iterable = ServiceLoader.load(service);
+        if (IS_IN_NATIVE_IMAGE || IS_BUILDING_NATIVE_IMAGE) {
+            List<?> list = servicesCache.get(service);
+            if (list != null) {
+                return (Iterable<S>) list;
+            }
+            if (IS_IN_NATIVE_IMAGE) {
+                throw new InternalError(String.format("No %s providers found when building native image", service.getName()));
+            }
+        }
+
+        Iterable<S> providers = load0(service);
+
+        if (IS_BUILDING_NATIVE_IMAGE) {
+            synchronized (servicesCache) {
+                ArrayList<S> providersList = new ArrayList<>();
+                for (S provider : providers) {
+                    Module module = provider.getClass().getModule();
+                    if (isHotSpotGraalModule(module.getName())) {
+                        providersList.add(provider);
+                    }
+                }
+                providers = providersList;
+                servicesCache.put(service, providersList);
+                return providers;
+            }
+        }
+
+        return providers;
+    }
+
+    /**
+     * Determines if the module named by {@code name} is part of Graal when it is configured as a
+     * HotSpot JIT compiler.
+     */
+    private static boolean isHotSpotGraalModule(String name) {
+        if (name != null) {
+            return name.equals("jdk.internal.vm.compiler") ||
+                            name.equals("jdk.internal.vm.compiler.management") ||
+                            name.equals("com.oracle.graal.graal_enterprise");
+        }
+        return false;
+    }
+
+    protected static <S> Iterable<S> load0(Class<S> service) {
+        Module module = GraalServices.class.getModule();
+        // Graal cannot know all the services used by another module
+        // (e.g. enterprise) so dynamically register the service use now.
+        if (!module.canUse(service)) {
+            module.addUses(service);
+        }
+
+        ModuleLayer layer = module.getLayer();
+        Iterable<S> iterable = ServiceLoader.load(layer, service);
         return new Iterable<>() {
             @Override
             public Iterator<S> iterator() {
@@ -91,6 +174,10 @@ public final class GraalServices {
      * @param other all JVMCI packages will be opened to the module defining this class
      */
     static void openJVMCITo(Class<?> other) {
+        if (IS_IN_NATIVE_IMAGE) {
+            return;
+        }
+
         Module jvmciModule = JVMCI_MODULE;
         Module otherModule = other.getModule();
         if (jvmciModule != otherModule) {
@@ -99,7 +186,7 @@ public final class GraalServices {
                     // JVMCI initialization opens all JVMCI packages
                     // to Graal which is a prerequisite for Graal to
                     // open JVMCI packages to other modules.
-                    JVMCI.initialize();
+                    JVMCI.getRuntime();
 
                     jvmciModule.addOpens(pkg, otherModule);
                 }
@@ -163,9 +250,12 @@ public final class GraalServices {
      * trusted code.
      */
     public static boolean isToStringTrusted(Class<?> c) {
+        if (IS_IN_NATIVE_IMAGE) {
+            return true;
+        }
+
         Module module = c.getModule();
         Module jvmciModule = JVMCI_MODULE;
-        assert jvmciModule.getPackages().contains("jdk.vm.ci.runtime");
         if (module == jvmciModule || jvmciModule.isOpen(JVMCI_RUNTIME_PACKAGE, module)) {
             // Can access non-statically-exported package in JVMCI
             return true;
@@ -173,42 +263,17 @@ public final class GraalServices {
         return false;
     }
 
-    /**
-     * An implementation of {@link SpeculationReason} based on direct, unencoded values.
-     */
-    static final class DirectSpeculationReason implements SpeculationReason {
-        final int groupId;
-        final String groupName;
-        final Object[] context;
-
-        DirectSpeculationReason(int groupId, String groupName, Object[] context) {
-            this.groupId = groupId;
-            this.groupName = groupName;
-            this.context = context;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj instanceof DirectSpeculationReason) {
-                DirectSpeculationReason that = (DirectSpeculationReason) obj;
-                return this.groupId == that.groupId && Arrays.equals(this.context, that.context);
-            }
-            return false;
-        }
-
-        @Override
-        public int hashCode() {
-            return groupId + Arrays.hashCode(this.context);
-        }
-
-        @Override
-        public String toString() {
-            return String.format("%s@%d%s", groupName, groupId, Arrays.toString(context));
-        }
-    }
-
     static SpeculationReason createSpeculationReason(int groupId, String groupName, Object... context) {
-        return new DirectSpeculationReason(groupId, groupName, context);
+        if (encodedSpeculationReasonConstructor != null) {
+            SpeculationEncodingAdapter adapter = new SpeculationEncodingAdapter();
+            try {
+                Object[] flattened = adapter.flatten(context);
+                return encodedSpeculationReasonConstructor.newInstance(groupId, groupName, flattened);
+            } catch (Throwable throwable) {
+                throw new InternalError(throwable);
+            }
+        }
+        return new UnencodedSpeculationReason(groupId, groupName, context);
     }
 
     /**
@@ -356,12 +421,102 @@ public final class GraalServices {
         return Math.fma(a, b, c);
     }
 
+    static final Method virtualObjectGetMethod;
+
+    static {
+        Method virtualObjectGet = null;
+        try {
+            virtualObjectGet = VirtualObject.class.getDeclaredMethod("get", ResolvedJavaType.class, Integer.TYPE, Boolean.TYPE);
+        } catch (Exception e) {
+            // VirtualObject.get that understands autobox isn't available
+        }
+        virtualObjectGetMethod = virtualObjectGet;
+    }
+
+    public static VirtualObject createVirtualObject(ResolvedJavaType type, int id, boolean isAutoBox) {
+        if (virtualObjectGetMethod != null) {
+            try {
+                return (VirtualObject) virtualObjectGetMethod.invoke(null, type, id, isAutoBox);
+            } catch (Throwable throwable) {
+                throw new InternalError(throwable);
+            }
+        }
+        return VirtualObject.get(type, id);
+    }
+
+    public static int getJavaUpdateVersion() {
+        return Runtime.version().update();
+    }
+
+    private static final Method constantPoolLookupReferencedType;
+
+    static {
+        Method lookupReferencedType = null;
+        Class<?> constantPool = ConstantPool.class;
+        try {
+            lookupReferencedType = constantPool.getDeclaredMethod("lookupReferencedType", Integer.TYPE, Integer.TYPE);
+        } catch (NoSuchMethodException e) {
+        }
+        constantPoolLookupReferencedType = lookupReferencedType;
+    }
+
+    public static JavaType lookupReferencedType(ConstantPool constantPool, int cpi, int opcode) {
+        if (constantPoolLookupReferencedType != null) {
+            try {
+                return (JavaType) constantPoolLookupReferencedType.invoke(constantPool, cpi, opcode);
+            } catch (Error e) {
+                throw e;
+            } catch (Throwable throwable) {
+                throw new InternalError(throwable);
+            }
+        }
+        throw new InternalError("This JVMCI version doesn't support ConstantPool.lookupReferencedType()");
+    }
+
+    public static boolean hasLookupReferencedType() {
+        return constantPoolLookupReferencedType != null;
+    }
+
+    private static final Constructor<?> implicitExceptionDispatchConstructor;
+
+    static {
+        Constructor<?> tempConstructor;
+        try {
+            Class<?> implicitExceptionDispatch = Class.forName("jdk.vm.ci.code.site.ImplicitExceptionDispatch");
+            tempConstructor = implicitExceptionDispatch.getConstructor(int.class, int.class, DebugInfo.class);
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            tempConstructor = null;
+        }
+        implicitExceptionDispatchConstructor = tempConstructor;
+    }
+
     /**
-     * Set the flag in the {@link VirtualObject} that indicates that it is a boxed primitive that
-     * was produced as a result of a call to a {@code valueOf} method.
+     * Returns true if JVMCI supports arbitrary implicit exception dispatch.
      */
-    @SuppressWarnings("unused")
-    public static void markVirtualObjectAsAutoBox(VirtualObject virtualObject) {
-        // Only supported by JDK13
+    public static boolean supportsArbitraryImplicitException() {
+        return implicitExceptionDispatchConstructor != null && !"sparcv9".equals(Services.getSavedProperties().get("os.arch"));
+    }
+
+    /**
+     * Construct an implicit exception dispatch. If this JVMCI does not support arbitrary implicit
+     * exception dispatch, then throws an exception when {@code pcOffset} is not the same as
+     * {@code dispatchOffset}.
+     *
+     * @param pcOffset the exceptional PC offset
+     * @param dispatchOffset the continuation PC offset
+     * @param debugInfo debugging information at the exceptional PC
+     */
+    public static Infopoint genImplicitException(int pcOffset, int dispatchOffset, DebugInfo debugInfo) {
+        if (implicitExceptionDispatchConstructor == null) {
+            if (pcOffset != dispatchOffset) {
+                throw new InternalError("This JVMCI version doesn't support dispatching implicit exception to an arbitrary address.");
+            }
+            return new Infopoint(pcOffset, debugInfo, InfopointReason.IMPLICIT_EXCEPTION);
+        }
+        try {
+            return (Infopoint) implicitExceptionDispatchConstructor.newInstance(pcOffset, dispatchOffset, debugInfo);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new InternalError("Exception when instantiating implicit exception dispatch", e);
+        }
     }
 }

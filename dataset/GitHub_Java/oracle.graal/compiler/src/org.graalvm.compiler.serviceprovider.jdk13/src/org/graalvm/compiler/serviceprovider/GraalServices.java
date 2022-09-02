@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,6 +28,9 @@ import static java.lang.Thread.currentThread;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,9 +42,15 @@ import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
+import jdk.vm.ci.meta.ConstantPool;
+import jdk.vm.ci.meta.JavaType;
 import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup.SpeculationContextObject;
 
 import jdk.vm.ci.code.BytecodePosition;
+import jdk.vm.ci.code.DebugInfo;
+import jdk.vm.ci.code.VirtualObject;
+import jdk.vm.ci.code.site.Infopoint;
+import jdk.vm.ci.code.site.InfopointReason;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -88,7 +97,10 @@ public final class GraalServices {
             synchronized (servicesCache) {
                 ArrayList<S> providersList = new ArrayList<>();
                 for (S provider : providers) {
-                    providersList.add(provider);
+                    Module module = provider.getClass().getModule();
+                    if (isHotSpotGraalModule(module.getName())) {
+                        providersList.add(provider);
+                    }
                 }
                 providers = providersList;
                 servicesCache.put(service, providersList);
@@ -99,8 +111,29 @@ public final class GraalServices {
         return providers;
     }
 
+    /**
+     * Determines if the module named by {@code name} is part of Graal when it is configured as a
+     * HotSpot JIT compiler.
+     */
+    private static boolean isHotSpotGraalModule(String name) {
+        if (name != null) {
+            return name.equals("jdk.internal.vm.compiler") ||
+                            name.equals("jdk.internal.vm.compiler.management") ||
+                            name.equals("com.oracle.graal.graal_enterprise");
+        }
+        return false;
+    }
+
     protected static <S> Iterable<S> load0(Class<S> service) {
-        Iterable<S> iterable = ServiceLoader.load(service, GraalServices.class.getClassLoader());
+        Module module = GraalServices.class.getModule();
+        // Graal cannot know all the services used by another module
+        // (e.g. enterprise) so dynamically register the service use now.
+        if (!module.canUse(service)) {
+            module.addUses(service);
+        }
+
+        ModuleLayer layer = module.getLayer();
+        Iterable<S> iterable = ServiceLoader.load(layer, service);
         return new Iterable<>() {
             @Override
             public Iterator<S> iterator() {
@@ -135,7 +168,9 @@ public final class GraalServices {
      * @param other all JVMCI packages will be opened to the module defining this class
      */
     static void openJVMCITo(Class<?> other) {
-        if (IS_IN_NATIVE_IMAGE) return;
+        if (IS_IN_NATIVE_IMAGE) {
+            return;
+        }
 
         Module jvmciModule = JVMCI_MODULE;
         Module otherModule = other.getModule();
@@ -209,6 +244,10 @@ public final class GraalServices {
      * trusted code.
      */
     public static boolean isToStringTrusted(Class<?> c) {
+        if (IS_IN_NATIVE_IMAGE) {
+            return true;
+        }
+
         Module module = c.getModule();
         Module jvmciModule = JVMCI_MODULE;
         assert jvmciModule.getPackages().contains("jdk.vm.ci.runtime");
@@ -500,5 +539,103 @@ public final class GraalServices {
             return null;
         }
         return jmx.getInputArguments();
+    }
+
+    /**
+     * Returns the fused multiply add of the three arguments; that is, returns the exact product of
+     * the first two arguments summed with the third argument and then rounded once to the nearest
+     * {@code float}.
+     */
+    public static float fma(float a, float b, float c) {
+        return Math.fma(a, b, c);
+    }
+
+    /**
+     * Returns the fused multiply add of the three arguments; that is, returns the exact product of
+     * the first two arguments summed with the third argument and then rounded once to the nearest
+     * {@code double}.
+     */
+    public static double fma(double a, double b, double c) {
+        return Math.fma(a, b, c);
+    }
+
+    public static VirtualObject createVirtualObject(ResolvedJavaType type, int id, boolean isAutoBox) {
+        return VirtualObject.get(type, id, isAutoBox);
+    }
+
+    public static int getJavaUpdateVersion() {
+        return Runtime.version().update();
+    }
+
+    private static final Method constantPoolLookupReferencedType;
+
+    static {
+        Method lookupReferencedType = null;
+        Class<?> constantPool = ConstantPool.class;
+        try {
+            lookupReferencedType = constantPool.getDeclaredMethod("lookupReferencedType", Integer.TYPE, Integer.TYPE);
+        } catch (NoSuchMethodException e) {
+        }
+        constantPoolLookupReferencedType = lookupReferencedType;
+    }
+
+    public static JavaType lookupReferencedType(ConstantPool constantPool, int cpi, int opcode) {
+        if (constantPoolLookupReferencedType != null) {
+            try {
+                return (JavaType) constantPoolLookupReferencedType.invoke(constantPool, cpi, opcode);
+            } catch (Error e) {
+                throw e;
+            } catch (Throwable throwable) {
+                throw new InternalError(throwable);
+            }
+        }
+        throw new InternalError("This JVMCI version doesn't support ConstantPool.lookupReferencedType()");
+    }
+
+    public static boolean hasLookupReferencedType() {
+        return constantPoolLookupReferencedType != null;
+    }
+
+    private static final Constructor<?> implicitExceptionDispatchConstructor;
+
+    static {
+        Constructor<?> tempConstructor;
+        try {
+            Class<?> implicitExceptionDispatch = Class.forName("jdk.vm.ci.code.site.ImplicitExceptionDispatch");
+            tempConstructor = implicitExceptionDispatch.getConstructor(int.class, int.class, DebugInfo.class);
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            tempConstructor = null;
+        }
+        implicitExceptionDispatchConstructor = tempConstructor;
+    }
+
+    /**
+     * Returns true if JVMCI supports arbitrary implicit exception dispatch.
+     */
+    public static boolean supportsArbitraryImplicitException() {
+        return implicitExceptionDispatchConstructor != null && !"sparcv9".equals(Services.getSavedProperties().get("os.arch"));
+    }
+
+    /**
+     * Construct an implicit exception dispatch. If this JVMCI does not support arbitrary implicit
+     * exception dispatch, then throws an exception when {@code pcOffset} is not the same as
+     * {@code dispatchOffset}.
+     *
+     * @param pcOffset the exceptional PC offset
+     * @param dispatchOffset the continuation PC offset
+     * @param debugInfo debugging information at the exceptional PC
+     */
+    public static Infopoint genImplicitException(int pcOffset, int dispatchOffset, DebugInfo debugInfo) {
+        if (implicitExceptionDispatchConstructor == null) {
+            if (pcOffset != dispatchOffset) {
+                throw new InternalError("This JVMCI version doesn't support dispatching implicit exception to an arbitrary address.");
+            }
+            return new Infopoint(pcOffset, debugInfo, InfopointReason.IMPLICIT_EXCEPTION);
+        }
+        try {
+            return (Infopoint) implicitExceptionDispatchConstructor.newInstance(pcOffset, dispatchOffset, debugInfo);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new InternalError("Exception when instantiating implicit exception dispatch", e);
+        }
     }
 }
