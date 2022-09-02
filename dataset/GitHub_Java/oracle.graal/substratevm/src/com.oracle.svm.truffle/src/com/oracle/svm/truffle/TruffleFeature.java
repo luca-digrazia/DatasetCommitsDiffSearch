@@ -79,6 +79,7 @@ import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.SharedTruffleCompilerOptions;
 import org.graalvm.compiler.truffle.compiler.nodes.asserts.NeverPartOfCompilationNode;
 import org.graalvm.compiler.truffle.compiler.substitutions.KnownTruffleTypes;
+import org.graalvm.compiler.truffle.runtime.BackgroundCompileQueue;
 import org.graalvm.compiler.truffle.runtime.OptimizedAssumption;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
@@ -133,7 +134,6 @@ import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.impl.DefaultTruffleRuntime;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.library.DefaultExportProvider;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -232,6 +232,10 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             OptimizedDirectCallNode callNode = (OptimizedDirectCallNode) KnownIntrinsics.convertUnknownValue(target, Object.class);
             OptimizedCallTarget callTarget = callNode.getCallTarget();
             return SubstrateObjectConstant.forObject(callTarget);
+        }
+
+        public BackgroundCompileQueue createBackgroundCompileQueue(@SuppressWarnings("unused") SubstrateTruffleRuntime runtime) {
+            return new BackgroundCompileQueue();
         }
     }
 
@@ -400,7 +404,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
 
         getLanguageClasses().forEach(RuntimeReflection::registerForReflectiveInstantiation);
 
-        config.registerHierarchyForReflectiveInstantiation(DefaultExportProvider.class);
         config.registerHierarchyForReflectiveInstantiation(TruffleInstrument.class);
         config.registerHierarchyForReflectiveInstantiation(com.oracle.truffle.api.instrumentation.InstrumentableFactory.class);
 
@@ -470,7 +473,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         String className = lib.getPackage().getName() + "." + lib.getSimpleName() + "Gen";
         Class<?> genClass = config.findClassByName(className);
         if (genClass == null) {
-            throw UserError.abort(String.format("Could not find generated library class '%s'. Did the Java compilation succeed and did the Truffle annotation processor run?", className));
+            throw UserError.abort(String.format("Could not find generated library class '%s'. Did the Java compilation succeed and did the Truffle annotation processor run?", genClass));
         }
         return genClass;
     }

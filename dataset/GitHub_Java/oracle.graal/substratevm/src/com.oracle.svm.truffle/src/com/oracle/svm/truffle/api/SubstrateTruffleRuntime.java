@@ -29,7 +29,6 @@ import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
@@ -38,11 +37,11 @@ import java.util.function.Consumer;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.UnmodifiableMapCursor;
 import org.graalvm.compiler.api.replacements.Fold;
+import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
@@ -124,18 +123,18 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
         truffleCompiler = null;
     }
 
-    private void initializeAtRuntime(OptimizedCallTarget callTarget) {
-        truffleCompiler.initialize(TruffleRuntimeOptions.getOptionsForCompiler(callTarget));
+    private void initializeAtRuntime(RootNode rootNode) {
         if (SubstateTruffleOptions.isMultiThreaded()) {
             compileQueue = TruffleFeature.getSupport().createBackgroundCompileQueue(this);
             RuntimeSupport.getRuntimeSupport().addTearDownHook(this::tearDown);
         }
-        if (callTarget.engine.traceTransferToInterpreter) {
+        if (getEngineData(rootNode).traceTransferToInterpreter) {
             if (!SubstrateOptions.IncludeNodeSourcePositions.getValue()) {
                 Log.log().string("Warning: TraceTruffleTransferToInterpreter cannot print stack traces. Build image with -H:+IncludeNodeSourcePositions to enable stack traces.").newline();
             }
             RuntimeOptionValues.singleton().update(Deoptimizer.Options.TraceDeoptimization, true);
         }
+        getTruffleCompiler().initialize();
         installDefaultListeners();
     }
 
@@ -153,7 +152,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
 
     @Override
     protected String getCompilerConfigurationName() {
-        TruffleCompiler compiler = truffleCompiler;
+        TruffleCompiler compiler = getTruffleCompiler();
         if (compiler != null) {
             return compiler.getCompilerConfigurationName();
         }
@@ -176,9 +175,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    public SubstrateTruffleCompiler getTruffleCompiler(CompilableTruffleAST compilable) {
-        Objects.requireNonNull(compilable, "Compilable must be non null.");
-        ensureInitializedAtRuntime((OptimizedCallTarget) compilable);
+    public SubstrateTruffleCompiler getTruffleCompiler() {
         return (SubstrateTruffleCompiler) truffleCompiler;
     }
 
@@ -219,17 +216,16 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
         if (profilingEnabled == null) {
             profilingEnabled = getEngineData(rootNode).profilingEnabled;
         }
-        OptimizedCallTarget callTarget = TruffleFeature.getSupport().createOptimizedCallTarget(source, rootNode);
-        ensureInitializedAtRuntime(callTarget);
-        return callTarget;
+        ensureInitializedAtRuntime(rootNode);
+        return TruffleFeature.getSupport().createOptimizedCallTarget(source, rootNode);
     }
 
-    private void ensureInitializedAtRuntime(OptimizedCallTarget callTarget) {
+    private void ensureInitializedAtRuntime(RootNode rootNode) {
         if (!SubstrateUtil.HOSTED && !initialized) {
             // Checkstyle: stop
             synchronized (this) {
                 if (!initialized) {
-                    initializeAtRuntime(callTarget);
+                    initializeAtRuntime(rootNode);
                     initialized = true;
                 }
             }
@@ -276,7 +272,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
          * already created in the boot image and they are directly compiled then the compile queue
          * might not yet be initialized.
          */
-        ensureInitializedAtRuntime(optimizedCallTarget);
+        ensureInitializedAtRuntime(optimizedCallTarget.getRootNode());
 
         if (SubstateTruffleOptions.isMultiThreaded()) {
             return super.submitForCompilation(optimizedCallTarget, lastTierCompilation);
@@ -392,6 +388,11 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Override
     protected JavaConstant forObject(Object object) {
         return SubstrateObjectConstant.forObject(object);
+    }
+
+    @Override
+    public void log(String message) {
+        TTY.println(message);
     }
 
     @Override
