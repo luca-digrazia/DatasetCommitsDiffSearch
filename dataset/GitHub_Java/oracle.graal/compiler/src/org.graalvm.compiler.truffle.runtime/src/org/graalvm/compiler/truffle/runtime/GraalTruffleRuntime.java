@@ -680,18 +680,35 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 if (debug == null) {
                     debug = compiler.openDebugContext(optionsMap, compilation);
                 }
-                // Open the "Truffle::methodName" dump group if dumping is enabled.
-                try (TruffleOutputGroup o = !isPrintGraphEnabled() ? null : TruffleOutputGroup.openCallTarget(debug, callTarget, Collections.singletonMap(GROUP_ID, compilation));
-                                AutoCloseable s = debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget));) {
+                try {
                     compilationStarted = true;
                     listeners.onCompilationStarted(callTarget, task.tier());
                     TruffleInlining inlining = new TruffleInlining();
-                    maybeDumpTruffleTree(debug, callTarget);
-                    // Open the "Graal Graphs" group if dumping is enabled.
-                    try (TruffleOutputGroup g = !isPrintGraphEnabled() ? null : TruffleOutputGroup.openGraalGraphs(debug)) {
-                        compiler.doCompile(debug, compilation, optionsMap, inlining, task, listeners.isEmpty() ? null : listeners);
+                    try (AutoCloseable s = debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget))) {
+                        // Open the "Truffle::methodName" dump group if dumping is enabled.
+                        try (TruffleOutputGroup o = !isPrintGraphEnabled() ? null
+                                        : TruffleOutputGroup.openCallTarget(debug, callTarget, Collections.singletonMap(GROUP_ID, compilation))) {
+                            // Create "AST" and "Call Tree" groups if dumping is enabled.
+                            maybeDumpTruffleTree(debug, callTarget);
+                            // Compile the method (puts dumps in "Graal Graphs" group if dumping is
+                            // enabled).
+                            try (TruffleOutputGroup o2 = !isPrintGraphEnabled() ? null
+                                    : TruffleOutputGroup.openGraalGraphs(debug)) {
+                                compiler.doCompile(debug, compilation, optionsMap, inlining, task, listeners.isEmpty() ? null : listeners);
+                            }
+                            maybeDumpInlinedASTs(debug, callTarget, inlining);
+                        }
+                    } finally {
+                        if (debug != null) {
+                            /*
+                             * The graph dumping code of Graal might leave inlining dump groups
+                             * open, in case there are more graphs coming. Close these groups at the
+                             * end of the compilation.
+                             */
+                            debug.closeDebugChannels();
+                        }
                     }
-                    maybeDumpInlinedASTs(debug, callTarget, inlining);
+                    // used by language-agnostic inlining
                     inlining.dequeueTargets();
                 } finally {
                     if (initialDebug == null) {
