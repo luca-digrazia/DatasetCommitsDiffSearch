@@ -361,7 +361,12 @@ public class LoopEx {
                 default:
                     throw GraalError.shouldNotReachHere(condition.toString());
             }
-            counted = new CountedLoopInfo(this, iv, ifNode, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor(), unsigned);
+            CountedLoopInfo cf = new CountedLoopInfo(this, iv, ifNode, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor(), unsigned);
+            if (!CountedLoopInfo.canSpeculateThatCountedLoopNeverOverflows(loopBegin, cf)) {
+                loopBegin.disableCounted();
+                return false;
+            }
+            counted = cf;
             return true;
         }
         return false;
