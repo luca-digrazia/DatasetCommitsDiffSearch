@@ -34,7 +34,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -46,17 +45,16 @@ import org.graalvm.nativeimage.hosted.Feature;
 import com.oracle.svm.core.ClassLoaderSupport;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.hosted.FeatureImpl;
-import com.oracle.svm.hosted.NativeImageClassLoaderSupport;
 import com.oracle.svm.hosted.NativeImageSystemClassLoader;
 
 import jdk.internal.module.Modules;
 
 public final class ClassLoaderSupportImplJDK11OrLater extends ClassLoaderSupport {
 
-    private final NativeImageClassLoaderSupport classLoaderSupport;
+    private final NativeImageClassLoaderSupportJDK11OrLater classLoaderSupport;
     private final Map<String, Set<Module>> packageToModules;
 
-    ClassLoaderSupportImplJDK11OrLater(NativeImageClassLoaderSupport classLoaderSupport) {
+    ClassLoaderSupportImplJDK11OrLater(NativeImageClassLoaderSupportJDK11OrLater classLoaderSupport) {
         this.classLoaderSupport = classLoaderSupport;
         packageToModules = new HashMap<>();
         buildPackageToModulesMap(classLoaderSupport);
@@ -80,9 +78,6 @@ public final class ClassLoaderSupportImplJDK11OrLater extends ClassLoaderSupport
             bundleName = specParts[0];
         }
         String packageName = packageName(bundleName);
-        if (packageName == null) {
-            throw new MissingResourceException("ResourceBundle does not seem to be a fully qualified class name.", bundleName, locale.toLanguageTag());
-        }
         Set<Module> modules;
         if (moduleName != null) {
             modules = classLoaderSupport.findModule(moduleName).stream().collect(Collectors.toSet());
@@ -90,12 +85,13 @@ public final class ClassLoaderSupportImplJDK11OrLater extends ClassLoaderSupport
             modules = packageToModules.getOrDefault(packageName, Collections.emptySet());
         }
         if (modules.isEmpty()) {
-            throw new MissingResourceException("ResourceBundle cannot be found.", bundleSpec, locale.toLanguageTag());
+            /* If bundle is not located in any module get it via classloader (from ALL_UNNAMED) */
+            return Collections.singletonList(ResourceBundle.getBundle(bundleName, locale, classLoaderSupport.getClassLoader()));
         }
         ArrayList<ResourceBundle> resourceBundles = new ArrayList<>();
         for (Module module : modules) {
             Module exportTargetModule = ClassLoaderSupportImplJDK11OrLater.class.getModule();
-            if (!module.isExported(packageName, exportTargetModule)) {
+            if (!module.isOpen(packageName, exportTargetModule)) {
                 Modules.addOpens(module, packageName, exportTargetModule);
             }
             resourceBundles.add(ResourceBundle.getBundle(bundleName, locale, module));
@@ -106,13 +102,12 @@ public final class ClassLoaderSupportImplJDK11OrLater extends ClassLoaderSupport
     private static String packageName(String bundleName) {
         int classSep = bundleName.replace('/', '.').lastIndexOf('.');
         if (classSep == -1) {
-            /* The bundle is not specified via a java.class or java.properties format. */
-            return null;
+            return ""; /* unnamed package */
         }
         return bundleName.substring(0, classSep);
     }
 
-    private void buildPackageToModulesMap(NativeImageClassLoaderSupport classLoaderSupport) {
+    private void buildPackageToModulesMap(NativeImageClassLoaderSupportJDK11OrLater classLoaderSupport) {
         for (ModuleLayer layer : allLayers(classLoaderSupport.moduleLayerForImageBuild)) {
             for (Module module : layer.modules()) {
                 for (String packageName : module.getDescriptor().packages()) {
@@ -175,6 +170,6 @@ class ClassLoaderSupportFeatureJDK11OrLater implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess a) {
         FeatureImpl.AfterRegistrationAccessImpl access = (FeatureImpl.AfterRegistrationAccessImpl) a;
-        ImageSingletons.add(ClassLoaderSupport.class, new ClassLoaderSupportImplJDK11OrLater(access.getImageClassLoader().classLoaderSupport));
+        ImageSingletons.add(ClassLoaderSupport.class, new ClassLoaderSupportImplJDK11OrLater((NativeImageClassLoaderSupportJDK11OrLater) access.getImageClassLoader().classLoaderSupport));
     }
 }
