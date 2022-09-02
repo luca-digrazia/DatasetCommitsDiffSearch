@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.nodes.cast;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -41,8 +40,7 @@ import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
@@ -53,7 +51,7 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 public abstract class LLVMToI32Node extends LLVMExpressionNode {
 
     @Specialization
-    protected int doManaged(LLVMManagedPointer from,
+    protected int doPointer(LLVMPointer from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
         return (int) toNative.executeWithTarget(from).asNative();
     }
@@ -64,12 +62,6 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
         return (int) toLLVM.executeWithTarget(from.getValue());
     }
 
-    @Specialization
-    protected int doNativePointer(LLVMNativePointer from) {
-        return (int) from.asNative();
-    }
-
-    @TruffleBoundary
     protected ForeignToLLVM createForeignToLLVM() {
         return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I32);
     }
@@ -123,6 +115,7 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
     }
 
     public abstract static class LLVMUnsignedCastToI32Node extends LLVMToI32Node {
+
         private static final float MAX_INT_AS_FLOAT = Integer.MAX_VALUE;
         private static final double MAX_INT_AS_DOUBLE = Integer.MAX_VALUE;
 
@@ -186,6 +179,7 @@ public abstract class LLVMToI32Node extends LLVMExpressionNode {
     }
 
     public abstract static class LLVMBitcastToI32Node extends LLVMToI32Node {
+
         @Specialization
         protected int doI32(int from) {
             return from;

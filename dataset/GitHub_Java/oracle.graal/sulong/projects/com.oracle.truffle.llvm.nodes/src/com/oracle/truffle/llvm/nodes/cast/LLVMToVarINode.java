@@ -37,8 +37,6 @@ import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeGen.LLVMBitcastToIVarNod
 import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeGen.LLVMSignedCastToIVarNodeGen;
 import com.oracle.truffle.llvm.nodes.cast.LLVMToVarINodeGen.LLVMUnsignedCastToIVarNodeGen;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.LLVMIVarBitLarge;
-import com.oracle.truffle.llvm.runtime.LLVMIVarBitSmall;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
@@ -92,13 +90,8 @@ public abstract class LLVMToVarINode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected LLVMIVarBit doIVarBit(LLVMIVarBitLarge from) {
+        protected LLVMIVarBit doIVarBit(LLVMIVarBit from) {
             return LLVMIVarBit.create(getBits(), from.getSignExtendedBytes(), from.getBitSize(), true);
-        }
-
-        @Specialization
-        protected LLVMIVarBit doIVarBit(LLVMIVarBitSmall from) {
-            return LLVMIVarBit.create(getBits(), from.getCleanedValue(true), from.getBitSize(), true);
         }
 
         @Specialization
@@ -135,13 +128,8 @@ public abstract class LLVMToVarINode extends LLVMExpressionNode {
         }
 
         @Specialization
-        protected LLVMIVarBit doIVarBit(LLVMIVarBitLarge from) {
+        protected LLVMIVarBit doIVarBit(LLVMIVarBit from) {
             return LLVMIVarBit.create(getBits(), from.getBytes(), from.getBitSize(), false);
-        }
-
-        @Specialization
-        protected LLVMIVarBit doIVarBit(LLVMIVarBitSmall from) {
-            return LLVMIVarBit.create(getBits(), from.getCleanedValue(false), from.getBitSize(), false);
         }
     }
 
