@@ -90,33 +90,25 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
          */
         initializeLocals(frame);
 
-        trace("%s EXECUTE", this);
+        logger.finest(() -> this + " EXECUTE");
 
         body.execute(context, frame);
 
+        long returnValue = pop(frame, 0);
         switch (body.returnTypeId()) {
             case 0x00:
-            case ValueTypes.VOID_TYPE: {
+            case ValueTypes.VOID_TYPE:
                 return WasmVoidResult.getInstance();
-            }
-            case ValueTypes.I32_TYPE: {
-                long returnValue = pop(frame, 0);
+            case ValueTypes.I32_TYPE:
                 assert returnValue >>> 32 == 0;
                 return (int) returnValue;
-            }
-            case ValueTypes.I64_TYPE: {
-                long returnValue = pop(frame, 0);
+            case ValueTypes.I64_TYPE:
                 return returnValue;
-            }
-            case ValueTypes.F32_TYPE: {
-                long returnValue = pop(frame, 0);
+            case ValueTypes.F32_TYPE:
                 assert returnValue >>> 32 == 0;
                 return Float.intBitsToFloat((int) returnValue);
-            }
-            case ValueTypes.F64_TYPE: {
-                long returnValue = pop(frame, 0);
+            case ValueTypes.F64_TYPE:
                 return Double.longBitsToDouble(returnValue);
-            }
             default:
                 assert false;
                 return null;
@@ -134,25 +126,25 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
             switch (kind) {
                 case Int: {
                     int argument = (int) args[i];
-                    trace("argument: 0x%08X (%d) [i32]", argument, argument);
+                    logger.finest(() -> String.format("argument: 0x%08X (%d) [i32]", argument, argument));
                     frame.setInt(slot, argument);
                     break;
                 }
                 case Long: {
                     long argument = (long) args[i];
-                    trace("argument: 0x%016X (%d) [i64]", argument, argument);
+                    logger.finest(() -> String.format("argument: 0x%016X (%d) [i64]", argument, argument));
                     frame.setLong(slot, argument);
                     break;
                 }
                 case Float: {
                     float argument = (float) args[i];
-                    trace("argument: %f [f32]", argument);
+                    logger.finest(() -> String.format("argument: %f [f32]", argument));
                     frame.setFloat(slot, argument);
                     break;
                 }
                 case Double: {
                     double argument = (double) args[i];
-                    trace("argument: %f [f64]", argument);
+                    logger.finest(() -> String.format("argument: %f [f64]", argument));
                     frame.setDouble(slot, argument);
                     break;
                 }
