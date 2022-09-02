@@ -616,23 +616,23 @@ final class LanguageAccessor extends Accessor {
         }
 
         @Override
-        public ClassLoader getStaticObjectClassLoader(TruffleLanguage<?> language, Class<?> referenceClass) {
-            return engineAccess().getStaticObjectClassLoader(language.polyglotLanguageInstance, referenceClass);
+        public ClassLoader getSomClassloader(TruffleLanguage<?> language, Class<?> referenceClass) {
+            return engineAccess().getSomClassloader(language.polyglotLanguageInstance, referenceClass);
         }
 
         @Override
-        public void setStaticObjectClassLoader(TruffleLanguage<?> language, Class<?> referenceClass, ClassLoader cl) {
-            engineAccess().setStaticObjectClassLoader(language.polyglotLanguageInstance, referenceClass, cl);
+        public void setSomClassloader(TruffleLanguage<?> language, Class<?> referenceClass, ClassLoader cl) {
+            engineAccess().setSomClassloader(language.polyglotLanguageInstance, referenceClass, cl);
         }
 
         @Override
-        public boolean areStaticObjectSafetyChecksRelaxed(TruffleLanguage<?> language) {
-            return engineAccess().areStaticObjectSafetyChecksRelaxed(language.polyglotLanguageInstance);
+        public boolean areSomSafetyChecksRelaxed(TruffleLanguage<?> language) {
+            return engineAccess().areSomSafetyChecksRelaxed(language.polyglotLanguageInstance);
         }
 
         @Override
-        public String getStaticObjectStorageStrategy(TruffleLanguage<?> language) {
-            return engineAccess().getStaticObjectStorageStrategy(language.polyglotLanguageInstance);
+        public String getSomStorageStrategy(TruffleLanguage<?> language) {
+            return engineAccess().getSomStorageStrategy(language.polyglotLanguageInstance);
         }
     }
 }

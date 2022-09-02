@@ -1441,23 +1441,23 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public ClassLoader getStaticObjectClassLoader(Object polyglotLanguageInstance, Class<?> referenceClass) {
-            return ((PolyglotLanguageInstance) polyglotLanguageInstance).staticObjectClassLoaders.get(referenceClass);
+        public ClassLoader getSomClassloader(Object polyglotLanguageInstance, Class<?> referenceClass) {
+            return ((PolyglotLanguageInstance) polyglotLanguageInstance).somClassLoaders.get(referenceClass);
         }
 
         @Override
-        public void setStaticObjectClassLoader(Object polyglotLanguageInstance, Class<?> referenceClass, ClassLoader cl) {
-            ((PolyglotLanguageInstance) polyglotLanguageInstance).staticObjectClassLoaders.put(referenceClass, cl);
+        public void setSomClassloader(Object polyglotLanguageInstance, Class<?> referenceClass, ClassLoader cl) {
+            ((PolyglotLanguageInstance) polyglotLanguageInstance).somClassLoaders.put(referenceClass, cl);
         }
 
         @Override
-        public boolean areStaticObjectSafetyChecksRelaxed(Object polyglotLanguageInstance) {
-            return ((PolyglotLanguageInstance) polyglotLanguageInstance).getEngine().getEngineOptionValues().get(PolyglotEngineOptions.RelaxStaticObjectSafetyChecks);
+        public boolean areSomSafetyChecksRelaxed(Object polyglotLanguageInstance) {
+            return ((PolyglotLanguageInstance) polyglotLanguageInstance).getEngine().getEngineOptionValues().get(PolyglotEngineOptions.RelaxSomSafetyChecks);
         }
 
         @Override
-        public String getStaticObjectStorageStrategy(Object polyglotLanguageInstance) {
-            return ((PolyglotLanguageInstance) polyglotLanguageInstance).getEngine().getEngineOptionValues().get(PolyglotEngineOptions.StaticObjectStorageStrategy).name().toLowerCase().replace('_', '-');
+        public String getSomStorageStrategy(Object polyglotLanguageInstance) {
+            return ((PolyglotLanguageInstance) polyglotLanguageInstance).getEngine().getEngineOptionValues().get(PolyglotEngineOptions.SomStorageStrategy).name().toLowerCase().replace('_', '-');
         }
     }
 

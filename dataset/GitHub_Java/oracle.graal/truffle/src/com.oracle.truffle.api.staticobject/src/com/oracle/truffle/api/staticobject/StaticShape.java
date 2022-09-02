@@ -93,11 +93,23 @@ public abstract class StaticShape<T> {
         FIELD_BASED
     }
 
-    static final Unsafe UNSAFE = getUnsafe();
-    final Class<?> storageClass;
-    final boolean safetyChecks;
+    /**
+     * @since 21.3.0
+     */
+    protected static final Unsafe UNSAFE = getUnsafe();
+    /**
+     * @since 21.3.0
+     */
+    protected final Class<?> storageClass;
+    /**
+     * @since 21.3.0
+     */
+    protected final boolean safetyChecks;
+    /**
+     * @since 21.3.0
+     */
     @CompilationFinal //
-    T factory;
+    protected T factory;
 
     StaticShape(Class<?> storageClass, boolean safetyChecks, PrivilegedToken privilegedToken) {
         if (privilegedToken == null) {
@@ -314,7 +326,7 @@ public abstract class StaticShape<T> {
 
         private <T> StaticShape<T> build(ShapeGenerator<T> sg, StaticShape<T> parentShape) {
             CompilerAsserts.neverPartOfCompilation();
-            boolean safetyChecks = !SomAccessor.LANGUAGE.areStaticObjectSafetyChecksRelaxed(language);
+            boolean safetyChecks = !SomAccessor.LANGUAGE.areSomSafetyChecksRelaxed(language);
             StaticShape<T> shape = sg.generateShape(parentShape, staticProperties.values(), safetyChecks);
             for (StaticProperty staticProperty : staticProperties.values()) {
                 staticProperty.initShape(shape);
@@ -389,7 +401,7 @@ public abstract class StaticShape<T> {
         }
 
         private StorageStrategy getStorageStrategy() {
-            String strategy = SomAccessor.LANGUAGE.getStaticObjectStorageStrategy(language);
+            String strategy = SomAccessor.LANGUAGE.getSomStorageStrategy(language);
             switch (strategy) {
                 case "default":
                     return TruffleOptions.AOT ? StorageStrategy.ARRAY_BASED : StorageStrategy.FIELD_BASED;
