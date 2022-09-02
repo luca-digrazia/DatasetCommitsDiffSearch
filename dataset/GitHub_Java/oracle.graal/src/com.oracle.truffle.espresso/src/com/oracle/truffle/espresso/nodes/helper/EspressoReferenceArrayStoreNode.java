@@ -24,7 +24,6 @@
 package com.oracle.truffle.espresso.nodes.helper;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -33,8 +32,8 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public class EspressoReferenceArrayStoreNode extends Node {
     @Child TypeCheckNode typeCheck;
-    @CompilationFinal boolean noOutOfBoundEx = true;
-    @CompilationFinal boolean noArrayStoreEx = true;
+    @CompilerDirectives.CompilationFinal boolean noOutOfBoundEx = true;
+    @CompilerDirectives.CompilationFinal boolean noArrayStoreEx = true;
 
     public EspressoReferenceArrayStoreNode(EspressoContext context) {
         this.typeCheck = TypeCheckNodeGen.create(context);

@@ -32,24 +32,9 @@ import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
-/**
- * Implements specialized type checking in espresso.
- * <p>
- * This node has 3 stages of specialization:
- * <ul>
- * <li>Trivial: When the node has seen only cases which are trivial to check, only check for those.
- * <li>Cached: The first time the node sees a non-trivial check, invalidate trivial check and start
- * using a cache.
- * <li>When the cache overflows, invalidate it, restore the trivial cases, and start specializing
- * for the general case (interface, array, regular class...)
- * </ul>
- * <p>
- * Note that this node can be used even if the type to check is known to be a constant, as all
- * checks should fold.
- */
 @SuppressWarnings("unused")
 public abstract class TypeCheckNode extends Node implements ContextAccess {
-    protected static final int LIMIT = 5;
+    protected static final int LIMIT = 2;
 
     private final EspressoContext context;
 
@@ -59,9 +44,9 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
         this.context = context;
     }
 
-    @Specialization(guards = "typeToCheck == k")
-    protected boolean typeCheckEquals(Klass typeToCheck, Klass k) {
-        return true;
+    @Specialization(guards = "isPrimitive(k)")
+    protected boolean typeCheckPrimitive(Klass typeToCheck, Klass k) {
+        return k == typeToCheck;
     }
 
     @Specialization(guards = "isJLObject(typeToCheck)")
@@ -74,27 +59,12 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
         return typeToCheck == k;
     }
 
-    @Specialization(replaces = {"typeCheckEquals", "typeCheckJLObject", "typeCheckFinal"}, guards = {"typeToCheck == cachedTTC", "k == cachedKlass"}, limit = "LIMIT")
+    @Specialization(replaces = {"typeCheckPrimitive", "typeCheckJLObject", "typeCheckFinal"}, guards = {"typeToCheck == cachedTTC", "k == cachedKlass"}, limit = "LIMIT")
     protected boolean typeCheckCached(Klass typeToCheck, Klass k,
                     @Cached("typeToCheck") Klass cachedTTC,
                     @Cached("k") Klass cachedKlass,
                     @Cached("doTypeCheck(typeToCheck, k)") boolean result) {
         return result;
-    }
-
-    @Specialization(replaces = "typeCheckCached", guards = "typeToCheck == k")
-    protected boolean typeCheckEqualsAfterCache(Klass typeToCheck, Klass k) {
-        return true;
-    }
-
-    @Specialization(replaces = "typeCheckCached", guards = "isJLObject(typeToCheck)")
-    protected boolean typeCheckJLObjectAfterCache(Klass typeToCheck, Klass k) {
-        return true;
-    }
-
-    @Specialization(replaces = "typeCheckCached", guards = "isFinal(typeToCheck)")
-    protected boolean typeCheckFinalAfterCache(ObjectKlass typeToCheck, Klass k) {
-        return typeToCheck == k;
     }
 
     @Specialization(replaces = "typeCheckCached", guards = "arraySameDim(typeToCheck, k)")
@@ -115,7 +85,7 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
     }
 
     @Specialization(replaces = "typeCheckCached", guards = "isInterface(typeToCheck)")
-    protected boolean typeCheckInterface(Klass typeToCheck, Klass k) {
+    protected boolean typeCheckInterface(Klass typeToCheck, ObjectKlass k) {
         return typeToCheck.checkInterfaceSubclassing(k);
     }
 
@@ -140,6 +110,10 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
         return typeToCheck.isAssignableFrom(k);
     }
 
+    protected TypeCheckNode createChild() {
+        return TypeCheckNodeGen.create(context);
+    }
+
     protected boolean arraySameDim(ArrayKlass k1, ArrayKlass k2) {
         return k1.getDimension() == k2.getDimension();
     }
@@ -150,10 +124,6 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
 
     protected boolean isInterface(Klass k) {
         return k.isInterface();
-    }
-
-    protected TypeCheckNode createChild() {
-        return TypeCheckNodeGen.create(context);
     }
 
     @Override
