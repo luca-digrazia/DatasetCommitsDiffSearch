@@ -36,19 +36,17 @@ import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FrameState;
-import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.WithExceptionNode;
 import org.graalvm.compiler.nodes.memory.MemoryKill;
-import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
-import org.graalvm.compiler.replacements.nodes.ArrayCopy;
+import org.graalvm.compiler.replacements.arraycopy.ArrayCopy;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.meta.JavaKind;
 
-@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN, size = SIZE_64)
+@NodeInfo(cycles = NodeCycles.CYCLES_UNKNOWN, cyclesRationale = "may be replaced with non-throwing counterpart", size = SIZE_64)
 public class ArrayCopyWithExceptionNode extends WithExceptionNode implements ArrayCopy {
 
     public static final NodeClass<ArrayCopyWithExceptionNode> TYPE = NodeClass.create(ArrayCopyWithExceptionNode.class);
@@ -67,6 +65,9 @@ public class ArrayCopyWithExceptionNode extends WithExceptionNode implements Arr
         this.bci = bci;
         this.args = new NodeInputList<>(this, new ValueNode[]{src, srcPos, dest, destPos, length});
         this.elementKind = elementKind != JavaKind.Illegal ? elementKind : null;
+        if (this.elementKind == null) {
+            this.elementKind = ArrayCopy.selectComponentKind(this);
+        }
     }
 
     @Override
@@ -132,25 +133,12 @@ public class ArrayCopyWithExceptionNode extends WithExceptionNode implements Arr
 
     @Override
     public FixedNode replaceWithNonThrowing() {
-        /*
-         * TODO (GR-21064): Once we have VM-independent stubs for arraycopy, we will be able to just
-         * generate a plain ArrayCopyNode here and benefit from all of its optimized variants.
-         */
         SubstrateArraycopyNode plainArrayCopy = this.asNode().graph()
                         .add(new SubstrateArraycopyNode(getSource(), getSourcePosition(), getDestination(), getDestinationPosition(), getLength(), getElementKind(), getBci()));
+        plainArrayCopy.setStateAfter(stateAfter);
         AbstractBeginNode oldException = this.exceptionEdge;
         graph().replaceSplitWithFixed(this, plainArrayCopy, this.next());
         GraphUtil.killCFG(oldException);
         return plainArrayCopy;
-    }
-
-    @Override
-    public AbstractBeginNode createNextBegin() {
-        return KillingBeginNode.create(getKilledLocationIdentity());
-    }
-
-    @Override
-    public void deleteThisNode(VirtualizerTool tool) {
-        tool.deleteAndKillExceptionEdge();
     }
 }
