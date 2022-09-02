@@ -305,8 +305,7 @@ public interface SwitchFoldable extends NodeInterface {
      * @see QuickQueryList
      * @see QuickQueryKeyData
      */
-    default void updateSwitchData(QuickQueryKeyData keyData, QuickQueryList<AbstractBeginNode> newSuccessors, double[] cumulative, double[] totalProbabilities,
-                    QuickQueryList<AbstractBeginNode> duplicates) {
+    default boolean updateSwitchData(QuickQueryKeyData keyData, QuickQueryList<AbstractBeginNode> newSuccessors, double[] cumulative, QuickQueryList<AbstractBeginNode> duplicates) {
         for (int i = 0; i < keyCount(); i++) {
             int key = intKeyAt(i);
             double keyProbability = cumulative[0] * keyProbability(i);
@@ -321,7 +320,7 @@ public interface SwitchFoldable extends NodeInterface {
                         // This might be a false alert, if one of the next keys points to it.
                         duplicates.add(keySuccessor);
                     }
-                    continue;
+                    return true;
                 }
                 /*
                  * A key might not be able to immediately link to its target, if it is shared with
@@ -331,7 +330,6 @@ public interface SwitchFoldable extends NodeInterface {
                  */
             } else {
                 data = new KeyData(key, keyProbability, KeyData.KEY_UNKNOWN);
-                totalProbabilities[0] += keyProbability;
                 keyData.add(data);
             }
 
@@ -349,6 +347,7 @@ public interface SwitchFoldable extends NodeInterface {
             }
         }
         cumulative[0] *= defaultProbability();
+        return true;
     }
 
     /**
@@ -384,7 +383,6 @@ public interface SwitchFoldable extends NodeInterface {
         QuickQueryList<AbstractBeginNode> successors = new QuickQueryList<>();
         QuickQueryList<AbstractBeginNode> potentiallyUnreachable = new QuickQueryList<>();
         double[] cumulative = {1.0d};
-        double[] totalProbability = {0.0d};
 
         iteratingNode = topMostSwitchNode;
         SwitchFoldable lowestSwitchNode = topMostSwitchNode;
@@ -395,7 +393,9 @@ public interface SwitchFoldable extends NodeInterface {
         // Go down the if cascade, collecting necessary data
         while (iteratingNode != null) {
             lowestSwitchNode = iteratingNode;
-            iteratingNode.updateSwitchData(keyData, successors, cumulative, totalProbability, potentiallyUnreachable);
+            if (!(iteratingNode.updateSwitchData(keyData, successors, cumulative, potentiallyUnreachable))) {
+                return false;
+            }
             if (!iteratingNode.isNonInitializedProfile()) {
                 uninitializedProfiles = false;
             }
@@ -413,22 +413,13 @@ public interface SwitchFoldable extends NodeInterface {
         // Sort the keys
         keyData.sort();
 
-        // The total probability might be different than 1 if there was a duplicate key which was
-        // erased by another branch whose probability was different (/ex: in the case where a method
-        // constituted of only a switch is inlined after a guard for a particular value of that
-        // switch). In that case, we need to re-normalize the probabilities.
-        // A more "correct" way would be to re-normalize the probabilities of the switch after the
-        // guard, but this cannot be done without an additional overhead.
-        assert totalProbability[0] > 0.0d;
-        double normalizationFactor = 1 / totalProbability[0];
-
         // Spawn the required data structures
         int newKeyCount = keyData.list.size();
         int[] keys = new int[newKeyCount];
         double[] keyProbabilities = new double[newKeyCount + 1];
         int[] keySuccessors = new int[newKeyCount + 1];
         int nonDeoptSuccessorCount = countNonDeoptSuccessors(keyData) + (cumulative[0] > 0.0d ? 1 : 0);
-        double uniform = normalizationFactor * (uninitializedProfiles && nonDeoptSuccessorCount > 0 ? 1 / (double) nonDeoptSuccessorCount : 1.0d);
+        double uniform = uninitializedProfiles && nonDeoptSuccessorCount > 0 ? 1 / (double) nonDeoptSuccessorCount : 1.0d;
 
         // Add default
         keyProbabilities[newKeyCount] = uninitializedProfiles && cumulative[0] > 0.0d ? uniform : cumulative[0];
@@ -438,7 +429,7 @@ public interface SwitchFoldable extends NodeInterface {
         for (int i = 0; i < newKeyCount; i++) {
             SwitchFoldable.KeyData data = keyData.get(i);
             keys[i] = data.key;
-            keyProbabilities[i] = normalizationFactor * (uninitializedProfiles && data.keyProbability > 0.0d ? uniform : data.keyProbability);
+            keyProbabilities[i] = uninitializedProfiles && data.keyProbability > 0.0d ? uniform : data.keyProbability;
             keySuccessors[i] = data.keySuccessor != KeyData.KEY_UNKNOWN ? data.keySuccessor : keySuccessors[newKeyCount];
         }
 
