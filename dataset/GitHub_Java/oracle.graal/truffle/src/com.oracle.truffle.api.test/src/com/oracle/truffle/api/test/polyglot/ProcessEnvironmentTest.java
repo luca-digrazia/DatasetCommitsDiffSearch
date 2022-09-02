@@ -52,13 +52,13 @@ public class ProcessEnvironmentTest extends AbstractPolyglotTest {
     @Test
     public void testEnvironmentAccessNone() {
         setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.NONE).environment("k1", "v1").environment("k2", "v2").build());
-        Assert.assertNull(languageEnv.getEnvironment("k1"));
-        Assert.assertNull(languageEnv.getEnvironment("k2"));
-        Map<String, String> env = languageEnv.getEnvironment();
+        Assert.assertNull(languageEnv.getEnvironmentVariable("k1"));
+        Assert.assertNull(languageEnv.getEnvironmentVariable("k2"));
+        Map<String, String> env = languageEnv.getEnvironmentVariables();
         Assert.assertNotNull(env);
         Assert.assertTrue(env.isEmpty());
         try {
-            languageEnv.setEnvironment("k3", "v3");
+            languageEnv.setEnvironmentVariable("k3", "v3");
             Assert.fail("Expected SecurityException.");
         } catch (SecurityException se) {
             // expected
@@ -74,15 +74,15 @@ public class ProcessEnvironmentTest extends AbstractPolyglotTest {
     @Test
     public void testEnvironmentAccessRead() {
         setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.READ).environment("k1", "v1").environment("k2", "v2").build());
-        Assert.assertEquals("v1", languageEnv.getEnvironment("k1"));
-        Assert.assertEquals("v2", languageEnv.getEnvironment("k2"));
-        Map<String, String> env = languageEnv.getEnvironment();
+        Assert.assertEquals("v1", languageEnv.getEnvironmentVariable("k1"));
+        Assert.assertEquals("v2", languageEnv.getEnvironmentVariable("k2"));
+        Map<String, String> env = languageEnv.getEnvironmentVariables();
         Map<String, String> expected = new HashMap<>();
         expected.put("k1", "v1");
         expected.put("k2", "v2");
         Assert.assertEquals(expected, env);
         try {
-            languageEnv.setEnvironment("k3", "v3");
+            languageEnv.setEnvironmentVariable("k3", "v3");
             Assert.fail("Expected SecurityException.");
         } catch (SecurityException se) {
             // expected
@@ -98,16 +98,16 @@ public class ProcessEnvironmentTest extends AbstractPolyglotTest {
     @Test
     public void testEnvironmentAccessReadWrite() {
         setupEnv(Context.newBuilder().allowEnvironmentAccess(EnvironmentAccess.ALL).environment("k1", "v1").environment("k2", "v2").build());
-        Assert.assertEquals("v1", languageEnv.getEnvironment("k1"));
-        Assert.assertEquals("v2", languageEnv.getEnvironment("k2"));
-        Map<String, String> env = languageEnv.getEnvironment();
+        Assert.assertEquals("v1", languageEnv.getEnvironmentVariable("k1"));
+        Assert.assertEquals("v2", languageEnv.getEnvironmentVariable("k2"));
+        Map<String, String> env = languageEnv.getEnvironmentVariables();
         Map<String, String> expected = new HashMap<>();
         expected.put("k1", "v1");
         expected.put("k2", "v2");
         Assert.assertEquals(expected, env);
-        languageEnv.setEnvironment("k3", "v3");
-        Assert.assertEquals("v3", languageEnv.getEnvironment("k3"));
-        env = languageEnv.getEnvironment();
+        languageEnv.setEnvironmentVariable("k3", "v3");
+        Assert.assertEquals("v3", languageEnv.getEnvironmentVariable("k3"));
+        env = languageEnv.getEnvironmentVariables();
         expected = new HashMap<>();
         expected.put("k1", "v1");
         expected.put("k2", "v2");
