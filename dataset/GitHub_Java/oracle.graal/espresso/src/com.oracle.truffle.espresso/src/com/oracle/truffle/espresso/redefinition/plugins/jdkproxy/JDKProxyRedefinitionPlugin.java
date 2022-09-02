@@ -40,7 +40,7 @@ import com.oracle.truffle.espresso.redefinition.plugins.api.InternalRedefinition
 import com.oracle.truffle.espresso.redefinition.plugins.api.MethodLocator;
 import com.oracle.truffle.espresso.redefinition.plugins.api.TriggerClass;
 
-public final class JDKProxyRedefinitionPlugin extends InternalRedefinitionPlugin {
+public class JDKProxyRedefinitionPlugin extends InternalRedefinitionPlugin {
 
     private static final String PROXY_GENERATOR_CLASS = "sun.misc.ProxyGenerator";
     private static final String GENERATOR_METHOD = "generateProxyClass";
@@ -146,9 +146,9 @@ public final class JDKProxyRedefinitionPlugin extends InternalRedefinitionPlugin
 
     @Override
     public boolean reRunClinit(KlassRef klass, boolean changed) {
-        // changed Dynamic Proxy classes have cached Method references
-        // in static fields, so always re-run the static initializer
-        return proxySuperKlass.isAssignable(klass);
+        // changed Dynamic Proxy classes has cached Method references
+        // in static fields, so re-run the static initializer
+        return changed && proxySuperKlass.isAssignable(klass);
     }
 
     private final class ProxyCache {
