@@ -158,7 +158,7 @@ final class GraphManager {
         public void notifyNotInlined(GraphBuilderContext b, ResolvedJavaMethod original, Invoke invoke) {
             if (original.equals(callBoundary)) {
                 if (lastDirectCallNode == null) {
-                    // Likely an indirect call, ignore for now
+                    // TODO: Handle indirect call
                     return;
                 }
                 TruffleCallNode truffleCallNode = callNodeProvider.findCallNode(lastDirectCallNode);

@@ -32,7 +32,7 @@ public interface InliningPolicy {
     default void afterAddChildren(CallNode callNode) {
     }
 
-    default void removedNode(CallNode node) {
+    default void removedNode(CallNode callNode, CallNode child) {
     }
 
     default Object newCallNodeData(CallNode callNode) {
