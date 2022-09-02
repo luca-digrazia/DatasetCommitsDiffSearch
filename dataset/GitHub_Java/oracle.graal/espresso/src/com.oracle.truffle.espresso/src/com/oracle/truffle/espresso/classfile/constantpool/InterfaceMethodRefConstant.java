@@ -121,7 +121,7 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
             // 1. If C is not an interface, interface method resolution throws an
             // IncompatibleClassChangeError.
             if (!holderInterface.isInterface()) {
-                throw meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, meta.toGuestString(name));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, meta.toGuestString(name));
             }
 
             Symbol<Signature> signature = getSignature(pool);
@@ -129,13 +129,13 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
             Method method = ((ObjectKlass) holderInterface).resolveInterfaceMethod(name, signature);
 
             if (method == null) {
-                throw meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError, meta.toGuestString(name));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError, meta.toGuestString(name));
             }
 
             if (!MemberRefConstant.checkAccess(accessingKlass, holderInterface, method)) {
                 context.getLogger().log(Level.WARNING, "Interface method access check of: " + method.getName() + " in " + holderInterface.getType() + " from " +
                                 accessingKlass.getType() + " throws IllegalAccessError");
-                throw meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(name));
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, meta.toGuestString(name));
             }
 
             method.checkLoadingConstraints(accessingKlass.getDefiningClassLoader(), method.getDeclaringKlass().getDefiningClassLoader());
